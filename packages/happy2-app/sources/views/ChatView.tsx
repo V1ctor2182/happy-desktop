@@ -159,6 +159,10 @@ export function ChatView(props: ChatViewProps) {
             props.onChatSelect(nextChatId, kind, replace);
         },
         infoOpen: () => overlays.getState().inspectorInfoShow(),
+        channelInfoOpen(chatId) {
+            props.onChatSelect(chatId, "channel");
+            overlays.getState().inspectorInfoShow();
+        },
         profileOpen: (userId) => overlays.getState().inspectorProfileShow(userId),
         panelClose: () => overlays.getState().inspectorClose(),
         traceOpen: (messageId) => overlays.getState().inspectorTraceShow(messageId),

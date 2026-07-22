@@ -192,6 +192,8 @@ export interface ChatPageActions {
     adminOpen(): void;
     chatSelect(chatId: string, kind: ChatPageConversationKind, replace?: boolean): void;
     infoOpen(): void;
+    /** Selects a channel and opens its info panel in one navigation update. */
+    channelInfoOpen(chatId: string): void;
     profileOpen(userId: string): void;
     panelClose(): void;
     traceOpen(messageId: string): void;
@@ -605,6 +607,26 @@ export function ChatPage(props: ChatPageProps) {
         onChildCreate: childCreateOpen,
         onError: showError,
     });
+    const sidebarChannelModel = (chatId: string) => {
+        const projection = sidebarChats().find((candidate) => candidate.id === chatId);
+        const chat = projection?.chat;
+        return chatChannelModelCreate({
+            activeChatId: () => chatId,
+            activeChat: () => chat,
+            sidebarChats,
+            canEdit: () => {
+                const role = chat?.membershipRole;
+                return chat?.kind !== "dm" && (role === "owner" || role === "admin");
+            },
+            actions: props.actions,
+            onInfoOpen: () => props.actions.channelInfoOpen(chatId),
+            onLeave: () => {
+                if (chatId === activeConversationId()) props.actions.chatSelect("", "chat");
+            },
+            onChildCreate: childCreateOpen,
+            onError: showError,
+        });
+    };
     const conversationEntries = () =>
         entries.filter((entry) => entry.conversationId === activeConversationId());
     const composeAgents = () =>
@@ -1007,6 +1029,11 @@ export function ChatPage(props: ChatPageProps) {
                                 ) : null)
                             }
                             composeLabel="New chat"
+                            itemMenuItems={(item) =>
+                                item.kind === "channel"
+                                    ? sidebarChannelModel(item.id).menuItems()
+                                    : []
+                            }
                             onCompose={() => setComposeOpen(true)}
                             onItemSelect={(id) => {
                                 // A reserved shared-link row opens externally through app
@@ -1020,6 +1047,9 @@ export function ChatPage(props: ChatPageProps) {
                                     props.onNavSelect?.(id);
                                 else selectConversation(id);
                             }}
+                            onItemMenuSelect={(item, actionId) =>
+                                sidebarChannelModel(item.id).menuSelect(actionId)
+                            }
                             onSectionAction={(sectionId) => {
                                 if (sectionId === "agents") setAgentCreateOpen(true);
                                 if (sectionId === "projects") setProjectCreateOpen(true);
