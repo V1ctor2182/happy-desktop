@@ -22,6 +22,7 @@ function DocumentsScreen() {
         <DocumentsView
             documentId={params.documentId}
             onCloseDetail={() => void navigate({ to: "/documents" })}
+            onFileOpen={(fileId) => context.state.overlays().getState().overlayFileOpen(fileId)}
             onOpen={(documentId) =>
                 void navigate({ params: { documentId }, to: "/documents/$documentId" })
             }
