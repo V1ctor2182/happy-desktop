@@ -71,14 +71,14 @@
     app-region: no-drag;
 }
 
-/* The native controls occupy x=14…78, and the sidebar toggle docks immediately
-   after them at x=78…106. Any heading content starts after both so it never
-   intersects the green traffic light or the toggle. */
+/* The native controls occupy x=14…78 and their window-server hit area runs
+   past the green light, so the toggle docks clear of it at x=96…124. Any
+   heading content starts after both. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: 114px;
+    padding-left: 136px;
 }
 
 /* Same reservation on the workspace's own top strip once the sidebar is hidden
@@ -87,7 +87,7 @@
    space, never the content beneath it. */
 .happy2-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-tabbed-pane__bar {
     padding-top: 23px;
-    padding-left: 114px;
+    padding-left: 136px;
 }
 
 .happy2-app-shell__title-bar {
@@ -204,7 +204,7 @@
 .happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
     top: 14px;
     right: auto;
-    left: 78px;
+    left: 96px;
 }
 
 .happy2-app-shell__sidebar-collapse:hover {
@@ -244,7 +244,7 @@
     position: absolute;
     z-index: 4;
     top: 14px;
-    left: 78px;
+    left: 96px;
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
