@@ -3,7 +3,6 @@ import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { WindowDragRegion } from "./TitleBar";
-import { onboardingBackgroundUrl } from "./assets";
 
 export type RigConnectionState = "connecting" | "connected" | "disconnected";
 export type RigDaemonState = "unknown" | "starting" | "ready" | "error";
@@ -100,7 +99,6 @@ export function RigConnectionStatus(props: RigConnectionStatusProps) {
         <>
             <WindowDragRegion />
             <OnboardingScreen
-                backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={model.bodyKey}
                 brand={{ name: "Happy Place" }}
                 className={props.className}

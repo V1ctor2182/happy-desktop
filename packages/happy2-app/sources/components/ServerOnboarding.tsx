@@ -9,7 +9,6 @@ import {
     StoreSurface,
     TextField,
     WindowDragRegion,
-    onboardingBackgroundUrl,
     type OnboardingStep,
 } from "happy2-ui";
 import {
@@ -241,7 +240,6 @@ function ServerOnboardingBody(props: {
     const loadingState = status.type === "unloaded" || status.type === "loading";
     return (
         <OnboardingScreen
-            backgroundUrl={onboardingBackgroundUrl}
             bodyKey={canonicalStep}
             brand={{ name: "Happy Place" }}
             copy={headline().copy}

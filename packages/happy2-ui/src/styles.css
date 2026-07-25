@@ -85,6 +85,7 @@
 @import "./styles/plugin-permission-card.css";
 @import "./styles/plugin-diagnostics.css";
 @import "./styles/onboarding-screen.css";
+@import "./styles/splash-screen.css";
 @import "./styles/setup-option-card.css";
 @import "./styles/default-agent-form.css";
 @import "./styles/build-progress-panel.css";

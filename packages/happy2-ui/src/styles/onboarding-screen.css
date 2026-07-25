@@ -1,17 +1,16 @@
 /*
  * C-060 OnboardingScreen — centered desktop setup card (Happy system theme).
  *
- * Layout (border-box): the root fills the host window as a centering flex box.
- * A background layer and a legibility scrim are absolutely positioned to fill
- * the root, and a single card floats above them, centered on both axes. The
- * card is a flex column — brand mast, step rail, content block, a scrolling
- * body slot, and an optional footer. Every dimension is on the 4px grid so 1px
- * edges land on physical pixels at 2×.
+ * Layout (border-box): the root fills the host window as a centering flex box
+ * painted in the same surface the workspace uses, so arriving at the app is a
+ * change of content rather than of scenery. A single card sits centered on both
+ * axes: a flex column of brand mast, step rail, content block, a scrolling body
+ * slot, and an optional footer, delineated by one hairline rather than lifted on
+ * a shadow. Every dimension is on the 4px grid so 1px edges land on physical
+ * pixels at 2×.
  */
 
 .happy2-onboarding-screen,
-.happy2-onboarding-screen__bg,
-.happy2-onboarding-screen__scrim,
 .happy2-onboarding-screen__card,
 .happy2-onboarding-screen__brand,
 .happy2-onboarding-screen__mark,
@@ -36,23 +35,10 @@
     height: 100%;
     overflow: hidden;
     margin: 0;
-    background: var(--header-background);
+    background: var(--surface);
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
-}
-
-/* ---- Background + scrim layers ---------------------------------------- */
-
-.happy2-onboarding-screen__bg {
-    position: absolute;
-    inset: 0;
-}
-
-.happy2-onboarding-screen__scrim {
-    position: absolute;
-    inset: 0;
-    display: none;
 }
 
 /* ---- Card ------------------------------------------------------------- */
@@ -68,7 +54,6 @@
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-shell);
     background: var(--surface);
-    box-shadow: 0 24px 60px var(--shadow-floating);
 }
 
 .happy2-onboarding-screen__card[data-width="large"] {

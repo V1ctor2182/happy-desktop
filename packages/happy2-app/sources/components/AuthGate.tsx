@@ -12,9 +12,9 @@ import {
     Button,
     Fade,
     OnboardingScreen,
+    SplashScreen,
     TextField,
     WindowDragRegion,
-    onboardingBackgroundUrl,
 } from "happy2-ui";
 import {
     createServerClient,
@@ -483,7 +483,6 @@ export function AuthGate(props: AuthGateProps) {
         <>
             {props.showWindowDragRegion ? <WindowDragRegion /> : null}
             <OnboardingScreen
-                backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={mode}
                 brand={{ name: "Happy Place" }}
                 copy={mode === "loading" ? undefined : headline().copy}
@@ -608,19 +607,36 @@ export function AuthGate(props: AuthGateProps) {
         updateUser: (nextUser) => update({ user: nextUser }),
         setAvatar,
     };
+    /* The first probe has nothing to say yet — it either resolves into a form or
+       straight into the workspace — so the window holds the mark until it does
+       and dissolves from there, instead of flashing a card that is about to be
+       replaced. Later loading (signing in, loading a profile) has a message worth
+       reading, so it stays in the card. */
+    const booting = () => mode === "loading" && methods === undefined;
     /* True once the session is fully resolved and the workspace can take over. */
     const sessionReady = () =>
         mode === "ready" &&
         !!user &&
         (cookieAuth || hasBearer || methods?.method === "cloudflare_access") &&
         !!state;
-    // Fade is reserved for the pre-app gate → app dissolve. Probe resolution
-    // and every form-mode transition retain the same card DOM node.
-    const screenKey = (): "gate" | "app" => (sessionReady() ? "app" : "gate");
+    // Fade covers the splash → gate and gate → app dissolves. Probe resolution
+    // within the gate and every form-mode transition retain the same card DOM
+    // node, so only these two boundaries crossfade.
+    const screenKey = (): "splash" | "gate" | "app" =>
+        sessionReady() ? "app" : booting() ? "splash" : "gate";
     const renderScreen = (key: string | number) => {
         if (key === "app") return props.children(session);
+        if (key === "splash") return renderSplash();
         return renderGate();
     };
+    function renderSplash() {
+        return (
+            <>
+                {props.showWindowDragRegion ? <WindowDragRegion /> : null}
+                <SplashScreen data-testid="auth-splash-screen" label="Happy Place" />
+            </>
+        );
+    }
     return <Fade active={screenKey()} data-testid="auth-gate" render={renderScreen} />;
 }
 function message(reason: unknown): string {

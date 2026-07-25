@@ -147,15 +147,13 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
         "overflow-y": "hidden",
     });
 
-    /* ---- Background layers stay neutral under Happy's centered surface --- */
+    /* ---- The screen paints the workspace surface, flat and image-free --- */
 
-    const bg = view.$('[data-happy2-ui="onboarding-bg"]');
-    const scrim = view.$('[data-happy2-ui="onboarding-scrim"]');
-    expect(bg.element.getAttribute("data-has-image")).toBeNull();
-    expect(bg.offsets()).toMatchObject({ left: 0, right: 0, top: 0, bottom: 0 });
-    expect(bg.computedStyle("background-image")).toBe("none");
-    expect(bg.computedStyle("background-size")).toBe("auto");
-    expect(scrim.computedStyle("display")).toBe("none");
+    const screen = view.$('[data-happy2-ui="onboarding-screen"]');
+    expect(screen.computedStyle("background-image")).toBe("none");
+    expect(screen.computedStyle("background-color")).toBe(
+        view.$('[data-happy2-ui="onboarding-card"]').computedStyle("background-color"),
+    );
 
     /* ---- Card: centered on both axes, 480×600 -------------------------- */
 
@@ -467,7 +465,6 @@ it("keeps loading and form card rects identical while holding width variants", a
     view.render(
         () => (
             <OnboardingScreen
-                backgroundUrl="data:image/svg+xml;utf8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='8'%20height='8'%3E%3Crect%20width='8'%20height='8'%20fill='%238b7cf7'/%3E%3C/svg%3E"
                 brand={{
                     mark: <Icon color="var(--button-primary-tint)" name="zap" size={16} />,
                     name: "Relay",
@@ -570,17 +567,11 @@ it("keeps loading and form card rects identical while holding width variants", a
     expect(resolvedCard.bounds()).toMatchObject({ width: 480, height: 600 });
     expect(loadingCard.offsets()).toEqual(resolvedCard.offsets());
 
-    /* ---- Large width variant: 640px card, custom mark, image bg --------- */
+    /* ---- Large width variant: 640px card, custom mark ------------------- */
 
     const largeCard = view.$('[data-testid="large"] [data-happy2-ui="onboarding-card"]');
     expect(largeCard.bounds()).toMatchObject({ width: 640, height: 600 });
     expect(largeCard.element.getAttribute("data-width")).toBe("large");
-
-    const largeBg = view.$('[data-testid="large"] [data-happy2-ui="onboarding-bg"]');
-    expect(largeBg.element.getAttribute("data-has-image")).toBe("");
-    const largeBgImage = largeBg.computedStyle("background-image");
-    expect(largeBgImage).toContain("data:image");
-    expect(largeBgImage).not.toContain("gradient");
 
     const customMark = view.$('[data-testid="large"] [data-happy2-ui="onboarding-mark"]');
     expect(customMark.bounds()).toMatchObject({ width: 28, height: 28 });

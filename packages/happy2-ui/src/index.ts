@@ -1,6 +1,7 @@
 import "./styles.css";
 
-export { happyLogoUrl, onboardingBackgroundUrl } from "./assets";
+export { happyLogoUrl } from "./assets";
+export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
 export {
     AgentActivityStrip,
     type AgentActivityStripProps,

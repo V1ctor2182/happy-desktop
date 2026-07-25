@@ -1,0 +1,29 @@
+/*
+ * C-161 SplashScreen — the mark on the workspace surface while the app resolves.
+ *
+ * It fills its host and centers a 64px mark on both axes. The surface is the one
+ * the workspace and the onboarding card share, so the crossfade out of this
+ * screen changes what is on the surface, never the surface itself.
+ */
+
+.happy2-splash-screen,
+.happy2-splash-screen__mark {
+    box-sizing: border-box;
+}
+
+.happy2-splash-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: var(--surface);
+}
+
+.happy2-splash-screen__mark {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+}

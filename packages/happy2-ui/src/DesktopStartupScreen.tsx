@@ -5,7 +5,6 @@ import { OnboardingScreen } from "./OnboardingScreen";
 import { SetupOptionCard } from "./SetupOptionCard";
 import { TextField } from "./TextField";
 import { WindowDragRegion } from "./TitleBar";
-import { onboardingBackgroundUrl } from "./assets";
 
 export type DesktopStartupMode = "local" | "cloud";
 export type DesktopStartupPhase = "choosing" | "starting" | "error";
@@ -84,7 +83,6 @@ export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
         <>
             <WindowDragRegion />
             <OnboardingScreen
-                backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={props.phase}
                 brand={{ name: "Happy Place" }}
                 copy={

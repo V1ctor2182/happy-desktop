@@ -15,7 +15,6 @@ export type OnboardingScreenProps = {
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
-    backgroundUrl?: string;
     brand?: OnboardingBrand;
     steps?: readonly OnboardingStep[];
     kicker?: string;
@@ -56,7 +55,6 @@ export function OnboardingScreen(props: OnboardingScreenProps) {
         "className",
         "data-testid",
         "style",
-        "backgroundUrl",
         "brand",
         "steps",
         "kicker",
@@ -80,22 +78,6 @@ export function OnboardingScreen(props: OnboardingScreenProps) {
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <div
-                aria-hidden="true"
-                className="happy2-onboarding-screen__bg"
-                data-has-image={local.backgroundUrl ? "" : undefined}
-                data-happy2-ui="onboarding-bg"
-                style={
-                    local.backgroundUrl
-                        ? { backgroundImage: `url("${local.backgroundUrl}")` }
-                        : undefined
-                }
-            />
-            <div
-                aria-hidden="true"
-                className="happy2-onboarding-screen__scrim"
-                data-happy2-ui="onboarding-scrim"
-            />
             <div
                 className="happy2-onboarding-screen__card"
                 data-happy2-ui="onboarding-card"

@@ -69,6 +69,7 @@ import { UserPasswordResetDialogPage } from "./pages/UserPasswordResetDialogPage
 import { ModerationReportCardPage } from "./pages/ModerationReportCardPage";
 import { NotificationListPage } from "./pages/NotificationListPage";
 import { OnboardingScreenPage } from "./pages/OnboardingScreenPage";
+import { SplashScreenPage } from "./pages/SplashScreenPage";
 import { PolicyControlPage } from "./pages/PolicyControlPage";
 import { ProductStorePage } from "./pages/ProductStorePage";
 import { ProfileCardPage } from "./pages/ProfileCardPage";
@@ -333,6 +334,12 @@ const components: BlueprintPage[] = [
         label: "Onboarding screen",
         number: "C-061",
         page: OnboardingScreenPage,
+    },
+    {
+        id: "splash-screen",
+        label: "Splash screen",
+        number: "C-161",
+        page: SplashScreenPage,
     },
     {
         id: "setup-option-card",

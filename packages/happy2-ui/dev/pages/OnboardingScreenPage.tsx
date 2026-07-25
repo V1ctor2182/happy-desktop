@@ -7,19 +7,6 @@ import { SetupOptionCard } from "../../src/SetupOptionCard";
 import { TextField } from "../../src/TextField";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
-/* Deterministic, network-free background fill for the blueprint image path. */
-const backgroundDataUri =
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'>` +
-            `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
-            `<stop offset='0' stop-color='%236d28d9'/><stop offset='1' stop-color='%23f472b6'/>` +
-            `</linearGradient></defs>` +
-            `<rect width='96' height='96' fill='%23131217'/>` +
-            `<circle cx='26' cy='70' r='46' fill='url(%23g)' opacity='0.85'/>` +
-            `<circle cx='78' cy='22' r='20' fill='%2338bdf8' opacity='0.45'/></svg>`,
-    );
-
 const stepLabels = ["Sandbox", "Base image", "Build", "Agent", "Registration"] as const;
 function wizardSteps(current: number): readonly OnboardingStep[] {
     return stepLabels.map((label, index) => ({
@@ -57,7 +44,6 @@ export function OnboardingScreenPage() {
             >
                 <WindowFrame>
                     <OnboardingScreen
-                        backgroundUrl={backgroundDataUri}
                         bodyKey="sandbox-provider"
                         brand={{ name: "Happy Place" }}
                         copy="Agent code runs inside the selected sandbox provider, isolated from the Happy server process."
@@ -99,7 +85,6 @@ export function OnboardingScreenPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                     <WindowFrame>
                         <OnboardingScreen
-                            backgroundUrl={backgroundDataUri}
                             bodyKey="loading"
                             brand={{ name: "Happy Place" }}
                             kicker="Server setup"
@@ -114,7 +99,6 @@ export function OnboardingScreenPage() {
                     </WindowFrame>
                     <WindowFrame>
                         <OnboardingScreen
-                            backgroundUrl={backgroundDataUri}
                             bodyKey="base-image"
                             brand={{ name: "Happy Place" }}
                             copy="The base image is downloaded and built once, then becomes the default sandbox for every agent."
@@ -141,7 +125,6 @@ export function OnboardingScreenPage() {
             >
                 <WindowFrame>
                     <OnboardingScreen
-                        backgroundUrl={backgroundDataUri}
                         bodyKey="base-image-overflow"
                         brand={{ name: "Happy Place" }}
                         copy="Choose one image or provide a Dockerfile. Every option remains reachable inside the body scrollport."
@@ -183,7 +166,6 @@ export function OnboardingScreenPage() {
             >
                 <WindowFrame>
                     <OnboardingScreen
-                        backgroundUrl={backgroundDataUri}
                         bodyKey="default-agent"
                         brand={{ name: "Happy Place" }}
                         copy="Create the built-in agent that runs your workspace before you finish setup."
@@ -219,7 +201,6 @@ export function OnboardingScreenPage() {
             >
                 <WindowFrame height={480} width={720}>
                     <OnboardingScreen
-                        backgroundUrl={backgroundDataUri}
                         bodyKey="short-registration"
                         brand={{ name: "Happy Place" }}
                         copy="Decide whether other people can create an account now."
