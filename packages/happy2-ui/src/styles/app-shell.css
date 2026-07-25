@@ -55,6 +55,7 @@
    input. Interactive descendants opt out of native dragging explicitly. */
 .happy2-app-shell[data-window-controls] .happy2-sidebar__header,
 .happy2-app-shell[data-window-controls] .happy2-channel-header,
+.happy2-app-shell[data-window-controls] .happy2-tabbed-pane__bar,
 .happy2-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
     app-region: drag;
@@ -70,14 +71,23 @@
     app-region: no-drag;
 }
 
-/* The native controls occupy x=14…78. Start the sidebar heading after that
-   fixed chrome lane plus a 12px content gap so the Happy mark never intersects
-   the green traffic light. */
+/* The native controls occupy x=14…78, and the sidebar toggle docks immediately
+   after them at x=78…106. Any heading content starts after both so it never
+   intersects the green traffic light or the toggle. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: 90px;
+    padding-left: 114px;
+}
+
+/* Same reservation on the workspace's own top strip once the sidebar is hidden
+   and the traffic lights plus the floating toggle sit over it. The strip also
+   grows to the 56px chrome height so the floating lane covers only tab-bar
+   space, never the content beneath it. */
+.happy2-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-tabbed-pane__bar {
+    padding-top: 23px;
+    padding-left: 114px;
 }
 
 .happy2-app-shell__title-bar {
@@ -189,6 +199,14 @@
     cursor: pointer;
 }
 
+/* On desktop the toggle docks beside the traffic lights instead, so hiding and
+   showing the sidebar never moves it. */
+.happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
+    top: 14px;
+    right: auto;
+    left: 78px;
+}
+
 .happy2-app-shell__sidebar-collapse:hover {
     background: var(--surface-pressed);
     color: var(--text);
@@ -219,10 +237,21 @@
     border-right: 1px solid var(--divider);
 }
 
-/* Reserve the top-left traffic-light lane so the reveal control never sits under it. */
-.happy2-app-shell__reveal[data-window-controls] {
-    width: 76px;
-    padding-top: 64px;
+/* Desktop: the collapsed sidebar leaves nothing behind. The lane stops taking
+   layout space and becomes a compact drag strip beside the traffic lights that
+   carries the toggle at the exact spot it occupied while expanded. */
+.happy2-app-shell__reveal[data-floating] {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    left: 0;
+    align-items: center;
+    justify-content: flex-end;
+    width: 114px;
+    height: 56px;
+    padding: 0 8px 0 0;
+    background: transparent;
+    border-right: 0;
 }
 
 .happy2-app-shell__reveal-button {

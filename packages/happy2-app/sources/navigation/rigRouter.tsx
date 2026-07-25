@@ -37,6 +37,12 @@ export interface RigRouterContext {
     readonly workspace: RigWorkspaceStore;
     readonly clock: RigClockStore;
     readonly appearance: AppearanceStore;
+    /**
+     * Which shell hosts this router. The Electron window has no native title bar,
+     * so the workspace draws the traffic-light inset and drag lanes itself; the
+     * browser development mode renders ordinary web chrome.
+     */
+    readonly platform?: "desktop" | "web";
 }
 
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
@@ -129,6 +135,7 @@ function RigWorkspaceLayout() {
             connection={context.connection}
             folderId={params.folderId}
             host={context.host}
+            platform={context.platform}
             onChatSelect={(folderId, chatId, replace) =>
                 void navigate(
                     folderId === undefined

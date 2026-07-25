@@ -41,6 +41,9 @@ const applicationIconPath = existsSync(builtApplicationIconPath)
     ? builtApplicationIconPath
     : sourceApplicationIconPath;
 const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
+const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
+    ? new URL(process.env.VITE_DEV_SERVER_URL).origin
+    : undefined;
 const titleBarHeight = 38;
 const macosTrafficLightSize = 14;
 const macosWindowChrome = {
@@ -197,7 +200,12 @@ void app
             {
                 root: desktopRoot,
             },
-            { localRigConnector: connector },
+            {
+                localRigConnector: connector,
+                // In development the renderer is a page on the Vite server's own
+                // port, so its calls to the ephemeral proxy port are cross-origin.
+                ...(developmentRendererOrigin ? { rendererOrigin: developmentRendererOrigin } : {}),
+            },
         );
         rigInstallManager = new RigInstallTerminalManager(connector, {
             verified: () => void runtime.retry().catch(() => undefined),

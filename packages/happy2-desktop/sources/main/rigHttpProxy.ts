@@ -22,6 +22,15 @@ export interface RigHttpProxyOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** The desktop's durable per-directory tab arrangement, applied to the listing. */
     readonly order?: RigSessionOrder;
+    /**
+     * The single browser origin allowed to call this proxy cross-origin, used only
+     * by the development shell: there the renderer is served by Vite on its own
+     * loopback port, so every request to this ephemeral port is cross-origin and
+     * the browser drops the response without these headers. The packaged app loads
+     * the renderer from `file:` and never needs them, so production passes nothing
+     * and the proxy answers no cross-origin caller.
+     */
+    readonly allowedOrigin?: string;
 }
 
 /** Projects Rig's protocol health into the minimal liveness shape the renderer loader consumes. */
@@ -44,6 +53,29 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
     const server = createServer((request, response) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
+        // Exact-match only: an echoed arbitrary origin would hand the whole daemon
+        // surface to any page the user happens to have open.
+        const crossOrigin =
+            options.allowedOrigin !== undefined && request.headers.origin === options.allowedOrigin;
+        if (crossOrigin) {
+            response.setHeader("access-control-allow-origin", options.allowedOrigin!);
+            response.setHeader("vary", "origin");
+        }
+        if (request.method === "OPTIONS") {
+            // The transport POSTs `application/json`, which is not a safelisted
+            // content type, so the browser preflights before every mutation.
+            if (crossOrigin) {
+                response.writeHead(204, {
+                    "access-control-allow-headers": "content-type",
+                    "access-control-allow-methods": "GET, POST, OPTIONS",
+                    "access-control-max-age": "600",
+                });
+            } else {
+                response.writeHead(403);
+            }
+            response.end();
+            return;
+        }
         void rigProxyHandle({
             client: options.client,
             order: options.order,

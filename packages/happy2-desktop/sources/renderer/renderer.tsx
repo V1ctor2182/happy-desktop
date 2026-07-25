@@ -62,6 +62,7 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
 
 function RigBoundary(props: {
     appearance: AppearanceStore;
+    platform: "desktop" | "web";
     router: RigRouter;
     store: RigSessionStore;
 }) {
@@ -83,6 +84,7 @@ function RigBoundary(props: {
                 clock: session.clock,
                 connection: session.connection,
                 host: session.host,
+                platform: props.platform,
                 workspace: session.workspace,
             }}
             key={session.connectionId}
@@ -94,6 +96,7 @@ function RigBoundary(props: {
 function DesktopRenderer(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
+    platform: "desktop" | "web";
     rigRouter: RigRouter;
     rigSession: RigSessionStore;
     startupValues: StartupValuesStore;
@@ -181,6 +184,7 @@ function DesktopRenderer(props: {
     return (
         <RigBoundary
             appearance={props.appearance}
+            platform={props.platform}
             router={props.rigRouter}
             store={props.rigSession}
         />
@@ -206,6 +210,9 @@ if (bridge) {
             <DesktopRenderer
                 appearance={appearance}
                 bridge={bridge}
+                // Only the Electron window hides its title bar; the browser
+                // development server renders the same tree with web chrome.
+                platform={browserLocal ? "web" : "desktop"}
                 rigRouter={rigRouter}
                 rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
                     conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),

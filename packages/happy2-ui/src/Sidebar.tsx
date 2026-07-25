@@ -353,7 +353,7 @@ export function Sidebar(props: SidebarProps) {
                                     </span>
                                 </span>
                             </span>
-                        ) : (
+                        ) : local.title !== undefined ? (
                             <span className="happy2-sidebar__title-row">
                                 <span
                                     className="happy2-sidebar__title"
@@ -365,7 +365,7 @@ export function Sidebar(props: SidebarProps) {
                                     <Icon name="chevron-down" size={14} />
                                 </span>
                             </span>
-                        )}
+                        ) : null}
                         {local.subtitle ? (
                             <span
                                 className="happy2-sidebar__subtitle"

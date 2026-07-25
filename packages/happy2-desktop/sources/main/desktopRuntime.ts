@@ -45,6 +45,12 @@ export interface DesktopRuntimePaths {
 export interface DesktopRuntimeOptions {
     readonly localRigConnector?: LocalRigConnector;
     readonly rigHttpProxyStart?: RigHttpProxyStart;
+    /**
+     * The development renderer's origin, when the shell is running against a Vite
+     * server instead of the packaged `file:` renderer. It is the only origin the
+     * loopback Rig proxy answers cross-origin.
+     */
+    readonly rendererOrigin?: string;
 }
 
 /** Owns the active local-Rig or remote-cloud topology and one immutable renderer snapshot. */
@@ -79,6 +85,7 @@ export class DesktopRuntime implements AsyncDisposable {
                     client: connection.client,
                     onConnectionError,
                     order,
+                    ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                 }));
         const active = settings?.topologies.find(({ id }) => id === settings.activeTopologyId);
         if (active) {

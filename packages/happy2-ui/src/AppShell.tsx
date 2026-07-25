@@ -66,7 +66,6 @@ const PANEL_MAX_WIDTH = 560;
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const RESIZE_HANDLE_WIDTH = 8;
 const REVEAL_WIDTH = 48;
-const WINDOW_CONTROLS_REVEAL_WIDTH = 76;
 const WORKSPACE_MIN_WIDTH = 140;
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -258,22 +257,47 @@ export function AppShell(props: AppShellProps) {
           : local.panelWidth === undefined
             ? undefined
             : { width: `${local.panelWidth}px` };
+    const sidebarHidden = sidebarInteractive && sidebarCollapsed;
+    // Under native window controls a collapsed sidebar leaves no lane behind: the
+    // reveal control floats beside the traffic lights, exactly where the collapse
+    // control sat, and the workspace takes the whole width.
+    const revealFloating = sidebarHidden && local.windowControls === true;
     const sidebarLayoutMin = !local.sidebar
         ? 0
-        : sidebarInteractive && sidebarCollapsed
-          ? local.windowControls
-              ? WINDOW_CONTROLS_REVEAL_WIDTH
-              : REVEAL_WIDTH
-          : sidebarInteractive
-            ? sidebarMin + RESIZE_HANDLE_WIDTH
-            : FIXED_SIDEBAR_MIN_WIDTH;
+        : revealFloating
+          ? 0
+          : sidebarHidden
+            ? REVEAL_WIDTH
+            : sidebarInteractive
+              ? sidebarMin + RESIZE_HANDLE_WIDTH
+              : FIXED_SIDEBAR_MIN_WIDTH;
     const sidebarFootprint = !local.sidebar
         ? "0px"
-        : sidebarInteractive && sidebarCollapsed
-          ? `${local.windowControls ? WINDOW_CONTROLS_REVEAL_WIDTH : REVEAL_WIDTH}px`
-          : sidebarInteractive
-            ? `${sidebarWidth + RESIZE_HANDLE_WIDTH}px`
-            : "clamp(250px, 30vw, 360px)";
+        : revealFloating
+          ? "0px"
+          : sidebarHidden
+            ? `${REVEAL_WIDTH}px`
+            : sidebarInteractive
+              ? `${sidebarWidth + RESIZE_HANDLE_WIDTH}px`
+              : "clamp(250px, 30vw, 360px)";
+    const reveal = sidebarHidden ? (
+        <div
+            className="happy2-app-shell__reveal"
+            data-floating={revealFloating ? "" : undefined}
+            data-happy2-ui="app-shell-reveal"
+            data-window-controls={local.windowControls ? "" : undefined}
+        >
+            <button
+                aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
+                className="happy2-app-shell__reveal-button"
+                data-happy2-ui="app-shell-reveal-button"
+                onClick={() => setSidebarCollapsed(false)}
+                type="button"
+            >
+                <Icon name="sidebar-expand" size={14} />
+            </button>
+        </div>
+    ) : null;
     const mainStyle: CSSProperties = {
         minWidth: `${sidebarLayoutMin + WORKSPACE_MIN_WIDTH}px`,
     };
@@ -285,6 +309,7 @@ export function AppShell(props: AppShellProps) {
             {...rest}
             className={["happy2-app-shell", local.className].filter(Boolean).join(" ")}
             data-happy2-ui="app-shell"
+            data-sidebar-collapsed={sidebarHidden ? "" : undefined}
             data-window-controls={local.windowControls ? "" : undefined}
             style={local.style}
         >
@@ -300,6 +325,7 @@ export function AppShell(props: AppShellProps) {
                     />
                 </div>
             ) : null}
+            {revealFloating ? reveal : null}
             {local.windowControls && !local.sidebar && !local.titleBar ? (
                 <div
                     aria-hidden="true"
@@ -328,23 +354,7 @@ export function AppShell(props: AppShellProps) {
                         data-happy2-ui="app-shell-main"
                         style={mainStyle}
                     >
-                        {sidebarInteractive && sidebarCollapsed ? (
-                            <div
-                                className="happy2-app-shell__reveal"
-                                data-happy2-ui="app-shell-reveal"
-                                data-window-controls={local.windowControls ? "" : undefined}
-                            >
-                                <button
-                                    aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
-                                    className="happy2-app-shell__reveal-button"
-                                    data-happy2-ui="app-shell-reveal-button"
-                                    onClick={() => setSidebarCollapsed(false)}
-                                    type="button"
-                                >
-                                    <Icon name="sidebar-expand" size={14} />
-                                </button>
-                            </div>
-                        ) : null}
+                        {revealFloating ? null : reveal}
                         {local.sidebar ? (
                             <div
                                 className="happy2-app-shell__sidebar"

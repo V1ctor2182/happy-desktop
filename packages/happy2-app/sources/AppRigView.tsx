@@ -47,6 +47,13 @@ export interface AppRigViewProps {
     /** Theme selection behind the sidebar footer's appearance toggle. */
     appearance: AppearanceStore;
     /**
+     * Where this surface is running. In the Electron shell the window has no
+     * native title bar, so the shell owns the traffic-light inset and the drag
+     * lanes and the sidebar heading gives its space up to them; the browser
+     * development mode keeps the ordinary branded heading.
+     */
+    platform?: "desktop" | "web";
+    /**
      * The addressed working directory and conversation, read from the route by
      * the caller. This surface never decides what is shown; it renders the
      * addressed directory's sessions and asks for a different address through
@@ -167,13 +174,19 @@ export function AppRigView(props: AppRigViewProps) {
             </Banner>
         ) : undefined;
 
+    const desktop = props.platform === "desktop";
+
     return (
         <AppShell
             sidebarCollapsible
+            windowControls={desktop}
             sidebar={
                 <Sidebar
                     activeItemId={props.folderId ?? ""}
-                    brand
+                    // The desktop window puts the traffic lights and the sidebar
+                    // toggle in this heading, so the product mark stands down and
+                    // the row becomes the window's drag lane.
+                    brand={!desktop}
                     composeLabel="New session"
                     footer={
                         <SidebarFooter
