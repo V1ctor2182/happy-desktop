@@ -411,21 +411,25 @@ line up.
   through the existing `attachmentAdd`/`attachmentRemove` actions, render pending
   attachments so they can be removed before sending, and check the cloud path for
   the same omission.
-- **No routing in local.** Cloud drives navigation with TanStack Router; local
-  keeps the selection in `rigWorkspaceStore.selectedId` and renders `AppRigView`
-  directly. A local session should be addressable by URL through the same route
-  tree, with the shell reading the id from the match so the transcript stays
-  mounted across selection changes. Materialization stays a store concern;
-  *which* conversation is selected stops being one. Do not leave both
-  authoritative.
-- **Local is mounted outside the app's shared providers.** `happy2-desktop`'s
-  `renderer.tsx` mounts `AppRigView` directly — outside `RouterProvider` and
-  outside `ThemeScope`, both of which only `DesktopApp` establishes for the cloud
-  tree. This is the structural root of both the missing router and the
-  non-functional appearance toggle, and likely of further gaps. The clean
-  resolution is probably that local mounts through the same entry shape as cloud
-  rather than as a special case; that decision belongs to step 7 and should be
-  taken deliberately rather than patched around.
+- ~~**No routing in local.**~~ Closed. Local now runs a TanStack router of its
+  own (`happy2-app/sources/navigation/rigRouter.tsx`) over the cloud address
+  shapes: `/` redirects to `/chats`, `/chats/$chatId` addresses one session, and
+  a pathless `_workspace` layout keeps the shell and transcript mounted while the
+  addressed conversation changes. The route loaders apply the address to the
+  store (`conversationOpen`/`conversationClose`); `rigSessionListStore` no longer
+  holds a `selectedId` and `ConversationListSnapshot` no longer has the field, so
+  the URL is the only selection authority. Creating or forking a session emits
+  `conversationOpenRequested`, which the renderer turns into a navigation. The
+  route tree is separate from the generated cloud tree because cloud routes
+  require a `HappyState` context local has none of; the paths, layout shape, and
+  history handling are the same.
+- **Local is mounted outside `ThemeScope`.** `happy2-desktop`'s `renderer.tsx`
+  now mounts local through `RouterProvider`, but still without the `ThemeScope`
+  that `DesktopApp` establishes for the cloud tree — the structural root of the
+  non-functional appearance toggle. The clean resolution is probably that local
+  mounts through the same entry shape as cloud rather than as a special case;
+  that decision belongs to step 7 and should be taken deliberately rather than
+  patched around.
 - **Transcript presentation.** Activity rows do not share the message body's left
   inset, so the left edge is ragged; the collapsed `chevron-right` affordance is
   unwanted; activity rows are too loud (link-blue labels, saturated status dots)

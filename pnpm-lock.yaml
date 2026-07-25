@@ -214,6 +214,9 @@ importers:
       '@slopus/rig':
         specifier: 0.0.55
         version: 0.0.55(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
+      '@tanstack/react-router':
+        specifier: ^1.170.18
+        version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9

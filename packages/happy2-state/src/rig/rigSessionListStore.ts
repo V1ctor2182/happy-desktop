@@ -7,13 +7,13 @@ import type { RigSessionCreateInput, RigSessionId, RigSessionSummary } from "./r
 
 /**
  * The list surface of the local workspace, in the shared conversation
- * vocabulary: a `Loadable` of ordered rows plus the current selection. Local
- * sessions are conversations like any other; nothing here is Rig-shaped.
+ * vocabulary: a `Loadable` of ordered rows. Local sessions are conversations
+ * like any other; nothing here is Rig-shaped, and nothing here is selected —
+ * the open conversation is addressed by the URL.
  */
 export type RigSessionListSnapshot = ConversationListSnapshot;
 
 export type RigSessionListOutput =
-    | { readonly type: "sessionSelected"; readonly sessionId: RigSessionId }
     | { readonly type: "sessionCreated"; readonly sessionId: RigSessionId }
     | { readonly type: "sessionForked"; readonly sessionId: RigSessionId }
     | { readonly type: "sessionReset"; readonly sessionId: RigSessionId };
@@ -26,10 +26,14 @@ export interface RigSessionListStore {
      * button: it runs on hydration and after mutations to converge on server truth.
      */
     sessionsRefresh(): Promise<void>;
-    /** Selects a conversation locally; emits `sessionSelected`. */
-    sessionSelect(sessionId: RigSessionId): void;
-    sessionCreate(input: RigSessionCreateInput): Promise<void>;
-    sessionFork(sessionId: RigSessionId): Promise<void>;
+    /**
+     * Creates a session and resolves with its id, or with `undefined` when the
+     * mutation failed and was recorded in `mutationError`. The id is what lets
+     * the caller navigate to the new conversation; this store never selects.
+     */
+    sessionCreate(input: RigSessionCreateInput): Promise<RigSessionId | undefined>;
+    /** Forks a session, resolving with the new session's id as `sessionCreate` does. */
+    sessionFork(sessionId: RigSessionId): Promise<RigSessionId | undefined>;
     sessionReset(sessionId: RigSessionId): Promise<void>;
     [Symbol.dispose](): void;
 }
@@ -74,26 +78,19 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
 
-    const publish = (patch?: Partial<RigSessionListSnapshot>): void => {
+    const publish = (): void => {
         const previous = store.getState();
         const projected = sessions.map(rigConversationSummaryProject);
         const conversations =
             previous.conversations.type === "ready"
                 ? referencesPreserve(previous.conversations.value, projected)
                 : projected;
-        const next: RigSessionListSnapshot = {
-            ...previous,
-            conversations: { type: "ready", value: conversations },
-            ...patch,
-        };
         if (
             previous.conversations.type === "ready" &&
-            previous.conversations.value === conversations &&
-            previous.selectedId === next.selectedId &&
-            previous.mutationError === next.mutationError
+            previous.conversations.value === conversations
         )
             return;
-        store.setState(next);
+        store.setState({ ...previous, conversations: { type: "ready", value: conversations } });
     };
 
     const reconcile = async (): Promise<void> => {
@@ -155,14 +152,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
     const storeUnsub = store.subscribe(notify);
 
-    const mutate = async (run: () => Promise<void>): Promise<void> => {
+    const mutate = async <T>(run: () => Promise<T>): Promise<T | undefined> => {
         try {
             store.setState({ ...store.getState(), mutationError: undefined });
-            await run();
+            return await run();
         } catch (error) {
             if (!disposed) {
                 store.setState({ ...store.getState(), mutationError: rigUserError(error) });
             }
+            return undefined;
         }
     };
 
@@ -177,36 +175,32 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             };
         },
         sessionsRefresh: () => reconcile(),
-        sessionSelect(sessionId) {
-            const previous = store.getState();
-            if (previous.selectedId === sessionId) return;
-            store.setState({ ...previous, selectedId: sessionId });
-            output({ type: "sessionSelected", sessionId });
-        },
         sessionCreate: (input) =>
             mutate(async () => {
                 void createId();
                 const session = await deps.transport.sessionCreate(input);
-                if (disposed) return;
+                if (disposed) return undefined;
                 sessions = sortByCreatedAt([
                     ...sessions.filter((existing) => existing.id !== session.id),
                     sessionSummaryOf(session),
                 ]);
-                publish({ selectedId: session.id });
+                publish();
                 output({ type: "sessionCreated", sessionId: session.id });
                 await reconcile();
+                return session.id;
             }),
         sessionFork: (sessionId) =>
             mutate(async () => {
                 const session = await deps.transport.sessionFork(sessionId);
-                if (disposed) return;
+                if (disposed) return undefined;
                 sessions = sortByCreatedAt([
                     ...sessions.filter((existing) => existing.id !== session.id),
                     sessionSummaryOf(session),
                 ]);
-                publish({ selectedId: session.id });
+                publish();
                 output({ type: "sessionForked", sessionId: session.id });
                 await reconcile();
+                return session.id;
             }),
         sessionReset: (sessionId) =>
             mutate(async () => {

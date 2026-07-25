@@ -21,10 +21,13 @@ export interface ConversationSummary {
     readonly participants: readonly ConversationAuthor[];
 }
 
-/** The immutable list surface: what is loaded, what is selected, what failed. */
+/**
+ * The immutable list surface: what is loaded and what failed. Which conversation
+ * is open is deliberately absent — that is addressed by the URL and owned by the
+ * router, so no list store carries a competing selection.
+ */
 export interface ConversationListSnapshot {
     readonly conversations: Loadable<readonly ConversationSummary[]>;
-    readonly selectedId?: string;
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
     readonly mutationError?: UserError;
 }

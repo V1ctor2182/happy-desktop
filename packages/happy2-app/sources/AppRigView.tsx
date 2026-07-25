@@ -8,7 +8,6 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigServiceTier,
-    RigSessionId,
     RigThinkingLevel,
     RigWorkspaceStore,
 } from "happy2-state";
@@ -39,6 +38,14 @@ export interface AppRigViewProps {
     workspace: RigWorkspaceStore;
     /** Ticking clock feeding relative timestamps in the conversation list. */
     clock: RigClockStore;
+    /**
+     * The addressed conversation, read from the route by the caller. This surface
+     * never decides which conversation is shown; it renders the addressed one and
+     * asks for a different address through `onChatSelect`, exactly as the cloud
+     * workspace does.
+     */
+    chatId?: string;
+    onChatSelect(chatId: string | undefined, replace?: boolean): void;
 }
 
 /** Relative age of a conversation's newest content, for its list row. */
@@ -79,8 +86,10 @@ function sidebarItem(summary: ConversationSummary, now: number): SidebarItem {
  * into that surface's slots.
  *
  * Until the daemon connection is live it shows the connection status with a
- * retry. Selection, materialization, and every draft keystroke live in the
- * workspace store outside React, so this component stays a pure projection.
+ * retry. Which conversation is shown comes from the route through `chatId`, and
+ * choosing another one is a navigation request; materialization and every draft
+ * keystroke live in the workspace store outside React, so this component stays a
+ * pure projection.
  */
 export function AppRigView(props: AppRigViewProps) {
     const status = useSyncExternalStore(
@@ -143,12 +152,12 @@ export function AppRigView(props: AppRigViewProps) {
         <AppShell
             sidebar={
                 <Sidebar
-                    activeItemId={workspace.list.selectedId ?? ""}
+                    activeItemId={props.chatId ?? ""}
                     brand
                     composeLabel="New session"
                     headerAccessory={listAccessory}
                     onCompose={conversationCreate}
-                    onItemSelect={(id) => props.workspace.conversationSelect(id as RigSessionId)}
+                    onItemSelect={(id) => props.onChatSelect(id)}
                     sections={[
                         {
                             id: "sessions",

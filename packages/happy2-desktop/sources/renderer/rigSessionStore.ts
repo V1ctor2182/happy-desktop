@@ -8,6 +8,7 @@ import {
     type RigConnectionStore,
     type RigDaemonHealth,
     type RigHost,
+    type RigSessionId,
     type RigWorkspaceStore,
 } from "happy2-state";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
@@ -31,6 +32,14 @@ interface RigSessionInternal extends RigSession {
 export interface RigSessionStore {
     get(): RigSession | undefined;
     subscribe(listener: () => void): () => void;
+}
+
+export interface RigSessionDeps {
+    /**
+     * Navigates to a conversation the workspace just created (compose or
+     * `/fork`). The store never selects a conversation itself; the URL does.
+     */
+    readonly conversationOpen: (sessionId: RigSessionId) => void;
 }
 
 function healthProbe(rigHttpUrl: string): () => Promise<RigDaemonHealth> {
@@ -61,6 +70,7 @@ function hostCreate(bridge: HappyDesktopBridge): RigHost {
 export function rigSessionStoreCreate(
     bridge: HappyDesktopBridge,
     runtime: DesktopRuntimeStore,
+    deps: RigSessionDeps,
 ): RigSessionStore {
     let session: RigSessionInternal | undefined;
     let runtimeUnsubscribe: (() => void) | undefined;
@@ -104,7 +114,9 @@ export function rigSessionStoreCreate(
             connection: rigConnectionLoaderCreate({ probe: healthProbe(target.rigHttpUrl) }),
             host: hostCreate(bridge),
             client,
-            workspace: rigWorkspaceStoreCreate(client),
+            workspace: rigWorkspaceStoreCreate(client, {
+                output: (event) => deps.conversationOpen(event.conversationId),
+            }),
             clock: rigClockStoreCreate(),
         };
         notify();

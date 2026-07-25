@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
-import { App, AppRigView, DesktopStartupScreen } from "happy2-app";
+import { RouterProvider } from "@tanstack/react-router";
+import { App, DesktopStartupScreen, rigRouterCreate, type RigRouter } from "happy2-app";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
@@ -32,7 +33,12 @@ function ChoosingScreen(props: {
     );
 }
 
-function RigBoundary(props: { bridge: HappyDesktopBridge; store: RigSessionStore }) {
+/**
+ * Mounts the local workspace under its router once a connection exists. The
+ * router owns which conversation is open, so the stores of a new connection are
+ * handed to it as route context rather than as props to a screen.
+ */
+function RigBoundary(props: { router: RigRouter; store: RigSessionStore }) {
     const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     if (!session)
         return (
@@ -45,18 +51,22 @@ function RigBoundary(props: { bridge: HappyDesktopBridge; store: RigSessionStore
             />
         );
     return (
-        <AppRigView
-            clock={session.clock}
-            connection={session.connection}
-            host={session.host}
+        <RouterProvider
+            context={{
+                clock: session.clock,
+                connection: session.connection,
+                host: session.host,
+                workspace: session.workspace,
+            }}
             key={session.connectionId}
-            workspace={session.workspace}
+            router={props.router}
         />
     );
 }
 
 function DesktopRenderer(props: {
     bridge: HappyDesktopBridge;
+    rigRouter: RigRouter;
     rigSession: RigSessionStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
@@ -140,7 +150,7 @@ function DesktopRenderer(props: {
             />
         );
 
-    return <RigBoundary bridge={props.bridge} store={props.rigSession} />;
+    return <RigBoundary router={props.rigRouter} store={props.rigSession} />;
 }
 
 // Browser-local dev mode is signalled by a CSP-safe meta tag the dev server
@@ -150,10 +160,21 @@ const browserLocal =
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 if (bridge) {
     const runtimeStore = desktopRuntimeStoreCreate(bridge);
+    // The local router outlives any single daemon connection, so it is created
+    // here and the session store navigates through it when a conversation it
+    // created should be opened.
+    const rigRouter = rigRouterCreate();
     createRoot(document.getElementById("root")!).render(
         <DesktopRenderer
             bridge={bridge}
-            rigSession={rigSessionStoreCreate(bridge, runtimeStore)}
+            rigRouter={rigRouter}
+            rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
+                conversationOpen: (sessionId) =>
+                    void rigRouter.navigate({
+                        params: { chatId: sessionId },
+                        to: "/chats/$chatId",
+                    }),
+            })}
             startupValues={startupValuesStoreCreate()}
             store={runtimeStore}
         />,

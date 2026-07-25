@@ -21,7 +21,7 @@ function conversationReady(workspace: RigWorkspaceStore): RigConversationSnapsho
 }
 
 describe("rigWorkspaceStore", () => {
-    it("hydrates the conversation list and materializes the selected conversation", async () => {
+    it("hydrates the conversation list and materializes the addressed conversation", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a", { title: "Alpha" }));
         const client = rigClientCreate({ transport: fake.transport });
@@ -36,7 +36,7 @@ describe("rigWorkspaceStore", () => {
         expect(list.type === "ready" && list.value[0]!.title).toBe("Alpha");
         expect(workspace.get().conversation.type).toBe("unloaded");
 
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         expect(conversationReady(workspace).conversationId).toBe("session-a");
@@ -48,7 +48,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("switches the conversation lease on selection and disposes the previous one", async () => {
+    it("switches the conversation lease when another one is addressed and disposes the previous", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         fake.sessionSet(fakeRigSession("session-b"));
@@ -58,17 +58,89 @@ describe("rigWorkspaceStore", () => {
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
 
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
         expect(conversationReady(workspace).conversationId).toBe("session-a");
 
-        workspace.conversationSelect("session-b" as RigSessionId);
+        workspace.conversationOpen("session-b" as RigSessionId);
         await flush();
         expect(conversationReady(workspace).conversationId).toBe("session-b");
-        // Only the currently-selected conversation holds a live subscription.
+        // Only the conversation the URL addresses holds a live subscription.
         expect(fake.sessionSubscriberCount).toBe(1);
 
         unsubscribe();
+        workspace[Symbol.dispose]();
+    });
+
+    it("releases the conversation when the list is addressed without one", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("session-a"));
+        const client = rigClientCreate({ transport: fake.transport });
+        const workspace = rigWorkspaceStoreCreate(client);
+        const unsubscribe = workspace.subscribe(() => undefined);
+        await flush();
+        workspace.conversationOpen("session-a" as RigSessionId);
+        await flush();
+        expect(fake.sessionSubscriberCount).toBe(1);
+
+        workspace.conversationClose();
+        await flush();
+
+        expect(workspace.get().conversation.type).toBe("unloaded");
+        expect(fake.sessionSubscriberCount).toBe(0);
+
+        unsubscribe();
+        workspace[Symbol.dispose]();
+    });
+
+    it("asks its owner to address a conversation it created rather than opening one itself", async () => {
+        const fake = createFakeRigTransport();
+        const requested: string[] = [];
+        const client = rigClientCreate({ transport: fake.transport });
+        const workspace = rigWorkspaceStoreCreate(client, {
+            output: (event) => requested.push(event.conversationId),
+        });
+        const unsubscribe = workspace.subscribe(() => undefined);
+        await flush();
+
+        await workspace.conversationCreate({ cwd: "/work/happy2" });
+        await flush();
+
+        // Creation is a navigation request: nothing is open until the router
+        // applies the address it asked for.
+        expect(requested).toHaveLength(1);
+        expect(workspace.get().conversation.type).toBe("unloaded");
+
+        workspace.conversationOpen(requested[0]! as RigSessionId);
+        await flush();
+        expect(conversationReady(workspace).conversationId).toBe(requested[0]);
+
+        unsubscribe();
+        workspace[Symbol.dispose]();
+    });
+
+    it("re-acquires the addressed conversation after every subscriber leaves and returns", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("session-a"));
+        const client = rigClientCreate({ transport: fake.transport });
+        const workspace = rigWorkspaceStoreCreate(client);
+        const first = workspace.subscribe(() => undefined);
+        await flush();
+        workspace.conversationOpen("session-a" as RigSessionId);
+        await flush();
+        expect(conversationReady(workspace).conversationId).toBe("session-a");
+
+        // The URL still names the conversation while nothing is mounted, so
+        // remounting must materialize it again without a second navigation.
+        first();
+        expect(fake.sessionSubscriberCount).toBe(0);
+        const second = workspace.subscribe(() => undefined);
+        await flush();
+
+        expect(conversationReady(workspace).conversationId).toBe("session-a");
+        expect(fake.sessionSubscriberCount).toBe(1);
+
+        second();
         workspace[Symbol.dispose]();
     });
 
@@ -79,12 +151,12 @@ describe("rigWorkspaceStore", () => {
         const workspace = rigWorkspaceStoreCreate(client);
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         const before = workspace.get();
-        // Re-selecting the already-selected conversation is a no-op: same reference.
-        workspace.conversationSelect("session-a" as RigSessionId);
+        // Re-addressing the open conversation is a no-op: same reference.
+        workspace.conversationOpen("session-a" as RigSessionId);
         expect(workspace.get()).toBe(before);
         expect(workspace.get().conversation).toBe(before.conversation);
 
@@ -99,7 +171,7 @@ describe("rigWorkspaceStore", () => {
         const workspace = rigWorkspaceStoreCreate(client);
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         workspace.composerTextUpdate("ship it");
@@ -135,7 +207,7 @@ describe("rigWorkspaceStore", () => {
         const workspace = rigWorkspaceStoreCreate(client);
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         expect(conversationReady(workspace).usagePanelOpen).toBe(false);
@@ -157,7 +229,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("rejects conversation actions when nothing is selected", async () => {
+    it("rejects conversation actions when no conversation is open", async () => {
         const fake = createFakeRigTransport();
         const client = rigClientCreate({ transport: fake.transport });
         const workspace = rigWorkspaceStoreCreate(client);
@@ -165,7 +237,7 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         await expect(workspace.runAbort()).rejects.toThrow(/No local conversation/);
-        // Composer actions without a selection are inert, not a crash.
+        // Composer actions with no open conversation are inert, not a crash.
         workspace.composerTextUpdate("ignored");
         expect(workspace.get().conversation.type).toBe("unloaded");
 
@@ -173,7 +245,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("surfaces acquisition failure with the selected id and retries successfully", async () => {
+    it("surfaces acquisition failure and retries successfully", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         const client = rigClientCreate({ transport: fake.transport });
@@ -182,10 +254,9 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         fake.failNext("modelsRead", new Error("catalog unavailable"));
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
-        expect(workspace.get().list.selectedId).toBe("session-a");
         const failed = workspace.get().conversation;
         expect(failed.type).toBe("error");
         expect(failed.type === "error" && failed.error.message).toBe("catalog unavailable");
@@ -201,7 +272,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("re-selects the same failed conversation by starting a new acquisition", async () => {
+    it("re-addresses the same failed conversation by starting a new acquisition", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         const client = rigClientCreate({ transport: fake.transport });
@@ -210,11 +281,11 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         fake.failNext("modelsRead");
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
         expect(workspace.get().conversation.type).toBe("error");
 
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         expect(workspace.get().conversation.type).toBe("loading");
         await flush();
 
@@ -225,7 +296,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("ignores a late acquisition for a conversation that is no longer selected", async () => {
+    it("ignores a late acquisition for a conversation that is no longer addressed", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         fake.sessionSet(fakeRigSession("session-b"));
@@ -235,10 +306,9 @@ describe("rigWorkspaceStore", () => {
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
 
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         expect(workspace.get().conversation.type).toBe("loading");
-        workspace.conversationSelect("session-b" as RigSessionId);
-        expect(workspace.get().list.selectedId).toBe("session-b");
+        workspace.conversationOpen("session-b" as RigSessionId);
         expect(workspace.get().conversation.type).toBe("loading");
 
         catalogGate.release();
@@ -258,7 +328,7 @@ describe("rigWorkspaceStore", () => {
         const workspace = rigWorkspaceStoreCreate(client);
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         const firstGate = fake.deferNext("filesSearch");
@@ -307,12 +377,12 @@ describe("rigWorkspaceStore", () => {
             notifications += 1;
         });
         await flush();
-        workspace.conversationSelect("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId);
         await flush();
 
         const searchGate = fake.deferNext("filesSearch");
         workspace.composerTextUpdate("@a");
-        workspace.conversationSelect("session-b" as RigSessionId);
+        workspace.conversationOpen("session-b" as RigSessionId);
         await flush();
         const before = workspace.get();
         const notificationsBefore = notifications;

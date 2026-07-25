@@ -46,26 +46,30 @@ function workspace(): RigWorkspaceStore {
                     },
                 ],
             },
-            selectedId: undefined,
         },
         conversation: { type: "unloaded" as const },
     };
     return {
         get: () => snapshot,
         subscribe: () => () => undefined,
-        conversationSelect: () => undefined,
+        conversationOpen: () => undefined,
+        conversationClose: () => undefined,
         conversationListRetry: () => undefined,
         conversationRetry: () => undefined,
         [Symbol.dispose]: () => undefined,
     } as unknown as RigWorkspaceStore;
 }
 
-function view(host: RigHost = rigHostNoop) {
+function view(
+    options: { chatId?: string; host?: RigHost; onChatSelect?: (id?: string) => void } = {},
+) {
     return render(
         <AppRigView
+            chatId={options.chatId}
             clock={clock()}
             connection={connection()}
-            host={host}
+            host={options.host ?? rigHostNoop}
+            onChatSelect={options.onChatSelect ?? (() => undefined)}
             workspace={workspace()}
         />,
     );
@@ -86,6 +90,19 @@ it("heads the local sidebar with the shared brand mark, not a local-only title",
     // The plain title row and its chevron affordance are gone.
     expect(container.textContent).not.toContain("Local");
     expect(container.querySelector(".happy2-sidebar__title-chevron")).toBeNull();
+});
+
+it("highlights the addressed session and asks to navigate when another is picked", () => {
+    const selected: (string | undefined)[] = [];
+    const { container } = view({ chatId: "ses_one", onChatSelect: (id) => selected.push(id) });
+
+    const row = container.querySelector('[data-item-id="ses_one"]');
+    expect(row?.getAttribute("aria-current")).toBe("page");
+
+    // Picking a row is a navigation request; this surface never selects a
+    // conversation in the workspace store itself.
+    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(selected).toEqual(["ses_one"]);
 });
 
 it("still lists local sessions under the branded heading", () => {

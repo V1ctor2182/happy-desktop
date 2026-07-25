@@ -51,7 +51,7 @@ export const rigComposerCommands: readonly ComposerCommand[] = [
 const MENTION_LIMIT = 8;
 
 /**
- * The selected conversation: its shared entries plus the local-only concepts a
+ * The open conversation: its shared entries plus the local-only concepts a
  * cloud chat has no counterpart for (run lifecycle, queued steering, tasks and
  * subagents, background processes, usage, and the model/effort/permission
  * pickers). Loading is stated in the shared `Loadable` vocabulary.
@@ -86,36 +86,55 @@ export interface RigConversationSnapshot {
 
 /**
  * Combined, immutable projection of the whole local workspace: the conversation
- * list plus the selected conversation. A single subscription fans out both, so a
+ * list plus the open conversation. A single subscription fans out both, so a
  * React surface reads the entire workspace through one `useSyncExternalStore`
  * without joining independent stores in the view.
  */
 export interface RigWorkspaceSnapshot {
     readonly list: ConversationListSnapshot;
-    /** Materialization state for the selected conversation; unloaded means no selection. */
+    /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
+}
+
+/**
+ * What the workspace asks its owner to navigate to. The store never decides
+ * which conversation is open — it reports that a conversation it just created
+ * (through the compose action or `/fork`) is the one to address next, and the
+ * router turns that into a URL.
+ */
+export type RigWorkspaceOutput = {
+    readonly type: "conversationOpenRequested";
+    readonly conversationId: RigSessionId;
+};
+
+export interface RigWorkspaceDeps {
+    readonly output?: (event: RigWorkspaceOutput) => void;
 }
 
 export interface RigWorkspaceStore {
     get(): RigWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
 
-    // List actions.
-    conversationSelect(conversationId: RigSessionId): void;
+    // Navigation-applied conversation lifetime. These are not user selection:
+    // the router applies them from the addressed URL.
+    /** Materializes the addressed conversation, releasing any previously open one. */
+    conversationOpen(conversationId: RigSessionId): void;
+    /** Releases the open conversation; the workspace is addressing no conversation. */
+    conversationClose(): void;
     /** Retries a failed authoritative conversation-list read. */
     conversationListRetry(): void;
-    /** Retries a failed acquisition for the currently selected conversation. */
+    /** Retries a failed acquisition for the currently open conversation. */
     conversationRetry(): void;
     conversationCreate(input: RigSessionCreateInput): Promise<void>;
     conversationFork(conversationId: RigSessionId): Promise<void>;
 
-    // Composer actions for the selected conversation (no draft lives in React).
+    // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
     composerFocusUpdate(focused: boolean): void;
     composerTextSubmit(): void;
     composerCommandInvoke(commandId: string): void;
 
-    // Conversation actions (forwarded to the currently selected chat store).
+    // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
     modelChange(input: RigModelSelection): Promise<void>;
@@ -132,9 +151,9 @@ export interface RigWorkspaceStore {
     usagePanelOpen(): void;
     usagePanelClose(): void;
     activityPanelToggle(): void;
-    /** Opens the session settings dialog for the selected conversation. */
+    /** Opens the session settings dialog for the open conversation. */
     settingsOpen(): void;
-    /** Closes the session settings dialog for the selected conversation. */
+    /** Closes the session settings dialog for the open conversation. */
     settingsClose(): void;
     reasoningToggle(): void;
     turnCompactToggle(): void;
@@ -144,14 +163,15 @@ export interface RigWorkspaceStore {
     [Symbol.dispose](): void;
 }
 
-function noSelection(): Promise<never> {
-    return Promise.reject(new Error("No local conversation is selected."));
+function noOpenConversation(): Promise<never> {
+    return Promise.reject(new Error("No local conversation is open."));
 }
 
 /**
- * Owns the join between the list selection and the active conversation for one
- * connected `RigClient`. It subscribes to the list store, and each time the
- * selection changes it acquires (ref-counted) the matching chat handle from the
+ * Owns the join between the conversation list and the open conversation for one
+ * connected `RigClient`. Which conversation is open is decided by the URL and
+ * applied here through `conversationOpen`/`conversationClose`; each time it
+ * changes this store acquires (ref-counted) the matching chat handle from the
  * client, materializes a composer for it, and disposes the previous pair — all
  * outside React, so the app layer never manages this lifetime in an effect.
  *
@@ -164,19 +184,23 @@ function noSelection(): Promise<never> {
  * is owned by the host (the desktop connection loader) and read separately, so
  * this framework-free product store depends only on the injected `RigClient`.
  */
-export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
+export function rigWorkspaceStoreCreate(
+    client: RigClient,
+    deps: RigWorkspaceDeps = {},
+): RigWorkspaceStore {
     const list: RigSessionListStore = client.sessionList();
+    const output = deps.output ?? (() => undefined);
 
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
 
-    // Active conversation lease. `acquisitionGeneration` invalidates an
-    // in-flight acquisition when the selection changes or the store stops.
+    // Open conversation lease. `acquisitionGeneration` invalidates an in-flight
+    // acquisition when the addressed conversation changes or the store stops.
     // `mentionGeneration` rejects both ABA query responses and responses for a
     // composer whose conversation lease has already been released.
-    let selectedId: RigSessionId | undefined;
+    let openId: RigSessionId | undefined;
     let acquiringId: RigSessionId | undefined;
     let handle: RigChatHandle | undefined;
     let chatStore: RigChatStore | undefined;
@@ -298,7 +322,7 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
                 store.activityPanelShow();
                 return;
             case "fork":
-                if (selectedId) swallow(list.sessionFork(selectedId));
+                if (openId) swallow(list.sessionFork(openId).then(openRequest));
                 return;
         }
     };
@@ -350,7 +374,7 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         });
 
     const acquireConversation = (conversationId: RigSessionId): void => {
-        if (disposed || !active || selectedId !== conversationId || acquiringId === conversationId)
+        if (disposed || !active || openId !== conversationId || acquiringId === conversationId)
             return;
         const current = ++acquisitionGeneration;
         acquiringId = conversationId;
@@ -361,7 +385,7 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
                 if (
                     disposed ||
                     !active ||
-                    selectedId !== conversationId ||
+                    openId !== conversationId ||
                     current !== acquisitionGeneration
                 ) {
                     acquired[Symbol.dispose]();
@@ -379,7 +403,7 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
                 if (
                     disposed ||
                     !active ||
-                    selectedId !== conversationId ||
+                    openId !== conversationId ||
                     current !== acquisitionGeneration
                 )
                     return;
@@ -390,8 +414,11 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         );
     };
 
-    const selectConversation = (conversationId: RigSessionId | undefined): void => {
-        if (conversationId === selectedId) {
+    /** Applies the addressed conversation, releasing whichever one was open. */
+    const openConversation = (conversationId: RigSessionId | undefined): void => {
+        if (conversationId === openId) {
+            // Re-addressing the same conversation is how a failed acquisition is
+            // retried, which is what a repeated navigation to it should do.
             if (conversationId && conversation.type === "error")
                 acquireConversation(conversationId);
             else recompute();
@@ -399,7 +426,7 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         }
         acquisitionGeneration += 1;
         acquiringId = undefined;
-        selectedId = conversationId;
+        openId = conversationId;
         releaseConversation();
         if (!conversationId) {
             conversation = { type: "unloaded" };
@@ -409,19 +436,19 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         acquireConversation(conversationId);
     };
 
-    const onListChange = (): void => {
-        const nextSelected = list.get().selectedId as RigSessionId | undefined;
-        if (nextSelected !== selectedId) {
-            selectConversation(nextSelected);
-            return;
-        }
-        recompute();
+    /** Reports a newly created conversation so the router can address it. */
+    const openRequest = (conversationId: RigSessionId | undefined): void => {
+        if (conversationId) output({ type: "conversationOpenRequested", conversationId });
     };
 
     const start = (): void => {
         active = true;
-        unsubscribeList = list.subscribe(onListChange);
-        selectConversation(list.get().selectedId as RigSessionId | undefined);
+        unsubscribeList = list.subscribe(recompute);
+        // The addressed conversation survives losing every subscriber (the URL
+        // still names it), so remounting re-acquires it rather than opening
+        // nothing.
+        if (openId) acquireConversation(openId);
+        recompute();
     };
 
     const stop = (): void => {
@@ -431,13 +458,12 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         unsubscribeList?.();
         unsubscribeList = undefined;
         releaseConversation();
-        selectedId = undefined;
         conversation = { type: "unloaded" };
         snapshot = { list: list.get(), conversation };
     };
 
     const withChat = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> =>
-        chatStore ? run(chatStore) : noSelection();
+        chatStore ? run(chatStore) : noOpenConversation();
 
     return {
         get: () => snapshot,
@@ -450,27 +476,21 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
             };
         },
 
-        conversationSelect(conversationId) {
-            const failedSelection =
-                list.get().selectedId === conversationId &&
-                selectedId === conversationId &&
-                conversation.type === "error";
-            list.sessionSelect(conversationId);
-            if (failedSelection) acquireConversation(conversationId);
-        },
+        conversationOpen: (conversationId) => openConversation(conversationId),
+        conversationClose: () => openConversation(undefined),
         conversationListRetry: () => {
             void list.sessionsRefresh();
         },
         conversationRetry() {
-            if (selectedId && conversation.type === "error") {
-                acquireConversation(selectedId);
+            if (openId && conversation.type === "error") {
+                acquireConversation(openId);
                 return;
             }
             if (conversation.type === "ready" && conversation.value.session.type === "error")
                 chatStore?.sessionRetry();
         },
-        conversationCreate: (input) => list.sessionCreate(input),
-        conversationFork: (conversationId) => list.sessionFork(conversationId),
+        conversationCreate: (input) => list.sessionCreate(input).then(openRequest),
+        conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
 
         composerTextUpdate: (text) => composer?.getState().textUpdate(text),
         composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),

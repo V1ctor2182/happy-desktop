@@ -292,6 +292,8 @@ export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
     type RigConversationSnapshot,
+    type RigWorkspaceDeps,
+    type RigWorkspaceOutput,
     type RigWorkspaceSnapshot,
     type RigWorkspaceStore,
 } from "./rig/rigWorkspaceStore.js";
