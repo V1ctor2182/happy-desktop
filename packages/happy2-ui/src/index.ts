@@ -189,6 +189,7 @@ export { Lightbox, type LightboxProps } from "./Lightbox";
 export { Rail, type RailItem, type RailProps } from "./Rail";
 export { ThemeScope, type ThemeMode, type ThemeScopeProps } from "./ThemeScope";
 export { Sidebar, type SidebarItem, type SidebarProps, type SidebarSection } from "./Sidebar";
+export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
 export {
     DesktopStartupScreen,
     type DesktopStartupMode,
@@ -205,8 +206,13 @@ export {
     type DesktopInstanceUpdate,
 } from "./DesktopInstanceSwitcher";
 export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
-export { RigToolCall, type RigToolCallProps } from "./RigToolCall";
-export { RigTranscript, type RigTranscriptProps } from "./RigTranscript";
+export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
+export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
+export {
+    ConversationSettingsModal,
+    type ConversationSettingsModalProps,
+} from "./ConversationSettingsModal";
+export { ConversationView, type ConversationViewProps } from "./ConversationView";
 export {
     RigUserInputPrompt,
     type RigUserInputAnswerMap,
@@ -223,13 +229,9 @@ export {
     type RigCommandId,
     type RigCommandPaletteProps,
 } from "./RigCommandPalette";
-export { RigSessionListPanel, type RigSessionListPanelProps } from "./RigSessionListPanel";
-export { RigFileMention, type RigFileMentionProps } from "./RigFileMention";
 export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
 export { RigStatusBar, type RigStatusBarProps } from "./RigStatusBar";
-export { RigChatView, type RigChatViewProps, rigMentionPrefix } from "./RigChatView";
-export { RigWorkspaceView, type RigWorkspaceViewProps } from "./RigWorkspaceView";
 export {
     SearchField,
     type SearchFieldEditableProps,

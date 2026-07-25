@@ -1,7 +1,15 @@
 import { createStore } from "zustand/vanilla";
 import type { UserError } from "../types.js";
+import { entriesMerge } from "../conversation/conversationEntries.js";
+import type { Loadable } from "../conversation/loadable.js";
+import {
+    entryKey,
+    type ConversationEntry,
+    type ConversationRequestSubmission,
+} from "../conversation/conversationEntry.js";
+import { rigConversationBuild, rigShellEntry } from "./rigConversationProject.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
-import { referencesPreserve, rigUserError } from "./rigSupport.js";
+import { deepEqual, rigUserError } from "./rigSupport.js";
 import type {
     RigAgentEvent,
     RigEventObserver,
@@ -10,12 +18,9 @@ import type {
 } from "./rigTransport.js";
 import type {
     RigBackgroundProcess,
-    RigFileDiffHunk,
-    RigFileDiffLineKind,
     RigFileSearchResult,
     RigGoal,
     RigMenusSnapshot,
-    RigMessage,
     RigModelCatalog,
     RigModelSelection,
     RigPermissionMode,
@@ -31,19 +36,16 @@ import type {
     RigTask,
     RigThinkingLevel,
     RigToolEntry,
-    RigTranscriptEntry,
     RigUserInputAnswers,
     RigUserInputRequest,
 } from "./rigTypes.js";
 
 export interface RigChatSnapshot {
     readonly sessionId: RigSessionId;
-    readonly status: "loading" | "ready" | "error";
-    readonly error?: UserError;
-    /** Durable session snapshot; the authoritative source for transcript + config. */
-    readonly session?: RigSession;
-    /** Ordered render list: finalized messages, run notices, then the live message. */
-    readonly transcript: readonly RigTranscriptEntry[];
+    /** Durable session snapshot; the authoritative source for entries + config. */
+    readonly session: Loadable<RigSession>;
+    /** Ordered render list: durable messages, agent activity, notices, requests. */
+    readonly entries: readonly ConversationEntry[];
     /** In-flight assistant message assembled from streaming deltas, when running. */
     readonly streaming?: RigStreamingMessage;
     readonly runStatus: "idle" | "running";
@@ -52,6 +54,7 @@ export interface RigChatSnapshot {
     /** Wall-clock duration of the most recently completed run, in milliseconds. */
     readonly turnElapsedMs?: number;
     readonly pendingUserInputs: readonly RigUserInputRequest[];
+    readonly requestSubmissions: readonly ConversationRequestSubmission[];
     /** Steering messages queued to submit after the current tool call (composer preview). */
     readonly queuedMessages: readonly RigQueuedMessage[];
     readonly tasks: readonly RigTask[];
@@ -72,10 +75,10 @@ export interface RigChatSnapshot {
     readonly usageError?: string;
     /** View state: whether the `/goal` + `/tasks` + `/agents` activity panel is open. */
     readonly activityPanelOpen: boolean;
+    /** View state: whether the session settings dialog is open. */
+    readonly settingsOpen: boolean;
     /** Derived pickers for model/effort/permission/service-tier. */
     readonly menus?: RigMenusSnapshot;
-    /** Last failed optimistic action, when one is surfaced without rejecting. */
-    readonly mutationError?: UserError;
 }
 
 export type RigChatOutput =
@@ -90,6 +93,8 @@ export type RigChatOutput =
 export interface RigChatStore {
     get(): RigChatSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Retries a failed authoritative session read. */
+    sessionRetry(): void;
     /** Submits when idle, steers when a run is active; rejects with a `UserError`. */
     messageSend(text: string): Promise<void>;
     runAbort(): Promise<void>;
@@ -103,8 +108,8 @@ export interface RigChatStore {
     sessionReset(): Promise<void>;
     /**
      * Runs a one-off shell command in the session workspace (composer shell mode).
-     * The live run reconciles from `shell_command_started`/`shell_command_finished`
-     * events; this promise rejects with a `UserError` if the request itself fails.
+     * Session events remain delivery hints; the authoritative action result renders
+     * the completed command. Rejects with a `UserError` if the request itself fails.
      */
     shellRun(command: string): Promise<void>;
     /** Requests termination of one background terminal (`/stop`); rejects on failure. */
@@ -142,6 +147,14 @@ export interface RigChatStore {
      * than toggle it. Opening it closes the usage panel and stops its poll.
      */
     activityPanelShow(): void;
+    /**
+     * Opens the session settings dialog. The dialog hosts the view toggles and the
+     * access/service-tier pickers that would otherwise crowd the header, so this is
+     * pure local view state: it starts no transport work and closes no panel.
+     */
+    settingsOpen(): void;
+    /** Closes the session settings dialog. */
+    settingsClose(): void;
     /** Local view toggle: show or hide thinking entries. */
     reasoningToggle(): void;
     /** Local view toggle: collapse or expand completed turns. */
@@ -173,10 +186,10 @@ export interface RigChatDeps {
  * The chat surface store for one session. The constructor opens nothing; the
  * first subscriber hydrates the durable session (`sessionRead`) and opens the
  * per-session realtime subscription, and the last unsubscribe tears both down.
- * `SessionEvent`s are reconciled into an immutable snapshot: finalized messages,
- * a live streaming message with per-tool execution state, pending user inputs,
- * run status, and turn timing. On a stream drop it backfills missed events by
- * `lastEventId` (SSE deltas are hints; durable truth is re-read on failure).
+ * Every `SessionEvent` is a delivery hint that schedules a coalesced
+ * `sessionRead`; event and backfill payloads never write durable session state or
+ * its cursor. Agent deltas alone feed explicitly transient streaming
+ * presentation, which a successful durable read supersedes on completion.
  */
 export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): RigChatStore {
     const output = deps.output ?? (() => undefined);
@@ -188,10 +201,16 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const stopInterval =
         deps.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
 
-    // --- mutable durable + live state (single source of truth) -------------
+    // --- durable state + explicitly transient presentation -----------------
     let session: RigSession | undefined;
-    let streaming: RigStreamingMessage | undefined;
-    let ephemeral: RigTranscriptEntry[] = [];
+    let transientStreamingPresentation: RigStreamingMessage | undefined;
+    let transientStreamingBaseAgentIds = new Set<string>();
+    // Run ids retired by durable completion. The bounded session-lifetime set
+    // rejects delayed events from more than merely the most recent run.
+    const retiredRunIds = new Set<string>();
+    const retiredRunOrder: string[] = [];
+    const RETIRED_RUN_LIMIT = 128;
+    let ephemeral: ConversationEntry[] = [];
     let runStatus: "idle" | "running" = "idle";
     let runId: string | undefined;
     let runStartedAt: number | undefined;
@@ -207,19 +226,21 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let usageTimer: unknown;
     let usageGeneration = 0;
     let activityPanelOpen = false;
+    let settingsOpen = false;
     // Entry ids hidden by a view-only `/clear`; new entries render as usual.
     let clearedIds = new Set<string>();
     let status: "loading" | "ready" | "error" = "loading";
     let error: UserError | undefined;
-    let mutationError: UserError | undefined;
-    let noticeSeq = 0;
+    const requestSubmissions = new Map<string, ConversationRequestSubmission>();
+    const requestSubmissionPromises = new Map<string, Promise<void>>();
 
     const store = createStore<RigChatSnapshot>()(() => ({
         sessionId,
-        status: "loading",
-        transcript: [],
+        session: { type: "loading" },
+        entries: [],
         runStatus: "idle",
         pendingUserInputs: [],
+        requestSubmissions: [],
         queuedMessages: [],
         tasks: [],
         subagents: [],
@@ -229,65 +250,78 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
+        settingsOpen: false,
     }));
+
+    const sessionLoadable = (): Loadable<RigSession> =>
+        status === "ready" && session
+            ? { type: "ready", value: session }
+            : status === "error" && error
+              ? { type: "error", error }
+              : { type: "loading" };
 
     const commit = (): void => {
         const previous = store.getState();
-        const built = buildTranscript(
+        const built = rigConversationBuild({
+            sessionId,
             session,
-            streaming,
+            streaming: transientStreamingPresentation,
             ephemeral,
             showReasoning,
             turnElapsedMs,
             compactTurns,
-        );
+            pendingUserInputs: session?.pendingUserInputs ?? [],
+        });
         const visible =
-            clearedIds.size === 0 ? built : built.filter((entry) => !clearedIds.has(entry.id));
-        const transcript = referencesPreserve(previous.transcript, visible);
-        store.setState(
-            {
-                sessionId,
-                status,
-                error,
-                session,
-                transcript,
-                streaming,
-                runStatus,
-                runId,
-                runStartedAt,
-                turnElapsedMs,
-                pendingUserInputs: session?.pendingUserInputs ?? [],
-                queuedMessages: session?.queuedMessages ?? [],
-                tasks: session?.tasks ?? [],
-                goal: session?.goal,
-                subagents: session?.subagents ?? [],
-                backgroundProcesses: session?.backgroundProcesses ?? [],
-                showReasoning,
-                compactTurns,
-                usagePanelOpen,
-                usage,
-                usageLoading,
-                usageError,
-                activityPanelOpen,
-                menus: session ? rigMenusDerive(deps.catalog, selectionOf(session)) : undefined,
-                mutationError,
-            },
-            true,
-        );
+            clearedIds.size === 0
+                ? built
+                : built.filter((entry) => !clearedIds.has(entryKey(entry)));
+        const entries = entriesMerge(previous.entries, visible);
+        const next: RigChatSnapshot = {
+            sessionId,
+            session: sessionLoadable(),
+            entries,
+            streaming: transientStreamingPresentation,
+            runStatus,
+            runId,
+            runStartedAt,
+            turnElapsedMs,
+            pendingUserInputs: session?.pendingUserInputs ?? [],
+            requestSubmissions: [...requestSubmissions.values()],
+            queuedMessages: session?.queuedMessages ?? [],
+            tasks: session?.tasks ?? [],
+            goal: session?.goal,
+            subagents: session?.subagents ?? [],
+            backgroundProcesses: session?.backgroundProcesses ?? [],
+            showReasoning,
+            compactTurns,
+            usagePanelOpen,
+            usage,
+            usageLoading,
+            usageError,
+            activityPanelOpen,
+            settingsOpen,
+            menus: session ? rigMenusDerive(deps.catalog, selectionOf(session)) : undefined,
+        };
+        if (deepEqual(previous, next)) return;
+        store.setState(next, true);
     };
 
     // --- streaming block helpers ------------------------------------------
-    const streamBlocks = (): RigStreamingBlock[] => (streaming ? [...streaming.blocks] : []);
-    const setStream = (blocks: RigStreamingBlock[]): void => {
-        streaming = streaming ? { runId: streaming.runId, blocks } : streaming;
+    const transientStreamBlocks = (): RigStreamingBlock[] =>
+        transientStreamingPresentation ? [...transientStreamingPresentation.blocks] : [];
+    const transientStreamSet = (blocks: RigStreamingBlock[]): void => {
+        transientStreamingPresentation = transientStreamingPresentation
+            ? { runId: transientStreamingPresentation.runId, blocks }
+            : transientStreamingPresentation;
     };
-    const updateTool = (
+    const transientToolUpdate = (
         toolCallId: string,
         update: (entry: RigToolEntry) => RigToolEntry,
         create?: () => RigToolEntry,
     ): void => {
-        if (!streaming) return;
-        const blocks = streamBlocks();
+        if (!transientStreamingPresentation) return;
+        const blocks = transientStreamBlocks();
         const index = blocks.findIndex(
             (block) => block.kind === "tool" && block.tool.toolCallId === toolCallId,
         );
@@ -299,33 +333,27 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         } else {
             return;
         }
-        setStream(blocks);
+        transientStreamSet(blocks);
     };
-    const appendText = (kind: "text" | "thinking", chunk: string): void => {
-        if (!streaming) return;
-        const blocks = streamBlocks();
+    const transientTextAppend = (kind: "text" | "thinking", chunk: string): void => {
+        if (!transientStreamingPresentation) return;
+        const blocks = transientStreamBlocks();
         const last = blocks[blocks.length - 1];
         if (last && last.kind === kind) {
             blocks[blocks.length - 1] = { kind, text: last.text + chunk };
         } else {
             blocks.push({ kind, text: chunk });
         }
-        setStream(blocks);
+        transientStreamSet(blocks);
     };
-    const startBlock = (kind: "text" | "thinking"): void => {
-        if (!streaming) return;
-        const blocks = streamBlocks();
+    const transientBlockStart = (kind: "text" | "thinking"): void => {
+        if (!transientStreamingPresentation) return;
+        const blocks = transientStreamBlocks();
         blocks.push({ kind, text: "" });
-        setStream(blocks);
+        transientStreamSet(blocks);
     };
-    const pushNotice = (level: "info" | "warning" | "error", title: string, text: string): void => {
-        ephemeral = [
-            ...ephemeral,
-            { id: `notice:${noticeSeq++}`, kind: "notice", level, title, text },
-        ];
-    };
-    // Shell-mode runs render as ephemeral transcript entries keyed by commandId so a
-    // `shell_command_started` entry is updated in place when its `finished` arrives.
+    // Shell-mode action results render as ephemeral transcript entries keyed by
+    // commandId so a retried result replaces rather than duplicates its command.
     const upsertShell = (
         commandId: string,
         patch: {
@@ -337,8 +365,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         },
     ): void => {
         const id = `shell:${commandId}`;
-        const entry: RigTranscriptEntry = { id, kind: "shell", ...patch };
-        const index = ephemeral.findIndex((existing) => existing.id === id);
+        const entry = rigShellEntry(id, patch);
+        const index = ephemeral.findIndex((existing) => entryKey(existing) === id);
         if (index === -1) {
             ephemeral = [...ephemeral, entry];
         } else {
@@ -348,26 +376,26 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         }
     };
 
-    const applyAgentEvent = (event: RigAgentEvent): void => {
+    const transientAgentEventApply = (event: RigAgentEvent): void => {
         switch (event.type) {
             case "text_start":
-                startBlock("text");
+                transientBlockStart("text");
                 break;
             case "text_delta":
-                appendText("text", event.text);
+                transientTextAppend("text", event.text);
                 break;
             case "thinking_start":
-                startBlock("thinking");
+                transientBlockStart("thinking");
                 break;
             case "thinking_delta":
-                appendText("thinking", event.thinking);
+                transientTextAppend("thinking", event.thinking);
                 break;
             case "text_end":
             case "thinking_end":
             case "done":
                 break;
             case "toolcall_start":
-                updateTool(
+                transientToolUpdate(
                     event.toolCallId,
                     (entry) => entry,
                     () => ({
@@ -382,10 +410,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             case "toolcall_delta":
                 break;
             case "toolcall_end":
-                updateTool(event.toolCallId, (entry) => ({ ...entry, arguments: event.arguments }));
+                transientToolUpdate(event.toolCallId, (entry) => ({
+                    ...entry,
+                    arguments: event.arguments,
+                }));
                 break;
             case "tool_execution_start":
-                updateTool(
+                transientToolUpdate(
                     event.toolCallId,
                     (entry) => ({
                         ...entry,
@@ -403,13 +434,19 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 );
                 break;
             case "tool_execution_progress":
-                updateTool(event.toolCallId, (entry) => ({ ...entry, display: event.display }));
+                transientToolUpdate(event.toolCallId, (entry) => ({
+                    ...entry,
+                    display: event.display,
+                }));
                 break;
             case "tool_execution_status":
-                updateTool(event.toolCallId, (entry) => ({ ...entry, status: event.status }));
+                transientToolUpdate(event.toolCallId, (entry) => ({
+                    ...entry,
+                    status: event.status,
+                }));
                 break;
             case "tool_execution_end":
-                updateTool(
+                transientToolUpdate(
                     event.toolCallId,
                     (entry) => ({
                         ...entry,
@@ -434,7 +471,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 );
                 break;
             case "permission_review":
-                updateTool(
+                transientToolUpdate(
                     event.toolCallId,
                     (entry) => ({
                         ...entry,
@@ -452,157 +489,55 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 );
                 break;
             case "context_compacted":
-                pushNotice(
-                    "info",
-                    "Context compacted",
-                    `Freed context (${event.estimatedTokensBefore} → ${event.estimatedTokensAfter} tokens).`,
-                );
-                break;
             case "inference_retry":
-                pushNotice(
-                    "warning",
-                    "Retrying",
-                    `Attempt ${event.attempt}/${event.maxAttempts} (${event.reason.replace("_", " ")}).`,
-                );
-                break;
             case "error":
-                pushNotice("error", "Run error", event.reason);
                 break;
         }
     };
 
-    const messageUpsert = (message: RigMessage): void => {
-        if (!session) return;
-        const messages = session.messages.filter((existing) => existing.id !== message.id);
-        messages.push(message);
-        session = { ...session, messages };
+    const transientStreamingStart = (streamRunId: string): void => {
+        if (retiredRunIds.has(streamRunId)) return;
+        if (transientStreamingPresentation?.runId === streamRunId) return;
+        // A delayed or reordered event for a different run must never replace
+        // the stream whose id currently guards steering and abort operations.
+        if (transientStreamingPresentation !== undefined) return;
+        transientStreamingPresentation = { runId: streamRunId, blocks: [] };
+        transientStreamingBaseAgentIds = new Set(
+            session?.messages
+                .filter((message) => message.role === "agent" && !message.internal)
+                .map((message) => message.id) ?? [],
+        );
+        runId = streamRunId;
+        runStartedAt = now();
+        turnElapsedMs = undefined;
     };
 
-    const applyEvent = (event: RigSessionEvent): void => {
+    const runRetire = (completedRunId: string): void => {
+        if (retiredRunIds.has(completedRunId)) return;
+        retiredRunIds.add(completedRunId);
+        retiredRunOrder.push(completedRunId);
+        if (retiredRunOrder.length <= RETIRED_RUN_LIMIT) return;
+        const oldest = retiredRunOrder.shift();
+        if (oldest !== undefined) retiredRunIds.delete(oldest);
+    };
+
+    /**
+     * Applies only non-durable live presentation from an SSE event. The event's
+     * session/message/config/cursor payload is deliberately unreachable here.
+     */
+    const transientStreamingHintApply = (event: RigSessionEvent): void => {
         switch (event.type) {
-            case "session_created":
-            case "session_updated":
-                session = event.session;
-                break;
-            case "message_submitted":
-                messageUpsert(event.message);
-                break;
             case "run_started":
-                runStatus = "running";
-                runId = event.runId;
-                runStartedAt = now();
-                turnElapsedMs = undefined;
-                streaming = { runId: event.runId, blocks: [] };
+                transientStreamingStart(event.runId);
                 break;
             case "agent_event":
-                if (!streaming) streaming = { runId: event.runId, blocks: [] };
-                applyAgentEvent(event.event);
+                transientStreamingStart(event.runId);
+                if (transientStreamingPresentation?.runId === event.runId)
+                    transientAgentEventApply(event.event);
                 break;
-            case "agent_message":
-                messageUpsert(event.message);
-                streaming = undefined;
-                break;
-            case "run_finished":
-                runStatus = "idle";
-                turnElapsedMs = runStartedAt !== undefined ? now() - runStartedAt : undefined;
-                streaming = undefined;
-                runId = undefined;
-                if (event.errorMessage) pushNotice("error", "Run error", event.errorMessage);
-                break;
-            case "run_error":
-                runStatus = "idle";
-                streaming = undefined;
-                runId = undefined;
-                pushNotice("error", "Run error", event.errorMessage);
-                break;
-            case "session_reset":
-                if (session)
-                    session = { ...session, messages: event.messages, pendingUserInputs: [] };
-                streaming = undefined;
-                ephemeral = [];
-                clearedIds = new Set();
-                break;
-            case "session_rewound":
-                if (session) session = { ...session, messages: event.messages };
-                streaming = undefined;
-                break;
-            case "session_title_changed":
-                if (session) session = { ...session, title: event.title, recap: event.recap };
-                break;
-            case "model_changed":
-                if (session)
-                    session = {
-                        ...session,
-                        modelId: event.modelId,
-                        providerId: event.providerId,
-                        effort: event.effort,
-                    };
-                break;
-            case "effort_changed":
-                if (session) session = { ...session, modelId: event.modelId, effort: event.effort };
-                break;
-            case "service_tier_changed":
-                if (session) session = { ...session, serviceTier: event.serviceTier ?? undefined };
-                break;
-            case "permission_mode_changed":
-                if (session) session = { ...session, permissionMode: event.permissionMode };
-                break;
-            case "user_input_requested":
-                if (session) {
-                    const pending = session.pendingUserInputs.filter(
-                        (request) => request.requestId !== event.request.requestId,
-                    );
-                    pending.push(event.request);
-                    session = { ...session, pendingUserInputs: pending };
-                }
-                break;
-            case "user_input_resolved":
-                if (session)
-                    session = {
-                        ...session,
-                        pendingUserInputs: session.pendingUserInputs.filter(
-                            (request) => request.requestId !== event.requestId,
-                        ),
-                    };
-                break;
-            case "tasks_changed":
-                if (session) session = { ...session, tasks: event.tasks };
-                break;
-            case "goal_changed":
-                if (session) session = { ...session, goal: event.goal ?? undefined };
-                break;
-            case "subagent_changed":
-                if (session) {
-                    const subagents = session.subagents.filter(
-                        (subagent) => subagent.id !== event.subagent.id,
-                    );
-                    subagents.push(event.subagent);
-                    session = { ...session, subagents };
-                }
-                break;
-            case "background_processes_changed":
-                if (session) session = { ...session, backgroundProcesses: event.processes };
-                break;
-            case "shell_command_started":
-                upsertShell(event.commandId, {
-                    command: event.command,
-                    output: "",
-                    exitCode: null,
-                    running: true,
-                    timedOut: false,
-                });
-                break;
-            case "shell_command_finished":
-                upsertShell(event.commandId, {
-                    command: event.command,
-                    output: event.output,
-                    exitCode: event.exitCode,
-                    running: false,
-                    timedOut: event.timedOut,
-                });
+            default:
                 break;
         }
-        if (event.eventId && session) session = { ...session, lastEventId: event.eventId };
     };
 
     // --- lifecycle: hydrate + subscribe -----------------------------------
@@ -610,24 +545,73 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let active = false;
     let disposed = false;
     let generation = 0;
+    let reconciling = false;
+    let reconcileAgain = false;
+    let recovering = false;
     let unsubscribeSession: (() => void) | undefined;
 
-    const hydrate = async (): Promise<void> => {
+    /**
+     * Private authoritative-input boundary. Only transport reads/action results
+     * enter here; session-event payloads never call it and it emits no output.
+     */
+    const sessionAuthoritativeWrite = (loaded: RigSession): void => {
+        const loadedHasCompletedAgentMessage =
+            transientStreamingPresentation !== undefined &&
+            loaded.messages.some(
+                (message) =>
+                    message.role === "agent" &&
+                    !message.internal &&
+                    !transientStreamingBaseAgentIds.has(message.id),
+            );
+        if (
+            transientStreamingPresentation &&
+            (loadedHasCompletedAgentMessage || loaded.status !== "running")
+        ) {
+            runRetire(transientStreamingPresentation.runId);
+            transientStreamingPresentation = undefined;
+            transientStreamingBaseAgentIds = new Set();
+            turnElapsedMs = runStartedAt !== undefined ? now() - runStartedAt : undefined;
+            runId = undefined;
+            runStartedAt = undefined;
+        }
+        session =
+            loaded.lastEventId === undefined && session?.lastEventId !== undefined
+                ? { ...loaded, lastEventId: session.lastEventId }
+                : loaded;
+        const pendingRequestIds = new Set(
+            loaded.pendingUserInputs.map((request) => request.requestId),
+        );
+        for (const requestId of requestSubmissions.keys())
+            if (!pendingRequestIds.has(requestId)) requestSubmissions.delete(requestId);
+        status = "ready";
+        error = undefined;
+        runStatus = loaded.status === "running" ? "running" : "idle";
+        commit();
+    };
+
+    const reconcile = async (): Promise<void> => {
+        if (reconciling) {
+            reconcileAgain = true;
+            return;
+        }
+        reconciling = true;
         const current = generation;
         try {
             const loaded = await deps.transport.sessionRead(sessionId);
-            if (disposed || current !== generation) return;
-            session = loaded;
-            status = "ready";
-            error = undefined;
-            runStatus = loaded.status === "running" ? "running" : "idle";
-            commit();
+            if (disposed || !active || current !== generation) return;
+            sessionAuthoritativeWrite(loaded);
         } catch (caught) {
-            if (disposed || current !== generation) return;
+            if (disposed || !active || current !== generation) return;
             if (status !== "ready") {
                 status = "error";
                 error = rigUserError(caught);
                 commit();
+            }
+        } finally {
+            reconciling = false;
+            if (reconcileAgain && !disposed && active) {
+                reconcileAgain = false;
+                void reconcile();
             }
         }
     };
@@ -635,8 +619,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const observer: RigEventObserver<RigSessionEvent> = {
         event: (value) => {
             if (disposed || !active) return;
-            applyEvent(value);
-            commit();
+            transientStreamingHintApply(value);
+            if (value.type === "run_started" || value.type === "agent_event") commit();
+            // Delivery hint: durable fields and lastEventId come only from sessionRead.
+            void reconcile();
         },
         error: () => {
             if (!disposed && active) void recover();
@@ -653,31 +639,30 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     };
 
     const recover = async (): Promise<void> => {
+        if (recovering) return;
+        recovering = true;
         unsubscribeSession?.();
         unsubscribeSession = undefined;
         const current = generation;
         const after = session?.lastEventId;
         try {
-            if (after) {
-                const missed = await deps.transport.sessionEventsBackfill(sessionId, after);
-                if (disposed || current !== generation) return;
-                for (const missedEvent of missed) applyEvent(missedEvent);
-                commit();
-            } else {
-                await hydrate();
-            }
+            if (after) await deps.transport.sessionEventsBackfill(sessionId, after);
         } catch {
-            await hydrate();
+            // A failed backfill is still a delivery hint; the full read below is
+            // authoritative and sufficient to recover current durable state.
+        } finally {
+            recovering = false;
         }
+        if (disposed || !active || current !== generation) return;
+        await reconcile();
         if (active && !disposed && current === generation) openStream();
     };
 
     const start = (): void => {
         active = true;
         generation += 1;
-        void hydrate().then(() => {
-            if (active && !disposed) openStream();
-        });
+        openStream();
+        void reconcile();
         // Resume the usage poll if the panel was left open across a no-subscriber gap.
         if (usagePanelOpen && usageTimer === undefined && !disposed) {
             usageLoad();
@@ -688,6 +673,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const stop = (): void => {
         active = false;
         generation += 1;
+        reconcileAgain = false;
         unsubscribeSession?.();
         unsubscribeSession = undefined;
         // Suspend polling while nothing observes this store; the open flag persists
@@ -708,10 +694,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         }
     };
 
-    const replaceSession = (loaded: RigSession): void => {
-        session = loaded;
-        status = "ready";
-        commit();
+    const sessionReplace = (loaded: RigSession): void => {
+        sessionAuthoritativeWrite(loaded);
     };
 
     // One usage fetch. The generation captured at call time guards against a stale
@@ -757,6 +741,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 if (listeners.size === 0) stop();
             };
         },
+        sessionRetry: () => {
+            if (status === "error" && active && !disposed) void reconcile();
+        },
         messageSend: (text) =>
             rejecting(async () => {
                 const key = createId();
@@ -773,52 +760,78 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 await deps.transport.runAbort(sessionId, runId);
                 output({ type: "runAborted", sessionId });
             }),
-        answerInput: (input) =>
-            rejecting(async () => {
-                replaceSession(await deps.transport.answerUserInput(sessionId, input));
-                output({ type: "inputAnswered", sessionId, requestId: input.requestId });
-            }),
+        answerInput(input) {
+            const existing = requestSubmissionPromises.get(input.requestId);
+            if (existing) return existing;
+            const operation = (async (): Promise<void> => {
+                requestSubmissions.set(input.requestId, {
+                    requestId: input.requestId,
+                    status: "pending",
+                });
+                commit();
+                try {
+                    const loaded = await deps.transport.answerUserInput(sessionId, input);
+                    requestSubmissions.delete(input.requestId);
+                    sessionReplace(loaded);
+                    output({ type: "inputAnswered", sessionId, requestId: input.requestId });
+                } catch (caught) {
+                    const submissionError = rigUserError(caught);
+                    requestSubmissions.set(input.requestId, {
+                        requestId: input.requestId,
+                        status: "failed",
+                        error: submissionError,
+                    });
+                    commit();
+                    throw submissionError;
+                } finally {
+                    requestSubmissionPromises.delete(input.requestId);
+                }
+            })();
+            requestSubmissionPromises.set(input.requestId, operation);
+            return operation;
+        },
         modelChange: (input) =>
             rejecting(async () => {
-                replaceSession(await deps.transport.changeModel(sessionId, input));
+                sessionReplace(await deps.transport.changeModel(sessionId, input));
             }),
         effortChange: (effort) =>
             rejecting(async () => {
-                replaceSession(await deps.transport.changeEffort(sessionId, effort));
+                sessionReplace(await deps.transport.changeEffort(sessionId, effort));
             }),
         permissionModeChange: (permissionMode) =>
             rejecting(async () => {
-                replaceSession(
+                sessionReplace(
                     await deps.transport.changePermissionMode(sessionId, permissionMode),
                 );
             }),
         serviceTierChange: (serviceTier) =>
             rejecting(async () => {
-                replaceSession(await deps.transport.changeServiceTier(sessionId, serviceTier));
+                sessionReplace(await deps.transport.changeServiceTier(sessionId, serviceTier));
             }),
         compact: () =>
             rejecting(async () => {
                 await deps.transport.compact(sessionId);
-                replaceSession(await deps.transport.sessionRead(sessionId));
+                sessionReplace(await deps.transport.sessionRead(sessionId));
             }),
         rewind: (messageId) =>
             rejecting(async () => {
-                replaceSession(await deps.transport.rewind(sessionId, messageId));
+                sessionReplace(await deps.transport.rewind(sessionId, messageId));
             }),
         sessionReset: () =>
             rejecting(async () => {
-                streaming = undefined;
+                if (transientStreamingPresentation) runRetire(transientStreamingPresentation.runId);
+                transientStreamingPresentation = undefined;
+                transientStreamingBaseAgentIds = new Set();
                 ephemeral = [];
-                replaceSession(await deps.transport.sessionReset(sessionId));
+                sessionReplace(await deps.transport.sessionReset(sessionId));
             }),
         shellRun: (command) =>
             rejecting(async () => {
-                // The started/finished events reconcile the transcript entry; the
-                // returned result is a fallback for daemons that answer synchronously
-                // without emitting events (e.g. a command that finished instantly).
+                // The action result is authoritative for this one-off local
+                // presentation; shell SSE payloads remain delivery hints only.
                 const commandId = createId();
                 const result = await deps.transport.shellRun(sessionId, command, commandId);
-                if (!ephemeral.some((entry) => entry.id === `shell:${commandId}`)) {
+                if (!ephemeral.some((entry) => entryKey(entry) === `shell:${commandId}`)) {
                     upsertShell(commandId, {
                         command: result.command,
                         output: result.output,
@@ -872,6 +885,16 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             }
             commit();
         },
+        settingsOpen() {
+            if (settingsOpen) return;
+            settingsOpen = true;
+            commit();
+        },
+        settingsClose() {
+            if (!settingsOpen) return;
+            settingsOpen = false;
+            commit();
+        },
         reasoningToggle() {
             showReasoning = !showReasoning;
             commit();
@@ -881,7 +904,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             commit();
         },
         viewClear() {
-            clearedIds = new Set(store.getState().transcript.map((entry) => entry.id));
+            clearedIds = new Set(store.getState().entries.map(entryKey));
             commit();
         },
         [Symbol.dispose]() {
@@ -902,197 +925,6 @@ function selectionOf(session: RigSession): RigSelection {
         permissionMode: session.permissionMode,
         serviceTier: session.serviceTier,
     };
-}
-
-interface TurnStats {
-    count: number;
-    tools: number;
-    files: Set<string>;
-    additions: number;
-    deletions: number;
-}
-
-/** Folds one transcript entry into the in-progress turn's aggregate tool stats. */
-function accumulateTurnStats(turn: TurnStats, entry: RigTranscriptEntry): void {
-    turn.count += 1;
-    if (entry.kind !== "tool") return;
-    turn.tools += 1;
-    const presentation = entry.tool.presentation;
-    if (presentation?.type !== "fileDiff") return;
-    for (const file of presentation.files) {
-        turn.files.add(file.path);
-        turn.additions +=
-            file.added ?? file.hunks.reduce((sum, hunk) => sum + countLines(hunk, "add"), 0);
-        turn.deletions +=
-            file.deleted ?? file.hunks.reduce((sum, hunk) => sum + countLines(hunk, "delete"), 0);
-    }
-}
-
-function countLines(hunk: RigFileDiffHunk, kind: RigFileDiffLineKind): number {
-    return hunk.lines.reduce((sum, line) => sum + (line.kind === kind ? 1 : 0), 0);
-}
-
-function turnSeparator(index: number, turn: TurnStats, elapsedMs?: number): RigTranscriptEntry {
-    return {
-        id: `turn-separator:${index}`,
-        kind: "turnSeparator",
-        elapsedMs,
-        toolCount: turn.tools,
-        fileCount: turn.files.size,
-        additions: turn.additions,
-        deletions: turn.deletions,
-    };
-}
-
-/**
- * Builds the ordered transcript the UI renders: finalized message blocks
- * (correlating tool calls with their results), turn-completion separators, then
- * run notices, then the live streaming message. Internal messages and (unless
- * enabled) thinking are omitted.
- */
-function buildTranscript(
-    session: RigSession | undefined,
-    streaming: RigStreamingMessage | undefined,
-    ephemeral: readonly RigTranscriptEntry[],
-    showReasoning: boolean,
-    turnElapsedMs: number | undefined,
-    compactTurns: boolean,
-): readonly RigTranscriptEntry[] {
-    const durable: RigTranscriptEntry[] = [];
-    if (session) {
-        // The daemon delivers a tool call and its result in separate messages, so
-        // correlate results across the whole session rather than within one
-        // message. Without this, every completed tool renders as an empty success.
-        const results = new Map<
-            string,
-            Extract<RigMessage["blocks"][number], { type: "toolResult" }>
-        >();
-        for (const message of session.messages) {
-            for (const block of message.blocks) {
-                if (block.type === "toolResult") results.set(block.toolCallId, block);
-            }
-        }
-        for (const message of session.messages) {
-            if (message.internal) continue;
-            if (message.role === "user") {
-                durable.push(userEntry(message));
-                continue;
-            }
-            if (message.role === "system") {
-                const text = joinText(message);
-                if (text) durable.push({ id: message.id, kind: "system", text });
-                continue;
-            }
-            appendAgentEntries(durable, message, results, showReasoning);
-        }
-    }
-
-    // Close each completed turn with a boundary separator. A turn is a user message
-    // and its following agent activity; the separator precedes the next user
-    // message, and a trailing one closes the last turn once the run is idle. Only
-    // the last completed turn has a known elapsed; historical turns show stats only.
-    // When `compactTurns` is on, a completed turn's agent activity is buffered and
-    // dropped, collapsing the turn to its user prompt plus the summary separator; an
-    // in-flight (streaming) turn always stays expanded so live output is visible.
-    const entries: RigTranscriptEntry[] = [];
-    let turn: TurnStats | undefined;
-    let buffer: RigTranscriptEntry[] = [];
-    const closeTurn = (elapsedMs?: number): void => {
-        if (!turn) return;
-        if (!compactTurns) for (const entry of buffer) entries.push(entry);
-        if (turn.count > 0) entries.push(turnSeparator(entries.length, turn, elapsedMs));
-        turn = undefined;
-        buffer = [];
-    };
-    for (const entry of durable) {
-        if (entry.kind === "user") {
-            closeTurn();
-            turn = { count: 0, tools: 0, files: new Set(), additions: 0, deletions: 0 };
-            entries.push(entry);
-            continue;
-        }
-        // Entries before the first user message are a preamble with no turn to close.
-        if (!turn) {
-            entries.push(entry);
-            continue;
-        }
-        accumulateTurnStats(turn, entry);
-        buffer.push(entry);
-    }
-    // The trailing turn: while a run streams it is in flight, so keep its buffered
-    // activity expanded and emit no separator; once idle it is a completed turn.
-    if (streaming) {
-        for (const entry of buffer) entries.push(entry);
-    } else {
-        closeTurn(turnElapsedMs);
-    }
-
-    for (const notice of ephemeral) entries.push(notice);
-    if (streaming) {
-        streaming.blocks.forEach((block, index) => {
-            const id = `${streaming.runId}:stream:${index}`;
-            if (block.kind === "text") {
-                entries.push({ id, kind: "agentText", text: block.text, streaming: true });
-            } else if (block.kind === "thinking") {
-                if (showReasoning)
-                    entries.push({ id, kind: "thinking", text: block.text, streaming: true });
-            } else {
-                entries.push({ id: block.tool.toolCallId, kind: "tool", tool: block.tool });
-            }
-        });
-    }
-    return entries;
-}
-
-function userEntry(message: RigMessage): RigTranscriptEntry {
-    const images: { readonly mediaType: string; readonly data: string }[] = [];
-    let text = "";
-    for (const block of message.blocks) {
-        if (block.type === "text") text += block.text;
-        else if (block.type === "image")
-            images.push({ mediaType: block.mediaType, data: block.data });
-    }
-    return { id: message.id, kind: "user", text, images };
-}
-
-function appendAgentEntries(
-    entries: RigTranscriptEntry[],
-    message: RigMessage,
-    results: ReadonlyMap<string, Extract<RigMessage["blocks"][number], { type: "toolResult" }>>,
-    showReasoning: boolean,
-): void {
-    message.blocks.forEach((block, index) => {
-        const id = `${message.id}:${index}`;
-        if (block.type === "text") {
-            if (block.text)
-                entries.push({ id, kind: "agentText", text: block.text, streaming: false });
-        } else if (block.type === "thinking") {
-            if (showReasoning && !block.redacted)
-                entries.push({ id, kind: "thinking", text: block.thinking, streaming: false });
-        } else if (block.type === "toolCall") {
-            const result = results.get(block.id);
-            entries.push({
-                id: block.id,
-                kind: "tool",
-                tool: {
-                    toolCallId: block.id,
-                    toolName: block.name,
-                    arguments: block.arguments,
-                    status: result ? (result.failed ? "failed" : "success") : "success",
-                    display: result?.display,
-                    failed: result?.failed ?? false,
-                    failure: result?.failure,
-                    presentation: result?.presentation,
-                },
-            });
-        }
-    });
-}
-
-function joinText(message: RigMessage): string {
-    let text = "";
-    for (const block of message.blocks) if (block.type === "text") text += block.text;
-    return text;
 }
 
 function defaultCreateId(): string {

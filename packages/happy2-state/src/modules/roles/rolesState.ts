@@ -1,8 +1,9 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type MemberPermissionDetail, type Permission, type RoleSummary } from "../../resources.js";
 import { type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
-import { type IdentityCatalog, type IdentityProjection } from "../identity/identityState.js";
+import { type Loadable } from "../../conversation/loadable.js";
+import { type IdentityCatalog } from "../identity/identityState";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface RolesActionContext {
@@ -220,7 +221,7 @@ export interface RolesCatalog {
 
 export interface RolesSnapshot {
     readonly catalog: Loadable<RolesCatalog>;
-    readonly members: readonly IdentityProjection[];
+    readonly members: readonly ConversationAuthor[];
     readonly selectedUserId?: string;
     readonly memberDetail: Loadable<MemberPermissionDetail>;
     readonly actionError?: UserError;
@@ -262,7 +263,7 @@ export type RolesInput =
     | { readonly type: "rolesLoading" }
     | { readonly type: "catalogLoaded"; readonly catalog: RolesCatalog }
     | { readonly type: "catalogFailed"; readonly error: UserError }
-    | { readonly type: "membersLoaded"; readonly members: readonly IdentityProjection[] }
+    | { readonly type: "membersLoaded"; readonly members: readonly ConversationAuthor[] }
     | {
           readonly type: "memberDetailLoaded";
           readonly userId: string;

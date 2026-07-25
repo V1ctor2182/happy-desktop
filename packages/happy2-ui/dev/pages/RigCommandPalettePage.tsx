@@ -1,7 +1,8 @@
-import { RigCommandPalette, type RigCommandId } from "../../src/RigCommandPalette";
+import type { ComposerCommand } from "happy2-state";
+import { RigCommandPalette } from "../../src/RigCommandPalette";
 import { ComponentPage, Specimen } from "../kit";
 
-const commands: RigCommandId[] = [
+const commands: ComposerCommand[] = [
     "model",
     "effort",
     "permissions",
@@ -15,7 +16,7 @@ const commands: RigCommandId[] = [
     "compact",
     "abort",
     "fork",
-];
+].map((id) => ({ id, label: `/${id}` }));
 
 export function RigCommandPalettePage() {
     return (

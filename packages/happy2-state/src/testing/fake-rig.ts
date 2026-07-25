@@ -5,7 +5,6 @@ import type {
     RigTransport,
 } from "../rig/rigTransport.js";
 import type {
-    RigEventId,
     RigFileSearchResult,
     RigModelCatalog,
     RigModelSelection,
@@ -51,6 +50,7 @@ export interface FakeRigCall {
     readonly sessionId?: RigSessionId;
     readonly idempotencyKey?: string;
     readonly text?: string;
+    readonly expectedRunId?: string;
 }
 
 export interface FakeRigTransport {
@@ -326,9 +326,14 @@ class FakeRigTransportModel implements FakeRigTransport {
             }),
         messageSubmit: (sessionId, text, idempotencyKey) =>
             this.perform("messageSubmit", { sessionId, text, idempotencyKey }, () => undefined),
-        messageSteer: (sessionId, text, idempotencyKey) =>
-            this.perform("messageSteer", { sessionId, text, idempotencyKey }, () => undefined),
-        runAbort: (sessionId) => this.perform("runAbort", { sessionId }, () => undefined),
+        messageSteer: (sessionId, text, idempotencyKey, expectedRunId) =>
+            this.perform(
+                "messageSteer",
+                { sessionId, text, idempotencyKey, expectedRunId },
+                () => undefined,
+            ),
+        runAbort: (sessionId, expectedRunId) =>
+            this.perform("runAbort", { sessionId, expectedRunId }, () => undefined),
         compact: (sessionId) => this.perform("compact", { sessionId }, () => undefined),
         rewind: (sessionId, messageId) =>
             this.perform("rewind", { sessionId }, () => {

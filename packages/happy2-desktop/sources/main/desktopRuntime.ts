@@ -26,6 +26,7 @@ import {
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
+import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
 
@@ -310,19 +311,4 @@ function displayError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-export function rigDaemonConnectionUnavailable(error: unknown): boolean {
-    let current: unknown = error;
-    for (let depth = 0; current && depth < 4; depth += 1) {
-        if (typeof current !== "object") return false;
-        const value = current as { readonly cause?: unknown; readonly code?: unknown };
-        if (
-            value.code === "ECONNREFUSED" ||
-            value.code === "ECONNRESET" ||
-            value.code === "EPIPE" ||
-            value.code === "ENOENT"
-        )
-            return true;
-        current = value.cause;
-    }
-    return false;
-}
+export { rigDaemonConnectionUnavailable };

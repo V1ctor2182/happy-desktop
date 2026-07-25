@@ -1,9 +1,9 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type AgentSecretSummary } from "../../resources.js";
 import { type ChatSummary, type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface AgentSecretsActionContext {
@@ -169,7 +169,7 @@ export function agentSecretsStoreCreate(
 
 export interface AgentSecretsSnapshot {
     readonly secrets: Loadable<readonly AgentSecretSummary[]>;
-    readonly agents: readonly IdentityProjection[];
+    readonly agents: readonly ConversationAuthor[];
     readonly channels: readonly ChatSummary[];
     readonly actionError?: UserError;
 }
@@ -208,7 +208,7 @@ export type AgentSecretsInput =
     | {
           readonly type: "secretsLoaded";
           readonly secrets: readonly AgentSecretSummary[];
-          readonly agents: readonly IdentityProjection[];
+          readonly agents: readonly ConversationAuthor[];
           readonly channels: readonly ChatSummary[];
       }
     | { readonly type: "secretsFailed"; readonly error: UserError }

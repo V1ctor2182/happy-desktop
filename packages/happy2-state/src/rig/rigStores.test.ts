@@ -11,7 +11,16 @@ import { rigClientCreate } from "./rigClient.js";
 import { rigSessionListStoreCreate } from "./rigSessionListStore.js";
 import type { RigSessionEvent } from "./rigTransport.js";
 import type {
+    ConversationActivityEntry,
+    ConversationEntry,
+    ConversationMessageEntry,
+    ConversationToolCall,
+} from "../conversation/conversationEntry.js";
+import type { ConversationSummary } from "../conversation/conversationSummary.js";
+import type { Loadable } from "../conversation/loadable.js";
+import type {
     RigEventId,
+    RigSession,
     RigMessage,
     RigModelCatalog,
     RigSessionId,
@@ -19,6 +28,57 @@ import type {
 } from "./rigTypes.js";
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * The render shape of one conversation entry, used so kind-order assertions stay
+ * readable: local messages carry their author, activity carries its variant.
+ */
+function entryShape(entry: ConversationEntry): string {
+    if (entry.kind === "message")
+        return entry.message.sender?.kind === "agent" ? "agentText" : "user";
+    if (entry.kind === "agentActivity") return entry.activity.kind;
+    if (entry.kind === "request") return "request";
+    return entry.variant === "divider" ? "divider" : "notice";
+}
+
+function shapesOf(store: RigChatStore): string[] {
+    return store.get().entries.map(entryShape);
+}
+
+function entriesOfShape(store: RigChatStore, shape: string): readonly ConversationEntry[] {
+    return store.get().entries.filter((entry) => entryShape(entry) === shape);
+}
+
+/** The agent's rendered text plus whether that row is still generating. */
+function agentTexts(store: RigChatStore): { text: string; streaming: boolean }[] {
+    return entriesOfShape(store, "agentText").map((entry) => ({
+        text: (entry as ConversationMessageEntry).message.text,
+        streaming: (entry as ConversationMessageEntry).message.generationStatus === "streaming",
+    }));
+}
+
+function toolCalls(store: RigChatStore): ConversationToolCall[] {
+    return entriesOfShape(store, "tool")
+        .map(
+            (entry) =>
+                (entry as ConversationActivityEntry).activity as { tool: ConversationToolCall },
+        )
+        .map((activity) => activity.tool);
+}
+
+/** The loaded durable session, for assertions about daemon-applied settings. */
+function sessionOf(store: RigChatStore): RigSession {
+    const session = store.get().session;
+    if (session.type !== "ready") throw new Error("The session is not loaded.");
+    return session.value;
+}
+
+/** The conversation rows of a list snapshot, which must be loaded to assert on. */
+function rowsOf(store: { get(): { conversations: Loadable<readonly ConversationSummary[]> } }) {
+    const conversations = store.get().conversations;
+    if (conversations.type !== "ready") throw new Error("The list is not loaded.");
+    return conversations.value;
+}
 
 async function catalogOf(fake: FakeRigTransport): Promise<RigModelCatalog> {
     return fake.transport.modelsRead();
@@ -60,7 +120,7 @@ async function chatReady(
 }
 
 describe("rigSessionListStore", () => {
-    it("orders sessions newest-created first and reconciles on session_created", async () => {
+    it("orders rows newest-created first and reconciles durable truth after a hint", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("a", { createdAt: 100 }));
         fake.sessionSet(fakeRigSession("c", { createdAt: 300 }));
@@ -69,23 +129,36 @@ describe("rigSessionListStore", () => {
         const unsubscribe = store.subscribe(() => undefined);
         await flush();
 
-        expect(store.get().status).toBe("ready");
-        expect(store.get().sessions.map((session) => session.id)).toEqual(["c", "b", "a"]);
+        expect(store.get().conversations.type).toBe("ready");
+        expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a"]);
 
+        // A global event is only a delivery hint: the payload it carries is never
+        // upserted, so a row appears exactly when the daemon durably has it.
         fake.globalEmit({
             cursor: 1,
             type: "session_created",
             session: fakeRigSummary("d", { createdAt: 400 }),
         });
-        expect(store.get().sessions.map((session) => session.id)).toEqual(["d", "c", "b", "a"]);
+        await flush();
+        expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a"]);
 
-        // A late-created session sorts to the front regardless of arrival order.
+        fake.sessionSet(fakeRigSession("d", { createdAt: 400 }));
         fake.globalEmit({
             cursor: 2,
+            type: "session_created",
+            session: fakeRigSummary("d", { createdAt: 400 }),
+        });
+        await flush();
+        expect(rowsOf(store).map((row) => row.id)).toEqual(["d", "c", "b", "a"]);
+
+        fake.sessionSet(fakeRigSession("a", { createdAt: 100, title: "Renamed" }));
+        fake.globalEmit({
+            cursor: 3,
             type: "session_updated",
             session: fakeRigSummary("a", { createdAt: 100, title: "Renamed" }),
         });
-        expect(store.get().sessions[3]?.title).toBe("Renamed");
+        await flush();
+        expect(rowsOf(store)[3]?.title).toBe("Renamed");
         unsubscribe();
     });
 
@@ -99,19 +172,81 @@ describe("rigSessionListStore", () => {
         unsubscribe();
         expect(fake.globalSubscriberCount).toBe(0);
     });
+
+    it("preserves the snapshot and skips notification for an unchanged durable refresh", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("a", { title: "Alpha" }));
+        const store = rigSessionListStoreCreate({ transport: fake.transport });
+        let notifications = 0;
+        const unsubscribe = store.subscribe(() => {
+            notifications += 1;
+        });
+        await flush();
+
+        const before = store.get();
+        const rows = rowsOf(store);
+        notifications = 0;
+        await store.sessionsRefresh();
+
+        expect(store.get()).toBe(before);
+        expect(rowsOf(store)).toBe(rows);
+        expect(notifications).toBe(0);
+        unsubscribe();
+    });
 });
 
 describe("rigChatStore streaming reconciliation", () => {
+    it("preserves the snapshot and skips notification for an unchanged durable reconcile", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1", { title: "Alpha" }));
+        const catalog = await catalogOf(fake);
+        const store = rigChatStoreCreate("s1" as RigSessionId, {
+            transport: fake.transport,
+            catalog,
+            now: () => 5_000,
+        });
+        let notifications = 0;
+        const unsubscribe = store.subscribe(() => {
+            notifications += 1;
+        });
+        await flush();
+
+        const before = store.get();
+        const entries = before.entries;
+        notifications = 0;
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "session_title_changed",
+                status: "ready",
+                title: "Payload title is only a hint",
+            }),
+        );
+        await flush();
+
+        expect(store.get()).toBe(before);
+        expect(store.get().entries).toBe(entries);
+        expect(notifications).toBe(0);
+        unsubscribe();
+    });
+
     it("hydrates then assembles streaming deltas into a finalized message", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1", { lastEventId: "e0" as RigEventId }));
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(store.get().status).toBe("ready");
+        expect(store.get().session.type).toBe("ready");
 
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                status: "running",
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, { type: "run_started", runId: "r1" }),
         );
+        await flush();
         expect(store.get().runStatus).toBe("running");
 
         fake.sessionEmit(
@@ -138,8 +273,7 @@ describe("rigChatStore streaming reconciliation", () => {
                 event: { type: "text_delta", text: "lo" },
             }),
         );
-        const streamingEntry = store.get().transcript.find((entry) => entry.kind === "agentText");
-        expect(streamingEntry).toMatchObject({ kind: "agentText", text: "Hello", streaming: true });
+        expect(agentTexts(store)[0]).toEqual({ text: "Hello", streaming: true });
 
         const finalized: RigMessage = {
             id: "m1",
@@ -147,6 +281,13 @@ describe("rigChatStore streaming reconciliation", () => {
             internal: false,
             blocks: [{ type: "text", text: "Hello" }],
         };
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                status: "idle",
+                messages: [finalized],
+                lastEventId: "e6" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e5", 5, { type: "agent_message", runId: "r1", message: finalized }),
@@ -160,18 +301,115 @@ describe("rigChatStore streaming reconciliation", () => {
                 modelLocked: false,
             }),
         );
+        await flush();
 
         expect(store.get().streaming).toBeUndefined();
         expect(store.get().runStatus).toBe("idle");
         expect(store.get().turnElapsedMs).toBe(0);
-        const finalEntry = store.get().transcript.find((entry) => entry.kind === "agentText");
-        expect(finalEntry).toMatchObject({ kind: "agentText", text: "Hello", streaming: false });
+        expect(agentTexts(store)[0]).toEqual({ text: "Hello", streaming: false });
+
+        // A reordered delta from the completed run cannot recreate a second row.
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e3", 3, {
+                type: "agent_event",
+                runId: "r1",
+                event: { type: "text_delta", text: " stale" },
+            }),
+        );
+        expect(agentTexts(store)).toEqual([{ text: "Hello", streaming: false }]);
+        await flush();
+        expect(agentTexts(store)).toEqual([{ text: "Hello", streaming: false }]);
         unsubscribe();
     });
 
-    it("surfaces a run-finished provider error from durable history", async () => {
+    it("keeps completed run ids retired and routes after delayed A to the active C run", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+        const completed = (id: string, text: string): RigMessage => ({
+            id,
+            role: "agent",
+            internal: false,
+            blocks: [{ type: "text", text }],
+        });
+        const a = completed("message-a", "A");
+        const b = completed("message-b", "B");
+
+        fake.sessionSet(fakeRigSession("s1", { status: "running" }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "a1", 1, { type: "run_started", runId: "run-a" }),
+        );
+        await flush();
+        fake.sessionSet(fakeRigSession("s1", { status: "idle", messages: [a] }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "a2", 2, {
+                type: "run_finished",
+                runId: "run-a",
+                stopReason: "stop",
+                modelLocked: false,
+            }),
+        );
+        await flush();
+
+        fake.sessionSet(fakeRigSession("s1", { status: "running", messages: [a] }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "b1", 3, { type: "run_started", runId: "run-b" }),
+        );
+        await flush();
+        fake.sessionSet(fakeRigSession("s1", { status: "idle", messages: [a, b] }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "b2", 4, {
+                type: "run_finished",
+                runId: "run-b",
+                stopReason: "stop",
+                modelLocked: false,
+            }),
+        );
+        await flush();
+
+        fake.sessionSet(fakeRigSession("s1", { status: "running", messages: [a, b] }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "c1", 5, { type: "run_started", runId: "run-c" }),
+        );
+        await flush();
+        expect(store.get().runId).toBe("run-c");
+
+        // A is older than the most recently completed B. Remembering only B
+        // would let this delayed delta replace C and poison guarded actions.
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "a-late", 6, {
+                type: "agent_event",
+                runId: "run-a",
+                event: { type: "text_delta", text: "stale" },
+            }),
+        );
+        await flush();
+        expect(store.get().runId).toBe("run-c");
+        expect(agentTexts(store).some(({ text }) => text.includes("stale"))).toBe(false);
+
+        await store.messageSend("steer C");
+        expect(fake.calls.at(-1)).toMatchObject({
+            operation: "messageSteer",
+            expectedRunId: "run-c",
+        });
+        await store.runAbort();
+        expect(fake.calls.at(-1)).toMatchObject({
+            operation: "runAbort",
+            expectedRunId: "run-c",
+        });
+        unsubscribe();
+    });
+
+    it("does not turn a run-finished error payload into durable transcript state", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1", { lastEventId: "e0" as RigEventId }));
         const { store, unsubscribe } = await chatReady(fake, "s1");
 
         fake.sessionEmit(
@@ -184,14 +422,10 @@ describe("rigChatStore streaming reconciliation", () => {
                 errorMessage: "Provider connection failed.",
             }),
         );
+        await flush();
 
-        expect(store.get().transcript).toContainEqual({
-            id: "notice:0",
-            kind: "notice",
-            level: "error",
-            title: "Run error",
-            text: "Provider connection failed.",
-        });
+        expect(entriesOfShape(store, "notice")).toEqual([]);
+        expect(sessionOf(store).lastEventId).toBe("e0");
         unsubscribe();
     });
 
@@ -216,8 +450,7 @@ describe("rigChatStore streaming reconciliation", () => {
                 },
             }),
         );
-        let tool = store.get().transcript.find((entry) => entry.kind === "tool");
-        expect(tool).toMatchObject({ kind: "tool", tool: { toolName: "Bash", status: "running" } });
+        expect(toolCalls(store)[0]).toMatchObject({ toolName: "Bash", status: "running" });
 
         fake.sessionEmit(
             "s1" as RigSessionId,
@@ -242,14 +475,11 @@ describe("rigChatStore streaming reconciliation", () => {
                 },
             }),
         );
-        tool = store.get().transcript.find((entry) => entry.kind === "tool");
+        const tool = toolCalls(store)[0];
         expect(tool).toMatchObject({
-            kind: "tool",
-            tool: {
-                status: "success",
-                display: "done",
-                presentation: { type: "execCommand", command: "ls", output: "file.txt" },
-            },
+            status: "success",
+            display: "done",
+            presentation: { type: "execCommand", command: "ls", output: "file.txt" },
         });
         unsubscribe();
     });
@@ -280,10 +510,10 @@ describe("rigChatStore streaming reconciliation", () => {
                 },
             }),
         );
-        const tool = store.get().transcript.find((entry) => entry.kind === "tool");
+        const tool = toolCalls(store)[0];
         expect(tool).toMatchObject({
-            kind: "tool",
-            tool: { status: "awaiting_approval", permissionReview: { risk: "medium" } },
+            status: "awaitingApproval",
+            review: { risk: "medium" },
         });
         unsubscribe();
     });
@@ -292,26 +522,40 @@ describe("rigChatStore streaming reconciliation", () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const { store, unsubscribe } = await chatReady(fake, "s1");
+        const request = {
+            requestId: "q1",
+            questions: [
+                {
+                    id: "one",
+                    header: "Pick",
+                    question: "Which?",
+                    multiSelect: false,
+                    required: true,
+                    options: [{ label: "A", description: "first" }],
+                },
+            ],
+        } as const;
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                pendingUserInputs: [request],
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, {
                 type: "user_input_requested",
-                request: {
-                    requestId: "q1",
-                    questions: [
-                        {
-                            id: "one",
-                            header: "Pick",
-                            question: "Which?",
-                            multiSelect: false,
-                            required: true,
-                            options: [{ label: "A", description: "first" }],
-                        },
-                    ],
-                },
+                request,
             }),
         );
+        await flush();
         expect(store.get().pendingUserInputs).toHaveLength(1);
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                pendingUserInputs: [],
+                lastEventId: "e2" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e2", 2, {
@@ -320,7 +564,60 @@ describe("rigChatStore streaming reconciliation", () => {
                 status: "answered",
             }),
         );
+        await flush();
         expect(store.get().pendingUserInputs).toHaveLength(0);
+        unsubscribe();
+    });
+
+    it("deduplicates a pending input answer and clears its request state on success", async () => {
+        const fake = createFakeRigTransport();
+        const request = {
+            requestId: "q1",
+            questions: [],
+        } as const;
+        fake.sessionSet(fakeRigSession("s1", { pendingUserInputs: [request] }));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+        const gate = fake.deferNext("answerUserInput");
+        const input = { requestId: "q1", answers: { choice: ["A"] } };
+
+        const first = store.answerInput(input);
+        const duplicate = store.answerInput(input);
+        expect(duplicate).toBe(first);
+        expect(store.get().requestSubmissions).toEqual([{ requestId: "q1", status: "pending" }]);
+        expect(fake.calls.filter((call) => call.operation === "answerUserInput")).toHaveLength(1);
+
+        gate.release();
+        await first;
+        expect(store.get().pendingUserInputs).toEqual([]);
+        expect(store.get().requestSubmissions).toEqual([]);
+        unsubscribe();
+    });
+
+    it("surfaces an input answer failure by request id and retries it successfully", async () => {
+        const fake = createFakeRigTransport();
+        const request = {
+            requestId: "q1",
+            questions: [],
+        } as const;
+        fake.sessionSet(fakeRigSession("s1", { pendingUserInputs: [request] }));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+        const input = { requestId: "q1", answers: { choice: ["A"] } };
+
+        fake.failNext("answerUserInput", new Error("Rig rejected the answer."));
+        await expect(store.answerInput(input)).rejects.toThrow("Rig rejected the answer.");
+        expect(store.get().requestSubmissions).toMatchObject([
+            {
+                requestId: "q1",
+                status: "failed",
+                error: { message: "Rig rejected the answer." },
+            },
+        ]);
+        expect(store.get().pendingUserInputs).toEqual([request]);
+
+        await store.answerInput(input);
+        expect(fake.calls.filter((call) => call.operation === "answerUserInput")).toHaveLength(2);
+        expect(store.get().pendingUserInputs).toEqual([]);
+        expect(store.get().requestSubmissions).toEqual([]);
         unsubscribe();
     });
 
@@ -328,6 +625,14 @@ describe("rigChatStore streaming reconciliation", () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const { store, unsubscribe } = await chatReady(fake, "s1");
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                modelId: "gpt-fast",
+                providerId: "openai",
+                effort: "low",
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, {
@@ -337,15 +642,32 @@ describe("rigChatStore streaming reconciliation", () => {
                 effort: "low",
             }),
         );
-        expect(store.get().session?.modelId).toBe("gpt-fast");
+        await flush();
+        expect(sessionOf(store).modelId).toBe("gpt-fast");
         expect(store.get().menus?.currentModelId).toBe("gpt-fast");
 
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                modelId: "gpt-fast",
+                effort: "medium",
+                lastEventId: "e2" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e2", 2, { type: "effort_changed", modelId: "gpt-fast", effort: "medium" }),
         );
-        expect(store.get().session?.effort).toBe("medium");
+        await flush();
+        expect(sessionOf(store).effort).toBe("medium");
 
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                modelId: "gpt-fast",
+                effort: "medium",
+                permissionMode: "read_only",
+                lastEventId: "e3" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e3", 3, {
@@ -353,9 +675,214 @@ describe("rigChatStore streaming reconciliation", () => {
                 permissionMode: "read_only",
             }),
         );
-        expect(store.get().session?.permissionMode).toBe("read_only");
+        await flush();
+        expect(sessionOf(store).permissionMode).toBe("read_only");
         expect(store.get().menus?.currentPermissionMode).toBe("read_only");
         unsubscribe();
+    });
+});
+
+describe("rigChatStore durable hint reconciliation", () => {
+    it("keeps durable messages, title, and config across out-of-order event payloads", async () => {
+        const fake = createFakeRigTransport();
+        const durableMessage: RigMessage = {
+            id: "durable-message",
+            role: "agent",
+            internal: false,
+            blocks: [{ type: "text", text: "Durable answer" }],
+        };
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                title: "Durable title",
+                modelId: "gpt-fast",
+                effort: "medium",
+                permissionMode: "full_access",
+                messages: [durableMessage],
+                lastEventId: "e10" as RigEventId,
+            }),
+        );
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e20", 20, {
+                type: "session_updated",
+                session: fakeRigSession("s1", {
+                    title: "Payload title",
+                    modelId: "gpt-default",
+                    effort: "low",
+                    permissionMode: "read_only",
+                    messages: [
+                        {
+                            id: "payload-message",
+                            role: "agent",
+                            internal: false,
+                            blocks: [{ type: "text", text: "Payload answer" }],
+                        },
+                    ],
+                }),
+            }),
+        );
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e2", 2, {
+                type: "session_title_changed",
+                status: "ready",
+                title: "Late stale title",
+            }),
+        );
+
+        // Neither the newer nor the late older payload can mutate the snapshot.
+        expect(agentTexts(store)).toEqual([{ text: "Durable answer", streaming: false }]);
+        expect(sessionOf(store)).toMatchObject({
+            title: "Durable title",
+            modelId: "gpt-fast",
+            effort: "medium",
+            permissionMode: "full_access",
+        });
+        await flush();
+        expect(agentTexts(store)).toEqual([{ text: "Durable answer", streaming: false }]);
+        expect(sessionOf(store)).toMatchObject({
+            title: "Durable title",
+            modelId: "gpt-fast",
+            effort: "medium",
+            permissionMode: "full_access",
+        });
+        unsubscribe();
+    });
+
+    it("coalesces a burst of duplicate hints into one read plus one follow-up", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1"));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+        const readsBefore = fake.calls.filter((call) => call.operation === "sessionRead").length;
+        const deferred = fake.deferNext("sessionRead");
+        const duplicate = event("s1", "duplicate", 1, {
+            type: "permission_mode_changed",
+            permissionMode: "read_only",
+        });
+
+        for (let index = 0; index < 25; index += 1)
+            fake.sessionEmit("s1" as RigSessionId, duplicate);
+
+        expect(fake.calls.filter((call) => call.operation === "sessionRead")).toHaveLength(
+            readsBefore + 1,
+        );
+        deferred.release();
+        await flush();
+        expect(fake.calls.filter((call) => call.operation === "sessionRead")).toHaveLength(
+            readsBefore + 2,
+        );
+        expect(sessionOf(store).permissionMode).toBe("auto");
+        unsubscribe();
+    });
+
+    it("does not add messages, tasks, or requests absent from the durable session", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1", { lastEventId: "e0" as RigEventId }));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "message_submitted",
+                message: {
+                    id: "phantom",
+                    role: "user",
+                    internal: false,
+                    blocks: [{ type: "text", text: "Never persisted" }],
+                },
+                displayText: "Never persisted",
+                runId: "r1",
+            }),
+        );
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e2", 2, {
+                type: "tasks_changed",
+                tasks: [
+                    {
+                        id: "phantom-task",
+                        subject: "Not durable",
+                        description: "Ignore this payload",
+                        status: "pending",
+                        blockedBy: [],
+                        blocks: [],
+                    },
+                ],
+            }),
+        );
+        await flush();
+
+        expect(sessionOf(store).messages).toEqual([]);
+        expect(store.get().tasks).toEqual([]);
+        expect(store.get().pendingUserInputs).toEqual([]);
+        expect(entriesOfShape(store, "user")).toEqual([]);
+        unsubscribe();
+    });
+
+    it("changes lastEventId only from authoritative reads and never from reordered hints", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1", { lastEventId: "e5" as RigEventId }));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+        const deferred = fake.deferNext("sessionRead");
+
+        fake.sessionSet(fakeRigSession("s1"));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e99", 99, {
+                type: "permission_mode_changed",
+                permissionMode: "read_only",
+            }),
+        );
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "permission_mode_changed",
+                permissionMode: "full_access",
+            }),
+        );
+        expect(sessionOf(store).lastEventId).toBe("e5");
+        deferred.release();
+        await flush();
+        // An authoritative read with no cursor cannot erase the last verified one.
+        expect(sessionOf(store).lastEventId).toBe("e5");
+
+        fake.sessionSet(fakeRigSession("s1", { lastEventId: "e6" as RigEventId }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e0", 0, {
+                type: "permission_mode_changed",
+                permissionMode: "read_only",
+            }),
+        );
+        await flush();
+        expect(sessionOf(store).lastEventId).toBe("e6");
+        unsubscribe();
+    });
+
+    it("does not publish a reconciliation that resolves after disposal", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1", { title: "Before" }));
+        const { store } = await chatReady(fake, "s1");
+        const deferred = fake.deferNext("sessionRead");
+        fake.sessionSet(fakeRigSession("s1", { title: "After" }));
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "session_title_changed",
+                status: "ready",
+                title: "After",
+            }),
+        );
+        const beforeDispose = store.get();
+
+        store[Symbol.dispose]();
+        deferred.release();
+        await flush();
+
+        expect(store.get()).toBe(beforeDispose);
+        expect(sessionOf(store).title).toBe("Before");
     });
 });
 
@@ -368,10 +895,17 @@ describe("rigChatStore actions", () => {
         await store.messageSend("first");
         expect(fake.calls.at(-1)).toMatchObject({ operation: "messageSubmit", text: "first" });
 
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                status: "running",
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, { type: "run_started", runId: "r1" }),
         );
+        await flush();
         await store.messageSend("second");
         expect(fake.calls.at(-1)).toMatchObject({ operation: "messageSteer", text: "second" });
         unsubscribe();
@@ -428,16 +962,13 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        const tools = store.get().transcript.filter((entry) => entry.kind === "tool");
+        const tools = toolCalls(store);
         // Exactly one tool entry — the result-only message emits nothing on its own.
         expect(tools).toHaveLength(1);
         expect(tools[0]).toMatchObject({
-            kind: "tool",
-            tool: {
-                status: "failed",
-                failed: true,
-                display: "Command exited with code 1: boom",
-            },
+            status: "failed",
+            failed: true,
+            display: "Command exited with code 1: boom",
         });
         unsubscribe();
     });
@@ -489,20 +1020,11 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        const kinds = store.get().transcript.map((entry) => entry.kind);
+        const kinds = shapesOf(store);
         // Separator between the two turns and a trailing one closing the last turn.
-        expect(kinds).toEqual([
-            "user",
-            "tool",
-            "turnSeparator",
-            "user",
-            "agentText",
-            "turnSeparator",
-        ]);
-        const firstSeparator = store
-            .get()
-            .transcript.find((entry) => entry.kind === "turnSeparator");
-        expect(firstSeparator).toMatchObject({ kind: "turnSeparator", toolCount: 1 });
+        expect(kinds).toEqual(["user", "tool", "divider", "user", "agentText", "divider"]);
+        // The divider summarizes its turn: one tool call, no file changes.
+        expect(entriesOfShape(store, "divider")[0]).toMatchObject({ text: "1 tool" });
         unsubscribe();
     });
 
@@ -544,27 +1066,14 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(store.get().transcript.map((entry) => entry.kind)).toEqual([
-            "user",
-            "agentText",
-            "tool",
-            "turnSeparator",
-        ]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "tool", "divider"]);
 
         store.turnCompactToggle();
         // The completed turn collapses to just the prompt plus its summary line.
-        expect(store.get().transcript.map((entry) => entry.kind)).toEqual([
-            "user",
-            "turnSeparator",
-        ]);
+        expect(shapesOf(store)).toEqual(["user", "divider"]);
 
         store.turnCompactToggle();
-        expect(store.get().transcript.map((entry) => entry.kind)).toEqual([
-            "user",
-            "agentText",
-            "tool",
-            "turnSeparator",
-        ]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "tool", "divider"]);
         unsubscribe();
     });
 
@@ -602,14 +1111,23 @@ describe("rigChatStore actions", () => {
         const { store, unsubscribe } = await chatReady(fake, "s1");
         expect(store.get().queuedMessages).toEqual([{ id: "q1", text: "Then push the branch." }]);
 
-        // A fresh session projection over SSE reconciles the queue durably.
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                queuedMessages: [],
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
+        // The event is only a hint; the fresh durable session clears the queue.
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, {
                 type: "session_updated",
-                session: fakeRigSession("s1", { queuedMessages: [] }),
+                session: fakeRigSession("s1", {
+                    queuedMessages: [{ id: "payload-only", text: "Ignore me." }],
+                }),
             }),
         );
+        await flush();
         expect(store.get().queuedMessages).toEqual([]);
         unsubscribe();
     });
@@ -778,7 +1296,37 @@ describe("rigChatStore actions", () => {
         store[Symbol.dispose]();
     });
 
-    it("renders a shell-mode run from started/finished events, updating in place", async () => {
+    it("opens and closes the settings dialog without disturbing the panels", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1"));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+
+        expect(store.get().settingsOpen).toBe(false);
+        store.settingsOpen();
+        expect(store.get().settingsOpen).toBe(true);
+
+        // Opening is idempotent: a second call does not emit a new snapshot.
+        const opened = store.get();
+        store.settingsOpen();
+        expect(store.get()).toBe(opened);
+
+        // The dialog is pure view state: it closes no panel and starts no work.
+        store.activityPanelToggle();
+        expect(store.get().activityPanelOpen).toBe(true);
+        expect(store.get().settingsOpen).toBe(true);
+
+        store.settingsClose();
+        expect(store.get().settingsOpen).toBe(false);
+        expect(store.get().activityPanelOpen).toBe(true);
+        const closed = store.get();
+        store.settingsClose();
+        expect(store.get()).toBe(closed);
+
+        unsubscribe();
+        store[Symbol.dispose]();
+    });
+
+    it("treats shell lifecycle event payloads as hints rather than transcript state", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const { store, unsubscribe } = await chatReady(fake, "s1");
@@ -791,9 +1339,6 @@ describe("rigChatStore actions", () => {
                 command: "ls -la",
             }),
         );
-        let shell = store.get().transcript.find((entry) => entry.kind === "shell");
-        expect(shell).toMatchObject({ kind: "shell", command: "ls -la", running: true });
-
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e2", 2, {
@@ -805,16 +1350,8 @@ describe("rigChatStore actions", () => {
                 timedOut: false,
             }),
         );
-        const entries = store.get().transcript.filter((entry) => entry.kind === "shell");
-        // Same commandId updates the one entry in place rather than appending a second.
-        expect(entries).toHaveLength(1);
-        shell = entries[0];
-        expect(shell).toMatchObject({
-            running: false,
-            output: "file.txt\n",
-            exitCode: 0,
-            timedOut: false,
-        });
+        await flush();
+        expect(entriesOfShape(store, "shell")).toEqual([]);
 
         unsubscribe();
         store[Symbol.dispose]();
@@ -827,8 +1364,10 @@ describe("rigChatStore actions", () => {
         const { store, unsubscribe } = await chatReady(fake, "s1");
 
         await store.shellRun("echo hi");
-        const shell = store.get().transcript.find((entry) => entry.kind === "shell");
-        expect(shell).toMatchObject({ running: false, output: "hi\n", exitCode: 3 });
+        const shell = entriesOfShape(store, "shell")[0];
+        expect(shell).toMatchObject({
+            activity: { running: false, output: "hi\n", exitCode: 3 },
+        });
 
         unsubscribe();
         store[Symbol.dispose]();
@@ -861,29 +1400,45 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(store.get().transcript.some((entry) => entry.kind === "user")).toBe(true);
+        expect(shapesOf(store)).toContain("user");
 
         store.viewClear();
-        expect(store.get().transcript.length).toBe(0);
+        expect(store.get().entries.length).toBe(0);
 
-        // A subsequent message arrives after the clear and renders normally.
+        const secondMessage: RigMessage = {
+            id: "m2",
+            role: "user",
+            internal: false,
+            blocks: [{ type: "text", text: "two" }],
+        };
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                messages: [
+                    {
+                        id: "m1",
+                        role: "user",
+                        internal: false,
+                        blocks: [{ type: "text", text: "one" }],
+                    },
+                    secondMessage,
+                ],
+                lastEventId: "e1" as RigEventId,
+            }),
+        );
+        // A subsequent durable message appears after the clear and renders normally.
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, {
                 type: "message_submitted",
-                message: {
-                    id: "m2",
-                    role: "user",
-                    internal: false,
-                    blocks: [{ type: "text", text: "two" }],
-                },
+                message: secondMessage,
                 displayText: "two",
                 runId: "r1",
             }),
         );
-        const users = store.get().transcript.filter((entry) => entry.kind === "user");
+        await flush();
+        const users = entriesOfShape(store, "user");
         expect(users.length).toBe(1);
-        expect(store.get().transcript.length).toBe(1);
+        expect(store.get().entries.length).toBe(1);
         unsubscribe();
     });
 
@@ -902,9 +1457,9 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(store.get().transcript.some((entry) => entry.kind === "thinking")).toBe(false);
+        expect(shapesOf(store)).not.toContain("reasoning");
         store.reasoningToggle();
-        expect(store.get().transcript.some((entry) => entry.kind === "thinking")).toBe(true);
+        expect(shapesOf(store)).toContain("reasoning");
         unsubscribe();
     });
 });
@@ -926,22 +1481,29 @@ describe("rigChatStore lifecycle", () => {
         expect(fake.sessionSubscriberCount).toBe(0);
     });
 
-    it("backfills missed events by lastEventId after a stream drop", async () => {
+    it("uses backfill only as a hint and reconciles the durable session after a drop", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1", { lastEventId: "e1" as RigEventId }));
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        // Queue an event into the backfill log that was never delivered live.
+        // The missed payload is stale; the durable read carries the actual result.
         fake.sessionLogAppend(
             "s1" as RigSessionId,
             event("s1", "e2", 2, {
                 type: "permission_mode_changed",
+                permissionMode: "read_only",
+            }),
+        );
+        fake.sessionSet(
+            fakeRigSession("s1", {
                 permissionMode: "full_access",
+                lastEventId: "e2" as RigEventId,
             }),
         );
         fake.sessionErrorEmit("s1" as RigSessionId);
         await flush();
         expect(fake.calls.some((call) => call.operation === "sessionEventsBackfill")).toBe(true);
-        expect(store.get().session?.permissionMode).toBe("full_access");
+        expect(sessionOf(store).permissionMode).toBe("full_access");
+        expect(sessionOf(store).lastEventId).toBe("e2");
         unsubscribe();
     });
 });

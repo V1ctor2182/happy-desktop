@@ -747,8 +747,11 @@
     border: 1px solid var(--divider);
     border-radius: 8px;
     appearance: none;
-    cursor: zoom-in;
     transition: border-color 120ms ease;
+}
+
+.happy2-message__media-item[data-interactive] {
+    cursor: zoom-in;
 }
 
 .happy2-message__media[data-count="2"] .happy2-message__media-item,
@@ -757,11 +760,11 @@
     aspect-ratio: 1 / 1;
 }
 
-.happy2-message__media-item:hover {
+.happy2-message__media-item[data-interactive]:hover {
     border-color: var(--surface-selected);
 }
 
-.happy2-message__media-item:focus-visible {
+.happy2-message__media-item[data-interactive]:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
@@ -1075,6 +1078,30 @@
     color: var(--text-secondary);
     text-align: center;
     text-wrap: balance;
+}
+
+/*
+ * The assistant-turn hint: mid-turn agent context reads as part of that turn,
+ * so it aligns to the message text column and drops to the tighter vertical
+ * rhythm of a grouped follow-up instead of separating the thread like a
+ * centered banner.
+ */
+/* The 14px leading glyph plus the 8px gap consume 22px, so an 8px inset lands
+   the text itself on the same 30px column a message body starts on. */
+.happy2-system-notice[data-align="start"] {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 4px 20px 4px 8px;
+}
+
+/* Center the 14px leading glyph on the 20px line box of the text beside it. */
+.happy2-system-notice[data-align="start"] .happy2-system-notice__icon {
+    height: 20px;
+}
+
+.happy2-system-notice[data-align="start"] .happy2-system-notice__text {
+    text-align: left;
+    text-wrap: initial;
 }
 
 .happy2-system-notice__ref {

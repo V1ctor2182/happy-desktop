@@ -6,7 +6,7 @@ import type {
     RigServiceTier,
     RigSessionCreateInput,
 } from "happy2-state";
-import type { RigDaemonClient } from "./rigDaemonClient";
+import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
 import type { EventId } from "./rigDaemonTypes";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
@@ -59,9 +59,11 @@ export interface RigProxyHandleOptions {
     readonly request: IncomingMessage;
     readonly response: ServerResponse;
     /**
-     * Invoked when `GET /health` fails at the transport level so the host can
-     * restart the connection. Only health triggers it, preserving the existing
-     * daemon reconnect contract; other routes simply answer an error status.
+     * Invoked when a route fails because this client can no longer reach or
+     * authenticate to the daemon — an unreachable socket or a token the daemon
+     * rejects after a restart — so the host can rebuild the connection. Errors
+     * the daemon itself reports (a bad session id, a refused action) are answered
+     * as ordinary error statuses and never trigger it.
      */
     readonly onConnectionError?: (error: unknown) => void;
     /** Home directory used to compute home-relative `displayCwd`s. Defaults to the OS home. */
@@ -100,7 +102,14 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 return true;
             }
             if (path === "/events/stream") {
-                await streamGlobalEvents(client, request, response, query, home);
+                await streamGlobalEvents(
+                    client,
+                    request,
+                    response,
+                    query,
+                    home,
+                    options.onConnectionError,
+                );
                 return true;
             }
             if (segments[0] === "sessions" && segments[1]) {
@@ -154,7 +163,15 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     return true;
                 }
                 if (segments[2] === "events" && segments[3] === "stream" && segments.length === 4) {
-                    await streamSessionEvents(client, request, response, sessionId, query, home);
+                    await streamSessionEvents(
+                        client,
+                        request,
+                        response,
+                        sessionId,
+                        query,
+                        home,
+                        options.onConnectionError,
+                    );
                     return true;
                 }
             }
@@ -186,6 +203,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
 
         return false;
     } catch (error) {
+        if (rigDaemonConnectionUnavailable(error)) options.onConnectionError?.(error);
         if (!response.headersSent) {
             writeJson(response, 502, { error: errorMessage(error) });
         } else {
@@ -371,6 +389,7 @@ async function streamSessionEvents(
     sessionId: string,
     query: URLSearchParams,
     home: string,
+    onConnectionError?: (error: unknown) => void,
 ): Promise<void> {
     const controller = new AbortController();
     request.on("close", () => controller.abort());
@@ -387,7 +406,11 @@ async function streamSessionEvents(
             },
         });
     } catch (error) {
-        if (!controller.signal.aborted) sseSend(response, { error: errorMessage(error) }, "error");
+        if (controller.signal.aborted) return;
+        // A dropped stream is how a restarted daemon usually announces itself, so
+        // report it before the reader sees the terminal error event.
+        if (rigDaemonConnectionUnavailable(error)) onConnectionError?.(error);
+        sseSend(response, { error: errorMessage(error) }, "error");
     } finally {
         response.end();
     }
@@ -399,6 +422,7 @@ async function streamGlobalEvents(
     response: ServerResponse,
     query: URLSearchParams,
     home: string,
+    onConnectionError?: (error: unknown) => void,
 ): Promise<void> {
     const controller = new AbortController();
     request.on("close", () => controller.abort());
@@ -415,7 +439,11 @@ async function streamGlobalEvents(
             },
         });
     } catch (error) {
-        if (!controller.signal.aborted) sseSend(response, { error: errorMessage(error) }, "error");
+        if (controller.signal.aborted) return;
+        // A dropped stream is how a restarted daemon usually announces itself, so
+        // report it before the reader sees the terminal error event.
+        if (rigDaemonConnectionUnavailable(error)) onConnectionError?.(error);
+        sseSend(response, { error: errorMessage(error) }, "error");
     } finally {
         response.end();
     }

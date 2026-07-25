@@ -1,8 +1,8 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type CallSummary, type UserError, type WebRtcSignal } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface CallsActionContext {
@@ -153,7 +153,7 @@ export interface CallParticipantProjection {
     readonly status: CallSummary["participants"][number]["status"];
     readonly joinedAt?: string;
     readonly leftAt?: string;
-    readonly identity?: IdentityProjection;
+    readonly identity?: ConversationAuthor;
 }
 
 export interface CallProjection {
@@ -162,7 +162,7 @@ export interface CallProjection {
     readonly createdByUserId?: string;
     readonly kind: CallSummary["kind"];
     readonly status: CallSummary["status"];
-    readonly createdBy?: IdentityProjection;
+    readonly createdBy?: ConversationAuthor;
     readonly participants: readonly CallParticipantProjection[];
     readonly startedAt?: string;
     readonly endedAt?: string;

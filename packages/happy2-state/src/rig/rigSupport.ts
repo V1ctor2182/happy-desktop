@@ -17,7 +17,7 @@ export function rigUserError(error: unknown): UserError {
 export function referencesPreserve<T>(previous: readonly T[], next: readonly T[]): readonly T[] {
     if (previous === next) return previous;
     let changed = previous.length !== next.length;
-    const merged: T[] = new Array(next.length);
+    const merged: T[] = Array.from({ length: next.length });
     for (let index = 0; index < next.length; index++) {
         const before = previous[index];
         const after = next[index]!;
@@ -37,6 +37,12 @@ export function deepEqual(left: unknown, right: unknown): boolean {
     if (typeof left !== "object" || typeof right !== "object" || left === null || right === null) {
         return false;
     }
+    if (
+        left instanceof Error &&
+        right instanceof Error &&
+        (left.name !== right.name || left.message !== right.message)
+    )
+        return false;
     const leftArray = Array.isArray(left);
     const rightArray = Array.isArray(right);
     if (leftArray !== rightArray) return false;

@@ -72,6 +72,58 @@ function mediaItemStyle(image: MessageImage, count: number): CSSProperties | und
     const width = Math.round(Math.min(image.width, MEDIA_SINGLE_MAX_W, MEDIA_SINGLE_MAX_H * ratio));
     return { width: `${width}px`, aspectRatio: `${image.width} / ${image.height}` };
 }
+
+/** One image tile; without an open action it remains media, not a fake button. */
+function MessageMediaItem(props: {
+    count: number;
+    image: MessageImage;
+    onOpen?: (id: string) => void;
+}) {
+    const content = props.image.url ? (
+        <img
+            alt={props.image.alt ?? ""}
+            className="happy2-message__media-image"
+            data-happy2-ui="message-media-image"
+            draggable={false}
+            height={props.image.height}
+            loading="lazy"
+            src={props.image.url}
+            width={props.image.width}
+        />
+    ) : (
+        <span
+            aria-label={`Loading ${props.image.alt ?? "image"}`}
+            className="happy2-message__media-loading"
+            data-happy2-ui="message-media-loading"
+            role="status"
+            style={
+                props.image.placeholderUrl
+                    ? { backgroundImage: `url(${props.image.placeholderUrl})` }
+                    : undefined
+            }
+        />
+    );
+    const shared = {
+        className: "happy2-message__media-item",
+        "data-fixed": "",
+        "data-media-id": props.image.id,
+        "data-happy2-ui": "message-media-item",
+        style: mediaItemStyle(props.image, props.count),
+    } as const;
+    return props.onOpen ? (
+        <button
+            {...shared}
+            aria-label={props.image.alt ? `Open ${props.image.alt}` : "Open image"}
+            data-interactive=""
+            onClick={() => props.onOpen?.(props.image.id)}
+            type="button"
+        >
+            {content}
+        </button>
+    ) : (
+        <div {...shared}>{content}</div>
+    );
+}
 export type MessageDeliveryState = "failed" | "sending" | "sent";
 export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Keeps a backed toolbar visible without hover (controlled/blueprint state). */
@@ -140,7 +192,12 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Emoji available in the hover reaction picker. IDs are passed to `onReactionSelect`. */
     reactionOptions?: EmojiItem[];
     style?: CSSProperties;
-    time: string;
+    /**
+     * Rendered send time. Optional because a producer may genuinely have none
+     * (a local agent transcript is ordered, not timestamped); the meta and
+     * gutter slots keep their boxes either way so no layout shifts.
+     */
+    time?: string;
     tone?: ToneName;
 };
 function deriveInitials(author: string) {
@@ -492,7 +549,7 @@ export function Message(props: MessageProps) {
                             </span>
                         ) : null}
                         <span className="happy2-message__time" data-happy2-ui="message-time">
-                            {local.time}
+                            {local.time ?? ""}
                         </span>
                     </div>
                 ) : null}
@@ -517,7 +574,7 @@ export function Message(props: MessageProps) {
                             className="happy2-message__aside-time"
                             data-happy2-ui="message-aside-time"
                         >
-                            {local.gutterTime ?? local.time}
+                            {local.gutterTime ?? local.time ?? ""}
                         </span>
                         {bodyNode}
                     </div>
@@ -531,44 +588,12 @@ export function Message(props: MessageProps) {
                         data-happy2-ui="message-media"
                     >
                         {local.images!.slice(0, 4).map((image) => (
-                            <button
-                                aria-label={image.alt ? `Open ${image.alt}` : "Open image"}
-                                className="happy2-message__media-item"
-                                data-fixed=""
-                                data-media-id={image.id}
-                                data-happy2-ui="message-media-item"
-                                onClick={() => local.onImageOpen?.(image.id)}
-                                style={mediaItemStyle(image, Math.min(local.images!.length, 4))}
-                                type="button"
+                            <MessageMediaItem
+                                count={Math.min(local.images!.length, 4)}
+                                image={image}
                                 key={image.id}
-                            >
-                                {image.url ? (
-                                    <img
-                                        alt={image.alt ?? ""}
-                                        className="happy2-message__media-image"
-                                        data-happy2-ui="message-media-image"
-                                        draggable={false}
-                                        height={image.height}
-                                        loading="lazy"
-                                        src={image.url}
-                                        width={image.width}
-                                    />
-                                ) : (
-                                    <span
-                                        aria-label={`Loading ${image.alt ?? "image"}`}
-                                        className="happy2-message__media-loading"
-                                        data-happy2-ui="message-media-loading"
-                                        role="status"
-                                        style={
-                                            image.placeholderUrl
-                                                ? {
-                                                      backgroundImage: `url(${image.placeholderUrl})`,
-                                                  }
-                                                : undefined
-                                        }
-                                    />
-                                )}
-                            </button>
+                                onOpen={local.onImageOpen}
+                            />
                         ))}
                     </div>
                 ) : null}
@@ -837,12 +862,19 @@ function systemNoticeSegments(text: string): SystemNoticeSegment[] {
         );
 }
 /**
- * Centered, low-emphasis service line for durable chat events such as
- * membership and agent-setting changes. It is not a chat bubble: a small
- * leading glyph sits beside muted body text, with @user and #channel references
- * color-lifted so the affected entities read at a glance.
+ * Low-emphasis service line for durable chat events such as membership and
+ * agent-setting changes. It is not a chat bubble: a small leading glyph sits
+ * beside muted body text, with @user and #channel references color-lifted so
+ * the affected entities read at a glance.
+ *
+ * `align` chooses between the two places a service line belongs. `center` is
+ * the shared-channel default, where a notice separates two people's turns.
+ * `start` is the assistant-turn hint: context a single agent emitted mid-turn,
+ * which reads as part of that turn and therefore lines up with its text column
+ * instead of interrupting the thread with a centered banner.
  */
 export function SystemNotice(props: {
+    align?: "center" | "start";
     className?: string;
     icon?: IconName;
     style?: CSSProperties;
@@ -853,6 +885,7 @@ export function SystemNotice(props: {
         <div
             aria-label={props.text}
             className={["happy2-system-notice", props.className].filter(Boolean).join(" ")}
+            data-align={props.align ?? "center"}
             data-happy2-ui="system-notice"
             role="note"
             style={props.style}

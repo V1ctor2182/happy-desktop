@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionEvent } from "./rigDaemonTypes";
+import { RigDaemonHttpError } from "./rigDaemonClient";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
 
 const HOME = "/home/dev";
@@ -211,6 +212,7 @@ async function handle(
     request: IncomingMessage,
     captured: Captured,
     query = new URLSearchParams(),
+    onConnectionError?: (error: unknown) => void,
 ): Promise<boolean> {
     return rigProxyHandle({
         client,
@@ -220,6 +222,7 @@ async function handle(
         request,
         response: captured.response,
         homeDir: HOME,
+        ...(onConnectionError ? { onConnectionError } : {}),
     });
 }
 
@@ -394,6 +397,46 @@ describe("rigProxyHandle", () => {
         const dataFrames = captured.chunks.filter((chunk) => chunk.startsWith("data:"));
         expect(dataFrames).toHaveLength(1);
         expect(dataFrames[0]).toContain('"type":"run_started"');
+    });
+
+    it("reports a rejected token so the host rebuilds the connection", async () => {
+        const listSessions = vi.fn(async () => {
+            throw new RigDaemonHttpError(401, "unauthorized");
+        });
+        const onConnectionError = vi.fn();
+        const captured = fakeResponse();
+        await handle(
+            clientStub({ listSessions } as unknown as Partial<RigProxyClient>),
+            "GET",
+            "/sessions",
+            getRequest(),
+            captured,
+            new URLSearchParams(),
+            onConnectionError,
+        );
+
+        expect(captured.status).toBe(502);
+        expect(onConnectionError).toHaveBeenCalledOnce();
+    });
+
+    it("leaves a daemon-reported failure to the reader without reconnecting", async () => {
+        const getSession = vi.fn(async () => {
+            throw new RigDaemonHttpError(404, "no such session");
+        });
+        const onConnectionError = vi.fn();
+        const captured = fakeResponse();
+        await handle(
+            clientStub({ getSession } as unknown as Partial<RigProxyClient>),
+            "GET",
+            "/sessions/missing",
+            getRequest(),
+            captured,
+            new URLSearchParams(),
+            onConnectionError,
+        );
+
+        expect(captured.status).toBe(502);
+        expect(onConnectionError).not.toHaveBeenCalled();
     });
 
     it("returns false for an unknown path", async () => {

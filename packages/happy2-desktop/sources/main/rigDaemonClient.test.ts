@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { rigDaemonPathsResolve, rigDaemonTokenRead } from "./rigDaemonClient";
+import {
+    rigDaemonConnectionUnavailable,
+    RigDaemonHttpError,
+    rigDaemonPathsResolve,
+    rigDaemonTokenRead,
+} from "./rigDaemonClient";
 
 describe("rigDaemonPathsResolve", () => {
     it("matches Rig's default and environment-overridden daemon paths", () => {
@@ -36,5 +41,27 @@ describe("rigDaemonTokenRead", () => {
         } finally {
             await rm(directory, { force: true, recursive: true });
         }
+    });
+});
+
+describe("rigDaemonConnectionUnavailable", () => {
+    it("treats a rejected token from a restarted daemon as an unusable connection", () => {
+        expect(rigDaemonConnectionUnavailable(new RigDaemonHttpError(401, "unauthorized"))).toBe(
+            true,
+        );
+        expect(rigDaemonConnectionUnavailable(new RigDaemonHttpError(403, "forbidden"))).toBe(true);
+        expect(
+            rigDaemonConnectionUnavailable(
+                Object.assign(new Error("socket gone"), { code: "ENOENT" }),
+            ),
+        ).toBe(true);
+    });
+
+    it("leaves daemon-reported failures to the caller", () => {
+        expect(rigDaemonConnectionUnavailable(new RigDaemonHttpError(404, "no session"))).toBe(
+            false,
+        );
+        expect(rigDaemonConnectionUnavailable(new RigDaemonHttpError(500, "boom"))).toBe(false);
+        expect(rigDaemonConnectionUnavailable(new Error("ordinary failure"))).toBe(false);
     });
 });

@@ -132,3 +132,54 @@ it("opens a control menu, selects an option, and closes on outside pointer-down"
 
     await view.screenshot("RigSessionControls.test");
 }, 120_000);
+
+it("renders only the requested controls, in the requested order", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <RigSessionControls
+                data-testid="split"
+                fields={["permission", "tier"]}
+                menus={menus}
+                onEffortChange={() => undefined}
+                onModelChange={() => undefined}
+                onPermissionModeChange={() => undefined}
+                onServiceTierChange={() => undefined}
+            />
+        ),
+        { width: 620, height: 120, padding: 16 },
+    );
+    await view.ready();
+
+    // A surface that shows the model picker elsewhere must not get a second copy.
+    expect(view.container.querySelector('[data-testid="rig-control-model"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="rig-control-effort"]')).toBeNull();
+
+    const rendered = [
+        ...view.container.querySelectorAll<HTMLElement>('[data-happy2-ui="rig-control-label"]'),
+    ].map((label) => label.textContent);
+    expect(rendered).toEqual(["Access", "Speed"]);
+});
+
+it("defaults to every control when no fields are requested", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <RigSessionControls
+                data-testid="all"
+                menus={menus}
+                onEffortChange={() => undefined}
+                onModelChange={() => undefined}
+                onPermissionModeChange={() => undefined}
+                onServiceTierChange={() => undefined}
+            />
+        ),
+        { width: 760, height: 120, padding: 16 },
+    );
+    await view.ready();
+
+    const rendered = [
+        ...view.container.querySelectorAll<HTMLElement>('[data-happy2-ui="rig-control-label"]'),
+    ].map((label) => label.textContent);
+    expect(rendered).toEqual(["Model", "Effort", "Access", "Speed"]);
+});

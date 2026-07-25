@@ -1,8 +1,8 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type NotificationSummary, type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface NotificationsActionContext {
@@ -168,7 +168,7 @@ export interface NotificationProjection {
     readonly actorUserId?: string;
     readonly readAt?: string;
     readonly createdAt: string;
-    readonly actor?: IdentityProjection;
+    readonly actor?: ConversationAuthor;
 }
 
 export interface NotificationsSnapshot {

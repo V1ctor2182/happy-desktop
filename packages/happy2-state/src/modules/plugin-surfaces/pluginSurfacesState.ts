@@ -10,7 +10,7 @@ import type {
     PluginContributionSummary,
     UserError,
 } from "../../types.js";
-import type { Loadable } from "../chat/chatState.js";
+import type { Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export type PluginActionState =

@@ -63,7 +63,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let disposed = false;
 
     const catalogEnsure = (): Promise<RigModelCatalog> => {
-        if (!catalogPromise) catalogPromise = transport.modelsRead();
+        if (!catalogPromise)
+            catalogPromise = transport.modelsRead().catch((error: unknown) => {
+                catalogPromise = undefined;
+                throw error;
+            });
         return catalogPromise;
     };
 
@@ -103,7 +107,17 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 chats.set(sessionId, binding);
             }
             binding.count += 1;
-            const store = await binding.storePromise;
+            let store: RigChatStore;
+            try {
+                store = await binding.storePromise;
+            } catch (error) {
+                const current = chats.get(sessionId);
+                if (current === binding) {
+                    current.count -= 1;
+                    if (current.count <= 0) chats.delete(sessionId);
+                }
+                throw error;
+            }
             let released = false;
             return {
                 store,

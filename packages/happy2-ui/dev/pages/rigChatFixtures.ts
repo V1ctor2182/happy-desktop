@@ -1,15 +1,56 @@
 import type {
+    ConversationEntry,
+    ConversationMessageEntry,
+    ConversationRequest,
+    ConversationSummary,
+    ConversationToolCall,
     RigMenusSnapshot,
-    RigSessionId,
-    RigSessionSummary,
-    RigToolEntry,
-    RigTranscriptEntry,
-    RigUserInputRequest,
 } from "happy2-state";
 
-const id = (value: string) => value as RigSessionId;
+/** One local message projection, with the collaborative fields left empty. */
+function message(
+    id: string,
+    author: "you" | "agent",
+    text: string,
+    generationStatus?: "streaming" | "complete",
+): ConversationMessageEntry {
+    return {
+        kind: "message",
+        source: "server",
+        delivery: "sent",
+        message: {
+            id,
+            chatId: "ses_alpha01234567",
+            sequence: id,
+            changePts: id,
+            sender:
+                author === "you"
+                    ? { id: "rig:owner", displayName: "You", username: "you", kind: "human" }
+                    : {
+                          id: "rig:agent",
+                          displayName: "Rig",
+                          username: "rig",
+                          kind: "agent",
+                          agentRole: "default",
+                      },
+            kind: author === "you" ? "user" : "automated",
+            automated: false,
+            audience: author === "you" ? "agents" : "people",
+            agentUserIds: [],
+            text,
+            ...(generationStatus ? { generationStatus } : {}),
+            revision: 0,
+            mentions: [],
+            attachments: [],
+            reactions: [],
+            receipts: [],
+            expiryMode: "none",
+            createdAt: "2026-07-25T09:41:00.000Z",
+        },
+    };
+}
 
-export const rigFileDiffTool: RigToolEntry = {
+export const rigFileDiffTool: ConversationToolCall = {
     toolCallId: "tool-diff",
     toolName: "edit",
     arguments: { path: "src/auth/refresh.ts" },
@@ -47,7 +88,7 @@ export const rigFileDiffTool: RigToolEntry = {
     },
 };
 
-export const rigExecTool: RigToolEntry = {
+export const rigExecTool: ConversationToolCall = {
     toolCallId: "tool-exec",
     toolName: "bash",
     arguments: { command: "pnpm test" },
@@ -63,7 +104,7 @@ export const rigExecTool: RigToolEntry = {
     },
 };
 
-export const rigTerminalTool: RigToolEntry = {
+export const rigTerminalTool: ConversationToolCall = {
     toolCallId: "tool-terminal",
     toolName: "TaskOutput",
     arguments: null,
@@ -76,7 +117,7 @@ export const rigTerminalTool: RigToolEntry = {
     },
 };
 
-export const rigGenericTool: RigToolEntry = {
+export const rigGenericTool: ConversationToolCall = {
     toolCallId: "tool-generic",
     toolName: "TaskList",
     arguments: { filter: "in_progress", limit: 20 },
@@ -85,7 +126,7 @@ export const rigGenericTool: RigToolEntry = {
     display: "3 tasks in progress",
 };
 
-export const rigRunningTool: RigToolEntry = {
+export const rigRunningTool: ConversationToolCall = {
     toolCallId: "tool-running",
     toolName: "grep",
     arguments: { pattern: "TODO" },
@@ -94,13 +135,13 @@ export const rigRunningTool: RigToolEntry = {
     display: "Searching…",
 };
 
-export const rigAwaitingTool: RigToolEntry = {
+export const rigAwaitingTool: ConversationToolCall = {
     toolCallId: "tool-await",
     toolName: "write",
     arguments: { path: "config/releases.json" },
-    status: "awaiting_approval",
+    status: "awaitingApproval",
     failed: false,
-    permissionReview: {
+    review: {
         action: "write config/releases.json",
         reason: "This file is outside the workspace write allowlist.",
         decision: "ask",
@@ -109,7 +150,7 @@ export const rigAwaitingTool: RigToolEntry = {
     },
 };
 
-export const rigFailedTool: RigToolEntry = {
+export const rigFailedTool: ConversationToolCall = {
     toolCallId: "tool-failed",
     toolName: "bash",
     arguments: { command: "pnpm build" },
@@ -124,7 +165,7 @@ export const rigFailedTool: RigToolEntry = {
     },
 };
 
-export const rigStoppedTool: RigToolEntry = {
+export const rigStoppedTool: ConversationToolCall = {
     toolCallId: "tool-stopped",
     toolName: "bash",
     arguments: { command: "sleep 100" },
@@ -133,7 +174,7 @@ export const rigStoppedTool: RigToolEntry = {
     display: "Stopped by user",
 };
 
-export const rigMcpTool: RigToolEntry = {
+export const rigMcpTool: ConversationToolCall = {
     toolCallId: "tool-mcp",
     toolName: "mcp__linear__create_issue",
     arguments: { title: "Fix token rotation race", team: "core", priority: 2 },
@@ -150,7 +191,7 @@ export const rigMcpTool: RigToolEntry = {
     ].join("\n"),
 };
 
-export const rigMcpInterruptedTool: RigToolEntry = {
+export const rigMcpInterruptedTool: ConversationToolCall = {
     toolCallId: "tool-mcp-interrupted",
     toolName: "mcp__github__search_code",
     arguments: { query: "withTransaction retry" },
@@ -159,68 +200,82 @@ export const rigMcpInterruptedTool: RigToolEntry = {
     failure: { kind: "interrupted" },
 };
 
-export const rigTranscriptEntries: readonly RigTranscriptEntry[] = [
+export const conversationEntries: readonly ConversationEntry[] = [
+    message("u1", "you", "Refresh the token rotation to avoid the race condition."),
     {
-        id: "u1",
-        kind: "user",
-        text: "Refresh the token rotation to avoid the race condition.",
-        images: [],
+        kind: "agentActivity",
+        id: "think-1",
+        sequence: "2",
+        activity: {
+            kind: "reasoning",
+            text: "The mutex is being acquired non-atomically.\n\nA blocking lock removes the window entirely.",
+            streaming: false,
+        },
+    },
+    message(
+        "a1",
+        "agent",
+        "I'll switch to a blocking lock and enqueue on contention.\n\n```ts\nawait mutex.lock()\n```",
+        "complete",
+    ),
+    {
+        kind: "agentActivity",
+        id: rigFileDiffTool.toolCallId,
+        sequence: "4",
+        activity: { kind: "tool", tool: rigFileDiffTool },
     },
     {
-        id: "u2",
-        kind: "user",
-        text: "Here is the failing screenshot.",
-        images: [{ mediaType: "image/png", data: "" }],
+        kind: "agentActivity",
+        id: rigExecTool.toolCallId,
+        sequence: "5",
+        activity: { kind: "tool", tool: rigExecTool },
     },
     {
-        id: "t1",
-        kind: "thinking",
-        text: "The mutex is being acquired non-atomically.",
-        streaming: false,
+        kind: "agentActivity",
+        id: rigGenericTool.toolCallId,
+        sequence: "6",
+        activity: { kind: "tool", tool: rigGenericTool },
     },
     {
-        id: "a1",
-        kind: "agentText",
-        text: "I'll switch to a blocking lock and enqueue on contention.\n\n```ts\nawait mutex.lock()\n```",
-        streaming: false,
-    },
-    { id: rigFileDiffTool.toolCallId, kind: "tool", tool: rigFileDiffTool },
-    { id: rigExecTool.toolCallId, kind: "tool", tool: rigExecTool },
-    { id: rigGenericTool.toolCallId, kind: "tool", tool: rigGenericTool },
-    {
-        id: "turn-1",
-        kind: "turnSeparator",
-        elapsedMs: 84_000,
-        toolCount: 3,
-        fileCount: 1,
-        additions: 18,
-        deletions: 5,
-    },
-    { id: "sys1", kind: "system", text: "Context reset for this session." },
-    {
-        id: "n1",
         kind: "notice",
+        id: "turn-1",
+        sequence: "7",
+        variant: "divider",
+        level: "info",
+        text: "Worked for 1m 24s · 3 tools · 1 file · +18 −5",
+    },
+    {
+        kind: "notice",
+        id: "sys1",
+        sequence: "8",
+        variant: "notice",
+        level: "info",
+        title: "System",
+        text: "Context reset for this session.",
+    },
+    {
+        kind: "notice",
+        id: "n1",
+        sequence: "9",
+        variant: "notice",
         level: "warning",
         title: "Retrying",
         text: "Attempt 2/3 (connection lost).",
     },
     {
-        id: "n2",
-        kind: "notice",
-        level: "error",
-        title: "Run error",
-        text: "The provider returned an error.",
-    },
-    {
+        kind: "agentActivity",
         id: "shell:c1",
-        kind: "shell",
-        command: "git status --short",
-        output: " M packages/happy2-state/src/rig/rigChatStore.ts\n M packages/happy2-ui/src/RigTranscript.tsx\n",
-        exitCode: 0,
-        running: false,
-        timedOut: false,
+        sequence: "10",
+        activity: {
+            kind: "shell",
+            command: "git status --short",
+            output: " M packages/happy2-state/src/rig/rigChatStore.ts\n M packages/happy2-ui/src/ConversationView.tsx\n",
+            exitCode: 0,
+            running: false,
+            timedOut: false,
+        },
     },
-    { id: "a2", kind: "agentText", text: "The change is applied and tests pass.", streaming: true },
+    message("a2", "agent", "The change is applied and tests pass.", "streaming"),
 ];
 
 export const rigMenus: RigMenusSnapshot = {
@@ -276,7 +331,8 @@ export const rigMenus: RigMenusSnapshot = {
     currentServiceTier: undefined,
 };
 
-export const rigUserInput: RigUserInputRequest = {
+export const rigUserInput: Extract<ConversationRequest, { kind: "userInput" }> = {
+    kind: "userInput",
     requestId: "req-1",
     questions: [
         {
@@ -306,44 +362,31 @@ export const rigUserInput: RigUserInputRequest = {
 
 const now = 1_700_000_000_000;
 
-export const rigSessions: readonly RigSessionSummary[] = [
+export const conversationSummaries: readonly ConversationSummary[] = [
     {
-        id: id("ses_alpha01234567"),
-        cwd: "/Users/dev/happy2",
-        displayCwd: "~/happy2",
-        providerId: "codex",
-        modelId: "gpt-5.6-sol",
-        permissionMode: "auto",
-        status: "running",
+        id: "ses_alpha01234567",
         title: "Fix token rotation race",
-        createdAt: now,
-        updatedAt: now,
-        lastMessageAt: now - 30_000,
+        subtitle: "~/happy2",
+        activity: "running",
+        updatedAt: now - 30_000,
+        participants: [],
     },
     {
-        id: id("ses_beta012345678"),
-        cwd: "/Users/dev/happy2-server",
-        displayCwd: "~/happy2-server",
-        providerId: "claude",
-        modelId: "opus-4-8",
-        permissionMode: "workspace_write",
-        status: "completed",
-        recap: "Added the sessions gym coverage.",
-        createdAt: now - 3_600_000,
+        id: "ses_beta012345678",
+        title: "Added the sessions gym coverage.",
+        subtitle: "~/happy2-server",
+        activity: "idle",
         updatedAt: now - 3_600_000,
-        lastMessageAt: now - 3_600_000,
+        participants: [],
     },
     {
-        id: id("ses_gamma01234567"),
-        cwd: "/Users/dev/scratch",
-        displayCwd: "~/scratch",
-        providerId: "grok",
-        modelId: "grok-4.5",
-        permissionMode: "read_only",
-        status: "error",
-        createdAt: now - 90_000_000,
+        id: "ses_gamma01234567",
+        title: "Session ses_gamm",
+        subtitle: "~/scratch",
+        activity: "idle",
         updatedAt: now - 90_000_000,
+        participants: [],
     },
 ];
 
-export const rigSessionsNow = now;
+export const conversationNow = now;

@@ -13,13 +13,23 @@ import {
     type TypingState,
     UserError,
 } from "../../types.js";
+import {
+    entriesMerge,
+    entryCompare,
+    entryEquivalent,
+} from "../../conversation/conversationEntries.js";
+import type {
+    ConversationMessageEntry,
+    ConversationMessageProjection,
+} from "../../conversation/conversationEntry.js";
+import type { Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type ComposerStore } from "../composer/composerState.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
-function sorted(messages: ChatMessageItem[]): readonly ChatMessageItem[] {
-    return messages.sort(messageItemCompare);
+function sorted(messages: ConversationMessageEntry[]): readonly ConversationMessageEntry[] {
+    return messages.sort(entryCompare);
 }
 
 function sameIds(
@@ -678,7 +688,7 @@ export function chatStoreCreate(
                         return {
                             ...snapshot,
                             status: { type: "ready", value: event.chat },
-                            messages: messageItemsMerge(snapshot.messages, event.messages),
+                            messages: entriesMerge(snapshot.messages, event.messages),
                             hasMoreMessages: event.hasMoreMessages,
                         };
                     case "chatFailed":
@@ -707,7 +717,7 @@ export function chatStoreCreate(
                         }
                         if (
                             snapshot.messages[index] === event.item ||
-                            messageItemEquivalent(snapshot.messages[index]!, event.item)
+                            entryEquivalent(snapshot.messages[index]!, event.item)
                         )
                             return snapshot;
                         const messages = [...snapshot.messages];
@@ -1148,34 +1158,7 @@ export function chatStoreCreate(
     }));
 }
 
-export interface ChatReactionSummary {
-    readonly key: string;
-    readonly emoji?: string;
-    readonly customEmojiId?: string;
-    readonly count: number;
-    readonly reacted: boolean;
-}
-
-export interface ChatMessageProjection extends Omit<MessageSummary, "sender" | "reactions"> {
-    readonly sender?: IdentityProjection;
-    readonly reactions: readonly ChatReactionSummary[];
-}
-
-export interface ChatMessageItem {
-    readonly message: ChatMessageProjection;
-    readonly source: "server" | "local";
-    readonly delivery: "sending" | "sent" | "failed";
-    readonly clientMutationId?: string;
-    readonly error?: UserError;
-}
-
-export type Loadable<Value> =
-    | { readonly type: "unloaded" }
-    | { readonly type: "loading" }
-    | { readonly type: "ready"; readonly value: Value }
-    | { readonly type: "error"; readonly error: UserError };
-
-export interface ChatMemberProjection extends IdentityProjection {
+export interface ChatMemberProjection extends ConversationAuthor {
     readonly role: "owner" | "admin" | "member";
     readonly title?: string;
     readonly presence: PresenceSnapshot["status"];
@@ -1184,17 +1167,17 @@ export interface ChatMemberProjection extends IdentityProjection {
 export interface ReactionActors {
     readonly messageId: string;
     readonly reactionKey: string;
-    readonly actors: readonly IdentityProjection[];
+    readonly actors: readonly ConversationAuthor[];
 }
 
 export interface ChatPinProjection extends Omit<ChatPinSummary, "message"> {
-    readonly message: ChatMessageProjection;
+    readonly message: ConversationMessageProjection;
 }
 
 export interface ChatSnapshot {
     readonly chatId: string;
     readonly status: Loadable<ChatSummary>;
-    readonly messages: readonly ChatMessageItem[];
+    readonly messages: readonly ConversationMessageEntry[];
     readonly hasMoreMessages: boolean;
     readonly members: Loadable<readonly ChatMemberProjection[]>;
     readonly pins: Loadable<readonly ChatPinProjection[]>;
@@ -1275,12 +1258,12 @@ export type ChatInput =
     | {
           readonly type: "chatLoaded";
           readonly chat: ChatSummary;
-          readonly messages: readonly ChatMessageItem[];
+          readonly messages: readonly ConversationMessageEntry[];
           readonly hasMoreMessages: boolean;
       }
     | { readonly type: "chatFailed"; readonly error: UserError }
     | { readonly type: "chatSummaryReconciled"; readonly chat: ChatSummary }
-    | { readonly type: "messageUpserted"; readonly item: ChatMessageItem }
+    | { readonly type: "messageUpserted"; readonly item: ConversationMessageEntry }
     | { readonly type: "messageRemoved"; readonly messageId: string }
     | { readonly type: "membersLoading" }
     | { readonly type: "membersLoaded"; readonly members: readonly ChatMemberProjection[] }
@@ -1362,7 +1345,7 @@ export type ChatInput =
           readonly type: "agentActivityReconciled";
           readonly agentActivity: readonly AgentActivityState[];
       }
-    | { readonly type: "identityReconciled"; readonly identity: IdentityProjection }
+    | { readonly type: "identityReconciled"; readonly identity: ConversationAuthor }
     | { readonly type: "agentEffortLoading"; readonly agentUserId: string }
     | { readonly type: "agentEffortLoaded"; readonly value: AgentEffortProjection }
     | {
@@ -1393,7 +1376,7 @@ export type ChatStore = StoreApi<ChatState>;
 
 export interface ChatHandle extends ChatStore, Disposable {}
 
-function agentEffortMessageApply(snapshot: ChatState, item?: ChatMessageItem): ChatState {
+function agentEffortMessageApply(snapshot: ChatState, item?: ConversationMessageEntry): ChatState {
     if (!item) return snapshot;
     const service = item.message.service;
     if (service?.type !== "agent_effort_changed") return snapshot;
@@ -1421,9 +1404,9 @@ function agentEffortMessageApply(snapshot: ChatState, item?: ChatMessageItem): C
 
 /** Returns the newest retained effort notice for one agent, if sync history has one. */
 function latestAgentEffortMessage(
-    messages: readonly ChatMessageItem[],
+    messages: readonly ConversationMessageEntry[],
     agentUserId: string,
-): ChatMessageItem | undefined {
+): ConversationMessageEntry | undefined {
     return [...messages]
         .reverse()
         .find(
@@ -1517,105 +1500,27 @@ function documentWriteRequestActionable(
 export function messageProject(
     identities: IdentityCatalog,
     message: MessageSummary,
-): ChatMessageProjection {
-    const { sender, reactions, ...visible } = message;
+): ConversationMessageProjection {
+    const { sender, reactions, attachments, ...visible } = message;
     return {
         ...visible,
         ...(sender ? { sender: identities.project(sender) } : {}),
         reactions: reactions.map(({ userIds: _userIds, ...reaction }) => reaction),
+        // A server attachment is always a durable file; inline bytes are local-only.
+        attachments: attachments.map((file) => ({ kind: "file", file }) as const),
     };
 }
 
 export function messageItemProject(
     identities: IdentityCatalog,
     message: MessageSummary,
-): ChatMessageItem {
-    return { message: messageProject(identities, message), source: "server", delivery: "sent" };
-}
-
-export function messageItemsMerge(
-    current: readonly ChatMessageItem[],
-    incoming: readonly ChatMessageItem[],
-): readonly ChatMessageItem[] {
-    const existingById = new Map(current.map((item) => [item.message.id, item]));
-    const existingByMutation = new Map(
-        current
-            .filter((item) => item.clientMutationId !== undefined)
-            .map((item) => [item.clientMutationId!, item]),
-    );
-    const consumed = new Set<ChatMessageItem>();
-    const next = incoming.map((item) => {
-        const previous =
-            existingById.get(item.message.id) ??
-            (item.clientMutationId ? existingByMutation.get(item.clientMutationId) : undefined);
-        if (previous) consumed.add(previous);
-        if (previous && messageItemEquivalent(previous, item)) {
-            return previous;
-        }
-        return item;
-    });
-    for (const item of current) {
-        if (!consumed.has(item) && item.delivery !== "sent") next.push(item);
-    }
-    next.sort(messageItemCompare);
-    return sameReferences(current, next) ? current : next;
-}
-
-export function messageItemEquivalent(left: ChatMessageItem, right: ChatMessageItem): boolean {
-    if (
-        left.delivery !== right.delivery ||
-        left.source !== right.source ||
-        left.clientMutationId !== right.clientMutationId ||
-        left.error !== right.error
-    )
-        return false;
-    if (left.message === right.message) return true;
-    if (left.source !== "server") return false;
-    return (
-        left.message.id === right.message.id &&
-        left.message.changePts === right.message.changePts &&
-        left.message.revision === right.message.revision &&
-        left.message.deletedAt === right.message.deletedAt &&
-        left.message.text === right.message.text &&
-        left.message.generationStatus === right.message.generationStatus &&
-        left.message.sender === right.message.sender &&
-        reactionsEqual(left.message.reactions, right.message.reactions)
-    );
-}
-
-export function messageItemCompare(left: ChatMessageItem, right: ChatMessageItem): number {
-    const leftLocal = left.source === "local";
-    const rightLocal = right.source === "local";
-    if (leftLocal !== rightLocal) return leftLocal ? 1 : -1;
-    if (leftLocal) return left.message.createdAt.localeCompare(right.message.createdAt);
-    try {
-        const difference = BigInt(left.message.sequence) - BigInt(right.message.sequence);
-        return difference < 0n ? -1 : difference > 0n ? 1 : 0;
-    } catch {
-        return left.message.sequence.localeCompare(right.message.sequence);
-    }
-}
-
-function reactionsEqual(
-    left: readonly import("./chatState.js").ChatReactionSummary[],
-    right: readonly import("./chatState.js").ChatReactionSummary[],
-): boolean {
-    return (
-        left.length === right.length &&
-        left.every(
-            (reaction, index) =>
-                reaction.key === right[index]?.key &&
-                reaction.count === right[index]?.count &&
-                reaction.reacted === right[index]?.reacted,
-        )
-    );
-}
-
-function sameReferences(
-    left: readonly ChatMessageItem[],
-    right: readonly ChatMessageItem[],
-): boolean {
-    return left.length === right.length && left.every((item, index) => item === right[index]);
+): ConversationMessageEntry {
+    return {
+        kind: "message",
+        message: messageProject(identities, message),
+        source: "server",
+        delivery: "sent",
+    };
 }
 
 export interface ReactionActorsLoadContext {

@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type UploadedFile } from "../../resources.js";
 import { type FileSummary, type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface FileUploadContext {

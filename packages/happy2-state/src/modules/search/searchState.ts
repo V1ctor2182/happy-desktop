@@ -1,10 +1,11 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type SearchResultSummary } from "../../resources.js";
 import { type ChatSummary, type FileSummary, type UserError } from "../../types.js";
-import { type ChatMessageProjection, type Loadable } from "../chat/chatState.js";
+import { type ConversationMessageProjection } from "../../conversation/conversationEntry.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { messageProject } from "../chat/chatState.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface SearchActionContext {
@@ -102,9 +103,13 @@ export function searchStoreCreate(
 }
 
 export type SearchResultProjection =
-    | { readonly type: "message"; readonly score: number; readonly message: ChatMessageProjection }
+    | {
+          readonly type: "message";
+          readonly score: number;
+          readonly message: ConversationMessageProjection;
+      }
     | { readonly type: "channel"; readonly score: number; readonly channel: ChatSummary }
-    | { readonly type: "user"; readonly score: number; readonly user: IdentityProjection };
+    | { readonly type: "user"; readonly score: number; readonly user: ConversationAuthor };
 
 export interface SearchSnapshot {
     readonly query: string;

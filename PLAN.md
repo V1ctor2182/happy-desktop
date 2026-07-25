@@ -319,25 +319,28 @@ comes first with `gym` coverage and explicit approval before the UI work. Every
 step below is "move Rig onto the cloud implementation," and each one must end
 with the corresponding Rig code deleted.
 
-1. **Promote the cloud conversation types.** Move `modules/chat`'s projection
-   types into `happy2-state/src/conversation/` as `ConversationEntry`,
+1. **Promote the cloud conversation types.** *(done)* Move `modules/chat`'s
+   projection types into `happy2-state/src/conversation/` as `ConversationEntry`,
    `ConversationAuthor`, `ConversationSummary`, `Loadable`, and the renamed
    merge/compare helpers, adding the `agentActivity` / `notice` / `request`
    variants that cloud also needs. Cloud keeps working unchanged; no Rig work
    yet.
-2. **Adopt the cloud composer in local mode.** Delete the `useState` draft from
-   `RigChatView` and the text argument from `RigChatStore.messageSend`,
-   materialize `composerStoreCreate` per Rig session, and add shell-mode /
-   slash-command / mention capabilities to the cloud composer store as
-   first-class closed concepts. Local product state stops living in React.
-3. **Render local chat through the cloud chat surface.** Project the Rig
-   transcript (including streaming) into `ConversationEntry`, extend
-   `Message`/`MessageList` to render every entry kind with compact, expandable
-   agent activity, and delete `RigTranscript` and `RigChatView`.
-4. **Render local sessions through the cloud sidebar.** Turn
-   `rigSessionListStore` into a private feeder for `conversationListStore`,
-   bring its event handling up to the difference-reconciliation discipline, and
-   delete `RigSessionListPanel` and `RigWorkspaceView`.
+2. **Adopt the cloud composer in local mode.** *(done)* Delete the `useState`
+   draft from `RigChatView` and the text argument from
+   `RigChatStore.messageSend`, materialize `composerStoreCreate` per Rig session,
+   and add shell-mode / slash-command / mention capabilities to the cloud
+   composer store as first-class closed concepts. Local product state stops
+   living in React.
+3. **Render local chat through the cloud chat surface.** *(landed; defects open,
+   see "Known defects")* Project the Rig transcript (including streaming) into
+   `ConversationEntry`, extend `Message`/`MessageList` to render every entry kind
+   with compact, expandable agent activity, and delete `RigTranscript` and
+   `RigChatView`.
+4. **Render local sessions through the cloud sidebar.** *(landed; parity gaps
+   open, see "Known defects")* Turn `rigSessionListStore` into a private feeder
+   for `conversationListStore`, bring its event handling up to the
+   difference-reconciliation discipline, and delete `RigSessionListPanel` and
+   `RigWorkspaceView`.
 5. **Workspace rail as the shell's top-level navigation.** Add
    `workspaceRailStore` and render the Discord-style rail: one local entry plus
    each cloud entry. The existing `DesktopInstanceSwitcher` semantics fold into
@@ -357,6 +360,97 @@ with the corresponding Rig code deleted.
    other members, and the server API and `gym` coverage behind it. The shared
    `ConversationEntry` vocabulary is what makes this cheap: publishing becomes a
    redacting projection, not a second data model.
+
+## Known defects, open after steps 1–4
+
+These are found and reproduced, not speculative. Steps 3 and 4 are not finished
+until they are closed.
+
+**The governing lesson.** Almost every defect below is one root cause: a shared
+`happy2-ui` component already supports the behavior and the local surface never
+opts in. The brand mark, the sidebar footer, and sidebar collapse/resize were all
+reported separately by the user and were all this. Close this class by
+inspection, not by screenshot: before calling a surface done, diff the props the
+cloud caller passes to a shared component against what the local caller passes,
+and justify every difference. Then check the stronger condition — that the same
+component renders each functional zone in both stacks, not merely that props
+line up.
+
+- **Duplicate entry ids corrupt the transcript.** `rigConversationBuild` keys a
+  durable tool call by the raw tool-call id
+  (`rig/rigConversationProject.ts`, the `toolCall` branch) and the streaming
+  projection keys the same call the same way. While a call is both durable and
+  streaming, one call yields two entries under one id. `ConversationView` uses
+  the entry id as the React key and `MessageList` feeds it to the virtualizer as
+  `getItemKey`, so the two rows are measured and positioned as one item: text
+  overlaps and scrolling jitters. Every other branch already uses a composite id
+  (`${message.id}:${index}`, `${runId}:stream:${index}`); only the tool-call
+  branches do not. Fix: emit one entry with stable identity across
+  running → finished, plus a regression test asserting no duplicate ids.
+  `MessageList` is not at fault and must not be worked around — it is untouched
+  in this work and cloud uses it without trouble.
+- **`AppShell` capabilities local never enables.** `AppRigView` passes only
+  `sidebar`. Missing: `sidebarCollapsible` (no collapse/expand, no resize —
+  contract documented on the prop), `windowControls`, `panelResizable`, and the
+  `panelMaximizable`/`panelMaximized`/`onPanelMaximizedChange` trio. Cloud passes
+  all of these from `ChatPage`. `Sidebar.onSectionAction` is the one genuine
+  non-applicability: local has a single section with no create action.
+- **Two different model pickers.** Cloud uses `ComposerModelControl`; local
+  renders `RigSessionControls` with `fields={["model", "effort"]}` in the same
+  composer slot. Local must use the shared control. The adaptation point is that
+  `ComposerModelControl` takes flat `{ id, label }` choices while local carries
+  `RigModelSelection` (provider + model) — join and parse at the call site, as
+  `RigSessionControls` already does with `MODEL_ID_SEP`; do not fork the
+  component or add a provider-aware variant. Afterwards, reassess what
+  `RigSessionControls` is still for; delete it with its dev page if nothing
+  remains.
+- **Image paste is inert.** `Composer` implements paste but returns early
+  without `onAttachmentsSelect`, and `ConversationView` never passes it. The
+  composer snapshot already carries `attachments` and the send button already
+  counts them, so state models attachments that nothing can create. Wire it
+  through the existing `attachmentAdd`/`attachmentRemove` actions, render pending
+  attachments so they can be removed before sending, and check the cloud path for
+  the same omission.
+- **No routing in local.** Cloud drives navigation with TanStack Router; local
+  keeps the selection in `rigWorkspaceStore.selectedId` and renders `AppRigView`
+  directly. A local session should be addressable by URL through the same route
+  tree, with the shell reading the id from the match so the transcript stays
+  mounted across selection changes. Materialization stays a store concern;
+  *which* conversation is selected stops being one. Do not leave both
+  authoritative.
+- **Local is mounted outside the app's shared providers.** `happy2-desktop`'s
+  `renderer.tsx` mounts `AppRigView` directly — outside `RouterProvider` and
+  outside `ThemeScope`, both of which only `DesktopApp` establishes for the cloud
+  tree. This is the structural root of both the missing router and the
+  non-functional appearance toggle, and likely of further gaps. The clean
+  resolution is probably that local mounts through the same entry shape as cloud
+  rather than as a special case; that decision belongs to step 7 and should be
+  taken deliberately rather than patched around.
+- **Transcript presentation.** Activity rows do not share the message body's left
+  inset, so the left edge is ragged; the collapsed `chevron-right` affordance is
+  unwanted; activity rows are too loud (link-blue labels, saturated status dots)
+  and should read as neutral secondary content with failure legible but
+  restrained; and consecutive agent entries are not grouped, so the avatar and
+  name repeat through one continuous turn. `Message` already supports `grouped`
+  and `ConversationEntryView` forwards it — nothing computes it. Derive grouping
+  in the projection and pass it as a prop: with a virtualized list a row must not
+  infer its grouping from a sibling DOM node, or grouping flickers as rows mount
+  and unmount.
+- **Settings entry point.** Moving the local-only settings into a modal was
+  right; opening it from a gear beside the composer model pill was an
+  under-specified instruction, and it gives local a composer control cloud does
+  not have. Reconsider the placement under the rule that local must not grow
+  affordances cloud lacks.
+
+## Validation notes
+
+`happy2-ui`'s cross-browser rendering suite does not currently pass on a clean
+checkout of `main` in this environment: `Button.test.tsx` fails identically with
+and without this work (transparent border colors, missing icon `svg` elements),
+which points at an environment/asset problem rather than a regression. Verify UI
+work against that baseline — compare a run on your branch with a run on a clean
+tree — rather than assuming a red suite is your fault, and fix the baseline
+before relying on the suite as a gate.
 
 ## Constraints carried from AGENTS.md and DESIGN.md
 

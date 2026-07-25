@@ -1,0 +1,208 @@
+/*
+ * AgentActivityRow: one glanceable row per tool call, reasoning block, or shell
+ * run, expanding into its detail. Layout is flexbox throughout; colors and type
+ * come only from theme roles.
+ */
+
+.happy2-agent-activity-row {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.happy2-agent-activity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-agent-activity__header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 2px 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy2-agent-activity__header:disabled {
+    cursor: default;
+}
+
+.happy2-agent-activity__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+}
+
+.happy2-agent-activity__dot[data-tone="success"] {
+    background: var(--success);
+}
+
+.happy2-agent-activity__dot[data-tone="warning"] {
+    background: var(--box-warning-text);
+}
+
+.happy2-agent-activity__dot[data-tone="error"] {
+    background: var(--status-error);
+}
+
+.happy2-agent-activity__verb {
+    flex: none;
+    font-weight: 600;
+    color: var(--text-link);
+}
+
+.happy2-agent-activity__text {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+    color: var(--text);
+}
+
+.happy2-agent-activity__stats {
+    flex: none;
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+}
+
+.happy2-agent-activity__added {
+    color: var(--git-added-text);
+}
+
+.happy2-agent-activity__deleted {
+    color: var(--git-removed-text);
+}
+
+.happy2-agent-activity__chevron {
+    flex: none;
+    display: inline-flex;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__child,
+.happy2-agent-activity__review {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    padding-left: 16px;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__child-marker {
+    flex: none;
+    color: var(--divider);
+}
+
+.happy2-agent-activity__child-text {
+    min-width: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__child[data-tone="error"] {
+    color: var(--status-error);
+}
+
+.happy2-agent-activity__review-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-agent-activity__review-title {
+    font-weight: 600;
+    color: var(--box-warning-text);
+}
+
+.happy2-agent-activity__review-risk[data-risk="high"] {
+    color: var(--status-error);
+}
+
+.happy2-agent-activity__body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 16px;
+}
+
+.happy2-agent-activity__diff {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.happy2-agent-activity__output {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--diff-context-bg);
+    border-radius: var(--happy2-radius-sm);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__output-elide {
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.happy2-agent-activity__args {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--diff-context-bg);
+    border-radius: var(--happy2-radius-sm);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__terminal {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy2-agent-activity__status {
+    flex: 0 0 auto;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__status[data-failed="true"] {
+    color: var(--text-destructive);
+}
+
+.happy2-agent-activity__reasoning {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}

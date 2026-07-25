@@ -3,7 +3,7 @@ import { useState } from "react";
 import type {
     AgentTurnTraceDetails,
     AgentTurnTraceSummary,
-    ChatMessageItem,
+    ConversationMessageEntry,
     ChatSummary,
 } from "happy2-state";
 import {
@@ -55,8 +55,9 @@ const chat: ChatSummary = {
     createdAt: "2026-07-17T12:00:00.000Z",
     updatedAt: "2026-07-17T12:00:00.000Z",
 };
-function messageItem(id: string, text: string): ChatMessageItem {
+function messageItem(id: string, text: string): ConversationMessageEntry {
     return {
+        kind: "message",
         source: "server",
         delivery: "sent",
         message: {
@@ -245,7 +246,7 @@ it("projects channel lifecycle service messages as generic user notices with ser
 it("updates one mounted message while preserving its open menu and sibling DOM", async () => {
     const first = messageItem("message-1", "first");
     const second = messageItem("message-2", "second");
-    let update!: (items: ChatMessageItem[]) => void;
+    let update!: (items: ConversationMessageEntry[]) => void;
     const view = createRenderer();
     view.render(
         () => {
@@ -1087,13 +1088,13 @@ it("reconciles an effort notice without remounting or moving focus from the chat
 });
 
 it("keeps an optimistic message outgoing through its authoritative confirmation", async () => {
-    const pending: ChatMessageItem = {
+    const pending: ConversationMessageEntry = {
         ...messageItem("local:mutation-1", "hello"),
         source: "local",
         delivery: "sending",
         clientMutationId: "mutation-1",
     };
-    const confirmed: ChatMessageItem = {
+    const confirmed: ConversationMessageEntry = {
         ...messageItem("message-1", "hello"),
         clientMutationId: "mutation-1",
         message: {
@@ -1117,7 +1118,7 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
         renderKey: "mutation-1",
     });
 
-    let update!: (item: ChatMessageItem) => void;
+    let update!: (item: ConversationMessageEntry) => void;
     const view = createRenderer();
     view.render(
         () => {
@@ -1177,7 +1178,7 @@ it("edits an own message through the desktop-safe dialog with its current revisi
         presence: "online" as const,
     };
     const baseMessage = messageItem("message-7", "Original body");
-    const ownMessage: ChatMessageItem = {
+    const ownMessage: ConversationMessageEntry = {
         ...baseMessage,
         message: {
             ...baseMessage.message,
@@ -1264,7 +1265,7 @@ function traceEntry(
     return { id, kind: "reasoning", title, status: "complete", occurredAt };
 }
 
-function assistantItem(trace: AgentTurnTraceSummary, text = ""): ChatMessageItem {
+function assistantItem(trace: AgentTurnTraceSummary, text = ""): ConversationMessageEntry {
     const base = messageItem("message-2", text);
     return {
         ...base,
@@ -1709,7 +1710,7 @@ function sharedLinkMessage(
     id: string,
     links: ReturnType<typeof sharedResourceLink>[],
     changePts = "1",
-): ChatMessageItem {
+): ConversationMessageEntry {
     const base = messageItem(id, "shared");
     return { ...base, message: { ...base.message, changePts, resourceLinks: links } };
 }

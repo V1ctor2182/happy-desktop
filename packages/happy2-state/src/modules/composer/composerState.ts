@@ -1,6 +1,41 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type MessageAudience, type UserError } from "../../types.js";
 
+/** One slash command a composer may offer while the draft begins with `/`. */
+export interface ComposerCommand {
+    readonly id: string;
+    readonly label: string;
+    readonly description?: string;
+}
+
+/** One `@`-mention candidate offered for the active mention token. */
+export interface ComposerMention {
+    readonly id: string;
+    readonly label: string;
+    readonly detail?: string;
+}
+
+/**
+ * What this composer can do beyond sending a message, as a closed capability
+ * set rather than optional escape hatches. A capability that is off contributes
+ * no derived state and no output: a `!` draft in a composer without shell mode
+ * is just text.
+ */
+export interface ComposerCapabilities {
+    /** A `!`-prefixed draft runs a workspace command instead of sending a message. */
+    readonly shellMode: boolean;
+    /** Commands offered while the draft begins with `/`; empty disables the palette. */
+    readonly commands: readonly ComposerCommand[];
+    /** A trailing `@token` opens mention candidates supplied by the owner. */
+    readonly mentions: boolean;
+}
+
+export const composerCapabilitiesNone: ComposerCapabilities = {
+    shellMode: false,
+    commands: [],
+    mentions: false,
+};
+
 export interface ComposerAttachment {
     readonly id: string;
     readonly name: string;
@@ -29,6 +64,19 @@ export interface ComposerSnapshot {
     readonly audience?: MessageAudience;
     /** Additional agents explicitly selected beyond the chat's default agent. */
     readonly agentUserIds: readonly string[];
+    readonly capabilities: ComposerCapabilities;
+    /**
+     * The active slash-command query (the text after `/`), derived from the
+     * draft. Present only while the command palette applies; submitting a
+     * command draft sends nothing, so an accidental Enter never posts `/model`.
+     */
+    readonly commandQuery?: string;
+    /** The active `@`-mention token (the text after `@`), derived from the draft. */
+    readonly mentionQuery?: string;
+    /** Candidates for the active mention query, reconciled by the owner. */
+    readonly mentionCandidates: readonly ComposerMention[];
+    /** The command a `!`-prefixed draft would run, when shell mode applies. */
+    readonly shellCommand?: string;
 }
 
 export type ComposerOutput =
@@ -52,6 +100,18 @@ export type ComposerOutput =
     | { readonly type: "agentUserAdded"; readonly scopeId: string; readonly agentUserId: string }
     | { readonly type: "agentUserRemoved"; readonly scopeId: string; readonly agentUserId: string }
     | {
+          readonly type: "mentionQueryUpdated";
+          readonly scopeId: string;
+          readonly query?: string;
+      }
+    | { readonly type: "commandInvoked"; readonly scopeId: string; readonly commandId: string }
+    | {
+          readonly type: "shellCommandSubmitted";
+          readonly scopeId: string;
+          readonly command: string;
+          readonly revision: number;
+      }
+    | {
           readonly type: "textSubmitted";
           readonly scopeId: string;
           readonly text: string;
@@ -63,6 +123,11 @@ export type ComposerOutput =
 
 export type ComposerInput =
     | { readonly type: "textReconciled"; readonly text: string }
+    | {
+          readonly type: "mentionCandidatesReconciled";
+          readonly query: string;
+          readonly candidates: readonly ComposerMention[];
+      }
     | { readonly type: "agentUsersReconciled"; readonly agentUserIds: readonly string[] }
     | { readonly type: "submissionConfirmed"; readonly revision: number }
     | { readonly type: "submissionFailed"; readonly revision: number; readonly error: UserError };
@@ -76,6 +141,8 @@ export interface ComposerState extends ComposerSnapshot {
     audienceToggle(): void;
     agentUserAdd(agentUserId: string): void;
     agentUserRemove(agentUserId: string): void;
+    /** Runs one offered slash command and clears the draft that opened it. */
+    commandInvoke(commandId: string): void;
     textSubmit(): void;
     composerInput(event: ComposerInput): void;
 }
@@ -83,12 +150,44 @@ export interface ComposerState extends ComposerSnapshot {
 export type ComposerStore = StoreApi<ComposerState>;
 
 export interface ComposerStoreOptions {
+    readonly capabilities?: ComposerCapabilities;
     readonly text?: string;
     readonly attachments?: readonly ComposerAttachment[];
     readonly audience?: MessageAudience;
     readonly agentUserIds?: readonly string[];
     readonly now?: () => number;
     readonly output?: (event: ComposerOutput) => void;
+}
+
+/**
+ * Finds the active `@`-mention token at the end of a draft: the run of
+ * non-whitespace after the last `@` that starts a token (at string start or
+ * after whitespace). A trailing space closes the mention, so `@src/a.ts ` has
+ * no active token.
+ */
+function mentionTokenOf(text: string): string | undefined {
+    const match = /(?:^|\s)@(\S*)$/.exec(text);
+    return match ? match[1]! : undefined;
+}
+
+/** The derived command/mention/shell reading of one draft under one capability set. */
+function draftDerive(
+    text: string,
+    capabilities: ComposerCapabilities,
+): {
+    commandQuery?: string;
+    mentionQuery?: string;
+    shellCommand?: string;
+} {
+    const commandQuery =
+        capabilities.commands.length > 0 && text.startsWith("/") ? text.slice(1) : undefined;
+    const shellCommand =
+        capabilities.shellMode && text.trimStart().startsWith("!")
+            ? text.trim().slice(1).trim()
+            : undefined;
+    const mentionQuery =
+        capabilities.mentions && commandQuery === undefined ? mentionTokenOf(text) : undefined;
+    return { commandQuery, mentionQuery, shellCommand };
 }
 
 /** Creates one self-contained composer store; every local mutation updates first and then emits. */
@@ -107,17 +206,26 @@ export function composerStoreCreate(
         focused: false,
         audience: options.audience ?? "agents",
         agentUserIds: [...(options.agentUserIds ?? [])],
+        capabilities: options.capabilities ?? composerCapabilitiesNone,
+        mentionCandidates: [],
+        ...draftDerive(options.text ?? "", options.capabilities ?? composerCapabilitiesNone),
 
         textUpdate(text): void {
             const previous = get();
             if (previous.text === text) return;
+            const derived = draftDerive(text, previous.capabilities);
+            const mentionClosed = derived.mentionQuery !== previous.mentionQuery;
             set({
                 text,
                 revision: previous.revision + 1,
                 submission: { status: "idle" },
                 lastInteractionAt: now(),
+                ...derived,
+                ...(mentionClosed ? { mentionCandidates: [] } : {}),
             });
             output({ type: "textUpdated", scopeId, text });
+            if (mentionClosed)
+                output({ type: "mentionQueryUpdated", scopeId, query: derived.mentionQuery });
         },
 
         focusUpdate(focused): void {
@@ -182,6 +290,21 @@ export function composerStoreCreate(
             output({ type: "agentUserRemoved", scopeId, agentUserId });
         },
 
+        commandInvoke(commandId): void {
+            const previous = get();
+            if (!previous.capabilities.commands.some((command) => command.id === commandId)) return;
+            set({
+                text: "",
+                revision: previous.revision + 1,
+                submission: { status: "idle" },
+                commandQuery: undefined,
+                mentionQuery: undefined,
+                shellCommand: undefined,
+                mentionCandidates: [],
+            });
+            output({ type: "commandInvoked", scopeId, commandId });
+        },
+
         textSubmit(): void {
             const previous = get();
             if (
@@ -189,6 +312,20 @@ export function composerStoreCreate(
                 (previous.text.length === 0 && previous.attachments.length === 0)
             )
                 return;
+            // An open command palette is an affordance, not a message: Enter picks
+            // nothing and sends nothing until the caller invokes a command.
+            if (previous.commandQuery !== undefined) return;
+            if (previous.shellCommand !== undefined) {
+                if (previous.shellCommand.length === 0) return;
+                set({ submission: { status: "pending", revision: previous.revision } });
+                output({
+                    type: "shellCommandSubmitted",
+                    scopeId,
+                    command: previous.shellCommand,
+                    revision: previous.revision,
+                });
+                return;
+            }
             set({ submission: { status: "pending", revision: previous.revision } });
             output({
                 type: "textSubmitted",
@@ -210,7 +347,13 @@ export function composerStoreCreate(
                             text: event.text,
                             revision: snapshot.revision + 1,
                             submission: { status: "idle" },
+                            ...draftDerive(event.text, snapshot.capabilities),
                         });
+                    return;
+                case "mentionCandidatesReconciled":
+                    // A response for a token the reader has already left is stale.
+                    if (snapshot.mentionQuery === event.query)
+                        set({ mentionCandidates: event.candidates });
                     return;
                 case "agentUsersReconciled": {
                     const allowed = new Set(event.agentUserIds);
@@ -235,7 +378,15 @@ export function composerStoreCreate(
                         snapshot.submission.revision === event.revision &&
                         snapshot.revision === event.revision
                     )
-                        set({ text: "", attachments: [], submission: { status: "idle" } });
+                        set({
+                            text: "",
+                            attachments: [],
+                            submission: { status: "idle" },
+                            commandQuery: undefined,
+                            mentionQuery: undefined,
+                            shellCommand: undefined,
+                            mentionCandidates: [],
+                        });
                     return;
                 case "submissionFailed":
                     if (

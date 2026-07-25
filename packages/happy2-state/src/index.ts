@@ -24,6 +24,12 @@ export {
     type ComposerStoreOptions,
 } from "./modules/composer/composerState.js";
 export {
+    composerCapabilitiesNone,
+    type ComposerCapabilities,
+    type ComposerCommand,
+    type ComposerMention,
+} from "./modules/composer/composerState.js";
+export {
     type ComposerAttachment,
     type ComposerOutput,
     type ComposerSnapshot,
@@ -34,25 +40,55 @@ export type {
     ChatHandle,
     ChatInput,
     ChatMemberProjection,
-    ChatMessageItem,
-    ChatMessageProjection,
     ChatOutput,
     ChatPinProjection,
-    ChatReactionSummary,
     ChatSnapshot,
     ChatStore,
-    Loadable,
     PortShareAccess,
     PortShareAccessTarget,
     ReactionActors,
 } from "./modules/chat/chatState.js";
+export type { Loadable } from "./conversation/loadable.js";
+export type { ConversationAuthor } from "./conversation/conversationAuthor.js";
+export type {
+    ConversationActivity,
+    ConversationActivityEntry,
+    ConversationActivityFailure,
+    ConversationActivityPresentation,
+    ConversationActivityReview,
+    ConversationActivityStatus,
+    ConversationDiffHunk,
+    ConversationDiffKind,
+    ConversationDiffLine,
+    ConversationDiffLineKind,
+    ConversationEntry,
+    ConversationFileDiff,
+    ConversationAttachment,
+    ConversationJson,
+    ConversationMessageEntry,
+    ConversationMessageProjection,
+    ConversationNoticeEntry,
+    ConversationReaction,
+    ConversationRequest,
+    ConversationRequestEntry,
+    ConversationRequestOption,
+    ConversationRequestSubmission,
+    ConversationRequestStatus,
+    ConversationRequestQuestion,
+    ConversationToolCall,
+} from "./conversation/conversationEntry.js";
+export { entryKey, entrySequence } from "./conversation/conversationEntry.js";
+export { entriesMerge, entryCompare, entryEquivalent } from "./conversation/conversationEntries.js";
+export type {
+    ConversationListSnapshot,
+    ConversationSummary,
+} from "./conversation/conversationSummary.js";
 export type {
     SidebarChatProjection,
     SidebarSnapshot,
     SidebarStatus,
     SidebarStore,
 } from "./modules/sidebar/sidebarState.js";
-export type { IdentityProjection } from "./modules/identity/identityState.js";
 export type {
     WorkspaceHandle,
     WorkspaceSnapshot,
@@ -253,13 +289,27 @@ export {
     type RigClientDeps,
 } from "./rig/rigClient.js";
 export {
+    rigComposerCommands,
     rigWorkspaceStoreCreate,
+    type RigConversationSnapshot,
     type RigWorkspaceSnapshot,
     type RigWorkspaceStore,
 } from "./rig/rigWorkspaceStore.js";
+export {
+    rigAgentAuthor,
+    rigConversationSummaryProject,
+    rigOwnerAuthor,
+} from "./rig/rigConversationProject.js";
 export {
     rigClockStoreCreate,
     type RigClockStore,
     type RigClockStoreOptions,
 } from "./rig/rigClock.js";
 export { rigPermissionLabel, rigServiceTierLabel, rigThinkingLabel } from "./rig/rigSupport.js";
+export {
+    appearanceStoreCreate,
+    type AppearanceSnapshot,
+    type AppearanceStore,
+    type AppearanceStoreOptions,
+    type ThemeMode,
+} from "./appearance/appearanceStore.js";

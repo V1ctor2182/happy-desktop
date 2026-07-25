@@ -36,13 +36,19 @@ export function useChatMessageMediaModel(
             loading.delete(fileId);
         }
     }
+    // A cloud message's attachments are always durable server files; the shared
+    // union's inline case exists for local sessions and never appears here.
+    const attachmentFiles = (message: LiveChatMessage) =>
+        (message.serverMessage?.attachments ?? []).flatMap((attachment) =>
+            attachment.kind === "file" ? [attachment.file] : [],
+        );
     const imageFiles = (message: LiveChatMessage) =>
-        message.serverMessage?.attachments.filter(
+        attachmentFiles(message).filter(
             (file) =>
                 file.kind === "photo" ||
                 file.kind === "gif" ||
                 file.contentType.startsWith("image/"),
-        ) ?? [];
+        );
     const images = (message: LiveChatMessage): MessageImage[] =>
         imageFiles(message).map((file) => {
             if (!urls.has(file.id) && !loading.has(file.id)) void ensureUrl(file.id, true);
@@ -56,7 +62,7 @@ export function useChatMessageMediaModel(
             };
         });
     const files = (message: LiveChatMessage) =>
-        (message.serverMessage?.attachments ?? [])
+        attachmentFiles(message)
             .filter((file) => !imageFiles(message).some((image) => image.id === file.id))
             .map((file) => ({
                 name: file.originalName ?? "Attachment",

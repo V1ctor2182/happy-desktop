@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from "react";
 import type {
+    ConversationSummary,
     RigClockStore,
     RigConnectionStore,
+    RigConversationSnapshot,
     RigHost,
     RigModelSelection,
     RigPermissionMode,
@@ -10,27 +12,74 @@ import type {
     RigThinkingLevel,
     RigWorkspaceStore,
 } from "happy2-state";
-import { RigConnectionStatus, RigWorkspaceView } from "happy2-ui";
+import { rigOwnerAuthor } from "happy2-state";
+import {
+    AppShell,
+    Banner,
+    Button,
+    ConversationSettingsModal,
+    ConversationView,
+    EmptyState,
+    RigActivityPanel,
+    RigConnectionStatus,
+    RigSessionControls,
+    RigStatusBar,
+    RigUsagePanel,
+    Sidebar,
+    type SidebarItem,
+} from "happy2-ui";
 
 export interface AppRigViewProps {
     /** Host/UI operations for the desktop shell (menus, directory picking). */
     host: RigHost;
     /** Daemon connection/health surface, used only to gate the workspace. */
     connection: RigConnectionStore;
-    /** Joined session-list + active-chat product store for the live connection. */
+    /** Joined conversation-list + active-conversation product store. */
     workspace: RigWorkspaceStore;
-    /** Ticking clock feeding relative timestamps in the session list. */
+    /** Ticking clock feeding relative timestamps in the conversation list. */
     clock: RigClockStore;
 }
 
+/** Relative age of a conversation's newest content, for its list row. */
+function relativeTime(then: number, now: number): string {
+    const seconds = Math.floor(Math.max(0, now - then) / 1000);
+    if (seconds < 45) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return `${Math.floor(days / 7)}w ago`;
+}
+
+function sidebarItem(summary: ConversationSummary, now: number): SidebarItem {
+    return {
+        id: summary.id,
+        kind: "agent",
+        label: summary.title,
+        initials: summary.title.slice(0, 1).toUpperCase(),
+        meta: summary.subtitle ?? relativeTime(summary.updatedAt, now),
+        // A row only carries a status while it is live; an idle row shows its
+        // directory instead, which is what tells two local sessions apart.
+        ...(summary.activity === "running" ? { status: "working" as const } : {}),
+    };
+}
+
 /**
- * The desktop Rig surface. It subscribes once each to the connection, workspace,
- * and clock stores (no local React state) and composes the presentational
- * `happy2-ui` components. Until the daemon connection is live and ready it shows
- * the connection status with a retry; once ready it renders the full workspace —
- * the session list and the selected session's chat — wiring every control to the
- * workspace store's actions. The selection→chat materialization lives in the
- * workspace store (outside React), so this component stays a pure projection.
+ * The local workspace surface. It subscribes once each to the connection,
+ * workspace, and clock stores (no local React state) and composes the shared
+ * `happy2-ui` components: the same `Sidebar` the cloud stack uses for its
+ * conversation list — including its shared brand heading, so the two modes are
+ * one component rendered twice rather than a local-only variant — and the same
+ * `ConversationView` for the selected conversation. Local-only affordances (the
+ * model and effort pickers beneath the composer, the settings dialog holding the
+ * view toggles and access pickers, the usage and activity panels, and the status
+ * bar) are passed into that surface's slots.
+ *
+ * Until the daemon connection is live it shows the connection status with a
+ * retry. Selection, materialization, and every draft keystroke live in the
+ * workspace store outside React, so this component stays a pure projection.
  */
 export function AppRigView(props: AppRigViewProps) {
     const status = useSyncExternalStore(
@@ -59,125 +108,264 @@ export function AppRigView(props: AppRigViewProps) {
         );
     }
 
-    const createSession = () => {
+    const conversationCreate = () => {
         void props.host.directoryPick().then((cwd) => {
-            if (cwd) void props.workspace.sessionCreate({ cwd }).catch(() => undefined);
+            if (cwd) void props.workspace.conversationCreate({ cwd }).catch(() => undefined);
         });
     };
 
-    const list = workspace.sessionList;
-    const chat = workspace.chat;
-    const elapsedMs =
-        chat && chat.runStatus === "running" && chat.runStartedAt !== undefined
-            ? Math.max(0, now - chat.runStartedAt)
-            : chat?.turnElapsedMs;
+    const conversations = workspace.list.conversations;
+    const rows = conversations.type === "ready" ? conversations.value : [];
+    const conversation = workspace.conversation;
+    const listAccessory =
+        conversations.type === "loading" || conversations.type === "unloaded" ? (
+            <Banner tone="neutral">Loading sessions…</Banner>
+        ) : conversations.type === "error" ? (
+            <Banner
+                action={{ label: "Retry", onClick: () => props.workspace.conversationListRetry() }}
+                tone="danger"
+                title="Sessions unavailable"
+            >
+                {conversations.error.message}
+            </Banner>
+        ) : workspace.list.mutationError ? (
+            <Banner
+                action={{ label: "Retry", onClick: conversationCreate }}
+                tone="danger"
+                title="Session not created"
+            >
+                {workspace.list.mutationError.message}
+            </Banner>
+        ) : undefined;
 
     return (
-        <RigWorkspaceView
-            sessionList={{
-                sessions: list.sessions,
-                selectedId: list.selectedSessionId,
-                onSelect: (id: RigSessionId) => props.workspace.sessionSelect(id),
-                onCreate: createSession,
-                now,
-            }}
-            chat={
-                chat
-                    ? {
-                          title: chat.session?.title,
-                          subtitle: chat.session?.displayCwd,
-                          running: chat.runStatus === "running",
-                          elapsedMs,
-                          entries: chat.transcript,
-                          menus: chat.menus,
-                          pendingUserInputs: chat.pendingUserInputs,
-                          queuedMessages: chat.queuedMessages,
-                          // Slash commands wired to direct workspace actions;
-                          // model/effort/permission/tier stay in the header
-                          // controls rather than duplicating as palette entries.
-                          commands: [
-                              "usage",
-                              "tasks",
-                              "agents",
-                              "goal",
-                              "ps",
-                              "new",
-                              "compact",
-                              "abort",
-                              "fork",
-                              "clear",
-                          ],
-                          onCommand: (id) => {
-                              if (id === "new")
-                                  void props.workspace.sessionReset().catch(() => undefined);
-                              else if (id === "compact")
-                                  void props.workspace.compact().catch(() => undefined);
-                              else if (id === "abort")
-                                  void props.workspace.runAbort().catch(() => undefined);
-                              else if (id === "clear") props.workspace.viewClear();
-                              else if (id === "usage") props.workspace.usagePanelOpen();
-                              else if (
-                                  id === "tasks" ||
-                                  id === "agents" ||
-                                  id === "goal" ||
-                                  id === "ps"
-                              )
-                                  props.workspace.activityPanelShow();
-                              else if (id === "fork" && list.selectedSessionId)
-                                  void props.workspace
-                                      .sessionFork(list.selectedSessionId)
-                                      .catch(() => undefined);
-                          },
-                          onFilesSearch: (query: string) =>
-                              props.workspace.filesSearch(query, 8).catch(() => []),
-                          showReasoning: chat.showReasoning,
-                          onReasoningToggle: () => props.workspace.reasoningToggle(),
-                          compactTurns: chat.compactTurns,
-                          onTurnCompactToggle: () => props.workspace.turnCompactToggle(),
-                          usageOpen: chat.usagePanelOpen,
-                          usage: chat.usage,
-                          usageLoading: chat.usageLoading,
-                          usageError: chat.usageError,
-                          onUsageToggle: () =>
-                              chat.usagePanelOpen
-                                  ? props.workspace.usagePanelClose()
-                                  : props.workspace.usagePanelOpen(),
-                          activityOpen: chat.activityPanelOpen,
-                          goal: chat.goal,
-                          tasks: chat.tasks,
-                          subagents: chat.subagents,
-                          now,
-                          onActivityToggle: () => props.workspace.activityPanelToggle(),
-                          backgroundCount: chat.backgroundProcesses.length,
-                          backgroundProcesses: chat.backgroundProcesses,
-                          onBackgroundProcessStop: (processId) =>
-                              void props.workspace
-                                  .backgroundProcessStop(processId)
-                                  .catch(() => undefined),
-                          onSend: (text) =>
-                              void props.workspace.messageSend(text).catch(() => undefined),
-                          onShellRun: (command) =>
-                              void props.workspace.shellRun(command).catch(() => undefined),
-                          onAbort: () => void props.workspace.runAbort().catch(() => undefined),
-                          onModelChange: (selection: RigModelSelection) =>
-                              void props.workspace.modelChange(selection).catch(() => undefined),
-                          onEffortChange: (effort?: RigThinkingLevel) =>
-                              void props.workspace.effortChange(effort).catch(() => undefined),
-                          onPermissionModeChange: (mode: RigPermissionMode) =>
-                              void props.workspace
-                                  .permissionModeChange(mode)
-                                  .catch(() => undefined),
-                          onServiceTierChange: (tier?: RigServiceTier) =>
-                              void props.workspace.serviceTierChange(tier).catch(() => undefined),
-                          onAnswerInput: (requestId, answers) =>
-                              void props.workspace
-                                  .answerInput({ requestId, answers })
-                                  .catch(() => undefined),
-                          onRewind: (entryId) =>
-                              void props.workspace.rewind(entryId).catch(() => undefined),
-                      }
-                    : undefined
+        <AppShell
+            sidebar={
+                <Sidebar
+                    activeItemId={workspace.list.selectedId ?? ""}
+                    brand
+                    composeLabel="New session"
+                    headerAccessory={listAccessory}
+                    onCompose={conversationCreate}
+                    onItemSelect={(id) => props.workspace.conversationSelect(id as RigSessionId)}
+                    sections={[
+                        {
+                            id: "sessions",
+                            label: "Sessions",
+                            items: rows.map((summary) => sidebarItem(summary, now)),
+                            ...(conversations.type === "ready"
+                                ? {
+                                      empty: {
+                                          actionLabel: "New session",
+                                          description: "Start a session to begin working locally.",
+                                          icon: "chat" as const,
+                                          title: "No sessions yet",
+                                      },
+                                  }
+                                : {}),
+                        },
+                    ]}
+                />
             }
+        >
+            {conversation.type === "ready" ? (
+                <RigConversationSurface
+                    conversation={conversation.value}
+                    now={now}
+                    workspace={props.workspace}
+                />
+            ) : conversation.type === "loading" ? (
+                <EmptyState
+                    description="Loading the selected local session."
+                    icon="chat"
+                    size="panel"
+                    title="Loading session…"
+                />
+            ) : conversation.type === "error" ? (
+                <EmptyState
+                    action={{
+                        label: "Retry",
+                        icon: "arrow-right",
+                        onClick: () => props.workspace.conversationRetry(),
+                    }}
+                    description={conversation.error.message}
+                    icon="shield"
+                    size="panel"
+                    title="Session unavailable"
+                />
+            ) : (
+                <EmptyState
+                    action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
+                    description="Select a session from the list or start a new one to begin."
+                    icon="chat"
+                    size="panel"
+                    title="No session selected"
+                />
+            )}
+        </AppShell>
+    );
+}
+
+/**
+ * Projects one local conversation into `ConversationView`: the shared entries,
+ * composer, and request prompts, plus the local-only header controls, panels,
+ * and status bar the shared surface hosts in its slots.
+ */
+function RigConversationSurface(props: {
+    conversation: RigConversationSnapshot;
+    now: number;
+    workspace: RigWorkspaceStore;
+}) {
+    const { conversation, workspace } = props;
+    if (conversation.session.type === "loading" || conversation.session.type === "unloaded")
+        return (
+            <EmptyState
+                description="Loading the selected local session."
+                icon="chat"
+                size="panel"
+                title="Loading session…"
+            />
+        );
+    if (conversation.session.type === "error")
+        return (
+            <EmptyState
+                action={{
+                    label: "Retry",
+                    icon: "arrow-right",
+                    onClick: () => workspace.conversationRetry(),
+                }}
+                description={conversation.session.error.message}
+                icon="shield"
+                size="panel"
+                title="Session unavailable"
+            />
+        );
+    const elapsedMs =
+        conversation.running && conversation.runStartedAt !== undefined
+            ? Math.max(0, props.now - conversation.runStartedAt)
+            : conversation.turnElapsedMs;
+    const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+
+    return (
+        <ConversationView
+            composer={conversation.composer}
+            composerPlaceholder="Message Rig…"
+            elapsedMs={elapsedMs}
+            entries={conversation.entries}
+            composerControls={
+                <>
+                    {conversation.menus ? (
+                        <RigSessionControls
+                            fields={["model", "effort"]}
+                            menus={conversation.menus}
+                            onEffortChange={(effort?: RigThinkingLevel) =>
+                                swallow(workspace.effortChange(effort))
+                            }
+                            onModelChange={(selection: RigModelSelection) =>
+                                swallow(workspace.modelChange(selection))
+                            }
+                            onPermissionModeChange={(mode: RigPermissionMode) =>
+                                swallow(workspace.permissionModeChange(mode))
+                            }
+                            onServiceTierChange={(tier?: RigServiceTier) =>
+                                swallow(workspace.serviceTierChange(tier))
+                            }
+                        />
+                    ) : null}
+                    <Button
+                        aria-label="Session settings"
+                        icon="settings"
+                        iconOnly
+                        onClick={() => workspace.settingsOpen()}
+                        size="small"
+                        variant="ghost"
+                    />
+                </>
+            }
+            onAbort={() => swallow(workspace.runAbort())}
+            onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
+            onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
+            onComposerSend={() => workspace.composerTextSubmit()}
+            onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+            onRequestAnswer={(requestId, answers) =>
+                swallow(workspace.answerInput({ requestId, answers }))
+            }
+            onRewind={(messageId) => swallow(workspace.rewind(messageId))}
+            panel={
+                conversation.usagePanelOpen ? (
+                    <RigUsagePanel
+                        error={conversation.usageError}
+                        loading={conversation.usageLoading}
+                        usage={conversation.usage}
+                    />
+                ) : conversation.activityPanelOpen ? (
+                    <RigActivityPanel
+                        backgroundProcesses={conversation.backgroundProcesses}
+                        goal={conversation.goal}
+                        now={props.now}
+                        onBackgroundProcessStop={(processId) =>
+                            swallow(workspace.backgroundProcessStop(processId))
+                        }
+                        subagents={conversation.subagents}
+                        tasks={conversation.tasks}
+                    />
+                ) : undefined
+            }
+            overlay={
+                conversation.settingsOpen ? (
+                    <ConversationSettingsModal
+                        activityOpen={conversation.activityPanelOpen}
+                        compactTurns={conversation.compactTurns}
+                        controls={
+                            conversation.menus ? (
+                                <RigSessionControls
+                                    fields={["permission", "tier"]}
+                                    menus={conversation.menus}
+                                    onEffortChange={(effort?: RigThinkingLevel) =>
+                                        swallow(workspace.effortChange(effort))
+                                    }
+                                    onModelChange={(selection: RigModelSelection) =>
+                                        swallow(workspace.modelChange(selection))
+                                    }
+                                    onPermissionModeChange={(mode: RigPermissionMode) =>
+                                        swallow(workspace.permissionModeChange(mode))
+                                    }
+                                    onServiceTierChange={(tier?: RigServiceTier) =>
+                                        swallow(workspace.serviceTierChange(tier))
+                                    }
+                                />
+                            ) : undefined
+                        }
+                        onActivityOpenChange={() => workspace.activityPanelToggle()}
+                        onClose={() => workspace.settingsClose()}
+                        onCompactTurnsChange={() => workspace.turnCompactToggle()}
+                        onShowReasoningChange={() => workspace.reasoningToggle()}
+                        onUsageOpenChange={(value) =>
+                            value ? workspace.usagePanelOpen() : workspace.usagePanelClose()
+                        }
+                        showReasoning={conversation.showReasoning}
+                        usageOpen={conversation.usagePanelOpen}
+                    />
+                ) : undefined
+            }
+            queued={conversation.queuedMessages}
+            requestSubmissions={conversation.requestSubmissions}
+            running={conversation.running}
+            statusBar={
+                <RigStatusBar
+                    backgroundCount={conversation.backgroundProcesses.length}
+                    cwd={conversation.subtitle}
+                    menus={conversation.menus}
+                    queuedCount={conversation.queuedMessages.length}
+                    runningSubagentCount={
+                        conversation.subagents.filter((subagent) => subagent.status === "running")
+                            .length
+                    }
+                />
+            }
+            subtitle={conversation.subtitle}
+            title={conversation.title ?? "Untitled session"}
+            viewerId={rigOwnerAuthor.id}
         />
     );
 }

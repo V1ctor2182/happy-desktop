@@ -102,8 +102,20 @@ export function RigControlMenu(props: RigControlMenuProps) {
     );
 }
 
+/** One control in the session bar; `fields` selects which of them render. */
+export type RigSessionControlField = "model" | "effort" | "permission" | "tier";
+
+const ALL_FIELDS: readonly RigSessionControlField[] = ["model", "effort", "permission", "tier"];
+
 export type RigSessionControlsProps = {
     menus: RigMenusSnapshot;
+    /**
+     * Which controls to render, in this order. Defaults to all four. A surface
+     * that has already placed the model picker elsewhere (the composer toolbar)
+     * asks for only the controls it still owns, instead of rendering a second
+     * copy of one it already shows.
+     */
+    fields?: readonly RigSessionControlField[];
     onModelChange: (selection: RigModelSelection) => void;
     onEffortChange: (effort?: RigThinkingLevel) => void;
     onPermissionModeChange: (mode: RigPermissionMode) => void;
@@ -173,42 +185,50 @@ export function RigSessionControls(props: RigSessionControlsProps) {
         menus.serviceTierOptions.find((option) => option.current)?.label ??
         (menus.currentServiceTier ? "Fast" : "Standard");
 
-    return (
-        <div
-            className={["happy2-rig-controls", props.className].filter(Boolean).join(" ")}
-            data-happy2-ui="rig-session-controls"
-            data-testid={props["data-testid"]}
-            style={props.style}
-        >
-            <RigControlMenu
-                data-testid="rig-control-model"
-                items={modelItems}
-                label="Model"
-                menuWidth={240}
-                onSelect={(id) => {
-                    const [providerId, modelId] = id.split(MODEL_ID_SEP);
-                    if (modelId) props.onModelChange({ providerId, modelId });
-                }}
-                value={currentModelName(menus)}
-            />
-            <RigControlMenu
-                data-testid="rig-control-effort"
-                items={effortItems}
-                label="Effort"
-                onSelect={(id) => props.onEffortChange(id as RigThinkingLevel)}
-                value={currentEffortLabel(menus)}
-            />
-            <RigControlMenu
-                data-testid="rig-control-permission"
-                items={permissionItems}
-                label="Access"
-                menuWidth={200}
-                onSelect={(id) => props.onPermissionModeChange(id as RigPermissionMode)}
-                value={PERMISSION_LABELS[menus.currentPermissionMode]}
-            />
+    const control = (field: RigSessionControlField) => {
+        if (field === "model")
+            return (
+                <RigControlMenu
+                    data-testid="rig-control-model"
+                    items={modelItems}
+                    key={field}
+                    label="Model"
+                    menuWidth={240}
+                    onSelect={(id) => {
+                        const [providerId, modelId] = id.split(MODEL_ID_SEP);
+                        if (modelId) props.onModelChange({ providerId, modelId });
+                    }}
+                    value={currentModelName(menus)}
+                />
+            );
+        if (field === "effort")
+            return (
+                <RigControlMenu
+                    data-testid="rig-control-effort"
+                    items={effortItems}
+                    key={field}
+                    label="Effort"
+                    onSelect={(id) => props.onEffortChange(id as RigThinkingLevel)}
+                    value={currentEffortLabel(menus)}
+                />
+            );
+        if (field === "permission")
+            return (
+                <RigControlMenu
+                    data-testid="rig-control-permission"
+                    items={permissionItems}
+                    key={field}
+                    label="Access"
+                    menuWidth={200}
+                    onSelect={(id) => props.onPermissionModeChange(id as RigPermissionMode)}
+                    value={PERMISSION_LABELS[menus.currentPermissionMode]}
+                />
+            );
+        return (
             <RigControlMenu
                 data-testid="rig-control-tier"
                 items={serviceTierItems}
+                key={field}
                 label="Speed"
                 onSelect={(id) =>
                     props.onServiceTierChange(
@@ -217,6 +237,17 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                 }
                 value={currentTierLabel}
             />
+        );
+    };
+
+    return (
+        <div
+            className={["happy2-rig-controls", props.className].filter(Boolean).join(" ")}
+            data-happy2-ui="rig-session-controls"
+            data-testid={props["data-testid"]}
+            style={props.style}
+        >
+            {(props.fields ?? ALL_FIELDS).map(control)}
         </div>
     );
 }

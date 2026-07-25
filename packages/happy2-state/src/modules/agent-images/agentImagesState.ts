@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { type AgentImageDetails, type AgentImageSummary } from "../../resources.js";
 import { type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface AgentImagesActionContext {

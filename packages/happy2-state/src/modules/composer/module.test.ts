@@ -167,4 +167,93 @@ describe("composer module", () => {
             submission: { status: "idle" },
         });
     });
+
+    it("submits a shell-mode draft as a command instead of a message", () => {
+        const output = vi.fn();
+        const binding = composerStoreCreate("session-1", {
+            capabilities: { shellMode: true, commands: [], mentions: false },
+            output,
+        });
+        binding.getState().textUpdate("!ls -la");
+        expect(binding.getState().shellCommand).toBe("ls -la");
+        binding.getState().textSubmit();
+        expect(output.mock.calls.map(([event]) => event.type)).toEqual([
+            "textUpdated",
+            "shellCommandSubmitted",
+        ]);
+        expect(output.mock.calls[1]![0]).toMatchObject({ command: "ls -la" });
+        const revision = binding.getState().revision;
+        binding.getState().composerInput({ type: "submissionConfirmed", revision });
+        expect(binding.getState()).toMatchObject({ text: "", shellCommand: undefined });
+    });
+
+    it("never sends an open command draft and invokes the chosen command instead", () => {
+        const output = vi.fn();
+        const binding = composerStoreCreate("session-1", {
+            capabilities: {
+                shellMode: false,
+                commands: [{ id: "compact", label: "/compact" }],
+                mentions: false,
+            },
+            output,
+        });
+        binding.getState().textUpdate("/comp");
+        expect(binding.getState().commandQuery).toBe("comp");
+        binding.getState().textSubmit();
+        expect(binding.getState().submission.status).toBe("idle");
+        binding.getState().commandInvoke("unknown");
+        binding.getState().commandInvoke("compact");
+        expect(binding.getState()).toMatchObject({ text: "", commandQuery: undefined });
+        expect(output.mock.calls.map(([event]) => event.type)).toEqual([
+            "textUpdated",
+            "commandInvoked",
+        ]);
+    });
+
+    it("tracks the active mention token and only accepts candidates for it", () => {
+        const output = vi.fn();
+        const binding = composerStoreCreate("session-1", {
+            capabilities: { shellMode: false, commands: [], mentions: true },
+            output,
+        });
+        binding.getState().textUpdate("look at @sr");
+        expect(binding.getState().mentionQuery).toBe("sr");
+        binding.getState().composerInput({
+            type: "mentionCandidatesReconciled",
+            query: "stale",
+            candidates: [{ id: "other.ts", label: "other.ts" }],
+        });
+        expect(binding.getState().mentionCandidates).toEqual([]);
+        binding.getState().composerInput({
+            type: "mentionCandidatesReconciled",
+            query: "sr",
+            candidates: [{ id: "src/a.ts", label: "src/a.ts" }],
+        });
+        expect(binding.getState().mentionCandidates).toHaveLength(1);
+
+        // The mention closes as soon as the token does; candidates never linger.
+        binding.getState().textUpdate("look at @src/a.ts ");
+        expect(binding.getState()).toMatchObject({
+            mentionQuery: undefined,
+            mentionCandidates: [],
+        });
+        expect(output.mock.calls.map(([event]) => event.type)).toEqual([
+            "textUpdated",
+            "mentionQueryUpdated",
+            "textUpdated",
+            "mentionQueryUpdated",
+        ]);
+    });
+
+    it("leaves a capability-free composer's prefixes as ordinary text", () => {
+        const binding = composerStoreCreate("chat-1");
+        binding.getState().textUpdate("!not a shell command");
+        expect(binding.getState()).toMatchObject({
+            shellCommand: undefined,
+            commandQuery: undefined,
+            mentionQuery: undefined,
+        });
+        binding.getState().textSubmit();
+        expect(binding.getState().submission.status).toBe("pending");
+    });
 });

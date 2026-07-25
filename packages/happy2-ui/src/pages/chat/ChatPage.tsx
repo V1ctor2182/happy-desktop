@@ -6,10 +6,8 @@ import {
     Button,
     ComposerModelControl,
     DocumentsPanel,
-    DocumentWritePermissionCard,
     Lightbox,
     ModalOverlay,
-    PluginPermissionCard,
     Sidebar,
     type ContextItem,
     type ComposerModelChoice,
@@ -34,6 +32,7 @@ import type {
     WorkspaceStore,
     WorkspaceFileStore,
 } from "happy2-state";
+import { ConversationRequestView } from "../../ConversationRequestView.js";
 import {
     composerAudienceHint,
     composerHint,
@@ -74,7 +73,6 @@ import { chatChannelModelCreate } from "./chatChannelModel.js";
 import { chatChannelAccessProject } from "./chatChannelAccessModel.js";
 import {
     useAvatarImages,
-    usePluginRequestImages,
     createAvatarProjection,
     useOptionalStoreSnapshot,
     useStoreSnapshot,
@@ -756,46 +754,40 @@ export function ChatPage(props: ChatPageProps) {
         return person ? `${person.displayName} activity` : "Agent activity";
     };
 
-    const requestImages = usePluginRequestImages(props.actions);
     const pluginRequestEntries = (): ReactNode[] => {
         const snapshot = chatSnapshot();
         const requests = snapshot?.pluginRequests;
         if (!snapshot || requests?.type !== "ready" || requests.value.length === 0) return [];
-        const requester = (agentUserId?: string) =>
-            agentUserId
-                ? directoryUsers().find((person) => person.id === agentUserId)?.displayName
-                : undefined;
         const nodes: ReactNode[] = requests.value.map((request) => (
             <div
                 className="happy2-plugin-permission-card-row"
                 data-happy2-ui="plugin-permission-card-row"
                 key={`plugin-request:${request.id}`}
             >
-                <PluginPermissionCard
-                    action={request.action}
-                    busy={snapshot.pluginRequestPendingIds.includes(request.id)}
-                    canDecide={isServerAdmin()}
-                    description={request.description}
-                    error={request.lastError}
-                    imageUrl={requestImages.imageUrl(
-                        request.chatId,
-                        request.id,
-                        request.status === "pending" || request.status === "processing",
-                    )}
-                    onApprove={() => props.chat?.getState().pluginRequestApprove(request.id)}
-                    onDeny={() => props.chat?.getState().pluginRequestDeny(request.id)}
-                    pluginName={request.displayName}
-                    reason={request.reason}
-                    requestedBy={requester(request.agentUserId)}
-                    shortName={request.shortName}
-                    source={
-                        request.sourceKind === "link"
-                            ? request.sourceReference
-                            : request.sourceKind === "archive"
-                              ? `ZIP · ${request.sourceReference ?? request.shortName}`
-                              : undefined
+                <ConversationRequestView
+                    onDecide={
+                        isServerAdmin()
+                            ? (_, decision) =>
+                                  decision === "approve"
+                                      ? props.chat?.getState().pluginRequestApprove(request.id)
+                                      : props.chat?.getState().pluginRequestDeny(request.id)
+                            : undefined
                     }
-                    status={request.status}
+                    pending={
+                        request.status === "processing" ||
+                        snapshot.pluginRequestPendingIds.includes(request.id)
+                    }
+                    request={{
+                        kind: "pluginManagement",
+                        requestId: request.id,
+                        action: request.action,
+                        status: request.status,
+                        displayName: request.displayName,
+                        shortName: request.shortName,
+                        description: request.description,
+                        reason: request.reason,
+                        lastError: request.lastError,
+                    }}
                 />
             </div>
         ));
@@ -817,24 +809,28 @@ export function ChatPage(props: ChatPageProps) {
         const snapshot = chatSnapshot();
         const requests = snapshot?.documentWriteRequests;
         if (!snapshot || requests?.type !== "ready" || requests.value.length === 0) return [];
-        const requester = (agentUserId?: string) =>
-            agentUserId
-                ? directoryUsers().find((person) => person.id === agentUserId)?.displayName
-                : undefined;
         const nodes: ReactNode[] = requests.value.map((request) => (
             <div
                 className="happy2-document-write-permission-card-row"
                 data-happy2-ui="document-write-permission-card-row"
                 key={`document-write-request:${request.id}`}
             >
-                <DocumentWritePermissionCard
-                    busy={snapshot.documentWriteRequestPendingIds.includes(request.id)}
-                    documentTitle={request.documentTitle}
-                    error={request.lastError}
-                    onApprove={() => props.chat?.getState().documentWriteRequestApprove(request.id)}
-                    onDeny={() => props.chat?.getState().documentWriteRequestDeny(request.id)}
-                    requestedBy={requester(request.agentUserId)}
-                    status={request.status}
+                <ConversationRequestView
+                    onDecide={(_, decision) =>
+                        decision === "approve"
+                            ? props.chat?.getState().documentWriteRequestApprove(request.id)
+                            : props.chat?.getState().documentWriteRequestDeny(request.id)
+                    }
+                    pending={snapshot.documentWriteRequestPendingIds.includes(request.id)}
+                    request={{
+                        kind: "documentWrite",
+                        requestId: request.id,
+                        status: request.status,
+                        documentId: request.documentId,
+                        documentTitle: request.documentTitle,
+                        expiresAt: request.expiresAt,
+                        lastError: request.lastError,
+                    }}
                 />
             </div>
         ));

@@ -1,4 +1,5 @@
 import { type CSSProperties } from "react";
+import type { ComposerCommand } from "happy2-state";
 import { CommandPalette } from "./CommandPalette";
 import { Icon, type IconName } from "./Icon";
 
@@ -24,12 +25,12 @@ export type RigCommandPaletteProps = {
     onQueryChange: (value: string) => void;
     onClose: () => void;
     /** Invoked with the chosen command id; the palette then closes. */
-    onCommand: (id: RigCommandId) => void;
+    onCommand: (id: string) => void;
     /**
-     * Commands to offer, in order. Only include ids wired to a real action; the
-     * palette lists exactly these so unavailable commands never appear.
+     * Commands to offer, in order — the composer capability list. Only commands
+     * wired to a real action appear, so an offered command always does something.
      */
-    commands: readonly RigCommandId[];
+    commands: readonly ComposerCommand[];
     autoFocus?: boolean;
     className?: string;
     "data-testid"?: string;
@@ -126,6 +127,19 @@ const COMMAND_META: Record<RigCommandId, CommandMeta> = {
     },
 };
 
+/** Presentation for a known command id, falling back to the supplied labels. */
+function metaOf(command: ComposerCommand): CommandMeta {
+    const known = COMMAND_META[command.id as RigCommandId] as CommandMeta | undefined;
+    return (
+        known ?? {
+            label: command.label,
+            slash: command.label.startsWith("/") ? command.label : `/${command.id}`,
+            description: command.description ?? "",
+            icon: "spark",
+        }
+    );
+}
+
 function matches(meta: CommandMeta, query: string): boolean {
     const needle = query.trim().replace(/^\//, "").toLowerCase();
     if (!needle) return true;
@@ -143,7 +157,9 @@ function matches(meta: CommandMeta, query: string): boolean {
  * and filters them by the typed query; choosing one calls `onCommand` and closes.
  */
 export function RigCommandPalette(props: RigCommandPaletteProps) {
-    const visible = props.commands.filter((id) => matches(COMMAND_META[id], props.query));
+    const visible = props.commands
+        .map((command) => ({ id: command.id, meta: metaOf(command) }))
+        .filter((command) => matches(command.meta, props.query));
     return (
         <CommandPalette
             autoFocus={props.autoFocus}
@@ -164,40 +180,32 @@ export function RigCommandPalette(props: RigCommandPaletteProps) {
                         No matching commands
                     </p>
                 ) : (
-                    visible.map((id) => {
-                        const meta = COMMAND_META[id];
-                        return (
-                            <button
-                                className="happy2-rig-command-palette__item"
-                                data-command-id={id}
-                                data-happy2-ui="rig-command-item"
-                                key={id}
-                                onClick={() => {
-                                    props.onCommand(id);
-                                    props.onClose();
-                                }}
-                                type="button"
-                            >
-                                <span
-                                    className="happy2-rig-command-palette__icon"
-                                    aria-hidden="true"
-                                >
-                                    <Icon name={meta.icon} size={16} />
+                    visible.map(({ id, meta }) => (
+                        <button
+                            className="happy2-rig-command-palette__item"
+                            data-command-id={id}
+                            data-happy2-ui="rig-command-item"
+                            key={id}
+                            onClick={() => {
+                                props.onCommand(id);
+                                props.onClose();
+                            }}
+                            type="button"
+                        >
+                            <span className="happy2-rig-command-palette__icon" aria-hidden="true">
+                                <Icon name={meta.icon} size={16} />
+                            </span>
+                            <span className="happy2-rig-command-palette__item-body">
+                                <span className="happy2-rig-command-palette__item-label">
+                                    {meta.label}
                                 </span>
-                                <span className="happy2-rig-command-palette__item-body">
-                                    <span className="happy2-rig-command-palette__item-label">
-                                        {meta.label}
-                                    </span>
-                                    <span className="happy2-rig-command-palette__item-description">
-                                        {meta.description}
-                                    </span>
+                                <span className="happy2-rig-command-palette__item-description">
+                                    {meta.description}
                                 </span>
-                                <span className="happy2-rig-command-palette__slash">
-                                    {meta.slash}
-                                </span>
-                            </button>
-                        );
-                    })
+                            </span>
+                            <span className="happy2-rig-command-palette__slash">{meta.slash}</span>
+                        </button>
+                    ))
                 )}
             </div>
         </CommandPalette>

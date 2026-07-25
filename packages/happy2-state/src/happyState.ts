@@ -1196,6 +1196,13 @@ export class HappyState implements AsyncDisposable, Disposable {
             case "attachmentAdded":
             case "attachmentRemoved":
                 return;
+            // Composer capabilities the cloud stack does not enable: a chat
+            // composer offers no shell mode, slash commands, or file mentions,
+            // so these never arrive here.
+            case "mentionQueryUpdated":
+            case "commandInvoked":
+            case "shellCommandSubmitted":
+                return;
             case "audienceUpdated":
             case "agentUserAdded":
             case "agentUserRemoved": {

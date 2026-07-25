@@ -1,41 +1,121 @@
+import type { ConversationEntry } from "../conversation/conversationEntry.js";
+import type { ConversationListSnapshot } from "../conversation/conversationSummary.js";
+import type { Loadable } from "../conversation/loadable.js";
+import {
+    composerStoreCreate,
+    type ComposerCommand,
+    type ComposerSnapshot,
+    type ComposerStore,
+} from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
 import type { RigChatSnapshot, RigChatStore } from "./rigChatStore.js";
-import type { RigSessionListSnapshot, RigSessionListStore } from "./rigSessionListStore.js";
+import { rigUserError } from "./rigSupport.js";
+import type { RigSessionListStore } from "./rigSessionListStore.js";
 import type {
+    RigBackgroundProcess,
     RigFileSearchResult,
+    RigGoal,
+    RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
+    RigQueuedMessage,
     RigServiceTier,
+    RigSession,
     RigSessionCreateInput,
     RigSessionId,
     RigSessionUsage,
+    RigSubagentSummary,
+    RigTask,
     RigThinkingLevel,
     RigUserInputAnswers,
 } from "./rigTypes.js";
 
 /**
- * Combined, immutable projection of the whole Rig workspace: the session list plus
- * the selected session's chat snapshot. A single subscription fans out both, so a
- * React surface can read the entire workspace through one `useSyncExternalStore`
+ * Commands a local composer offers behind `/`. Only ids wired to a real action
+ * appear, so an offered command always does something.
+ */
+export const rigComposerCommands: readonly ComposerCommand[] = [
+    { id: "usage", label: "/usage", description: "Token usage for the session." },
+    { id: "tasks", label: "/tasks", description: "Show the session task list." },
+    { id: "agents", label: "/agents", description: "Monitor delegated subagents." },
+    { id: "goal", label: "/goal", description: "Show the session goal." },
+    { id: "ps", label: "/ps", description: "List background terminals." },
+    { id: "new", label: "/new", description: "Start a fresh session context." },
+    { id: "compact", label: "/compact", description: "Compact the conversation." },
+    { id: "abort", label: "/abort", description: "Stop the current run." },
+    { id: "fork", label: "/fork", description: "Fork this session." },
+    { id: "clear", label: "/clear", description: "Clear the visible conversation." },
+];
+
+/** Number of `@`-mention candidates a local composer asks the workspace for. */
+const MENTION_LIMIT = 8;
+
+/**
+ * The selected conversation: its shared entries plus the local-only concepts a
+ * cloud chat has no counterpart for (run lifecycle, queued steering, tasks and
+ * subagents, background processes, usage, and the model/effort/permission
+ * pickers). Loading is stated in the shared `Loadable` vocabulary.
+ */
+export interface RigConversationSnapshot {
+    readonly conversationId: RigSessionId;
+    readonly session: Loadable<RigSession>;
+    readonly title?: string;
+    readonly subtitle?: string;
+    readonly entries: readonly ConversationEntry[];
+    readonly composer: ComposerSnapshot;
+    readonly running: boolean;
+    readonly runStartedAt?: number;
+    readonly turnElapsedMs?: number;
+    readonly queuedMessages: readonly RigQueuedMessage[];
+    readonly requestSubmissions: RigChatSnapshot["requestSubmissions"];
+    readonly tasks: readonly RigTask[];
+    readonly goal?: RigGoal;
+    readonly subagents: readonly RigSubagentSummary[];
+    readonly backgroundProcesses: readonly RigBackgroundProcess[];
+    readonly showReasoning: boolean;
+    readonly compactTurns: boolean;
+    readonly usagePanelOpen: boolean;
+    readonly usage?: RigSessionUsage;
+    readonly usageLoading: boolean;
+    readonly usageError?: string;
+    readonly activityPanelOpen: boolean;
+    /** Whether the session settings dialog is open. */
+    readonly settingsOpen: boolean;
+    readonly menus?: RigMenusSnapshot;
+}
+
+/**
+ * Combined, immutable projection of the whole local workspace: the conversation
+ * list plus the selected conversation. A single subscription fans out both, so a
+ * React surface reads the entire workspace through one `useSyncExternalStore`
  * without joining independent stores in the view.
  */
 export interface RigWorkspaceSnapshot {
-    readonly sessionList: RigSessionListSnapshot;
-    /** The selected session's chat snapshot, or undefined when none is selected/materializing. */
-    readonly chat?: RigChatSnapshot;
+    readonly list: ConversationListSnapshot;
+    /** Materialization state for the selected conversation; unloaded means no selection. */
+    readonly conversation: Loadable<RigConversationSnapshot>;
 }
 
 export interface RigWorkspaceStore {
     get(): RigWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
 
-    // Session-list actions (delegate to the list store).
-    sessionSelect(sessionId: RigSessionId): void;
-    sessionCreate(input: RigSessionCreateInput): Promise<void>;
-    sessionFork(sessionId: RigSessionId): Promise<void>;
+    // List actions.
+    conversationSelect(conversationId: RigSessionId): void;
+    /** Retries a failed authoritative conversation-list read. */
+    conversationListRetry(): void;
+    /** Retries a failed acquisition for the currently selected conversation. */
+    conversationRetry(): void;
+    conversationCreate(input: RigSessionCreateInput): Promise<void>;
+    conversationFork(conversationId: RigSessionId): Promise<void>;
 
-    // Chat actions (forwarded to the currently selected chat store).
-    messageSend(text: string): Promise<void>;
+    // Composer actions for the selected conversation (no draft lives in React).
+    composerTextUpdate(text: string): void;
+    composerFocusUpdate(focused: boolean): void;
+    composerTextSubmit(): void;
+    composerCommandInvoke(commandId: string): void;
+
+    // Conversation actions (forwarded to the currently selected chat store).
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
     modelChange(input: RigModelSelection): Promise<void>;
@@ -44,81 +124,130 @@ export interface RigWorkspaceStore {
     serviceTierChange(serviceTier?: RigServiceTier): Promise<void>;
     compact(): Promise<void>;
     rewind(messageId: string): Promise<void>;
-    sessionReset(): Promise<void>;
-    /** Runs a shell-mode command in the active session's workspace (`!cmd`). */
-    shellRun(command: string): Promise<void>;
+    conversationReset(): Promise<void>;
     /** Requests termination of one background terminal in the active session (`/stop`). */
     backgroundProcessStop(processId: number): Promise<void>;
-    /** Searches the active session's workspace for `@`-mention candidates. */
-    filesSearch(query: string, limit?: number): Promise<readonly RigFileSearchResult[]>;
     /** Reads the active session's token/cost usage snapshot for the `/usage` panel. */
     usageGet(): Promise<RigSessionUsage>;
-    /** Opens the `/usage` panel for the active session and starts polling it. */
     usagePanelOpen(): void;
-    /** Closes the `/usage` panel and stops polling. */
     usagePanelClose(): void;
-    /** Toggles the activity panel (goal + tasks + subagents) for the active session. */
     activityPanelToggle(): void;
-    /** Idempotently opens the activity panel (for `/tasks`, `/agents`, `/goal`). */
-    activityPanelShow(): void;
+    /** Opens the session settings dialog for the selected conversation. */
+    settingsOpen(): void;
+    /** Closes the session settings dialog for the selected conversation. */
+    settingsClose(): void;
     reasoningToggle(): void;
     turnCompactToggle(): void;
-    /** View-only clear of the active session's visible transcript (TUI `/clear`). */
+    /** View-only clear of the active conversation's visible entries (TUI `/clear`). */
     viewClear(): void;
 
     [Symbol.dispose](): void;
 }
 
 function noSelection(): Promise<never> {
-    return Promise.reject(new Error("No Rig session is selected."));
+    return Promise.reject(new Error("No local conversation is selected."));
 }
 
 /**
- * Owns the join between the session-list selection and the active per-session chat
- * store for one connected `RigClient`. It subscribes to the list store, and each
- * time the selected session changes it acquires (ref-counted) the matching chat
- * handle from the client and disposes the previous one — all outside React, so the
- * app layer never manages this lifetime in an effect. It re-exposes a single
- * combined snapshot that changes only when the underlying list or chat snapshot
- * changes, giving `useSyncExternalStore` a stable reference between no-op updates.
+ * Owns the join between the list selection and the active conversation for one
+ * connected `RigClient`. It subscribes to the list store, and each time the
+ * selection changes it acquires (ref-counted) the matching chat handle from the
+ * client, materializes a composer for it, and disposes the previous pair — all
+ * outside React, so the app layer never manages this lifetime in an effect.
+ *
+ * The composer is the shared composer store: its `textSubmitted`,
+ * `shellCommandSubmitted`, `commandInvoked`, and `mentionQueryUpdated` output is
+ * what drives the daemon, so no draft, mention query, or command palette state
+ * lives in a React component.
  *
  * The connection/daemon health surface is deliberately not part of this store: it
  * is owned by the host (the desktop connection loader) and read separately, so
  * this framework-free product store depends only on the injected `RigClient`.
  */
 export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
-    const sessionList: RigSessionListStore = client.sessionList();
+    const list: RigSessionListStore = client.sessionList();
 
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
 
-    // Active chat lease. `generation` invalidates an in-flight async acquisition
-    // when the selection changes again or the store stops before it resolves.
+    // Active conversation lease. `acquisitionGeneration` invalidates an
+    // in-flight acquisition when the selection changes or the store stops.
+    // `mentionGeneration` rejects both ABA query responses and responses for a
+    // composer whose conversation lease has already been released.
     let selectedId: RigSessionId | undefined;
+    let acquiringId: RigSessionId | undefined;
     let handle: RigChatHandle | undefined;
     let chatStore: RigChatStore | undefined;
     let unsubscribeChat: (() => void) | undefined;
-    let generation = 0;
+    let composer: ComposerStore | undefined;
+    let unsubscribeComposer: (() => void) | undefined;
+    let acquisitionGeneration = 0;
+    let mentionGeneration = 0;
 
-    let snapshot: RigWorkspaceSnapshot = { sessionList: sessionList.get() };
+    let conversation: Loadable<RigConversationSnapshot> = { type: "unloaded" };
+    let snapshot: RigWorkspaceSnapshot = { list: list.get(), conversation };
 
     const notify = (): void => {
         for (const listener of listeners) listener();
     };
 
-    // Rebuilds the combined snapshot only when a component snapshot reference
-    // actually changed, so `get()` stays referentially stable across no-op ticks.
+    const conversationProject = (
+        chat: RigChatSnapshot,
+        draft: ComposerSnapshot,
+    ): RigConversationSnapshot => {
+        const session = chat.session.type === "ready" ? chat.session.value : undefined;
+        return {
+            conversationId: chat.sessionId,
+            session: chat.session,
+            ...(session?.title ? { title: session.title } : {}),
+            ...(session ? { subtitle: session.displayCwd || session.cwd } : {}),
+            entries: chat.entries,
+            composer: draft,
+            running: chat.runStatus === "running",
+            ...(chat.runStartedAt !== undefined ? { runStartedAt: chat.runStartedAt } : {}),
+            ...(chat.turnElapsedMs !== undefined ? { turnElapsedMs: chat.turnElapsedMs } : {}),
+            queuedMessages: chat.queuedMessages,
+            requestSubmissions: chat.requestSubmissions,
+            tasks: chat.tasks,
+            ...(chat.goal ? { goal: chat.goal } : {}),
+            subagents: chat.subagents,
+            backgroundProcesses: chat.backgroundProcesses,
+            showReasoning: chat.showReasoning,
+            compactTurns: chat.compactTurns,
+            usagePanelOpen: chat.usagePanelOpen,
+            ...(chat.usage ? { usage: chat.usage } : {}),
+            usageLoading: chat.usageLoading,
+            ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
+            activityPanelOpen: chat.activityPanelOpen,
+            settingsOpen: chat.settingsOpen,
+            ...(chat.menus ? { menus: chat.menus } : {}),
+        };
+    };
+
+    // Rebuilds the combined snapshot only when a component snapshot actually
+    // changed, so `get()` stays referentially stable across no-op ticks.
     const recompute = (): void => {
-        const listSnap = sessionList.get();
-        const chatSnap = chatStore?.get();
-        if (snapshot.sessionList === listSnap && snapshot.chat === chatSnap) return;
-        snapshot = { sessionList: listSnap, chat: chatSnap };
+        const listSnapshot = list.get();
+        const chat = chatStore?.get();
+        const draft = composer?.getState();
+        if (chat && draft) {
+            const next = conversationProject(chat, draft);
+            if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
+                conversation = { type: "ready", value: next };
+            }
+        }
+        if (snapshot.list === listSnapshot && snapshot.conversation === conversation) return;
+        snapshot = { list: listSnapshot, conversation };
         notify();
     };
 
-    const releaseChat = (): void => {
+    const releaseConversation = (): void => {
+        mentionGeneration += 1;
+        unsubscribeComposer?.();
+        unsubscribeComposer = undefined;
+        composer = undefined;
         unsubscribeChat?.();
         unsubscribeChat = undefined;
         chatStore = undefined;
@@ -126,38 +255,164 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
         handle = undefined;
     };
 
-    const selectChat = (sessionId: RigSessionId | undefined): void => {
-        selectedId = sessionId;
-        releaseChat();
-        const current = ++generation;
-        if (!sessionId) {
-            recompute();
-            return;
+    /** Runs one composer submission and reports its outcome back to the composer. */
+    const submitting = (revision: number, run: () => Promise<void>): void => {
+        const target = composer;
+        void run().then(
+            () => target?.getState().composerInput({ type: "submissionConfirmed", revision }),
+            (error: unknown) =>
+                target?.getState().composerInput({
+                    type: "submissionFailed",
+                    revision,
+                    error: rigUserError(error),
+                }),
+        );
+    };
+
+    const commandRun = (commandId: string): void => {
+        const store = chatStore;
+        if (!store) return;
+        const swallow = (operation: Promise<unknown>): void => {
+            void operation.catch(() => undefined);
+        };
+        switch (commandId) {
+            case "new":
+                swallow(store.sessionReset());
+                return;
+            case "compact":
+                swallow(store.compact());
+                return;
+            case "abort":
+                swallow(store.runAbort());
+                return;
+            case "clear":
+                store.viewClear();
+                return;
+            case "usage":
+                store.usagePanelOpen();
+                return;
+            case "tasks":
+            case "agents":
+            case "goal":
+            case "ps":
+                store.activityPanelShow();
+                return;
+            case "fork":
+                if (selectedId) swallow(list.sessionFork(selectedId));
+                return;
         }
-        void client.chat(sessionId).then(
+    };
+
+    const composerCreate = (conversationId: RigSessionId, store: RigChatStore): ComposerStore =>
+        composerStoreCreate(conversationId, {
+            capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
+            output: (event) => {
+                switch (event.type) {
+                    case "textSubmitted":
+                        submitting(event.revision, () => store.messageSend(event.text));
+                        return;
+                    case "shellCommandSubmitted":
+                        submitting(event.revision, () => store.shellRun(event.command));
+                        return;
+                    case "commandInvoked":
+                        commandRun(event.commandId);
+                        return;
+                    case "mentionQueryUpdated": {
+                        const requestGeneration = ++mentionGeneration;
+                        const query = event.query;
+                        if (query === undefined) return;
+                        const target = composer;
+                        void store.filesSearch(query, MENTION_LIMIT).then(
+                            (files: readonly RigFileSearchResult[]) => {
+                                if (
+                                    requestGeneration !== mentionGeneration ||
+                                    target === undefined ||
+                                    composer !== target
+                                )
+                                    return;
+                                target.getState().composerInput({
+                                    type: "mentionCandidatesReconciled",
+                                    query,
+                                    candidates: files.map((file) => ({
+                                        id: file.path,
+                                        label: file.path,
+                                    })),
+                                });
+                            },
+                            () => undefined,
+                        );
+                        return;
+                    }
+                    default:
+                        return;
+                }
+            },
+        });
+
+    const acquireConversation = (conversationId: RigSessionId): void => {
+        if (disposed || !active || selectedId !== conversationId || acquiringId === conversationId)
+            return;
+        const current = ++acquisitionGeneration;
+        acquiringId = conversationId;
+        conversation = { type: "loading" };
+        recompute();
+        void client.chat(conversationId).then(
             (acquired) => {
-                if (disposed || !active || current !== generation) {
+                if (
+                    disposed ||
+                    !active ||
+                    selectedId !== conversationId ||
+                    current !== acquisitionGeneration
+                ) {
                     acquired[Symbol.dispose]();
                     return;
                 }
+                acquiringId = undefined;
                 handle = acquired;
                 chatStore = acquired.store;
+                composer = composerCreate(conversationId, acquired.store);
                 unsubscribeChat = acquired.store.subscribe(recompute);
+                unsubscribeComposer = composer.subscribe(recompute);
                 recompute();
             },
-            () => {
-                // A failed chat acquisition leaves the surface without a chat
-                // snapshot; the list remains usable and reselection can retry.
-                if (!disposed && current === generation) recompute();
+            (error: unknown) => {
+                if (
+                    disposed ||
+                    !active ||
+                    selectedId !== conversationId ||
+                    current !== acquisitionGeneration
+                )
+                    return;
+                acquiringId = undefined;
+                conversation = { type: "error", error: rigUserError(error) };
+                recompute();
             },
         );
-        recompute();
+    };
+
+    const selectConversation = (conversationId: RigSessionId | undefined): void => {
+        if (conversationId === selectedId) {
+            if (conversationId && conversation.type === "error")
+                acquireConversation(conversationId);
+            else recompute();
+            return;
+        }
+        acquisitionGeneration += 1;
+        acquiringId = undefined;
+        selectedId = conversationId;
+        releaseConversation();
+        if (!conversationId) {
+            conversation = { type: "unloaded" };
+            recompute();
+            return;
+        }
+        acquireConversation(conversationId);
     };
 
     const onListChange = (): void => {
-        const nextSelected = sessionList.get().selectedSessionId;
+        const nextSelected = list.get().selectedId as RigSessionId | undefined;
         if (nextSelected !== selectedId) {
-            selectChat(nextSelected);
+            selectConversation(nextSelected);
             return;
         }
         recompute();
@@ -165,17 +420,20 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
 
     const start = (): void => {
         active = true;
-        unsubscribeList = sessionList.subscribe(onListChange);
-        selectChat(sessionList.get().selectedSessionId);
+        unsubscribeList = list.subscribe(onListChange);
+        selectConversation(list.get().selectedId as RigSessionId | undefined);
     };
 
     const stop = (): void => {
         active = false;
-        generation += 1;
+        acquisitionGeneration += 1;
+        acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
-        releaseChat();
+        releaseConversation();
         selectedId = undefined;
+        conversation = { type: "unloaded" };
+        snapshot = { list: list.get(), conversation };
     };
 
     const withChat = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> =>
@@ -192,11 +450,33 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
             };
         },
 
-        sessionSelect: (sessionId) => sessionList.sessionSelect(sessionId),
-        sessionCreate: (input) => sessionList.sessionCreate(input),
-        sessionFork: (sessionId) => sessionList.sessionFork(sessionId),
+        conversationSelect(conversationId) {
+            const failedSelection =
+                list.get().selectedId === conversationId &&
+                selectedId === conversationId &&
+                conversation.type === "error";
+            list.sessionSelect(conversationId);
+            if (failedSelection) acquireConversation(conversationId);
+        },
+        conversationListRetry: () => {
+            void list.sessionsRefresh();
+        },
+        conversationRetry() {
+            if (selectedId && conversation.type === "error") {
+                acquireConversation(selectedId);
+                return;
+            }
+            if (conversation.type === "ready" && conversation.value.session.type === "error")
+                chatStore?.sessionRetry();
+        },
+        conversationCreate: (input) => list.sessionCreate(input),
+        conversationFork: (conversationId) => list.sessionFork(conversationId),
 
-        messageSend: (text) => withChat((store) => store.messageSend(text)),
+        composerTextUpdate: (text) => composer?.getState().textUpdate(text),
+        composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),
+        composerTextSubmit: () => composer?.getState().textSubmit(),
+        composerCommandInvoke: (commandId) => composer?.getState().commandInvoke(commandId),
+
         runAbort: () => withChat((store) => store.runAbort()),
         answerInput: (input) => withChat((store) => store.answerInput(input)),
         modelChange: (input) => withChat((store) => store.modelChange(input)),
@@ -207,16 +487,15 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
             withChat((store) => store.serviceTierChange(serviceTier)),
         compact: () => withChat((store) => store.compact()),
         rewind: (messageId) => withChat((store) => store.rewind(messageId)),
-        sessionReset: () => withChat((store) => store.sessionReset()),
-        shellRun: (command) => withChat((store) => store.shellRun(command)),
+        conversationReset: () => withChat((store) => store.sessionReset()),
         backgroundProcessStop: (processId) =>
             withChat((store) => store.backgroundProcessStop(processId)),
-        filesSearch: (query, limit) => withChat((store) => store.filesSearch(query, limit)),
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => chatStore?.usagePanelOpen(),
         usagePanelClose: () => chatStore?.usagePanelClose(),
         activityPanelToggle: () => chatStore?.activityPanelToggle(),
-        activityPanelShow: () => chatStore?.activityPanelShow(),
+        settingsOpen: () => chatStore?.settingsOpen(),
+        settingsClose: () => chatStore?.settingsClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
         turnCompactToggle: () => chatStore?.turnCompactToggle(),
         viewClear: () => chatStore?.viewClear(),
@@ -228,4 +507,14 @@ export function rigWorkspaceStoreCreate(client: RigClient): RigWorkspaceStore {
             listeners.clear();
         },
     };
+}
+
+/**
+ * Whether a freshly projected conversation is indistinguishable from the current
+ * one, so the existing object — and every React subtree bound to it — is kept.
+ */
+function conversationEqual(left: RigConversationSnapshot, right: RigConversationSnapshot): boolean {
+    const keys = Object.keys(left) as (keyof RigConversationSnapshot)[];
+    if (keys.length !== Object.keys(right).length) return false;
+    return keys.every((key) => left[key] === right[key]);
 }

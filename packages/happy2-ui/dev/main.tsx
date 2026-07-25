@@ -97,18 +97,16 @@ import { DocumentWritePermissionCardPage } from "./pages/DocumentWritePermission
 import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
-import { RigToolCallPage } from "./pages/RigToolCallPage";
-import { RigTranscriptPage } from "./pages/RigTranscriptPage";
+import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
+import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
+import { ConversationSettingsModalPage } from "./pages/ConversationSettingsModalPage";
+import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
 import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
 import { RigCommandPalettePage } from "./pages/RigCommandPalettePage";
-import { RigFileMentionPage } from "./pages/RigFileMentionPage";
 import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
 import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
 import { RigStatusBarPage } from "./pages/RigStatusBarPage";
-import { RigSessionListPanelPage } from "./pages/RigSessionListPanelPage";
-import { RigChatViewPage } from "./pages/RigChatViewPage";
-import { RigWorkspaceViewPage } from "./pages/RigWorkspaceViewPage";
 type BlueprintPage = {
     id: string;
     label: string;
@@ -184,8 +182,18 @@ const components: BlueprintPage[] = [
         number: "C-147",
         page: RigConnectionStatusPage,
     },
-    { id: "rig-tool-call", label: "Rig tool call", number: "C-148", page: RigToolCallPage },
-    { id: "rig-transcript", label: "Rig transcript", number: "C-149", page: RigTranscriptPage },
+    {
+        id: "agent-activity-row",
+        label: "Agent activity row",
+        number: "C-148",
+        page: AgentActivityRowPage,
+    },
+    {
+        id: "conversation-entry",
+        label: "Conversation entry",
+        number: "C-149",
+        page: ConversationEntryViewPage,
+    },
     {
         id: "rig-user-input-prompt",
         label: "Rig user input prompt",
@@ -205,17 +213,16 @@ const components: BlueprintPage[] = [
         page: RigCommandPalettePage,
     },
     {
-        id: "rig-session-list-panel",
-        label: "Rig session list panel",
-        number: "C-153",
-        page: RigSessionListPanelPage,
+        id: "conversation-view",
+        label: "Conversation view",
+        number: "C-154",
+        page: ConversationViewPage,
     },
-    { id: "rig-chat-view", label: "Rig chat view", number: "C-154", page: RigChatViewPage },
     {
-        id: "rig-file-mention",
-        label: "Rig file mention",
-        number: "C-155",
-        page: RigFileMentionPage,
+        id: "conversation-settings-modal",
+        label: "Conversation settings modal",
+        number: "C-159",
+        page: ConversationSettingsModalPage,
     },
     {
         id: "rig-usage-panel",
@@ -234,12 +241,6 @@ const components: BlueprintPage[] = [
         label: "Rig status bar",
         number: "C-158",
         page: RigStatusBarPage,
-    },
-    {
-        id: "rig-workspace-view",
-        label: "Rig workspace view",
-        number: "C-155",
-        page: RigWorkspaceViewPage,
     },
     { id: "app-shell", label: "App shell", number: "C-010", page: AppShellPage },
     { id: "channel-header", label: "Channel header", number: "C-011", page: ChannelHeaderPage },

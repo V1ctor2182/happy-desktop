@@ -4,7 +4,8 @@
     "private": true,
     "type": "module",
     "exports": {
-        ".": "./sources/index.ts"
+        ".": "./sources/index.ts",
+        "./vite": "./vite/routerPlugin.ts"
     },
     "scripts": {
         "build": "vite build",

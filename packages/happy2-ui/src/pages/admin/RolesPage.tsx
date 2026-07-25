@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { IdentityProjection, Permission, RolesStore, RoleSummary } from "happy2-state";
+import type { ConversationAuthor, Permission, RolesStore, RoleSummary } from "happy2-state";
 import { Badge } from "../../Badge";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
@@ -157,7 +157,7 @@ export function RolesPage(props: RolesPageProps) {
                             ),
                         },
                     }));
-                const selectedMember: IdentityProjection | undefined = snapshot.members.find(
+                const selectedMember: ConversationAuthor | undefined = snapshot.members.find(
                     (member) => member.id === snapshot.selectedUserId,
                 );
                 const detail =

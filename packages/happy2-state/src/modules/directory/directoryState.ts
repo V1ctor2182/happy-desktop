@@ -4,9 +4,9 @@ import {
     type PresenceSettingsSummary,
     type PresenceSnapshot,
 } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface DirectoryActionContext {
@@ -83,7 +83,7 @@ export function directoryStoreCreate(): DirectoryStore {
     }));
 }
 
-export interface DirectoryUserProjection extends IdentityProjection {
+export interface DirectoryUserProjection extends ConversationAuthor {
     readonly title?: string;
     readonly role: "member" | "admin";
     readonly presence: PresenceSnapshot["status"];

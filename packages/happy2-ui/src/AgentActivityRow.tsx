@@ -1,16 +1,18 @@
 import { useState, type CSSProperties } from "react";
 import type {
-    RigFileDiff,
-    RigJson,
-    RigPermissionReview,
-    RigToolEntry,
-    RigToolStatus,
+    ConversationActivity,
+    ConversationActivityReview,
+    ConversationActivityStatus,
+    ConversationFileDiff,
+    ConversationJson,
+    ConversationToolCall,
 } from "happy2-state";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { Icon } from "./Icon";
+import { renderMessageMarkdown } from "./MessageMarkdown";
 
-export type RigToolCallProps = {
-    tool: RigToolEntry;
+export type AgentActivityRowProps = {
+    activity: ConversationActivity;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
     className?: string;
@@ -70,8 +72,8 @@ function humanizeToolName(name: string): string {
 }
 
 /** Active/done verb for a tool by name + status (A2/A3). */
-function toolVerb(name: string, status: RigToolStatus): string {
-    if (status === "awaiting_approval") return "Awaiting approval";
+function toolVerb(name: string, status: ConversationActivityStatus): string {
+    if (status === "awaitingApproval") return "Awaiting approval";
     if (status === "stopped") return "Stopped";
     if (status === "failed") return "Failed";
     const active = status === "running";
@@ -84,19 +86,19 @@ function toolVerb(name: string, status: RigToolStatus): string {
 }
 
 /** Status → semantic dot tone: warning while active/awaiting, error on stop/fail. */
-function statusTone(status: RigToolStatus): "success" | "warning" | "error" {
+function statusTone(status: ConversationActivityStatus): "success" | "warning" | "error" {
     if (status === "success") return "success";
     if (status === "failed" || status === "stopped") return "error";
     return "warning";
 }
 
-function diffVerb(kind: RigFileDiff["kind"]): string {
+function diffVerb(kind: ConversationFileDiff["kind"]): string {
     if (kind === "add") return "Added";
     if (kind === "delete") return "Deleted";
     return "Edited";
 }
 
-function diffCounts(file: RigFileDiff): { added: number; deleted: number } {
+function diffCounts(file: ConversationFileDiff): { added: number; deleted: number } {
     if (file.added !== undefined || file.deleted !== undefined)
         return { added: file.added ?? 0, deleted: file.deleted ?? 0 };
     let added = 0;
@@ -110,7 +112,7 @@ function diffCounts(file: RigFileDiff): { added: number; deleted: number } {
 }
 
 /** Flattens a file's hunks into numbered DiffSnippet lines with `@@` meta rows. */
-function diffLines(file: RigFileDiff): DiffLine[] {
+function diffLines(file: ConversationFileDiff): DiffLine[] {
     const lines: DiffLine[] = [];
     file.hunks.forEach((hunk, index) => {
         if (file.hunks.length > 1 || index > 0)
@@ -147,7 +149,7 @@ function headTail(text: string, budget: number): { lines: string[]; omitted: num
     };
 }
 
-function boundedJson(value: RigJson): string | undefined {
+function boundedJson(value: ConversationJson): string | undefined {
     if (value === null) return undefined;
     if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
         return undefined;
@@ -159,39 +161,42 @@ function boundedJson(value: RigJson): string | undefined {
 function ChildRow(props: { tone?: "muted" | "error"; children: React.ReactNode }) {
     return (
         <div
-            className="happy2-rig-tool__child"
+            className="happy2-agent-activity__child"
             data-tone={props.tone ?? "muted"}
-            data-happy2-ui="rig-tool-child"
+            data-happy2-ui="agent-activity-child"
         >
-            <span aria-hidden="true" className="happy2-rig-tool__child-marker">
+            <span aria-hidden="true" className="happy2-agent-activity__child-marker">
                 └
             </span>
-            <span className="happy2-rig-tool__child-text" data-happy2-ui="rig-tool-child-text">
+            <span
+                className="happy2-agent-activity__child-text"
+                data-happy2-ui="agent-activity-child-text"
+            >
                 {props.children}
             </span>
         </div>
     );
 }
 
-function PermissionReviewRow(props: { review: RigPermissionReview }) {
+function PermissionReviewRow(props: { review: ConversationActivityReview }) {
     const { review } = props;
     return (
-        <div className="happy2-rig-tool__review" data-happy2-ui="rig-tool-review">
-            <span aria-hidden="true" className="happy2-rig-tool__child-marker">
+        <div className="happy2-agent-activity__review" data-happy2-ui="agent-activity-review">
+            <span aria-hidden="true" className="happy2-agent-activity__child-marker">
                 └
             </span>
-            <span className="happy2-rig-tool__review-body">
+            <span className="happy2-agent-activity__review-body">
                 <span
-                    className="happy2-rig-tool__review-title"
-                    data-happy2-ui="rig-tool-review-title"
+                    className="happy2-agent-activity__review-title"
+                    data-happy2-ui="agent-activity-review-title"
                 >
                     Awaiting approval · {review.action}
                 </span>
-                <span className="happy2-rig-tool__review-reason">{review.reason}</span>
+                <span className="happy2-agent-activity__review-reason">{review.reason}</span>
                 <span
-                    className="happy2-rig-tool__review-risk"
+                    className="happy2-agent-activity__review-risk"
                     data-risk={review.risk}
-                    data-happy2-ui="rig-tool-review-risk"
+                    data-happy2-ui="agent-activity-review-risk"
                 >
                     Risk: {review.risk}
                 </span>
@@ -201,16 +206,14 @@ function PermissionReviewRow(props: { review: RigPermissionReview }) {
 }
 
 /**
- * RigToolCall — presentational renderer for one `RigToolEntry`. It picks a rich
- * body by `presentation` (file diff, exec command, background-terminal
- * interaction) and otherwise falls back to a generic header + result/args block.
- * A colored status dot and verb encode running/awaiting-approval/success/failed/
- * stopped, and a pending `permissionReview` renders an inline "Awaiting approval"
- * child line. Collapse/expand of the rich body is the component's only local UI
- * state; every value comes from props so the same entry renders identically in
- * the app, blueprint, and tests.
+ * One tool invocation: a rich body chosen by `presentation` (file diff, exec
+ * command, background-terminal interaction) with a generic header + result/args
+ * fallback. A colored status dot and verb encode running/awaiting-approval/
+ * success/failed/stopped, and a pending `review` renders an inline "Awaiting
+ * approval" child line. Collapse/expand of the rich body is the only local UI
+ * state; every value comes from props.
  */
-export function RigToolCall(props: RigToolCallProps) {
+function AgentToolActivity(props: { tool: ConversationToolCall; defaultExpanded?: boolean }) {
     const { tool } = props;
     const presentation = tool.presentation;
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
@@ -291,56 +294,59 @@ export function RigToolCall(props: RigToolCallProps) {
 
     return (
         <div
-            className={["happy2-rig-tool", props.className].filter(Boolean).join(" ")}
+            className="happy2-agent-activity"
             data-status={tool.status}
             data-tone={tone}
             data-presentation={presentation?.type ?? "generic"}
             data-expanded={expanded ? "" : undefined}
-            data-happy2-ui="rig-tool-call"
-            data-testid={props["data-testid"]}
-            style={props.style}
+            data-happy2-ui="agent-activity-call"
         >
             <button
                 aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
-                className="happy2-rig-tool__header"
-                data-happy2-ui="rig-tool-header"
+                className="happy2-agent-activity__header"
+                data-happy2-ui="agent-activity-header"
                 disabled={!hasBody}
                 onClick={() => hasBody && setExpanded((open) => !open)}
                 type="button"
             >
                 <span
                     aria-hidden="true"
-                    className="happy2-rig-tool__dot"
+                    className="happy2-agent-activity__dot"
                     data-tone={tone}
-                    data-happy2-ui="rig-tool-dot"
+                    data-happy2-ui="agent-activity-dot"
                 />
-                <span className="happy2-rig-tool__verb" data-happy2-ui="rig-tool-verb">
+                <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                     {verb}
                 </span>
-                <span className="happy2-rig-tool__text" data-happy2-ui="rig-tool-text">
+                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
                     {primaryText}
                 </span>
                 {stats ? (
-                    <span className="happy2-rig-tool__stats" data-happy2-ui="rig-tool-stats">
-                        <span className="happy2-rig-tool__added">+{stats.added}</span>
-                        <span className="happy2-rig-tool__deleted">&minus;{stats.deleted}</span>
+                    <span
+                        className="happy2-agent-activity__stats"
+                        data-happy2-ui="agent-activity-stats"
+                    >
+                        <span className="happy2-agent-activity__added">+{stats.added}</span>
+                        <span className="happy2-agent-activity__deleted">
+                            &minus;{stats.deleted}
+                        </span>
                     </span>
                 ) : null}
                 {hasBody ? (
-                    <span aria-hidden="true" className="happy2-rig-tool__chevron">
+                    <span aria-hidden="true" className="happy2-agent-activity__chevron">
                         <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                     </span>
                 ) : null}
             </button>
 
-            {tool.permissionReview ? <PermissionReviewRow review={tool.permissionReview} /> : null}
+            {tool.review ? <PermissionReviewRow review={tool.review} /> : null}
 
             {genericResult !== undefined ? (
                 <ChildRow tone={tool.failed ? "error" : "muted"}>{genericResult}</ChildRow>
             ) : null}
 
             {mcpResult ? (
-                <div data-happy2-ui="rig-tool-mcp-result">
+                <div data-happy2-ui="agent-activity-mcp-result">
                     {mcpResult.rows.map((row, index) => (
                         <ChildRow key={index} tone={tool.failed ? "error" : "muted"}>
                             {row || "\u00a0"}
@@ -351,7 +357,7 @@ export function RigToolCall(props: RigToolCallProps) {
             ) : null}
 
             {expanded && hasBody ? (
-                <div className="happy2-rig-tool__body" data-happy2-ui="rig-tool-body">
+                <div className="happy2-agent-activity__body" data-happy2-ui="agent-activity-body">
                     {presentation?.type === "fileDiff"
                         ? (() => {
                               const shown = presentation.files.slice(0, MAX_DIFF_FILES);
@@ -362,7 +368,7 @@ export function RigToolCall(props: RigToolCallProps) {
                                   <>
                                       {shown.map((file, index) => (
                                           <div
-                                              className="happy2-rig-tool__diff"
+                                              className="happy2-agent-activity__diff"
                                               key={`${file.path}-${index}`}
                                           >
                                               <DiffSnippet
@@ -394,14 +400,17 @@ export function RigToolCall(props: RigToolCallProps) {
                                   execOutput.omitted > 0 ? EXEC_HEAD_TAIL : execOutput.lines.length;
                               return (
                                   <pre
-                                      className="happy2-rig-tool__output"
-                                      data-happy2-ui="rig-tool-output"
+                                      className="happy2-agent-activity__output"
+                                      data-happy2-ui="agent-activity-output"
                                   >
                                       {execOutput.lines.map((line, index) => (
-                                          <div className="happy2-rig-tool__output-line" key={index}>
+                                          <div
+                                              className="happy2-agent-activity__output-line"
+                                              key={index}
+                                          >
                                               {line || "\u00a0"}
                                               {execOutput.omitted > 0 && index === headCount - 1 ? (
-                                                  <div className="happy2-rig-tool__output-elide">
+                                                  <div className="happy2-agent-activity__output-elide">
                                                       … +{execOutput.omitted} lines
                                                   </div>
                                               ) : null}
@@ -413,7 +422,7 @@ export function RigToolCall(props: RigToolCallProps) {
                         : null}
 
                     {terminalInput ? (
-                        <div className="happy2-rig-tool__terminal">
+                        <div className="happy2-agent-activity__terminal">
                             {terminalInput.map((line, index) => (
                                 <ChildRow key={index}>{line || "\u00a0"}</ChildRow>
                             ))}
@@ -421,12 +430,178 @@ export function RigToolCall(props: RigToolCallProps) {
                     ) : null}
 
                     {argsJson ? (
-                        <pre className="happy2-rig-tool__args" data-happy2-ui="rig-tool-args">
+                        <pre
+                            className="happy2-agent-activity__args"
+                            data-happy2-ui="agent-activity-args"
+                        >
                             {argsJson}
                         </pre>
                     ) : null}
                 </div>
             ) : null}
+        </div>
+    );
+}
+
+/** Model reasoning: one compact line that expands into the full thinking text. */
+function AgentReasoningActivity(props: {
+    text: string;
+    streaming: boolean;
+    defaultExpanded?: boolean;
+}) {
+    const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
+    const summary = props.text.split("\n").find((line) => line.trim().length > 0) ?? "";
+    return (
+        <div
+            className="happy2-agent-activity"
+            data-expanded={expanded ? "" : undefined}
+            data-presentation="reasoning"
+            data-tone="warning"
+            data-happy2-ui="agent-activity-reasoning"
+        >
+            <button
+                aria-expanded={expanded ? "true" : "false"}
+                className="happy2-agent-activity__header"
+                data-happy2-ui="agent-activity-header"
+                onClick={() => setExpanded((open) => !open)}
+                type="button"
+            >
+                <span
+                    aria-hidden="true"
+                    className="happy2-agent-activity__dot"
+                    data-tone={props.streaming ? "warning" : "success"}
+                    data-happy2-ui="agent-activity-dot"
+                />
+                <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
+                    {props.streaming ? "Thinking" : "Thought"}
+                </span>
+                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                    {summary}
+                </span>
+                <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                    <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
+                </span>
+            </button>
+            {expanded ? (
+                <div
+                    className="happy2-agent-activity__body happy2-agent-activity__reasoning happy2-message__body--markdown"
+                    data-happy2-ui="agent-activity-reasoning-body"
+                >
+                    {renderMessageMarkdown(props.text)}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/** A shell-mode run: the command line, its exit state, and its captured output. */
+function AgentShellActivity(props: {
+    command: string;
+    output: string;
+    exitCode: number | null;
+    running: boolean;
+    timedOut: boolean;
+    defaultExpanded?: boolean;
+}) {
+    const [expanded, setExpanded] = useState(props.defaultExpanded ?? true);
+    const failed = !props.running && (props.timedOut || (props.exitCode ?? 0) !== 0);
+    const status = props.running
+        ? "Running"
+        : props.timedOut
+          ? "Timed out"
+          : `Exit ${props.exitCode ?? "?"}`;
+    const hasBody = props.output.trim().length > 0;
+    return (
+        <div
+            className="happy2-agent-activity"
+            data-expanded={expanded ? "" : undefined}
+            data-presentation="shell"
+            data-tone={props.running ? "warning" : failed ? "error" : "success"}
+            data-happy2-ui="agent-activity-shell"
+        >
+            <button
+                aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
+                className="happy2-agent-activity__header"
+                data-happy2-ui="agent-activity-header"
+                disabled={!hasBody}
+                onClick={() => hasBody && setExpanded((open) => !open)}
+                type="button"
+            >
+                <span
+                    aria-hidden="true"
+                    className="happy2-agent-activity__dot"
+                    data-tone={props.running ? "warning" : failed ? "error" : "success"}
+                    data-happy2-ui="agent-activity-dot"
+                />
+                <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
+                    {props.running ? "Running" : "Ran"}
+                </span>
+                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                    {props.command}
+                </span>
+                <span
+                    className="happy2-agent-activity__status"
+                    data-failed={failed ? "true" : undefined}
+                    data-happy2-ui="agent-activity-status"
+                >
+                    {status}
+                </span>
+                {hasBody ? (
+                    <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
+                    </span>
+                ) : null}
+            </button>
+            {expanded && hasBody ? (
+                <div className="happy2-agent-activity__body" data-happy2-ui="agent-activity-body">
+                    <pre
+                        className="happy2-agent-activity__output"
+                        data-happy2-ui="agent-activity-output"
+                    >
+                        {props.output}
+                    </pre>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/**
+ * AgentActivityRow — the one glanceable row for everything an agent does inside
+ * a conversation: a tool call, a reasoning block, or a shell run. Each variant
+ * shows a status dot, a verb, and its subject on a single line and expands to
+ * the detail on demand, so a long working turn stays readable without hiding
+ * what happened. Presentational only: the caller supplies the projected
+ * activity and the surface decides which rows to show at all.
+ */
+export function AgentActivityRow(props: AgentActivityRowProps) {
+    const activity = props.activity;
+    return (
+        <div
+            className={["happy2-agent-activity-row", props.className].filter(Boolean).join(" ")}
+            data-happy2-ui="agent-activity-row"
+            data-kind={activity.kind}
+            data-testid={props["data-testid"]}
+            style={props.style}
+        >
+            {activity.kind === "tool" ? (
+                <AgentToolActivity defaultExpanded={props.defaultExpanded} tool={activity.tool} />
+            ) : activity.kind === "reasoning" ? (
+                <AgentReasoningActivity
+                    defaultExpanded={props.defaultExpanded}
+                    streaming={activity.streaming}
+                    text={activity.text}
+                />
+            ) : (
+                <AgentShellActivity
+                    command={activity.command}
+                    defaultExpanded={props.defaultExpanded}
+                    exitCode={activity.exitCode}
+                    output={activity.output}
+                    running={activity.running}
+                    timedOut={activity.timedOut}
+                />
+            )}
         </div>
     );
 }

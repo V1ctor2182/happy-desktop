@@ -1,25 +1,25 @@
 import type {
     ChatSummary,
     DirectorySnapshot,
-    IdentityProjection,
+    ConversationAuthor,
     SidebarChatProjection,
     SidebarSnapshot,
 } from "happy2-state";
 import { expect, it } from "vitest";
 import { chatSidebarModelCreate } from "./chatSidebarModel";
-const human: IdentityProjection = {
+const human: ConversationAuthor = {
     id: "human-2",
     displayName: "Grace Hopper",
     username: "grace",
     kind: "human",
 };
-const agent: IdentityProjection = {
+const agent: ConversationAuthor = {
     id: "agent-2",
     displayName: "Build agent",
     username: "build-agent",
     kind: "agent",
 };
-const happy: IdentityProjection = {
+const happy: ConversationAuthor = {
     id: "happy",
     displayName: "Happy",
     username: "happy",
@@ -66,7 +66,7 @@ function chat(
         ...values,
     };
 }
-function projection(summary: ChatSummary, displayName: string, peer?: IdentityProjection) {
+function projection(summary: ChatSummary, displayName: string, peer?: ConversationAuthor) {
     return {
         id: summary.id,
         chat: summary,

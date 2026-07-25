@@ -1,18 +1,16 @@
 import { createStore } from "zustand/vanilla";
-import type { UserError } from "../types.js";
+import type { ConversationListSnapshot } from "../conversation/conversationSummary.js";
+import { rigConversationSummaryProject } from "./rigConversationProject.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
 import type { RigSessionCreateInput, RigSessionId, RigSessionSummary } from "./rigTypes.js";
 
-export interface RigSessionListSnapshot {
-    readonly status: "loading" | "ready" | "error";
-    readonly error?: UserError;
-    /** Session summaries sorted chronologically, newest-created first (chat convention). */
-    readonly sessions: readonly RigSessionSummary[];
-    readonly selectedSessionId?: RigSessionId;
-    /** Last failed create/fork/reset, surfaced without rejecting the optimistic action. */
-    readonly mutationError?: UserError;
-}
+/**
+ * The list surface of the local workspace, in the shared conversation
+ * vocabulary: a `Loadable` of ordered rows plus the current selection. Local
+ * sessions are conversations like any other; nothing here is Rig-shaped.
+ */
+export type RigSessionListSnapshot = ConversationListSnapshot;
 
 export type RigSessionListOutput =
     | { readonly type: "sessionSelected"; readonly sessionId: RigSessionId }
@@ -28,7 +26,7 @@ export interface RigSessionListStore {
      * button: it runs on hydration and after mutations to converge on server truth.
      */
     sessionsRefresh(): Promise<void>;
-    /** Selects a session locally; emits `sessionSelected`. */
+    /** Selects a conversation locally; emits `sessionSelected`. */
     sessionSelect(sessionId: RigSessionId): void;
     sessionCreate(input: RigSessionCreateInput): Promise<void>;
     sessionFork(sessionId: RigSessionId): Promise<void>;
@@ -47,78 +45,93 @@ function sortByCreatedAt(sessions: readonly RigSessionSummary[]): readonly RigSe
 }
 
 /**
- * Owns the flat, chronologically ordered session catalog (no directory grouping).
- * The constructor opens nothing; the first subscriber triggers hydration and one
- * global-event subscription, and the last unsubscribe tears both down. Global
- * events are delivery hints — their carried summaries are upserted and the list
- * re-sorted; `sessionsRefresh` reconciles the full durable list.
+ * Owns the flat, chronologically ordered local conversation catalog (no
+ * directory grouping). The constructor opens nothing; the first subscriber
+ * triggers hydration and one global-event subscription, and the last
+ * unsubscribe tears both down.
+ *
+ * Daemon global events are delivery hints only: receiving one schedules a
+ * reconcile of the durable list rather than trusting the payload it carried, so
+ * a dropped, reordered, or partial event can never leave a row that the daemon
+ * does not actually have.
  */
 export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionListStore {
     const output = deps.output ?? (() => undefined);
     const createId = deps.createId ?? defaultCreateId;
 
     const store = createStore<RigSessionListSnapshot>()(() => ({
-        status: "loading",
-        sessions: [],
+        conversations: { type: "loading" },
     }));
 
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
     let generation = 0;
+    let reconciling = false;
+    let reconcileAgain = false;
     let unsubscribeGlobal: (() => void) | undefined;
+    // The durable rows this surface last reconciled, kept so a projection can be
+    // rebuilt without refetching and so unchanged rows keep their references.
+    let sessions: readonly RigSessionSummary[] = [];
 
-    const upsert = (summary: RigSessionSummary): void => {
+    const publish = (patch?: Partial<RigSessionListSnapshot>): void => {
         const previous = store.getState();
-        const next = previous.sessions.filter((session) => session.id !== summary.id);
-        next.push(summary);
-        store.setState({
+        const projected = sessions.map(rigConversationSummaryProject);
+        const conversations =
+            previous.conversations.type === "ready"
+                ? referencesPreserve(previous.conversations.value, projected)
+                : projected;
+        const next: RigSessionListSnapshot = {
             ...previous,
-            sessions: referencesPreserve(previous.sessions, sortByCreatedAt(next)),
-        });
-    };
-
-    const applyGlobal = (event: RigGlobalEvent): void => {
-        const previous = store.getState();
-        if (event.type === "session_created" || event.type === "session_updated") {
-            upsert(event.session);
+            conversations: { type: "ready", value: conversations },
+            ...patch,
+        };
+        if (
+            previous.conversations.type === "ready" &&
+            previous.conversations.value === conversations &&
+            previous.selectedId === next.selectedId &&
+            previous.mutationError === next.mutationError
+        )
             return;
-        }
-        // session_title_changed: patch the existing summary title/recap in place.
-        const existing = previous.sessions.find((session) => session.id === event.sessionId);
-        if (!existing) return;
-        upsert({ ...existing, title: event.title, recap: event.recap, status: event.status });
+        store.setState(next);
     };
 
     const reconcile = async (): Promise<void> => {
+        if (reconciling) {
+            reconcileAgain = true;
+            return;
+        }
+        reconciling = true;
         const current = ++generation;
         try {
-            const sessions = await deps.transport.sessionsRead();
+            const read = await deps.transport.sessionsRead();
             if (disposed || current !== generation) return;
-            const previous = store.getState();
-            store.setState({
-                status: "ready",
-                error: undefined,
-                sessions: referencesPreserve(previous.sessions, sortByCreatedAt(sessions)),
-                selectedSessionId: previous.selectedSessionId,
-            });
+            sessions = sortByCreatedAt(read);
+            publish();
         } catch (error) {
             if (disposed || current !== generation) return;
             const previous = store.getState();
-            store.setState({
-                ...previous,
-                status: previous.status === "ready" ? "ready" : "error",
-                error: rigUserError(error),
-            });
+            // A failed refresh of an already loaded list keeps the rows on screen.
+            if (previous.conversations.type !== "ready")
+                store.setState({
+                    ...previous,
+                    conversations: { type: "error", error: rigUserError(error) },
+                });
+        } finally {
+            reconciling = false;
+            if (reconcileAgain && !disposed && active) {
+                reconcileAgain = false;
+                void reconcile();
+            }
         }
     };
 
     const observer: RigEventObserver<RigGlobalEvent> = {
-        event: (value) => {
-            if (!disposed && active) applyGlobal(value);
+        event: () => {
+            // Delivery hint: reconcile the durable list, never upsert the payload.
+            if (!disposed && active) void reconcile();
         },
         error: () => {
-            // Reconcile on stream error: the SSE feed is only a hint.
             if (!disposed && active) void reconcile();
         },
         end: () => undefined,
@@ -166,8 +179,8 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         sessionsRefresh: () => reconcile(),
         sessionSelect(sessionId) {
             const previous = store.getState();
-            if (previous.selectedSessionId === sessionId) return;
-            store.setState({ ...previous, selectedSessionId: sessionId });
+            if (previous.selectedId === sessionId) return;
+            store.setState({ ...previous, selectedId: sessionId });
             output({ type: "sessionSelected", sessionId });
         },
         sessionCreate: (input) =>
@@ -175,24 +188,32 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 void createId();
                 const session = await deps.transport.sessionCreate(input);
                 if (disposed) return;
-                upsert(sessionSummaryOf(session));
-                store.setState({ ...store.getState(), selectedSessionId: session.id });
+                sessions = sortByCreatedAt([
+                    ...sessions.filter((existing) => existing.id !== session.id),
+                    sessionSummaryOf(session),
+                ]);
+                publish({ selectedId: session.id });
                 output({ type: "sessionCreated", sessionId: session.id });
+                await reconcile();
             }),
         sessionFork: (sessionId) =>
             mutate(async () => {
                 const session = await deps.transport.sessionFork(sessionId);
                 if (disposed) return;
-                upsert(sessionSummaryOf(session));
-                store.setState({ ...store.getState(), selectedSessionId: session.id });
+                sessions = sortByCreatedAt([
+                    ...sessions.filter((existing) => existing.id !== session.id),
+                    sessionSummaryOf(session),
+                ]);
+                publish({ selectedId: session.id });
                 output({ type: "sessionForked", sessionId: session.id });
+                await reconcile();
             }),
         sessionReset: (sessionId) =>
             mutate(async () => {
                 const session = await deps.transport.sessionReset(sessionId);
                 if (disposed) return;
-                upsert(sessionSummaryOf(session));
                 output({ type: "sessionReset", sessionId: session.id });
+                await reconcile();
             }),
         [Symbol.dispose]() {
             if (disposed) return;

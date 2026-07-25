@@ -1,10 +1,9 @@
 import { type SendMessageInput, UserError } from "../../types.js";
+import { type ChatStore, messageItemProject } from "../chat/chatState";
 import {
-    type ChatMessageItem,
-    type ChatMessageProjection,
-    type ChatStore,
-    messageItemProject,
-} from "../chat/chatState.js";
+    type ConversationMessageEntry,
+    type ConversationMessageProjection,
+} from "../../conversation/conversationEntry.js";
 import { type ComposerStore } from "../composer/composerState.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
 import { type StateRuntime } from "../runtime/runtimeState.js";
@@ -82,7 +81,8 @@ export function messageSend(
         chatStatus?.type === "ready" && chatStatus.value.isDefaultAgentConversation
             ? "agents"
             : "people";
-    const optimistic: ChatMessageItem = {
+    const optimistic: ConversationMessageEntry = {
+        kind: "message",
         message: optimisticMessage(localId, chatId, input, defaultAudience, context.runtime.now()),
         source: "local",
         delivery: "sending",
@@ -160,7 +160,7 @@ function optimisticMessage(
     input: SendMessageInput,
     defaultAudience: "people" | "agents",
     now: number,
-): ChatMessageProjection {
+): ConversationMessageProjection {
     const createdAt = new Date(now).toISOString();
     return {
         id,

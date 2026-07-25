@@ -10,7 +10,7 @@ import {
     setWorkspaceRequestedDirectories,
     type WorkspaceRecord,
 } from "../../workspace.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 

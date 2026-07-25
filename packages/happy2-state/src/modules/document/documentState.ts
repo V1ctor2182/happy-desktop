@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { UserError, type DocumentPresenceEntry, type DocumentSummary } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 /**

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
-import type { RigUserInputRequest } from "happy2-state";
+import type { RigUserInputRequest, UserError } from "happy2-state";
+import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 
@@ -10,6 +11,8 @@ export type RigUserInputPromptProps = {
     onAnswer: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Disables the controls while a prior submission is in flight. */
     pending?: boolean;
+    /** Last failed answer submission; retry resubmits the retained selections. */
+    error?: UserError;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -112,6 +115,19 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
                     );
                 })}
             </div>
+            {props.error ? (
+                <Banner
+                    action={{
+                        label: "Retry",
+                        onClick: () => props.onAnswer(request.requestId, answers),
+                    }}
+                    data-testid="rig-user-input-error"
+                    tone="danger"
+                    title="Answer not sent"
+                >
+                    {props.error.message}
+                </Banner>
+            ) : null}
             <div className="happy2-rig-input__footer">
                 <Button
                     data-action="submit"

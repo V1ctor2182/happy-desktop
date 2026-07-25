@@ -1,14 +1,14 @@
 import { expect, it, vi } from "vitest";
-import type { RigToolEntry } from "happy2-state";
+import type { ConversationToolCall } from "happy2-state";
 import "./theme.css";
 import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/diff-snippet.css";
-import "./styles/rig-chat.css";
-import { RigToolCall } from "./RigToolCall";
+import "./styles/agent-activity-row.css";
+import { AgentActivityRow } from "./AgentActivityRow";
 import { createRenderer } from "./testing";
 
-const fileDiffTool: RigToolEntry = {
+const fileDiffTool: ConversationToolCall = {
     toolCallId: "t-diff",
     toolName: "edit",
     arguments: { path: "src/a.ts" },
@@ -39,7 +39,7 @@ const fileDiffTool: RigToolEntry = {
     },
 };
 
-const execTool: RigToolEntry = {
+const execTool: ConversationToolCall = {
     toolCallId: "t-exec",
     toolName: "bash",
     arguments: { command: "pnpm test" },
@@ -53,7 +53,7 @@ const execTool: RigToolEntry = {
     },
 };
 
-const genericTool: RigToolEntry = {
+const genericTool: ConversationToolCall = {
     toolCallId: "t-generic",
     toolName: "TaskList",
     arguments: { filter: "in_progress" },
@@ -62,13 +62,13 @@ const genericTool: RigToolEntry = {
     display: "3 tasks",
 };
 
-const awaitingTool: RigToolEntry = {
+const awaitingTool: ConversationToolCall = {
     toolCallId: "t-await",
     toolName: "write",
     arguments: null,
-    status: "awaiting_approval",
+    status: "awaitingApproval",
     failed: false,
-    permissionReview: {
+    review: {
         action: "write config.json",
         reason: "Outside the allowlist.",
         decision: "ask",
@@ -77,7 +77,7 @@ const awaitingTool: RigToolEntry = {
     },
 };
 
-const failedTool: RigToolEntry = {
+const failedTool: ConversationToolCall = {
     toolCallId: "t-failed",
     toolName: "bash",
     arguments: null,
@@ -86,7 +86,7 @@ const failedTool: RigToolEntry = {
     display: "exit 1",
 };
 
-const mcpTool: RigToolEntry = {
+const mcpTool: ConversationToolCall = {
     toolCallId: "t-mcp",
     toolName: "mcp__linear__create_issue",
     arguments: { title: "Fix the race", team: "core" },
@@ -96,7 +96,7 @@ const mcpTool: RigToolEntry = {
     display: Array.from({ length: 7 }, (_, index) => `result ${index}`).join("\n"),
 };
 
-const mcpInterruptedTool: RigToolEntry = {
+const mcpInterruptedTool: ConversationToolCall = {
     toolCallId: "t-mcp-int",
     toolName: "mcp__github__search_code",
     arguments: { query: "retry" },
@@ -110,11 +110,29 @@ it("renders each tool presentation and status with the correct dot tone", async 
     view.render(
         () => (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "600px" }}>
-                <RigToolCall data-testid="diff" defaultExpanded tool={fileDiffTool} />
-                <RigToolCall data-testid="exec" defaultExpanded tool={execTool} />
-                <RigToolCall data-testid="generic" defaultExpanded tool={genericTool} />
-                <RigToolCall data-testid="await" tool={awaitingTool} />
-                <RigToolCall data-testid="failed" tool={failedTool} />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: fileDiffTool }}
+                    data-testid="diff"
+                    defaultExpanded
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: execTool }}
+                    data-testid="exec"
+                    defaultExpanded
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: genericTool }}
+                    data-testid="generic"
+                    defaultExpanded
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: awaitingTool }}
+                    data-testid="await"
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: failedTool }}
+                    data-testid="failed"
+                />
             </div>
         ),
         { width: 660, height: 720, padding: 16 },
@@ -123,70 +141,76 @@ it("renders each tool presentation and status with the correct dot tone", async 
 
     // File diff: verb + stats + DiffSnippet body.
     expect(
-        view.$('[data-testid="diff"] [data-happy2-ui="rig-tool-verb"]').element.textContent,
+        view.$('[data-testid="diff"] [data-happy2-ui="agent-activity-verb"]').element.textContent,
     ).toBe("Edited");
     expect(
-        view.$('[data-testid="diff"] [data-happy2-ui="rig-tool-text"]').element.textContent,
+        view.$('[data-testid="diff"] [data-happy2-ui="agent-activity-text"]').element.textContent,
     ).toBe("src/a.ts");
-    expect(view.$('[data-testid="diff"] .happy2-rig-tool__added').element.textContent).toBe("+1");
+    expect(view.$('[data-testid="diff"] .happy2-agent-activity__added').element.textContent).toBe(
+        "+1",
+    );
     expect(
         view.container.querySelector('[data-testid="diff"] [data-happy2-ui="diff-snippet"]'),
     ).not.toBeNull();
     // Success dot is green.
     expect(
         view
-            .$('[data-testid="diff"] [data-happy2-ui="rig-tool-dot"]')
+            .$('[data-testid="diff"] [data-happy2-ui="agent-activity-dot"]')
             .computedStyle("background-color"),
     ).toBe("rgb(52, 199, 89)");
 
     // Exec output is head/tail truncated (14 lines > 10 budget → 10 shown + elide).
     const outputLines = view.container.querySelectorAll(
-        '[data-testid="exec"] .happy2-rig-tool__output-line',
+        '[data-testid="exec"] .happy2-agent-activity__output-line',
     );
     expect(outputLines.length).toBe(10);
     expect(
-        view.container.querySelector('[data-testid="exec"] .happy2-rig-tool__output-elide')
+        view.container.querySelector('[data-testid="exec"] .happy2-agent-activity__output-elide')
             ?.textContent,
     ).toBe("… +4 lines");
 
     // Generic tool shows a result child row + JSON args.
     expect(
-        view.$('[data-testid="generic"] [data-happy2-ui="rig-tool-child-text"]').element
+        view.$('[data-testid="generic"] [data-happy2-ui="agent-activity-child-text"]').element
             .textContent,
     ).toBe("3 tasks");
     expect(
-        view.container.querySelector('[data-testid="generic"] [data-happy2-ui="rig-tool-args"]'),
+        view.container.querySelector(
+            '[data-testid="generic"] [data-happy2-ui="agent-activity-args"]',
+        ),
     ).not.toBeNull();
 
     // Awaiting approval: warning dot (orange #ff9500) + review row.
     expect(
         view
-            .$('[data-testid="await"] [data-happy2-ui="rig-tool-dot"]')
+            .$('[data-testid="await"] [data-happy2-ui="agent-activity-dot"]')
             .computedStyle("background-color"),
     ).toBe("rgb(255, 149, 0)");
     expect(
-        view.$('[data-testid="await"] [data-happy2-ui="rig-tool-verb"]').element.textContent,
+        view.$('[data-testid="await"] [data-happy2-ui="agent-activity-verb"]').element.textContent,
     ).toBe("Awaiting approval");
     expect(
-        view.container.querySelector('[data-testid="await"] [data-happy2-ui="rig-tool-review"]'),
+        view.container.querySelector(
+            '[data-testid="await"] [data-happy2-ui="agent-activity-review"]',
+        ),
     ).not.toBeNull();
     expect(
         view
-            .$('[data-testid="await"] [data-happy2-ui="rig-tool-review-risk"]')
+            .$('[data-testid="await"] [data-happy2-ui="agent-activity-review-risk"]')
             .computedStyle("color"),
     ).toBe("rgb(255, 59, 48)");
 
     // Failed: error dot (red) + verb Failed.
     expect(
         view
-            .$('[data-testid="failed"] [data-happy2-ui="rig-tool-dot"]')
+            .$('[data-testid="failed"] [data-happy2-ui="agent-activity-dot"]')
             .computedStyle("background-color"),
     ).toBe("rgb(255, 59, 48)");
     expect(
-        view.$('[data-testid="failed"] [data-happy2-ui="rig-tool-verb"]').element.textContent,
+        view.$('[data-testid="failed"] [data-happy2-ui="agent-activity-verb"]').element.textContent,
     ).toBe("Failed");
 
-    await view.screenshot("RigToolCall.test");
+    await view.screenshot("AgentActivityRow.test");
 }, 120_000);
 
 it("renders MCP tool calls with a server·tool header, capped result rows, and interrupted state", async () => {
@@ -194,8 +218,15 @@ it("renders MCP tool calls with a server·tool header, capped result rows, and i
     view.render(
         () => (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "600px" }}>
-                <RigToolCall data-testid="mcp" defaultExpanded tool={mcpTool} />
-                <RigToolCall data-testid="mcp-int" tool={mcpInterruptedTool} />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: mcpTool }}
+                    data-testid="mcp"
+                    defaultExpanded
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: mcpInterruptedTool }}
+                    data-testid="mcp-int"
+                />
             </div>
         ),
         { width: 660, height: 520, padding: 16 },
@@ -203,13 +234,13 @@ it("renders MCP tool calls with a server·tool header, capped result rows, and i
     await view.ready();
 
     // Header is `server · tool`, derived from the mcp__server__tool name.
-    expect(view.$('[data-testid="mcp"] [data-happy2-ui="rig-tool-text"]').element.textContent).toBe(
-        "linear · create_issue",
-    );
+    expect(
+        view.$('[data-testid="mcp"] [data-happy2-ui="agent-activity-text"]').element.textContent,
+    ).toBe("linear · create_issue");
 
     // Result is capped at 5 rows with a "… 2 more" overflow note (7 lines total).
     const resultRows = view.container.querySelectorAll(
-        '[data-testid="mcp"] [data-happy2-ui="rig-tool-mcp-result"] [data-happy2-ui="rig-tool-child-text"]',
+        '[data-testid="mcp"] [data-happy2-ui="agent-activity-mcp-result"] [data-happy2-ui="agent-activity-child-text"]',
     );
     // 5 result rows + 1 overflow row.
     expect(resultRows.length).toBe(6);
@@ -219,45 +250,50 @@ it("renders MCP tool calls with a server·tool header, capped result rows, and i
 
     // Args render as the expandable invocation body.
     expect(
-        view.container.querySelector('[data-testid="mcp"] [data-happy2-ui="rig-tool-args"]'),
+        view.container.querySelector('[data-testid="mcp"] [data-happy2-ui="agent-activity-args"]'),
     ).not.toBeNull();
 
     // Interrupted MCP call collapses its result to a single "Interrupted." row.
     const interruptedRows = view.container.querySelectorAll(
-        '[data-testid="mcp-int"] [data-happy2-ui="rig-tool-mcp-result"] [data-happy2-ui="rig-tool-child-text"]',
+        '[data-testid="mcp-int"] [data-happy2-ui="agent-activity-mcp-result"] [data-happy2-ui="agent-activity-child-text"]',
     );
     expect(interruptedRows.length).toBe(1);
     expect(interruptedRows[0]?.textContent).toBe("Interrupted.");
 
-    await view.screenshot("RigToolCall.mcp.test");
+    await view.screenshot("AgentActivityRow.mcp.test");
 }, 120_000);
 
 it("expands and collapses its body without remounting the header or losing focus", async () => {
     const view = createRenderer();
-    view.render(() => <RigToolCall data-testid="tool" tool={execTool} />, {
-        width: 520,
-        height: 320,
-        padding: 16,
-    });
+    view.render(
+        () => <AgentActivityRow activity={{ kind: "tool", tool: execTool }} data-testid="tool" />,
+        {
+            width: 520,
+            height: 320,
+            padding: 16,
+        },
+    );
     await view.ready();
 
-    const header = view.$('[data-testid="tool"] [data-happy2-ui="rig-tool-header"]')
+    const header = view.$('[data-testid="tool"] [data-happy2-ui="agent-activity-header"]')
         .element as HTMLButtonElement;
     expect(header.getAttribute("aria-expanded")).toBe("false");
     expect(
-        view.container.querySelector('[data-testid="tool"] [data-happy2-ui="rig-tool-body"]'),
+        view.container.querySelector('[data-testid="tool"] [data-happy2-ui="agent-activity-body"]'),
     ).toBeNull();
 
     header.focus();
     header.click();
     await vi.waitFor(() =>
         expect(
-            view.container.querySelector('[data-testid="tool"] [data-happy2-ui="rig-tool-body"]'),
+            view.container.querySelector(
+                '[data-testid="tool"] [data-happy2-ui="agent-activity-body"]',
+            ),
         ).not.toBeNull(),
     );
 
     // The header button node is the same and keeps focus across the expansion.
-    const headerAfter = view.$('[data-testid="tool"] [data-happy2-ui="rig-tool-header"]')
+    const headerAfter = view.$('[data-testid="tool"] [data-happy2-ui="agent-activity-header"]')
         .element as HTMLButtonElement;
     expect(headerAfter, "header must not remount on expand").toBe(header);
     expect(document.activeElement).toBe(header);
@@ -266,7 +302,9 @@ it("expands and collapses its body without remounting the header or losing focus
     header.click();
     await vi.waitFor(() =>
         expect(
-            view.container.querySelector('[data-testid="tool"] [data-happy2-ui="rig-tool-body"]'),
+            view.container.querySelector(
+                '[data-testid="tool"] [data-happy2-ui="agent-activity-body"]',
+            ),
         ).toBeNull(),
     );
     expect(document.activeElement).toBe(header);

@@ -237,7 +237,7 @@ export class RigDaemonClient {
                 });
             } catch (error) {
                 if (options.signal?.aborted) return;
-                if (error instanceof RigEventStreamError && error.statusCode < 500) throw error;
+                if (error instanceof RigDaemonHttpError && error.statusCode < 500) throw error;
                 await retryDelay(options.signal);
             }
         }
@@ -256,7 +256,7 @@ export class RigDaemonClient {
                 });
             } catch (error) {
                 if (options.signal?.aborted) return;
-                if (error instanceof RigEventStreamError && error.statusCode < 500) throw error;
+                if (error instanceof RigDaemonHttpError && error.statusCode < 500) throw error;
                 await retryDelay(options.signal);
             }
         }
@@ -285,7 +285,10 @@ export class RigDaemonClient {
                         const statusCode = response.statusCode ?? 500;
                         if (statusCode >= 400) {
                             reject(
-                                new Error(text.length > 0 ? text : `Rig daemon HTTP ${statusCode}`),
+                                new RigDaemonHttpError(
+                                    statusCode,
+                                    text.length > 0 ? text : `Rig daemon HTTP ${statusCode}`,
+                                ),
                             );
                             return;
                         }
@@ -336,7 +339,12 @@ export class RigDaemonClient {
                     const statusCode = response.statusCode ?? 500;
                     if (statusCode >= 400) {
                         response.resume();
-                        settle(new RigEventStreamError(statusCode));
+                        settle(
+                            new RigDaemonHttpError(
+                                statusCode,
+                                `Rig daemon event stream returned HTTP ${statusCode}.`,
+                            ),
+                        );
                         return;
                     }
                     let buffer = "";
@@ -399,10 +407,47 @@ export async function rigDaemonTokenRead(tokenPath: string): Promise<string | un
     }
 }
 
-class RigEventStreamError extends Error {
-    constructor(readonly statusCode: number) {
-        super(`Rig daemon event stream returned HTTP ${statusCode}.`);
+/**
+ * A daemon response the client could not use, carrying the HTTP status so callers
+ * can tell a stale credential apart from a genuine daemon-side failure.
+ */
+export class RigDaemonHttpError extends Error {
+    constructor(
+        readonly statusCode: number,
+        message: string,
+    ) {
+        super(message);
+        this.name = "RigDaemonHttpError";
     }
+}
+
+/**
+ * True when the error means this client can no longer reach or authenticate to
+ * the daemon it was created for, so the host must reconnect rather than retry.
+ *
+ * A restarted daemon is the common case and shows up two ways: the socket is
+ * gone or was reset while a request was in flight, or the socket is back but the
+ * token file was regenerated, so the daemon rejects this client's cached token
+ * with 401/403. Both require a fresh connection that re-reads the token; only
+ * the first is a transport error, which is why the status codes are included.
+ */
+export function rigDaemonConnectionUnavailable(error: unknown): boolean {
+    let current: unknown = error;
+    for (let depth = 0; current && depth < 4; depth += 1) {
+        if (typeof current !== "object") return false;
+        if (current instanceof RigDaemonHttpError)
+            return current.statusCode === 401 || current.statusCode === 403;
+        const value = current as { readonly cause?: unknown; readonly code?: unknown };
+        if (
+            value.code === "ECONNREFUSED" ||
+            value.code === "ECONNRESET" ||
+            value.code === "EPIPE" ||
+            value.code === "ENOENT"
+        )
+            return true;
+        current = value.cause;
+    }
+    return false;
 }
 
 function sessionEventParse(raw: string): SessionEvent | undefined {

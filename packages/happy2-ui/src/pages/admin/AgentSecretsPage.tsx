@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AgentSecretsStore, ChatSummary, IdentityProjection } from "happy2-state";
+import type { AgentSecretsStore, ChatSummary, ConversationAuthor } from "happy2-state";
 import { AgentSecretDetail } from "../../AgentSecretDetail";
 import { AgentSecretPanel, type AgentSecretDraftVariable } from "../../AgentSecretPanel";
 import { Modal } from "../../Modal";
@@ -219,7 +219,7 @@ export function AgentSecretsPage(props: AgentSecretsPageProps) {
         </StoreSurface>
     );
 }
-function userName(user: IdentityProjection): string {
+function userName(user: ConversationAuthor): string {
     return user.displayName || `@${user.username}`;
 }
 function chatName(chat: ChatSummary): string {

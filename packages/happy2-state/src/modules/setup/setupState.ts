@@ -7,7 +7,7 @@ import {
     type SetupBaseImagesView,
 } from "../../resources.js";
 import { type UserError } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export interface SetupActionContext {

@@ -498,6 +498,16 @@
     background: var(--surface-ripple);
 }
 
+/* A surface with no profile to open renders the same identity row as inert
+   text: same geometry and type, without the affordances of a control. */
+.happy2-sidebar__profile--static {
+    cursor: default;
+}
+
+.happy2-sidebar__profile--static:hover {
+    background: transparent;
+}
+
 .happy2-sidebar__profile:focus-visible {
     outline: 2px solid var(--surface-selected);
     outline-offset: -2px;

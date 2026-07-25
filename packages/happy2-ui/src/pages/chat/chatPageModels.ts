@@ -1,9 +1,9 @@
 import type {
     AgentTurnTraceSummary,
-    ChatMessageItem,
-    ChatMessageProjection,
+    ConversationMessageEntry,
+    ConversationMessageProjection,
     DeepReadonly,
-    IdentityProjection,
+    ConversationAuthor,
 } from "happy2-state";
 import type { EmojiItem, ToneName } from "./ChatPageComponents.js";
 import type { IconName } from "../../Icon.js";
@@ -76,7 +76,7 @@ export type LiveChatMessage = ChatMessage & {
      * acknowledgement. The server message id remains in `id` for actions.
      */
     renderKey: string;
-    serverMessage?: DeepReadonly<ChatMessageProjection>;
+    serverMessage?: DeepReadonly<ConversationMessageProjection>;
     senderId?: string;
     photoFileId?: string;
     delivery?: "sending" | "sent" | "failed";
@@ -144,7 +144,7 @@ export function toneFor(id: string): ToneName {
     for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
     return tones[hash % tones.length]!;
 }
-export function identityInitials(identity: Pick<IdentityProjection, "displayName">): string {
+export function identityInitials(identity: Pick<ConversationAuthor, "displayName">): string {
     return identity.displayName
         .split(/\s+/u)
         .slice(0, 2)
@@ -179,7 +179,7 @@ function dayLabel(value: string): string {
         year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
     }).format(date);
 }
-function messageEntry(item: DeepReadonly<ChatMessageItem>): LiveChatMessage {
+function messageEntry(item: DeepReadonly<ConversationMessageEntry>): LiveChatMessage {
     const message = item.message;
     const sender = message.sender;
     const own = item.source === "local" || item.clientMutationId !== undefined;
@@ -261,7 +261,9 @@ export function turnsCollapse(entries: readonly WorkspaceEntry[]): WorkspaceEntr
     }
     return result;
 }
-export function entriesProject(items: readonly DeepReadonly<ChatMessageItem>[]): WorkspaceEntry[] {
+export function entriesProject(
+    items: readonly DeepReadonly<ConversationMessageEntry>[],
+): WorkspaceEntry[] {
     const result: WorkspaceEntry[] = [];
     let previousDay = "";
     for (const item of items) {

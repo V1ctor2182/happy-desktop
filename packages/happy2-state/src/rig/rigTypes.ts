@@ -406,68 +406,6 @@ export interface RigStreamingMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Transcript projection (the UI renders these directly)
-// ---------------------------------------------------------------------------
-
-export type RigTranscriptEntry =
-    | {
-          readonly id: string;
-          readonly kind: "user";
-          readonly text: string;
-          readonly images: readonly { readonly mediaType: string; readonly data: string }[];
-      }
-    | {
-          readonly id: string;
-          readonly kind: "agentText";
-          readonly text: string;
-          readonly streaming: boolean;
-      }
-    | {
-          readonly id: string;
-          readonly kind: "thinking";
-          readonly text: string;
-          readonly streaming: boolean;
-      }
-    | { readonly id: string; readonly kind: "tool"; readonly tool: RigToolEntry }
-    | { readonly id: string; readonly kind: "system"; readonly text: string }
-    | {
-          /**
-           * A composer shell-mode command run (`!cmd`). `running` is true between the
-           * `shell_command_started` and `shell_command_finished` events; once finished
-           * the captured `output` and `exitCode` render inline in the transcript.
-           */
-          readonly id: string;
-          readonly kind: "shell";
-          readonly command: string;
-          readonly output: string;
-          readonly exitCode: number | null;
-          readonly running: boolean;
-          readonly timedOut: boolean;
-      }
-    | {
-          readonly id: string;
-          readonly kind: "notice";
-          readonly level: "info" | "warning" | "error";
-          readonly title: string;
-          readonly text: string;
-      }
-    | {
-          /**
-           * Boundary rule closing a completed turn (the agent activity following one
-           * user message). Derived, not durable: stats are summed from the turn's
-           * tool entries; `elapsedMs` is only known for the most recently completed
-           * turn, so historical separators render as a rule with stats or bare.
-           */
-          readonly id: string;
-          readonly kind: "turnSeparator";
-          readonly elapsedMs?: number;
-          readonly toolCount: number;
-          readonly fileCount: number;
-          readonly additions: number;
-          readonly deletions: number;
-      };
-
-// ---------------------------------------------------------------------------
 // Menus (pickers derived from catalog + current session selection)
 // ---------------------------------------------------------------------------
 

@@ -18,6 +18,8 @@ export type ApprovalRequest = {
     typeLabel: string;
 };
 export type ApprovalCardProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
+    /** Keeps a pending decision visible but prevents duplicate or unauthorized decisions. */
+    decisionDisabled?: boolean;
     expanded: boolean;
     onExpandedChange: (expanded: boolean) => void;
     onResolutionChange: (resolution: ApprovalResolution) => void;
@@ -33,6 +35,7 @@ export type ApprovalCardProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
 export function ApprovalCard(props: ApprovalCardProps) {
     const [local, rest] = partitionComponentProps(props, [
         "className",
+        "decisionDisabled",
         "expanded",
         "onExpandedChange",
         "onResolutionChange",
@@ -148,6 +151,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
                     <>
                         <Button
                             data-action="approve"
+                            disabled={local.decisionDisabled}
                             icon="check"
                             onClick={() => local.onResolutionChange("approved")}
                             size="small"
@@ -156,6 +160,7 @@ export function ApprovalCard(props: ApprovalCardProps) {
                         </Button>
                         <Button
                             data-action="deny"
+                            disabled={local.decisionDisabled}
                             onClick={() => local.onResolutionChange("denied")}
                             size="small"
                             variant="secondary"

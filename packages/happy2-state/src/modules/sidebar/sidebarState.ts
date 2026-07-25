@@ -7,7 +7,7 @@ import {
     type UserError,
 } from "../../types.js";
 import { type IdentityCatalog } from "../identity/identityState.js";
-import { type IdentityProjection } from "../identity/identityState.js";
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 /** Materializes sidebar-ready names and avatars, reloading DM membership only when its epoch changes. */
@@ -33,7 +33,7 @@ export class SidebarChatsProjector {
         this.currentUserId = undefined;
     }
 
-    reconcileIdentity(identity: IdentityProjection): readonly SidebarChatProjection[] {
+    reconcileIdentity(identity: ConversationAuthor): readonly SidebarChatProjection[] {
         const changed: SidebarChatProjection[] = [];
         for (const [chatId, current] of this.cache) {
             const index = current.participants.findIndex(
@@ -282,7 +282,7 @@ export interface SidebarChatProjection {
     readonly id: string;
     readonly displayName: string;
     readonly avatarFileId?: string;
-    readonly participants: readonly IdentityProjection[];
+    readonly participants: readonly ConversationAuthor[];
 }
 
 export interface SidebarSnapshot {

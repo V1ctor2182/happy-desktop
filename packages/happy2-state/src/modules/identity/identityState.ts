@@ -1,3 +1,4 @@
+import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type UserSummary } from "../../types.js";
 import { type ChatStore } from "../chat/chatState.js";
 import { type StateRuntime } from "../runtime/runtimeState.js";
@@ -8,7 +9,7 @@ export interface IdentitiesReconcileContext {
     chatsGet(): Iterable<readonly [string, ChatStore]>;
     directoryReconcile(): void;
     agentSecretsReconcile(): void;
-    sidebarIdentityReconcile(identity: IdentityProjection): void;
+    sidebarIdentityReconcile(identity: ConversationAuthor): void;
 }
 
 /** Fetches authoritative user presentations after a users hint and replaces affected retained rows only. */
@@ -26,9 +27,9 @@ export async function identitiesReconcile(context: IdentitiesReconcileContext): 
 
 /** Canonicalizes rare identity presentation changes for structural sharing across surface rows. */
 export class IdentityCatalog {
-    private readonly identities = new Map<string, IdentityProjection>();
+    private readonly identities = new Map<string, ConversationAuthor>();
 
-    project(user: UserSummary): IdentityProjection {
+    project(user: UserSummary): ConversationAuthor {
         const existing = this.identities.get(user.id);
         const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ");
         if (
@@ -41,7 +42,7 @@ export class IdentityCatalog {
         ) {
             return existing;
         }
-        const next: IdentityProjection = {
+        const next: ConversationAuthor = {
             ...(user.agentRole ? { agentRole: user.agentRole } : {}),
             id: user.id,
             displayName,
@@ -53,21 +54,11 @@ export class IdentityCatalog {
         return next;
     }
 
-    get(userId: string): IdentityProjection | undefined {
+    get(userId: string): ConversationAuthor | undefined {
         return this.identities.get(userId);
     }
 
     clear(): void {
         this.identities.clear();
     }
-}
-
-/** Render-ready stable identity shared by every denormalized surface occurrence. */
-export interface IdentityProjection {
-    readonly agentRole?: UserSummary["agentRole"];
-    readonly id: string;
-    readonly displayName: string;
-    readonly username: string;
-    readonly kind: UserSummary["kind"];
-    readonly photoFileId?: string;
 }

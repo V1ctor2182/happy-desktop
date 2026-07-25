@@ -1,12 +1,10 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-    Avatar,
-    Box,
-    Button,
     DesktopInstanceSwitcher,
     Sidebar,
     SidebarAppsSection,
+    SidebarFooter,
     StoreSurface,
     type AdminPageSection,
     type IconName,
@@ -83,50 +81,24 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
      * Administration is absent when no section is reachable.
      */
     const sidebarFooter = (
-        <Box style={{ display: "flex", alignItems: "center", gap: "4px", width: "100%" }}>
-            <button
-                aria-label="Open profile"
-                className="happy2-sidebar__profile"
-                data-happy2-ui="sidebar-profile"
-                onClick={() => overlays.getState().overlayProfileOpen(user?.id ?? "me")}
-                type="button"
-            >
-                <Avatar
-                    aria-label={`${userName} — online`}
-                    imageUrl={user?.avatarUrl}
-                    initials={userInitials}
-                    online
-                    size="sm"
-                    tone="brand"
-                />
-                <span className="happy2-sidebar__profile-name">{userName}</span>
-            </button>
-            {adminSections.length > 0 ? (
-                <Button
-                    aria-label="Administration"
-                    icon="settings"
-                    iconOnly
-                    onClick={() =>
-                        void navigate({
-                            params: { section: adminSections[0]! },
-                            to: "/admin/$section",
-                        })
-                    }
-                    size="small"
-                    variant="ghost"
-                />
-            ) : null}
-            <Button
-                aria-label={
-                    context.appearance === "dark" ? "Use light appearance" : "Use dark appearance"
-                }
-                icon={context.appearance === "dark" ? "sun" : "moon"}
-                iconOnly
-                onClick={context.appearanceToggle}
-                size="small"
-                variant="ghost"
-            />
-        </Box>
+        <SidebarFooter
+            appearance={context.appearance}
+            imageUrl={user?.avatarUrl}
+            initials={userInitials}
+            name={userName}
+            onAppearanceToggle={context.appearanceToggle}
+            onAdminOpen={
+                adminSections.length > 0
+                    ? () =>
+                          void navigate({
+                              params: { section: adminSections[0]! },
+                              to: "/admin/$section",
+                          })
+                    : undefined
+            }
+            onProfileOpen={() => overlays.getState().overlayProfileOpen(user?.id ?? "me")}
+            online
+        />
     );
 
     // Administration lives in the footer, so the rows above the chat list are the

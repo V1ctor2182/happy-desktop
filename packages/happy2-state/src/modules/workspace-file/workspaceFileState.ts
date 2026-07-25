@@ -6,7 +6,7 @@ import {
     type WorkspaceTextFile,
     type WorkspaceTextPatch,
 } from "../../types.js";
-import { type Loadable } from "../chat/chatState.js";
+import { type Loadable } from "../../conversation/loadable.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 
 export function textPatchApply(content: string, patch: WorkspaceTextPatch): string {

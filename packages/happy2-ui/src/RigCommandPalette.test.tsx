@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import type { ComposerCommand } from "happy2-state";
 import "./theme.css";
 import "./styles/icon.css";
 import "./styles/vector-icon.css";
@@ -6,10 +7,10 @@ import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/command-palette.css";
 import "./styles/rig-chat.css";
-import { RigCommandPalette, type RigCommandId } from "./RigCommandPalette";
+import { RigCommandPalette } from "./RigCommandPalette";
 import { createRenderer } from "./testing";
 
-const commands: RigCommandId[] = [
+const commands: ComposerCommand[] = [
     "model",
     "effort",
     "permissions",
@@ -23,10 +24,10 @@ const commands: RigCommandId[] = [
     "compact",
     "abort",
     "fork",
-];
+].map((id) => ({ id, label: `/${id}` }));
 
 it("lists wired commands, filters by query, and invokes + closes on selection", async () => {
-    const invoked: RigCommandId[] = [];
+    const invoked: string[] = [];
     let closed = 0;
     const view = createRenderer();
     view.render(

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import type { LocalRigConnection } from "./localRig";
 import { localRigConnectorCreate } from "./localRig";
+import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigProxyHandle } from "./rigProxyHandle";
 
 const endpoint = "/__happy2_local_rig";
@@ -10,18 +11,51 @@ interface DevRuntime {
     readonly connection: LocalRigConnection;
 }
 
+export interface BrowserLocalRigOptions {
+    /** Opens one daemon connection; injectable so tests drive reconnection deterministically. */
+    readonly connect?: () => Promise<LocalRigConnection>;
+}
+
 /**
  * Gives the loopback-only Vite renderer a development bridge to the user's normal
  * Rig daemon. It mirrors the packaged desktop's HTTP proxy: `GET /health` forwards
  * the daemon's projected health, and the renderer's connection loader probes it
  * exactly as it probes the Electron main process's proxy in production.
+ *
+ * The connection is memoized but never permanent: it is dropped as soon as a
+ * route reports that the daemon has become unreachable or has stopped accepting
+ * this connection's token, so restarting the daemon under a running `vite` heals
+ * on the renderer's next health probe instead of serving 503 until a restart.
  */
-export function browserLocalRigPlugin(): Plugin {
+export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plugin {
+    const connect = options.connect ?? (() => localRigConnectorCreate().connect());
     let runtimeTask: Promise<DevRuntime> | undefined;
-    const runtime = () =>
-        (runtimeTask ??= localRigConnectorCreate()
-            .connect()
-            .then((connection) => ({ connection })));
+    const runtime = (): Promise<DevRuntime> => {
+        if (runtimeTask) return runtimeTask;
+        const task = connect().then((connection) => ({ connection }));
+        // A failed connect must not stay memoized, or one daemon outage at the
+        // first request keeps this bridge dead for the whole Vite session.
+        void task.catch(() => {
+            if (runtimeTask === task) runtimeTask = undefined;
+        });
+        runtimeTask = task;
+        return task;
+    };
+    // A restarted daemon regenerates its token file, so the memoized connection's
+    // cached token stops authenticating and every proxied route fails until the
+    // connection itself is rebuilt. Dropping the memo makes the next request
+    // reconnect and re-read the token, which is how the dev bridge recovers
+    // without the user reloading Vite.
+    const runtimeInvalidate = (error: unknown, expected?: Promise<DevRuntime>): void => {
+        if (!rigDaemonConnectionUnavailable(error)) return;
+        if (expected !== undefined && runtimeTask !== expected) return;
+        const stale = runtimeTask;
+        runtimeTask = undefined;
+        void stale?.then(
+            ({ connection }) => connection.close(),
+            () => undefined,
+        );
+    };
     return {
         name: "happy2-browser-local-rig",
         apply: "serve",
@@ -50,8 +84,10 @@ export function browserLocalRigPlugin(): Plugin {
                     return;
                 }
                 if (path === endpoint || path.startsWith(`${endpoint}/`)) {
+                    let pending: Promise<DevRuntime> | undefined;
                     try {
-                        const active = await runtime();
+                        pending = runtime();
+                        const active = await pending;
                         const handled = await rigProxyHandle({
                             client: active.connection.client,
                             method: request.method ?? "GET",
@@ -59,9 +95,11 @@ export function browserLocalRigPlugin(): Plugin {
                             query: url.searchParams,
                             request,
                             response,
+                            onConnectionError: (error) => runtimeInvalidate(error, pending),
                         });
                         if (!handled && !response.headersSent) next();
                     } catch (error) {
+                        runtimeInvalidate(error, pending);
                         if (!response.headersSent) json(response, 503, { error: message(error) });
                     }
                     return;
