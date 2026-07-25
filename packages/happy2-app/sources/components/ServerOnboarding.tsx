@@ -25,12 +25,9 @@ import type {
     SetupSnapshot,
     SetupStore,
 } from "happy2-state";
-import type { DesktopNavigation, DesktopOnboardingStep } from "../navigation/desktopRouteTypes";
-import { useDesktopNavigation } from "../navigation/useDesktopNavigation";
-import { onboardingStepForStatus } from "../onboarding/onboardingRoute";
+import { onboardingStepForStatus, type OnboardingStepId } from "../onboarding/onboardingRoute";
 export type ServerOnboardingProps = {
     state: HappyState;
-    navigation: DesktopNavigation;
     showWindowDragRegion?: boolean;
     /** Invoked once server setup is complete and the main application may take over. */
     onComplete: () => void;
@@ -40,7 +37,7 @@ const BUILD_POLL_MS = 2500;
 /** Re-probe cadence for sandbox provider health while the sandbox screen is open. */
 const PROVIDER_POLL_MS = 4000;
 const SERVER_STAGES: {
-    step: DesktopOnboardingStep;
+    step: OnboardingStepId;
     label: string;
 }[] = [
     { step: "sandbox-provider", label: "Sandbox" },
@@ -52,9 +49,12 @@ const SERVER_STAGES: {
 /**
  * The centered, server-driven onboarding surface shown after the bootstrap
  * profile exists and before the main application. It owns one subscription to the
- * durable setup store, reflects the authoritative next step into the
- * `/onboarding/<step>` URL (so reload and manual navigation both resume the exact
- * durable step), and blocks the app until server setup completes.
+ * durable setup store, renders the authoritative next step, and blocks the app
+ * until server setup completes.
+ *
+ * The step is deliberately not in the URL. It is re-derived from durable server
+ * status on every mount, so a reload resumes the correct step regardless of the
+ * address, and a hand-entered later step could only contradict the server.
  */
 export function ServerOnboarding(props: ServerOnboardingProps) {
     const setup = props.state.setup();
@@ -64,7 +64,6 @@ export function ServerOnboarding(props: ServerOnboardingProps) {
             <StoreSurface store={setup}>
                 {(snapshot) => (
                     <ServerOnboardingBody
-                        navigation={props.navigation}
                         onComplete={props.onComplete}
                         snapshot={snapshot}
                         state={props.state}
@@ -76,14 +75,12 @@ export function ServerOnboarding(props: ServerOnboardingProps) {
     );
 }
 function ServerOnboardingBody(props: {
-    navigation: DesktopNavigation;
     onComplete: () => void;
     snapshot: SetupSnapshot;
     state: HappyState;
     store: SetupStore;
 }) {
-    const { navigation, onComplete, snapshot, state } = props;
-    const route = useDesktopNavigation(navigation);
+    const { onComplete, snapshot, state } = props;
     const status = snapshot.status;
     const defaultAgentFormId = `${useId()}-default-agent`;
     // The agent draft belongs to this stable screen owner so the body form and
@@ -100,36 +97,14 @@ function ServerOnboardingBody(props: {
         },
     );
     const resolution = status.type === "ready" ? onboardingStepForStatus(status.value) : undefined;
-    const canonicalStep: DesktopOnboardingStep | undefined =
+    const canonicalStep: OnboardingStepId | undefined =
         resolution?.kind === "step" ? resolution.step : undefined;
-    const urlStep: DesktopOnboardingStep | undefined =
-        route.primary.kind === "onboarding" ? route.primary.step : undefined;
-    // Hand off to the main application the moment server setup is durably
-    // complete, moving the URL off the onboarding path so the workspace opens on
-    // a real destination instead of a stale setup route.
+    // Hand off to the main application the moment server setup is durably complete.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the handoff latch is an imperative transition out of this surface, not rendered output
     useLayoutEffect(() => {
         if (resolution?.kind !== "app") return;
-        if (urlStep !== undefined)
-            navigation.navigate(
-                { ...route, primary: { kind: "home" }, panel: undefined, overlay: undefined },
-                { replace: true },
-            );
         onComplete();
-    }, [resolution?.kind, urlStep, route, navigation, onComplete]);
-    // Reflect the durable step into the URL. A manually entered later route or a
-    // stale reload URL is replaced with the first incomplete prerequisite.
-    useLayoutEffect(() => {
-        if (!canonicalStep || urlStep === canonicalStep) return;
-        navigation.navigate(
-            {
-                ...route,
-                primary: { kind: "onboarding", step: canonicalStep },
-                panel: undefined,
-                overlay: undefined,
-            },
-            { replace: true },
-        );
-    }, [canonicalStep, urlStep, route, navigation]);
+    }, [resolution?.kind, onComplete]);
     // Load the data each step needs on entry, once, without a manual refresh.
     useLayoutEffect(() => {
         if (canonicalStep === "sandbox-provider" && snapshot.providers.type === "unloaded")
@@ -345,7 +320,7 @@ function Switchboard(props: {
     ) => void;
     snapshot: SetupSnapshot;
     state: HappyState;
-    step: DesktopOnboardingStep | undefined;
+    step: OnboardingStepId | undefined;
     store: SetupStore;
 }): ReactNode {
     return (

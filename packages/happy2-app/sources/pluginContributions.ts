@@ -1,4 +1,6 @@
 import type {
+    AppOverlayPresentation,
+    OverlaysStore,
     PluginActionState,
     PluginAppOpenPresentation,
     PluginAppSummary,
@@ -14,11 +16,6 @@ import type {
  */
 export type PluginNavigationSurface = ReturnType<PluginNavigationStore["getState"]>;
 import type { PluginContributionActionState, PluginContributionMenuState } from "happy2-ui";
-import type {
-    DesktopAppOverlayPresentation,
-    DesktopNavigation,
-    DesktopRoute,
-} from "./navigation/desktopRouteTypes";
 
 /*
  * The plugin navigation/chat contribution stores expose their transient state as
@@ -69,9 +66,7 @@ export function pluginPresentationUiState(state: PluginPresentationState | undef
     return { busy: false, error: state.error.message };
 }
 
-function overlayPresentation(
-    presentation: PluginAppOpenPresentation,
-): DesktopAppOverlayPresentation {
+function overlayPresentation(presentation: PluginAppOpenPresentation): AppOverlayPresentation {
     return presentation === "fullscreen" ? "fullscreen" : "modal";
 }
 
@@ -102,26 +97,24 @@ export function pluginAppOpenTargetResolve(
 
 /**
  * Routes an `openApp` invocation result to the requested existing instance in its
- * presentation: `primary` swaps the workspace app page, `modal`/`fullscreen` open
- * the durable app overlay. There is no transient second app-session model.
+ * presentation: `primary` navigates to the workspace app page, `modal`/`fullscreen`
+ * open the durable app overlay. There is no transient second app-session model.
+ *
+ * The two destinations are different in kind — one is an addressable screen, the
+ * other a floating layer — so the caller supplies a navigator for the first and an
+ * overlays store for the second.
  */
 export function pluginOpenAppNavigate(
-    navigation: DesktopNavigation,
-    route: DesktopRoute,
+    target: {
+        onAppOpen: (instanceId: string) => void;
+        overlays: OverlaysStore;
+    },
     instanceId: string,
     presentation: PluginAppOpenPresentation,
 ): void {
     if (presentation === "primary") {
-        navigation.navigate({
-            ...route,
-            primary: { kind: "apps", appId: instanceId },
-            panel: undefined,
-            overlay: undefined,
-        });
+        target.onAppOpen(instanceId);
         return;
     }
-    navigation.navigate({
-        ...route,
-        overlay: { kind: "app", instanceId, presentation: overlayPresentation(presentation) },
-    });
+    target.overlays.getState().overlayAppOpen(instanceId, overlayPresentation(presentation));
 }

@@ -4,7 +4,21 @@ import type {
     RegistrationAvailability,
     ServerSetupStep,
 } from "happy2-state";
-import type { DesktopOnboardingStep } from "../navigation/desktopRouteTypes";
+/**
+ * The centered onboarding screens, in the order setup reaches them. This is the
+ * app's own step vocabulary and is deliberately not a URL vocabulary: the step is
+ * always derived from durable server status by the functions below.
+ */
+export type OnboardingStepId =
+    | "bootstrap-account"
+    | "sign-in"
+    | "profile"
+    | "sandbox-provider"
+    | "base-image"
+    | "build-progress"
+    | "default-agent"
+    | "completion"
+    | "waiting";
 
 /**
  * The canonical onboarding step for the pre-authentication phase. It is chosen
@@ -22,14 +36,14 @@ import type { DesktopOnboardingStep } from "../navigation/desktopRouteTypes";
 export function preAuthOnboardingStep(
     phase: PublicServerSetupPhase,
     registration: RegistrationAvailability,
-): Extract<DesktopOnboardingStep, "bootstrap-account" | "sign-in"> {
+): Extract<OnboardingStepId, "bootstrap-account" | "sign-in"> {
     return phase === "bootstrap_required" && registration !== "closed"
         ? "bootstrap-account"
         : "sign-in";
 }
 
 export type OnboardingResolution =
-    | { readonly kind: "step"; readonly step: DesktopOnboardingStep }
+    | { readonly kind: "step"; readonly step: OnboardingStepId }
     | { readonly kind: "app" };
 
 /**
@@ -59,7 +73,7 @@ export function onboardingStepForStatus(status: CombinedOnboardingStatus): Onboa
     }
 }
 
-function serverStep(step: ServerSetupStep): DesktopOnboardingStep {
+function serverStep(step: ServerSetupStep): OnboardingStepId {
     switch (step) {
         case "bootstrap_administrator":
             return "profile";

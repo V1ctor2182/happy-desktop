@@ -1,24 +1,24 @@
 import { useLayoutEffect, useRef } from "react";
-import type { PluginActionState } from "happy2-state";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
+import type { OverlaysStore, PluginActionState } from "happy2-state";
 import { pluginOpenAppNavigate } from "../pluginContributions";
 
 export interface PluginOpenAppWatcherProps {
-    navigation: DesktopNavigation;
-    route: DesktopRoute;
     /** The transient action states of one contribution surface (nav or chat). */
     actionStates: ReadonlyMap<string, PluginActionState>;
+    onAppOpen: (instanceId: string) => void;
+    overlays: OverlaysStore;
 }
 
 /**
  * Routes `openApp` invocation results to the requested existing instance. A
- * contribution invocation that succeeds may carry `openApp`; this watcher opens
- * it exactly once (tracked by action key + generation) in its requested
- * presentation. Navigation from a store change is an imperative side effect, so
- * it runs in a layout effect rather than during render. It renders nothing.
+ * contribution invocation that succeeds may carry `openApp`; this watcher opens it
+ * exactly once — tracked by action key and generation, so a later invocation of the
+ * same action opens again while a re-render does not — in its requested
+ * presentation. It renders nothing.
  */
 export function PluginOpenAppWatcher(props: PluginOpenAppWatcherProps) {
     const handled = useRef<Set<string>>(new Set());
+    // eslint-disable-next-line happy2-react/no-layout-effect -- opening a screen or overlay in response to a store transition is an imperative side effect, not rendered output
     useLayoutEffect(() => {
         for (const [key, state] of props.actionStates) {
             if (state.type !== "succeeded") continue;
@@ -28,8 +28,7 @@ export function PluginOpenAppWatcher(props: PluginOpenAppWatcherProps) {
             if (handled.current.has(token)) continue;
             handled.current.add(token);
             pluginOpenAppNavigate(
-                props.navigation,
-                props.route,
+                { onAppOpen: props.onAppOpen, overlays: props.overlays },
                 openApp.instanceId,
                 openApp.presentation,
             );

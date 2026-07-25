@@ -87,6 +87,14 @@ export type {
     AgentModelsStore,
 } from "./modules/agent-models/agentModelsState.js";
 export type { AdminSection, AdminSnapshot, AdminStore } from "./modules/admin/adminState.js";
+export {
+    overlaysStoreCreate,
+    type AppOverlayPresentation,
+    type InspectorSnapshot,
+    type OverlaySnapshot,
+    type OverlaysSnapshot,
+    type OverlaysStore,
+} from "./modules/overlays/overlaysState.js";
 export type {
     AgentImagesSnapshot,
     AgentImagesStore,

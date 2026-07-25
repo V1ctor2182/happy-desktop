@@ -1,12 +1,10 @@
-import { RouterProvider } from "@tanstack/react-router";
-import { useLayoutEffect, useReducer, type ReactNode } from "react";
+import { useLayoutEffect, useReducer } from "react";
 import { happyStateCreate } from "happy2-state";
 import { AuthGate, type AuthCredentialStore, type AuthSession } from "./components/AuthGate";
 import { DesktopApp } from "./components/DesktopApp";
 import { DevTokenGate } from "./components/DevTokenGate";
 import { OnboardingBoundary } from "./components/OnboardingBoundary";
-import { desktopNavigationCreate } from "./navigation/desktopNavigationCreate";
-import type { DesktopNavigation } from "./navigation/desktopRouteTypes";
+import { appRouterCreate, type AppRouter } from "./navigation/appRouter";
 import type {
     DesktopInstanceStatus,
     DesktopInstanceTarget,
@@ -24,7 +22,8 @@ export interface AppDesktopRuntime {
     update?: DesktopInstanceUpdate;
 }
 export interface AppProps {
-    navigation?: DesktopNavigation;
+    /** Supplied by tests to drive the app over a deterministic history. */
+    router?: AppRouter;
     platform?: "desktop" | "web";
     serverUrl?: string;
     /**
@@ -48,78 +47,77 @@ export interface AppProps {
     /** Native runtime identity rendered consistently in every sidebar variant. */
     desktopRuntime?: AppDesktopRuntime;
 }
-/** Owns host authentication plus the process-local state and navigation boundaries. */
+
+/**
+ * Owns host authentication plus the process-local state and router boundaries.
+ *
+ * Authentication and durable server setup are resolved here, above the route tree,
+ * because until they succeed there is no product state for a route to read. Only
+ * once a session exists does `DesktopApp` mount the router.
+ */
 export function App(props: AppProps) {
     const usesServer = !!props.serverUrl;
     const [resources] = useReducer(
         (value: {
             state?: ReturnType<typeof happyStateCreate>;
-            navigation: DesktopNavigation;
-            ownsNavigation: boolean;
+            router: AppRouter;
+            ownsRouter: boolean;
         }) => value,
         undefined,
         () => ({
             state: usesServer ? undefined : happyStateCreate(),
-            navigation: props.navigation ?? desktopNavigationCreate(),
-            ownsNavigation: !props.navigation,
+            router: props.router ?? appRouterCreate(),
+            ownsRouter: !props.router,
         }),
     );
-    const navigation = resources.navigation;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- disposes the process-local state and router history this component created
     useLayoutEffect(() => {
-        const { state, navigation, ownsNavigation } = resources;
+        const { state, router, ownsRouter } = resources;
         return () => {
             state?.[Symbol.dispose]();
-            if (ownsNavigation) navigation[Symbol.dispose]();
+            if (ownsRouter) router.history.destroy();
         };
     }, [resources]);
     const desktop = props.platform === "desktop";
     const renderWorkspace = (session: AuthSession) => (
         <DesktopApp
-            navigation={navigation}
+            desktopRuntime={props.desktopRuntime}
             platform={props.platform}
+            router={resources.router}
             session={session}
             state={session.state}
-            desktopRuntime={props.desktopRuntime}
         />
     );
-    let content: ReactNode;
-    if (props.cookieAuth && props.requireDevelopmentToken) {
+    if (props.cookieAuth && props.requireDevelopmentToken)
         // Cookie-authenticated web mode: the user types a development token, it is
         // validated once through a bearer `/v0/me`, and every later request rides
         // the HttpOnly cookie. No header sign-in or server-onboarding boundary.
-        content = (
+        return (
             <DevTokenGate serverUrl={props.serverUrl ?? ""} showWindowDragRegion={desktop}>
                 {renderWorkspace}
             </DevTokenGate>
         );
-    } else if (props.serverUrl) {
-        content = (
+    if (props.serverUrl)
+        return (
             <AuthGate
                 cookieAuth={props.cookieAuth}
                 credentialStore={props.credentialStore}
-                navigation={navigation}
                 serverUrl={props.serverUrl}
                 showWindowDragRegion={desktop}
             >
                 {(session: AuthSession) => (
-                    <OnboardingBoundary
-                        navigation={navigation}
-                        session={session}
-                        showWindowDragRegion={desktop}
-                    >
+                    <OnboardingBoundary session={session} showWindowDragRegion={desktop}>
                         {renderWorkspace(session)}
                     </OnboardingBoundary>
                 )}
             </AuthGate>
         );
-    } else {
-        content = (
-            <DesktopApp
-                navigation={navigation}
-                platform={props.platform}
-                state={resources.state!}
-            />
-        );
-    }
-    return <RouterProvider context={{ content }} router={navigation.router} />;
+    return (
+        <DesktopApp
+            desktopRuntime={props.desktopRuntime}
+            platform={props.platform}
+            router={resources.router}
+            state={resources.state!}
+        />
+    );
 }

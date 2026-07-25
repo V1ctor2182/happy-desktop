@@ -1,9 +1,7 @@
 import { useReducer, type ReactNode } from "react";
 import type { AuthSession } from "./AuthGate";
 import { ServerOnboarding } from "./ServerOnboarding";
-import type { DesktopNavigation } from "../navigation/desktopRouteTypes";
 export type OnboardingBoundaryProps = {
-    navigation: DesktopNavigation;
     session: AuthSession;
     showWindowDragRegion?: boolean;
     children: ReactNode;
@@ -21,7 +19,6 @@ export function OnboardingBoundary(props: OnboardingBoundaryProps) {
         props.children
     ) : (
         <ServerOnboarding
-            navigation={props.navigation}
             onComplete={completeSet}
             showWindowDragRegion={props.showWindowDragRegion}
             state={props.session.state}

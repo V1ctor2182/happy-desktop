@@ -1,4 +1,5 @@
-import { useLayoutEffect, useReducer, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useReducer, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
     ChatPage,
     StoreSurface,
@@ -22,8 +23,8 @@ import type {
     WorkspaceFileHandle,
     WorkspaceHandle,
 } from "happy2-state";
+import type { InspectorSnapshot, OverlaysStore } from "happy2-state";
 import type { AuthSession } from "../components/AuthGate";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
 import { usePluginAssetMasks } from "../pluginAssets";
 import {
     chatMenuContributionNodes,
@@ -38,8 +39,12 @@ export type ChatViewProps = {
     platform?: "desktop" | "web";
     session?: AuthSession;
     state: HappyState;
-    route: DesktopRoute;
-    navigation: DesktopNavigation;
+    /** The conversation addressed by the URL, absent when none is selected. */
+    chatId?: string;
+    conversationKind: "chat" | "channel";
+    /** The transient inspector and overlay layers for this conversation. */
+    overlays: OverlaysStore;
+    onChatSelect: (chatId: string | undefined, kind: "chat" | "channel", replace?: boolean) => void;
     createRequest?: {
         kind: "agent" | "channel";
         nonce: number;
@@ -90,6 +95,7 @@ function chatScrollCache(state: HappyState): Map<string, MessageListScrollPositi
 /** Owns route-keyed HappyState leases while the reusable ChatPage remains props-only. */
 export function ChatView(props: ChatViewProps) {
     const state = props.state;
+    const navigate = useNavigate();
     const masks = usePluginAssetMasks(state);
     const [resources, resourcesReplace] = useReducer(
         (_current: ChatResources, next: ChatResources) => next,
@@ -97,24 +103,29 @@ export function ChatView(props: ChatViewProps) {
     );
     const resourcesRef = useRef<ChatResources>({});
     const chatScrollPositions = chatScrollCache(state);
-    const conversation =
-        props.route.primary.kind === "conversation" ? props.route.primary : undefined;
-    const workspaceFileRoute =
-        props.route.overlay?.kind === "workspace-file" ? props.route.overlay : undefined;
-    const documentRoute =
-        props.route.overlay?.kind === "document" ? props.route.overlay : undefined;
-    const nextChatId = conversation?.chatId;
-    const nextConversationKind = conversation?.conversationKind;
-    const nextTraceMessageId =
-        props.route.panel?.kind === "trace" ? props.route.panel.messageId : undefined;
+    const overlays = props.overlays;
+    // One coarse subscription to the transient layers; the inspector selection and
+    // the open overlay both feed the leases and the page props below.
+    const layers = useSyncExternalStore(
+        overlays.subscribe,
+        overlays.getState,
+        overlays.getInitialState,
+    );
+    const inspector = layers.inspector;
+    const workspaceFileOverlay =
+        layers.overlay.type === "workspaceFile" ? layers.overlay : undefined;
+    const documentOverlay = layers.overlay.type === "document" ? layers.overlay : undefined;
+    const nextChatId = props.chatId;
+    const nextConversationKind = props.chatId ? props.conversationKind : undefined;
+    const nextTraceMessageId = inspector.type === "trace" ? inspector.messageId : undefined;
     const nextWorkspaceChatId =
-        props.route.panel?.kind === "workspace" || workspaceFileRoute ? nextChatId : undefined;
+        inspector.type === "workspace" || workspaceFileOverlay ? nextChatId : undefined;
     const nextWorkspaceFileKey =
-        workspaceFileRoute?.chatId && workspaceFileRoute.path
-            ? `${workspaceFileRoute.chatId}\u0000${workspaceFileRoute.path}`
+        workspaceFileOverlay?.chatId && workspaceFileOverlay.path
+            ? `${workspaceFileOverlay.chatId}\u0000${workspaceFileOverlay.path}`
             : undefined;
-    const nextDocumentListChatId = props.route.panel?.kind === "documents" ? nextChatId : undefined;
-    const nextDocumentId = documentRoute?.documentId;
+    const nextDocumentListChatId = inspector.type === "documents" ? nextChatId : undefined;
+    const nextDocumentId = documentOverlay?.documentId;
     const resourcesCommit = (next: ChatResources) => {
         resourcesRef.current = next;
         resourcesReplace(next);
@@ -135,6 +146,9 @@ export function ChatView(props: ChatViewProps) {
             changed = true;
         };
         if (next.chatId !== nextChatId || next.conversationKind !== nextConversationKind) {
+            // The inspector and any chat-scoped overlay described the conversation
+            // being left, so they retire with it rather than describing the new one.
+            overlays.getState().chatContextUpdate(nextChatId);
             next.trace?.[Symbol.dispose]();
             next.workspaceFile?.[Symbol.dispose]();
             next.workspace?.[Symbol.dispose]();
@@ -196,10 +210,10 @@ export function ChatView(props: ChatViewProps) {
             replace({
                 workspaceFileKey: nextWorkspaceFileKey,
                 workspaceFile:
-                    workspaceFileRoute && nextWorkspaceFileKey
+                    workspaceFileOverlay && nextWorkspaceFileKey
                         ? state.workspaceFileOpen(
-                              workspaceFileRoute.chatId,
-                              workspaceFileRoute.path,
+                              workspaceFileOverlay.chatId,
+                              workspaceFileOverlay.path,
                           )
                         : undefined,
             });
@@ -222,13 +236,14 @@ export function ChatView(props: ChatViewProps) {
         }
         if (changed) resourcesCommit(next);
     }, [
+        overlays,
         state,
         nextChatId,
         nextConversationKind,
         nextTraceMessageId,
         nextWorkspaceChatId,
         nextWorkspaceFileKey,
-        workspaceFileRoute,
+        workspaceFileOverlay,
         nextDocumentListChatId,
         nextDocumentId,
     ]);
@@ -265,47 +280,24 @@ export function ChatView(props: ChatViewProps) {
             document.removeEventListener("visibilitychange", visibilityChange);
         };
     }, [state]);
-    function panelOpen(panel: ChatPagePanel) {
-        props.navigation.navigate({ ...props.route, panel, overlay: undefined });
-    }
     const actions: ChatPageActions = {
         adminOpen() {
-            props.navigation.navigate({
-                ...props.route,
-                primary: { kind: "admin", section: props.adminStartSection },
-                panel: undefined,
-                overlay: undefined,
-            });
+            void navigate({ params: { section: props.adminStartSection }, to: "/admin/$section" });
         },
         chatSelect(nextChatId, kind, replace) {
-            props.navigation.navigate(
-                {
-                    ...props.route,
-                    primary: {
-                        kind: "conversation",
-                        conversationKind: kind,
-                        ...(nextChatId ? { chatId: nextChatId } : {}),
-                    },
-                    panel: undefined,
-                    overlay: undefined,
-                },
-                { replace },
-            );
+            props.onChatSelect(nextChatId, kind, replace);
         },
-        infoOpen: () => panelOpen({ kind: "info" }),
-        profileOpen: (userId) => panelOpen({ kind: "profile", userId }),
-        panelClose: () => props.navigation.close("panel"),
-        traceOpen: (messageId) => panelOpen({ kind: "trace", messageId }),
-        traceClose: () => props.navigation.close("panel"),
-        workspaceOpen: () => panelOpen({ kind: "workspace" }),
-        workspaceClose: () => props.navigation.close("panel"),
+        infoOpen: () => overlays.getState().inspectorInfoShow(),
+        profileOpen: (userId) => overlays.getState().inspectorProfileShow(userId),
+        panelClose: () => overlays.getState().inspectorClose(),
+        traceOpen: (messageId) => overlays.getState().inspectorTraceShow(messageId),
+        traceClose: () => overlays.getState().inspectorClose(),
+        workspaceOpen: () => overlays.getState().inspectorWorkspaceShow(),
+        workspaceClose: () => overlays.getState().inspectorClose(),
         workspaceFileOpen(nextChatId, path) {
-            const current = workspaceFileRoute;
+            const current = workspaceFileOverlay;
             if (current?.chatId === nextChatId && current.path === path) return;
-            props.navigation.navigate({
-                ...props.route,
-                overlay: { kind: "workspace-file", chatId: nextChatId, path },
-            });
+            overlays.getState().overlayWorkspaceFileOpen(nextChatId, path);
         },
         workspaceFileReload(nextChatId, path) {
             const current = resourcesRef.current;
@@ -316,22 +308,16 @@ export function ChatView(props: ChatViewProps) {
                 workspaceFile: state.workspaceFileOpen(nextChatId, path),
             });
         },
-        workspaceFileClose: () => props.navigation.close("overlay"),
-        documentsOpen: () => panelOpen({ kind: "documents" }),
-        documentsClose: () => props.navigation.close("panel"),
+        workspaceFileClose: () => overlays.getState().overlayClose(),
+        documentsOpen: () => overlays.getState().inspectorDocumentsShow(),
+        documentsClose: () => overlays.getState().inspectorClose(),
         documentOpen(selectedChatId, documentId) {
-            props.navigation.navigate({
-                ...props.route,
-                overlay: { kind: "document", chatId: selectedChatId, documentId },
-            });
+            overlays.getState().overlayDocumentOpen(selectedChatId, documentId);
         },
-        documentClose: () => props.navigation.close("overlay"),
+        documentClose: () => overlays.getState().overlayClose(),
         async documentCreate(selectedChatId) {
             const document = await state.documentCreate(selectedChatId, { title: "" });
-            props.navigation.navigate({
-                ...props.route,
-                overlay: { kind: "document", chatId: selectedChatId, documentId: document.id },
-            });
+            overlays.getState().overlayDocumentOpen(selectedChatId, document.id);
         },
         documentRename: (documentId, title) => state.documentRename(documentId, title),
         documentAttach: (documentId, chatId) => state.documentAttach(documentId, chatId),
@@ -392,13 +378,15 @@ export function ChatView(props: ChatViewProps) {
     };
     const pageNavigation = (): ChatPageNavigation => {
         const renderedChatId = resources.chatId;
-        const file = workspaceFileRoute;
+        const file = workspaceFileOverlay;
         return {
             chatId: renderedChatId,
-            panel: props.route.panel,
+            panel: panelProject(inspector),
             workspaceFilePath: file?.chatId === renderedChatId ? file?.path : undefined,
             documentId:
-                documentRoute?.chatId === renderedChatId ? documentRoute?.documentId : undefined,
+                documentOverlay?.chatId === renderedChatId
+                    ? documentOverlay?.documentId
+                    : undefined,
         };
     };
     const renderPage = (contributions: {
@@ -472,4 +460,27 @@ export function ChatView(props: ChatViewProps) {
             }}
         </StoreSurface>
     );
+}
+
+/**
+ * Projects the inspector selection into `ChatPage`'s panel contract. The store and
+ * the visual component name these layers differently on purpose: the store models
+ * a closed inspector explicitly, while the component treats an absent panel as
+ * closed.
+ */
+function panelProject(inspector: InspectorSnapshot): ChatPagePanel | undefined {
+    switch (inspector.type) {
+        case "closed":
+            return undefined;
+        case "info":
+            return { kind: "info" };
+        case "profile":
+            return { kind: "profile", userId: inspector.userId };
+        case "trace":
+            return { kind: "trace", messageId: inspector.messageId };
+        case "workspace":
+            return { kind: "workspace" };
+        case "documents":
+            return { kind: "documents" };
+    }
 }

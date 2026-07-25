@@ -27,7 +27,6 @@ import {
 import { createAuthenticatedTransport } from "../stateTransport";
 import { terminalDriverCreate } from "../terminalDriver";
 import { portShareAccessCreate } from "../portShareAccess";
-import type { DesktopNavigation, DesktopOnboardingStep } from "../navigation/desktopRouteTypes";
 import { preAuthOnboardingStep } from "../onboarding/onboardingRoute";
 export type AuthSession = {
     state: HappyState;
@@ -52,7 +51,6 @@ type AuthGateProps = {
     children: (session: AuthSession) => ReactNode;
     showWindowDragRegion?: boolean;
     /** When provided, the pre-application onboarding step is reflected into the URL. */
-    navigation?: DesktopNavigation;
     /**
      * Cookie deployments (the web gateway) authenticate every request through a
      * same-origin HttpOnly cookie the gateway issues on the first successful bearer
@@ -113,8 +111,6 @@ export function AuthGate(props: AuthGateProps) {
     const {
         mode,
         methods,
-        phase,
-        registration,
         user,
         state,
         isRegistering,
@@ -255,36 +251,6 @@ export function AuthGate(props: AuthGateProps) {
         },
         [],
     );
-    /* The current pre-application onboarding step, or undefined once the app can
-     * take over. Bootstrap vs. sign-in is chosen from the public setup phase and
-     * registration availability together, so a fresh server routes to first-account
-     * creation while a provisional-account-before-profile reload (phase still
-     * bootstrap_required but registration closed) routes to sign-in to resume. */
-    const preAppStep: DesktopOnboardingStep | undefined = (() => {
-        if (mode === "sign-in")
-            return phase ? preAuthOnboardingStep(phase!, registration ?? "closed") : "sign-in";
-        if (mode === "onboarding") return "profile";
-        return undefined;
-    })();
-    /* Reflect the durable pre-application step into the URL so a reload resumes
-     * the same centered screen. The server-configuration steps take over URL
-     * ownership once the workspace state exists (see ServerOnboarding). */
-    useLayoutEffect(() => {
-        const navigation = props.navigation;
-        const step = preAppStep;
-        if (!navigation || !step) return;
-        const current = navigation.get();
-        if (current.primary.kind === "onboarding" && current.primary.step === step) return;
-        navigation.navigate(
-            {
-                ...current,
-                primary: { kind: "onboarding", step },
-                panel: undefined,
-                overlay: undefined,
-            },
-            { replace: true },
-        );
-    }, [preAppStep, props.navigation]);
     /* Probes the server for its authentication method and public setup phase, then
      * routes to the first pre-application step. It is the single entry the mount
      * and the unavailable-screen retry both call, so recovery happens in place —

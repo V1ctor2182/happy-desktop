@@ -1,6 +1,7 @@
 import { useLayoutEffect, useReducer, type ReactNode } from "react";
 import type {
     HappyState,
+    OverlaysStore,
     PluginAppHandle,
     PluginAppSummary,
     PluginAppInstanceSnapshot,
@@ -15,7 +16,7 @@ import {
     type McpAppDisplayMode,
     type PluginSettingsAppRow,
 } from "happy2-ui";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
+import { useNavigate } from "@tanstack/react-router";
 import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
 import {
     pluginAppOpenTargetResolve,
@@ -28,8 +29,8 @@ import { openExternalLink } from "../externalLink";
 
 export interface AppsViewProps {
     state: HappyState;
-    navigation: DesktopNavigation;
-    route: DesktopRoute;
+    /** The durable app instance addressed by the URL, or none for the catalog. */
+    appId?: string;
 }
 
 const APP_DISPLAY_MODES: readonly McpAppDisplayMode[] = ["inline", "fullscreen"];
@@ -41,28 +42,19 @@ const APP_DISPLAY_MODES: readonly McpAppDisplayMode[] = ["inline", "fullscreen"]
  * open instance and one coarse subscription to plugin navigation.
  */
 export function AppsView(props: AppsViewProps) {
-    const appId = props.route.primary.kind === "apps" ? props.route.primary.appId : undefined;
     const masks = usePluginAssetMasks(props.state);
-    if (appId)
-        return (
-            <PluginAppPageView
-                instanceId={appId}
-                masks={masks}
-                navigation={props.navigation}
-                route={props.route}
-                state={props.state}
-            />
-        );
+    if (props.appId)
+        return <PluginAppPageView instanceId={props.appId} masks={masks} state={props.state} />;
     return <AppsManageView masks={masks} state={props.state} />;
 }
 
 function PluginAppPageView(props: {
     instanceId: string;
     state: HappyState;
-    navigation: DesktopNavigation;
-    route: DesktopRoute;
     masks: PluginAssetMasks;
 }) {
+    const navigate = useNavigate();
+    const overlays = props.state.overlays();
     const [handle, setHandle] = useReducer(
         (_current: PluginAppHandle | undefined, next: PluginAppHandle | undefined) => next,
         undefined,
@@ -90,8 +82,11 @@ function PluginAppPageView(props: {
                     );
                     if (targetId)
                         pluginOpenAppNavigate(
-                            props.navigation,
-                            props.route,
+                            {
+                                onAppOpen: (appId) =>
+                                    void navigate({ params: { appId }, to: "/apps/$appId" }),
+                                overlays,
+                            },
                             targetId,
                             presentation,
                         );
@@ -99,7 +94,7 @@ function PluginAppPageView(props: {
                 return (
                     <StoreSurface store={handle}>
                         {(snapshot: PluginAppInstanceSnapshot) =>
-                            renderAppPage(snapshot, handle, props, openApp)
+                            renderAppPage(snapshot, handle, { ...props, overlays }, openApp)
                         }
                     </StoreSurface>
                 );
@@ -113,9 +108,8 @@ function renderAppPage(
     handle: PluginAppHandle,
     props: {
         instanceId: string;
-        navigation: DesktopNavigation;
-        route: DesktopRoute;
         masks: PluginAssetMasks;
+        overlays: OverlaysStore;
     },
     onOpenApp: (instanceKey: string, presentation: PluginAppOpenPresentation) => void,
 ): ReactNode {
@@ -139,10 +133,7 @@ function renderAppPage(
     );
     const requestFullscreen = (mode: McpAppDisplayMode): McpAppDisplayMode => {
         if (mode === "fullscreen") {
-            props.navigation.navigate({
-                ...props.route,
-                overlay: { kind: "app", instanceId: props.instanceId, presentation: "fullscreen" },
-            });
+            props.overlays.getState().overlayAppOpen(props.instanceId, "fullscreen");
             return "fullscreen";
         }
         return "inline";

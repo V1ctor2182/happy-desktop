@@ -178,6 +178,7 @@ import {
     type AdminSection,
     type AdminStore,
 } from "./modules/admin/adminState.js";
+import { overlaysStoreCreate, type OverlaysStore } from "./modules/overlays/overlaysState.js";
 import {
     agentImagesLoad,
     agentImagesOutputRoute,
@@ -359,6 +360,7 @@ export class HappyState implements AsyncDisposable, Disposable {
     private directoryReconcilePending = false;
     private agentModelsBinding?: AgentModelsStore;
     private adminBinding?: AdminStore;
+    private overlaysBinding?: OverlaysStore;
     private readonly adminSections = new Set<AdminSection>();
     private setupBinding?: SetupStore;
     private agentImagesBinding?: AgentImagesStore;
@@ -624,6 +626,12 @@ export class HappyState implements AsyncDisposable, Disposable {
             this.searchBinding = binding;
         }
         return this.searchBinding;
+    }
+
+    /** Transient layers over the primary screen; deliberately not addressed by the URL. */
+    overlays(): OverlaysStore {
+        if (!this.overlaysBinding) this.overlaysBinding = overlaysStoreCreate();
+        return this.overlaysBinding;
     }
 
     directory(): DirectoryStore {

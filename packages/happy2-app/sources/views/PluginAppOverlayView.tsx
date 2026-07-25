@@ -13,7 +13,7 @@ import {
     StoreSurface,
     type McpAppDisplayMode,
 } from "happy2-ui";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
+import { useNavigate } from "@tanstack/react-router";
 import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
 import {
     pluginAppOpenTargetResolve,
@@ -24,8 +24,6 @@ import { openExternalLink } from "../externalLink";
 
 export interface PluginAppOverlayViewProps {
     state: HappyState;
-    navigation: DesktopNavigation;
-    route: DesktopRoute;
     instanceId: string;
     presentation: "modal" | "fullscreen";
     onClose(): void;
@@ -36,13 +34,15 @@ export interface PluginAppOverlayViewProps {
 const APP_DISPLAY_MODES: readonly McpAppDisplayMode[] = ["inline", "fullscreen"];
 
 /**
- * Hosts one durable app instance as a route-addressable modal or full-window
- * overlay. It leases the instance handle for its own lifetime and renders through
+ * Hosts one durable app instance as a modal or full-window overlay. It leases the
+ * instance handle for its own lifetime and renders through
  * a single coarse subscription; a display mode of `fullscreen` maps to the
  * fullscreen overlay and `inline` collapses back to the modal card.
  */
 export function PluginAppOverlayView(props: PluginAppOverlayViewProps) {
+    const navigate = useNavigate();
     const masks = usePluginAssetMasks(props.state);
+    const overlays = props.state.overlays();
     const [handle, setHandle] = useReducer(
         (_current: PluginAppHandle | undefined, next: PluginAppHandle | undefined) => next,
         undefined,
@@ -75,8 +75,15 @@ export function PluginAppOverlayView(props: PluginAppOverlayViewProps) {
                     );
                     if (targetId)
                         pluginOpenAppNavigate(
-                            props.navigation,
-                            props.route,
+                            {
+                                onAppOpen: (appId) => {
+                                    // Moving the app to the workspace page replaces
+                                    // this overlay rather than stacking behind it.
+                                    props.onClose();
+                                    void navigate({ params: { appId }, to: "/apps/$appId" });
+                                },
+                                overlays,
+                            },
                             targetId,
                             presentation,
                         );

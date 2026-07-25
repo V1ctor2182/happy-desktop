@@ -1,13 +1,15 @@
 import { useSyncExternalStore } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { HappyState, NotificationProjection } from "happy2-state";
-import type { DesktopNavigation, DesktopRoute } from "./desktopRouteTypes";
 
-/** Resolves notification destinations from the live sidebar without mirroring either store. */
-export function useNotificationNavigation(
-    state: HappyState,
-    navigation: DesktopNavigation,
-    route: DesktopRoute,
-) {
+/**
+ * Resolves a notification's label and destination from the live sidebar without
+ * mirroring it. A notification carries only a chat id, so the conversation kind —
+ * and therefore whether the destination is `/chats` or `/channels` — has to be
+ * looked up in the sidebar projection at the moment the row is opened.
+ */
+export function useNotificationNavigation(state: HappyState) {
+    const navigate = useNavigate();
     const sidebar = state.sidebar();
     const sidebarSnapshot = useSyncExternalStore(
         sidebar.subscribe,
@@ -30,29 +32,17 @@ export function useNotificationNavigation(
         },
         open(notification: NotificationProjection): void {
             if (notification.kind === "call") {
-                navigation.navigate({
-                    ...route,
-                    primary: { kind: "calls" },
-                    panel: undefined,
-                    overlay: undefined,
-                });
+                void navigate({ to: "/calls" });
                 return;
             }
-            if (!notification.chatId) return;
-            const chat = chatFor(notification.chatId);
-            const conversationKind =
-                chat?.chat.kind === "public_channel" || chat?.chat.kind === "private_channel"
-                    ? "channel"
-                    : "chat";
-            navigation.navigate({
-                ...route,
-                primary: {
-                    kind: "conversation",
-                    conversationKind,
-                    chatId: notification.chatId,
-                },
-                panel: undefined,
-                overlay: undefined,
+            const chatId = notification.chatId;
+            if (!chatId) return;
+            const chat = chatFor(chatId);
+            const channel =
+                chat?.chat.kind === "public_channel" || chat?.chat.kind === "private_channel";
+            void navigate({
+                params: { chatId },
+                to: channel ? "/channels/$chatId" : "/chats/$chatId",
             });
         },
     };

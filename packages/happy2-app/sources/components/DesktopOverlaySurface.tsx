@@ -1,93 +1,105 @@
-import { CommandPalette, Modal, ModalOverlay } from "happy2-ui";
-import type { HappyState } from "happy2-state";
+import { CommandPalette, Modal, ModalOverlay, StoreSurface } from "happy2-ui";
+import type { HappyState, OverlaysStore } from "happy2-state";
 import type { AuthSession } from "./AuthGate";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
 import { SearchOverlay } from "../views/SearchOverlay";
 import { ProfileView } from "../views/ProfileView";
 import { SettingsView } from "../views/SettingsView";
 import { PluginAppOverlayView } from "../views/PluginAppOverlayView";
 import { DesktopFileOverlay } from "./DesktopFileOverlay";
+
 export interface DesktopOverlaySurfaceProps {
-    route: DesktopRoute;
-    navigation: DesktopNavigation;
+    overlays: OverlaysStore;
     state: HappyState;
     session?: AuthSession;
-    onSearchSelect: (type: import("happy2-ui").SearchResultType, id: string) => void;
-    onSearchQueryChange: (value: string) => void;
+    /** Navigates to a channel chosen in the search palette. */
+    onChannelOpen: (chatId: string) => void;
 }
-/** Renders route-addressable modal layers without owning or replacing the primary surface. */
+
+/**
+ * Renders the transient layer floating over whichever screen is open. The layer is
+ * read from the overlays store rather than the URL, so opening or dismissing one
+ * never navigates and never remounts the screen underneath.
+ */
 export function DesktopOverlaySurface(props: DesktopOverlaySurfaceProps) {
-    const overlay = () => props.route.overlay;
-    const searchOverlay = () => {
-        const value = overlay();
-        return value?.kind === "search" ? value : undefined;
-    };
-    const fileOverlay = () => {
-        const value = overlay();
-        return value?.kind === "file" ? value : undefined;
-    };
-    const profileOverlay = () => {
-        const value = overlay();
-        return value?.kind === "profile" ? value : undefined;
-    };
-    const appOverlay = () => {
-        const value = overlay();
-        return value?.kind === "app" ? value : undefined;
-    };
-    const close = () => props.navigation.close("overlay");
-    return searchOverlay() ? (
-        <ModalOverlay onDismiss={close} placement="top">
-            <CommandPalette
-                onClose={close}
-                onQueryChange={props.onSearchQueryChange}
-                placeholder="Search Happy Place…"
-                query={searchOverlay()?.query ?? ""}
-            >
-                <SearchOverlay
-                    onSelect={props.onSearchSelect}
-                    query={searchOverlay()?.query ?? ""}
-                    state={props.state}
-                />
-            </CommandPalette>
-        </ModalOverlay>
-    ) : profileOverlay() ? (
-        <ModalOverlay onDismiss={close}>
-            <Modal icon="at" onClose={close} size="large" title="Profile and settings">
-                {profileOverlay()?.userId === "me" ||
-                profileOverlay()?.userId === props.session?.user.id ? (
-                    <SettingsView session={props.session} state={props.state} />
-                ) : (
-                    <ProfileView state={props.state} userId={profileOverlay()?.userId ?? ""} />
-                )}
-            </Modal>
-        </ModalOverlay>
-    ) : fileOverlay() ? (
-        <DesktopFileOverlay
-            fileId={fileOverlay()?.fileId ?? ""}
-            onClose={close}
-            state={props.state}
-        />
-    ) : appOverlay() ? (
-        <PluginAppOverlayView
-            instanceId={appOverlay()!.instanceId}
-            navigation={props.navigation}
-            route={props.route}
-            onClose={close}
-            onPresentationChange={(presentation) =>
-                props.navigation.navigate(
-                    {
-                        ...props.route,
-                        overlay: {
-                            kind: "app",
-                            instanceId: appOverlay()!.instanceId,
-                            presentation,
-                        },
-                    },
-                    { replace: true },
-                )
-            }
-            presentation={appOverlay()!.presentation}
-            state={props.state}
-        />
-    ) : null;
+    const overlays = props.overlays;
+    return (
+        <StoreSurface store={overlays}>
+            {(snapshot) => {
+                const overlay = snapshot.overlay;
+                const close = () => overlays.getState().overlayClose();
+                if (overlay.type === "search")
+                    return (
+                        <ModalOverlay onDismiss={close} placement="top">
+                            <CommandPalette
+                                onClose={close}
+                                onQueryChange={(value) =>
+                                    overlays.getState().overlaySearchQueryUpdate(value)
+                                }
+                                placeholder="Search Happy Place…"
+                                query={overlay.query}
+                            >
+                                <SearchOverlay
+                                    onSelect={(type, id) => searchSelect(type, id)}
+                                    query={overlay.query}
+                                    state={props.state}
+                                />
+                            </CommandPalette>
+                        </ModalOverlay>
+                    );
+                if (overlay.type === "profile")
+                    return (
+                        <ModalOverlay onDismiss={close}>
+                            <Modal
+                                icon="at"
+                                onClose={close}
+                                size="large"
+                                title="Profile and settings"
+                            >
+                                {overlay.userId === "me" ||
+                                overlay.userId === props.session?.user.id ? (
+                                    <SettingsView session={props.session} state={props.state} />
+                                ) : (
+                                    <ProfileView state={props.state} userId={overlay.userId} />
+                                )}
+                            </Modal>
+                        </ModalOverlay>
+                    );
+                if (overlay.type === "file")
+                    return (
+                        <DesktopFileOverlay
+                            fileId={overlay.fileId}
+                            onClose={close}
+                            state={props.state}
+                        />
+                    );
+                if (overlay.type === "app")
+                    return (
+                        <PluginAppOverlayView
+                            instanceId={overlay.instanceId}
+                            onClose={close}
+                            onPresentationChange={(presentation) =>
+                                overlays.getState().overlayAppPresentationUpdate(presentation)
+                            }
+                            presentation={overlay.presentation}
+                            state={props.state}
+                        />
+                    );
+                return null;
+
+                /**
+                 * A palette result either navigates or swaps this overlay for the
+                 * matching one. Choosing a channel is a destination, so it closes
+                 * the palette and routes; a user or file stays in the modal stack.
+                 */
+                function searchSelect(type: string, id: string) {
+                    if (type === "user") overlays.getState().overlayProfileOpen(id);
+                    else if (type === "file") overlays.getState().overlayFileOpen(id);
+                    else if (type === "channel") {
+                        close();
+                        props.onChannelOpen(id);
+                    } else close();
+                }
+            }}
+        </StoreSurface>
+    );
 }
