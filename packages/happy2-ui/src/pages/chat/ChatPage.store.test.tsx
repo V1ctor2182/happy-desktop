@@ -1460,7 +1460,7 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
     await nextFrame();
     expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBe(row);
     expect(row.dataset.status).toBe("complete");
-    expect(row.textContent).toContain("View trace");
+    expect(row.textContent).toContain("View traces");
     expect(messageRoot.textContent).toContain("All done.");
     expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(panel);
 

@@ -19,13 +19,18 @@ export interface AgentTraceRowProps {
     readonly title?: string;
     readonly detail?: string;
     readonly entryCount: number;
-    /** Tool invocations when known (shown beside “View trace” in the message meta row). */
+    /** Tool invocations when known (shown beside “View traces” in the message meta row). */
     readonly toolCallCount?: number;
     /** Turn token total when the producer reports it. */
     readonly totalTokens?: number;
     /** The trace panel is currently showing this turn. */
     readonly open?: boolean;
     readonly onOpen?: () => void;
+    /**
+     * Clicking closes the trace again rather than opening a panel, so an open row
+     * offers to hide it. Owners that only ever open a panel leave this off.
+     */
+    readonly toggles?: boolean;
     /** Accessible name, default "Agent activity". */
     readonly label?: string;
     /** A compact metadata link placed beside an assistant name. */
@@ -70,9 +75,10 @@ function metaStats(toolCallCount?: number, totalTokens?: number): string | undef
  * an assistant message. While the turn runs it shows only the latest activity:
  * a static accent dot (no animation), the kind glyph, a title, and mono detail
  * when that detail is not already visible elsewhere — no counter churn. Once
- * the turn completes or fails it reads as a "View trace" link row with the
- * step count. Clicking fires `onOpen`; `aria-expanded` reflects whether the
- * trace panel currently shows this turn. Props only — no local state, timers,
+ * the turn completes or fails it reads as a "View traces" link row with the
+ * step count — "Hide traces" while open, when the owner made it a toggle.
+ * Clicking fires `onOpen`; `aria-expanded` reflects whether the trace is
+ * currently shown. Props only — no local state, timers,
  * or animation.
  */
 export function AgentTraceRow(props: AgentTraceRowProps) {
@@ -89,21 +95,23 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
         "totalTokens",
         "open",
         "onOpen",
+        "toggles",
         "label",
         "variant",
     ]);
     const running = () => local.status === "running";
     const meta = () => local.variant === "meta";
     const stats = () => metaStats(local.toolCallCount, local.totalTokens);
+    const linkLabel = () => (local.toggles && local.open ? "Hide traces" : "View traces");
     return (
         <button
             aria-expanded={local.open === true ? "true" : "false"}
             aria-label={
                 local.label ??
                 (meta() && stats()
-                    ? `View trace, ${stats()}`
+                    ? `${linkLabel()}, ${stats()}`
                     : meta()
-                      ? "View trace"
+                      ? linkLabel()
                       : "Agent activity")
             }
             className={["happy2-agent-trace-row", local.className].filter(Boolean).join(" ")}
@@ -132,7 +140,7 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                   ))(local.kind)
                 : null}
             <span className="happy2-agent-trace-row__title" data-happy2-ui="agent-trace-row-title">
-                {meta() ? "View trace" : running() ? (local.title ?? "Working") : "View trace"}
+                {meta() ? linkLabel() : running() ? (local.title ?? "Working") : linkLabel()}
             </span>
             {meta() && stats() ? (
                 <span

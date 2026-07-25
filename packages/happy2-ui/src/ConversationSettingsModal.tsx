@@ -7,9 +7,6 @@ export type ConversationSettingsModalProps = {
     /** Whether thinking/reasoning entries are visible in the transcript. */
     showReasoning: boolean;
     onShowReasoningChange: (value: boolean) => void;
-    /** Whether completed turns collapse to their summary line. */
-    compactTurns: boolean;
-    onCompactTurnsChange: (value: boolean) => void;
     /** Whether the token-usage panel replaces the transcript. */
     usageOpen: boolean;
     onUsageOpenChange: (value: boolean) => void;
@@ -69,13 +66,6 @@ export function ConversationSettingsModal(props: ConversationSettingsModalProps)
                             description="Show the agent's thinking blocks inline."
                             label="Thinking"
                             onChange={props.onShowReasoningChange}
-                        />
-                        <Switch
-                            checked={props.compactTurns}
-                            data-testid="conversation-settings-compact"
-                            description="Collapse a finished turn to its summary line."
-                            label="Compact turns"
-                            onChange={props.onCompactTurnsChange}
                         />
                     </div>
                     <div

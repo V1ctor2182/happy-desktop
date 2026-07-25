@@ -45,7 +45,6 @@ describe("rig conversation projection", () => {
             streaming: { runId: "r1", blocks: [{ kind: "text", text: "Wor" }] },
             ephemeral: [],
             showReasoning: false,
-            compactTurns: false,
             pendingUserInputs: [
                 {
                     requestId: "q1",

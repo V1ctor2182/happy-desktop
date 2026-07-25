@@ -13,7 +13,6 @@ function view(overrides: { showReasoning?: boolean; usageOpen?: boolean } = {}) 
         () => (
             <ConversationSettingsModal
                 activityOpen={false}
-                compactTurns={false}
                 controls={
                     <button data-testid="session-control" type="button">
                         Access
@@ -22,7 +21,6 @@ function view(overrides: { showReasoning?: boolean; usageOpen?: boolean } = {}) 
                 data-testid="settings"
                 onActivityOpenChange={(value) => changes.push(["activity", value])}
                 onClose={() => closed.push("closed")}
-                onCompactTurnsChange={(value) => changes.push(["compact", value])}
                 onShowReasoningChange={(value) => changes.push(["reasoning", value])}
                 onUsageOpenChange={(value) => changes.push(["usage", value])}
                 showReasoning={overrides.showReasoning ?? false}
@@ -50,11 +48,6 @@ it("hosts every session preference on the shared modal card", async () => {
     expect(reasoning.element.getAttribute("aria-checked")).toBe("true");
     expect(
         renderer
-            .$('[data-testid="conversation-settings-compact"]')
-            .element.getAttribute("aria-checked"),
-    ).toBe("false");
-    expect(
-        renderer
             .$('[data-testid="conversation-settings-usage"]')
             .element.getAttribute("aria-checked"),
     ).toBe("false");
@@ -77,7 +70,7 @@ it("reports every toggle and close intent to its owner", async () => {
     const { renderer, changes, closed } = view();
     await renderer.ready();
 
-    for (const name of ["reasoning", "compact", "usage", "activity"])
+    for (const name of ["reasoning", "usage", "activity"])
         (
             renderer.$(`[data-testid="conversation-settings-${name}"]`).element as HTMLElement
         ).click();
@@ -86,7 +79,6 @@ it("reports every toggle and close intent to its owner", async () => {
     // and nothing changes until the owner supplies a new value.
     expect(changes).toEqual([
         ["reasoning", true],
-        ["compact", true],
         ["usage", true],
         ["activity", true],
     ]);
@@ -107,11 +99,9 @@ it("omits the session group when the owner supplies no controls", async () => {
         () => (
             <ConversationSettingsModal
                 activityOpen
-                compactTurns
                 data-testid="no-controls"
                 onActivityOpenChange={() => undefined}
                 onClose={() => undefined}
-                onCompactTurnsChange={() => undefined}
                 onShowReasoningChange={() => undefined}
                 onUsageOpenChange={() => undefined}
                 showReasoning={false}

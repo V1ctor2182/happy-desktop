@@ -73,7 +73,8 @@ export interface RigConversationSnapshot {
     readonly subagents: readonly RigSubagentSummary[];
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
     readonly showReasoning: boolean;
-    readonly compactTurns: boolean;
+    /** Finished turns the reader expanded, so their trace entries stay listed. */
+    readonly expandedTurnIds: ReadonlySet<string>;
     readonly usagePanelOpen: boolean;
     readonly usage?: RigSessionUsage;
     readonly usageLoading: boolean;
@@ -156,7 +157,8 @@ export interface RigWorkspaceStore {
     /** Closes the session settings dialog for the open conversation. */
     settingsClose(): void;
     reasoningToggle(): void;
-    turnCompactToggle(): void;
+    /** Shows or hides one finished turn's intermediate entries in the transcript. */
+    turnTraceToggle(turnId: string): void;
     /** View-only clear of the active conversation's visible entries (TUI `/clear`). */
     viewClear(): void;
 
@@ -239,7 +241,7 @@ export function rigWorkspaceStoreCreate(
             subagents: chat.subagents,
             backgroundProcesses: chat.backgroundProcesses,
             showReasoning: chat.showReasoning,
-            compactTurns: chat.compactTurns,
+            expandedTurnIds: chat.expandedTurnIds,
             usagePanelOpen: chat.usagePanelOpen,
             ...(chat.usage ? { usage: chat.usage } : {}),
             usageLoading: chat.usageLoading,
@@ -517,7 +519,7 @@ export function rigWorkspaceStoreCreate(
         settingsOpen: () => chatStore?.settingsOpen(),
         settingsClose: () => chatStore?.settingsClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
-        turnCompactToggle: () => chatStore?.turnCompactToggle(),
+        turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
         viewClear: () => chatStore?.viewClear(),
 
         [Symbol.dispose]() {

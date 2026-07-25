@@ -2,17 +2,12 @@ import type { ConversationEntry } from "happy2-state";
 
 type MessageEntry = Extract<ConversationEntry, { kind: "message" }>;
 
-/** Nearest message row, skipping inline tool activity between agent text blocks. */
-function neighborMessage(
+/** Preceding message row, skipping inline tool activity between agent text blocks. */
+function previousMessage(
     entries: readonly ConversationEntry[],
     index: number,
-    step: -1 | 1,
 ): MessageEntry | undefined {
-    for (
-        let cursor = index + step;
-        step === -1 ? cursor >= 0 : cursor < entries.length;
-        cursor += step
-    ) {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = entries[cursor];
         if (entry?.kind === "message") return entry;
         if (entry?.kind === "agentActivity") continue;
@@ -34,17 +29,6 @@ export function conversationMessageGrouped(
 ): boolean {
     const entry = entries[index];
     if (entry?.kind !== "message") return false;
-    const previous = neighborMessage(entries, index, -1);
+    const previous = previousMessage(entries, index);
     return previous !== undefined && sameSender(entry, previous);
-}
-
-/** Another message from the same author follows (ignoring tool rows in between). */
-export function conversationMessageGroupContinues(
-    entries: readonly ConversationEntry[],
-    index: number,
-): boolean {
-    const entry = entries[index];
-    if (entry?.kind !== "message") return false;
-    const next = neighborMessage(entries, index, 1);
-    return next !== undefined && sameSender(entry, next);
 }

@@ -302,10 +302,7 @@ export {
     rigConversationSummaryProject,
     rigOwnerAuthor,
 } from "./rig/rigConversationProject.js";
-export {
-    rigConversationAttachTurnTraces,
-    rigTurnTraceDetails,
-} from "./rig/rigConversationTurnTrace.js";
+export { rigConversationAttachTurnTraces } from "./rig/rigConversationTurnTrace.js";
 export {
     rigClockStoreCreate,
     type RigClockStore,

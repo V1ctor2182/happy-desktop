@@ -20,7 +20,6 @@ export function ConversationSettingsModalPage() {
                 <div style={{ width: "980px", height: "620px", display: "flex" }}>
                     <ConversationSettingsModal
                         activityOpen={false}
-                        compactTurns
                         controls={
                             <RigSessionControls
                                 fields={["permission", "tier"]}
@@ -33,7 +32,6 @@ export function ConversationSettingsModalPage() {
                         }
                         onActivityOpenChange={() => undefined}
                         onClose={() => undefined}
-                        onCompactTurnsChange={() => undefined}
                         onShowReasoningChange={() => undefined}
                         onUsageOpenChange={() => undefined}
                         showReasoning
@@ -51,10 +49,8 @@ export function ConversationSettingsModalPage() {
                 <div style={{ width: "980px", height: "540px", display: "flex" }}>
                     <ConversationSettingsModal
                         activityOpen
-                        compactTurns={false}
                         onActivityOpenChange={() => undefined}
                         onClose={() => undefined}
-                        onCompactTurnsChange={() => undefined}
                         onShowReasoningChange={() => undefined}
                         onUsageOpenChange={() => undefined}
                         showReasoning={false}

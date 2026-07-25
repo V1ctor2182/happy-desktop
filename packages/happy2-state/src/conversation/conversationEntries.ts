@@ -16,6 +16,7 @@ import {
     type ConversationRequestQuestion,
     type ConversationToolCall,
 } from "./conversationEntry.js";
+import type { AgentTurnTraceSummary } from "../types.js";
 
 /**
  * Merges incoming entries into the current list while preserving the reference
@@ -74,6 +75,7 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             left.message.deletedAt === right.message.deletedAt &&
             left.message.text === right.message.text &&
             left.message.generationStatus === right.message.generationStatus &&
+            traceEqual(left.message.agentTrace, right.message.agentTrace) &&
             left.message.sender === right.message.sender &&
             reactionsEqual(left.message.reactions, right.message.reactions) &&
             attachmentsEqual(left.message.attachments, right.message.attachments)
@@ -114,6 +116,29 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
     if (left.kind === "request" && right.kind === "request")
         return requestEqual(left.request, right.request);
     return false;
+}
+
+/**
+ * Whether two turn summaries render identically. The rig rebuilds a turn summary
+ * on every activity tick while its `changePts` stays put, so without this a
+ * running message would keep its first "View trace" projection forever.
+ */
+function traceEqual(
+    left: AgentTurnTraceSummary | undefined,
+    right: AgentTurnTraceSummary | undefined,
+): boolean {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    return (
+        left.turnId === right.turnId &&
+        left.status === right.status &&
+        left.entryCount === right.entryCount &&
+        left.toolCallCount === right.toolCallCount &&
+        left.totalTokens === right.totalTokens &&
+        left.latest?.kind === right.latest?.kind &&
+        left.latest?.title === right.latest?.title &&
+        left.latest?.detail === right.latest?.detail
+    );
 }
 
 /** Whether two requests render identically, field by field for every variant. */

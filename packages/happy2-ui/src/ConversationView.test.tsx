@@ -295,10 +295,13 @@ it("centers the entry column and the composer dock on one shared measure", async
     const columnCenter = column.bounds().x + column.bounds().width / 2;
     expect(columnCenter).toBeCloseTo(surface.bounds().x + surface.bounds().width / 2, 1);
 
-    // The dock bar spans the surface so its hairline meets both edges, while its
-    // contents land on exactly the same measure and center line as the column.
+    // The dock bar spans the surface, while its contents land on the same center
+    // line as the column: the shared 880px measure plus the cloud dock's 12px/20px
+    // interior insets, so both stacks ground the composer identically.
     expect(dock.bounds().width).toBe(1240);
-    expect(dockInner.bounds().width).toBe(880);
+    expect(dockInner.bounds().width).toBe(912);
+    expect(dockInner.computedStyle("padding-left")).toBe("12px");
+    expect(dockInner.computedStyle("padding-right")).toBe("20px");
     expect(dockInner.bounds().x + dockInner.bounds().width / 2).toBeCloseTo(columnCenter, 1);
 
     // Composer controls live in the composer toolbar, not the channel header.

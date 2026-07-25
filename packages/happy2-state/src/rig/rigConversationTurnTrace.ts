@@ -1,12 +1,14 @@
 import type {
     AgentTurnStatus,
-    AgentTurnTraceDetails,
     AgentTurnTraceEntrySummary,
     AgentTurnTraceKind,
     AgentTurnTraceLatest,
     AgentTurnTraceSummary,
 } from "../types.js";
-import type { ConversationActivityEntry, ConversationEntry } from "../conversation/conversationEntry.js";
+import type {
+    ConversationActivityEntry,
+    ConversationEntry,
+} from "../conversation/conversationEntry.js";
 import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 
 function humanizeToolName(name: string): string {
@@ -48,8 +50,7 @@ function activityTraceEntry(
         };
     }
     if (activity.kind === "shell") {
-        const failed =
-            !activity.running && (activity.timedOut || (activity.exitCode ?? 0) !== 0);
+        const failed = !activity.running && (activity.timedOut || (activity.exitCode ?? 0) !== 0);
         return {
             id: entry.id,
             kind: "terminal",
@@ -93,35 +94,41 @@ function latestFromActivities(
 function turnFailed(activities: readonly ConversationActivityEntry[]): boolean {
     return activities.some((entry) => {
         const activity = entry.activity;
-        if (activity.kind === "tool") return activity.tool.failed || activity.tool.status === "failed";
+        if (activity.kind === "tool")
+            return activity.tool.failed || activity.tool.status === "failed";
         if (activity.kind === "shell")
-            return (
-                !activity.running &&
-                (activity.timedOut || (activity.exitCode ?? 0) !== 0)
-            );
+            return !activity.running && (activity.timedOut || (activity.exitCode ?? 0) !== 0);
         return false;
     });
 }
 
-function withAgentTrace(
-    entry: ConversationEntry,
-    trace: AgentTurnTraceSummary,
-): ConversationEntry {
+/** The turn's final message, the one line a collapsed turn keeps on screen. */
+function lastMessage(body: readonly ConversationEntry[]): ConversationEntry | undefined {
+    for (let index = body.length - 1; index >= 0; index -= 1) {
+        const entry = body[index]!;
+        if (entry.kind === "message") return entry;
+    }
+    return undefined;
+}
+
+/** Attaches the turn summary that turns an agent message meta row into "View trace". */
+function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary): ConversationEntry {
     if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") return entry;
-    return {
-        ...entry,
-        message: { ...entry.message, agentTrace: trace },
-    };
+    return { ...entry, message: { ...entry.message, agentTrace: trace } };
 }
 
 /**
- * Attaches a shared `agentTrace` summary to every agent message in each user
- * turn so the cloud-style meta row can offer "View trace" without inlining tool
- * rows into the message header model.
+ * Splits the conversation into turns, summarizes each one, and decides how much
+ * of it the transcript shows. A running turn lists its whole body so live output
+ * is visible. A finished turn collapses to its final message until the reader
+ * opens its "View trace" control, and expanding puts the intermediate messages
+ * and tool rows back as ordinary sibling entries — the list stays flat, so a
+ * long turn still virtualizes one block at a time. Exactly one agent message per
+ * turn — the first one shown — carries the summary, so the control appears once.
  */
 export function rigConversationAttachTurnTraces(
     entries: readonly ConversationEntry[],
-    input: { readonly running: boolean },
+    input: { readonly running: boolean; readonly expandedTurnIds: ReadonlySet<string> },
 ): readonly ConversationEntry[] {
     const result: ConversationEntry[] = [];
     let turnUserId: string | undefined;
@@ -137,12 +144,12 @@ export function rigConversationAttachTurnTraces(
         const activities = turnBody.filter(
             (entry): entry is ConversationActivityEntry => entry.kind === "agentActivity",
         );
-        const status: AgentTurnStatus =
-            isOpenTurn && input.running
-                ? "running"
-                : turnFailed(activities)
-                  ? "failed"
-                  : "complete";
+        const running = isOpenTurn && input.running;
+        const status: AgentTurnStatus = running
+            ? "running"
+            : turnFailed(activities)
+              ? "failed"
+              : "complete";
         const toolCallCount = activities.filter((entry) => entry.activity.kind === "tool").length;
         const trace: AgentTurnTraceSummary = {
             turnId: turnUserId,
@@ -154,7 +161,22 @@ export function rigConversationAttachTurnTraces(
             subagents: [],
             backgroundTerminals: [],
         };
-        for (const entry of turnBody) result.push(withAgentTrace(entry, trace));
+        // A turn with nothing behind its answer has no trace to reveal, so it
+        // keeps a plain message with no control.
+        const summarizable = turnBody.length > 1;
+        const expanded = running || input.expandedTurnIds.has(turnUserId);
+        const collapsed = summarizable && !expanded ? lastMessage(turnBody) : undefined;
+        const shown = collapsed ? [collapsed] : turnBody;
+        let traced = !summarizable;
+        for (const entry of shown) {
+            if (traced) {
+                result.push(entry);
+                continue;
+            }
+            const withTrace = withAgentTrace(entry, trace);
+            traced = withTrace !== entry;
+            result.push(withTrace);
+        }
         turnBody = [];
         turnUserId = undefined;
     };
@@ -176,36 +198,4 @@ export function rigConversationAttachTurnTraces(
     }
     flush(true);
     return result;
-}
-
-/** Builds trace panel rows for one turn from the flat conversation entry list. */
-export function rigTurnTraceDetails(
-    entries: readonly ConversationEntry[],
-    turnId: string,
-): AgentTurnTraceDetails | undefined {
-    let collecting = false;
-    let baseTime = 0;
-    const activities: ConversationActivityEntry[] = [];
-    let trace: AgentTurnTraceSummary | undefined;
-
-    for (const entry of entries) {
-        if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
-            if (entry.message.id === turnId) {
-                collecting = true;
-                baseTime = Date.parse(entry.message.createdAt) || 0;
-                continue;
-            }
-            if (collecting) break;
-        }
-        if (!collecting) continue;
-        if (entry.kind === "agentActivity") activities.push(entry);
-        if (entry.kind === "message" && entry.message.agentTrace?.turnId === turnId)
-            trace = entry.message.agentTrace;
-    }
-
-    if (!trace) return undefined;
-    const panelEntries = activities.map((activity, index) =>
-        activityTraceEntry(activity, baseTime + index + 1),
-    );
-    return { ...trace, entries: panelEntries };
 }

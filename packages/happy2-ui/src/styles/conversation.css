@@ -52,6 +52,9 @@
     width: 100%;
     max-width: var(--happy2-chat-measure);
     margin-inline: auto;
+    /* The dock is seamless with the transcript, so the clearance beneath the
+       newest message is what keeps it from reading as part of the composer. */
+    padding-bottom: 24px;
 }
 
 /*
@@ -108,51 +111,31 @@
     color: var(--warning);
 }
 
-.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity] {
-    padding-top: 10px;
-    padding-bottom: 10px;
+/*
+ * Agent replies arrive as a run of short blocks interleaved with tool rows, so
+ * they carry half the vertical padding of a human turn: the run reads as one
+ * answer while the identity row (author, View trace, time) stays above the body.
+ */
+.happy2-conversation .happy2-message[data-agent] {
+    padding-top: 8px;
+    padding-bottom: 8px;
 }
 
-.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity][data-grouped] {
+.happy2-conversation .happy2-message[data-agent][data-grouped] {
     padding-top: 2px;
     padding-bottom: 2px;
 }
 
-/*
- * Local agent rows keep hover meta (time, View trace) off the layout until the
- * row is focused so consecutive replies read as one block.
- */
-.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity] .happy2-message__meta[data-minimal] {
-    height: 0;
-    margin: 0;
-    overflow: hidden;
-    pointer-events: none;
+/* The dangling avatar is positioned from the row's top edge, so it follows that
+   halved padding down by exactly as much: keep it centred on the author line. */
+.happy2-conversation .happy2-message[data-agent]:not([data-own]) .happy2-message__gutter {
+    top: 10px;
 }
 
 .happy2-conversation
-    .happy2-message[data-agent][data-hide-incoming-identity]:hover
-    .happy2-message__meta[data-minimal],
-.happy2-conversation
-    .happy2-message[data-agent][data-hide-incoming-identity]:focus-within
-    .happy2-message__meta[data-minimal] {
-    height: 20px;
-    overflow: visible;
-    pointer-events: auto;
-}
-
-.happy2-conversation
-    .happy2-message[data-agent][data-hide-incoming-identity]
-    .happy2-message__meta[data-minimal][data-trail] {
-    margin-top: 0;
-}
-
-.happy2-conversation
-    .happy2-message[data-agent][data-hide-incoming-identity]:hover
-    .happy2-message__meta[data-minimal][data-trail],
-.happy2-conversation
-    .happy2-message[data-agent][data-hide-incoming-identity]:focus-within
-    .happy2-message__meta[data-minimal][data-trail] {
-    margin-top: 4px;
+    .happy2-message[data-agent][data-grouped]:not([data-own])
+    .happy2-message__gutter {
+    top: 4px;
 }
 
 .happy2-conversation__panel,
@@ -190,22 +173,27 @@
 }
 
 /*
- * The dock bar spans the surface so its hairline meets both edges, while its
- * contents center on the same measure as the entry column above — the input
- * therefore starts flush with the transcript rather than spanning the pane.
+ * The dock is the same grounded bar the cloud chat uses (see ComposerDock): a
+ * solid surface whose boundary with the transcript is seamless — no hairline and
+ * no gap — with 24px of desktop breathing room below. Its contents center on the
+ * entry column's measure and carry that dock's 12px/20px interior insets, so the
+ * input starts flush with the transcript in both stacks.
  */
 .happy2-conversation__dock {
     display: flex;
+    flex: none;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px 12px;
-    border-top: 1px solid var(--divider);
+    padding-bottom: 24px;
+    background: var(--surface);
 }
 
 .happy2-conversation__dock > * {
     width: 100%;
     max-width: var(--happy2-chat-measure);
+    padding-right: 20px;
+    padding-left: 12px;
 }
 
 .happy2-conversation__dock-inner {

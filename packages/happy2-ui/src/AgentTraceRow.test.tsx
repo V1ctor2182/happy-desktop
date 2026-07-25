@@ -241,7 +241,7 @@ it("holds AgentTraceRow geometry, states, icon mapping, and click behavior", asy
     const completeTitle = view.$(
         '[data-testid="tr-complete"] [data-happy2-ui="agent-trace-row-title"]',
     );
-    expect(completeTitle.element.textContent).toBe("View trace");
+    expect(completeTitle.element.textContent).toBe("View traces");
     expect(completeTitle.computedStyle("color")).toBe("rgb(43, 172, 204)");
     expect(
         view.$('[data-testid="tr-complete"] [data-happy2-ui="agent-trace-row-count"]').element

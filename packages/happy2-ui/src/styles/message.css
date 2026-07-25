@@ -269,7 +269,6 @@
     position: relative;
     top: 1px;
     opacity: 0;
-    transition: opacity 100ms ease;
 }
 
 .happy2-message__meta-accessory {
@@ -279,7 +278,6 @@
     position: relative;
     top: 1px;
     opacity: 0;
-    transition: opacity 100ms ease;
 }
 
 /* The automation marker is durable identity metadata, not a hover affordance, so

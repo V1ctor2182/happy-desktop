@@ -1063,14 +1063,17 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(shapesOf(store)).toEqual(["user", "agentText", "tool"]);
+        // The finished turn collapses to its final message, which carries the
+        // turn summary behind "View trace".
+        expect(shapesOf(store)).toEqual(["user", "agentText"]);
+        expect(store.get().expandedTurnIds.has("u1")).toBe(false);
 
-        store.turnCompactToggle();
-        // The completed turn collapses to just the prompt.
-        expect(shapesOf(store)).toEqual(["user"]);
-
-        store.turnCompactToggle();
+        store.turnTraceToggle("u1");
         expect(shapesOf(store)).toEqual(["user", "agentText", "tool"]);
+        expect(store.get().expandedTurnIds.has("u1")).toBe(true);
+
+        store.turnTraceToggle("u1");
+        expect(shapesOf(store)).toEqual(["user", "agentText"]);
         unsubscribe();
     });
 

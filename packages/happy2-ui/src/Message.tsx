@@ -157,10 +157,6 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     generationStatus?: MessageGenerationStatus;
     /** Consecutive message from the same author. Preferred over `compact`. */
     grouped?: boolean;
-    /** Another message from the same author follows this row. */
-    groupContinues?: boolean;
-    /** Incoming rows with no avatar, author name, or meta time (local transcript). */
-    hideIncomingIdentity?: boolean;
     /** Compact time for the grouped gutter (e.g. "12:55") so a wide 12-hour
      * "12:55 AM" — fine inline on the first message — still fits the 36px gutter.
      * Defaults to `time`. */
@@ -262,9 +258,7 @@ export function Message(props: MessageProps) {
         "contributions",
         "deliveryState",
         "generationStatus",
-        "groupContinues",
         "grouped",
-        "hideIncomingIdentity",
         "gutterTime",
         "imageUrl",
         "images",
@@ -301,16 +295,7 @@ export function Message(props: MessageProps) {
     const markdownBody = typeof local.body === "string" ? renderMessageMarkdown(local.body) : null;
     const hasAttachments = () => hasRenderableChild(attachments);
     const grouped = () => local.grouped || local.compact;
-    const showIncomingAvatar = () =>
-        !local.own && !local.hideIncomingIdentity && (!grouped() || local.metaAccessory);
-    const incomingMetaAfterBody = () => Boolean(local.hideIncomingIdentity);
-    const showIncomingMeta = () => {
-        if (local.own) return false;
-        if (!local.hideIncomingIdentity) return !grouped() || Boolean(local.metaAccessory);
-        if (!local.time && !local.metaAccessory) return false;
-        if (local.groupContinues) return false;
-        return true;
-    };
+    const showIncomingIdentity = () => !local.own && (!grouped() || Boolean(local.metaAccessory));
     const authorActionLabel = () => `View ${local.author}’s profile`;
     const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
     const renderAvatar = (size: AvatarSize) => (
@@ -500,31 +485,24 @@ export function Message(props: MessageProps) {
         local.own &&
         (bodyNode !== null ||
             (local.automated && (Boolean(local.images?.length) || hasAttachments())));
-    const incomingMeta = showIncomingMeta() ? (
-        <div
-            className="happy2-message__meta"
-            data-happy2-ui="message-meta"
-            data-minimal={local.hideIncomingIdentity ? "" : undefined}
-            data-trail={incomingMetaAfterBody() ? "" : undefined}
-        >
-            {!local.hideIncomingIdentity ? (
-                local.onAuthorSelect ? (
-                    <button
-                        aria-label={authorActionLabel()}
-                        className="happy2-message__author happy2-message__author--button"
-                        data-happy2-ui="message-author"
-                        onClick={() => local.onAuthorSelect?.()}
-                        type="button"
-                    >
-                        {local.author}
-                    </button>
-                ) : (
-                    <span className="happy2-message__author" data-happy2-ui="message-author">
-                        {local.author}
-                    </span>
-                )
-            ) : null}
-            {!local.hideIncomingIdentity && local.automated ? (
+    const incomingMeta = showIncomingIdentity() ? (
+        <div className="happy2-message__meta" data-happy2-ui="message-meta">
+            {local.onAuthorSelect ? (
+                <button
+                    aria-label={authorActionLabel()}
+                    className="happy2-message__author happy2-message__author--button"
+                    data-happy2-ui="message-author"
+                    onClick={() => local.onAuthorSelect?.()}
+                    type="button"
+                >
+                    {local.author}
+                </button>
+            ) : (
+                <span className="happy2-message__author" data-happy2-ui="message-author">
+                    {local.author}
+                </span>
+            )}
+            {local.automated ? (
                 <span className="happy2-message__automated" data-happy2-ui="message-automated">
                     <AutomatedTag />
                 </span>
@@ -553,7 +531,6 @@ export function Message(props: MessageProps) {
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
             data-grouped={grouped() ? "" : undefined}
-            data-hide-incoming-identity={local.hideIncomingIdentity ? "" : undefined}
             data-has-actions={hasActions() ? "" : undefined}
             data-has-body={local.body ? "" : undefined}
             data-happy2-ui="message"
@@ -569,12 +546,12 @@ export function Message(props: MessageProps) {
             style={local.style}
         >
             <div className="happy2-message__gutter" data-happy2-ui="message-gutter">
-                {showIncomingAvatar() ? renderDanglingAvatar() : null}
+                {showIncomingIdentity() ? renderDanglingAvatar() : null}
             </div>
             <div className="happy2-message__content" data-happy2-ui="message-content">
                 {/* Own messages carry no meta row — the accent bubble on the
                     right is identity enough; no author, time, or audience pill. */}
-                {showIncomingMeta() && !incomingMetaAfterBody() ? incomingMeta : null}
+                {incomingMeta}
                 {ownBubbleLine ? (
                     <div
                         className="happy2-message__bubble-line"
@@ -603,7 +580,6 @@ export function Message(props: MessageProps) {
                 ) : (
                     bodyNode
                 )}
-                {showIncomingMeta() && incomingMetaAfterBody() ? incomingMeta : null}
                 {local.images && local.images.length > 0 ? (
                     <div
                         className="happy2-message__media"

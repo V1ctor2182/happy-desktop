@@ -1,20 +1,15 @@
-import { type CSSProperties, type ReactNode, useMemo } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import type {
-    AgentTurnTraceDetails,
     ComposerSnapshot,
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
-import { AgentTracePanel } from "./AgentTracePanel";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
-import {
-    conversationMessageGroupContinues,
-    conversationMessageGrouped,
-} from "./conversationMessageGrouped";
+import { conversationMessageGrouped } from "./conversationMessageGrouped";
 import { EmptyState } from "./EmptyState";
 import { MessageList } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
@@ -47,11 +42,10 @@ export type ConversationViewProps = {
     overlay?: ReactNode;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
-    /** When set, replaces `panel` with the activity trace for this agent message. */
-    traceMessageId?: string;
-    traceDetails?: AgentTurnTraceDetails;
-    onTraceOpen?: (messageId: string) => void;
-    onTraceClose?: () => void;
+    /** Shows or hides the intermediate entries of a finished turn. */
+    onTraceToggle?: (turnId: string) => void;
+    /** Finished turns currently listing their intermediate entries. */
+    expandedTurnIds?: ReadonlySet<string>;
     /** Steering messages queued to submit after the current tool call (preview only). */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** The composer surface snapshot; the draft never lives in this component. */
@@ -105,20 +99,6 @@ export function ConversationView(props: ConversationViewProps) {
     const paletteOpen = composer.commandQuery !== undefined && props.onCommandInvoke !== undefined;
     const sendEnabled =
         !paletteOpen && (composer.text.trim().length > 0 || composer.attachments.length > 0);
-    const tracePanel = useMemo(() => {
-        if (!props.traceMessageId || !props.traceDetails) return undefined;
-        const trace = props.traceDetails;
-        return (
-            <AgentTracePanel
-                entries={trace.entries}
-                entryCount={trace.entryCount}
-                onClose={props.onTraceClose}
-                status={trace.status === "pending" ? "running" : trace.status}
-                title="Happy"
-            />
-        );
-    }, [props.onTraceClose, props.traceDetails, props.traceMessageId]);
-    const bodyPanel = tracePanel ?? props.panel;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -153,9 +133,9 @@ export function ConversationView(props: ConversationViewProps) {
                 topic={props.subtitle}
             />
 
-            {bodyPanel ? (
+            {props.panel ? (
                 <div className="happy2-conversation__panel" data-happy2-ui="conversation-panel">
-                    {bodyPanel}
+                    {props.panel}
                 </div>
             ) : props.entries.length === 0 ? (
                 <div className="happy2-conversation__empty" data-happy2-ui="conversation-empty">
@@ -176,15 +156,9 @@ export function ConversationView(props: ConversationViewProps) {
                                           candidate.requestId === entry.request.requestId,
                                   )
                                 : undefined;
-                        const messageId = entry.kind === "message" ? entry.message.id : undefined;
                         return (
                             <ConversationEntryView
                                 entry={entry}
-                                groupContinues={
-                                    entry.kind === "message"
-                                        ? conversationMessageGroupContinues(props.entries, index)
-                                        : undefined
-                                }
                                 grouped={
                                     entry.kind === "message"
                                         ? conversationMessageGrouped(props.entries, index)
@@ -193,14 +167,17 @@ export function ConversationView(props: ConversationViewProps) {
                                 key={entry.kind === "message" ? entry.message.id : entry.id}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRewind={props.onRewind}
-                                onTraceOpen={props.onTraceOpen}
+                                onTraceToggle={props.onTraceToggle}
+                                traceOpen={
+                                    entry.kind === "message" &&
+                                    entry.message.agentTrace !== undefined &&
+                                    props.expandedTurnIds?.has(entry.message.agentTrace.turnId) ===
+                                        true
+                                }
                                 requestError={
                                     submission?.status === "failed" ? submission.error : undefined
                                 }
                                 requestPending={submission?.status === "pending"}
-                                traceOpen={
-                                    messageId !== undefined && props.traceMessageId === messageId
-                                }
                                 viewerId={props.viewerId}
                             />
                         );

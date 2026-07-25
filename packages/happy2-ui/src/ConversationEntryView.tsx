@@ -1,7 +1,7 @@
 import { type CSSProperties } from "react";
 import type { ConversationAttachment, ConversationEntry, UserError } from "happy2-state";
 import { AgentActivityRow } from "./AgentActivityRow";
-import { AgentTraceRow, type AgentTraceRowKind, type AgentTraceRowStatus } from "./AgentTraceRow";
+import { AgentTraceRow, type AgentTraceRowKind } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
 import {
     ConversationRequestView,
@@ -15,8 +15,6 @@ export type ConversationEntryViewProps = {
     viewerId?: string;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
-    /** Another message from the same author follows (tool rows ignored). */
-    groupContinues?: boolean;
     /** Rewinds the conversation to a message; enables the per-message affordance. */
     onRewind?: (messageId: string) => void;
     /** Answers a pending question request entry. */
@@ -36,9 +34,9 @@ export type ConversationEntryViewProps = {
     requestError?: UserError;
     /** Renders rich activity bodies expanded from the first paint (blueprint/tests). */
     activityDefaultExpanded?: boolean;
-    /** Opens the turn trace panel for an agent message. */
-    onTraceOpen?: (messageId: string) => void;
-    /** The trace panel is showing this message's turn. */
+    /** Shows or hides the intermediate entries of this message's finished turn. */
+    onTraceToggle?: (turnId: string) => void;
+    /** That turn's intermediate entries are currently listed. */
     traceOpen?: boolean;
     className?: string;
     "data-testid"?: string;
@@ -46,6 +44,20 @@ export type ConversationEntryViewProps = {
 };
 
 const NOTICE_ICON = { info: "dot", warning: "shield", error: "shield" } as const;
+
+/** The trace row glyph for the kind of activity a turn reported last. */
+function traceRowKind(kind: string | undefined): AgentTraceRowKind | undefined {
+    if (
+        kind === "reasoning" ||
+        kind === "response" ||
+        kind === "tool" ||
+        kind === "subagent" ||
+        kind === "terminal" ||
+        kind === "status"
+    )
+        return kind;
+    return undefined;
+}
 
 /**
  * ConversationEntryView — renders one `ConversationEntry` through the shared
@@ -108,21 +120,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         trace !== undefined &&
         (trace.status === "pending" || trace.status === "running") &&
         trace.entryCount > 0;
-    const traceOpen = props.onTraceOpen ? () => props.onTraceOpen!(message.id) : undefined;
-    const traceStatus = (): AgentTraceRowStatus => {
-        if (!trace) return "running";
-        if (trace.status === "failed") return "failed";
-        if (trace.status === "running" || trace.status === "pending") return "running";
-        return "complete";
-    };
-    const traceKind = (): AgentTraceRowKind | undefined => {
-        const kind = trace?.latest?.kind;
-        if (kind === "reasoning" || kind === "response" || kind === "tool") return kind;
-        if (kind === "subagent") return "subagent";
-        if (kind === "terminal") return "terminal";
-        if (kind === "status") return "status";
-        return undefined;
-    };
+    const traceToggle =
+        trace && props.onTraceToggle ? () => props.onTraceToggle?.(trace.turnId) : undefined;
     return (
         <Message
             agent={author?.kind === "agent"}
@@ -132,9 +131,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             data-testid={props["data-testid"]}
             deliveryState={entry.delivery}
             generationStatus={message.generationStatus}
-            groupContinues={props.groupContinues}
             grouped={props.grouped}
-            hideIncomingIdentity={!own}
             initials={initialsOf(author?.displayName)}
             menuItems={
                 rewindable
@@ -145,9 +142,10 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 trace && !traceRunning && trace.entryCount > 0 ? (
                     <AgentTraceRow
                         entryCount={trace.entryCount}
-                        onOpen={traceOpen}
+                        onOpen={traceToggle}
                         open={props.traceOpen}
-                        status={traceStatus()}
+                        status={trace.status === "failed" ? "failed" : "complete"}
+                        toggles
                         toolCallCount={trace.toolCallCount}
                         totalTokens={trace.totalTokens}
                         variant="meta"
@@ -169,8 +167,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 <AgentTraceRow
                     detail={trace.latest?.detail}
                     entryCount={trace.entryCount}
-                    kind={traceKind()}
-                    onOpen={traceOpen}
+                    kind={traceRowKind(trace.latest?.kind)}
+                    onOpen={traceToggle}
                     open={props.traceOpen}
                     status="running"
                     title={trace.latest?.title}

@@ -64,8 +64,8 @@ export interface RigChatSnapshot {
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
     /** View state: whether thinking blocks are shown (hidden by default). */
     readonly showReasoning: boolean;
-    /** View state: whether completed turns collapse to a summary. */
-    readonly compactTurns: boolean;
+    /** Finished turns the reader opened; their intermediate entries are listed. */
+    readonly expandedTurnIds: ReadonlySet<string>;
     /** View state: whether the `/usage` panel is open (drives poll-while-visible). */
     readonly usagePanelOpen: boolean;
     /** Latest usage snapshot while the panel is open; undefined before the first load. */
@@ -158,8 +158,12 @@ export interface RigChatStore {
     settingsClose(): void;
     /** Local view toggle: show or hide thinking entries. */
     reasoningToggle(): void;
-    /** Local view toggle: collapse or expand completed turns. */
-    turnCompactToggle(): void;
+    /**
+     * Local view toggle: shows or hides one finished turn's intermediate
+     * messages and tool rows. A finished turn renders as its trace row plus its
+     * final message until it is expanded; a running turn always shows everything.
+     */
+    turnTraceToggle(turnId: string): void;
     /**
      * View-only clear: hides every currently visible transcript entry without
      * touching the durable server snapshot (mirrors the TUI `/clear`). New messages
@@ -217,7 +221,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let runStartedAt: number | undefined;
     let turnElapsedMs: number | undefined;
     let showReasoning = false;
-    let compactTurns = false;
+    // Finished turns the reader opened from their trace row; a running turn is
+    // always open, so this set only grows by explicit intent.
+    let expandedTurnIds: ReadonlySet<string> = new Set();
     // `/usage` panel: open flag, latest snapshot, in-flight/error, poll timer and a
     // generation guard so a stale in-flight fetch never overwrites a newer state.
     let usagePanelOpen = false;
@@ -247,7 +253,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         subagents: [],
         backgroundProcesses: [],
         showReasoning: false,
-        compactTurns: false,
+        expandedTurnIds: new Set<string>(),
         usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
@@ -270,10 +276,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 streaming: transientStreamingPresentation,
                 ephemeral,
                 showReasoning,
-                compactTurns,
                 pendingUserInputs: session?.pendingUserInputs ?? [],
             }),
-            { running: runStatus === "running" },
+            { running: runStatus === "running", expandedTurnIds },
         );
         const visible =
             clearedIds.size === 0
@@ -297,7 +302,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             subagents: session?.subagents ?? [],
             backgroundProcesses: session?.backgroundProcesses ?? [],
             showReasoning,
-            compactTurns,
+            expandedTurnIds,
             usagePanelOpen,
             usage,
             usageLoading,
@@ -902,8 +907,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             showReasoning = !showReasoning;
             commit();
         },
-        turnCompactToggle() {
-            compactTurns = !compactTurns;
+        turnTraceToggle(turnId) {
+            const next = new Set(expandedTurnIds);
+            if (!next.delete(turnId)) next.add(turnId);
+            expandedTurnIds = next;
             commit();
         },
         viewClear() {

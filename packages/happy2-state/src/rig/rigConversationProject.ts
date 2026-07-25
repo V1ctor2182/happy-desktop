@@ -170,14 +170,44 @@ function userEntry(sessionId: string, message: RigMessage): ConversationEntry {
     });
 }
 
+type RigToolResultBlock = Extract<RigMessage["blocks"][number], { type: "toolResult" }>;
+
+/**
+ * Pairs every durable tool call with its result, keyed by the call's positional
+ * entry id rather than by tool call id. The daemon delivers a call and its result
+ * in separate messages, so correlation spans the whole session; but a provider may
+ * reuse a call id across turns, so a call claims the first still-unclaimed result
+ * for its id in message order. Matching by id alone would show one late result on
+ * every earlier call that happened to share the id.
+ */
+function toolResultsPair(messages: readonly RigMessage[]): ReadonlyMap<string, RigToolResultBlock> {
+    const paired = new Map<string, RigToolResultBlock>();
+    const unclaimed = new Map<string, string[]>();
+    for (const message of messages)
+        message.blocks.forEach((block, index) => {
+            if (block.type === "toolCall") {
+                const queue = unclaimed.get(block.id);
+                if (queue) queue.push(`${message.id}:${index}`);
+                else unclaimed.set(block.id, [`${message.id}:${index}`]);
+            } else if (block.type === "toolResult") {
+                const entryId = unclaimed.get(block.toolCallId)?.shift();
+                if (entryId !== undefined) paired.set(entryId, block);
+            }
+        });
+    return paired;
+}
+
 function appendAgentEntries(
     entries: ConversationEntry[],
     sessionId: string,
     message: RigMessage,
-    results: ReadonlyMap<string, Extract<RigMessage["blocks"][number], { type: "toolResult" }>>,
+    results: ReadonlyMap<string, RigToolResultBlock>,
     showReasoning: boolean,
 ): void {
     message.blocks.forEach((block, index) => {
+        // Every entry id — text, reasoning, tool — is the block's position in its
+        // message. A tool call id is the provider's, may repeat across turns, and
+        // would collapse two distinct tool rows into one entry key if used here.
         const id = `${message.id}:${index}`;
         if (block.type === "text") {
             if (block.text)
@@ -199,10 +229,10 @@ function appendAgentEntries(
                     sequence: "",
                 });
         } else if (block.type === "toolCall") {
-            const result = results.get(block.id);
+            const result = results.get(id);
             entries.push({
                 kind: "agentActivity",
-                id: block.id,
+                id,
                 sequence: "",
                 activity: {
                     kind: "tool",
@@ -239,76 +269,39 @@ export interface RigConversationBuildInput {
     /** Run notices and shell runs that are not part of the durable message log. */
     readonly ephemeral: readonly ConversationEntry[];
     readonly showReasoning: boolean;
-    readonly compactTurns: boolean;
     readonly pendingUserInputs: readonly RigUserInputRequest[];
 }
 
 /**
  * Builds the ordered conversation a local session renders: durable messages
- * (with their tool calls correlated to results), run notices,
- * the streaming reply, and anything currently waiting on the reader. Streaming
+ * (with their tool calls correlated to results), run notices, the streaming
+ * reply, and anything currently waiting on the reader. Every entry is emitted;
+ * grouping a turn and collapsing a finished one belongs to the turn pass, which
+ * needs the complete list. Streaming
  * output is an ordinary message entry carrying a generation status rather than
  * a separate top-level field, so the same row settles in place when the run ends.
  */
 export function rigConversationBuild(
     input: RigConversationBuildInput,
 ): readonly ConversationEntry[] {
-    const durable: ConversationEntry[] = [];
+    const entries: ConversationEntry[] = [];
     const session = input.session;
     if (session) {
-        // The daemon delivers a tool call and its result in separate messages, so
-        // correlate results across the whole session rather than within one
-        // message. Without this, every completed tool renders as an empty success.
-        const results = new Map<
-            string,
-            Extract<RigMessage["blocks"][number], { type: "toolResult" }>
-        >();
-        for (const message of session.messages)
-            for (const block of message.blocks)
-                if (block.type === "toolResult") results.set(block.toolCallId, block);
+        const results = toolResultsPair(session.messages);
         for (const message of session.messages) {
             if (message.internal) continue;
             if (message.role === "user") {
-                durable.push(userEntry(input.sessionId, message));
+                entries.push(userEntry(input.sessionId, message));
                 continue;
             }
             if (message.role === "system") {
                 const text = messageText(message);
-                if (text) durable.push(rigNoticeEntry(message.id, "info", "System", text));
+                if (text) entries.push(rigNoticeEntry(message.id, "info", "System", text));
                 continue;
             }
-            appendAgentEntries(durable, input.sessionId, message, results, input.showReasoning);
+            appendAgentEntries(entries, input.sessionId, message, results, input.showReasoning);
         }
     }
-
-    // A turn is a user message and its following agent activity. When
-    // `compactTurns` is on, a completed turn's activity is dropped, collapsing it
-    // to the prompt; an in-flight turn always stays expanded so live output is visible.
-    const entries: ConversationEntry[] = [];
-    let inTurn = false;
-    let buffer: ConversationEntry[] = [];
-    const closeTurn = (): void => {
-        if (!inTurn) return;
-        if (!input.compactTurns) for (const entry of buffer) entries.push(entry);
-        inTurn = false;
-        buffer = [];
-    };
-    for (const entry of durable) {
-        if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
-            closeTurn();
-            inTurn = true;
-            entries.push(entry);
-            continue;
-        }
-        // Entries before the first user message are a preamble with no turn to close.
-        if (!inTurn) {
-            entries.push(entry);
-            continue;
-        }
-        buffer.push(entry);
-    }
-    if (input.streaming) for (const entry of buffer) entries.push(entry);
-    else closeTurn();
 
     for (const notice of input.ephemeral) entries.push(notice);
 
@@ -337,7 +330,7 @@ export function rigConversationBuild(
             } else
                 entries.push({
                     kind: "agentActivity",
-                    id: block.tool.toolCallId,
+                    id,
                     sequence: "",
                     activity: { kind: "tool", tool: rigToolCallProject(block.tool) },
                 });

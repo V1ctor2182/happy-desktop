@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import type {
     ConversationSummary,
     RigClockStore,
@@ -11,7 +11,7 @@ import type {
     RigThinkingLevel,
     RigWorkspaceStore,
 } from "happy2-state";
-import { rigOwnerAuthor, rigTurnTraceDetails } from "happy2-state";
+import { rigOwnerAuthor } from "happy2-state";
 import {
     AppShell,
     Banner,
@@ -255,18 +255,6 @@ function RigConversationSurface(props: {
             ? Math.max(0, props.now - conversation.runStartedAt)
             : conversation.turnElapsedMs;
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
-    const [traceMessageId, setTraceMessageId] = useState<string | undefined>();
-    const traceDetails = useMemo(() => {
-        if (!traceMessageId) return undefined;
-        const row = conversation.entries.find(
-            (entry) => entry.kind === "message" && entry.message.id === traceMessageId,
-        );
-        const turnId =
-            row?.kind === "message" ? row.message.agentTrace?.turnId : undefined;
-        if (!turnId) return undefined;
-        return rigTurnTraceDetails(conversation.entries, turnId);
-    }, [conversation.entries, traceMessageId]);
-
     return (
         <ConversationView
             composer={conversation.composer}
@@ -303,9 +291,8 @@ function RigConversationSurface(props: {
             onRequestAnswer={(requestId, answers) =>
                 swallow(workspace.answerInput({ requestId, answers }))
             }
-            onRewind={(messageId) => swallow(workspace.rewind(messageId))}
-            onTraceClose={() => setTraceMessageId(undefined)}
-            onTraceOpen={(messageId) => setTraceMessageId(messageId)}
+            expandedTurnIds={conversation.expandedTurnIds}
+            onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             panel={
                 conversation.usagePanelOpen ? (
                     <RigUsagePanel
@@ -330,7 +317,6 @@ function RigConversationSurface(props: {
                 conversation.settingsOpen ? (
                     <ConversationSettingsModal
                         activityOpen={conversation.activityPanelOpen}
-                        compactTurns={conversation.compactTurns}
                         controls={
                             conversation.menus ? (
                                 <RigSessionControls
@@ -353,7 +339,6 @@ function RigConversationSurface(props: {
                         }
                         onActivityOpenChange={() => workspace.activityPanelToggle()}
                         onClose={() => workspace.settingsClose()}
-                        onCompactTurnsChange={() => workspace.turnCompactToggle()}
                         onShowReasoningChange={() => workspace.reasoningToggle()}
                         onUsageOpenChange={(value) =>
                             value ? workspace.usagePanelOpen() : workspace.usagePanelClose()
@@ -368,8 +353,6 @@ function RigConversationSurface(props: {
             running={conversation.running}
             subtitle={conversation.subtitle}
             title={conversation.title ?? "Untitled session"}
-            traceDetails={traceDetails}
-            traceMessageId={traceMessageId}
             viewerId={rigOwnerAuthor.id}
         />
     );
