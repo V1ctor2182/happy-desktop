@@ -425,14 +425,30 @@ export function Sidebar(props: SidebarProps) {
     ): void => {
         dragClick.current = false;
         if (!local.onItemReorder || event.button !== 0 || blocks.length < 2) return;
-        // Heights come from the laid-out rows: a block is as tall as the rows it
-        // holds, so a project with worktrees displaces more than a bare one.
-        const rows = event.currentTarget.parentElement?.children ?? [];
-        const heights = blocks.map((block) =>
-            block.reduce((total, index) => {
-                const row = rows[index] as HTMLElement | undefined;
-                return total + (row?.offsetHeight ?? 0);
-            }, 0),
+        // Heights are the distance a block actually displaces, measured from the
+        // laid-out rows: the step from one block's top to the next block's top,
+        // which counts the rows a block holds and the gap between them. Reading
+        // the section's children directly would count its heading too, and
+        // summing row heights alone would drop every gap — either way the block
+        // travels a little less than it should and the drop lands off by that
+        // much. The last block has no next top, so it takes its own extent plus
+        // the same gap.
+        const rows = [
+            ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
+                '[data-happy2-ui="sidebar-item"]',
+            ) ?? []),
+        ];
+        const top = (blockIndex: number): number =>
+            rows[blocks[blockIndex]?.[0] ?? -1]?.offsetTop ?? 0;
+        const bottom = (block: readonly number[]): number => {
+            const last = rows[block[block.length - 1] ?? -1];
+            return last ? last.offsetTop + last.offsetHeight : 0;
+        };
+        const gap = blocks.length > 1 ? Math.max(0, top(1) - bottom(blocks[0]!)) : 0;
+        const heights = blocks.map((block, index) =>
+            index + 1 < blocks.length
+                ? top(index + 1) - top(index)
+                : bottom(block) - top(index) + gap,
         );
         event.currentTarget.setPointerCapture(event.pointerId);
         dragSet({
@@ -637,6 +653,7 @@ export function Sidebar(props: SidebarProps) {
                             className="happy2-sidebar__section"
                             key={section.id}
                             data-happy2-ui="sidebar-section"
+                            data-reordering={dragOf(section.id) ? "" : undefined}
                             data-section-id={section.id}
                         >
                             {section.label ? (

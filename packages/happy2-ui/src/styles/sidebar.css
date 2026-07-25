@@ -338,6 +338,17 @@
     cursor: pointer;
     transition:
         background-color 120ms ease,
+        color 120ms ease;
+}
+
+/* Rows only animate their transform while a reorder is in flight. Once the move
+   is reported the list is rearranged and every transform drops to none in the
+   same commit; if that drop were transitioned, each row would glide in from
+   wherever it had been pushed to — the dropped row appearing to fly in from
+   above — instead of simply being where the new order puts it. */
+.happy2-sidebar__section[data-reordering] .happy2-sidebar__item {
+    transition:
+        background-color 120ms ease,
         color 120ms ease,
         transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -357,7 +368,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-sidebar__item {
+    .happy2-sidebar__section[data-reordering] .happy2-sidebar__item {
         transition:
             background-color 120ms ease,
             color 120ms ease;
