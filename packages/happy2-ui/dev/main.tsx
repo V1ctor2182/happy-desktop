@@ -83,6 +83,7 @@ import { BuildProgressPanelPage } from "./pages/BuildProgressPanelPage";
 import { SidebarPage } from "./pages/SidebarPage";
 import { StatTilePage } from "./pages/StatTilePage";
 import { StatusPickerPage } from "./pages/StatusPickerPage";
+import { SpinnerPage } from "./pages/SpinnerPage";
 import { SwitchPage } from "./pages/SwitchPage";
 import { TabbedPanePage } from "./pages/TabbedPanePage";
 import { TabsPage } from "./pages/TabsPage";
@@ -247,6 +248,7 @@ const components: BlueprintPage[] = [
     { id: "text-field", label: "Text field", number: "C-018", page: TextFieldPage },
     { id: "select", label: "Select", number: "C-019", page: SelectPage },
     { id: "switch", label: "Switch", number: "C-020", page: SwitchPage },
+    { id: "spinner", label: "Spinner", number: "C-160", page: SpinnerPage },
     { id: "checkbox", label: "Checkbox", number: "C-021", page: CheckboxPage },
     {
         id: "segmented-control",

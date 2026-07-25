@@ -252,6 +252,15 @@ export {
     type TextFieldType,
 } from "./TextField";
 export { Select, type SelectOption, type SelectProps, type SelectSize } from "./Select";
+export { LoadingSwap, type LoadingSwapProps } from "./LoadingSwap";
+export {
+    SPINNER_FRAMES,
+    SPINNER_VARIANTS,
+    Spinner,
+    type SpinnerProps,
+    type SpinnerTone,
+    type SpinnerVariant,
+} from "./Spinner";
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {
