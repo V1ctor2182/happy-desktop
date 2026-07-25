@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ProtocolHttpClient } from "@slopus/rig-client-runtime/dist/client/index.js";
+import type { RigDaemonClient } from "./rigDaemonClient";
 import type { LocalRigConnection, LocalRigConnector } from "./localRig";
 import {
     RigInstallTerminalManager,
@@ -15,7 +15,7 @@ describe("confirmed Rig installation terminal", () => {
         const host: RigInstallPtyHost = { spawn: vi.fn(() => pty.value) };
         const connector: LocalRigConnector = {
             connect: vi.fn(async () => ({
-                client: {} as ProtocolHttpClient,
+                client: {} as RigDaemonClient,
                 command: "/usr/local/bin/rig",
                 environment: { PATH: "/usr/local/bin:/usr/bin" },
                 version: "0.0.45",
@@ -115,7 +115,7 @@ describe("confirmed Rig installation terminal", () => {
 
         manager.closeOwner(9);
         connectionResolve({
-            client: {} as ProtocolHttpClient,
+            client: {} as RigDaemonClient,
             command: "/usr/local/bin/rig",
             environment: {},
             version: "0.0.45",

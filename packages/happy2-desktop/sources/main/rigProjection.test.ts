@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type {
+    AgentSnapshot,
     GlobalEventQueueEntry,
     ModelCatalog,
     ProtocolSession,
     SessionEvent,
     SessionSummary,
     SubagentSummary,
-} from "@slopus/rig-client-runtime/dist/protocol/index.js";
-import type { AgentSnapshot } from "@slopus/rig-client-runtime/dist/agent/index.js";
+} from "./rigDaemonTypes";
 import {
     rigCatalogProject,
     rigDisplayCwd,
@@ -331,6 +331,25 @@ describe("rigSessionEventProject", () => {
             modelId: "gpt-y",
             providerId: "anthropic",
             effort: "high",
+        });
+    });
+
+    it("preserves the durable error attached to a finished run", () => {
+        expect(
+            rigSessionEventProject(
+                envelope("run_finished", {
+                    runId: "r1",
+                    stopReason: "error",
+                    modelLocked: false,
+                    errorMessage: "Provider connection failed.",
+                }),
+                HOME,
+            ),
+        ).toMatchObject({
+            type: "run_finished",
+            runId: "r1",
+            stopReason: "error",
+            errorMessage: "Provider connection failed.",
         });
     });
 

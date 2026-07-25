@@ -1,32 +1,26 @@
 import type {
+    AgentBlock,
+    AgentLoopEvent,
+    AssistantMessage,
+    BashSessionActivity,
+    FileDiff,
     GetSessionUsageResponse,
     GlobalEventQueueEntry,
+    Message,
     ModelCatalog,
+    Model,
     ProtocolSession,
     RunShellCommandResponse,
+    SessionGoal,
     SessionEvent,
     SessionSummary,
+    SessionTask,
     SubagentSummary,
-} from "@slopus/rig-client-runtime/dist/protocol/index.js";
-import type {
-    AgentBlock,
-    Message,
-    ToolResultBlock,
-} from "@slopus/rig-client-runtime/dist/agent/types.js";
-import type { AgentLoopEvent } from "@slopus/rig-client-runtime/dist/agent/loop.js";
-import type {
-    FileDiff,
-    ToolResultPresentation,
-} from "@slopus/rig-client-runtime/dist/agent/ToolResultPresentation.js";
-import type { BashSessionActivity } from "@slopus/rig-client-runtime/dist/agent/context/BashContext.js";
-import type {
-    AssistantMessage,
-    Model,
     ToolCall,
-} from "@slopus/rig-client-runtime/dist/providers/types.js";
-import type { UserInputRequest } from "@slopus/rig-client-runtime/dist/user-input/index.js";
-import type { SessionTask } from "@slopus/rig-client-runtime/dist/tasks/index.js";
-import type { SessionGoal } from "@slopus/rig-client-runtime/dist/goals/index.js";
+    ToolResultBlock,
+    ToolResultPresentation,
+    UserInputRequest,
+} from "./rigDaemonTypes";
 import type {
     RigAgentEvent,
     RigBackgroundProcess,
@@ -287,6 +281,9 @@ export function rigSessionEventProject(
                 runId: event.data.runId,
                 stopReason: event.data.stopReason,
                 modelLocked: event.data.modelLocked,
+                ...(event.data.errorMessage !== undefined
+                    ? { errorMessage: event.data.errorMessage }
+                    : {}),
             };
         case "run_error":
             return {

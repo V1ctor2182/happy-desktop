@@ -29,8 +29,7 @@
     "dependencies": {
         "@lydell/node-pty": "1.2.0-beta.12",
         "@slopus/ghostty-web": "0.1.0",
-        "@slopus/rig": "0.0.45",
-        "@slopus/rig-client-runtime": "npm:@slopus/rig@0.0.33",
+        "@slopus/rig": "0.0.55",
         "electron-updater": "^6.8.9",
         "happy2-app": "workspace:*",
         "happy2-state": "workspace:*",

@@ -169,6 +169,32 @@ describe("rigChatStore streaming reconciliation", () => {
         unsubscribe();
     });
 
+    it("surfaces a run-finished provider error from durable history", async () => {
+        const fake = createFakeRigTransport();
+        fake.sessionSet(fakeRigSession("s1"));
+        const { store, unsubscribe } = await chatReady(fake, "s1");
+
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "run_finished",
+                runId: "r1",
+                stopReason: "error",
+                modelLocked: false,
+                errorMessage: "Provider connection failed.",
+            }),
+        );
+
+        expect(store.get().transcript).toContainEqual({
+            id: "notice:0",
+            kind: "notice",
+            level: "error",
+            title: "Run error",
+            text: "Provider connection failed.",
+        });
+        unsubscribe();
+    });
+
     it("builds a tool entry across start/progress/end with the correct status", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));

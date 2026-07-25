@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProtocolHttpClient } from "@slopus/rig-client-runtime/dist/client/index.js";
+import type { RigDaemonClient } from "./rigDaemonClient";
 import type { DesktopRuntimeSnapshot } from "../shared/desktopContract";
 import {
     RigCommandMissingError,
@@ -183,7 +183,7 @@ function connectorSequence(values: readonly (LocalRigConnection | Error)[]): Loc
 
 function connection(close: () => void): LocalRigConnection {
     return {
-        client: {} as ProtocolHttpClient,
+        client: {} as RigDaemonClient,
         command: "/usr/local/bin/rig",
         environment: { PATH: "/usr/local/bin:/usr/bin" },
         version: "0.0.45",

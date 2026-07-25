@@ -83,7 +83,7 @@ export type RigAgentEvent =
       }
     | {
           readonly type: "context_compacted";
-          readonly reason: "context_window" | "threshold";
+          readonly reason: "context_window" | "manual" | "threshold";
           readonly estimatedTokensBefore: number;
           readonly estimatedTokensAfter: number;
       }
@@ -124,6 +124,7 @@ export type RigSessionEvent = {
           readonly runId: string;
           readonly stopReason: RigStopReason;
           readonly modelLocked: boolean;
+          readonly errorMessage?: string;
       }
     | {
           readonly type: "run_error";

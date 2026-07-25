@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { SessionEvent } from "@slopus/rig-client-runtime/dist/protocol/index.js";
+import type { SessionEvent } from "./rigDaemonTypes";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
 
 const HOME = "/home/dev";

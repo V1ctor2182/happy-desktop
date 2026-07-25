@@ -507,6 +507,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 turnElapsedMs = runStartedAt !== undefined ? now() - runStartedAt : undefined;
                 streaming = undefined;
                 runId = undefined;
+                if (event.errorMessage) pushNotice("error", "Run error", event.errorMessage);
                 break;
             case "run_error":
                 runStatus = "idle";

@@ -3,11 +3,7 @@ import { realpath } from "node:fs/promises";
 import { isAbsolute, normalize, resolve } from "node:path";
 import { userInfo } from "node:os";
 import type { HealthResponse } from "@slopus/rig/types";
-import {
-    ProtocolHttpClient,
-    readTokenIfPresent,
-} from "@slopus/rig-client-runtime/dist/client/index.js";
-import { getEnvironmentLocalServerPaths } from "@slopus/rig-client-runtime/dist/server/index.js";
+import { RigDaemonClient, rigDaemonPathsResolve, rigDaemonTokenRead } from "./rigDaemonClient";
 
 const discoveryMarker = "__HAPPY2_RIG_PATH__=";
 const discoveryCommand = `printf '${discoveryMarker}%s\\0' "$(command -v rig 2>/dev/null)"; /usr/bin/env -0`;
@@ -21,7 +17,7 @@ export interface RigLoginEnvironment {
 }
 
 export interface LocalRigConnection {
-    readonly client: ProtocolHttpClient;
+    readonly client: RigDaemonClient;
     readonly command: string;
     readonly environment: NodeJS.ProcessEnv;
     readonly version: string;
@@ -114,13 +110,13 @@ export function localRigConnectorCreate(
         readonly clientCreate?: (input: {
             readonly socketPath: string;
             readonly token: string;
-        }) => ProtocolHttpClient;
+        }) => RigDaemonClient;
     } = {},
 ): LocalRigConnector {
     const host = options.host ?? defaultProcessHost;
     const wait = options.wait ?? delay;
     const baseEnvironment = options.environment ?? process.env;
-    const clientCreate = options.clientCreate ?? ((input) => new ProtocolHttpClient(input));
+    const clientCreate = options.clientCreate ?? ((input) => new RigDaemonClient(input));
     return {
         async connect(): Promise<LocalRigConnection> {
             const login = await rigLoginEnvironmentDiscover(
@@ -128,7 +124,7 @@ export function localRigConnectorCreate(
                 baseEnvironment,
                 options.configuredShell,
             );
-            const paths = getEnvironmentLocalServerPaths(login.environment);
+            const paths = rigDaemonPathsResolve(login.environment);
             let connection = await daemonProbe(paths.socketPath, paths.tokenPath, clientCreate);
             if (!connection) {
                 await host.execFile(login.command, ["daemon", "start"], {
@@ -220,9 +216,9 @@ function minimalShellEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Process
 async function daemonProbe(
     socketPath: string,
     tokenPath: string,
-    create: (input: { readonly socketPath: string; readonly token: string }) => ProtocolHttpClient,
-): Promise<{ readonly client: ProtocolHttpClient; readonly health: HealthResponse } | undefined> {
-    const token = await readTokenIfPresent(tokenPath);
+    create: (input: { readonly socketPath: string; readonly token: string }) => RigDaemonClient,
+): Promise<{ readonly client: RigDaemonClient; readonly health: HealthResponse } | undefined> {
+    const token = await rigDaemonTokenRead(tokenPath);
     if (!token) return undefined;
     const client = create({ socketPath, token });
     try {
@@ -235,9 +231,9 @@ async function daemonProbe(
 async function daemonWait(
     socketPath: string,
     tokenPath: string,
-    create: (input: { readonly socketPath: string; readonly token: string }) => ProtocolHttpClient,
+    create: (input: { readonly socketPath: string; readonly token: string }) => RigDaemonClient,
     wait: (milliseconds: number) => Promise<void>,
-): Promise<{ readonly client: ProtocolHttpClient; readonly health: HealthResponse }> {
+): Promise<{ readonly client: RigDaemonClient; readonly health: HealthResponse }> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
         const connection = await daemonProbe(socketPath, tokenPath, create);
@@ -248,7 +244,7 @@ async function daemonWait(
 }
 
 async function readyHealthWait(
-    client: ProtocolHttpClient,
+    client: RigDaemonClient,
     wait: (milliseconds: number) => Promise<void>,
 ): Promise<Extract<HealthResponse, { readonly status: "ready" }>> {
     const deadline = Date.now() + 10_000;

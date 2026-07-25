@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProtocolHttpClient } from "@slopus/rig-client-runtime/dist/client/index.js";
+import type { RigDaemonClient } from "./rigDaemonClient";
 import {
     discoveryOutputParse,
     localRigConnectorCreate,
@@ -114,7 +114,7 @@ describe("normal Rig discovery", () => {
             environment: { SHELL: "/bin/zsh" },
             configuredShell: "/bin/zsh",
             wait: async () => undefined,
-            clientCreate: () => ({ health }) as unknown as ProtocolHttpClient,
+            clientCreate: () => ({ health }) as unknown as RigDaemonClient,
         });
 
         const connection = await connector.connect();

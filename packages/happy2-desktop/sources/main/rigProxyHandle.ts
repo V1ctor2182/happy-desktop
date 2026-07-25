@@ -1,13 +1,13 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
-import type { ProtocolHttpClient } from "@slopus/rig-client-runtime/dist/client/index.js";
-import type { EventId } from "@slopus/rig-client-runtime/dist/protocol/index.js";
 import type {
     RigModelSelection,
     RigPermissionMode,
     RigServiceTier,
     RigSessionCreateInput,
 } from "happy2-state";
+import type { RigDaemonClient } from "./rigDaemonClient";
+import type { EventId } from "./rigDaemonTypes";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
     rigCatalogProject,
@@ -22,7 +22,7 @@ import {
 
 /** The subset of the daemon client the projected loopback surface calls. */
 export type RigProxyClient = Pick<
-    ProtocolHttpClient,
+    RigDaemonClient,
     | "health"
     | "models"
     | "listSessions"
