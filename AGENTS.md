@@ -10,9 +10,8 @@ layouts for mobile viewports.
 
 Treat each feature as one atomic, independently mergeable change, not as the
 lifetime of a Conductor workspace. A worktree may contain only one unmerged
-feature at a time. Do not begin the next feature until the current feature has
-been pushed or merged to `main`. Reviews are optional and are never a
-prerequisite for pushing or merging.
+feature at a time; finish and push the current feature before starting the
+next one.
 
 After that merge, reuse the same workspace/worktree when convenient. It does
 not need to be recreated, checked out directly on `main`, or have a branch tip
@@ -25,58 +24,44 @@ is still unmerged.
 Build each feature in isolation, with an explicit boundary between its server
 and UI work. Do not mix unrelated features into the same implementation.
 
-## Optional review workflow
+Small UI work does not need this ceremony. For a quick visual or interaction
+change, just make it: if it typechecks, builds, and renders correctly, it is
+done.
 
-Review is optional for every edit and must never block pushing or merging. When
-an independent review would be useful, reserve Claude Opus for sizable or
-critical changes: security or authorization behavior, durable data or
-migrations, server API contracts, complex concurrency or synchronization,
-substantial UI flows, or broad/high-risk diffs. Opus is deliberately slow, so
-do not invoke it early, before the implementation and relevant tests are
-complete, or for a small, isolated, low-risk change.
+## Tests
 
-For a quick independent review, ask GPT Luna at high effort instead. Use that
-option for focused, low-to-medium-risk diffs when a fast second look is useful.
-Routine mechanical, small, and low-risk changes may rely on the implementer's
-own verification and relevant automated checks without a separate review.
+Do not write tests unless the user asked for them. No unit tests, no `gym`
+tests, no browser tests — not "just one to be safe", not as a side effect of
+touching a file that already has tests. Verify your change by building and
+running it instead.
 
-When choosing to run an Opus review:
+When the user does ask for tests, follow the rules in the sections below for
+where they live and what they must prove. Keep existing tests passing for the
+code you touch.
 
-1. Finish the isolated implementation and its required tests, then review the
-   complete task diff with Claude Opus at medium effort and streaming/verbose
-   output. Do not use `ultrareview`/Ultracode for this gate.
-2. Address every actionable finding, rerun the relevant checks, and resume the
-   same persisted Opus session with a concrete account of the fixes.
-3. Repeat until both Codex and Opus explicitly agree that no task-blocking issue
-   remains. Never interrupt, terminate, cancel, or replace a running Claude
-   reviewer merely because it is slow or has not produced intermediate output.
-4. Run repository-wide `pnpm format`, then the final required checks. If the
-   task has not already been synced, sync it to `main` using the workflow below.
-   Review completion is not a condition of pushing or merging.
+## Review
 
-For Claude-owned UI tasks that warrant review, Codex performs the reciprocal
-review and Opus resumes the same session to address actionable findings. For
-GPT-owned server tasks, Opus is a read-only reviewer and must not implement
-server behavior.
+Review is optional for every edit and never gates pushing or merging. An
+independent review is worth requesting for sizable or critical work — security
+or authorization behavior, durable data or migrations, server API contracts,
+complex concurrency, substantial UI flows, or broad/high-risk diffs — and only
+once the implementation is complete. Routine mechanical, small, and low-risk
+changes rely on the implementer's own verification.
+
+When a review is run, address every actionable finding and rerun the relevant
+checks. Then run repository-wide `pnpm format` and sync the task to `main`
+using the workflow below.
 
 Backward compatibility is not a default product requirement. Prefer the clean
 new-server/backend and UI design unless the current task explicitly requires a
 compatibility or data-preservation contract; do not add legacy branches solely
 to preserve obsolete behavior.
 
-## Model ownership
+## Order of work
 
-Model ownership is strict:
-
-- GPT models, and only GPT models, implement the server behavior and its `gym`
-  coverage.
-- Claude Opus implements the UI portion only after the server behavior is
-  complete and the user has explicitly approved the backend.
-
-Development starts with the server feature. Design its API and data model
-carefully, implement it, and prove its observable behavior with thorough `gym`
-tests. Then stop and ask the user to review and approve the backend. Do not
-begin or hand off any UI work until that approval is given. Favor simple,
+When a feature needs both server and UI work, development starts with the
+server feature: design its API and data model carefully, implement it, then
+build the UI on top of the finished server behavior. Favor simple,
 durable boundaries that will not create foreseeable maintenance or
 compatibility problems. Do not add abstractions, options, or behavior solely
 for hypothetical future use cases; solve the feature currently being built
@@ -88,7 +73,9 @@ Before creating or changing any user interface, read and follow `DESIGN.md`.
 It is the authoritative contract for component ownership, blueprint coverage,
 layout dimensions, icon preparation, optical alignment, and cross-browser
 rendering tests. Reusable visual components belong in `happy2-ui`; application
-packages may only compose them and supply product state and event handlers.
+packages may only compose them and supply product state and event handlers. Its
+rendering-test rules describe how such tests are written when they are asked
+for; they do not override the "Tests" section above.
 
 Use flexbox for layout almost all of the time — it is the default for every row,
 column, stack, toolbar, and centered box. Use another mechanism (CSS Grid, and
@@ -158,8 +145,9 @@ scroll, measurements, and local UI state survive updates.
 - Virtualize collections that can contain thousands of entries. Efficient
   reconciliation does not make thousands of simultaneous DOM nodes, layout
   boxes, images, or observers free.
-- Browser tests for a store adapter or repeated-row projection must prove the
-  lifecycle contract, not only visible text: assert child mount count,
+- When browser tests for a store adapter or repeated-row projection are
+  requested, they must prove the lifecycle contract, not only visible text:
+  assert child mount count,
   subscription cleanup, exact DOM-node identity, `document.activeElement`,
   selection/local value where relevant, and open local panels or menus across
   local and authoritative store updates. Run those tests in Chromium, Firefox,
@@ -172,16 +160,14 @@ the latest `origin/main`, then push the resulting `HEAD` to `main` with a normal
 non-force push. If `main` advances or the push is rejected, fetch, rebase again,
 and retry until the push succeeds. Never force-push `main`.
 
-Keep sync validation proportional to the packages that changed. When a diff is
-client-only and limited to `happy2-app`, `happy2-state`, and `happy2-ui` (plus
-their docs, assets, or development tooling), run only the package-level checks
-that are directly relevant; do not run server gym, server coverage, or another
-repository-wide test pass solely because the work is being synced. These UI and
-client-state changes cannot corrupt durable server data or migrations. If the
-user explicitly asks to sync without tests, skip tests and limit the sync gate
-to formatting and non-test repository/diff checks before committing and
-rebasing. Any server, schema, migration, authentication, or durable-state change
-still follows the full server validation requirements above.
+Keep sync validation proportional to the packages that changed. For a
+client-only diff limited to `happy2-app`, `happy2-state`, and `happy2-ui` (plus
+their docs, assets, or development tooling), formatting plus a typecheck/build
+of the touched packages is enough; do not run server gym, server coverage, or
+another repository-wide test pass solely because the work is being synced.
+These UI and client-state changes cannot corrupt durable server data or
+migrations. A server, schema, migration, authentication, or durable-state change
+runs the existing server checks for the code it touches.
 
 ## Server principles
 
@@ -189,14 +175,14 @@ still follows the full server validation requirements above.
 server or as a separately deployed authentication service. Its behavior is
 configured from a TOML file; do not add deployment-specific switches to code.
 
-Server behavior must be tested end to end in `gym`, the repository's isolated
-black-box testing environment. Add or update coverage under
-`packages/happy2-gym/tests/server` whenever changing server HTTP behavior; unit tests
-do not replace this end-to-end coverage. Name each test file after the observable
-behavior it proves so the directory reads like an index of supported workflows;
-do not use generic names such as `server.test.ts`, `integration.test.ts`, or
-issue numbers. Read `packages/happy2-gym/README.md` before writing gym tests for the
-full naming, organization, harness, and lifecycle instructions.
+When server tests are requested, they belong end to end in `gym`, the
+repository's isolated black-box testing environment: put the coverage under
+`packages/happy2-gym/tests/server`, since unit tests do not replace end-to-end
+coverage. Name each test file after the observable behavior it proves so the
+directory reads like an index of supported workflows; do not use generic names
+such as `server.test.ts`, `integration.test.ts`, or issue numbers. Read
+`packages/happy2-gym/README.md` before writing gym tests for the full naming,
+organization, harness, and lifecycle instructions.
 
 - Keep `/` deliberately minimal. Versioned, useful HTTP APIs live under `/v0`.
 - Exactly one authentication mechanism is enabled in TOML at a time: OIDC,
@@ -317,6 +303,6 @@ decision to create a process-global instance outside this package.
   typed writer and must not re-emit store output events. Public actions may
   express intent or optimistic local state, but must not fabricate confirmed,
   saved, pinned, or otherwise server-authoritative state.
-- Cover deterministic races and failures with the programmable fake server in
-  `happy2-state/testing`, and cover the same boundary against the real in-memory
-  server through `gym/state`.
+- When tests for races and failure handling are requested, write them against
+  the programmable fake server in `happy2-state/testing`, and cover the same
+  boundary against the real in-memory server through `gym/state`.
