@@ -367,7 +367,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         view
             .$('[data-testid="full"] .happy2-sidebar__compose .happy2-sidebar__item-label')
             .textMetrics().text,
-    ).toContain("New chat");
+    ).toContain("Create");
     expect(compose.bounds().width).toBe(344);
     expect(compose.bounds().height).toBe(32);
     expect(compose.bounds().x).toBe(8);

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import type { ChatSummary } from "happy2-state";
+import type { AgentTurnTraceSummary, ChatSummary, ConversationMessageEntry } from "happy2-state";
 import {
     chatStoreFixtureCreate,
     composerStoreFixtureCreate,
@@ -50,8 +50,7 @@ const passiveActions: ChatPageActions = {
     channelInfoOpen: () => undefined,
     profileOpen: () => undefined,
     panelClose: () => undefined,
-    traceOpen: () => undefined,
-    traceClose: () => undefined,
+    searchOpen: () => undefined,
     workspaceOpen: () => undefined,
     workspaceClose: () => undefined,
     workspaceFileOpen: () => undefined,
@@ -99,6 +98,53 @@ const passiveActions: ChatPageActions = {
     messageSend: () => undefined,
     sharedLinkOpen: () => undefined,
 };
+const REPLY_FIRST =
+    "I'll create a dedicated subchannel for making document removal archive-only, with restore and visibility semantics defined at the backend first.";
+const REPLY_LAST =
+    "Created **Archive documents** and kicked off archive-only document removal, including restore behavior.";
+const turnTrace: AgentTurnTraceSummary = {
+    turnId: "message-blueprint-1",
+    agentUserId: "happy-blueprint",
+    status: "complete",
+    startedAt: "2026-07-17T12:00:01.000Z",
+    completedAt: "2026-07-17T12:00:09.000Z",
+    latest: { kind: "status", title: "Turn completed", occurredAt: 6 },
+    entryCount: 7,
+    toolCallCount: 1,
+    totalTokens: 4_200,
+    subagents: [],
+    backgroundTerminals: [],
+};
+function chatMessage(
+    id: string,
+    text: string,
+    agent?: AgentTurnTraceSummary,
+): ConversationMessageEntry {
+    return {
+        kind: "message",
+        source: "server",
+        delivery: "sent",
+        message: {
+            id,
+            chatId: chat.id,
+            sequence: id,
+            changePts: "1",
+            kind: agent ? "automated" : "user",
+            automated: false,
+            audience: agent ? "people" : "agents",
+            agentUserIds: agent ? [] : ["happy-blueprint"],
+            text,
+            revision: 1,
+            mentions: [],
+            attachments: [],
+            reactions: [],
+            receipts: [],
+            expiryMode: "none",
+            createdAt: "2026-07-17T12:00:00.000Z",
+            ...(agent ? { agentTrace: agent, generationStatus: "complete" as const } : {}),
+        },
+    };
+}
 export function ChatStorePage() {
     const [{ sidebar, directory, chatSurface, composer }] = useState(() => {
         const sidebar = sidebarStoreFixtureCreate();
@@ -151,7 +197,80 @@ export function ChatStorePage() {
             ],
             sync: { protocolVersion: 1, generation: "blueprint", sequence: "0" },
         });
-        chatSurface.input({ type: "chatLoaded", chat, messages: [], hasMoreMessages: false });
+        // One finished turn, so the blueprint shows both states: the reply with
+        // its "View traces" control, and the turn expanded back into what the
+        // agent wrote, did, and answered.
+        chatSurface.input({
+            type: "chatLoaded",
+            chat,
+            messages: [
+                chatMessage("message-blueprint-1", "Move turn traces into the transcript"),
+                chatMessage("message-blueprint-2", `${REPLY_FIRST}\n\n${REPLY_LAST}`, turnTrace),
+            ],
+            hasMoreMessages: false,
+        });
+        chatSurface.input({
+            type: "traceLoaded",
+            messageId: "message-blueprint-2",
+            trace: {
+                ...turnTrace,
+                entries: [
+                    {
+                        id: "step-0",
+                        kind: "status",
+                        title: "Starting turn",
+                        status: "complete",
+                        occurredAt: 0,
+                    },
+                    {
+                        id: "step-1",
+                        kind: "reasoning",
+                        title: "Reasoning",
+                        detail: "**Planning the transcript** \nThe chat surface already owns the messages, so it can own the steps",
+                        status: "complete",
+                        occurredAt: 1,
+                    },
+                    {
+                        id: "step-2",
+                        kind: "response",
+                        title: "Response completed",
+                        detail: REPLY_FIRST,
+                        status: "complete",
+                        occurredAt: 2,
+                    },
+                    {
+                        id: "step-3",
+                        kind: "tool",
+                        title: "Channel child create",
+                        detail: "packages/happy2-server/sources/modules/chat",
+                        status: "complete",
+                        occurredAt: 3,
+                    },
+                    {
+                        id: "step-4",
+                        kind: "status",
+                        title: "Inference 2",
+                        status: "complete",
+                        occurredAt: 4,
+                    },
+                    {
+                        id: "step-5",
+                        kind: "response",
+                        title: "Response completed",
+                        detail: REPLY_LAST,
+                        status: "complete",
+                        occurredAt: 5,
+                    },
+                    {
+                        id: "step-6",
+                        kind: "status",
+                        title: "Turn completed",
+                        status: "complete",
+                        occurredAt: 6,
+                    },
+                ],
+            },
+        });
         return { sidebar, directory, chatSurface, composer };
     });
     const [navigation, setNavigation] = useState<ChatPageNavigation>({ chatId: chat.id });
@@ -162,9 +281,6 @@ export function ChatStorePage() {
         profileOpen: (userId) =>
             setNavigation((value) => ({ ...value, panel: { kind: "profile", userId } })),
         panelClose: () => setNavigation((value) => ({ ...value, panel: undefined })),
-        traceOpen: (messageId) =>
-            setNavigation((value) => ({ ...value, panel: { kind: "trace", messageId } })),
-        traceClose: () => setNavigation((value) => ({ ...value, panel: undefined })),
         workspaceOpen: () => setNavigation((value) => ({ ...value, panel: { kind: "workspace" } })),
         workspaceClose: () => setNavigation((value) => ({ ...value, panel: undefined })),
         workspaceFileOpen: (_chatId, path) =>

@@ -8,6 +8,19 @@ import type {
 import type { ChannelDirectoryItem, SidebarItem, SidebarSection } from "./ChatPageComponents.js";
 import { identityInitials, toneFor } from "./chatPageModels.js";
 import type { ChatPageUser } from "./ChatPage.js";
+/** Row that opens the ⌘K palette; the sidebar has no "Discover channels" caption. */
+export const SIDEBAR_SEARCH_ID = "action:search";
+/**
+ * The search row rides directly under the compose row, inside whatever workspace
+ * navigation the application supplies, so finding things sits with creating them
+ * instead of opening a section of its own.
+ */
+export const sidebarSearchItem: SidebarItem = {
+    id: SIDEBAR_SEARCH_ID,
+    kind: "action",
+    icon: "search",
+    label: "Search",
+};
 export interface ChatSidebarModelOptions {
     user: () => ChatPageUser;
     activeConversationId: () => string;
@@ -115,13 +128,8 @@ export function chatSidebarModelCreate(options: ChatSidebarModelOptions) {
             ...values.filter((projection) => !projection.chat.starred),
         ];
         return [
-            {
-                id: "projects",
-                label: "Projects",
-                headingOnly: true,
-                action: { icon: "plus", label: "New project" },
-                items: [],
-            },
+            // Projects list themselves by name, so a "Projects" caption above them
+            // only repeats what the rows already say.
             ...options.sidebarSnapshot().projects.map((project) => ({
                 id: `project:${project.id}`,
                 label: project.name,
@@ -132,13 +140,6 @@ export function chatSidebarModelCreate(options: ChatSidebarModelOptions) {
                 },
                 items: channelItems(projections, project.id, ordered),
             })),
-            {
-                id: "browse",
-                label: "Discover channels",
-                headingOnly: true,
-                action: { icon: "search", label: "Browse channels" },
-                items: [],
-            },
             {
                 id: "dms",
                 label: "Humans",

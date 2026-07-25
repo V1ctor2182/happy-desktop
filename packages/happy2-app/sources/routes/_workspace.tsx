@@ -63,12 +63,11 @@ function WorkspaceLayout() {
 }
 
 /**
- * The workspace navigation row to highlight. Conversations highlight the chat row;
- * Apps and Documents highlight their own; the remaining screens are reached from
- * elsewhere and highlight nothing.
+ * The workspace navigation row to highlight. Conversations highlight the chat row
+ * and Documents highlights its own; Apps is reached from the identity strip and
+ * the remaining screens are reached from elsewhere, so they highlight nothing.
  */
 function navActiveId(routeId: string): string {
-    if (routeId.startsWith("/_workspace/apps")) return "apps";
     if (routeId.startsWith("/_workspace/documents")) return "documents";
     if (routeId.startsWith("/_workspace/chats") || routeId.startsWith("/_workspace/channels"))
         return "chat";

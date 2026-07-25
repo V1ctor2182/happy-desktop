@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import type { AgentTurnStatus, AgentTurnTraceSummary } from "happy2-state";
 import {
     messagesGrouped,
-    turnsCollapse,
+    traceStepsShown,
     type LiveChatMessage,
     type WorkspaceEntry,
 } from "./chatPageModels";
@@ -28,9 +28,6 @@ function trace(turnId: string, status: AgentTurnStatus): AgentTurnTraceSummary {
         subagents: [],
         backgroundTerminals: [],
     };
-}
-function entryIds(entries: readonly WorkspaceEntry[]): string[] {
-    return entries.map((entry) => entry.id);
 }
 it("groups consecutive same-author manual messages", () => {
     const list: WorkspaceEntry[] = [message({ id: "a" }), message({ id: "b" })];
@@ -66,49 +63,15 @@ it("does not group across different authors regardless of automation", () => {
     ];
     expect(messagesGrouped(list, 1, list[1] as LiveChatMessage)).toBe(false);
 });
-it("keeps every message of a running turn visible", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "a", agentTrace: trace("t1", "running") }),
-        message({ id: "b", agentTrace: trace("t1", "running") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["a", "b"]);
+it("streams the steps of a running turn and folds away a finished one", () => {
+    const running = message({ id: "a", agentTrace: trace("t1", "running") });
+    const finished = message({ id: "b", agentTrace: trace("t1", "complete") });
+    expect(traceStepsShown(running, { traces: {}, expandedMessageIds: [] })).toBe(true);
+    expect(traceStepsShown(finished, { traces: {}, expandedMessageIds: [] })).toBe(false);
+    expect(traceStepsShown(finished, { traces: {}, expandedMessageIds: ["b"] })).toBe(true);
 });
-it("collapses a completed turn to its last message with body text", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "a", body: "thinking", agentTrace: trace("t1", "complete") }),
-        message({ id: "b", body: "final answer", agentTrace: trace("t1", "complete") }),
-        message({ id: "c", body: "", agentTrace: trace("t1", "complete") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["b"]);
-});
-it("collapses a completed turn with no body text to its last message", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "a", body: "", agentTrace: trace("t1", "complete") }),
-        message({ id: "b", body: "   ", agentTrace: trace("t1", "complete") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["b"]);
-});
-it("collapses a failed turn like a completed one", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "a", body: "partial", agentTrace: trace("t1", "failed") }),
-        message({ id: "b", body: "", agentTrace: trace("t1", "failed") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["a"]);
-});
-it("collapses turns independently and leaves plain messages untouched", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "u", body: "hi" }),
-        message({ id: "a1", body: "step", agentTrace: trace("t1", "complete") }),
-        message({ id: "a2", body: "answer 1", agentTrace: trace("t1", "complete") }),
-        message({ id: "b1", body: "step", agentTrace: trace("t2", "complete") }),
-        message({ id: "b2", body: "answer 2", agentTrace: trace("t2", "complete") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["u", "a2", "b2"]);
-});
-it("does not merge adjacent messages from different turns", () => {
-    const list: WorkspaceEntry[] = [
-        message({ id: "a", body: "one", agentTrace: trace("t1", "complete") }),
-        message({ id: "b", body: "two", agentTrace: trace("t2", "complete") }),
-    ];
-    expect(entryIds(turnsCollapse(list))).toEqual(["a", "b"]);
+it("shows no steps for a message that never ran a turn", () => {
+    expect(traceStepsShown(message({ id: "u" }), { traces: {}, expandedMessageIds: ["u"] })).toBe(
+        false,
+    );
 });

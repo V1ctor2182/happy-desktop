@@ -594,6 +594,43 @@ function AgentShellActivity(props: {
 }
 
 /**
+ * A step the producer already described: its label and subject go straight to
+ * the same single line a local tool call renders, so a summarized cloud turn and
+ * a streamed local one read identically.
+ */
+function AgentLabeledActivity(props: {
+    label: string;
+    subject?: string;
+    status: ConversationActivityStatus;
+    mono: boolean;
+}) {
+    return (
+        <div
+            className="happy2-agent-activity"
+            data-happy2-ui="agent-activity-call"
+            data-mono={props.mono ? "" : undefined}
+            data-single-line=""
+            data-status={props.status}
+            data-tone="neutral"
+        >
+            <div className="happy2-agent-activity__header" data-happy2-ui="agent-activity-header">
+                <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
+                    {props.label}
+                </span>
+                {props.subject !== undefined && props.subject.length > 0 ? (
+                    <span
+                        className="happy2-agent-activity__text"
+                        data-happy2-ui="agent-activity-text"
+                    >
+                        {props.subject}
+                    </span>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+/**
  * AgentActivityRow — the one glanceable row for everything an agent does inside
  * a conversation: a tool call, a reasoning block, or a shell run. Each variant
  * shows a status dot, a verb, and its subject on a single line and expands to
@@ -616,6 +653,13 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     defaultExpanded={props.defaultExpanded}
                     singleLine={props.singleLine}
                     tool={activity.tool}
+                />
+            ) : activity.kind === "labeled" ? (
+                <AgentLabeledActivity
+                    label={activity.label}
+                    mono={activity.mono}
+                    status={activity.status}
+                    subject={activity.subject}
                 />
             ) : activity.kind === "reasoning" ? (
                 <AgentReasoningActivity

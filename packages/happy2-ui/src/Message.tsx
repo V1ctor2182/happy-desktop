@@ -295,7 +295,12 @@ export function Message(props: MessageProps) {
     const markdownBody = typeof local.body === "string" ? renderMessageMarkdown(local.body) : null;
     const hasAttachments = () => hasRenderableChild(attachments);
     const grouped = () => local.grouped || local.compact;
-    const showIncomingIdentity = () => !local.own && (!grouped() || Boolean(local.metaAccessory));
+    const showIncomingIdentity = () => !local.own && !grouped();
+    /* A grouped follow-up still needs its meta row when it carries an accessory —
+       the trace control of a turn lives there — but the run's identity was
+       already established by the message that opened it, so the row holds the
+       accessory alone: no avatar, no repeated name, no second timestamp. */
+    const showIncomingMeta = () => !local.own && (!grouped() || Boolean(local.metaAccessory));
     const authorActionLabel = () => `View ${local.author}’s profile`;
     const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
     const renderAvatar = (size: AvatarSize) => (
@@ -435,6 +440,19 @@ export function Message(props: MessageProps) {
         observer.observe(bodyElement);
         return () => observer.disconnect();
     }, [local.body, local.generationStatus]);
+    /* Automation attribution belongs to the message, so on an own message it
+       opens the bubble instead of floating beside it: the reader sees that a
+       plugin posted this before reading a word of it. It never depends on hover
+       for the same reason. */
+    const ownAutomatedLine =
+        local.own && local.automated ? (
+            <span
+                className="happy2-message__automated happy2-message__automated--own"
+                data-happy2-ui="message-automated"
+            >
+                <AutomatedTag />
+            </span>
+        ) : null;
     const bodyNode =
         !local.body && local.generationStatus === undefined ? null : isMarkdownBody() ? (
             <div
@@ -443,6 +461,7 @@ export function Message(props: MessageProps) {
                 data-happy2-ui="message-body"
                 ref={body}
             >
+                {ownAutomatedLine}
                 {markdownBody}
                 {/* An empty generated reply keeps a non-breaking-space line box
                     after completion. The visible stream cursor can therefore
@@ -473,6 +492,7 @@ export function Message(props: MessageProps) {
             </div>
         ) : (
             <div className="happy2-message__body" data-happy2-ui="message-body">
+                {ownAutomatedLine}
                 {segments().map((segment, index) => (
                     <span key={`${segment.kind}-${index}`}>{renderSegment(segment)}</span>
                 ))}
@@ -485,9 +505,9 @@ export function Message(props: MessageProps) {
         local.own &&
         (bodyNode !== null ||
             (local.automated && (Boolean(local.images?.length) || hasAttachments())));
-    const incomingMeta = showIncomingIdentity() ? (
+    const incomingMeta = showIncomingMeta() ? (
         <div className="happy2-message__meta" data-happy2-ui="message-meta">
-            {local.onAuthorSelect ? (
+            {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
                 <button
                     aria-label={authorActionLabel()}
                     className="happy2-message__author happy2-message__author--button"
@@ -502,7 +522,7 @@ export function Message(props: MessageProps) {
                     {local.author}
                 </span>
             )}
-            {local.automated ? (
+            {local.automated && showIncomingIdentity() ? (
                 <span className="happy2-message__automated" data-happy2-ui="message-automated">
                     <AutomatedTag />
                 </span>
@@ -515,9 +535,11 @@ export function Message(props: MessageProps) {
                     {local.metaAccessory}
                 </span>
             ) : null}
-            <span className="happy2-message__time" data-happy2-ui="message-time">
-                {local.time ?? ""}
-            </span>
+            {showIncomingIdentity() ? (
+                <span className="happy2-message__time" data-happy2-ui="message-time">
+                    {local.time ?? ""}
+                </span>
+            ) : null}
         </div>
     ) : null;
     return (
@@ -557,11 +579,10 @@ export function Message(props: MessageProps) {
                         className="happy2-message__bubble-line"
                         data-happy2-ui="message-bubble-line"
                     >
-                        {/* Own messages carry no meta row, so the automation marker
-                            rides the bubble line beside the hover time. Unlike the
-                            time it stays visible: attribution that a plugin posted
-                            on the viewer's behalf must not depend on hover. */}
-                        {local.automated ? (
+                        {/* A media-only automated message has no bubble to open, so
+                            its marker rides the bubble line beside the hover time
+                            instead. It stays visible either way. */}
+                        {local.automated && bodyNode === null ? (
                             <span
                                 className="happy2-message__automated happy2-message__automated--own"
                                 data-happy2-ui="message-automated"

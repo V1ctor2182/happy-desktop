@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import type { InfoPanelProfile, MenuItem, MessageImage } from "./ChatPageComponents.js";
 import {
+    AgentActivityRow,
     AgentTraceRow,
     DayDivider,
     FileAttachment,
@@ -10,6 +11,8 @@ import {
 import { emojiItems, type LiveChatMessage, type WorkspaceEntry } from "./chatPageModels.js";
 export interface ChatMessageEntryProps {
     entry: WorkspaceEntry;
+    /** Layout class for this row's place in the transcript, e.g. prose resuming under tool steps. */
+    className?: string;
     grouped: boolean;
     /** The entry is the viewer's own message → right-aligned accent bubble. */
     own?: boolean;
@@ -24,6 +27,7 @@ export interface ChatMessageEntryProps {
         size: string;
         onOpen: () => void;
     }>;
+    /** This turn's steps are listed above the message right now. */
     traceOpen?: boolean;
     /**
      * Interactive MCP App surfaces attached to this assistant message, supplied
@@ -45,16 +49,24 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
     const entry = props.entry;
     if (entry.kind === "divider") return <DayDivider label={entry.label} />;
     if (entry.kind === "notice") return <SystemNotice icon={entry.icon} text={entry.text} />;
+    if (entry.kind === "traceStep")
+        return <AgentActivityRow activity={entry.activity} className={props.className} />;
+    /* A running turn needs no status row of its own: its steps are listed in the
+       transcript as it works. Once the turn ends they fold away behind the
+       compact "View traces" link on the line that opened the turn, which toggles
+       the same steps back into place. A turn that did no work anyone can open —
+       it only answered — carries no link at all. */
     const trace = entry.agentTrace;
-    /* A running turn streams its current tool call inline as a full trace row so
-       the reader watches it work; a completed turn instead carries the compact
-       "View trace" status line in the meta row. Both open the side trace panel. */
-    const traceRunning =
-        trace !== undefined && (trace.status === "pending" || trace.status === "running");
-    const traceOpen = props.onTraceSelect ? () => props.onTraceSelect!(entry) : undefined;
+    const traceCollapsible =
+        trace !== undefined &&
+        trace.status !== "pending" &&
+        trace.status !== "running" &&
+        trace.entryCount > 0;
+    const traceToggle = props.onTraceSelect ? () => props.onTraceSelect!(entry) : undefined;
     return (
         <Message
             agent={entry.agent}
+            className={props.className}
             audienceLabel={props.audienceLabel}
             author={entry.author}
             automated={entry.automated}
@@ -68,34 +80,33 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             images={props.images}
             initials={entry.initials}
             menuItems={props.menuItems}
+            metaAccessory={
+                traceCollapsible && trace ? (
+                    <AgentTraceRow
+                        entryCount={trace.entryCount}
+                        onOpen={traceToggle}
+                        open={props.traceOpen}
+                        status={trace.status === "failed" ? "failed" : "complete"}
+                        toggles
+                        toolCallCount={trace.toolCallCount}
+                        totalTokens={trace.totalTokens}
+                        variant="meta"
+                    />
+                ) : undefined
+            }
             onAuthorSelect={props.profile ? () => props.onProfileOpen(props.profile!) : undefined}
             onImageOpen={(id) => props.onImageOpen(entry, id)}
             onMenuSelect={(action) => props.onMenuSelect(entry, action)}
             onReactionSelect={(emoji) => props.onReactionSelect(entry, emoji)}
             own={props.own}
-            reactionOptions={emojiItems}
-            reactions={entry.reactions}
+            /* An agent turn is a transcript of work, not a post: it carries no
+               reaction picker and no message menu, so hovering a step or a reply
+               never offers to react to the machine. */
+            reactionOptions={entry.agent ? undefined : emojiItems}
+            reactions={entry.agent ? undefined : entry.reactions}
             time={entry.time}
             tone={entry.tone}
         >
-            {trace ? (
-                <AgentTraceRow
-                    detail={traceRunning ? trace.latest?.detail : undefined}
-                    entryCount={trace.entryCount}
-                    kind={traceRunning ? trace.latest?.kind : undefined}
-                    onOpen={traceOpen}
-                    open={props.traceOpen}
-                    status={
-                        trace.status === "pending" || trace.status === "running"
-                            ? "running"
-                            : trace.status
-                    }
-                    title={traceRunning ? trace.latest?.title : undefined}
-                    toolCallCount={trace.toolCallCount}
-                    totalTokens={trace.totalTokens}
-                    variant={traceRunning ? "row" : "meta"}
-                />
-            ) : null}
             {props.files.map((file) => (
                 <FileAttachment
                     aria-label={`Download ${file.name}`}

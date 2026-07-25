@@ -79,7 +79,9 @@ export interface SyncCoordinatorContext extends SidebarLoadContext {
     callsGet(): CallsStore | undefined;
     chatGet(chatId: string): ChatStore | undefined;
     chatsGet(): Iterable<readonly [string, ChatStore]>;
-    agentTraceReconcile(message: MessageSummary): void;
+    /** Refetches the steps of one turn the transcript renders when its summary moved. */
+    agentTraceReconcile(chatId: string, message: MessageSummary): void;
+    /** Refetches every shown turn trace after a difference-bypassing reconcile. */
     agentTracesInvalidate(): void;
     mcpAppReconcile(message: MessageSummary): void;
     mcpAppsInvalidate(): void;
@@ -351,7 +353,7 @@ export class SyncCoordinator {
                 type: "messageUpserted",
                 item: messageItemProject(this.context.identities, message),
             });
-            this.context.agentTraceReconcile(message);
+            this.context.agentTraceReconcile(chatId, message);
             this.context.mcpAppReconcile(message);
         }
         // Plugin management updates carry no projection in the difference; the

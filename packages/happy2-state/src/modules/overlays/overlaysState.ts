@@ -30,7 +30,6 @@ export type InspectorSnapshot =
     | { readonly type: "closed" }
     | { readonly type: "info" }
     | { readonly type: "profile"; readonly userId: string }
-    | { readonly type: "trace"; readonly messageId: string }
     | { readonly type: "workspace" }
     | { readonly type: "documents" };
 
@@ -66,7 +65,6 @@ export interface OverlaysState extends OverlaysSnapshot {
     overlayClose(): void;
     inspectorInfoShow(): void;
     inspectorProfileShow(userId: string): void;
-    inspectorTraceShow(messageId: string): void;
     inspectorWorkspaceShow(): void;
     inspectorDocumentsShow(): void;
     inspectorClose(): void;
@@ -184,9 +182,6 @@ export function overlaysStoreCreate(): OverlaysStore {
         inspectorProfileShow(userId): void {
             set((snapshot) => ({ ...snapshot, inspector: { type: "profile", userId } }));
         },
-        inspectorTraceShow(messageId): void {
-            set((snapshot) => ({ ...snapshot, inspector: { type: "trace", messageId } }));
-        },
         inspectorWorkspaceShow(): void {
             set((snapshot) => ({ ...snapshot, inspector: { type: "workspace" } }));
         },
@@ -212,7 +207,7 @@ export function overlaysStoreCreate(): OverlaysStore {
         chatContextUpdate(chatId): void {
             // The inspector and chat-scoped overlays describe one conversation.
             // Moving to a different conversation (or to none) retires them
-            // instead of showing another chat's trace or workspace file.
+            // instead of showing another chat's members or workspace file.
             set((snapshot) => {
                 const overlay = snapshot.overlay;
                 const scoped =

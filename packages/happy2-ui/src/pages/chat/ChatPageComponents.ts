@@ -3,7 +3,7 @@ export {
     type AgentActivityStripSubagent,
     type AgentActivityStripTerminal,
 } from "../../AgentActivityStrip.js";
-export { AgentTracePanel, type AgentTracePanelEntry } from "../../AgentTracePanel.js";
+export { AgentActivityRow } from "../../AgentActivityRow.js";
 export { AgentTraceRow } from "../../AgentTraceRow.js";
 export { AppShell } from "../../AppShell.js";
 export { Banner } from "../../Banner.js";

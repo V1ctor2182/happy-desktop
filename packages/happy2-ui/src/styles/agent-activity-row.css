@@ -210,3 +210,74 @@
     line-height: 18px;
     color: var(--text-secondary);
 }
+
+/*
+ * Transcript layout. Every activity row — reasoning, shell run, tool call, or a
+ * step a server already labeled — shares the agent message measure and its block
+ * spacing, so thinking reads as one more block of the reply rather than
+ * something pinned to the pane edge. Both the local conversation and the cloud
+ * chat render these rows, so the contract lives with the component.
+ */
+.happy2-agent-activity-row {
+    flex: none;
+    /* The subject ellipsizes, so it is the one line that always reaches its
+       boundary: it stops short of where prose wraps, or a truncated command
+       reads as running off the surface. */
+    padding: 8px 96px 8px 30px;
+}
+
+/*
+ * Tool calls are the exception: each reads as one quiet text line (verb +
+ * subject), with no status dot or child result, so a run of them stays tight.
+ */
+.happy2-agent-activity-row[data-kind="tool"],
+.happy2-agent-activity-row[data-kind="labeled"] {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity,
+.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity {
+    gap: 0;
+}
+
+.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity__header,
+.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity__header {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0;
+    cursor: default;
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__verb {
+    flex: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--warning);
+}
+
+.happy2-agent-activity[data-single-line][data-presentation="execCommand"]
+    .happy2-agent-activity__text,
+.happy2-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
+    .happy2-agent-activity__text,
+.happy2-agent-activity[data-single-line][data-mono] .happy2-agent-activity__text {
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__stats {
+    color: var(--warning);
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__added,
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__deleted {
+    color: var(--warning);
+}

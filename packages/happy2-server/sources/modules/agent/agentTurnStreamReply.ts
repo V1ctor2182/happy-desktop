@@ -84,7 +84,11 @@ export async function agentTurnStreamReply(
         const traceUpdates = normalizeTraceUpdates(input.traceUpdates);
         const subagents = normalizeSubagents(input.subagents);
         const backgroundTerminals = normalizeBackgroundTerminals(input.backgroundTerminals);
-        let entryCount = await traceEntryCount(tx, input.userMessageId, input.agentUserId);
+        // Two counts: every stored entry bounds what one turn may write, while the
+        // rollup published to readers counts only the steps a transcript lists —
+        // turn bookkeeping and committed text are not work the reader can open.
+        let storedCount = await traceEntryCount(tx, input.userMessageId, input.agentUserId);
+        let entryCount = await traceEntryCount(tx, input.userMessageId, input.agentUserId, true);
         const persistedTraceUpdates: AgentTurnTraceUpdate[] = [];
         if (traceUpdates.length > 0) {
             await tx
@@ -121,7 +125,7 @@ export async function agentTurnStreamReply(
             );
             for (const trace of traceUpdates) {
                 const exists = existingKeys.has(trace.traceKey);
-                if (!exists && entryCount >= MAX_STREAM_TRACE_ENTRIES) continue;
+                if (!exists && storedCount >= MAX_STREAM_TRACE_ENTRIES) continue;
                 await tx
                     .insert(agentTurnTraceEntries)
                     .values({
@@ -157,7 +161,8 @@ export async function agentTurnStreamReply(
                 persistedTraceUpdates.push(trace);
                 if (!exists) {
                     existingKeys.add(trace.traceKey);
-                    entryCount += 1;
+                    storedCount += 1;
+                    if (TRACE_WORK_KINDS.includes(trace.kind)) entryCount += 1;
                 }
             }
         }
@@ -294,10 +299,24 @@ export async function agentTurnStreamReply(
     });
 }
 
+/**
+ * The step kinds that represent work a reader can look at. A turn's bookkeeping
+ * (`status`) and its committed text (`response`, which the reply itself renders)
+ * are recorded for the durable history but are not steps anyone opens, so they
+ * stay out of the count that decides whether a turn has a trace at all.
+ */
+const TRACE_WORK_KINDS: readonly AgentTurnTraceUpdate["kind"][] = [
+    "reasoning",
+    "tool",
+    "terminal",
+    "subagent",
+];
+
 async function traceEntryCount(
     executor: DrizzleExecutor,
     userMessageId: string,
     agentUserId: string,
+    workOnly = false,
 ): Promise<number> {
     const [count] = await executor
         .select({ value: sql<number>`count(*)` })
@@ -306,6 +325,7 @@ async function traceEntryCount(
             and(
                 eq(agentTurnTraceEntries.userMessageId, userMessageId),
                 eq(agentTurnTraceEntries.agentUserId, agentUserId),
+                ...(workOnly ? [inArray(agentTurnTraceEntries.kind, [...TRACE_WORK_KINDS])] : []),
             ),
         );
     return Math.min(MAX_AGENT_TURN_TRACE_ENTRIES, Math.max(0, Number(count?.value ?? 0)));

@@ -1,14 +1,5 @@
 import { StoreRegistry } from "./kernel/storeRegistry.js";
 import {
-    agentTraceLoad,
-    agentTraceOpen,
-    agentTraceReconcile,
-    agentTraceStoreCreate,
-    type AgentTraceHandle,
-    type AgentTraceOpenContext,
-    type AgentTraceStore,
-} from "./modules/agent-trace/agentTraceState.js";
-import {
     mcpAppLoad,
     mcpAppOpen,
     mcpAppResourceRead,
@@ -81,6 +72,12 @@ import { chatMembersLoad } from "./modules/chat/chatState.js";
 import { chatPinsLoad } from "./modules/chat/chatState.js";
 import { chatOpen, type ChatOpenContext } from "./modules/chat/chatState.js";
 import { reactionActorsLoad } from "./modules/chat/chatState.js";
+import {
+    chatAgentTraceLoad,
+    chatTraceTracked,
+    chatTraceStaleMessageIds,
+    chatTraceSummaryEquals,
+} from "./modules/chat/chatState.js";
 import { chatStoreCreate, type ChatOutput, type ChatStore } from "./modules/chat/chatState.js";
 import type { ChatHandle } from "./modules/chat/chatState.js";
 import {
@@ -340,9 +337,6 @@ export class HappyState implements AsyncDisposable, Disposable {
     private readonly workspaceFiles = new StoreRegistry<string, WorkspaceFileStore>(
         HappyState.surfaceCacheOptions,
     );
-    private readonly agentTraces = new StoreRegistry<string, AgentTraceStore>(
-        HappyState.surfaceCacheOptions,
-    );
     private readonly mcpApps = new StoreRegistry<string, McpAppStore>(
         HappyState.surfaceCacheOptions,
     );
@@ -389,7 +383,6 @@ export class HappyState implements AsyncDisposable, Disposable {
     private readonly context: ChatOpenContext &
         WorkspaceOpenContext &
         WorkspaceFileOpenContext &
-        AgentTraceOpenContext &
         McpAppOpenContext &
         DocumentOpenContext &
         DocumentListOpenContext &
@@ -450,10 +443,6 @@ export class HappyState implements AsyncDisposable, Disposable {
             workspaceFileRelease: (chatId, path) =>
                 this.workspaceFiles.release(workspaceFileKey(chatId, path)),
             workspaceFileLoad: (chatId, path) => this.workspaceFileLoad(chatId, path),
-            agentTraceAcquire: (messageId) =>
-                this.agentTraces.getOrCreate(messageId, () => agentTraceStoreCreate(messageId)),
-            agentTraceRelease: (messageId) => this.agentTraces.release(messageId),
-            agentTraceLoad: (messageId) => this.agentTraceLoad(messageId),
             mcpAppAcquire: (messageId, callId) =>
                 this.mcpApps.getOrCreate(mcpAppKey(messageId, callId), () =>
                     mcpAppStoreCreate(messageId, callId),
@@ -515,8 +504,8 @@ export class HappyState implements AsyncDisposable, Disposable {
             callsGet: () => this.callsBinding,
             chatGet: (chatId) => this.chats.get(chatId),
             chatsGet: () => this.chatEntries(),
-            agentTraceReconcile: (message) => this.agentTraceReconcile(message),
-            agentTracesInvalidate: () => this.agentTracesReload(),
+            agentTraceReconcile: (chatId, message) => this.chatTraceReconcile(chatId, message),
+            agentTracesInvalidate: () => this.chatTracesReload(),
             mcpAppReconcile: (message) => this.mcpAppReconcile(message),
             mcpAppsInvalidate: () => this.mcpAppsReload(),
             chatPluginRequestsReconcile: (chatId) => this.chatPluginRequestsReconcile(chatId),
@@ -874,10 +863,6 @@ export class HappyState implements AsyncDisposable, Disposable {
         });
     }
 
-    agentTraceOpen(messageId: string): AgentTraceHandle {
-        return agentTraceOpen(this.context, messageId);
-    }
-
     /** Opens one deduplicated MCP App surface for an assistant message's tool call. */
     mcpAppOpen(messageId: string, callId: string): McpAppHandle {
         return mcpAppOpen(this.context, messageId, callId);
@@ -1157,7 +1142,6 @@ export class HappyState implements AsyncDisposable, Disposable {
         this.workspaces.dispose();
         this.composers.dispose();
         this.composerAudiences.clear();
-        this.agentTraces.dispose();
         this.mcpApps.dispose();
         for (const [, binding] of this.documents.values()) documentSessionStop(binding);
         this.documents.dispose();
@@ -1236,6 +1220,9 @@ export class HappyState implements AsyncDisposable, Disposable {
                 return;
             case "reactionActorsRetained":
                 this.reactionActorsLoad(event.chatId, event.messageId, event.reactionKey);
+                return;
+            case "traceRetained":
+                this.chatTraceLoad(event.chatId, event.messageId);
                 return;
             case "agentEffortRetained":
                 this.agentEffortLoad(event.chatId, event.agentUserId);
@@ -1538,6 +1525,9 @@ export class HappyState implements AsyncDisposable, Disposable {
     }
 
     private chatLoad(chatId: string): void {
+        // A chat opened while an agent is mid-turn must stream that turn's tools
+        // and reasoning without waiting for the next delivery hint, so the
+        // freshly loaded transcript fetches the steps it renders.
         this.runtime.background(
             chatLoad(
                 {
@@ -1547,7 +1537,7 @@ export class HappyState implements AsyncDisposable, Disposable {
                     agentUserIds: (chat) => this.chatAgentUserIds(chat),
                 },
                 chatId,
-            ),
+            ).then(() => this.chatTracesReload()),
         );
         // A full chat reload also covers reset paths where individual chat
         // updates were unavailable; a retained request list must not stale.
@@ -1659,13 +1649,11 @@ export class HappyState implements AsyncDisposable, Disposable {
             this.chatPluginRequestsLoad(chatId);
     }
 
-    private agentTraceLoad(messageId: string): void {
+    private chatTraceLoad(chatId: string, messageId: string): void {
         this.runtime.background(
-            agentTraceLoad(
-                {
-                    runtime: this.runtime,
-                    agentTraceGet: (id) => this.agentTraces.get(id),
-                },
+            chatAgentTraceLoad(
+                { runtime: this.runtime, chatGet: (id) => this.chats.get(id) },
+                chatId,
                 messageId,
             ),
         );
@@ -1708,16 +1696,27 @@ export class HappyState implements AsyncDisposable, Disposable {
             this.runtime.background(documentSynchronize(this.documentContext(), documentId));
     }
 
-    private agentTraceReconcile(message: MessageSummary): void {
-        agentTraceReconcile(
-            {
-                runtime: this.runtime,
-                agentTraceGet: (id) => this.agentTraces.get(id),
-                agentTraceLoad: (id) => this.agentTraceLoad(id),
-            },
-            message.id,
-            message.agentTrace,
-        );
+    /**
+     * Refetches the steps of one turn whose message summary hints at newer
+     * durable activity, so a transcript that streams a turn's tools and
+     * reasoning reconciles through the GET endpoint instead of trusting the
+     * hint. A turn nobody is watching — finished and collapsed — is left alone.
+     */
+    private chatTraceReconcile(chatId: string, message: MessageSummary): void {
+        const chat = this.chats.get(chatId);
+        if (!chat) return;
+        const snapshot = chat.getState();
+        if (!chatTraceTracked(snapshot, message.id, message.agentTrace)) {
+            // A turn that stopped being renderable — its message was deleted or
+            // its trace revoked — must not keep serving fetched steps from cache.
+            if (message.agentTrace === undefined)
+                snapshot.chatInput({ type: "traceCleared", messageId: message.id });
+            return;
+        }
+        const current = snapshot.traces[message.id];
+        if (current?.type === "ready" && chatTraceSummaryEquals(current.value, message.agentTrace!))
+            return;
+        this.chatTraceLoad(chatId, message.id);
     }
 
     /**
@@ -1727,8 +1726,10 @@ export class HappyState implements AsyncDisposable, Disposable {
      * access-revoked details from cache; a revoked or deleted trace fails its
      * refetch and surfaces the error state instead.
      */
-    private agentTracesReload(): void {
-        for (const [messageId] of this.agentTraces.values()) this.agentTraceLoad(messageId);
+    private chatTracesReload(): void {
+        for (const [chatId, chat] of this.chats.values())
+            for (const messageId of chatTraceStaleMessageIds(chat.getState()))
+                this.chatTraceLoad(chatId, messageId);
     }
 
     private mcpAppLoad(messageId: string, callId: string): void {
@@ -1875,7 +1876,7 @@ export class HappyState implements AsyncDisposable, Disposable {
             {
                 chatReconcile: (chatId) => {
                     this.chatLoad(chatId);
-                    this.agentTracesReload();
+                    this.chatTracesReload();
                     this.mcpAppsReload();
                 },
                 directoryReconcile: () => {
@@ -1988,7 +1989,7 @@ export class HappyState implements AsyncDisposable, Disposable {
             const { chatId, path } = binding.getState();
             this.workspaceFileLoad(chatId, path);
         }
-        this.agentTracesReload();
+        this.chatTracesReload();
         this.mcpAppsReload();
         this.documentsReconcile();
         this.pluginAppsReconcile();

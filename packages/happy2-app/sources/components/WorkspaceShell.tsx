@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
+    Button,
     DesktopInstanceSwitcher,
     Sidebar,
     SidebarAppsSection,
@@ -82,6 +83,19 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
      */
     const sidebarFooter = (
         <SidebarFooter
+            /* Apps is a workspace-level destination like administration, not a
+               conversation, so it belongs with the other identity-strip controls
+               rather than above the chat list. */
+            actions={
+                <Button
+                    aria-label="Apps"
+                    icon="spark"
+                    iconOnly
+                    onClick={() => navSelect("apps")}
+                    size="small"
+                    variant="ghost"
+                />
+            }
             appearance={context.appearance}
             imageUrl={user?.avatarUrl}
             initials={userInitials}
@@ -104,7 +118,6 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     // Administration lives in the footer, so the rows above the chat list are the
     // always-available workspace drill-downs.
     const navItems: SidebarItem[] = [
-        { id: "apps", kind: "view", icon: "spark", label: "Apps" },
         { id: "documents", kind: "view", icon: "doc", label: "Documents" },
     ];
     const navSection: SidebarSection = { id: "workspace", items: navItems };

@@ -4,7 +4,7 @@ import { createId } from "@paralleldrive/cuid2";
 
 import { agentReplyMutationId } from "./agentReplyMutationId.js";
 import { agentTurnTraceEntries, agentTurns, messages } from "../../schema.js";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { chatHint } from "../../chat/chatHint.js";
 
 import { chatAdvanceWithSequence } from "../../chat/chatAdvanceWithSequence.js";
@@ -120,6 +120,8 @@ export async function finishAgentTurn(
             occurredAt,
             completedAt: occurredAt,
         });
+        // The count published to readers is the steps they can open, so the
+        // turn's own bookkeeping and its committed text stay out of it.
         const [traceCount] = await tx
             .select({ value: sql<number>`count(*)` })
             .from(agentTurnTraceEntries)
@@ -127,6 +129,12 @@ export async function finishAgentTurn(
                 and(
                     eq(agentTurnTraceEntries.userMessageId, input.userMessageId),
                     eq(agentTurnTraceEntries.agentUserId, input.agentUserId),
+                    inArray(agentTurnTraceEntries.kind, [
+                        "reasoning",
+                        "tool",
+                        "terminal",
+                        "subagent",
+                    ]),
                 ),
             );
         await tx

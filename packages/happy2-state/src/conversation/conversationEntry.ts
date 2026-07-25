@@ -144,6 +144,21 @@ export type ConversationActivity =
           readonly exitCode: number | null;
           readonly running: boolean;
           readonly timedOut: boolean;
+      }
+    /**
+     * A step whose producer already labeled it. A local session streams the tool
+     * call itself and the client derives the wording; a cloud turn is summarized
+     * by the server, which sends the label and its subject and keeps the payload
+     * out of the transcript. Both are one step of an agent's work, so both render
+     * as the same row rather than growing a second one.
+     */
+    | {
+          readonly kind: "labeled";
+          readonly label: string;
+          readonly subject?: string;
+          readonly status: ConversationActivityStatus;
+          /** Literal commands and paths read as code; prose does not. */
+          readonly mono: boolean;
       };
 
 /**

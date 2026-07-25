@@ -6,6 +6,8 @@ import {
 } from "../../resources.js";
 import {
     type AgentActivityState,
+    type AgentTurnTraceDetails,
+    type AgentTurnTraceSummary,
     type ChatPinSummary,
     type ChatSummary,
     type MessageSummary,
@@ -565,6 +567,8 @@ export function chatStoreCreate(
         portShareOpeningIds: [],
         portShareDisablingIds: [],
         reactionActors: {},
+        traces: {},
+        traceExpandedMessageIds: [],
         typing: [],
         agentActivity: [],
         agentEffort: {},
@@ -667,6 +671,16 @@ export function chatStoreCreate(
             if (current?.type === "loading" || current?.type === "ready") return;
             get().chatInput({ type: "reactionActorsLoading", messageId, reactionKey });
             output({ type: "reactionActorsRetained", chatId, messageId, reactionKey });
+        },
+        traceToggle(messageId): void {
+            const expanded = get().traceExpandedMessageIds.includes(messageId);
+            get().chatInput({ type: "traceExpansionToggled", messageId });
+            // Collapsing keeps the cached steps: reopening the same turn must not
+            // blank the list while a refetch lands. Expanding a turn whose steps
+            // were never fetched asks the owner for them once.
+            if (expanded || get().traces[messageId] !== undefined) return;
+            get().chatInput({ type: "traceLoading", messageId });
+            output({ type: "traceRetained", chatId, messageId });
         },
         agentEffortRetain(agentUserId): void {
             const current = get().agentEffort[agentUserId];
@@ -1066,6 +1080,57 @@ export function chatStoreCreate(
                             },
                         };
                     }
+                    case "traceExpansionToggled": {
+                        const expanded = snapshot.traceExpandedMessageIds.includes(event.messageId);
+                        return {
+                            ...snapshot,
+                            traceExpandedMessageIds: expanded
+                                ? snapshot.traceExpandedMessageIds.filter(
+                                      (id) => id !== event.messageId,
+                                  )
+                                : [...snapshot.traceExpandedMessageIds, event.messageId],
+                        };
+                    }
+                    case "traceLoading":
+                        // A refresh of already shown steps keeps rendering them, so
+                        // a streaming turn never flickers back to a loading row.
+                        return snapshot.traces[event.messageId] !== undefined
+                            ? snapshot
+                            : {
+                                  ...snapshot,
+                                  traces: {
+                                      ...snapshot.traces,
+                                      [event.messageId]: { type: "loading" },
+                                  },
+                              };
+                    case "traceLoaded":
+                        return {
+                            ...snapshot,
+                            traces: {
+                                ...snapshot.traces,
+                                [event.messageId]: { type: "ready", value: event.trace },
+                            },
+                        };
+                    case "traceFailed":
+                        return {
+                            ...snapshot,
+                            traces: {
+                                ...snapshot.traces,
+                                [event.messageId]: { type: "error", error: event.error },
+                            },
+                        };
+                    case "traceCleared": {
+                        if (snapshot.traces[event.messageId] === undefined) return snapshot;
+                        const traces = { ...snapshot.traces };
+                        delete traces[event.messageId];
+                        return {
+                            ...snapshot,
+                            traces,
+                            traceExpandedMessageIds: snapshot.traceExpandedMessageIds.filter(
+                                (id) => id !== event.messageId,
+                            ),
+                        };
+                    }
                     case "typingReconciled":
                         return sameIds(snapshot.typing, event.typing)
                             ? snapshot
@@ -1195,6 +1260,14 @@ export interface ChatSnapshot {
     readonly portShareDisablingIds: readonly string[];
     readonly portShareActionError?: UserError;
     readonly reactionActors: Readonly<Record<string, Loadable<ReactionActors>>>;
+    /**
+     * Durable turn traces keyed by assistant message id, held for exactly the
+     * turns this surface renders steps for: every turn still running plus every
+     * finished turn the reader expanded.
+     */
+    readonly traces: Readonly<Record<string, Loadable<AgentTurnTraceDetails>>>;
+    /** Assistant message ids whose finished turn the reader expanded back open. */
+    readonly traceExpandedMessageIds: readonly string[];
     readonly typing: readonly TypingState[];
     readonly agentActivity: readonly AgentActivityState[];
     readonly agentEffort: Readonly<Record<string, Loadable<AgentEffortProjection>>>;
@@ -1240,6 +1313,11 @@ export type ChatOutput =
           readonly chatId: string;
           readonly messageId: string;
           readonly reactionKey: string;
+      }
+    | {
+          readonly type: "traceRetained";
+          readonly chatId: string;
+          readonly messageId: string;
       }
     | {
           readonly type: "agentEffortRetained";
@@ -1340,6 +1418,15 @@ export type ChatInput =
           readonly reactionKey: string;
           readonly error: UserError;
       }
+    | { readonly type: "traceExpansionToggled"; readonly messageId: string }
+    | { readonly type: "traceLoading"; readonly messageId: string }
+    | {
+          readonly type: "traceLoaded";
+          readonly messageId: string;
+          readonly trace: AgentTurnTraceDetails;
+      }
+    | { readonly type: "traceFailed"; readonly messageId: string; readonly error: UserError }
+    | { readonly type: "traceCleared"; readonly messageId: string }
     | { readonly type: "typingReconciled"; readonly typing: readonly TypingState[] }
     | {
           readonly type: "agentActivityReconciled";
@@ -1367,6 +1454,8 @@ export interface ChatState extends ChatSnapshot {
     portShareOpen(portShareId: string): void;
     portShareDisable(portShareId: string): void;
     reactionActorsRetain(messageId: string, reactionKey: string): void;
+    /** Shows or hides the steps of one finished agent turn inside the transcript. */
+    traceToggle(messageId: string): void;
     agentEffortRetain(agentUserId: string): void;
     agentEffortChange(agentUserId: string, effort: string): void;
     chatInput(event: ChatInput): void;
@@ -1562,4 +1651,146 @@ export async function reactionActorsLoad(
                 error: userError(error),
             });
     }
+}
+
+export interface ChatAgentTraceLoadContext {
+    readonly runtime: StateRuntime;
+    chatGet(chatId: string): ChatStore | undefined;
+}
+
+interface TraceLoadState {
+    running: boolean;
+    queued: boolean;
+}
+
+const traceLoadStates = new WeakMap<ChatStore, Map<string, TraceLoadState>>();
+
+function traceLoadState(chat: ChatStore, messageId: string): TraceLoadState {
+    let perMessage = traceLoadStates.get(chat);
+    if (!perMessage) {
+        perMessage = new Map();
+        traceLoadStates.set(chat, perMessage);
+    }
+    let state = perMessage.get(messageId);
+    if (!state) {
+        state = { running: false, queued: false };
+        perMessage.set(messageId, state);
+    }
+    return state;
+}
+
+/**
+ * Fetches the durable step list behind one assistant message into the chat
+ * surface, with single-flight coalescing per message: a fetch requested while
+ * one is in flight queues exactly one trailing refetch, so a streaming turn's
+ * burst of delivery hints costs at most one extra request and the steps finally
+ * rendered are at least as new as the last hint. Already loaded steps stay
+ * visible across a refresh, and a response that arrives after the chat surface
+ * was released or replaced is discarded.
+ */
+export async function chatAgentTraceLoad(
+    context: ChatAgentTraceLoadContext,
+    chatId: string,
+    messageId: string,
+): Promise<void> {
+    const chat = context.chatGet(chatId);
+    if (!chat || !context.runtime.connected) return;
+    const state = traceLoadState(chat, messageId);
+    if (state.running) {
+        state.queued = true;
+        return;
+    }
+    state.running = true;
+    try {
+        do {
+            state.queued = false;
+            try {
+                const result = await context.runtime.operation("getMessageAgentTrace", {
+                    messageId,
+                });
+                if (context.chatGet(chatId) !== chat) return;
+                chat.getState().chatInput({ type: "traceLoaded", messageId, trace: result.trace });
+            } catch (error) {
+                if (context.chatGet(chatId) !== chat) return;
+                if (!state.queued)
+                    chat.getState().chatInput({
+                        type: "traceFailed",
+                        messageId,
+                        error: userError(error),
+                    });
+            }
+        } while (state.queued);
+    } finally {
+        state.running = false;
+    }
+}
+
+/**
+ * Decides whether one turn's steps must be kept current. The transcript renders
+ * them while the turn works and while the reader keeps a finished turn expanded;
+ * beyond that, steps already fetched stay tracked so the cached copy a collapsed
+ * turn reopens with is the finished one, not the last streaming snapshot.
+ */
+export function chatTraceTracked(
+    snapshot: ChatSnapshot,
+    messageId: string,
+    trace: AgentTurnTraceSummary | undefined,
+): boolean {
+    if (!trace) return false;
+    return chatTraceShown(snapshot, messageId, trace) || snapshot.traces[messageId] !== undefined;
+}
+
+/**
+ * Decides whether the transcript currently renders the steps of one turn: a
+ * turn that is still working always streams its tools and reasoning inline, and
+ * a finished turn does so only while the reader keeps it expanded.
+ */
+export function chatTraceShown(
+    snapshot: ChatSnapshot,
+    messageId: string,
+    trace: AgentTurnTraceSummary | undefined,
+): boolean {
+    if (!trace) return false;
+    return (
+        trace.status === "pending" ||
+        trace.status === "running" ||
+        snapshot.traceExpandedMessageIds.includes(messageId)
+    );
+}
+
+/**
+ * Compares the steps already rendered with an incoming message summary to
+ * decide whether a shown trace must refetch. Text-only stream ticks carry the
+ * same summary and must not cost a request per token.
+ */
+export function chatTraceSummaryEquals(
+    details: AgentTurnTraceDetails,
+    summary: AgentTurnTraceSummary,
+): boolean {
+    return (
+        details.status === summary.status &&
+        details.entryCount === summary.entryCount &&
+        details.latest?.kind === summary.latest?.kind &&
+        details.latest?.title === summary.latest?.title &&
+        details.latest?.detail === summary.latest?.detail &&
+        details.latest?.occurredAt === summary.latest?.occurredAt
+    );
+}
+
+/**
+ * Reports the assistant messages of one chat whose tracked steps are stale, so
+ * the owner can refetch exactly those. A turn is stale when its steps are shown
+ * but were never fetched, or when its message summary reports activity newer
+ * than the details already held; a turn nobody has ever looked at is skipped.
+ */
+export function chatTraceStaleMessageIds(snapshot: ChatSnapshot): readonly string[] {
+    const stale: string[] = [];
+    for (const item of snapshot.messages) {
+        const trace = item.message.agentTrace;
+        if (!chatTraceTracked(snapshot, item.message.id, trace)) continue;
+        const current = snapshot.traces[item.message.id];
+        if (current?.type === "ready" && chatTraceSummaryEquals(current.value, trace!)) continue;
+        stale.push(item.message.id);
+    }
+    return stale;
 }

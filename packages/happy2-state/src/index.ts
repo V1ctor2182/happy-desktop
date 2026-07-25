@@ -175,11 +175,6 @@ export type {
     PluginInstallStore,
     PluginPrepareSource,
 } from "./modules/plugin-install/pluginInstallState.js";
-export type {
-    AgentTraceHandle,
-    AgentTraceSnapshot,
-    AgentTraceStore,
-} from "./modules/agent-trace/agentTraceState.js";
 export type { McpAppHandle, McpAppSnapshot, McpAppStore } from "./modules/mcp-apps/mcpAppState.js";
 export {
     documentRemoteOrigin,

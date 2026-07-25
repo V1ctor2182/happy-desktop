@@ -90,7 +90,9 @@ export async function agentTurnTraceStart(
                 traceLatestTitle: "Starting turn",
                 traceLatestDetail: null,
                 traceLatestAt: occurredAt,
-                traceEntryCount: 1,
+                // The opening "Starting turn" marker is bookkeeping, not a step a
+                // reader opens, so the turn still reports no trace to show.
+                traceEntryCount: 0,
                 updatedAt: sql`CURRENT_TIMESTAMP`,
             })
             .where(

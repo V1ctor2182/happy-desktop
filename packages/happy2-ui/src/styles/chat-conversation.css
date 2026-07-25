@@ -1,0 +1,59 @@
+/*
+ * The cloud transcript's turn layout. A turn is one block: the line that names
+ * the agent, the steps it took, the text it wrote, and the reply that closes it.
+ * These rules give that block the same rhythm the local conversation has, so the
+ * two surfaces read alike while each keeps its own surrounding chrome.
+ */
+
+/*
+ * Agent replies arrive as a run of short blocks interleaved with activity rows,
+ * so they carry half the vertical padding of a human turn: the run reads as one
+ * answer while the identity row (author, View traces, time) stays above the body.
+ */
+.happy2-chat-conversation .happy2-message[data-agent] {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+/*
+ * The dock is seamless with the transcript, so the clearance beneath the newest
+ * message is what keeps it from reading as part of the composer. It is also the
+ * band the turn's live state occupies — what the agent is inferring, who is
+ * typing — so it holds a few lines rather than a hairline, and it belongs to the
+ * scrollport so the reader can always push the last line clear of the dock.
+ */
+.happy2-chat-conversation .happy2-message-list__content {
+    padding-bottom: 64px;
+}
+
+/* The dangling avatar is positioned from the row's top edge, so it follows that
+   halved padding up by exactly as much: keep it centred on the author line. */
+.happy2-chat-conversation .happy2-message[data-agent]:not([data-own]) .happy2-message__gutter {
+    top: 10px;
+}
+
+.happy2-chat-conversation
+    .happy2-message[data-agent][data-grouped]:not([data-own])
+    .happy2-message__gutter {
+    top: 4px;
+}
+
+/*
+ * The line that opens a turn carries no text of its own — it names the agent,
+ * and the steps and blocks below it are what the turn did and said — so it holds
+ * its meta row and nothing else.
+ */
+.happy2-chat-conversation .happy2-message--turn-header {
+    padding-bottom: 0;
+}
+
+.happy2-chat-conversation .happy2-message--turn-header .happy2-message__body {
+    display: none;
+}
+
+/* Prose resuming under a run of tool steps opens the same gap that separates the
+   prose above from the first of those steps, so the run reads as belonging to
+   the text it followed rather than the text below it. */
+.happy2-chat-conversation .happy2-message[data-grouped].happy2-message--after-trace-steps {
+    padding-top: 8px;
+}

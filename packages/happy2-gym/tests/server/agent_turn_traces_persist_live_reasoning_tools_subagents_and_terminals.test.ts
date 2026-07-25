@@ -53,10 +53,12 @@ describe("Durable live agent turn traces", () => {
             generationStatus: "streaming",
         });
         const assistantMessageId = placeholder.id as string;
+        // The opening "Starting turn" marker is bookkeeping, so the turn reports
+        // no steps until it does work a reader can open.
         expect(placeholder.agentTrace).toMatchObject({
             turnId,
             status: "running",
-            entryCount: 1,
+            entryCount: 0,
         });
 
         const run = await waitForRun(rig);
@@ -121,7 +123,7 @@ describe("Durable live agent turn traces", () => {
             return Boolean(
                 trace?.subagents.some(({ id }) => id === "subagent-1") &&
                 trace.backgroundTerminals.some(({ id }) => id === "7") &&
-                trace.entryCount >= 5,
+                trace.entryCount >= 3,
             );
         });
         expect(liveMessage.agentTrace).toMatchObject({
@@ -340,7 +342,7 @@ describe("Durable live agent turn traces", () => {
         await waitFor(
             async () => {
                 const trace = await getTrace(asOwner, assistantMessageId);
-                return trace.entryCount === 511;
+                return trace.entries.length === 511;
             },
             "the bounded trace collection",
             15_000,
@@ -350,8 +352,12 @@ describe("Durable live agent turn traces", () => {
             Boolean((message.agentTrace as TraceSummary | undefined)?.status === "complete"),
         );
         const completed = await getTrace(asOwner, assistantMessageId);
-        expect(completed.entryCount).toBe(512);
         expect(completed.entries).toHaveLength(512);
+        // The reported count is the steps a reader can open, so it excludes the
+        // turn's own bookkeeping entries even while the store is at its cap.
+        expect(completed.entryCount).toBe(
+            completed.entries.filter(({ kind }) => kind !== "status" && kind !== "response").length,
+        );
         expect(
             completed.entries.every(({ title }) => title.length > 0 && title.length <= 500),
         ).toBe(true);

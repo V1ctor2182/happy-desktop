@@ -52,8 +52,8 @@ function assistantMessage(changePts: string, overrides: Parameters<typeof messag
     });
 }
 
-describe("Agent turn trace surface stays live without refetch storms", () => {
-    it("refetches an open trace only when the message summary changes", async () => {
+describe("Agent turn traces stay live in the transcript without refetch storms", () => {
+    it("refetches a streaming turn's steps only when its message summary changes", async () => {
         const server = createFakeServer();
         server.respond("GET", "/v0/sync/state", syncStateResponse);
         server.respond("GET", "/v0/chats", jsonResponse(200, { chats: [chat()] }));
@@ -104,35 +104,36 @@ describe("Agent turn trace surface stays live without refetch storms", () => {
         using chatHandle = state.chatOpen("chat-1");
         await state.whenIdle();
         expect(chatHandle.getState().status.type).toBe("ready");
-        using trace = state.agentTraceOpen("message-2");
-        await state.whenIdle();
-        expect(trace.getState().trace).toMatchObject({
-            type: "ready",
-            value: { entryCount: 1 },
-        });
         const traceRequests = () =>
             server.requests.filter(({ path }) => path === "/v0/messages/message-2/agentTrace")
                 .length;
-        expect(traceRequests()).toBe(1);
+        expect(traceRequests()).toBe(0);
 
+        // The turn starts running: the transcript shows its steps, so they load
+        // without anyone opening anything.
         server.events.sync({ sequence: "1" });
         await state.whenIdle();
-        expect(trace.getState().trace).toMatchObject({
+        expect(chatHandle.getState().traces["message-2"]).toMatchObject({
+            type: "ready",
+            value: { entryCount: 1 },
+        });
+        expect(traceRequests()).toBe(1);
+
+        server.events.sync({ sequence: "2" });
+        await state.whenIdle();
+        expect(chatHandle.getState().traces["message-2"]).toMatchObject({
             type: "ready",
             value: { entryCount: 2, latest: { kind: "reasoning" } },
         });
         expect(traceRequests()).toBe(2);
 
-        server.events.sync({ sequence: "2" });
-        await state.whenIdle();
-        expect(traceRequests()).toBe(2);
-
+        // A message change that leaves the turn summary alone costs no request.
         server.events.sync({ sequence: "3" });
         await state.whenIdle();
         expect(traceRequests()).toBe(2);
     });
 
-    it("recovers an early-opened trace once the turn appears in a difference", async () => {
+    it("retries steps that failed to load while the turn keeps advancing", async () => {
         const server = createFakeServer();
         server.respond("GET", "/v0/sync/state", syncStateResponse);
         server.respond("GET", "/v0/chats", jsonResponse(200, { chats: [chat()] }));
@@ -149,30 +150,42 @@ describe("Agent turn trace surface stays live without refetch storms", () => {
             jsonResponse(404, { error: "not_found", message: "Agent turn trace was not found" }),
             jsonResponse(200, { trace: agentTraceDetails() }),
         );
-        server.respond("POST", "/v0/sync/getDifference", syncDifference("1", "2"));
+        server.respond(
+            "POST",
+            "/v0/sync/getDifference",
+            syncDifference("1", "2"),
+            syncDifference("2", "3"),
+        );
         server.respond(
             "POST",
             "/v0/chats/chat-1/getDifference",
             chatDifference("2", [assistantMessage("2", { agentTrace: agentTraceSummary() })]),
+            chatDifference("3", [
+                assistantMessage("3", {
+                    text: "Stream",
+                    agentTrace: agentTraceSummary({ entryCount: 2 }),
+                }),
+            ]),
         );
         using state = happyStateCreate({ transport: server.transport });
         await state.syncStart();
         using chatHandle = state.chatOpen("chat-1");
         await state.whenIdle();
         expect(chatHandle.getState().status.type).toBe("ready");
-        using trace = state.agentTraceOpen("message-2");
-        await state.whenIdle();
-        expect(trace.getState().trace.type).toBe("error");
 
         server.events.sync({ sequence: "1" });
         await state.whenIdle();
-        expect(trace.getState().trace).toMatchObject({
+        expect(chatHandle.getState().traces["message-2"]?.type).toBe("error");
+
+        server.events.sync({ sequence: "2" });
+        await state.whenIdle();
+        expect(chatHandle.getState().traces["message-2"]).toMatchObject({
             type: "ready",
             value: { turnId: "turn-1", entryCount: 1 },
         });
     });
 
-    it("revalidates an open trace when its message is deleted instead of serving cache", async () => {
+    it("drops fetched steps when the message that owned the turn is deleted", async () => {
         const server = createFakeServer();
         server.respond("GET", "/v0/sync/state", syncStateResponse);
         server.respond("GET", "/v0/chats", jsonResponse(200, { chats: [chat()] }));
@@ -186,18 +199,23 @@ describe("Agent turn trace surface stays live without refetch storms", () => {
         server.respond(
             "GET",
             "/v0/messages/message-2/agentTrace",
-            jsonResponse(200, { trace: agentTraceDetails({ status: "complete" }) }),
-            jsonResponse(404, { error: "not_found", message: "Agent turn trace was not found" }),
+            jsonResponse(200, { trace: agentTraceDetails() }),
         );
-        server.respond("POST", "/v0/sync/getDifference", syncDifference("1", "2"));
+        server.respond(
+            "POST",
+            "/v0/sync/getDifference",
+            syncDifference("1", "2"),
+            syncDifference("2", "3"),
+        );
         server.respond(
             "POST",
             "/v0/chats/chat-1/getDifference",
-            chatDifference("2", [
+            chatDifference("2", [assistantMessage("2", { agentTrace: agentTraceSummary() })]),
+            chatDifference("3", [
                 message({
                     id: "message-2",
                     sequence: "2",
-                    changePts: "2",
+                    changePts: "3",
                     kind: "automated",
                     text: "",
                     deletedAt: "2026-01-01T00:00:05.000Z",
@@ -209,59 +227,14 @@ describe("Agent turn trace surface stays live without refetch storms", () => {
         using chatHandle = state.chatOpen("chat-1");
         await state.whenIdle();
         expect(chatHandle.getState().status.type).toBe("ready");
-        using trace = state.agentTraceOpen("message-2");
-        await state.whenIdle();
-        expect(trace.getState().trace).toMatchObject({
-            type: "ready",
-            value: { status: "complete" },
-        });
 
         server.events.sync({ sequence: "1" });
         await state.whenIdle();
-        expect(trace.getState().trace.type).toBe("error");
-    });
+        expect(chatHandle.getState().traces["message-2"]?.type).toBe("ready");
 
-    it("revalidates an open trace when its chat is removed from the account", async () => {
-        const server = createFakeServer();
-        server.respond("GET", "/v0/sync/state", syncStateResponse);
-        server.respond("GET", "/v0/chats", jsonResponse(200, { chats: [chat()] }));
-        server.respond("GET", "/v0/projects", jsonResponse(200, { projects: [] }));
-        server.respond("GET", "/v0/chats/chat-1", jsonResponse(200, { chat: chat() }));
-        server.respond(
-            "GET",
-            "/v0/chats/chat-1/messages?limit=100",
-            jsonResponse(200, { messages: [message()], hasMore: false, chatPts: "1" }),
-        );
-        server.respond(
-            "GET",
-            "/v0/messages/message-2/agentTrace",
-            jsonResponse(200, { trace: agentTraceDetails({ status: "complete" }) }),
-            jsonResponse(404, { error: "not_found", message: "Agent turn trace was not found" }),
-        );
-        server.respond(
-            "POST",
-            "/v0/sync/getDifference",
-            jsonResponse(200, {
-                kind: "empty",
-                changedChats: [],
-                removedChatIds: ["chat-1"],
-                areas: [],
-                state: { protocolVersion: 1, generation: "g", sequence: "1" },
-                targetState: { protocolVersion: 1, generation: "g", sequence: "1" },
-            }),
-        );
-        using state = happyStateCreate({ transport: server.transport });
-        await state.syncStart();
-        using chatHandle = state.chatOpen("chat-1");
+        server.events.sync({ sequence: "2" });
         await state.whenIdle();
-        expect(chatHandle.getState().status.type).toBe("ready");
-        using trace = state.agentTraceOpen("message-2");
-        await state.whenIdle();
-        expect(trace.getState().trace.type).toBe("ready");
-
-        server.events.sync({ sequence: "1" });
-        await state.whenIdle();
-        expect(trace.getState().trace.type).toBe("error");
+        expect(chatHandle.getState().traces["message-2"]).toBeUndefined();
     });
 
     it("keeps live subagents and background terminals on chat agent activity and expires them", async () => {

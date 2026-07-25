@@ -560,7 +560,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="automated: a plugin/API posted on the author's behalf. The author identity stays; a quiet Automated marker sits after the name (incoming), in the own bubble aside lane, or above own media when there is no text. It is not the agent treatment, and a hand-typed follow-up starts a new group so it never inherits the marker."
+                detail="automated: a plugin/API posted on the author's behalf. The author identity stays; a quiet Automated marker sits after the name (incoming), on the first line inside an own bubble, or above own media when there is no text. It is not the agent treatment, and a hand-typed follow-up starts a new group so it never inherits the marker."
                 label="Message — automated attribution"
                 number="14"
                 stage="app"

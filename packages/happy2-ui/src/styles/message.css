@@ -289,10 +289,16 @@
     height: 16px;
 }
 
-/* On an own message there is no meta row, so the marker rides the bottom-aligned
-   bubble line beside the hover time. It sits on the same baseline the aside time
-   occupies (line-height 22px, 10px bottom offset) so the two read as one row. */
-.happy2-message__automated--own {
+/* On an own message the marker opens the bubble: its own line above the text,
+   with the body's line rhythm beneath it. A media-only automated message has no
+   bubble, so there the marker still rides the bottom-aligned bubble line and
+   sits on the baseline the aside time occupies (line-height 22px, 10px offset). */
+.happy2-message__body .happy2-message__automated--own {
+    display: flex;
+    margin-bottom: 4px;
+}
+
+.happy2-message__bubble-line > .happy2-message__automated--own {
     margin-bottom: 13px;
 }
 

@@ -60,6 +60,20 @@ function activityTraceEntry(
             occurredAt,
         };
     }
+    if (activity.kind === "labeled")
+        return {
+            id: entry.id,
+            kind: "tool",
+            title: activity.label,
+            ...(activity.subject ? { detail: activity.subject } : {}),
+            status:
+                activity.status === "running"
+                    ? "running"
+                    : activity.status === "failed"
+                      ? "failed"
+                      : "complete",
+            occurredAt,
+        };
     const tool = activity.tool;
     const failed = tool.status === "failed" || tool.failed;
     const running = tool.status === "running" || tool.status === "awaitingApproval";

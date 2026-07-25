@@ -349,10 +349,10 @@ export function Sidebar(props: SidebarProps) {
                             active={false}
                             className="happy2-sidebar__compose"
                             item={{
-                                icon: "edit",
+                                icon: "plus",
                                 id: "new-chat",
                                 kind: "action",
-                                label: local.composeLabel ?? "New chat",
+                                label: local.composeLabel ?? "Create",
                             }}
                             onSelect={local.onCompose}
                         />

@@ -5,7 +5,7 @@ import { createGymServer, type GymRequestClient } from "../../sources/index.js";
 import { createGymStateTransport } from "../../sources/state/index.js";
 
 describe("agent turn traces through happy2-state and the real server", () => {
-    it("streams a live trace into an open surface and keeps it after completion", async () => {
+    it("streams a live trace into the transcript and keeps it after completion", async () => {
         await using rig = await createMockRigDaemon();
         rig.setAutomaticReply(undefined);
         await using server = await createGymServer({
@@ -56,8 +56,10 @@ describe("agent turn traces through happy2-state and the real server", () => {
         const assistantMessageId = placeholder()!.id;
         expect(placeholder()).toMatchObject({ text: "", generationStatus: "streaming" });
 
-        using trace = state.agentTraceOpen(assistantMessageId);
-        await expect.poll(() => trace.getState().trace.type, { timeout: 4_000 }).toBe("ready");
+        // A running turn's steps load into the chat surface on their own: nothing
+        // opens a panel, the transcript simply renders what the agent is doing.
+        const trace = () => chat.getState().traces[assistantMessageId];
+        await expect.poll(() => trace()?.type, { timeout: 4_000 }).toBe("ready");
 
         const run = rig.submittedRuns[0]!;
         rig.emitThinkingStart(run.runId, 20);
@@ -65,8 +67,8 @@ describe("agent turn traces through happy2-state and the real server", () => {
         await expect
             .poll(
                 () => {
-                    const current = trace.getState().trace;
-                    return current.type === "ready"
+                    const current = trace();
+                    return current?.type === "ready"
                         ? current.value.entries.some(({ kind }) => kind === "reasoning")
                         : false;
                 },
@@ -107,15 +109,15 @@ describe("agent turn traces through happy2-state and the real server", () => {
         await expect
             .poll(
                 () => {
-                    const current = trace.getState().trace;
-                    return current.type === "ready" ? current.value.status : current.type;
+                    const current = trace();
+                    return current?.type === "ready" ? current.value.status : current?.type;
                 },
                 { timeout: 10_000 },
             )
             .toBe("complete");
-        const completed = trace.getState().trace;
-        expect(completed.type).toBe("ready");
-        if (completed.type === "ready") {
+        const completed = trace();
+        expect(completed?.type).toBe("ready");
+        if (completed?.type === "ready") {
             expect(completed.value.latest).toMatchObject({ title: "Turn completed" });
             expect(completed.value.subagents).toEqual([]);
             expect(completed.value.backgroundTerminals).toEqual([]);

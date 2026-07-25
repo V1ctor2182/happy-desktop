@@ -7,7 +7,6 @@ import type {
     ChatSummary,
 } from "happy2-state";
 import {
-    agentTraceStoreFixtureCreate,
     chatStoreFixtureCreate,
     composerStoreFixtureCreate,
     directoryStoreFixtureCreate,
@@ -88,8 +87,7 @@ function chatPageActionsCreate(overrides: Partial<ChatPageActions> = {}): ChatPa
         channelInfoOpen: () => undefined,
         profileOpen: () => undefined,
         panelClose: () => undefined,
-        traceOpen: () => undefined,
-        traceClose: () => undefined,
+        searchOpen: () => undefined,
         workspaceOpen: () => undefined,
         workspaceClose: () => undefined,
         workspaceFileOpen: () => undefined,
@@ -683,118 +681,6 @@ it("creates a direct message from the directory and does not hijack later naviga
     expect(chatSelect.mock.calls.filter(([chatId]) => chatId === "dm-grace")).toHaveLength(1);
 });
 
-it("joins an eligible private child explicitly and removes it reactively from the directory", async () => {
-    const sidebar = sidebarStoreFixtureCreate();
-    const directory = directoryStoreFixtureCreate();
-    onTestFinished(() => {
-        sidebar[Symbol.dispose]();
-        directory[Symbol.dispose]();
-    });
-    const publicRejoin: ChatSummary = {
-        ...chat,
-        id: "alumni",
-        name: "Alumni",
-        slug: "alumni",
-        membershipRole: undefined,
-    };
-    const privateParent: ChatSummary = {
-        ...chat,
-        id: "founders",
-        kind: "private_channel",
-        name: "Founders",
-        slug: "founders",
-        membershipRole: undefined,
-    };
-    const privateChild: ChatSummary = {
-        ...privateParent,
-        id: "hiring",
-        name: "Hiring plan",
-        slug: "hiring",
-        parentChatId: privateParent.id,
-    };
-    directory.input({
-        type: "directoryLoaded",
-        users: [],
-        channels: [publicRejoin, privateParent, privateChild],
-    });
-    sidebar.input({
-        type: "sidebarLoaded",
-        chats: [{ chat, id: chat.id, displayName: chat.name!, participants: [] }],
-        projects: [testProject],
-        sync: { protocolVersion: 1, generation: "test", sequence: "0" },
-    });
-    let settleJoin: () => void = () => undefined;
-    const chatJoin = vi.fn(
-        () =>
-            new Promise<void>((resolve) => {
-                settleJoin = resolve;
-            }),
-    );
-    const view = createRenderer();
-    view.render(
-        () => (
-            <ChatPage
-                actions={chatPageActionsCreate({ chatJoin })}
-                directory={directory.store}
-                navigation={{ chatId: chat.id }}
-                rail={<div>Rail</div>}
-                sidebarSearch=""
-                sidebar={sidebar.store}
-                windowControls={false}
-                user={{ id: "user-1", firstName: "Ada" }}
-            />
-        ),
-        { width: 1200, height: 800 },
-    );
-    await view.ready();
-
-    view.container
-        .querySelector<HTMLButtonElement>(
-            '[data-section-id="browse"] [aria-label="Browse channels"]',
-        )!
-        .click();
-    await nextFrame();
-    const alumniRow = view.container.querySelector('[data-channel-id="alumni"]')!;
-    expect(view.container.querySelector('[data-channel-id="hiring"]')?.textContent).toContain(
-        "Product · Private · Inherits #Founders",
-    );
-    view.container.querySelector<HTMLButtonElement>('[aria-label="Join Hiring plan"]')!.click();
-    await nextFrame();
-    expect(chatJoin).toHaveBeenCalledExactlyOnceWith("hiring");
-    expect(view.container.querySelector('[aria-label="Join Hiring plan"]')?.textContent).toContain(
-        "Joining…",
-    );
-    expect(
-        view.container.querySelector<HTMLButtonElement>('[aria-label="Join Alumni"]')!.disabled,
-    ).toBe(true);
-
-    settleJoin();
-    await Promise.resolve();
-    await nextFrame();
-    sidebar.input({
-        type: "chatSummariesReconciled",
-        changedChats: [
-            {
-                chat: { ...privateChild, membershipRole: "member" },
-                id: privateChild.id,
-                displayName: privateChild.name!,
-                participants: [],
-            },
-        ],
-        removedChatIds: [],
-        sync: { protocolVersion: 1, generation: "test", sequence: "1" },
-    });
-    directory.input({
-        type: "directoryLoaded",
-        users: [],
-        channels: [publicRejoin, privateParent],
-    });
-    await nextFrame();
-    expect(view.container.querySelector('[data-channel-id="hiring"]')).toBeNull();
-    expect(view.container.querySelector('[data-channel-id="alumni"]')).toBe(alumniRow);
-    expect(view.container.querySelector('[data-item-id="hiring"]')).not.toBeNull();
-});
-
 it("replaces the channel default agent from the info panel", async () => {
     const routedChat: ChatSummary = { ...chat, defaultAgentUserId: "agent-happy" };
     const sidebar = sidebarStoreFixtureCreate();
@@ -1288,19 +1174,16 @@ function subscriptionCounter(store: { subscribe(listener: () => void): () => voi
     return () => active;
 }
 
-it("opens a live trace panel from the message row and keeps DOM identity across updates", async () => {
+it("streams a turn's steps inline and folds them behind View traces when it ends", async () => {
     const sidebar = sidebarStoreFixtureCreate();
     const directory = directoryStoreFixtureCreate();
     const chatSurface = chatStoreFixtureCreate(chat.id);
-    const trace = agentTraceStoreFixtureCreate("message-2");
     onTestFinished(() => {
         sidebar[Symbol.dispose]();
         directory[Symbol.dispose]();
         chatSurface[Symbol.dispose]();
-        trace[Symbol.dispose]();
     });
     const chatSubscriptions = subscriptionCounter(chatSurface.store);
-    const traceSubscriptions = subscriptionCounter(trace.store);
     directory.input({
         type: "directoryLoaded",
         users: [
@@ -1327,65 +1210,9 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
         messages: [messageItem("message-1", "Please inspect"), assistantItem(traceSummary())],
         hasMoreMessages: false,
     });
-    const traceOpen = vi.fn();
-    const traceClose = vi.fn();
-    const view = createRenderer();
-    let panelSet!: (panel: ChatPageNavigation["panel"]) => void;
-    view.render(
-        () => {
-            const [panel, setPanel] = useState<ChatPageNavigation["panel"]>(undefined);
-            panelSet = setPanel;
-            return (
-                <ChatPage
-                    actions={chatPageActionsCreate({
-                        traceOpen: (messageId) => {
-                            traceOpen(messageId);
-                            setPanel({ kind: "trace", messageId });
-                        },
-                        traceClose: () => {
-                            traceClose();
-                            setPanel(undefined);
-                        },
-                    })}
-                    chat={chatSurface.store}
-                    directory={directory.store}
-                    navigation={{ chatId: chat.id, panel }}
-                    rail={<div>Rail</div>}
-                    sidebarSearch=""
-                    sidebar={sidebar.store}
-                    windowControls={false}
-                    trace={trace.store}
-                    user={{ id: "user-1", firstName: "Ada" }}
-                />
-            );
-        },
-        { width: 1200, height: 800 },
-    );
-    await view.ready();
-
-    const row = view.container.querySelector<HTMLButtonElement>(
-        '[data-happy2-ui="agent-trace-row"]',
-    )!;
-    expect(row).not.toBeNull();
-    expect(row.dataset.status).toBe("running");
-    expect(row.textContent).toContain("Reasoning");
-    expect(row.getAttribute("aria-expanded")).toBe("false");
-    const messageRoot = row.closest('[data-happy2-ui="message"]')!;
-
-    row.focus();
-    row.click();
-    await nextFrame();
-    expect(traceOpen).toHaveBeenCalledExactlyOnceWith("message-2");
-    const panel = view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')!;
-    expect(panel).not.toBeNull();
-    expect(
-        panel
-            .querySelector('[data-happy2-ui="agent-trace-panel-state"]')
-            ?.getAttribute("data-state"),
-    ).toBe("loading");
-
-    trace.input({
-        type: "agentTraceLoaded",
+    chatSurface.input({
+        type: "traceLoaded",
+        messageId: "message-2",
         trace: {
             ...traceSummary({ entryCount: 2 }),
             entries: [
@@ -1394,14 +1221,36 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
             ],
         },
     });
-    await nextFrame();
-    const entries = view.container.querySelectorAll('[data-happy2-ui="agent-trace-panel-entry"]');
-    expect(entries).toHaveLength(2);
-    const firstEntry = entries[0]!;
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(panel);
+    const view = createRenderer();
+    view.render(
+        () => (
+            <ChatPage
+                actions={chatPageActionsCreate()}
+                chat={chatSurface.store}
+                directory={directory.store}
+                navigation={{ chatId: chat.id }}
+                rail={<div>Rail</div>}
+                sidebarSearch=""
+                sidebar={sidebar.store}
+                windowControls={false}
+                user={{ id: "user-1", firstName: "Ada" }}
+            />
+        ),
+        { width: 1200, height: 800 },
+    );
+    await view.ready();
 
-    // A streaming tick updates the message and trace summary without replacing
-    // the message row, the open panel, its entry DOM, or the focused control.
+    // A running turn lists its steps in the transcript, above the answer it is
+    // still writing, and offers no control while it works.
+    const steps = view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]');
+    expect(steps).toHaveLength(2);
+    const firstStep = steps[0]!;
+    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBeNull();
+    const messageRoot = view.container.querySelectorAll('[data-happy2-ui="message"]')[2]!;
+    expect(messageRoot.textContent).toContain("");
+
+    // A streaming tick updates the message without replacing the message row or
+    // the already listed steps.
     chatSurface.input({
         type: "messageUpserted",
         item: assistantItem(
@@ -1413,15 +1262,13 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
         ),
     });
     await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBe(row);
-    expect(row.closest('[data-happy2-ui="message"]')).toBe(messageRoot);
-    expect(row.textContent).toContain("Running tests");
-    expect(row.getAttribute("aria-expanded")).toBe("true");
-    expect(document.activeElement).toBe(row);
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(panel);
+    expect(view.container.querySelectorAll('[data-happy2-ui="message"]')[2]).toBe(messageRoot);
+    expect(messageRoot.textContent).toContain("Partial reply");
+    expect(view.container.querySelector('[data-happy2-ui="agent-activity-row"]')).toBe(firstStep);
 
-    trace.input({
-        type: "agentTraceLoaded",
+    chatSurface.input({
+        type: "traceLoaded",
+        messageId: "message-2",
         trace: {
             ...traceSummary({
                 entryCount: 3,
@@ -1435,14 +1282,12 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
         },
     });
     await nextFrame();
-    const updatedEntries = view.container.querySelectorAll(
-        '[data-happy2-ui="agent-trace-panel-entry"]',
-    );
-    expect(updatedEntries).toHaveLength(3);
-    expect(updatedEntries[0]).toBe(firstEntry);
+    const updatedSteps = view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]');
+    expect(updatedSteps).toHaveLength(3);
+    expect(updatedSteps[0]).toBe(firstStep);
 
-    // Completion settles the durable reply in place and turns the activity row
-    // into the persisted-trace link while the open panel stays mounted.
+    // Completing the turn settles the durable reply in place, folds the steps
+    // away, and turns the activity row into the "View traces" link.
     chatSurface.input({
         type: "messageUpserted",
         item: assistantItem(
@@ -1455,42 +1300,43 @@ it("opens a live trace panel from the message row and keeps DOM identity across 
         ),
     });
     await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBe(row);
-    expect(row.dataset.status).toBe("complete");
-    expect(row.textContent).toContain("View traces");
-    expect(messageRoot.textContent).toContain("All done.");
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(panel);
+    expect(view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]')).toHaveLength(
+        0,
+    );
+    const link = view.container.querySelector<HTMLButtonElement>(
+        '[data-happy2-ui="agent-trace-row"]',
+    )!;
+    expect(link.dataset.status).toBe("complete");
+    expect(link.textContent).toContain("View traces");
+    expect(link.getAttribute("aria-expanded")).toBe("false");
+    expect(link.closest('[data-happy2-ui="message"]')!.textContent).toContain("All done.");
 
-    // Closing an expanded trace resets its local geometry so route-driven
-    // reopening starts docked instead of reviving a stale full-shell overlay.
-    view.container
-        .querySelector<HTMLButtonElement>('[data-happy2-ui="app-shell-panel-toggle"]')!
-        .click();
+    // Expanding puts the same steps back into the transcript in place, with the
+    // control staying on the line that opens the turn.
+    link.click();
     await nextFrame();
+    expect(view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]')).toHaveLength(
+        3,
+    );
+    expect(view.container.querySelectorAll('[data-happy2-ui="agent-trace-row"]')).toHaveLength(1);
     expect(
         view.container
-            .querySelector('[data-happy2-ui="app-shell-panel"]')!
-            .getAttribute("data-maximized"),
-    ).toBe("");
-    const closeButton = panel.querySelector<HTMLButtonElement>('[aria-label="Close trace"]')!;
-    closeButton.click();
-    await nextFrame();
-    expect(traceClose).toHaveBeenCalledOnce();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBeNull();
-    panelSet({ kind: "trace", messageId: "message-2" });
-    await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).not.toBeNull();
+            .querySelector<HTMLButtonElement>('[data-happy2-ui="agent-trace-row"]')!
+            .getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(
-        view.container
-            .querySelector('[data-happy2-ui="app-shell-panel"]')!
-            .getAttribute("data-maximized"),
-    ).toBeNull();
+        view.container.querySelector('[data-happy2-ui="agent-trace-row"]')!.textContent,
+    ).toContain("Hide traces");
+
+    view.container.querySelector<HTMLButtonElement>('[data-happy2-ui="agent-trace-row"]')!.click();
+    await nextFrame();
+    expect(view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]')).toHaveLength(
+        0,
+    );
 
     expect(chatSubscriptions()).toBeGreaterThan(0);
-    expect(traceSubscriptions()).toBeGreaterThan(0);
     view.destroy();
     expect(chatSubscriptions()).toBe(0);
-    expect(traceSubscriptions()).toBe(0);
 });
 
 it("projects live subagents and terminals into the strip with stable row identity", async () => {
@@ -1793,129 +1639,6 @@ it("projects shared MCP links into the sidebar and opens them via the external-l
     await nextFrame();
     expect(view.container.querySelector('[data-section-id="shared-links"]')).toBeNull();
 });
-it("expands the trace over the shell with a working composer footer and stable identity", async () => {
-    const sidebar = sidebarStoreFixtureCreate();
-    const directory = directoryStoreFixtureCreate();
-    const chatSurface = chatStoreFixtureCreate(chat.id);
-    const trace = agentTraceStoreFixtureCreate("message-2");
-    const submitted = vi.fn();
-    const composer = composerStoreFixtureCreate(chat.id, { output: submitted });
-    onTestFinished(() => {
-        sidebar[Symbol.dispose]();
-        directory[Symbol.dispose]();
-        chatSurface[Symbol.dispose]();
-        trace[Symbol.dispose]();
-        composer[Symbol.dispose]();
-    });
-    directory.input({ type: "directoryLoaded", users: [], channels: [] });
-    sidebar.input({
-        type: "sidebarLoaded",
-        projects: [testProject],
-        chats: [{ chat, id: chat.id, displayName: chat.name!, participants: [] }],
-        sync: { protocolVersion: 1, generation: "test", sequence: "0" },
-    });
-    chatSurface.input({
-        type: "chatLoaded",
-        chat,
-        messages: [messageItem("message-1", "Please inspect"), assistantItem(traceSummary())],
-        hasMoreMessages: false,
-    });
-    trace.input({
-        type: "agentTraceLoaded",
-        trace: {
-            ...traceSummary({ entryCount: 1 }),
-            entries: [traceEntry("entry-1", "Reasoning", 1)],
-        },
-    });
-    const view = createRenderer();
-    onTestFinished(() => view.destroy());
-    view.render(
-        () => (
-            <ChatPage
-                actions={chatPageActionsCreate()}
-                chat={chatSurface.store}
-                composer={composer}
-                directory={directory.store}
-                navigation={{ chatId: chat.id, panel: { kind: "trace", messageId: "message-2" } }}
-                sidebarSearch=""
-                sidebar={sidebar.store}
-                windowControls={false}
-                trace={trace.store}
-                user={{ id: "user-1", firstName: "Ada" }}
-            />
-        ),
-        { width: 1200, height: 800 },
-    );
-    await view.ready();
-
-    // Docked: the trace panel is present, not maximized, and carries no composer footer.
-    const panel = view.container.querySelector('[data-happy2-ui="app-shell-panel"]')!;
-    expect(panel.getAttribute("data-maximized")).toBeNull();
-    expect(view.container.querySelector('[data-happy2-ui="app-shell-panel-footer"]')).toBeNull();
-    const tracePanel = view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')!;
-    expect(tracePanel).not.toBeNull();
-
-    // Expand: the panel maximizes over the content and the trace body keeps its identity.
-    view.container
-        .querySelector<HTMLButtonElement>('[data-happy2-ui="app-shell-panel-toggle"]')!
-        .click();
-    await nextFrame();
-    expect(
-        view.container
-            .querySelector('[data-happy2-ui="app-shell-panel"]')!
-            .getAttribute("data-maximized"),
-    ).toBe("");
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(tracePanel);
-
-    // A composer footer appears inside the expanded panel and shares the composer store.
-    const footer = view.container.querySelector('[data-happy2-ui="app-shell-panel-footer"]')!;
-    const footerTextarea = footer.querySelector<HTMLTextAreaElement>("textarea")!;
-    expect(footerTextarea).not.toBeNull();
-    composer.getState().textUpdate("draft from the trace view");
-    await nextFrame();
-    expect(footerTextarea.value).toBe("draft from the trace view");
-    // The hidden workspace composer reflects the same snapshot (single source of truth).
-    const workspaceTextarea = view.container.querySelector<HTMLTextAreaElement>(
-        '[data-happy2-ui="app-shell-workspace"] textarea',
-    )!;
-    expect(workspaceTextarea.value).toBe("draft from the trace view");
-
-    // Sending from the footer routes through the shared composer action.
-    footer.querySelector<HTMLButtonElement>('[aria-label="Send message"]')!.click();
-    await nextFrame();
-    expect(submitted).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "textSubmitted", text: "draft from the trace view" }),
-    );
-
-    // An ordinary chat-store notification preserves the footer composer and trace identities.
-    chatSurface.input({
-        type: "messageUpserted",
-        item: assistantItem(
-            traceSummary({
-                entryCount: 2,
-                latest: { kind: "tool", title: "Running tests", occurredAt: 2 },
-            }),
-            "Partial reply",
-        ),
-    });
-    await nextFrame();
-    expect(footer.querySelector("textarea")).toBe(footerTextarea);
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(tracePanel);
-
-    // Restore returns to the docked layout and removes the footer composer.
-    view.container
-        .querySelector<HTMLButtonElement>('[data-happy2-ui="app-shell-panel-toggle"]')!
-        .click();
-    await nextFrame();
-    expect(
-        view.container
-            .querySelector('[data-happy2-ui="app-shell-panel"]')!
-            .getAttribute("data-maximized"),
-    ).toBeNull();
-    expect(view.container.querySelector('[data-happy2-ui="app-shell-panel-footer"]')).toBeNull();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-panel"]')).toBe(tracePanel);
-});
-
 it("uses the shared expandable inspector shell for documents", async () => {
     const sidebar = sidebarStoreFixtureCreate();
     const directory = directoryStoreFixtureCreate();

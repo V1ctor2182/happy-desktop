@@ -1,6 +1,5 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-    AgentTracePanel,
     AppShell,
     Banner,
     Button,
@@ -16,7 +15,6 @@ import {
 import type {
     AgentActivityState,
     AgentModelsStore,
-    AgentTraceStore,
     ChatSummary,
     ChatStore,
     ComposerStore,
@@ -37,10 +35,13 @@ import {
     composerAudienceHint,
     composerHint,
     entriesProject,
+    entryLayoutClass,
     formatBytes,
     identityInitials,
     messagesGrouped,
     toneFor,
+    traceStepsShown,
+    type ChatTraceProjection,
     type Conversation,
     type LiveChatMessage,
     type PortShareView,
@@ -49,9 +50,7 @@ import {
 import { ChatMessageEntry } from "./ChatMessageEntry.js";
 import { ChatAgentCreateDialog } from "./ChatAgentCreateDialog.js";
 import { ChatChannelCreateDialog } from "./ChatChannelCreateDialog.js";
-import { ChatProjectCreateDialog } from "./ChatProjectCreateDialog.js";
 import { ChatChildChannelCreateDialog } from "./ChatChildChannelCreateDialog.js";
-import { ChatDirectoryDialog } from "./ChatDirectoryDialog.js";
 import { ChatDirectMessageDialog } from "./ChatDirectMessageDialog.js";
 import { ChatMessageEditDialog } from "./ChatMessageEditDialog.js";
 import { ChatInfoPanel } from "./ChatInfoPanel.js";
@@ -64,7 +63,11 @@ import { ChatConversation } from "./ChatConversation.js";
 import { ComposerDock } from "./ComposerDock.js";
 import { ComposeModal } from "../compose/ComposeModal.js";
 import type { MessageListScrollPosition } from "../../Message.js";
-import { chatSidebarModelCreate } from "./chatSidebarModel.js";
+import {
+    chatSidebarModelCreate,
+    SIDEBAR_SEARCH_ID,
+    sidebarSearchItem,
+} from "./chatSidebarModel.js";
 import { chatSharedLinksSectionCreate, sharedLinkUriFromItemId } from "./chatSharedLinksModel.js";
 import { useChatInfoModel } from "./chatInfoModel.js";
 import { chatMessageActionsModelCreate } from "./chatMessageActionsModel.js";
@@ -90,7 +93,6 @@ export type ChatPageProps = {
     agentModels?: AgentModelsStore;
     chat?: ChatStore;
     composer?: ComposerStore;
-    trace?: AgentTraceStore;
     terminal?: TerminalStore;
     workspace?: WorkspaceStore;
     workspaceFile?: WorkspaceFileStore;
@@ -171,10 +173,6 @@ export type ChatPagePanel =
           readonly userId: string;
       }
     | {
-          readonly kind: "trace";
-          readonly messageId: string;
-      }
-    | {
           readonly kind: "workspace";
       }
     | {
@@ -194,8 +192,8 @@ export interface ChatPageActions {
     channelInfoOpen(chatId: string): void;
     profileOpen(userId: string): void;
     panelClose(): void;
-    traceOpen(messageId: string): void;
-    traceClose(): void;
+    /** Opens the workspace-wide search palette, the same one ⌘K opens. */
+    searchOpen(): void;
     workspaceOpen(chatId: string): void;
     workspaceClose(): void;
     workspaceFileOpen(chatId: string, path: string): void;
@@ -255,7 +253,6 @@ export function ChatPage(props: ChatPageProps) {
     const agentModelsState = useOptionalStoreSnapshot(props.agentModels);
     const chatState = useOptionalStoreSnapshot(props.chat);
     const composerState = useOptionalStoreSnapshot(props.composer);
-    const traceState = useOptionalStoreSnapshot(props.trace);
     const terminalState = useOptionalStoreSnapshot(props.terminal);
     const documentListState = useOptionalStoreSnapshot(props.documentList);
     const documentCollectionState = useOptionalStoreSnapshot(props.documents);
@@ -263,7 +260,6 @@ export function ChatPage(props: ChatPageProps) {
     const directorySnapshot = () => directoryState;
     const chatSnapshot = () => chatState;
     const composerSnapshot = () => composerState;
-    const traceSnapshot = () => traceState;
     // A chat has at most one active port share; both the header and info panel
     // render the same view from the one owning chat snapshot.
     const portShareView = (): PortShareView | undefined => {
@@ -295,16 +291,11 @@ export function ChatPage(props: ChatPageProps) {
     const [busyCount, setBusyCount] = useState(0);
     const [createOpen, setCreateOpen] = useState(false);
     const [channelProjectId, setChannelProjectId] = useState<string>();
-    const [projectCreateOpen, setProjectCreateOpen] = useState(false);
     const [childCreateParentId, setChildCreateParentId] = useState<string | undefined>(undefined);
     const [agentCreateOpen, setAgentCreateOpen] = useState(false);
-    const [directoryOpen, setDirectoryOpen] = useState(false);
-    const [directoryJoinBusyId, setDirectoryJoinBusyId] = useState<string | undefined>(undefined);
-    const [directoryJoinError, setDirectoryJoinError] = useState<string | undefined>(undefined);
     const [composeOpen, setComposeOpen] = useState(false);
     const [directMessageOpen, setDirectMessageOpen] = useState(false);
-    // Every right-panel mode shares AppShell's expanded workspace geometry. The
-    // trace alone adds a composer footer while expanded.
+    // Every right-panel mode shares AppShell's expanded workspace geometry.
     const [panelExpanded, setPanelExpanded] = useState(false);
     const [messageEdit, setMessageEdit] = useState<{
         chatId: string;
@@ -335,9 +326,8 @@ export function ChatPage(props: ChatPageProps) {
     >(undefined);
     const activeConversationId = () => props.navigation.chatId ?? "";
     const activePanel = () => props.navigation.panel;
-    const panelMode = (): "info" | "trace" | "files" | "documents" | undefined => {
+    const panelMode = (): "info" | "files" | "documents" | undefined => {
         const panel = activePanel();
-        if (panel?.kind === "trace") return "trace";
         if (panel?.kind === "info" || panel?.kind === "profile") return "info";
         if (panel?.kind === "documents") return "documents";
         return panel?.kind === "workspace" ? "files" : undefined;
@@ -421,7 +411,18 @@ export function ChatPage(props: ChatPageProps) {
     const [terminalHeight, setTerminalHeight] = useState(280);
     const draft = () => composerSnapshot()?.text ?? "";
     const pendingAttachments = () => composerSnapshot()?.attachments ?? [];
-    const entries = entriesProject(chatSnapshot()?.messages ?? []);
+    // Turn steps come from the same chat snapshot as the messages they belong
+    // to, so a streaming turn's tools, reasoning, and answer render together.
+    const traceProjection = (): ChatTraceProjection | undefined => {
+        const snapshot = chatSnapshot();
+        return snapshot
+            ? {
+                  traces: snapshot.traces,
+                  expandedMessageIds: snapshot.traceExpandedMessageIds,
+              }
+            : undefined;
+    };
+    const entries = entriesProject(chatSnapshot()?.messages ?? [], traceProjection());
     const avatarFor = createAvatarProjection({
         user,
         sidebarSnapshot,
@@ -498,11 +499,6 @@ export function ChatPage(props: ChatPageProps) {
         if (!(await creationModel.channelCreate(input))) return;
         pendingSelection.current = { kind: "channel", slug: input.slug };
         setCreateOpen(false);
-    }
-    async function createProject(input: import("happy2-state").CreateProjectInput) {
-        if (!(await creationModel.projectCreate(input))) return;
-        pendingSelection.current = { kind: "channel", slug: input.initialChannel.slug };
-        setProjectCreateOpen(false);
     }
     function defaultProjectId(): string {
         return (
@@ -738,21 +734,6 @@ export function ChatPage(props: ChatPageProps) {
     };
     const activeAgentActivity = (): readonly DeepReadonly<AgentActivityState>[] =>
         chatSnapshot()?.agentActivity ?? [];
-    const activeTraceMessageId = () => {
-        const panel = activePanel();
-        return panel?.kind === "trace" ? panel.messageId : undefined;
-    };
-    const traceDetails = () => {
-        const snapshot = traceSnapshot();
-        return snapshot?.trace.type === "ready" ? snapshot.trace.value : undefined;
-    };
-    const traceAgentName = () => {
-        const details = traceDetails();
-        const person = details
-            ? directoryUsers().find((candidate) => candidate.id === details.agentUserId)
-            : undefined;
-        return person ? `${person.displayName} activity` : "Agent activity";
-    };
 
     const pluginRequestEntries = (): ReactNode[] => {
         const snapshot = chatSnapshot();
@@ -963,23 +944,6 @@ export function ChatPage(props: ChatPageProps) {
         if (members?.type !== "ready") return undefined;
         return members.value.find((member) => member.id === userId)?.displayName;
     }
-    async function directoryJoin(id: string) {
-        if (directoryJoinBusyId) return;
-        setDirectoryJoinBusyId(id);
-        setDirectoryJoinError(undefined);
-        startBusy();
-        try {
-            await props.actions.chatJoin(id);
-            setStatusHint("Joined channel.");
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Could not join this channel.";
-            setDirectoryJoinError(message);
-            showError(error);
-        } finally {
-            finishBusy();
-            setDirectoryJoinBusyId(undefined);
-        }
-    }
     const typingChatId = props.navigation.chatId;
     useLayoutEffect(
         () => () => {
@@ -994,15 +958,11 @@ export function ChatPage(props: ChatPageProps) {
                 // Left navigation can hide/show and resize whenever the normal chat
                 // sidebar is present (not a pushed detail override).
                 sidebarCollapsible={!props.sidebarOverride}
-                // All inspector modes use the same resize/expand shell. The live
-                // trace alone adds a composer footer while it is expanded.
+                // All inspector modes use the same resize/expand shell.
                 panelResizable
                 panelMaximizable={panelMode() !== undefined}
                 panelMaximized={panelMode() !== undefined ? panelExpanded : undefined}
                 onPanelMaximizedChange={setPanelExpanded}
-                panelFooter={
-                    panelMode() === "trace" && panelExpanded ? renderComposerDock() : undefined
-                }
                 sidebar={
                     props.sidebarOverride ?? (
                         <Sidebar
@@ -1024,7 +984,7 @@ export function ChatPage(props: ChatPageProps) {
                                     </Button>
                                 ) : null)
                             }
-                            composeLabel="New chat"
+                            composeLabel="Create"
                             itemMenuItems={(item) =>
                                 item.kind === "channel"
                                     ? sidebarChannelModel(item.id).menuItems()
@@ -1039,6 +999,10 @@ export function ChatPage(props: ChatPageProps) {
                                     props.actions.sharedLinkOpen(sharedUri);
                                     return;
                                 }
+                                if (id === SIDEBAR_SEARCH_ID) {
+                                    props.actions.searchOpen();
+                                    return;
+                                }
                                 if (props.navSection?.items.some((item) => item.id === id))
                                     props.onNavSelect?.(id);
                                 else selectConversation(id);
@@ -1048,14 +1012,20 @@ export function ChatPage(props: ChatPageProps) {
                             }
                             onSectionAction={(sectionId) => {
                                 if (sectionId === "agents") setAgentCreateOpen(true);
-                                if (sectionId === "projects") setProjectCreateOpen(true);
                                 if (sectionId.startsWith("project:"))
                                     channelCreateOpen(sectionId.slice("project:".length));
-                                if (sectionId === "browse") setDirectoryOpen(true);
                                 if (sectionId === "dms") setDirectMessageOpen(true);
                             }}
                             sections={[
-                                ...(props.navSection ? [props.navSection] : []),
+                                // Search leads the workspace navigation rather than
+                                // standing in a section of its own, so it sits under
+                                // Create with no gap of its own.
+                                props.navSection
+                                    ? {
+                                          ...props.navSection,
+                                          items: [sidebarSearchItem, ...props.navSection.items],
+                                      }
+                                    : { id: "workspace", items: [sidebarSearchItem] },
                                 ...sidebarSections,
                                 ...(sharedLinksSection() ? [sharedLinksSection()!] : []),
                             ]}
@@ -1063,24 +1033,7 @@ export function ChatPage(props: ChatPageProps) {
                     )
                 }
                 panel={
-                    panelMode() === "trace" ? (
-                        ((trace) => (
-                            <AgentTracePanel
-                                entries={traceDetails()?.entries ?? []}
-                                entryCount={traceDetails()?.entryCount ?? 0}
-                                error={trace?.type === "error" ? trace.error.message : undefined}
-                                loading={
-                                    !trace || (trace.type !== "ready" && trace.type !== "error")
-                                }
-                                onClose={() => {
-                                    setPanelExpanded(false);
-                                    props.actions.traceClose();
-                                }}
-                                status={traceDetails()?.status ?? "pending"}
-                                title={traceAgentName()}
-                            />
-                        ))(traceSnapshot()?.trace)
-                    ) : panelMode() === "info" ? (
+                    panelMode() === "info" ? (
                         <ChatInfoPanel
                             about={conversation.topic}
                             access={channelAccess()}
@@ -1343,22 +1296,6 @@ export function ChatPage(props: ChatPageProps) {
                     status={workspaceModel.fileStatus()}
                 />
             ) : null}
-            {directoryOpen ? (
-                <ChatDirectoryDialog
-                    channels={directoryChannels()}
-                    error={directoryJoinError}
-                    joiningId={directoryJoinBusyId}
-                    onChannelCreate={() => {
-                        setDirectoryOpen(false);
-                        channelCreateOpen();
-                    }}
-                    onClose={() => {
-                        setDirectoryOpen(false);
-                        setDirectoryJoinError(undefined);
-                    }}
-                    onJoin={(id) => void directoryJoin(id)}
-                />
-            ) : null}
             {directMessageOpen ? (
                 <ChatDirectMessageDialog
                     busy={busy()}
@@ -1405,13 +1342,6 @@ export function ChatPage(props: ChatPageProps) {
                     projects={sidebarSnapshot().projects}
                 />
             ) : null}
-            {projectCreateOpen ? (
-                <ChatProjectCreateDialog
-                    busy={busy()}
-                    onClose={() => setProjectCreateOpen(false)}
-                    onCreate={(input) => void createProject(input)}
-                />
-            ) : null}
             {childCreateParentId
                 ? ((parent) => (
                       <ChatChildChannelCreateDialog
@@ -1455,47 +1385,16 @@ export function ChatPage(props: ChatPageProps) {
                 : null}
         </>
     );
-    // The same composer surface, bound to the same snapshot/actions, rendered at the
-    // bottom of the expanded trace panel. Focus moving here on expand is an explicit
-    // UI lifetime boundary; the composer store remains the single source of truth.
-    function renderComposerDock(): ReactNode {
-        return (
-            <ComposerDock
-                activities={activeAgentActivity()}
-                activityNow={activityNow}
-                composerAudience={
-                    audienceRoutingActive() ? composerSnapshot()?.audience : undefined
-                }
-                composerCompactHint={liveComposerCompactHint()}
-                composerContributions={props.composerContributions}
-                composerModelControl={composerModelControl()}
-                composerDisabled={!activeConversationId()}
-                composerHint={liveComposerHint()}
-                composerMentions={composerMentionCandidates()}
-                composerPending={composerSnapshot()?.submission.status === "pending" || busy()}
-                composerSendEnabled={draft().trim().length > 0 || pendingAttachments().length > 0}
-                composerValue={draft()}
-                contextItems={composerContext}
-                onAudienceChange={(audience) => props.composer?.getState().audienceUpdate(audience)}
-                onComposerFocusChange={(focused) => props.composer?.getState().focusUpdate(focused)}
-                onContextRemove={(id) =>
-                    props.composer?.getState().attachmentRemove(id.replace(/^file:/u, ""))
-                }
-                onFilesSelected={(files) => void uploadFiles(files)}
-                onMentionSelect={composerMentionSelect}
-                onSend={sendMessage}
-                onValueChange={updateDraft}
-                placeholder={conversation.composerPlaceholder}
-            />
-        );
-    }
     function renderEntry(
         entry: WorkspaceEntry,
         index: number,
         list: readonly WorkspaceEntry[],
     ): ReactNode {
         const message = entry.kind === "message" ? entry : undefined;
-        const server = message?.serverMessage;
+        // An earlier text block of a turn is a projection of the reply below it,
+        // so attachments, apps, menus, and reactions stay on that one real
+        // message and are not repeated per block.
+        const server = message?.turnBlock ? undefined : message?.serverMessage;
         const apps = server?.mcpApps ?? [];
         const appNodes =
             props.renderMcpApp && server && apps.length > 0
@@ -1515,10 +1414,11 @@ export function ChatPage(props: ChatPageProps) {
             <ChatMessageEntry
                 key={message?.renderKey ?? entry.id}
                 appNodes={appNodes}
+                className={entryLayoutClass(list, index)}
                 entry={entry}
                 audienceLabel={message ? messageAudienceLabel(message) : undefined}
                 avatarUrl={avatarFor(message?.senderId, message?.photoFileId)}
-                files={message ? mediaModel.files(message) : []}
+                files={message && !message.turnBlock ? mediaModel.files(message) : []}
                 grouped={message ? messagesGrouped(list, index, message) : false}
                 own={
                     message !== undefined &&
@@ -1526,9 +1426,13 @@ export function ChatPage(props: ChatPageProps) {
                     (message.own ||
                         (message.senderId !== undefined && message.senderId === user()?.id))
                 }
-                images={message ? mediaModel.images(message) : []}
+                images={message && !message.turnBlock ? mediaModel.images(message) : []}
                 menuContributions={server ? props.messageContributions?.(server.id) : undefined}
-                menuItems={message ? messageActions.menuItems(message) : []}
+                menuItems={
+                    message && !message.turnBlock && !message.agent
+                        ? messageActions.menuItems(message)
+                        : []
+                }
                 profile={message ? infoModel.messageProfile(message) : undefined}
                 onImageOpen={(message, id) => void mediaModel.imageOpen(message, id)}
                 onMenuSelect={(message, action) => void messageActions.menuSelect(message, action)}
@@ -1536,12 +1440,8 @@ export function ChatPage(props: ChatPageProps) {
                 onReactionSelect={(message, emoji) =>
                     void messageActions.reactionToggle(message, emoji)
                 }
-                onTraceSelect={(message) => {
-                    // A freshly opened trace starts docked, not left maximized from before.
-                    setPanelExpanded(false);
-                    props.actions.traceOpen(message.id);
-                }}
-                traceOpen={message ? activeTraceMessageId() === message.id : false}
+                onTraceSelect={(message) => props.chat?.getState().traceToggle(message.id)}
+                traceOpen={message ? traceStepsShown(message, traceProjection()) : false}
             />
         );
     }

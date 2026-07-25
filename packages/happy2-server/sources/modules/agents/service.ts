@@ -2977,21 +2977,14 @@ function agentTurnTraceUpdates(
             },
         ];
     }
-    if (type.startsWith("text_")) {
-        const detail = agentLoopContent(loop, "text");
-        return [
-            {
-                traceKey: `response:${loop.partial?.id ?? "active"}:${loop.contentIndex ?? 0}`,
-                sessionEventId: event.id,
-                kind: "response",
-                title: type === "text_end" ? "Response drafted" : "Writing response",
-                ...(detail ? { detail: traceDetail(detail) } : {}),
-                status: type === "text_end" ? "complete" : "running",
-                occurredAt,
-                ...(type === "text_end" ? { completedAt: occurredAt } : {}),
-            },
-        ];
-    }
+    // Draft text is deliberately not traced. The partial already streams into the
+    // reply message the reader is watching, and a rig that reuses one partial id
+    // across inference iterations collided on this trace key, overwriting the
+    // first text block's entry with a later block's words while it kept the
+    // original timestamp. Every committed block is recorded by `agent_message`
+    // above, keyed by its own message id, so the response entries stay one per
+    // block and in the order the turn produced them.
+    if (type.startsWith("text_")) return [];
     if (type === "toolcall_end" && loop.toolCall?.id) {
         const toolCallId = boundedIdentifier(loop.toolCall.id, "tool");
         const name = traceSummary(loop.toolCall.name ?? "tool") || "tool";

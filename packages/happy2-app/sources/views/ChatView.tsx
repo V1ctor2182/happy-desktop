@@ -86,7 +86,6 @@ export function ChatView(props: ChatViewProps) {
     const workspaceFilePath = workspaceFileOverlay?.path;
     const nextChatId = props.chatId;
     const nextConversationKind = props.chatId ? props.conversationKind : undefined;
-    const nextTraceMessageId = inspector.type === "trace" ? inspector.messageId : undefined;
     const nextWorkspaceChatId =
         inspector.type === "workspace" || workspaceFileOverlay ? nextChatId : undefined;
     const nextWorkspaceFileKey =
@@ -109,9 +108,6 @@ export function ChatView(props: ChatViewProps) {
     const conversation = useDisposableLease(
         nextChatId ? `${nextChatId}\u0000${nextConversationKind}` : undefined,
         () => conversationLease(state, overlays, nextChatId!, nextConversationKind!),
-    );
-    const trace = useDisposableLease(nextTraceMessageId, () =>
-        state.agentTraceOpen(nextTraceMessageId!),
     );
     const workspace = useDisposableLease(nextWorkspaceChatId, () =>
         state.workspaceOpen(nextWorkspaceChatId!),
@@ -165,8 +161,7 @@ export function ChatView(props: ChatViewProps) {
         },
         profileOpen: (userId) => overlays.getState().inspectorProfileShow(userId),
         panelClose: () => overlays.getState().inspectorClose(),
-        traceOpen: (messageId) => overlays.getState().inspectorTraceShow(messageId),
-        traceClose: () => overlays.getState().inspectorClose(),
+        searchOpen: () => overlays.getState().overlaySearchOpen(),
         workspaceOpen: () => overlays.getState().inspectorWorkspaceShow(),
         workspaceClose: () => overlays.getState().inspectorClose(),
         workspaceFileOpen(nextChatId, path) {
@@ -277,7 +272,6 @@ export function ChatView(props: ChatViewProps) {
             sidebarHeaderAccessory={props.sidebarHeaderAccessory}
             sidebarOverride={props.sidebarOverride}
             workspaceOverride={props.workspaceOverride}
-            trace={trace}
             terminal={terminal?.handle}
             windowControls={props.windowControls}
             user={props.session?.user ?? { id: "local-user", firstName: "Happy" }}
@@ -334,8 +328,6 @@ function panelProject(inspector: InspectorSnapshot): ChatPagePanel | undefined {
             return { kind: "info" };
         case "profile":
             return { kind: "profile", userId: inspector.userId };
-        case "trace":
-            return { kind: "trace", messageId: inspector.messageId };
         case "workspace":
             return { kind: "workspace" };
         case "documents":

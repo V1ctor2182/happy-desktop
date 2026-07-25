@@ -40,7 +40,7 @@ describe("workspace route rendering", () => {
             return current;
         });
         const sidebarBody = sidebar!.querySelector<HTMLElement>('[data-happy2-ui="sidebar-body"]')!;
-        const compose = screen.getByRole("button", { name: "New chat" });
+        const compose = screen.getByRole("button", { name: "Create" });
         sidebarBody.scrollTop = 48;
         compose.focus();
         expect(document.activeElement).toBe(compose);

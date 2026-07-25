@@ -134,23 +134,15 @@ it("places the default-agent conversation in the agents section and projects dis
     // agents section; there is no privileged pinned row above the sections.
     expect("pinnedItems" in model).toBe(false);
     expect(model.sections.map((section) => section.id)).toEqual([
-        "projects",
         "project:project-1",
-        "browse",
         "dms",
         "agents",
     ]);
-    expect(model.sections.map((section) => section.label)).toEqual([
-        "Projects",
-        "Product",
-        "Discover channels",
-        "Humans",
-        "Agents",
-    ]);
+    // The sidebar names only the groups that hold conversations; workspace
+    // actions are rows in the navigation the page prepends, not captions here.
+    expect(model.sections.map((section) => section.label)).toEqual(["Product", "Humans", "Agents"]);
     expect(model.sections.map((section) => section.items.map((item) => item.label))).toEqual([
-        [],
         ["Engineering"],
-        [],
         ["Grace Hopper"],
         ["Happy", "Build agent", "Review agent"],
     ]);

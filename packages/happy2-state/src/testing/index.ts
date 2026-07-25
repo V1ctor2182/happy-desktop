@@ -20,7 +20,6 @@ export {
     adminStoreFixtureCreate,
     agentImagesStoreFixtureCreate,
     agentSecretsStoreFixtureCreate,
-    agentTraceStoreFixtureCreate,
     callsStoreFixtureCreate,
     chatStoreFixtureCreate,
     directoryStoreFixtureCreate,

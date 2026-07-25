@@ -64,7 +64,7 @@ describe("overlays module", () => {
 
     it("retires the inspector and chat-scoped overlays when the conversation changes", () => {
         const overlays = overlaysStoreCreate();
-        overlays.getState().inspectorTraceShow("message-1");
+        overlays.getState().inspectorInfoShow();
         overlays.getState().overlayDocumentOpen("chat-1", "doc-1");
 
         overlays.getState().chatContextUpdate("chat-1");
@@ -73,7 +73,7 @@ describe("overlays module", () => {
             overlay: { type: "document", chatId: "chat-1", documentId: "doc-1" },
         });
 
-        overlays.getState().inspectorTraceShow("message-2");
+        overlays.getState().inspectorWorkspaceShow();
         overlays.getState().chatContextUpdate("chat-2");
         expect(overlays.getState()).toMatchObject({
             inspector: { type: "closed" },
