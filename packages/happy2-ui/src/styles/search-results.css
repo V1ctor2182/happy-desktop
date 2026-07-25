@@ -20,7 +20,7 @@
     width: 400px;
     padding: 6px;
     background: var(--surface-pressed);
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-md);
     box-shadow: 0 12px 32px var(--shadow-floating);
     color: var(--text);

@@ -21,7 +21,7 @@ const fontFamily = () =>
  * danger — the identity contract the inventory calls out.
  */
 const DOT_COLORS: Record<Availability, string> = {
-    automatic: "rgb(142, 142, 147)", // --text-secondary #8e8e93
+    automatic: "rgb(142, 142, 147)", // --warning #8e8e93
     online: "rgb(52, 199, 89)", // --success  #34c759
     away: "rgb(255, 59, 48)", // --warning-critical  #ff3b30
     dnd: "rgb(255, 59, 48)", // --warning-critical   #ff3b30
@@ -216,7 +216,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
         const label = view.$(
             sp(` [data-availability="${value}"] [data-happy2-ui="status-picker-segment-label"]`),
         );
-        expect(label.computedStyle("color"), `${value} inactive color`).toBe("rgb(142, 142, 147)");
+        expect(label.computedStyle("color"), `${value} inactive color`).toBe("rgb(73, 69, 79)");
     }
 
     // Symmetric dot centroids on the three unselected segments (the selected
@@ -245,7 +245,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
     ).toEqual({
         "background-color": "rgb(248, 248, 248)",
         "border-radius": "1px",
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         position: "absolute",
     });
 
@@ -262,7 +262,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
         ]),
         "eyebrow",
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "11px",
         "font-weight": "700",
         "letter-spacing": "0.66px",
@@ -330,7 +330,7 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
 
     // ---- Expiry meta ----------------------------------------------------
     const meta = view.$(sp(' [data-happy2-ui="status-picker-meta"]'));
-    expect(meta.computedStyle("color"), "meta color").toBe("rgb(142, 142, 147)");
+    expect(meta.computedStyle("color"), "meta color").toBe("rgb(73, 69, 79)");
     expect(
         view.$(sp(' [data-happy2-ui="status-picker-meta-icon"] [data-happy2-ui="icon"]')).bounds(),
         "meta icon box",
@@ -415,7 +415,7 @@ it("holds StatusPicker availability sweep and empty-status state", async () => {
                 `${root} [data-availability="${other}"] [data-happy2-ui="status-picker-segment-label"]`,
             );
             expect(otherLabel.computedStyle("color"), `${value}/${other} inactive`).toBe(
-                "rgb(142, 142, 147)",
+                "rgb(73, 69, 79)",
             );
             // Every dot keeps its own identity color regardless of selection.
             const otherDot = view.$(

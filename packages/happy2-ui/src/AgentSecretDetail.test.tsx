@@ -160,7 +160,7 @@ it("holds AgentSecretDetail layout, variable names, bindings, and attach/detach 
     // Optical: a detach button's close glyph is centered in its icon slot.
     const glyph = await inkDrift(
         view,
-        `${binding("agent-1")} [data-happy2-ui="button-icon"]`,
+        `${binding("agent-1")} [data-happy2-ui="button-icon"] svg`,
         `${binding("agent-1")} [data-happy2-ui="button-icon"] svg`,
     );
     expect(Math.abs(glyph.dx), "detach glyph dx").toBeLessThanOrEqual(ICON_TOLERANCE);

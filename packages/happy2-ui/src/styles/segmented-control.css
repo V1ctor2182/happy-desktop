@@ -64,7 +64,7 @@
     left: var(--happy2-segmented-pad);
     box-sizing: border-box;
     width: calc((100% - 2 * var(--happy2-segmented-pad)) / var(--happy2-segmented-count));
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-segmented-inner-radius);
     background: var(--surface-high);
     transform: translateX(calc(var(--happy2-segmented-index) * 100%));

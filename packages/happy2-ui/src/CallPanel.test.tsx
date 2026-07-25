@@ -164,7 +164,7 @@ it("holds active CallPanel geometry, typography, tiles, and controls", async () 
     expect(duration.textMetrics().font.family).toBe("happy2 Mono, ui-monospace, monospace");
     expect(duration.textMetrics().font.size).toBe(12);
     expect(duration.textMetrics().font.weight).toBe("600");
-    expect(duration.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(duration.computedStyle("color")).toBe("rgb(73, 69, 79)");
     /* Pinned to the header's right edge. */
     expect(
         header.bounds().x + header.bounds().width - (duration.bounds().x + duration.bounds().width),
@@ -237,7 +237,7 @@ it("holds active CallPanel geometry, typography, tiles, and controls", async () 
     expect(mute.bounds().width).toBe(18);
     expect(mute.bounds().height).toBe(18);
     expect(mute.computedStyle("background-color")).toBe("rgb(240, 240, 242)");
-    expect(mute.computedStyle("color")).toBe("rgb(255, 59, 48)");
+    expect(mute.computedStyle("color")).toBe("rgb(244, 67, 54)");
     expect(wrap1.bounds().x + 48 - (mute.bounds().x + mute.bounds().width)).toBeLessThanOrEqual(
         0.5,
     );
@@ -312,14 +312,14 @@ it("holds active CallPanel geometry, typography, tiles, and controls", async () 
     /* Control glyphs: mic + eye centered by Icon path data. */
     const micDrift = await iconDrift(
         view,
-        '[data-testid="cp-panel"] [data-action="mute"]',
+        '[data-testid="cp-panel"] [data-action="mute"] svg',
         '[data-testid="cp-panel"] [data-action="mute"] svg',
     );
     expect(Math.abs(micDrift.dx), "mic glyph x").toBeLessThanOrEqual(ICON_TOL);
     expect(Math.abs(micDrift.dy), "mic glyph y").toBeLessThanOrEqual(ICON_TOL);
     const eyeDrift = await iconDrift(
         view,
-        '[data-testid="cp-panel"] [data-action="video"]',
+        '[data-testid="cp-panel"] [data-action="video"] svg',
         '[data-testid="cp-panel"] [data-action="video"] svg',
     );
     expect(Math.abs(eyeDrift.dx), "eye glyph x").toBeLessThanOrEqual(ICON_TOL);
@@ -468,7 +468,7 @@ it("holds incoming card and status/kind variants", async () => {
     );
     expect(callerSub.textMetrics().text).toBe("Incoming video call");
     expect(callerSub.textMetrics().font.size).toBe(12);
-    expect(callerSub.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(callerSub.computedStyle("color")).toBe("rgb(73, 69, 79)");
     const callerSubInk = await ink(callerSub, caller, "caller sub");
     const callerSubTarget = layoutTop(callerSub, caller) + callerSub.bounds().height / 2;
     expect(Math.abs(callerSubInk.y - callerSubTarget), "caller sub optical y").toBeLessThanOrEqual(
@@ -490,14 +490,14 @@ it("holds incoming card and status/kind variants", async () => {
 
     const closeDrift = await iconDrift(
         view,
-        '[data-testid="cp-incoming"] [data-action="decline"]',
+        '[data-testid="cp-incoming"] [data-action="decline"] svg',
         '[data-testid="cp-incoming"] [data-action="decline"] svg',
     );
     expect(Math.abs(closeDrift.dx), "close glyph x").toBeLessThanOrEqual(ICON_TOL);
     expect(Math.abs(closeDrift.dy), "close glyph y").toBeLessThanOrEqual(ICON_TOL);
     const checkDrift = await iconDrift(
         view,
-        '[data-testid="cp-incoming"] [data-action="join"]',
+        '[data-testid="cp-incoming"] [data-action="join"] svg',
         '[data-testid="cp-incoming"] [data-action="join"] svg',
     );
     expect(Math.abs(checkDrift.dx), "check glyph x").toBeLessThanOrEqual(ICON_TOL);
@@ -535,7 +535,7 @@ it("holds incoming card and status/kind variants", async () => {
         '[data-testid="cp-ringing"] [data-participant-id="r1"] [data-happy2-ui="call-panel-tile-state"]',
     );
     expect(ringingState.textMetrics().text).toBe("Ringing");
-    expect(ringingState.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(ringingState.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* ---- Ended panel: neutral pill, no controls, danger captions ------- */
     const ended = view.$('[data-testid="cp-ended"]');
@@ -546,7 +546,7 @@ it("holds incoming card and status/kind variants", async () => {
     expect(endedBadge.element.textContent).toBe("Ended");
     expect(endedBadge.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgb(245, 245, 245)",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     /* Ended calls drop the control row. */
     expect(

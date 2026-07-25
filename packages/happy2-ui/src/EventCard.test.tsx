@@ -174,9 +174,9 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
     const chip = view.$('[data-testid="ev-transition"] [data-happy2-ui="event-card-chip"]');
     expect(chip.offsets().left).toBe(13); /* border 1 + pad 12 */
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "6px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
 
     /* ---- Title + inline meta ------------------------------------------------ */
@@ -200,7 +200,7 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
 
     const meta = view.$('[data-testid="ev-transition"] [data-happy2-ui="event-card-meta"]');
     expect(meta.textMetrics().font.size).toBe(12);
-    expect(meta.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(meta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     /* Uppercase + digits ticket ref: cap-band ink is symmetric enough for a
      * full vertical centroid check against the row center. */
     const metaInk = await ink(meta, row, "meta");
@@ -215,13 +215,13 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
     const to = view.$('[data-testid="ev-transition"] [data-happy2-ui="event-card-to"]');
     expect(from.textMetrics().text).toBe("In progress");
     expect(from.computedStyles(["color", "font-size", "font-weight"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "font-weight": "500",
     });
     expect(arrow.bounds().width).toBe(12);
     expect(arrow.bounds().height).toBe(12);
-    expect(arrow.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(arrow.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(to.textMetrics().text).toBe("In review");
     expect(to.computedStyles(["color", "font-size", "font-weight"])).toEqual({
         color: "rgb(43, 172, 204)",
@@ -248,7 +248,7 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
     const timeMetrics = time.textMetrics();
     expect(timeMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
     expect(timeMetrics.font.size).toBe(11);
-    expect(time.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(time.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(row.bounds().x + 680 - (time.bounds().x + time.bounds().width)).toBe(13);
     /* Gecko reports the ink-right edge at a subpixel float; 2dp is exact enough. */
     expect(time.bounds().x - (to.bounds().x + to.bounds().width)).toBeCloseTo(8, 2);

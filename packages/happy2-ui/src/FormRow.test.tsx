@@ -12,7 +12,7 @@ import { createRenderer } from "./testing";
 type Engine = "chromium" | "firefox" | "webkit";
 /* Fixed text colors so every engine reports the same rgb(). */
 const TEXT = "rgb(0, 0, 0)"; // --text  #000000
-const MUTED = "rgb(142, 142, 147)"; // --text-secondary #8e8e93
+const MUTED = "rgb(73, 69, 79)"; // --text-secondary #8e8e93
 const HAIRLINE = "rgb(234, 234, 234)"; // --divider
 type Renderer = ReturnType<typeof createRenderer>;
 /*

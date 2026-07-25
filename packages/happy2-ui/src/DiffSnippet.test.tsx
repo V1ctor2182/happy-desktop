@@ -154,7 +154,7 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
         ]),
     ).toEqual({
         "align-items": "center",
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-bottom-color": "rgb(224, 224, 224)",
         "border-bottom-width": "1px",
         "box-sizing": "border-box",
@@ -180,7 +180,7 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
         size: 11,
         weight: "600",
     });
-    expect(file.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(file.computedStyle("color")).toBe("rgb(73, 69, 79)");
     /* Integer line-box geometry: 16px line at 5px from the header top,
      * 7px to the header bottom edge (hairline + reserved padding row),
      * i.e. dead-centered in the visible 27px field. */
@@ -234,7 +234,7 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
     });
     expect(context.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     expect(meta.computedStyle("color")).toBe("rgb(88, 96, 105)");
 

@@ -204,7 +204,7 @@ it("holds MediaGallery grid geometry, tile anatomy, overlays, and footer typogra
             "color",
         ]),
     ).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "10px",
         "border-top-color": "rgb(234, 234, 234)",
         "border-top-width": "1px",

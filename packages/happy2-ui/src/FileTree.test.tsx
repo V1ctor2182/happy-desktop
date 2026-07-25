@@ -41,7 +41,7 @@ const nodes: FileTreeNode[] = [
 const statusColor: Record<string, string> = {
     "src/index.ts": "rgb(142, 142, 147)", // modified · warning
     "src/new.ts": "rgb(52, 199, 89)", // added · success
-    "src/old.ts": "rgb(255, 59, 48)", // deleted · danger
+    "src/old.ts": "rgb(244, 67, 54)", // deleted · danger
     "notes.md": "rgb(0, 122, 255)", // renamed · info
     ".env": "rgb(52, 199, 89)", // untracked · success
 };
@@ -182,12 +182,12 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     const plainMetrics = plainName.textMetrics();
     expect(plainMetrics.font.weight).toBe("500");
     expect(plainMetrics.font.size).toBe(13);
-    expect(plainName.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(plainName.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* ---- Selection: README.md carries the accent-soft surface + solid ink */
 
     expect(row("README.md").element.getAttribute("data-selected")).toBe("");
-    expect(row("README.md").computedStyle("background-color")).toBe("rgb(198, 198, 200)");
+    expect(row("README.md").computedStyle("background-color")).toBe("rgb(234, 234, 234)");
     expect(
         view
             .$(sel('[data-path="README.md"] [data-happy2-ui="file-tree-name"]'))
@@ -217,7 +217,7 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
             .computedStyle("text-decoration-line"),
     ).toBe("line-through");
     const docsName = view.$(sel('[data-path="docs/"] [data-happy2-ui="file-tree-name"]'));
-    expect(docsName.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(docsName.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(row("docs/").element.getAttribute("data-status")).toBe("ignored");
 
     /* Status letter is tabular mono for a stable single-column decoration. */
@@ -306,7 +306,7 @@ it("routes selection, disclosure, and paging callbacks, and renders loading/empt
     /* Whole-tree loading and empty states render a single muted status line. */
     const busy = view.$(at("busy", '[data-happy2-ui="file-tree-status-line"]'));
     expect(busy.element.textContent).toBe("Loading files…");
-    expect(busy.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(busy.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(view.$(at("empty", '[data-happy2-ui="file-tree-empty"]')).element.textContent).toBe(
         "No files to show.",
     );

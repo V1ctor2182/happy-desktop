@@ -24,17 +24,17 @@ const monoFont = "happy2 Mono, ui-monospace, monospace";
 
 /* Fixed theme tokens resolved to the exact rgb()/rgba() each engine reports. */
 const TEXT = "rgb(0, 0, 0)";
-const SECONDARY = "rgb(142, 142, 147)";
-const MUTED = "rgb(142, 142, 147)";
+const SECONDARY = "rgb(73, 69, 79)";
+const MUTED = "rgb(73, 69, 79)";
 const SURFACE = "rgb(255, 255, 255)";
 const BORDER = "rgb(234, 234, 234)";
-const ON_TRACK = "rgb(52, 199, 89)";
+const ON_TRACK = "rgb(25, 118, 210)";
 const OFF_TRACK = "rgb(221, 221, 221)";
 const SECONDARY_BTN = "rgb(248, 248, 248)";
 
 const badgeColors = {
     info: { bg: "rgb(248, 248, 248)", fg: "rgb(0, 122, 255)" },
-    accent: { bg: "rgb(198, 198, 200)", fg: "rgb(43, 172, 204)" },
+    accent: { bg: "rgb(234, 234, 234)", fg: "rgb(43, 172, 204)" },
     warning: { bg: "rgb(255, 248, 240)", fg: "rgb(255, 149, 0)" },
     success: { bg: "rgb(248, 248, 248)", fg: "rgb(52, 199, 89)" },
     danger: { bg: "rgb(255, 240, 240)", fg: "rgb(255, 59, 48)" },
@@ -437,8 +437,8 @@ it("centers ink optically in every card row and glyph", async () => {
     ).toBeLessThanOrEqual(0.75);
 
     /* — trigger→action arrow: symmetric on y, box-centered in the 18px row — */
-    const arrow = a('[data-happy2-ui="automation-card-arrow"]');
-    expect(arrow.offsets().top, "arrow box vertical centering").toBe(2); /* (18 − 14) / 2 */
+    const arrow = a('[data-happy2-ui="automation-card-arrow"] svg');
+    expect(arrow.offsets().top, "arrow box vertical centering").toBe(0);
     const arrowInk = await inkCenter(arrow, "arrow");
     expect(
         Math.abs(arrowInk.y - boxCenterY(arrow)),

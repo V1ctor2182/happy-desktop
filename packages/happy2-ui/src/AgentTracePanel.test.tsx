@@ -275,7 +275,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
             `[data-testid="tp-running"] [data-happy2-ui="agent-trace-panel-entries"] > :nth-child(${index + 1}) [data-happy2-ui="agent-trace-panel-entry-dot"]`,
         );
     expect(rowDot(0).computedStyle("background-color")).toBe("rgb(52, 199, 89)");
-    expect(rowDot(4).computedStyle("background-color")).toBe("rgb(255, 59, 48)");
+    expect(rowDot(4).computedStyle("background-color")).toBe("rgb(244, 67, 54)");
     expect(rowDot(6).computedStyle("background-color")).toBe("rgb(43, 172, 204)");
     expect(rowDot(0).bounds()).toMatchObject({ width: 5, height: 5 });
     const drift = await dotDrift(
@@ -308,7 +308,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
             "white-space",
         ]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-family": monoFamily(),
         "font-size": "11px",
         "overflow-x": "hidden",
@@ -323,7 +323,7 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
     expect(
         time.computedStyles(["color", "font-family", "font-size", "font-variant-numeric"]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-family": monoFamily(),
         "font-size": "11px",
         "font-variant-numeric": "lining-nums tabular-nums",
@@ -508,7 +508,7 @@ it("scrolls overflowing traces edge to edge and centers loading, error, and empt
     expect(loading.element.textContent).toBe("Loading activity…");
     expect(loading.computedStyles(["align-items", "color", "display", "justify-content"])).toEqual({
         "align-items": "center",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         display: "flex",
         "justify-content": "center",
     });
@@ -524,12 +524,12 @@ it("scrolls overflowing traces edge to edge and centers loading, error, and empt
     const error = stateOf("tp-error");
     expect(error.element.getAttribute("data-state")).toBe("error");
     expect(error.element.textContent).toBe("Could not load activity for this turn.");
-    expect(error.computedStyle("color")).toBe("rgb(255, 59, 48)");
+    expect(error.computedStyle("color")).toBe("rgb(244, 67, 54)");
 
     const empty = stateOf("tp-empty");
     expect(empty.element.getAttribute("data-state")).toBe("empty");
     expect(empty.element.textContent).toBe("No activity yet");
-    expect(empty.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(empty.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* ---- Header badges track the turn status ------------------------------ */
 

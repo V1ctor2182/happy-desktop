@@ -710,14 +710,14 @@ it("holds Badge family geometry, colors, and behavior", async () => {
         }
     > = {
         neutral: { background: "rgb(245, 245, 245)", color: "rgb(73, 69, 79)" },
-        accent: { background: "color(srgb 0 0.478431 1 / 0.14)", color: "rgb(0, 122, 255)" },
+        accent: { background: "rgb(234, 234, 234)", color: "rgb(43, 172, 204)" },
         success: {
-            background: "color(srgb 0.203922 0.780392 0.34902 / 0.14)",
+            background: "rgb(248, 248, 248)",
             color: "rgb(52, 199, 89)",
         },
         warning: { background: "rgb(255, 248, 240)", color: "rgb(255, 149, 0)" },
-        danger: { background: "rgb(255, 240, 240)", color: "rgb(255, 107, 107)" },
-        info: { background: "color(srgb 0 0.478431 1 / 0.14)", color: "rgb(0, 122, 255)" },
+        danger: { background: "rgb(255, 240, 240)", color: "rgb(255, 59, 48)" },
+        info: { background: "rgb(248, 248, 248)", color: "rgb(0, 122, 255)" },
         outline: { background: "rgba(0, 0, 0, 0)", color: "rgb(73, 69, 79)" },
     };
     for (const variant of BADGE_VARIANTS) {
@@ -872,12 +872,12 @@ it("holds Badge family geometry, colors, and behavior", async () => {
     const active = view.$(".g-chip-active");
     expect(active.element.getAttribute("aria-pressed")).toBe("true");
     expect(active.computedStyles(["background-color", "border-top-color"])).toEqual({
-        "background-color": "color(srgb 0 0.478431 1 / 0.14)",
-        "border-top-color": "rgb(0, 122, 255)",
+        "background-color": "rgb(234, 234, 234)",
+        "border-top-color": "rgb(43, 172, 204)",
     });
     expect(
         view.$('.g-chip-active [data-happy2-ui="reaction-chip-count"]').computedStyle("color"),
-    ).toBe("rgb(0, 122, 255)");
+    ).toBe("rgb(43, 172, 204)");
     /* KeyCap: 18px mono hint. */
     for (const id of ["g-cap-short", "g-cap-long"]) {
         const cap = view.$(`.${id}`);

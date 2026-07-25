@@ -620,6 +620,30 @@ export function Composer(props: ComposerProps) {
                                 variant="ghost"
                             />
                         ) : null}
+                        {mentions().length > 0 ? (
+                            <Button
+                                aria-label="Mention someone"
+                                disabled={busy}
+                                icon="at"
+                                iconOnly
+                                onClick={triggerMention}
+                                size="small"
+                                variant="ghost"
+                            />
+                        ) : null}
+                        {emoji().length > 0 ? (
+                            <Button
+                                aria-expanded={emojiOpen ? "true" : "false"}
+                                aria-haspopup="dialog"
+                                aria-label="Add emoji"
+                                disabled={busy}
+                                icon="smile"
+                                iconOnly
+                                onClick={triggerEmoji}
+                                size="small"
+                                variant="ghost"
+                            />
+                        ) : null}
                     </div>
                     <div className="happy2-composer__trailing" data-happy2-ui="composer-trailing">
                         {props.modelControl ? (

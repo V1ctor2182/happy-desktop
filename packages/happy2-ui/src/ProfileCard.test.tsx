@@ -196,7 +196,7 @@ it("holds ProfileCard geometry, typography, presence, and status layout", async 
         },
         text: "Ada Lovelace",
     });
-    expect(username.computedStyle("color"), "username colour").toBe("rgb(142, 142, 147)");
+    expect(username.computedStyle("color"), "username colour").toBe("rgb(73, 69, 79)");
     expect(username.textMetrics()).toMatchObject({
         font: {
             family: "happy2 Mono, ui-monospace, monospace",
@@ -223,7 +223,7 @@ it("holds ProfileCard geometry, typography, presence, and status layout", async 
 
     /* ---- Title ----------------------------------------------------------- */
 
-    expect(title.computedStyle("color"), "title colour").toBe("rgb(142, 142, 147)");
+    expect(title.computedStyle("color"), "title colour").toBe("rgb(73, 69, 79)");
     expect(title.textMetrics()).toMatchObject({
         font: {
             family: "happy2 Figtree, system-ui, sans-serif",
@@ -241,9 +241,9 @@ it("holds ProfileCard geometry, typography, presence, and status layout", async 
         status.computedStyles(["background-color", "border-radius", "color", "display"]),
         "status pill chrome",
     ).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "999px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         display: "flex",
     });
 
@@ -283,7 +283,7 @@ it("holds ProfileCard geometry, typography, presence, and status layout", async 
     const statusText = view.$(
         '[data-testid="pc-full"] [data-happy2-ui="profile-card-status-text"]',
     );
-    expect(statusText.computedStyle("color"), "status text colour").toBe("rgb(142, 142, 147)");
+    expect(statusText.computedStyle("color"), "status text colour").toBe("rgb(73, 69, 79)");
     expect(statusText.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 12, weight: "500" },
         text: "In the studio",

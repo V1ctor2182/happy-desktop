@@ -74,7 +74,7 @@ it("shows a client-generated password and routes every preflight action", async 
     const description = view.$('[data-happy2-ui="user-password-reset-dialog-description"]');
     expect(description.computedStyles(["color", "font-size", "line-height", "margin-top"])).toEqual(
         {
-            color: "rgb(142, 142, 147)",
+            color: "rgb(73, 69, 79)",
             "font-size": "13px",
             "line-height": "20px",
             "margin-top": "0px",

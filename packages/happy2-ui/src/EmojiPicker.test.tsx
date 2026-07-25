@@ -334,7 +334,7 @@ it("holds EmojiPicker recent sections, searching, empty state, and query events"
         weight: "700",
     });
     expect(recentLabel.computedStyles(["color", "text-transform"]), "recent label style").toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "text-transform": "uppercase",
     });
 
@@ -403,7 +403,7 @@ it("holds EmojiPicker recent sections, searching, empty state, and query events"
     ).toBeNull();
     const emptyMsg = view.$('[data-testid="empty"] [data-happy2-ui="emoji-picker-empty"]');
     expect(emptyMsg.element.textContent).toBe("No emoji found");
-    expect(emptyMsg.computedStyle("color"), "empty muted color").toBe("rgb(142, 142, 147)");
+    expect(emptyMsg.computedStyle("color"), "empty muted color").toBe("rgb(73, 69, 79)");
     expect((await emptyMsg.visibleMetrics()).pixelCount, "empty text paints").toBeGreaterThan(0);
 
     await view.screenshot("EmojiPicker.variants.test");

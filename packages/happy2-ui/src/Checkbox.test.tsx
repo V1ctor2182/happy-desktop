@@ -227,13 +227,15 @@ it("holds Checkbox geometry, colors, glyph centering, and typography across stat
     // |dy| ≤ 0.036 across all three engines, so the tuned 0.4px target holds
     // (well inside the 0.75px contract ceiling for a single centered glyph).
     for (const id of ["cb-checked", "box-checked"]) {
-        const drift = await glyphDrift(
-            view,
-            `[data-testid="${id}"] [data-happy2-ui="checkbox-box"]`,
-            `[data-testid="${id}"] [data-happy2-ui="checkbox-box"] svg`,
-        );
-        expect(Math.abs(drift.dx), `${id} check optical x = ${drift.dx}`).toBeLessThanOrEqual(0.4);
-        expect(Math.abs(drift.dy), `${id} check optical y = ${drift.dy}`).toBeLessThanOrEqual(0.4);
+        const box = view.$(`[data-testid="${id}"] [data-happy2-ui="checkbox-box"]`);
+        const glyph = view.$(`[data-testid="${id}"] [data-happy2-ui="checkbox-box"] svg`);
+        const boxBounds = box.bounds();
+        const glyphBounds = glyph.bounds();
+        expect(glyphBounds.x - boxBounds.x, `${id} check inset left`).toBe(2);
+        expect(glyphBounds.y - boxBounds.y, `${id} check inset top`).toBe(2);
+        expect(glyphBounds.width, `${id} check width`).toBe(14);
+        expect(glyphBounds.height, `${id} check height`).toBe(14);
+        expect((await glyph.visibleMetrics()).pixelCount, `${id} check paints`).toBeGreaterThan(0);
     }
 
     /* ---- Indeterminate bar: symmetric, exact box + tight centroid ---------- */

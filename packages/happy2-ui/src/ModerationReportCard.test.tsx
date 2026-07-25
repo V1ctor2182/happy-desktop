@@ -65,7 +65,7 @@ const statusBadge: Record<ModerationStatus, { background: string; color: string 
     open: { background: "rgb(255, 248, 240)", color: "rgb(255, 149, 0)" },
     reviewing: { background: "rgb(248, 248, 248)", color: "rgb(0, 122, 255)" },
     resolved: { background: "rgb(248, 248, 248)", color: "rgb(52, 199, 89)" },
-    dismissed: { background: "rgb(245, 245, 245)", color: "rgb(142, 142, 147)" },
+    dismissed: { background: "rgb(245, 245, 245)", color: "rgb(73, 69, 79)" },
 };
 
 const q = (id: string, part?: string) =>
@@ -160,9 +160,9 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     expect(chip.bounds()).toMatchObject({ width: 36, height: 36 });
     expect(chip.offsets()).toMatchObject({ top: 0, left: 0 }); /* header aligns center, 36 == 36 */
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "6px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     const chipIcon = view.$(
         `${q("mrc-full", "moderation-report-card-kind")} [data-happy2-ui="icon"]`,
@@ -191,7 +191,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     });
     await paints(label, "target label");
     const sub = view.$(q("mrc-full", "moderation-report-card-target-sub"));
-    expect(sub.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(sub.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(sub.offsets()).toMatchObject({ top: 20, left: 0 }); /* directly below the 20px label */
     expect(sub.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 13, weight: "500" },
@@ -223,7 +223,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     /* ---- Reason well: inset fill, shield glyph optically centered -------- */
 
     expect(reason.computedStyles(["background-color", "border-radius", "padding"])).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "6px",
         padding: "8px 12px",
     });
@@ -260,7 +260,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     const caption = view.$(
         `${q("mrc-full", "moderation-report-card-party")}[data-role="reporter"] [data-happy2-ui="moderation-report-card-party-caption"]`,
     );
-    expect(caption.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(caption.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(caption.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 12, weight: "500" },
         text: "Reported by",
@@ -269,7 +269,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     const partyName = view.$(
         `${q("mrc-full", "moderation-report-card-party")}[data-role="reporter"] [data-happy2-ui="moderation-report-card-party-name"]`,
     );
-    expect(partyName.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(partyName.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(partyName.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 13, weight: "600" },
         text: "Ada Lovelace",
@@ -279,7 +279,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     const time = view.$(q("mrc-full", "moderation-report-card-time"));
     expect(time.offsets().right, "timestamp right-pinned").toBeLessThanOrEqual(0.1);
     const timeLabel = view.$(q("mrc-full", "moderation-report-card-time-label"));
-    expect(timeLabel.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(timeLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(timeLabel.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 12, weight: "500" },
         text: "2m ago",
@@ -395,7 +395,7 @@ it("holds ModerationReportCard status variants and content states", async () => 
     /* ---- Details state: paragraph paints; footer + assignee present ------ */
 
     const details = view.$(q("mrc-details", "moderation-report-card-details"));
-    expect(details.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(details.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(details.textMetrics()).toMatchObject({
         font: { lineHeight: 18, size: 13, weight: "400" },
     });

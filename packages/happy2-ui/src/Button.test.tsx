@@ -57,7 +57,7 @@ const variantStyles: Record<
     },
     secondary: {
         background: "rgb(248, 248, 248)",
-        borderColor: "rgb(209, 209, 214)",
+        borderColor: "rgb(234, 234, 234)",
         color: "rgb(0, 0, 0)",
     },
     ghost: {

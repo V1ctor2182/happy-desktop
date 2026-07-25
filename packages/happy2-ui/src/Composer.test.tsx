@@ -472,7 +472,7 @@ it("holds Composer geometry, colors, and typography", async () => {
     const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
     (textarea.element as HTMLTextAreaElement).focus();
     await settle();
-    expect(surface.computedStyle("border-top-color")).toBe("rgba(0, 0, 0, 0)");
+    expect(surface.computedStyle("border-top-color")).toBe("rgb(234, 234, 234)");
     (document.activeElement as HTMLElement | null)?.blur();
     await settle();
     expect(surface.computedStyle("border-top-color")).toBe("rgba(0, 0, 0, 0)");
@@ -977,7 +977,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     ).toEqual({
         "background-color": "rgb(248, 248, 248)",
         "border-radius": "10px",
-        "border-top-color": "rgba(0, 0, 0, 0)",
+        "border-top-color": "rgb(234, 234, 234)",
         "border-top-width": "1px",
         "box-sizing": "border-box",
         padding: "6px",

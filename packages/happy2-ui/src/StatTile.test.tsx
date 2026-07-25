@@ -57,8 +57,8 @@ async function paints(part: RenderedElement<Element>, name: string) {
 
 const trendColors = {
     up: "rgb(52, 199, 89)",
-    down: "rgb(255, 59, 48)",
-    flat: "rgb(142, 142, 147)",
+    down: "rgb(244, 67, 54)",
+    flat: "rgb(73, 69, 79)",
 } as const;
 
 it("holds StatTile card geometry, typography, and trend deltas", async () => {
@@ -159,7 +159,7 @@ it("holds StatTile card geometry, typography, and trend deltas", async () => {
     /* ---- Label: muted, vertically centered in the 28px header ------------ */
 
     const label = view.$('[data-testid="st-full"] [data-happy2-ui="stat-tile-label"]');
-    expect(label.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(label.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(label.textMetrics()).toMatchObject({
         font: {
             family: "happy2 Figtree, system-ui, sans-serif",
@@ -180,7 +180,7 @@ it("holds StatTile card geometry, typography, and trend deltas", async () => {
     expect(chip.bounds()).toMatchObject({ width: 28, height: 28 });
     expect(chip.offsets()).toMatchObject({ top: 0, right: 0, bottom: 0 }); /* pinned top-right */
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         "border-radius": "6px",
         color: "rgb(43, 172, 204)",
     });
@@ -237,7 +237,7 @@ it("holds StatTile card geometry, typography, and trend deltas", async () => {
     await paints(deltaValue, "delta value");
 
     const hint = view.$('[data-testid="st-full"] [data-happy2-ui="stat-tile-hint"]');
-    expect(hint.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(hint.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(hint.textMetrics()).toMatchObject({
         font: { lineHeight: 16, size: 12, weight: "500" },
         text: "vs last week",
@@ -328,8 +328,8 @@ it("holds StatTile tones and content states", async () => {
     /* ---- Tones: chip fill + glyph colour per tone ------------------------ */
 
     const toneChips: Record<string, { background: string; color: string }> = {
-        neutral: { background: "rgb(242, 242, 247)", color: "rgb(142, 142, 147)" },
-        accent: { background: "rgb(198, 198, 200)", color: "rgb(43, 172, 204)" },
+        neutral: { background: "rgb(245, 245, 245)", color: "rgb(73, 69, 79)" },
+        accent: { background: "rgb(234, 234, 234)", color: "rgb(43, 172, 204)" },
         success: { background: "rgb(248, 248, 248)", color: "rgb(52, 199, 89)" },
         warning: { background: "rgb(255, 248, 240)", color: "rgb(255, 149, 0)" },
         danger: { background: "rgb(255, 240, 240)", color: "rgb(255, 59, 48)" },

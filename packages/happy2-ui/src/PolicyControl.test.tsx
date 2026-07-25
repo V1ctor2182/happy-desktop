@@ -16,11 +16,11 @@ const engine = () => server.browser as Engine;
 
 /* Fixed theme colors so every engine reports the same rgb(). */
 const TEXT = "rgb(0, 0, 0)"; // --text  #000000
-const SECONDARY = "rgb(142, 142, 147)"; // --text-secondary #8e8e93
-const MUTED = "rgb(142, 142, 147)"; // --text-secondary #8e8e93
+const SECONDARY = "rgb(73, 69, 79)"; // --text-secondary #8e8e93
+const MUTED = "rgb(73, 69, 79)"; // --text-secondary #8e8e93
 const SURFACE = "rgb(255, 255, 255)"; // --surface #ffffff
 const HAIRLINE = "rgb(234, 234, 234)"; // --divider
-const ACCENT = "rgb(52, 199, 89)"; // --switch-track-active #34c759
+const ACCENT = "rgb(25, 118, 210)"; // --switch-track-active #1976d2
 
 /* Card fills a 400px host; border 1 + padding 20 each side → 358 content. */
 const CARD_W = 400;
@@ -382,8 +382,7 @@ it("holds PolicyControl card, sections, composed controls, and optical centering
             .textMetrics().text,
         "retention select value",
     ).toBe("30 days");
-    const retChevron =
-        ".happy2-policy-control__field--retention [data-happy2-ui=select-chevron] svg";
+    const retChevron = ".happy2-policy-control__field--retention [data-happy2-ui=select-chevron]";
     const retChevronDrift = await boxCentroid(view, retChevron);
     expect(Math.abs(retChevronDrift.dx), "retention chevron centroid x").toBeLessThanOrEqual(0.6);
     expect(Math.abs(retChevronDrift.dy), "retention chevron centroid y").toBeLessThanOrEqual(0.6);

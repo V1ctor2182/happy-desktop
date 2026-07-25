@@ -189,7 +189,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
     const kind = view.$('[data-testid="run-review"] [data-happy2-ui="agent-run-card-kind"]');
     expect(kind.element.textContent).toBe("· run");
     expect(kind.computedStyles(["color", "font-weight"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-weight": "500",
     });
 
@@ -211,7 +211,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
     expect(toggle.element.tagName).toBe("BUTTON");
     expect(toggle.computedStyles(["border-radius", "color"])).toEqual({
         "border-radius": "6px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
 
     /* — title and mono diffstat meta — */
@@ -251,7 +251,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
         size: 12,
         weight: "500",
     });
-    expect(detail.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(detail.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* — branch row — */
     const branch = view.$('[data-testid="run-review"] [data-happy2-ui="agent-run-card-branch"]');
@@ -261,7 +261,7 @@ it("holds the review hero card geometry, mint treatment, and interactions at 680
     );
     expect(branchName.element.textContent).toBe("fix/auth-flake");
     expect(branchName.computedStyles(["color", "font-size"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
     });
     const branchIcon = view.$(
@@ -349,7 +349,7 @@ it("holds the working and queued status treatments at 680 and 440", async () => 
     );
     expect(progress.bounds()).toEqual({ x: 13, y: 13, width: 678, height: 3 });
     expect(progress.computedStyles(["background-color", "position"])).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         position: "absolute",
     });
     expect(progress.element.getAttribute("aria-valuenow")).toBe("50");
@@ -372,7 +372,7 @@ it("holds the working and queued status treatments at 680 and 440", async () => 
     expect(
         queued.computedStyles(["border-top-color", "border-top-style", "border-top-width"]),
     ).toEqual({
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         "border-top-style": "dashed",
         "border-top-width": "1px",
     });
@@ -380,7 +380,7 @@ it("holds the working and queued status treatments at 680 and 440", async () => 
     expect(queuedBadge.element.textContent).toBe("QUEUED");
     expect(queuedBadge.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgb(245, 245, 245)",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     expect(queuedBadge.offsets().top).toBe(5);
     expect(queued.element.querySelector('[data-happy2-ui="agent-run-card-progress"]')).toBeNull();
@@ -506,7 +506,7 @@ it("holds the expanded complete card at 440: steps, children slot, and max-width
         pendingDot.computedStyles(["background-color", "border-top-color", "border-top-width"]),
     ).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
-        "border-top-color": "rgb(142, 142, 147)",
+        "border-top-color": "rgb(73, 69, 79)",
         "border-top-width": "1px",
     });
 
@@ -520,7 +520,7 @@ it("holds the expanded complete card at 440: steps, children slot, and max-width
         '[data-testid="run-complete"] [data-status="pending"] [data-happy2-ui="agent-run-card-step-label"]',
     );
     expect(doneLabel.computedStyles(["color", "font-size", "font-weight"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "font-weight": "500",
     });
@@ -529,7 +529,7 @@ it("holds the expanded complete card at 440: steps, children slot, and max-width
         "font-weight": "600",
     });
     expect(pendingLabel.computedStyles(["color", "font-weight"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-weight": "500",
     });
     /* Long pending label truncates inside the narrow lane instead of pushing it. */

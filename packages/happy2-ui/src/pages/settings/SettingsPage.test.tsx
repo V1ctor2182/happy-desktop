@@ -342,7 +342,7 @@ it("holds save-status geometry, typography, alignment, and profile identity", as
         ]),
     ).toEqual({
         "align-items": "center",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         display: "flex",
         "font-family": computedFontFamily,
         "font-size": "13px",

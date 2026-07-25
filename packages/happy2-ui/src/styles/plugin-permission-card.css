@@ -192,7 +192,7 @@
 .happy2-plugin-permission-card__reason {
     margin: 0;
     padding: 0 0 0 10px;
-    border-left: 2px solid var(--surface-pressed-overlay);
+    border-left: 2px solid var(--divider);
     color: var(--text-secondary);
     font-size: 13px;
     font-style: italic;

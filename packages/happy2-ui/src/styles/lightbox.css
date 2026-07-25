@@ -37,7 +37,7 @@
     max-width: 880px;
     overflow: hidden;
     background: var(--surface-high);
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-shell);
     box-shadow: 0 24px 64px var(--shadow-elevated);
 }

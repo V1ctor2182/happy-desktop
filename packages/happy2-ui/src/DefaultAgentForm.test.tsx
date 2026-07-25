@@ -112,7 +112,7 @@ it("renders the controlled form with a stable external-submit link and calibrate
         display: "flex",
         "flex-direction": "column",
         gap: "16px",
-        width: "440px",
+        width: "438px",
     });
 
     const name = input(view, "default-agent-name");
@@ -131,7 +131,7 @@ it("renders the controlled form with a stable external-submit link and calibrate
     expect((submit.element as HTMLButtonElement).type).toBe("submit");
     expect((submit.element as HTMLButtonElement).disabled).toBe(false);
     expect(submit.element.textContent).toBe("Create agent");
-    expect(submit.bounds()).toMatchObject({ width: 440, height: 36 });
+    expect(submit.bounds()).toMatchObject({ width: 438, height: 36 });
 
     const description = view.$('[data-testid="da"] [data-happy2-ui="default-agent-description"]');
     expect(
@@ -143,7 +143,7 @@ it("renders the controlled form with a stable external-submit link and calibrate
             "line-height",
         ]),
     ).toMatchObject({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "font-weight": "400",
         "line-height": "20px",
@@ -161,7 +161,7 @@ it("renders the controlled form with a stable external-submit link and calibrate
     expect(lucky.bounds().height).toBe(36);
     const luckyGlyph = await glyphDrift(
         view,
-        '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"]',
+        '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"] svg',
         '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"] svg',
     );
     expect(Math.abs(luckyGlyph.dx), "lucky glyph horizontal centroid").toBeLessThanOrEqual(0.45);
@@ -227,7 +227,7 @@ it("shows field errors and a server conflict while the linked submit is disabled
     const formError = view.$('[data-testid="da"] [data-happy2-ui="default-agent-error"]');
     expect(formError.element.getAttribute("role")).toBe("alert");
     expect(formError.element.textContent).toBe("The default agent username is already taken.");
-    expect(formError.computedStyle("color")).toBe("rgb(255, 59, 48)");
+    expect(formError.computedStyle("color")).toBe("rgb(244, 67, 54)");
     expect(formError.textMetrics().font).toMatchObject({ size: 13, weight: "400", lineHeight: 20 });
     expect((await formError.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 

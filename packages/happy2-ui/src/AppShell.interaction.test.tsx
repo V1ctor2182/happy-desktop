@@ -249,12 +249,12 @@ it("hides and shows the sidebar while keeping the workspace DOM node mounted", a
     const collapseIcon = view.$(
         '[data-happy2-ui="app-shell-sidebar-collapse"] [data-happy2-ui="icon"]',
     );
-    expect(collapseIcon.element.getAttribute("data-glyph")).toBe("sidebar-collapse");
+    expect(collapseIcon.element.getAttribute("data-name")).toBe("sidebar-collapse");
     expect(collapse.computedStyles(["background-color", "border-top-width"])).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
         "border-top-width": "0px",
     });
-    expect(collapseIcon.computedStyle("font-size")).toBe("14px");
+    expect(collapseIcon.bounds()).toMatchObject({ width: 14, height: 14 });
 
     (collapse.element as HTMLButtonElement).click();
     await view.ready();
@@ -265,12 +265,12 @@ it("hides and shows the sidebar while keeping the workspace DOM node mounted", a
     const reveal = view.$('[data-happy2-ui="app-shell-reveal-button"]');
     expect(reveal.element.getAttribute("aria-label")).toBe("Show sidebar");
     const revealIcon = view.$('[data-happy2-ui="app-shell-reveal-button"] [data-happy2-ui="icon"]');
-    expect(revealIcon.element.getAttribute("data-glyph")).toBe("sidebar-expand");
+    expect(revealIcon.element.getAttribute("data-name")).toBe("sidebar-expand");
     expect(reveal.computedStyles(["background-color", "border-top-width"])).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
         "border-top-width": "0px",
     });
-    expect(revealIcon.computedStyle("font-size")).toBe("14px");
+    expect(revealIcon.bounds()).toMatchObject({ width: 14, height: 14 });
     expect(view.$('[data-happy2-ui="app-shell-workspace"]').element).toBe(workspaceBefore);
 
     (reveal.element as HTMLButtonElement).click();

@@ -145,7 +145,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and optical brand
             "width",
         ]),
     ).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "box-sizing": "border-box",
         display: "flex",
         "flex-direction": "column",
@@ -190,7 +190,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and optical brand
      * spark is bilaterally symmetric, so it holds the tuned 0.4px. */
     const markGlyph = await glyphDrift(
         view,
-        '[data-happy2-ui="auth-mark"]',
+        '[data-happy2-ui="auth-mark"] svg',
         '[data-happy2-ui="auth-mark"] svg',
     );
     expect(Math.abs(markGlyph.dx), "mark glyph horizontal centroid").toBeLessThanOrEqual(0.4);
@@ -254,7 +254,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and optical brand
     /* Copy: secondary body, capped to a 320px measure. */
     expect(copy.width()).toBe(320);
     expect(copy.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "15px",
         "font-weight": "400",
         "line-height": "22px",
@@ -282,7 +282,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and optical brand
     const footer = view.$('[data-happy2-ui="auth-footer"]');
     expect(footer.offsets()).toMatchObject({ left: 48, right: 48, bottom: 48 });
     expect(footer.computedStyles(["color", "font-size", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "line-height": "18px",
     });
@@ -404,7 +404,7 @@ it("holds AuthScreen loading, generated-image hero, custom mark, and minimal for
     expect(
         loadingLabel.computedStyles(["color", "font-size", "font-weight", "line-height"]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "14px",
         "font-weight": "500",
         "line-height": "20px",

@@ -217,7 +217,7 @@ it("holds AgentSecretPanel layout, variable names, attachment counts, and row ac
     // Optical: the Delete button's close glyph is centered in its icon slot.
     const glyph = await inkDrift(
         view,
-        `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"]`,
+        `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"] svg`,
         `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"] svg`,
     );
     expect(Math.abs(glyph.dx), "delete glyph dx").toBeLessThanOrEqual(ICON_TOLERANCE);

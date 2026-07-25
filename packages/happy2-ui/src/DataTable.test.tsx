@@ -184,7 +184,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
     ).toEqual({
         "background-color": "rgb(255, 255, 255)",
         "box-sizing": "border-box",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "font-weight": "600",
         "letter-spacing": "0.72px",
@@ -194,7 +194,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
         "vertical-align": "middle",
     });
     const headShadow = nameTh.computedStyle("box-shadow");
-    expect(headShadow, "header hairline color").toContain("rgb(209, 209, 214)");
+    expect(headShadow, "header hairline color").toContain("rgb(234, 234, 234)");
     expect(headShadow, "header hairline offset").toContain("-1px");
     expect(headShadow, "header hairline inset").toContain("inset");
 
@@ -249,7 +249,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
     expect(lastRowTd.computedStyle("box-shadow"), "last row has no hairline").toBe("none");
 
     // Selected vs. default row background tokens.
-    expect(nameTd.computedStyle("background-color"), "selected row bg").toBe("rgb(198, 198, 200)");
+    expect(nameTd.computedStyle("background-color"), "selected row bg").toBe("rgb(234, 234, 234)");
     const graceTd = view.$(
         '[data-happy2-ui="data-table-body"] [data-row-id="grace"] [data-column-id="email"]',
     );

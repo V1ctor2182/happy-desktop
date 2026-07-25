@@ -164,7 +164,7 @@ it("holds Menu popover geometry, item rows, icon centroids, danger, and shortcut
         view
             .$('[data-testid="actions"] [data-item-id="copy"] [data-happy2-ui="menu-item-icon"]')
             .computedStyle("color"),
-    ).toBe("rgb(142, 142, 147)");
+    ).toBe("rgb(73, 69, 79)");
 
     /* Every glyph is a non-directional icon, so its ink centroid must land on
      * the slot center (8, 8) within the tuned 0.4px (contract ceiling 0.75). */
@@ -205,13 +205,13 @@ it("holds Menu popover geometry, item rows, icon centroids, danger, and shortcut
 
     const del = item("delete");
     expect(del.element.hasAttribute("data-danger")).toBe(true);
-    expect(del.computedStyle("color")).toBe("rgb(255, 59, 48)");
-    expect(label("delete").computedStyle("color")).toBe("rgb(255, 59, 48)");
+    expect(del.computedStyle("color")).toBe("rgb(244, 67, 54)");
+    expect(label("delete").computedStyle("color")).toBe("rgb(244, 67, 54)");
     expect(
         view
             .$('[data-testid="actions"] [data-item-id="delete"] [data-happy2-ui="menu-item-icon"]')
             .computedStyle("color"),
-    ).toBe("rgb(255, 59, 48)");
+    ).toBe("rgb(244, 67, 54)");
 
     /* ---- Shortcuts: KeyCap right-aligned in the row ---------------------- */
 
@@ -297,7 +297,7 @@ it("holds Menu section labels, disabled items, and text-only alignment", async (
         lineHeight: 24,
     });
     expect(sortBy.computedStyles(["color", "text-transform"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "text-transform": "uppercase",
     });
     /* Mono uppercase caps sit optically centered in the 24px label box.
@@ -339,7 +339,7 @@ it("holds Menu section labels, disabled items, and text-only alignment", async (
     expect(dupCap.offsets().right).toBe(10);
     /* Danger still paints red in a text-only menu. */
     expect(view.$('[data-testid="text"] [data-item-id="leave"]').computedStyle("color")).toBe(
-        "rgb(255, 59, 48)",
+        "rgb(244, 67, 54)",
     );
 
     /* ---- Interaction: enabled fires, disabled is inert ------------------- */

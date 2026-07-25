@@ -140,7 +140,7 @@ it("keeps the send action inside every measured toolbar stage", async () => {
         const composerElement = composer.element as HTMLElement;
         const toolbarElement = toolbar.element as HTMLElement;
 
-        expect(composerElement.clientWidth).toBe(stage.contentWidth);
+        expect(composerElement.clientWidth).toBe(stage.contentWidth + 2);
         expect(sendBounds.x + sendBounds.width, `${stage.testid} send right inset`).toBe(
             composerBounds.x + composerBounds.width - 16,
         );

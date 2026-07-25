@@ -243,7 +243,7 @@ it(
         expect(
             subtitle.computedStyles(["color", "font-size", "font-weight", "line-height"]),
         ).toEqual({
-            color: "rgb(142, 142, 147)",
+            color: "rgb(73, 69, 79)",
             "font-size": "12px",
             "font-weight": "500",
             "line-height": "16px",
@@ -274,7 +274,7 @@ it(
         const searchIcon = part("s-full", "search-icon");
         expect(searchIcon.bounds().width, "search icon box").toBe(14);
         expect(searchIcon.bounds().height, "search icon box").toBe(14);
-        expect(searchIcon.computedStyle("color")).toBe("rgb(142, 142, 147)");
+        expect(searchIcon.computedStyle("color")).toBe("rgb(73, 69, 79)");
         /* The search glyph is Icon-owned and must not be re-tuned here. Its true
    drift is <=0.4px, proven differentially against a calibration square in
    Icon.test.tsx; this absolute (un-calibrated) capture additionally carries

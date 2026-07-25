@@ -170,7 +170,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     // Badge width can be fractional (its own letter-spacing compensation).
     expect(Math.abs(count.offsets().right - 14)).toBeLessThanOrEqual(0.1);
     expect(count.computedStyles(["background-color", "color"])).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         color: "rgb(43, 172, 204)",
     });
     const badgeInk = await ink(view, ".happy2-agent-desk__count", 23.5);
@@ -237,7 +237,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     );
     const etaBounds = eta.bounds();
     expect(etaBounds.x + etaBounds.width).toBe(314);
-    expect(eta.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(eta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(eta.textMetrics().font).toEqual({
         family: "happy2 Mono, ui-monospace, monospace",
         letterSpacing: 0,
@@ -264,7 +264,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
             "white-space",
         ]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "line-height": "16px",
         "text-overflow": "ellipsis",
@@ -277,7 +277,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     );
     expect(track.bounds()).toEqual({ x: 26, y: 124, width: 288, height: 3 });
     expect(track.computedStyles(["background-color", "border-radius", "overflow-y"])).toEqual({
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "999px",
         "overflow-y": "hidden",
     });
@@ -305,7 +305,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
             "text-transform",
         ]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "11px",
         "font-weight": "700",
         "letter-spacing": "0.88px",
@@ -345,20 +345,20 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     ).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
         "border-radius": "8px",
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         "border-top-style": "dashed",
         "border-top-width": "1px",
         cursor: "pointer",
     });
     const clockSelector = '[data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon';
-    expect(view.$(clockSelector).computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(view.$(clockSelector).computedStyle("color")).toBe("rgb(73, 69, 79)");
     const clockInk = await ink(view, clockSelector, 18);
     expect(Math.abs(clockInk.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
     expect(Math.abs(clockInk.dx)).toBeLessThanOrEqual(ICON_TOLERANCE);
     const queuedTitle = view.$(
         '[data-happy2-ui="agent-desk-queued"] [data-happy2-ui="agent-desk-row-title"]',
     );
-    expect(queuedTitle.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(queuedTitle.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(queuedTitle.textMetrics().font).toEqual({
         family: "happy2 Figtree, system-ui, sans-serif",
         letterSpacing: 0,
@@ -375,7 +375,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     const queuedMeta = view.$(
         '[data-happy2-ui="agent-desk-queued"] [data-happy2-ui="agent-desk-row-meta"]',
     );
-    expect(queuedMeta.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(queuedMeta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(queuedMeta.textMetrics().font).toEqual({
         family: "happy2 Mono, ui-monospace, monospace",
         letterSpacing: 0,
@@ -409,7 +409,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         '[data-happy2-ui="agent-desk-done"] [data-happy2-ui="agent-desk-row-title"]',
     );
     expect(doneTitle.computedStyles(["color", "font-size", "text-decoration-line"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "text-decoration-line": "none",
     });

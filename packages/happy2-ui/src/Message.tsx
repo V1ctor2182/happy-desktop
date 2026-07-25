@@ -15,6 +15,7 @@ import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
 import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
+import { Button } from "./Button";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
@@ -343,7 +344,9 @@ export function Message(props: MessageProps) {
         Boolean(local.onMenuSelect) &&
         Boolean(local.menuItems?.some((item) => item.kind === "item"));
     const hasContributions = () => hasRenderableChild(local.contributions);
-    const hasActions = () => deliveryState() !== "sending" && hasContributions();
+    const hasActions = () =>
+        deliveryState() !== "sending" &&
+        (hasReactionAction() || hasMenuAction() || hasContributions());
     const filteredReactionOptions = () => {
         const query = reactionQuery.trim().toLocaleLowerCase();
         if (!query) return local.reactionOptions ?? [];
@@ -636,12 +639,55 @@ export function Message(props: MessageProps) {
                                 key={`${reaction.emoji}-${index}`}
                             />
                         ))}
+                        {hasReactionAction() ? (
+                            <button
+                                aria-expanded={reactionOpen}
+                                aria-haspopup={local.reactionOptions?.length ? "dialog" : undefined}
+                                aria-label="Add reaction"
+                                className="happy2-message__react-add"
+                                data-happy2-ui="message-react-add"
+                                onClick={toggleReactionPicker}
+                                type="button"
+                            >
+                                <Icon name="smile" size={14} />
+                            </button>
+                        ) : null}
                     </div>
                 ) : null}
             </div>
             {hasActions() ? (
                 <>
                     <div className="happy2-message__actions" data-happy2-ui="message-actions">
+                        {hasReactionAction() ? (
+                            <Button
+                                aria-expanded={reactionOpen}
+                                aria-haspopup={local.reactionOptions?.length ? "dialog" : undefined}
+                                aria-label="Add reaction"
+                                className="happy2-message__action"
+                                icon="smile"
+                                iconOnly
+                                onClick={toggleReactionPicker}
+                                size="small"
+                                variant="ghost"
+                            />
+                        ) : null}
+                        {hasMenuAction() ? (
+                            <Button
+                                aria-expanded={menuOpen}
+                                aria-haspopup="menu"
+                                aria-label="More message actions"
+                                className="happy2-message__action"
+                                icon="more"
+                                iconOnly
+                                onClick={() => {
+                                    reactionOpenSet(false);
+                                    placePopover(196, menuHeight());
+                                    menuOpenSet(!menuOpen);
+                                }}
+                                size="small"
+                                variant="ghost"
+                            />
+                        ) : null}
                         {hasContributions() ? (
                             <span
                                 className="happy2-message__contributions"

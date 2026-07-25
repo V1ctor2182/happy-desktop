@@ -73,7 +73,7 @@
 }
 
 .happy2-button[data-variant="secondary"] {
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
     background-color: var(--surface-high);
     color: var(--text);
 }

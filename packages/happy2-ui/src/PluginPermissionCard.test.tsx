@@ -216,7 +216,7 @@ it("disables decisions while busy or processing and hides them without decision 
         '[data-testid="member"] [data-happy2-ui="plugin-permission-card-state-label"]',
     );
     expect(memberState.element.textContent).toBe("Administrator approval required");
-    expect(memberState.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(memberState.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(decisions).toEqual([]);
 
     await view.screenshot("PluginPermissionCard.busy.test");

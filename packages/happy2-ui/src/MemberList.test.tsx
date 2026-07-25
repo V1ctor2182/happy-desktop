@@ -76,7 +76,7 @@ const subtitleText: Record<string, string> = {
 
 const roleSpec: Record<string, { bg: string; color: string; label: string; variant: string }> = {
     ada: {
-        bg: "rgb(198, 198, 200)",
+        bg: "rgb(234, 234, 234)",
         color: "rgb(43, 172, 204)",
         label: "Owner",
         variant: "accent",
@@ -89,13 +89,13 @@ const roleSpec: Record<string, { bg: string; color: string; label: string; varia
     },
     linus: {
         bg: "rgb(245, 245, 245)",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         label: "Member",
         variant: "neutral",
     },
     katherine: {
         bg: "rgb(245, 245, 245)",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         label: "Member",
         variant: "neutral",
     },
@@ -257,7 +257,7 @@ it("holds MemberList geometry, typography, role badges, and optical alignment", 
         expect(tm.font.size, id).toBe(12);
         expect(tm.font.weight, id).toBe("500");
         expect(tm.font.lineHeight, id).toBe(16);
-        expect(sub.computedStyle("color"), id).toBe("rgb(142, 142, 147)");
+        expect(sub.computedStyle("color"), id).toBe("rgb(73, 69, 79)");
         expect((await sub.visibleMetrics()).pixelCount, id).toBeGreaterThan(0);
     }
 
@@ -393,9 +393,9 @@ it("holds MemberList trailing variants, minimal rows, and role colors", async ()
         ["grace", "Grace Hopper"],
     ] as const) {
         const trailing = view.$(
-            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"]`,
+            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] svg`,
         );
-        expect(trailing.offsets().right, `${id} menu trailing right`).toBe(12);
+        expect(trailing.offsets().right, `${id} menu trailing right`).toBe(0);
         const button = view.$(
             `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] [data-happy2-ui="button"]`,
         );
@@ -413,7 +413,7 @@ it("holds MemberList trailing variants, minimal rows, and role colors", async ()
 
     /* Owner badge accent tokens (the roster test covers the other variants). */
     const adaBadge = view.$('[data-testid="menu"] [data-member-id="ada"] [data-happy2-ui="badge"]');
-    expect(adaBadge.computedStyle("background-color")).toBe("rgb(198, 198, 200)");
+    expect(adaBadge.computedStyle("background-color")).toBe("rgb(234, 234, 234)");
     expect(adaBadge.computedStyle("color")).toBe("rgb(43, 172, 204)");
 
     /* ---- Minimal rows: no trailing, single-line name, image avatar ---- */

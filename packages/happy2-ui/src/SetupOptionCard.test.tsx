@@ -146,7 +146,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
     expect(
         selected.computedStyles(["background-color", "border-top-color", "border-top-width"]),
     ).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         "border-top-color": "rgb(43, 172, 204)",
         "border-top-width": "1px",
     });
@@ -166,9 +166,9 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
         ]),
     ).toEqual({
         "align-items": "center",
-        "background-color": "rgb(242, 242, 247)",
+        "background-color": "rgb(245, 245, 245)",
         "border-radius": "8px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         display: "flex",
         "justify-content": "center",
     });
@@ -176,7 +176,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
      * tight optical-centering tolerance in the 36px chip. */
     const glyph = await glyphDrift(
         view,
-        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"]',
+        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"] svg',
         '[data-testid="chip"] [data-happy2-ui="setup-option-icon"] svg',
     );
     expect(Math.abs(glyph.dx), "chip glyph horizontal centroid").toBeLessThanOrEqual(0.5);
@@ -198,7 +198,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
     expect(
         description.computedStyles(["color", "font-size", "font-weight", "line-height"]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "font-weight": "400",
         "line-height": "18px",
@@ -207,7 +207,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
 
     const meta = part(view, "chip", "setup-option-meta");
     expect(meta.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "font-weight": "500",
         "line-height": "16px",
@@ -217,7 +217,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
 
     const hint = part(view, "disabled", "setup-option-hint");
     expect(hint.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(255, 59, 48)",
+        color: "rgb(244, 67, 54)",
         "font-size": "12px",
         "font-weight": "400",
         "line-height": "16px",

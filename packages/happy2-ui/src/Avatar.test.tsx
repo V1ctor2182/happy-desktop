@@ -40,12 +40,12 @@ const GAP = 8;
 
 const TONE_COLORS: Record<ToneName, string> = {
     violet: "rgb(0, 122, 255)",
-    ember: "rgb(255, 59, 48)",
+    ember: "rgb(244, 67, 54)",
     mint: "rgb(52, 199, 89)",
     ocean: "rgb(43, 172, 204)",
     rose: "rgb(255, 107, 107)",
     amber: "rgb(255, 149, 0)",
-    slate: "rgb(142, 142, 147)",
+    slate: "rgb(73, 69, 79)",
     brand: "rgb(0, 0, 0)",
 };
 
@@ -257,7 +257,7 @@ it("anchors the presence dot at every size", { timeout: 90_000 }, async () => {
         ).toEqual({
             "background-color": "rgb(52, 199, 89)",
             "border-radius": "999px",
-            "border-top-color": "rgb(242, 242, 247)",
+            "border-top-color": "rgb(245, 245, 245)",
             "border-top-style": "solid",
             "border-top-width": "2px",
             "box-sizing": "border-box",

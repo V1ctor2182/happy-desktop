@@ -68,19 +68,6 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             images={props.images}
             initials={entry.initials}
             menuItems={props.menuItems}
-            metaAccessory={
-                trace && !traceRunning && trace.entryCount > 0 ? (
-                    <AgentTraceRow
-                        entryCount={trace.entryCount}
-                        onOpen={traceOpen}
-                        open={props.traceOpen}
-                        status={trace.status === "pending" ? "running" : trace.status}
-                        toolCallCount={trace.toolCallCount}
-                        totalTokens={trace.totalTokens}
-                        variant="meta"
-                    />
-                ) : undefined
-            }
             onAuthorSelect={props.profile ? () => props.onProfileOpen(props.profile!) : undefined}
             onImageOpen={(id) => props.onImageOpen(entry, id)}
             onMenuSelect={(action) => props.onMenuSelect(entry, action)}
@@ -91,16 +78,22 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             time={entry.time}
             tone={entry.tone}
         >
-            {traceRunning && trace ? (
+            {trace ? (
                 <AgentTraceRow
-                    detail={trace.latest?.detail}
+                    detail={traceRunning ? trace.latest?.detail : undefined}
                     entryCount={trace.entryCount}
-                    kind={trace.latest?.kind}
+                    kind={traceRunning ? trace.latest?.kind : undefined}
                     onOpen={traceOpen}
                     open={props.traceOpen}
-                    status="running"
-                    title={trace.latest?.title}
-                    variant="row"
+                    status={
+                        trace.status === "pending" || trace.status === "running"
+                            ? "running"
+                            : trace.status
+                    }
+                    title={traceRunning ? trace.latest?.title : undefined}
+                    toolCallCount={trace.toolCallCount}
+                    totalTokens={trace.totalTokens}
+                    variant={traceRunning ? "row" : "meta"}
                 />
             ) : null}
             {props.files.map((file) => (

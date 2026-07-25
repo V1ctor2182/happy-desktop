@@ -152,13 +152,13 @@ it("renders a composer-icon contribution as a true icon-only button", async () =
     );
     const button = view.$('[data-testid="todo-composer-icon"] [data-happy2-ui="button"]');
     expect(button.element.getAttribute("data-icon-only")).toBe("");
-    expect(button.bounds()).toMatchObject({ height: 32, width: 32 });
+    expect(button.bounds()).toMatchObject({ height: 28, width: 28 });
     expect(button.element.getAttribute("aria-label")).toBe("Open TODOs");
     expect(button.element.textContent).toBe("✓");
     await userEvent.hover(button.element);
     for (const animation of button.element.getAnimations()) animation.finish();
     expect(button.computedStyles(["background-color", "color"])).toEqual({
-        "background-color": "rgb(240, 240, 242)",
+        "background-color": "rgba(0, 0, 0, 0.08)",
         color: "rgb(0, 0, 0)",
     });
     (button.element as HTMLButtonElement).click();

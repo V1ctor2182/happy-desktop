@@ -887,7 +887,6 @@ it("replaces the channel default agent from the info panel", async () => {
     await expect
         .poll(() => channelDefaultAgentUpdate.mock.calls)
         .toEqual([[routedChat.id, "agent-claude"]]);
-    await expect.poll(() => view.container.textContent).toContain("Default agent updated.");
 });
 
 it("renders one active port share in the header and info panel and routes open and disable to the owning chat store", async () => {

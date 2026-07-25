@@ -92,7 +92,7 @@
 
 .happy2-badge[data-variant="outline"] {
     background: transparent;
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     padding: 0 5px; /* keeps label 6px from the visual edge */
     color: var(--text-secondary);
 }
@@ -154,7 +154,7 @@
 }
 
 .happy2-reaction-chip:hover {
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
 }
 
 .happy2-reaction-chip:focus-visible {

@@ -156,7 +156,7 @@ it("holds AgentImagePanel layout, status mapping, the default marker, and row ac
         weight: "600",
     });
     expect(view.$(".happy2-agent-image-panel__subtitle").computedStyle("color")).toBe(
-        "rgb(142, 142, 147)",
+        "rgb(73, 69, 79)",
     );
 
     // Header actions pin to the right edge and expose only New image — there is
@@ -219,7 +219,7 @@ it("holds AgentImagePanel layout, status mapping, the default marker, and row ac
     // Optical: the default badge's check glyph is centered in its 12px icon slot.
     const glyph = await inkDrift(
         view,
-        `${defaultCell("img-default")} [data-happy2-ui="badge-icon"]`,
+        `${defaultCell("img-default")} [data-happy2-ui="badge-icon"] svg`,
         `${defaultCell("img-default")} [data-happy2-ui="badge-icon"] svg`,
     );
     expect(Math.abs(glyph.dx), "default badge glyph dx").toBeLessThanOrEqual(ICON_TOLERANCE);
@@ -304,13 +304,13 @@ it("shows build progress, the last log line, and opens a row on click", async ()
     const buildingSub = view.$(`${nameCell("img-building")} .happy2-agent-image-panel__subline`);
     expect(buildingSub.element.textContent).toBe("#6 [4/4] RUN pip install --no-cache-dir");
     expect(buildingSub.element.getAttribute("data-tone")).toBe("muted");
-    expect(buildingSub.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(buildingSub.computedStyle("color")).toBe("rgb(73, 69, 79)");
     const failedSub = view.$(`${nameCell("img-failed")} .happy2-agent-image-panel__subline`);
     expect(failedSub.element.textContent).toBe(
         "package cuda-toolkit-12-4 has no installation candidate",
     );
     expect(failedSub.element.getAttribute("data-tone")).toBe("danger");
-    expect(failedSub.computedStyle("color")).toBe("rgb(255, 59, 48)");
+    expect(failedSub.computedStyle("color")).toBe("rgb(244, 67, 54)");
     // A ready row with no log line renders no subline.
     expect(
         view.$(nameCell("img-minimal")).element.querySelector(".happy2-agent-image-panel__subline"),

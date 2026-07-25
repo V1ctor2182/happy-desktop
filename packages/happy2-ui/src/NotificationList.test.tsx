@@ -49,7 +49,7 @@ const kindColor: Record<NotificationKind, string> = {
     direct_message: "rgb(52, 199, 89)", // --success
     reaction: "rgb(255, 149, 0)", // --box-warning-text
     call: "rgb(52, 199, 89)", // --success
-    system: "rgb(142, 142, 147)", // --text-secondary
+    system: "rgb(73, 69, 79)", // --text-secondary
     moderation: "rgb(255, 59, 48)", // --warning-critical
     automation: "rgb(255, 149, 0)", // --box-warning-text
 };
@@ -157,7 +157,7 @@ it("holds NotificationList geometry, row anatomy, typography, and optical alignm
 
     /* ---- Read vs unread background token ------------------------------ */
 
-    expect(row("n1").computedStyle("background-color"), "unread bg").toBe("rgb(198, 198, 200)");
+    expect(row("n1").computedStyle("background-color"), "unread bg").toBe("rgb(234, 234, 234)");
     expect(row("n3").computedStyle("background-color"), "read bg").toBe("rgba(0, 0, 0, 0)");
 
     /* ---- Unread dot: 8px accent disc, centred on the row midline ------ */
@@ -310,7 +310,7 @@ it("holds NotificationList geometry, row anatomy, typography, and optical alignm
     );
     expect(context.textMetrics().font.size).toBe(12);
     expect(context.textMetrics().font.lineHeight).toBe(16);
-    expect(context.computedStyle("color")).toBe("rgb(142, 142, 147)"); // --text-secondary
+    expect(context.computedStyle("color")).toBe("rgb(73, 69, 79)"); // --text-secondary
     expect((await context.visibleMetrics()).pixelCount, "context ink").toBeGreaterThan(0);
 
     /* ---- Time: mono, muted, right-aligned in the row ----------------- */
@@ -322,7 +322,7 @@ it("holds NotificationList geometry, row anatomy, typography, and optical alignm
     expect(timeMetrics.font.family).toBe("happy2 Mono, ui-monospace, monospace");
     expect(timeMetrics.font.size).toBe(11);
     expect(timeMetrics.text).toBe("2m");
-    expect(time.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(time.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(time.offsets().right, "time right-alignment").toBe(16);
     expect((await time.visibleMetrics()).pixelCount, "time ink").toBeGreaterThan(0);
     // Time sits to the right of the body.
@@ -515,7 +515,7 @@ it("renders every notification kind with a centred kind glyph, plus tiles and th
     const empty = view.$('[data-testid="empty"] [data-happy2-ui="notification-list-empty"]');
     expect(empty.element.textContent).toBe("You're all caught up");
     expect(empty.computedStyles(["color", "text-align"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "text-align": "center",
     });
     expect(empty.bounds().height).toBeGreaterThanOrEqual(96);

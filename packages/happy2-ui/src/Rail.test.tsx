@@ -296,7 +296,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
     ).toBe("sun");
     expect(appearanceToggle.computedStyles(["border-radius", "color", "cursor"])).toEqual({
         "border-radius": "999px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         cursor: "pointer",
     });
     (appearanceToggle.element as HTMLButtonElement).click();
@@ -337,7 +337,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
         "border-radius": "8px",
         "border-top-width": "0px",
         "box-sizing": "border-box",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         cursor: "pointer",
         display: "flex",
         "flex-direction": "column",
@@ -347,7 +347,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
     expect(active.element.getAttribute("aria-current")).toBe("page");
     expect(inbox.element.getAttribute("aria-current")).toBeNull();
     expect(active.computedStyles(["background-color", "color"])).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         color: "rgb(43, 172, 204)",
     });
     expect(
@@ -372,7 +372,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
     const chatIcon = view.$(
         '[data-testid="rail-main"] [data-item-id="chat"] [data-happy2-ui="icon"]',
     );
-    expect(chatIcon.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(chatIcon.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* Optical: every rail glyph, active and inactive, centroid vs the item
      * center — the icon row center sits exactly 8px above it. Raw drift

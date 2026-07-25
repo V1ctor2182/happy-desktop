@@ -31,7 +31,7 @@
     --bn-colors-disabled-background: var(--input-background);
     --bn-colors-border: var(--divider);
     --bn-colors-side-menu: var(--text-secondary);
-    --bn-colors-shadow: var(--surface-pressed-overlay);
+    --bn-colors-shadow: var(--divider);
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;

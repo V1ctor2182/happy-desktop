@@ -114,7 +114,7 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
     ).toEqual({
         "background-color": "rgb(240, 240, 242)",
         "border-radius": "10px",
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         "border-top-width": "1px",
         "box-sizing": "border-box",
         color: "rgb(0, 0, 0)",
@@ -162,7 +162,7 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
         expect(
             label.computedStyles(["color", "text-transform"]),
             `${spec.type} label color`,
-        ).toEqual({ color: "rgb(142, 142, 147)", "text-transform": "uppercase" });
+        ).toEqual({ color: "rgb(73, 69, 79)", "text-transform": "uppercase" });
         /* 11px label line box (16px) centered in the 28px head: (28-16)/2 = 6. */
         expect(label.offsets().top, `${spec.type} label box top`).toBe(6);
         expect(label.offsets().bottom, `${spec.type} label box bottom`).toBe(6);
@@ -181,7 +181,7 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
             size: 11,
             weight: "500",
         });
-        expect(count.computedStyle("color"), `${spec.type} count color`).toBe("rgb(142, 142, 147)");
+        expect(count.computedStyle("color"), `${spec.type} count color`).toBe("rgb(73, 69, 79)");
         expect(count.offsets().right, `${spec.type} count trailing offset`).toBe(10);
         await paints(count, `${spec.type} count`);
     }
@@ -226,9 +226,9 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
             glyph.computedStyles(["background-color", "border-radius", "color"]),
             `${id} glyph tokens`,
         ).toEqual({
-            "background-color": "rgb(242, 242, 247)",
+            "background-color": "rgb(245, 245, 245)",
             "border-radius": "999px",
-            color: "rgb(142, 142, 147)",
+            color: "rgb(73, 69, 79)",
         });
 
         const icon = q(`[data-item-id="${id}"] [data-happy2-ui="search-results-row-glyph"] svg`);
@@ -305,7 +305,7 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
             weight: "400",
             lineHeight: 16,
         });
-        expect(meta.computedStyle("color"), `${id} meta color`).toBe("rgb(142, 142, 147)");
+        expect(meta.computedStyle("color"), `${id} meta color`).toBe("rgb(73, 69, 79)");
         await paints(meta, `${id} meta`);
     }
 
@@ -322,7 +322,7 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
         mark.computedStyles(["background-color", "color", "font-weight"]),
         "mark tokens",
     ).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         color: "rgb(43, 172, 204)",
         "font-weight": "600",
     });
@@ -419,11 +419,9 @@ it("renders the empty state and rich message snippets", async () => {
         size: 13,
         weight: "500",
     });
-    expect(emptyLabel.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(emptyLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
     await paints(emptyLabel, "empty label");
-    const emptyIcon = view.$(
-        '[data-testid="empty"] [data-happy2-ui="search-results-empty-icon"] svg',
-    );
+    const emptyIcon = view.$('[data-testid="empty"] [data-happy2-ui="search-results-empty-icon"]');
     expect(emptyIcon.bounds().width).toBe(20);
     await paints(emptyIcon, "empty icon");
     /* No rows exist in the empty state. */
@@ -468,7 +466,7 @@ it("renders the empty state and rich message snippets", async () => {
     /* The plain-text "launch" segment (not the mention) is highlighted. */
     const richMark = view.$('[data-testid="rich"] [data-happy2-ui="search-results-mark"]');
     expect(richMark.element.textContent).toBe("launch");
-    expect(richMark.computedStyle("background-color")).toBe("rgb(198, 198, 200)");
+    expect(richMark.computedStyle("background-color")).toBe("rgb(234, 234, 234)");
     await paints(richMark, "rich mark");
 
     window.scrollTo(0, 0);

@@ -201,7 +201,7 @@
 
 .happy2-agent-desk__queued {
     height: 36px;
-    border: 1px dashed var(--surface-pressed-overlay);
+    border: 1px dashed var(--divider);
     border-radius: 8px;
 }
 

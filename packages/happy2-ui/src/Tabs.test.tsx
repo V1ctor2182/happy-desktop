@@ -240,7 +240,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Leading icon box + trailing CountBadge geometry (DOM only).
         for (const id of ["all", "mentions"]) {
             const iconBox = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"]`,
+                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"] svg`,
             );
             const tab = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
             expect(iconBox.bounds().width, `${size}/${id} icon box w`).toBe(spec.icon);

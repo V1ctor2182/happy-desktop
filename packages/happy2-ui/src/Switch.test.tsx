@@ -23,11 +23,11 @@ const sizeSpecs = {
 >;
 
 const OFF_TRACK = "rgb(221, 221, 221)";
-const ON_TRACK = "rgb(52, 199, 89)";
+const ON_TRACK = "rgb(25, 118, 210)";
 const OFF_RING = "rgb(234, 234, 234) 0px 0px 0px 1px inset";
 const THUMB = "rgb(255, 255, 255)";
 const TEXT = "rgb(0, 0, 0)";
-const MUTED = "rgb(142, 142, 147)";
+const MUTED = "rgb(73, 69, 79)";
 
 type Renderer = ReturnType<typeof createRenderer>;
 

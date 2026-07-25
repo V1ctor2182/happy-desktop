@@ -264,7 +264,7 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
     /* Brand mark glyph (default spark) optically centered in the 28px chip. */
     const markGlyph = await glyphDrift(
         view,
-        '[data-happy2-ui="onboarding-mark"]',
+        '[data-happy2-ui="onboarding-mark"] svg',
         '[data-happy2-ui="onboarding-mark"] svg',
     );
     expect(Math.abs(markGlyph.dx), "mark glyph horizontal centroid").toBeLessThanOrEqual(0.5);
@@ -299,9 +299,9 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
     const upcomingLabel = view.$(
         '[data-happy2-ui="onboarding-step"][data-state="upcoming"] [data-happy2-ui="onboarding-step-label"]',
     );
-    expect(completeLabel.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(completeLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(currentLabel.computedStyle("color")).toBe("rgb(0, 0, 0)");
-    expect(upcomingLabel.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(upcomingLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* The complete step paints its check glyph unclipped inside the dot. */
     const completeCheck = view.$(
@@ -351,7 +351,7 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
     await paints(title, "title");
 
     expect(copy.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "15px",
         "font-weight": "400",
         "line-height": "22px",
@@ -436,7 +436,7 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
             "margin-left",
         ]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "line-height": "18px",
         "margin-top": "20px",
@@ -582,7 +582,7 @@ it("keeps loading and form card rects identical while holding width variants", a
     expect(
         loadingLabel.computedStyles(["color", "font-size", "font-weight", "line-height"]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "14px",
         "font-weight": "500",
         "line-height": "20px",

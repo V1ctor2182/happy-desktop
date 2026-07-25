@@ -43,7 +43,7 @@ button.happy2-file-attachment {
 
 .happy2-file-attachment:hover {
     background: var(--surface-high);
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
 }
 
 .happy2-file-attachment:focus-visible {
@@ -88,7 +88,7 @@ button.happy2-file-attachment {
     gap: 12px;
     padding: 10px 12px;
     background: var(--surface);
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
     border-radius: var(--happy2-radius-window);
 }
 
@@ -144,7 +144,7 @@ button.happy2-file-attachment {
     align-items: center;
     justify-content: center;
     background: var(--surface-high);
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-sm);
     color: var(--text-secondary);
     opacity: 0;

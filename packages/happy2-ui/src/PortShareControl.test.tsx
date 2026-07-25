@@ -201,10 +201,10 @@ it("renders busy and error states with disabled actions, danger tokens, and an i
         view
             .$('[data-testid="error"] [data-happy2-ui="port-share-control-mark"]')
             .computedStyle("color"),
-    ).toBe("rgb(244, 67, 54)");
+    ).toBe("rgb(255, 59, 48)");
     const errorLine = view.$('[data-testid="error"] [data-happy2-ui="port-share-control-error"]');
     expect(errorLine.computedStyles(["color", "font-size"])).toEqual({
-        color: "rgb(244, 67, 54)",
+        color: "rgb(255, 59, 48)",
         "font-size": "12px",
     });
     expect(errorLine.element.textContent).toBe(
@@ -278,7 +278,7 @@ it("renders the compact header pair with accessible names, no labels, and center
         view
             .$('[data-testid="compact-error"] [data-happy2-ui="port-share-control-mark"]')
             .computedStyle("color"),
-    ).toBe("rgb(244, 67, 54)");
+    ).toBe("rgb(255, 59, 48)");
 
     // Assistive tech gets the actual message through a visually hidden role=status
     // node — not conveyed by color/title alone. It must not occupy layout.

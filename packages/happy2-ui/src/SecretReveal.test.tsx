@@ -176,7 +176,7 @@ it("holds SecretReveal card, header, mono token, and warning-banner contract", a
         size: 12,
         weight: "500",
     });
-    expect(meta.computedStyle("color"), "meta color").toBe("rgb(142, 142, 147)");
+    expect(meta.computedStyle("color"), "meta color").toBe("rgb(73, 69, 79)");
     // Meta stacks directly under the label: 16px line box + 2px column gap.
     expect(meta.bounds().y - label.bounds().y, "label/meta stack").toBeCloseTo(18, 3);
 
@@ -199,7 +199,7 @@ it("holds SecretReveal card, header, mono token, and warning-banner contract", a
         "copy tokens",
     ).toEqual({
         "background-color": "rgb(248, 248, 248)",
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         color: "rgb(0, 0, 0)",
     });
     const copyLabel = view.$(
@@ -253,7 +253,7 @@ it("holds SecretReveal card, header, mono token, and warning-banner contract", a
         size: 13,
         weight: "500",
     });
-    expect(token.computedStyle("color"), "masked token color").toBe("rgb(142, 142, 147)");
+    expect(token.computedStyle("color"), "masked token color").toBe("rgb(73, 69, 79)");
     expect(token.computedStyle("font-variant-numeric"), "token tabular").toContain("tabular-nums");
     expect(token.bounds().x - field.bounds().x, "token left inset").toBeCloseTo(15, 3); // border 1 + pad 14
     await assertTextInk(token, "masked token");
@@ -365,7 +365,7 @@ it("holds SecretReveal copied, minimal, and reveal/copy interaction states", asy
     expect(minimalField.bounds().width, "minimal field width").toBe(266); // 300 - 32 - 2
     const minimalToken = view.$('[data-testid="minimal"] [data-happy2-ui="secret-reveal-token"]');
     expect(minimalToken.textMetrics().text, "minimal masked").toBe(MASK);
-    expect(minimalToken.computedStyle("color"), "minimal masked color").toBe("rgb(142, 142, 147)");
+    expect(minimalToken.computedStyle("color"), "minimal masked color").toBe("rgb(73, 69, 79)");
 
     // ---- Interaction: reveal and copy fire their own callbacks ---------------
     const revealButton = view.$('[data-testid="minimal"] .happy2-secret-reveal__reveal')

@@ -306,7 +306,7 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
             label.computedStyles(["color", "display", "font-size", "font-weight", "line-height"]),
             id,
         ).toEqual({
-            color: "rgb(142, 142, 147)",
+            color: "rgb(73, 69, 79)",
             display: "block",
             "font-size": "12px",
             "font-weight": "600",
@@ -444,7 +444,7 @@ it("holds Select placeholder, error, disabled, focus, truncation, and fullWidth 
 
     /* ---- Hint: muted message, hooked as select-hint ----------------- */
     const hint = view.$('[data-testid="sel-hint"] [data-happy2-ui="select-hint"]');
-    expect(hint.computedStyle("color"), "hint color").toBe("rgb(142, 142, 147)");
+    expect(hint.computedStyle("color"), "hint color").toBe("rgb(73, 69, 79)");
     expect(hint.textMetrics().text).toBe("Applied to every new message");
 
     /* ---- Disabled: dimmed, still a real disabled control ------------ */
@@ -474,7 +474,7 @@ it("holds Select placeholder, error, disabled, focus, truncation, and fullWidth 
         ]),
         "focus ring",
     ).toEqual({
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         "outline-color": "rgb(0, 122, 255)",
         "outline-offset": "1px",
         "outline-style": "solid",

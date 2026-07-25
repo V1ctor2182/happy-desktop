@@ -68,7 +68,7 @@
 }
 
 .happy2-select__control:focus-within {
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }

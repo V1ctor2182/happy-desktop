@@ -80,7 +80,7 @@ const toneStyles: Record<
     neutral: {
         background: "rgb(248, 248, 248)",
         border: "rgb(234, 234, 234)",
-        icon: "rgb(142, 142, 147)",
+        icon: "rgb(73, 69, 79)",
         iconName: "eye",
         title: "Read receipts",
         message: "Receipts are on.",
@@ -202,7 +202,7 @@ it("holds Banner tone tokens, geometry, typography, and leading-icon centering",
             weight: "400",
         });
         expect(messageMetrics.text, `${tone} message text`).toBe(spec.message);
-        expect(message.computedStyle("color"), `${tone} message color`).toBe("rgb(142, 142, 147)");
+        expect(message.computedStyle("color"), `${tone} message color`).toBe("rgb(73, 69, 79)");
         // Message stacks directly under the title: 18px line box + 4px column gap.
         expect(message.bounds().y - title.bounds().y, `${tone} title/message stack`).toBe(22);
         expect((await title.visibleMetrics()).pixelCount, `${tone} title ink`).toBeGreaterThan(0);
@@ -229,7 +229,7 @@ it("holds Banner tone tokens, geometry, typography, and leading-icon centering",
     expect(dismiss.computedStyles(["background-color", "border-radius", "color"])).toEqual({
         "background-color": "rgba(0, 0, 0, 0)",
         "border-radius": "6px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     const dismissGlyph = view.$('[data-testid="tone-info"] [data-happy2-ui="banner-dismiss"] svg');
     expect(dismissGlyph.bounds()).toMatchObject({ width: 14, height: 14 });

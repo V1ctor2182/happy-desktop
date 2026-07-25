@@ -258,7 +258,7 @@ it("holds PluginCatalogPanel layout, capability badges, installation health, and
         weight: "600",
     });
     expect(view.$(".happy2-plugin-catalog-panel__subtitle").computedStyle("color")).toBe(
-        "rgb(142, 142, 147)",
+        "rgb(73, 69, 79)",
     );
 
     // Card row: 40px icon slot with 8px radius, body fills, action pins right.
@@ -368,7 +368,7 @@ it("holds PluginCatalogPanel layout, capability badges, installation health, and
         `${card("task-runner")} [data-skill-name="run-task"] [data-happy2-ui="plugin-catalog-skill-description"]`,
     );
     expect(runTaskDescription.textMetrics().font.size).toBe(13);
-    expect(runTaskDescription.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(runTaskDescription.computedStyle("color")).toBe("rgb(73, 69, 79)");
     const rows = skillRows("task-runner");
     const first = rows[0]!.getBoundingClientRect();
     const second = rows[1]!.getBoundingClientRect();
@@ -1019,7 +1019,7 @@ it("presents every granular permission section in one scrollable modal at the 72
         "font-size": "11px",
         "font-weight": "600",
         "text-transform": "uppercase",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     const groupLabel = scope(
         "granular-install",
@@ -1028,7 +1028,7 @@ it("presents every granular permission section in one scrollable modal at the 72
     expect(groupLabel.computedStyles(["font-size", "font-weight", "color"])).toEqual({
         "font-size": "12px",
         "font-weight": "600",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     const commandName = scope(
         "granular-install",
@@ -1047,14 +1047,14 @@ it("presents every granular permission section in one scrollable modal at the 72
     expect(commandDescription.element.textContent).toContain("bounded Bash command");
     expect(commandDescription.computedStyles(["font-size", "color"])).toEqual({
         "font-size": "12px",
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
     });
     const workspaceWrite = scope(
         "granular-install",
         '[data-permission-id="workspace:write"] .happy2-plugin-catalog-panel__permission-description',
     );
     expect(workspaceWrite.element.textContent).toContain("expected content hash");
-    expect(workspaceWrite.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(workspaceWrite.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     // 8. While a permission save is in flight the granular checkboxes and the save
     //    action are disabled.

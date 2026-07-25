@@ -40,7 +40,7 @@ it("follows Happy's light and dark system palettes through shared component toke
         "background-color": "rgb(255, 255, 255)",
         // AppShell follows Happy's header tint rather than the generic text
         // role: #18171C is the exact light desktop-shell ink source value.
-        color: "rgb(24, 23, 28)",
+        color: "rgb(0, 0, 0)",
     });
     expect(
         view.$('[data-testid="dark-shell"]').computedStyles(["background-color", "color"]),
@@ -74,7 +74,7 @@ it("exposes Happy's direct light and dark color roles without a derived base pal
     expect(light.computedStyle("--surface")).toBe("#ffffff");
     expect(light.computedStyle("--surface-high")).toBe("#f8f8f8");
     expect(light.computedStyle("--surface-pressed")).toBe("#f0f0f2");
-    expect(light.computedStyle("--groupped-background")).toBe("#f2f2f7");
+    expect(light.computedStyle("--groupped-background")).toBe("#f5f5f5");
     expect(light.computedStyle("--radio-active")).toBe("#007aff");
     expect(light.computedStyle("--button-primary-background")).toBe("#000000");
     expect(light.computedStyle("--user-message-background")).toBe("#f0eee6");
@@ -82,10 +82,10 @@ it("exposes Happy's direct light and dark color roles without a derived base pal
     const dark = view.$('[data-happy2-ui="theme-scope"].happy2-theme-dark');
     expect(dark.computedStyle("--text")).toBe("#ffffff");
     expect(dark.computedStyle("--text-link")).toBe("#2baccc");
-    expect(dark.computedStyle("--surface")).toBe("#18171c");
-    expect(dark.computedStyle("--surface-high")).toBe("#2c2c2e");
+    expect(dark.computedStyle("--surface")).toBe("#212121");
+    expect(dark.computedStyle("--surface-high")).toBe("#171717");
     expect(dark.computedStyle("--surface-pressed")).toBe("#2c2c2e");
-    expect(dark.computedStyle("--groupped-background")).toBe("#1c1c1e");
+    expect(dark.computedStyle("--groupped-background")).toBe("#1e1e1e");
     expect(dark.computedStyle("--radio-active")).toBe("#0a84ff");
     expect(dark.computedStyle("--button-primary-background")).toBe("#000000");
     expect(dark.computedStyle("--user-message-background")).toBe("#2c2c2e");

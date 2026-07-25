@@ -26,7 +26,7 @@
     max-height: 70%;
     overflow: hidden;
     background: var(--diff-context-bg);
-    border-top: 1px solid var(--surface-pressed-overlay);
+    border-top: 1px solid var(--divider);
 }
 
 /* A collapsed (dead, frameless) panel is exactly its header row. */

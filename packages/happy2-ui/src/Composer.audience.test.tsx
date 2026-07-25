@@ -268,7 +268,7 @@ it("marks Agents mode with a quiet accent frame instead of a chip row", async ()
     expect(view.container.querySelector('[aria-label="Add agent"]')).toBeNull();
     // At rest the frame stays quiet and neutral.
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(getComputedStyle(cardEl).borderTopColor).toBe("rgb(234, 234, 234)");
+    expect(getComputedStyle(cardEl).borderTopColor).toBe("rgb(0, 0, 0)");
     await view.screenshot("Composer.agents.test");
 });
 

@@ -123,7 +123,7 @@
 .happy2-agent-image-detail__empty {
     margin: 0;
     padding: 12px 14px;
-    border: 1px dashed var(--surface-pressed-overlay);
+    border: 1px dashed var(--divider);
     border-radius: var(--happy2-radius-md);
     color: var(--text-secondary);
     font-size: 13px;

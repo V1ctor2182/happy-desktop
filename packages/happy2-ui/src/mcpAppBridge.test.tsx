@@ -233,8 +233,8 @@ it("sends standard style variables in initialize and re-delivers them on an expl
     // ship together on one notification.
     const hccParams = lastLogByTag(log, "hcc")!.params as Record<string, any>;
     expect(hccParams.theme).toBe("dark");
-    expect(hccParams.styles.variables["--color-background-primary"]).toBe("#18171c");
-    expect(hccParams.styles.variables["--color-background-secondary"]).toBe("#2c2c2e");
+    expect(hccParams.styles.variables["--color-background-primary"]).toBe("#212121");
+    expect(hccParams.styles.variables["--color-background-secondary"]).toBe("#171717");
     expect(hccParams.styles.variables["--color-background-tertiary"]).toBe("#2c2c2e");
     expect(hccParams.styles.variables["--color-background-inverse"]).toBe("#000000");
     expect(hccParams.styles.variables["--color-text-primary"]).toBe("#ffffff");

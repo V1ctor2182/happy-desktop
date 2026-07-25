@@ -87,7 +87,7 @@
     left: var(--happy2-sp-pad);
     box-sizing: border-box;
     width: calc((100% - 2 * var(--happy2-sp-pad)) / var(--happy2-sp-count));
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-sp-inner-radius);
     background: var(--surface-high);
     transform: translateX(calc(var(--happy2-sp-index) * 100%));
@@ -191,7 +191,7 @@
 }
 
 .happy2-status-picker__field:focus-within {
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
 }
 
 /* Fixed, explicitly sized emoji slot (label and glyph stay decoupled). */

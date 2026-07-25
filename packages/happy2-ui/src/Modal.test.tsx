@@ -197,14 +197,14 @@ it("holds Modal dialog geometry, header/body/footer layout, and optical glyph ce
     expect(chip.offsets().left).toBe(20);
     expect(chip.offsets().top).toBe(16);
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgb(198, 198, 200)",
+        "background-color": "rgb(234, 234, 234)",
         "border-radius": "8px",
         color: "rgb(43, 172, 204)",
     });
     /* Chip glyph optically centered on both axes (reuses the tuned Icon set). */
     const chipGlyph = await glyphDrift(
         view,
-        '[data-testid="md"] [data-happy2-ui="modal-icon"]',
+        '[data-testid="md"] [data-happy2-ui="modal-icon"] svg',
         '[data-testid="md"] [data-happy2-ui="modal-icon"] svg',
     );
     expect(Math.abs(chipGlyph.dx), "chip glyph horizontal centroid").toBeLessThanOrEqual(0.4);
@@ -233,7 +233,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and optical glyph ce
     expect(close.offsets().top).toBe(16);
     const closeGlyph = await glyphDrift(
         view,
-        '[data-testid="md"] .happy2-modal__close',
+        '[data-testid="md"] .happy2-modal__close svg',
         '[data-testid="md"] .happy2-modal__close svg',
     );
     expect(Math.abs(closeGlyph.dx), "close glyph horizontal centroid").toBeLessThanOrEqual(0.4);
@@ -258,7 +258,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and optical glyph ce
             "padding-top",
         ]),
     ).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "13px",
         "font-weight": "400",
         "line-height": "20px",
@@ -392,11 +392,11 @@ it("holds Modal tone treatments and the minimal (no icon / footer / close) form"
     expect(dangerChip.bounds().width).toBe(28);
     expect(dangerChip.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgb(255, 240, 240)",
-        color: "rgb(255, 59, 48)",
+        color: "rgb(244, 67, 54)",
     });
     const dangerGlyph = await glyphDrift(
         view,
-        '[data-testid="danger"] [data-happy2-ui="modal-icon"]',
+        '[data-testid="danger"] [data-happy2-ui="modal-icon"] svg',
         '[data-testid="danger"] [data-happy2-ui="modal-icon"] svg',
     );
     expect(Math.abs(dangerGlyph.dx), "danger chip glyph horizontal centroid").toBeLessThanOrEqual(

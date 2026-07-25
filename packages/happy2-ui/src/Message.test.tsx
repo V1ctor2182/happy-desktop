@@ -937,17 +937,16 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
     const actionButtons = toolbar.element.querySelectorAll<HTMLButtonElement>(
         '[data-happy2-ui="button"]',
     );
-    expect(actionButtons.length).toBe(3);
+    expect(actionButtons.length).toBe(2);
     expect(Array.from(actionButtons, (button) => button.getAttribute("aria-label"))).toEqual([
         "Add reaction",
-        "Start thread",
         "More message actions",
     ]);
     for (const button of actionButtons) {
         expect(button.getBoundingClientRect().width).toBe(28);
         expect(button.getBoundingClientRect().height).toBe(28);
     }
-    /* Thread callback and the picker/menu popovers perform actual selections. */
+    /* The picker/menu popovers perform actual selections. */
     actionButtons[1]?.click();
     actionButtons[0]?.click();
     await nextFrame();
@@ -964,12 +963,12 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
     expect(
         view.container.querySelector('[data-testid="actions"] [data-happy2-ui="emoji-picker"]'),
     ).toBeNull();
-    actionButtons[2]?.click();
+    actionButtons[1]?.click();
     await nextFrame();
     const menu = view.$('[data-testid="actions"] [data-happy2-ui="menu"]');
     assertParallelRoundedCorners(view.container);
     expect(menu.bounds().width).toBe(196);
-    expect(actionButtons[2]?.getAttribute("aria-expanded")).toBe("true");
+    expect(actionButtons[1]?.getAttribute("aria-expanded")).toBe("true");
     const edit = view.$('[data-testid="actions"] [data-item-id="edit"]');
     (edit.element as HTMLButtonElement).click();
     await nextFrame();
@@ -978,20 +977,20 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
         view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
     ).toBeNull();
     /* Escape and an outside pointer both dismiss without selecting an action. */
-    actionButtons[2]?.click();
-    actionButtons[2]?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    actionButtons[1]?.click();
+    actionButtons[1]?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
     await nextFrame();
     expect(
         view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
     ).toBeNull();
-    actionButtons[2]?.click();
+    actionButtons[1]?.click();
     await nextFrame();
     document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     await nextFrame();
     expect(
         view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
     ).toBeNull();
-    /* Grouping suppresses repeated identity while retaining the shared gutter. */
+    /* Grouping suppresses repeated identity and leaves the shared gutter empty. */
     for (const testid of ["grouped-sent", "grouped-sending"] as const) {
         const root = view.$(`[data-testid="${testid}"] [data-happy2-ui="message"]`);
         expect(root.element.hasAttribute("data-grouped")).toBe(true);
@@ -1006,7 +1005,7 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
         expect(
             root.element.querySelector('[data-happy2-ui="message-gutter-time"]'),
             `${testid} gutter time`,
-        ).not.toBeNull();
+        ).toBeNull();
     }
     /* Delivery paint changes without moving or resizing any row part. */
     const sentRoot = view.$('[data-testid="grouped-sent"] [data-happy2-ui="message"]');

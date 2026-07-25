@@ -36,7 +36,7 @@
 
 .happy2-agent-run-card[data-status="queued"] {
     border-style: dashed;
-    border-color: var(--surface-pressed-overlay);
+    border-color: var(--divider);
 }
 
 /* ---- Working progress strip ------------------------------------------ */

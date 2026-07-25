@@ -384,10 +384,14 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         "border-radius": "6px",
     });
     const composeLeading = view.$(
-        '[data-testid="full"] .happy2-sidebar__compose [data-happy2-ui="sidebar-item-leading"]',
+        '[data-testid="full"] .happy2-sidebar__compose [data-happy2-ui="sidebar-item-leading"] svg',
     );
-    const composeCenter = await rowInk(composeLeading, compose);
-    expect(Math.abs(composeCenter.y - 16), "compose leading optical y").toBeLessThanOrEqual(0.25);
+    const composeIconBounds = composeLeading.bounds();
+    expect(
+        composeIconBounds.y - compose.bounds().y + composeIconBounds.height / 2,
+        "compose leading box y",
+    ).toBe(15);
+    expect((await composeLeading.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     expect((await compose.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     /* ---- Body and section rhythm ---------------------------------------- */

@@ -199,7 +199,7 @@
     flex: none;
     width: 20px;
     height: 20px;
-    border: 2px solid var(--surface-pressed-overlay);
+    border: 2px solid var(--divider);
     border-top-color: var(--text-link);
     border-radius: var(--happy2-radius-pill);
 }

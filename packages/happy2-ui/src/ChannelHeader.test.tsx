@@ -167,7 +167,7 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     const icon = part("s-full", "icon");
     expect(icon.bounds().width).toBe(16);
     expect(icon.bounds().height).toBe(16);
-    expect(icon.computedStyle("color")).toBe("rgb(142, 142, 147)");
+    expect(icon.computedStyle("color")).toBe("rgb(73, 69, 79)");
     const iconInk = await inkCenter("hash icon", icon, hFull);
     expect(Math.abs(iconInk.dx), "hash icon optical x").toBeLessThanOrEqual(0.75);
     expect(Math.abs(iconInk.dy), "hash icon optical y").toBeLessThanOrEqual(0.75);
@@ -189,13 +189,13 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     expect(dot.bounds().height).toBe(3);
     expect(dot.bounds().y - hFull.bounds().y + 1.5).toBe(LANE_CENTER);
     expect(dot.computedStyles(["background-color", "border-radius"])).toEqual({
-        "background-color": "rgb(142, 142, 147)",
+        "background-color": "rgb(73, 69, 79)",
         "border-radius": "999px",
     });
     const topic = part("s-full", "topic");
     expect(topic.element.textContent).toBe("Ship mobile v2 by Fri");
     expect(topic.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "font-weight": "400",
         "line-height": "16px",

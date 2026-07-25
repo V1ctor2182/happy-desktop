@@ -257,7 +257,7 @@ it("holds TextField sizes, typography, label, hint, and leading-icon geometry", 
     const hint = view.$('[data-testid="tf-small"] [data-happy2-ui="text-field-hint"]');
     expect(hint.element.getAttribute("data-tone")).toBe("hint");
     expect(hint.computedStyles(["color", "font-size", "line-height"])).toEqual({
-        color: "rgb(142, 142, 147)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "line-height": "16px",
     });
@@ -451,7 +451,7 @@ it("holds TextField focus, error, disabled, textarea, width, and placeholder par
             "outline-width",
         ]),
     ).toEqual({
-        "border-top-color": "rgb(209, 209, 214)",
+        "border-top-color": "rgb(234, 234, 234)",
         "outline-color": "rgb(0, 122, 255)",
         "outline-offset": "1px",
         "outline-style": "solid",

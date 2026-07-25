@@ -36,7 +36,7 @@
     height: 40px;
     padding: 0 16px;
     background: var(--surface);
-    box-shadow: inset 0 -1px 0 var(--surface-pressed-overlay);
+    box-shadow: inset 0 -1px 0 var(--divider);
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
@@ -168,7 +168,7 @@
     box-sizing: border-box;
     width: 18px;
     height: 18px;
-    border: 1px solid var(--surface-pressed-overlay);
+    border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-sm);
     background: var(--groupped-background);
     color: var(--button-primary-tint);
