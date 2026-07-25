@@ -8,8 +8,10 @@ import {
     type MouseEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
+    type TransitionEvent as ReactTransitionEvent,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
+import { haptic } from "./haptics";
 import { CountBadge } from "./Badge";
 import { Button } from "./Button";
 import { happyLogoUrl } from "./assets";
@@ -128,6 +130,14 @@ function isFirstAtDepth(items: readonly SidebarItem[], index: number): boolean {
 /** Pointer travel, in px, before a press becomes a drag instead of a selection. */
 const DRAG_THRESHOLD = 4;
 
+/** True when the reader asked for no motion, so a drop lands instead of gliding. */
+function reducedMotion(): boolean {
+    return (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+}
+
 interface SidebarDrag {
     readonly pointerId: number;
     readonly startY: number;
@@ -138,6 +148,12 @@ interface SidebarDrag {
     readonly heights: readonly number[];
     /** False until the pointer passes the threshold, so a click still selects. */
     readonly moved: boolean;
+    /**
+     * Released and travelling to the slot it was dropped into. The move is
+     * reported only once that travel ends, so the list is rearranged under a row
+     * that is already sitting where the new order will put it.
+     */
+    readonly settling: boolean;
 }
 
 /**
@@ -153,6 +169,17 @@ function blocksOf(items: readonly SidebarItem[]): readonly (readonly number[])[]
         else blocks[blocks.length - 1]!.push(index);
     });
     return blocks;
+}
+
+/** How far the dragged block must travel to sit in the slot it was dropped into. */
+function settleOffset(drag: SidebarDrag): number {
+    let offset = 0;
+    if (drag.to > drag.from)
+        for (let index = drag.from + 1; index <= drag.to; index += 1)
+            offset += drag.heights[index] ?? 0;
+    if (drag.to < drag.from)
+        for (let index = drag.to; index < drag.from; index += 1) offset -= drag.heights[index] ?? 0;
+    return offset;
 }
 
 /** Where the dragged block lands: each neighbour it has passed by half that neighbour's height. */
@@ -201,6 +228,9 @@ function SidebarRow(props: {
     onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onSelect: (id: string) => void;
+    onTransitionEnd?: (event: ReactTransitionEvent<HTMLButtonElement>) => void;
+    /** Set while a released row is still travelling to the slot it was dropped into. */
+    settling?: boolean;
     shift?: number;
 }) {
     const item = () => props.item;
@@ -223,12 +253,14 @@ function SidebarRow(props: {
             data-happy2-ui="sidebar-item"
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
+            data-settling={props.settling ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
             onPointerDown={props.onPointerDown}
             onPointerMove={props.onPointerMove}
             onPointerCancel={props.onPointerUp}
             onPointerUp={props.onPointerUp}
+            onTransitionEnd={props.onTransitionEnd}
             style={{
                 ...(depth() > 0
                     ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
@@ -411,6 +443,7 @@ export function Sidebar(props: SidebarProps) {
                 heights,
                 moved: false,
                 pointerId: event.pointerId,
+                settling: false,
                 startY: event.clientY,
                 to: blockIndex,
             },
@@ -419,18 +452,33 @@ export function Sidebar(props: SidebarProps) {
 
     const dragMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
         const current = dragRef.current;
-        if (!current || event.pointerId !== current.drag.pointerId) return;
+        if (!current || current.drag.settling || event.pointerId !== current.drag.pointerId) return;
         const deltaY = event.clientY - current.drag.startY;
         if (!current.drag.moved && Math.abs(deltaY) < DRAG_THRESHOLD) return;
+        const to = dragTargetIndex(current.drag, deltaY);
+        // A tick each time the row crosses into a new slot, so the arrangement
+        // can be felt without watching it.
+        if (to !== current.drag.to) haptic("selection");
         dragSet({
             ...current,
-            drag: {
-                ...current.drag,
-                deltaY,
-                moved: true,
-                to: dragTargetIndex(current.drag, deltaY),
-            },
+            drag: { ...current.drag, deltaY, moved: true, to },
         });
+    };
+
+    /** Reports the move, if the drag made one, and clears the drag. */
+    const dragCommit = (
+        drag: SidebarDrag,
+        section: SidebarSection,
+        blocks: readonly (readonly number[])[],
+    ): void => {
+        dragSet(undefined);
+        if (drag.from === drag.to) return;
+        haptic("impact");
+        const topLevel = blocks.map((block) => section.items[block[0]!]!.id);
+        const next = [...topLevel];
+        const [reordered] = next.splice(drag.from, 1);
+        next.splice(drag.to, 0, reordered!);
+        local.onItemReorder?.(section.id, next);
     };
 
     const dragEnd = (
@@ -439,17 +487,35 @@ export function Sidebar(props: SidebarProps) {
         blocks: readonly (readonly number[])[],
     ): void => {
         const current = dragRef.current;
-        if (!current || event.pointerId !== current.drag.pointerId) return;
-        dragSet(undefined);
-        const { from, to, moved } = current.drag;
-        if (!moved) return;
+        if (!current || current.drag.settling || event.pointerId !== current.drag.pointerId) return;
+        if (!current.drag.moved) {
+            dragSet(undefined);
+            return;
+        }
         dragClick.current = true;
-        if (from === to) return;
-        const topLevel = blocks.map((block) => section.items[block[0]!]!.id);
-        const next = [...topLevel];
-        const [reordered] = next.splice(from, 1);
-        next.splice(to, 0, reordered!);
-        local.onItemReorder?.(section.id, next);
+        // The row is released mid-flight, so it travels the rest of the way
+        // before the list is rearranged under it — otherwise the new order lands
+        // in one frame and the row appears to teleport into its slot. When there
+        // is no travel left, or the reader asked for no motion, there is nothing
+        // to wait for and the move is reported now.
+        const offset = settleOffset(current.drag);
+        const still = Math.abs(offset - current.drag.deltaY) < 0.5;
+        if (still || reducedMotion()) {
+            dragCommit(current.drag, section, blocks);
+            return;
+        }
+        dragSet({ ...current, drag: { ...current.drag, deltaY: offset, settling: true } });
+    };
+
+    /** Ends the settle once the released row has actually finished travelling. */
+    const dragSettled = (
+        event: ReactTransitionEvent<HTMLButtonElement>,
+        section: SidebarSection,
+        blocks: readonly (readonly number[])[],
+    ): void => {
+        const current = dragRef.current;
+        if (!current?.drag.settling || event.propertyName !== "transform") return;
+        dragCommit(current.drag, section, blocks);
     };
 
     const openItemMenu = (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => {
@@ -609,6 +675,7 @@ export function Sidebar(props: SidebarProps) {
                                           );
                                           const drag = dragOf(section.id);
                                           const dragging = drag?.moved === true;
+                                          const held = dragging && blockIndex === drag.from;
                                           return (
                                               <SidebarRow
                                                   active={item.id === local.activeItemId}
@@ -623,7 +690,7 @@ export function Sidebar(props: SidebarProps) {
                                                       (item.depth ?? 0) > 0 &&
                                                       isFirstAtDepth(section.items, index)
                                                   }
-                                                  dragging={dragging && blockIndex === drag.from}
+                                                  dragging={held && !drag.settling}
                                                   key={item.id}
                                                   item={item}
                                                   onContextMenu={openItemMenu}
@@ -647,6 +714,13 @@ export function Sidebar(props: SidebarProps) {
                                                                 dragEnd(event, section, blocks)
                                                           : undefined
                                                   }
+                                                  onTransitionEnd={
+                                                      local.onItemReorder && held
+                                                          ? (event) =>
+                                                                dragSettled(event, section, blocks)
+                                                          : undefined
+                                                  }
+                                                  settling={held && drag.settling}
                                                   onSelect={(id) => {
                                                       if (dragClick.current) {
                                                           dragClick.current = false;

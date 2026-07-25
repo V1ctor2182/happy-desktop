@@ -190,6 +190,7 @@ export { type MessageGenerationStatus } from "./MessageMarkdown";
 export { Lightbox, type LightboxProps } from "./Lightbox";
 export { Rail, type RailItem, type RailProps } from "./Rail";
 export { ThemeScope, type ThemeMode, type ThemeScopeProps } from "./ThemeScope";
+export { haptic, type HapticSignal } from "./haptics";
 export { Sidebar, type SidebarItem, type SidebarProps, type SidebarSection } from "./Sidebar";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
 export {

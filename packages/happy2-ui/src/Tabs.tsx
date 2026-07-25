@@ -6,6 +6,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { CountBadge } from "./Badge";
+import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
@@ -171,7 +172,10 @@ export function Tabs(props: TabsProps) {
         if (!current || event.pointerId !== current.pointerId) return;
         const deltaX = event.clientX - current.startX;
         if (!current.moved && Math.abs(deltaX) < DRAG_THRESHOLD) return;
-        dragSet({ ...current, deltaX, moved: true, to: dragTargetIndex(current, deltaX) });
+        const to = dragTargetIndex(current, deltaX);
+        // A tick each time the tab crosses into a new slot, matching the sidebar.
+        if (to !== current.to) haptic("selection");
+        dragSet({ ...current, deltaX, moved: true, to });
     };
 
     const dragEnd = (event: ReactPointerEvent<HTMLButtonElement>): void => {
@@ -181,6 +185,7 @@ export function Tabs(props: TabsProps) {
         if (!current.moved) return;
         dragClick.current = true;
         if (current.to === current.from) return;
+        haptic("impact");
         local.onReorder?.(
             orderAfterDrag(
                 local.tabs.map((tab) => tab.id),

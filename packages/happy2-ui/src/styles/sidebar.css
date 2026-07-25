@@ -338,7 +338,8 @@
     cursor: pointer;
     transition:
         background-color 120ms ease,
-        color 120ms ease;
+        color 120ms ease,
+        transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* The row under the pointer rides above its neighbours and drops its transition,
@@ -347,6 +348,20 @@
     z-index: 1;
     background: var(--surface-ripple);
     transition: none;
+}
+
+/* Released, still travelling to the slot it was dropped into: it takes the
+   transform transition back and keeps riding above the rows it passes. */
+.happy2-sidebar__item[data-settling] {
+    z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-sidebar__item {
+        transition:
+            background-color 120ms ease,
+            color 120ms ease;
+    }
 }
 
 .happy2-sidebar__item:hover {
