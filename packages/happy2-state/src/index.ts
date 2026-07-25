@@ -102,6 +102,7 @@ export {
     type OverlaySnapshot,
     type OverlaysSnapshot,
     type OverlaysStore,
+    type TerminalPanelSnapshot,
 } from "./modules/overlays/overlaysState.js";
 export type {
     AgentImagesSnapshot,

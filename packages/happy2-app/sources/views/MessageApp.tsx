@@ -1,7 +1,8 @@
-import { useLayoutEffect, useReducer, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type { HappyState, McpAppHandle, McpAppSnapshot } from "happy2-state";
 import { McpAppShell, StoreSurface, type McpAppRenderInput } from "happy2-ui";
 import { openExternalLink } from "../externalLink";
+import { useDisposableLease } from "../useDisposableLease";
 
 export interface MessageAppProps {
     state: HappyState;
@@ -17,22 +18,9 @@ export interface MessageAppProps {
  */
 export function MessageApp(props: MessageAppProps) {
     const { state, input } = props;
-    const [handle, setHandle] = useReducer(
-        (_current: McpAppHandle | undefined, next: McpAppHandle | undefined) => next,
-        undefined,
+    const handle = useDisposableLease(`${input.messageId}\u0000${input.callId}`, () =>
+        state.mcpAppOpen(input.messageId, input.callId),
     );
-    const handleRef = useRef<McpAppHandle | undefined>(undefined);
-    useLayoutEffect(() => {
-        const acquired = state.mcpAppOpen(input.messageId, input.callId);
-        handleRef.current = acquired;
-        setHandle(acquired);
-        return () => {
-            acquired[Symbol.dispose]();
-            handleRef.current = undefined;
-            setHandle(undefined);
-        };
-    }, [state, input.messageId, input.callId]);
-
     if (!handle) return <McpAppShell status="loading" toolName={input.toolName} />;
     return (
         <StoreSurface store={handle}>

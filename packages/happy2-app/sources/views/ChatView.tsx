@@ -34,6 +34,7 @@ import {
 } from "./PluginContributionRenderer";
 import { MessageApp } from "./MessageApp";
 import { openExternalLink } from "../externalLink";
+import { useDisposableLease } from "../useDisposableLease";
 const AGENT_MODEL_CATALOG_POLL_MS = 5_000;
 export type ChatViewProps = {
     platform?: "desktop" | "web";
@@ -64,24 +65,6 @@ export type ChatViewProps = {
     canOpenAdmin: boolean;
     adminStartSection: AdminPageSection;
 };
-type ChatResources = {
-    chat?: ChatHandle;
-    composer?: ComposerStore;
-    chatContributions?: ChatContributionsHandle;
-    trace?: AgentTraceHandle;
-    workspace?: WorkspaceHandle;
-    workspaceFile?: WorkspaceFileHandle;
-    terminal?: TerminalHandle;
-    documentList?: DocumentListHandle;
-    document?: DocumentHandle;
-    chatId?: string;
-    conversationKind?: "chat" | "channel";
-    traceMessageId?: string;
-    workspaceChatId?: string;
-    workspaceFileKey?: string;
-    documentListChatId?: string;
-    documentId?: string;
-};
 const CHAT_SCROLL_CACHE_CAPACITY = 128;
 const chatScrollCaches = new WeakMap<HappyState, Map<string, MessageListScrollPosition>>();
 
@@ -97,11 +80,6 @@ export function ChatView(props: ChatViewProps) {
     const state = props.state;
     const navigate = useNavigate();
     const masks = useAssetUrls(state);
-    const [resources, resourcesReplace] = useReducer(
-        (_current: ChatResources, next: ChatResources) => next,
-        {},
-    );
-    const resourcesRef = useRef<ChatResources>({});
     const chatScrollPositions = chatScrollCache(state);
     const overlays = props.overlays;
     // One coarse subscription to the transient layers; the inspector selection and
@@ -126,10 +104,6 @@ export function ChatView(props: ChatViewProps) {
             : undefined;
     const nextDocumentListChatId = inspector.type === "documents" ? nextChatId : undefined;
     const nextDocumentId = documentOverlay?.documentId;
-    const resourcesCommit = (next: ChatResources) => {
-        resourcesRef.current = next;
-        resourcesReplace(next);
-    };
     const chatScrollPositionUpdate = (chatId: string, position: MessageListScrollPosition) => {
         const cache = chatScrollPositions;
         cache.delete(chatId);
@@ -138,134 +112,40 @@ export function ChatView(props: ChatViewProps) {
         const oldestChatId = cache.keys().next().value;
         if (oldestChatId) cache.delete(oldestChatId);
     };
-    useLayoutEffect(() => {
-        let next = resourcesRef.current;
-        let changed = false;
-        const replace = (patch: Partial<ChatResources>) => {
-            next = { ...next, ...patch };
-            changed = true;
-        };
-        if (next.chatId !== nextChatId || next.conversationKind !== nextConversationKind) {
-            // The inspector and any chat-scoped overlay described the conversation
-            // being left, so they retire with it rather than describing the new one.
-            overlays.getState().chatContextUpdate(nextChatId);
-            next.trace?.[Symbol.dispose]();
-            next.workspaceFile?.[Symbol.dispose]();
-            next.workspace?.[Symbol.dispose]();
-            next.terminal?.[Symbol.dispose]();
-            next.chatContributions?.[Symbol.dispose]();
-            next.chat?.[Symbol.dispose]();
-            if (next.chatId) state.composerRelease(next.chatId);
-            if (!nextChatId) next = {};
-            else {
-                const chat = state.chatOpen(nextChatId);
-                if (nextConversationKind === "channel") chat.getState().membersRetain();
-                // Agent plugin install/uninstall requests render as approval
-                // cards in every conversation and reconcile with the chat.
-                chat.getState().pluginRequestsRetain();
-                // Agent document writes render as approval cards and only apply
-                // once a member approves them here.
-                chat.getState().documentWriteRequestsRetain();
-                // Active port shares appear in the header and info panel of every
-                // conversation and reconcile with the chat over the sync stream.
-                chat.getState().portSharesRetain();
-                next = {
-                    chatId: nextChatId,
-                    conversationKind: nextConversationKind,
-                    chat,
-                    // Channels expose the same agent-first routing control as
-                    // direct conversations; people remains an explicit choice.
-                    composer: state.composer(
-                        nextChatId,
-                        nextConversationKind === "channel" ? { audience: "agents" } : {},
-                    ),
-                    // One retained chat-contribution surface fans out to the
-                    // header, composer, and every message row.
-                    chatContributions: state.chatContributionsOpen(nextChatId),
-                };
-            }
-            changed = true;
-        }
-        if (next.traceMessageId !== nextTraceMessageId) {
-            next.trace?.[Symbol.dispose]();
-            replace({
-                traceMessageId: nextTraceMessageId,
-                trace: nextTraceMessageId ? state.agentTraceOpen(nextTraceMessageId) : undefined,
-            });
-        }
-        if (next.workspaceChatId !== nextWorkspaceChatId) {
-            next.workspaceFile?.[Symbol.dispose]();
-            next.workspace?.[Symbol.dispose]();
-            replace({
-                workspaceChatId: nextWorkspaceChatId,
-                workspace: nextWorkspaceChatId
-                    ? state.workspaceOpen(nextWorkspaceChatId)
-                    : undefined,
-                workspaceFileKey: undefined,
-                workspaceFile: undefined,
-            });
-        }
-        if (next.workspaceFileKey !== nextWorkspaceFileKey) {
-            next.workspaceFile?.[Symbol.dispose]();
-            replace({
-                workspaceFileKey: nextWorkspaceFileKey,
-                workspaceFile:
-                    workspaceFileOverlay && nextWorkspaceFileKey
-                        ? state.workspaceFileOpen(
-                              workspaceFileOverlay.chatId,
-                              workspaceFileOverlay.path,
-                          )
-                        : undefined,
-            });
-        }
-        if (next.documentListChatId !== nextDocumentListChatId) {
-            next.documentList?.[Symbol.dispose]();
-            replace({
-                documentListChatId: nextDocumentListChatId,
-                documentList: nextDocumentListChatId
-                    ? state.documentListOpen(nextDocumentListChatId)
-                    : undefined,
-            });
-        }
-        if (next.documentId !== nextDocumentId) {
-            next.document?.[Symbol.dispose]();
-            replace({
-                documentId: nextDocumentId,
-                document: nextDocumentId ? state.documentOpen(nextDocumentId) : undefined,
-            });
-        }
-        if (changed) resourcesCommit(next);
-    }, [
-        overlays,
-        state,
-        nextChatId,
-        nextConversationKind,
-        nextTraceMessageId,
-        nextWorkspaceChatId,
-        nextWorkspaceFileKey,
-        workspaceFileOverlay,
-        nextDocumentListChatId,
-        nextDocumentId,
-    ]);
-    useLayoutEffect(
-        () => () => {
-            const current = resourcesRef.current;
-            current.trace?.[Symbol.dispose]();
-            current.workspaceFile?.[Symbol.dispose]();
-            current.workspace?.[Symbol.dispose]();
-            current.terminal?.[Symbol.dispose]();
-            current.documentList?.[Symbol.dispose]();
-            current.document?.[Symbol.dispose]();
-            current.chatContributions?.[Symbol.dispose]();
-            current.chat?.[Symbol.dispose]();
-            if (current.chatId) state.composerRelease(current.chatId);
-            resourcesRef.current = {};
-        },
-        [state],
+    // Each retained handle is leased for exactly as long as the surface addresses
+    // it, keyed by that address, so a selection change disposes the old lease
+    // before taking the new one and unmounting releases everything.
+    const conversation = useDisposableLease(
+        nextChatId ? `${nextChatId}\u0000${nextConversationKind}` : undefined,
+        () => conversationLease(state, overlays, nextChatId!, nextConversationKind!),
+    );
+    const trace = useDisposableLease(nextTraceMessageId, () =>
+        state.agentTraceOpen(nextTraceMessageId!),
+    );
+    const workspace = useDisposableLease(nextWorkspaceChatId, () =>
+        state.workspaceOpen(nextWorkspaceChatId!),
+    );
+    const workspaceFile = useDisposableLease(
+        // The reload generation is part of the identity: re-reading the same path
+        // is a new lease, not the existing one.
+        nextWorkspaceFileKey && `${nextWorkspaceFileKey}\u0000${layers.workspaceFileGeneration}`,
+        () => state.workspaceFileOpen(workspaceFileOverlay!.chatId, workspaceFileOverlay!.path),
+    );
+    const documentList = useDisposableLease(nextDocumentListChatId, () =>
+        state.documentListOpen(nextDocumentListChatId!),
+    );
+    const documentHandle = useDisposableLease(nextDocumentId, () =>
+        state.documentOpen(nextDocumentId!),
+    );
+    const terminalAgentUserId =
+        layers.terminal.type === "open" && nextChatId ? layers.terminal.agentUserId : undefined;
+    const terminal = useDisposableLease(terminalAgentUserId, () =>
+        terminalLease(state, nextChatId!, terminalAgentUserId!),
     );
     // Rig's catalog can change outside Happy Place. Load it as the desktop app
     // enters the chat surface, then refresh only while that surface is visible;
     // picker clicks consume this already-materialized catalog and never fetch.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the catalog has no realtime channel, so this surface polls while visible; the interval and listener are an imperative browser integration with complete cleanup
     useLayoutEffect(() => {
         const syncModels = () => {
             if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -299,15 +179,7 @@ export function ChatView(props: ChatViewProps) {
             if (current?.chatId === nextChatId && current.path === path) return;
             overlays.getState().overlayWorkspaceFileOpen(nextChatId, path);
         },
-        workspaceFileReload(nextChatId, path) {
-            const current = resourcesRef.current;
-            current.workspaceFile?.[Symbol.dispose]();
-            resourcesCommit({
-                ...current,
-                workspaceFileKey: `${nextChatId}\u0000${path}`,
-                workspaceFile: state.workspaceFileOpen(nextChatId, path),
-            });
-        },
+        workspaceFileReload: () => overlays.getState().overlayWorkspaceFileReload(),
         workspaceFileClose: () => overlays.getState().overlayClose(),
         documentsOpen: () => overlays.getState().inspectorDocumentsShow(),
         documentsClose: () => overlays.getState().inspectorClose(),
@@ -360,24 +232,11 @@ export function ChatView(props: ChatViewProps) {
         sharedLinkOpen: (uri) => openExternalLink(uri),
         pluginRequestImageDownload: (chatId, requestId) =>
             state.pluginManagementRequestImageDownload(chatId, requestId),
-        terminalOpen(agentUserId) {
-            const current = resourcesRef.current;
-            if (!current.chatId) return;
-            current.terminal?.[Symbol.dispose]();
-            resourcesCommit({
-                ...current,
-                terminal: state.terminalOpen(current.chatId, agentUserId),
-            });
-        },
-        terminalClose() {
-            const current = resourcesRef.current;
-            current.terminal?.getState().terminalClose();
-            current.terminal?.[Symbol.dispose]();
-            resourcesCommit({ ...current, terminal: undefined });
-        },
+        terminalOpen: (agentUserId) => overlays.getState().terminalOpen(agentUserId),
+        terminalClose: () => overlays.getState().terminalClose(),
     };
     const pageNavigation = (): ChatPageNavigation => {
-        const renderedChatId = resources.chatId;
+        const renderedChatId = conversation?.chatId;
         const file = workspaceFileOverlay;
         return {
             chatId: renderedChatId,
@@ -398,22 +257,22 @@ export function ChatView(props: ChatViewProps) {
             actions={actions}
             agentModels={state.agentModels()}
             canOpenAdmin={props.canOpenAdmin}
-            chat={resources.chat}
+            chat={conversation?.chat}
             chatMenuContributions={contributions.chatMenuContributions}
-            composer={resources.composer}
+            composer={conversation?.composer}
             composerContributions={contributions.composerContributions}
             createRequest={props.createRequest}
             directory={state.directory()}
             messageContributions={contributions.messageContributions}
             messageListScrollPosition={
-                resources.chatId ? chatScrollPositions.get(resources.chatId) : undefined
+                conversation ? chatScrollPositions.get(conversation.chatId) : undefined
             }
             navActiveId={props.navActiveId}
             navSection={props.navSection}
             navigation={pageNavigation()}
             onMessageListScrollPositionChange={
-                resources.chatId
-                    ? (position) => chatScrollPositionUpdate(resources.chatId!, position)
+                conversation
+                    ? (position) => chatScrollPositionUpdate(conversation.chatId, position)
                     : undefined
             }
             onNavSelect={props.onNavSelect}
@@ -423,18 +282,18 @@ export function ChatView(props: ChatViewProps) {
             sidebarHeaderAccessory={props.sidebarHeaderAccessory}
             sidebarOverride={props.sidebarOverride}
             workspaceOverride={props.workspaceOverride}
-            trace={resources.trace}
-            terminal={resources.terminal}
+            trace={trace}
+            terminal={terminal?.handle}
             windowControls={props.windowControls}
             user={props.session?.user ?? { id: "local-user", firstName: "Happy" }}
-            workspace={resources.workspace}
-            workspaceFile={resources.workspaceFile}
-            documentList={resources.documentList}
-            document={resources.document}
+            workspace={workspace}
+            workspaceFile={workspaceFile}
+            documentList={documentList}
+            document={documentHandle}
             documents={state.documentCollection()}
         />
     );
-    const contributionHandle = resources.chatContributions;
+    const contributionHandle = conversation?.contributions;
     if (!contributionHandle) return renderPage({});
     // One coarse subscription for the active chat's contributions; the header,
     // composer, and every message row are fanned out from this single snapshot.
@@ -483,4 +342,63 @@ function panelProject(inspector: InspectorSnapshot): ChatPagePanel | undefined {
         case "documents":
             return { kind: "documents" };
     }
+}
+
+/**
+ * The handles one open conversation needs, leased and released together: they
+ * describe the same chat and a surface never wants a subset of them.
+ *
+ * The retains are what make the header, approval cards, and port-share rows
+ * reconcile over the sync stream for as long as the conversation is open.
+ * Disposing also retires the inspector and any chat-scoped overlay, because
+ * those described the conversation being left.
+ */
+function conversationLease(
+    state: HappyState,
+    overlays: OverlaysStore,
+    chatId: string,
+    kind: "chat" | "channel",
+) {
+    const chat = state.chatOpen(chatId);
+    if (kind === "channel") chat.getState().membersRetain();
+    // Agent plugin install/uninstall requests render as approval cards in every
+    // conversation and reconcile with the chat.
+    chat.getState().pluginRequestsRetain();
+    // Agent document writes render as approval cards and only apply once a
+    // member approves them here.
+    chat.getState().documentWriteRequestsRetain();
+    // Active port shares appear in the header and info panel of every
+    // conversation and reconcile with the chat over the sync stream.
+    chat.getState().portSharesRetain();
+    return {
+        chatId,
+        chat,
+        // Channels expose the same agent-first routing control as direct
+        // conversations; people remains an explicit choice.
+        composer: state.composer(chatId, kind === "channel" ? { audience: "agents" } : {}),
+        // One retained chat-contribution surface fans out to the header,
+        // composer, and every message row.
+        contributions: state.chatContributionsOpen(chatId),
+        [Symbol.dispose]() {
+            this.contributions[Symbol.dispose]();
+            chat[Symbol.dispose]();
+            state.composerRelease(chatId);
+            overlays.getState().chatContextUpdate(undefined);
+        },
+    };
+}
+
+/**
+ * One agent terminal. Closing it tells the daemon before releasing the handle,
+ * so the remote session ends rather than being abandoned.
+ */
+function terminalLease(state: HappyState, chatId: string, agentUserId: string) {
+    const handle = state.terminalOpen(chatId, agentUserId);
+    return {
+        handle,
+        [Symbol.dispose]() {
+            handle.getState().terminalClose();
+            handle[Symbol.dispose]();
+        },
+    };
 }

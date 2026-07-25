@@ -34,9 +34,24 @@ export type InspectorSnapshot =
     | { readonly type: "workspace" }
     | { readonly type: "documents" };
 
+/**
+ * The agent terminal docked in the conversation, if one is open. Like the
+ * inspector it is scoped to one conversation and retires when that changes.
+ */
+export type TerminalPanelSnapshot =
+    | { readonly type: "closed" }
+    | { readonly type: "open"; readonly agentUserId: string };
+
 export interface OverlaysSnapshot {
     readonly overlay: OverlaySnapshot;
     readonly inspector: InspectorSnapshot;
+    readonly terminal: TerminalPanelSnapshot;
+    /**
+     * Bumped to re-read the open workspace file from the server. The reload is a
+     * new lease of the same path, so the count is what distinguishes the second
+     * lease from the first; nothing renders this number.
+     */
+    readonly workspaceFileGeneration: number;
 }
 
 export interface OverlaysState extends OverlaysSnapshot {
@@ -55,13 +70,21 @@ export interface OverlaysState extends OverlaysSnapshot {
     inspectorWorkspaceShow(): void;
     inspectorDocumentsShow(): void;
     inspectorClose(): void;
+    overlayWorkspaceFileReload(): void;
+    terminalOpen(agentUserId: string): void;
+    terminalClose(): void;
     chatContextUpdate(chatId?: string): void;
     primaryContextUpdate(): void;
 }
 
 export type OverlaysStore = StoreApi<OverlaysState>;
 
-const closed: OverlaysSnapshot = { overlay: { type: "closed" }, inspector: { type: "closed" } };
+const closed: OverlaysSnapshot = {
+    overlay: { type: "closed" },
+    inspector: { type: "closed" },
+    terminal: { type: "closed" },
+    workspaceFileGeneration: 0,
+};
 
 /**
  * Creates the store for surfaces that float over, or dock beside, the primary
@@ -124,6 +147,30 @@ export function overlaysStoreCreate(): OverlaysStore {
                     : snapshot,
             );
         },
+        overlayWorkspaceFileReload(): void {
+            set((snapshot) =>
+                snapshot.overlay.type === "workspaceFile"
+                    ? {
+                          ...snapshot,
+                          workspaceFileGeneration: snapshot.workspaceFileGeneration + 1,
+                      }
+                    : snapshot,
+            );
+        },
+        terminalOpen(agentUserId): void {
+            set((snapshot) =>
+                snapshot.terminal.type === "open" && snapshot.terminal.agentUserId === agentUserId
+                    ? snapshot
+                    : { ...snapshot, terminal: { type: "open", agentUserId } },
+            );
+        },
+        terminalClose(): void {
+            set((snapshot) =>
+                snapshot.terminal.type === "closed"
+                    ? snapshot
+                    : { ...snapshot, terminal: { type: "closed" } },
+            );
+        },
         overlayClose(): void {
             set((snapshot) =>
                 snapshot.overlay.type === "closed"
@@ -173,9 +220,16 @@ export function overlaysStoreCreate(): OverlaysStore {
                         ? overlay
                         : undefined;
                 const keepOverlay = !scoped || (chatId !== undefined && scoped.chatId === chatId);
-                if (snapshot.inspector.type === "closed" && keepOverlay) return snapshot;
+                if (
+                    snapshot.inspector.type === "closed" &&
+                    snapshot.terminal.type === "closed" &&
+                    keepOverlay
+                )
+                    return snapshot;
                 return {
+                    ...snapshot,
                     inspector: { type: "closed" },
+                    terminal: { type: "closed" },
                     overlay: keepOverlay ? overlay : { type: "closed" },
                 };
             });
@@ -185,9 +239,11 @@ export function overlaysStoreCreate(): OverlaysStore {
             // floating layer, so navigation never leaves a stale modal covering
             // a screen it was not opened from.
             set((snapshot) =>
-                snapshot.overlay.type === "closed" && snapshot.inspector.type === "closed"
+                snapshot.overlay.type === "closed" &&
+                snapshot.inspector.type === "closed" &&
+                snapshot.terminal.type === "closed"
                     ? snapshot
-                    : closed,
+                    : { ...closed, workspaceFileGeneration: snapshot.workspaceFileGeneration },
             );
         },
     }));

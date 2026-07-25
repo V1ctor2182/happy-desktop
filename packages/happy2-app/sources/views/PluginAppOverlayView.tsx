@@ -1,4 +1,4 @@
-import { useLayoutEffect, useReducer, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type {
     HappyState,
     PluginAppHandle,
@@ -21,6 +21,7 @@ import {
     type PluginNavigationSurface,
 } from "../pluginContributions";
 import { openExternalLink } from "../externalLink";
+import { useDisposableLease } from "../useDisposableLease";
 
 export interface PluginAppOverlayViewProps {
     state: HappyState;
@@ -43,18 +44,9 @@ export function PluginAppOverlayView(props: PluginAppOverlayViewProps) {
     const navigate = useNavigate();
     const masks = useAssetUrls(props.state);
     const overlays = props.state.overlays();
-    const [handle, setHandle] = useReducer(
-        (_current: PluginAppHandle | undefined, next: PluginAppHandle | undefined) => next,
-        undefined,
+    const handle = useDisposableLease(props.instanceId, () =>
+        props.state.pluginAppOpen(props.instanceId),
     );
-    useLayoutEffect(() => {
-        const acquired = props.state.pluginAppOpen(props.instanceId);
-        setHandle(acquired);
-        return () => {
-            acquired[Symbol.dispose]();
-            setHandle(undefined);
-        };
-    }, [props.state, props.instanceId]);
     if (!handle)
         return (
             <ModalOverlay onDismiss={props.onClose}>

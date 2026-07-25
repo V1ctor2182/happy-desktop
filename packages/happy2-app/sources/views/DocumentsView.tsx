@@ -1,6 +1,6 @@
-import { useLayoutEffect, useReducer, useRef } from "react";
 import { DocumentDetailPane, DocumentsPage } from "happy2-ui";
-import type { DocumentHandle, HappyState } from "happy2-state";
+import type { HappyState } from "happy2-state";
+import { useDisposableLease } from "../useDisposableLease";
 
 export interface DocumentsViewProps {
     state: HappyState;
@@ -11,42 +11,16 @@ export interface DocumentsViewProps {
     onCloseDetail: () => void;
 }
 
-type DocumentsResources = {
-    document?: DocumentHandle;
-    documentId?: string;
-};
-
 /** Owns the route-keyed document session lease for the global Documents surface. */
 export function DocumentsView(props: DocumentsViewProps) {
     const state = props.state;
-    const [resources, resourcesReplace] = useReducer(
-        (_current: DocumentsResources, next: DocumentsResources) => next,
-        {},
-    );
-    const resourcesRef = useRef<DocumentsResources>({});
     const nextDocumentId = props.documentId;
-    useLayoutEffect(() => {
-        if (resourcesRef.current.documentId === nextDocumentId) return;
-        resourcesRef.current.document?.[Symbol.dispose]();
-        const next: DocumentsResources = {
-            documentId: nextDocumentId,
-            document: nextDocumentId ? state.documentOpen(nextDocumentId) : undefined,
-        };
-        resourcesRef.current = next;
-        resourcesReplace(next);
-    }, [state, nextDocumentId]);
-    useLayoutEffect(
-        () => () => {
-            resourcesRef.current.document?.[Symbol.dispose]();
-            resourcesRef.current = {};
-        },
-        [],
-    );
-    if (nextDocumentId && resources.document && resources.documentId === nextDocumentId) {
+    const document = useDisposableLease(nextDocumentId, () => state.documentOpen(nextDocumentId!));
+    if (nextDocumentId && document) {
         return (
             <DocumentDetailPane
                 directory={state.directory()}
-                document={resources.document}
+                document={document}
                 onClose={props.onCloseDetail}
                 onDelete={() => {
                     void state

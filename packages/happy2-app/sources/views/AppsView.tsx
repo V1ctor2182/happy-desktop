@@ -1,4 +1,4 @@
-import { useLayoutEffect, useReducer, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import type {
     HappyState,
     OverlaysStore,
@@ -26,6 +26,7 @@ import {
 } from "../pluginContributions";
 import { PluginInlineContribution } from "./PluginContributionRenderer";
 import { openExternalLink } from "../externalLink";
+import { useDisposableLease } from "../useDisposableLease";
 
 export interface AppsViewProps {
     state: HappyState;
@@ -55,18 +56,9 @@ function PluginAppPageView(props: {
 }) {
     const navigate = useNavigate();
     const overlays = props.state.overlays();
-    const [handle, setHandle] = useReducer(
-        (_current: PluginAppHandle | undefined, next: PluginAppHandle | undefined) => next,
-        undefined,
+    const handle = useDisposableLease(props.instanceId, () =>
+        props.state.pluginAppOpen(props.instanceId),
     );
-    useLayoutEffect(() => {
-        const acquired = props.state.pluginAppOpen(props.instanceId);
-        setHandle(acquired);
-        return () => {
-            acquired[Symbol.dispose]();
-            setHandle(undefined);
-        };
-    }, [props.state, props.instanceId]);
     if (!handle) return <PluginAppView status="loading" title="App" />;
     return (
         <StoreSurface store={props.state.pluginNavigation()}>
