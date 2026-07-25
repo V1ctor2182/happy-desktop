@@ -25,16 +25,7 @@ import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./main/windowL
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./main/runtimeValidation";
 import { desktopIpc } from "./shared/desktopContract";
 import { localRigConnectorCreate } from "./main/localRig";
-import { RigIpcHost } from "./main/rigIpcHost";
-import {
-    rigClientRequestValidate,
-    rigScrollbackBasisValidate,
-    rigScrollbackValidate,
-    rigStreamIdValidate,
-    rigStreamOpenRequestValidate,
-    rigTerminalInputValidate,
-    rigTerminalSizeValidate,
-} from "./main/rigIpcValidation";
+import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./main/rigIpcValidation";
 import { RigInstallTerminalManager } from "./main/rigInstallTerminal";
 
 if (process.platform !== "darwin") {
@@ -63,10 +54,8 @@ const macosWindowChrome = {
 nativeTheme.themeSource = "system";
 
 let runtime: DesktopRuntime;
-let rigIpcHost: RigIpcHost;
 let rigInstallManager: RigInstallTerminalManager;
 let quitting = false;
-let activeRigConnectionId: number | undefined;
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
 
 function windowOptions(
@@ -111,7 +100,6 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     window.webContents.on("will-redirect", preventUntrustedNavigation);
     const ownerId = window.webContents.id;
     const cleanup = () => {
-        rigIpcHost?.closeOwner(ownerId);
         rigInstallManager?.closeOwner(ownerId);
     };
     window.webContents.on("render-process-gone", cleanup);
@@ -211,10 +199,6 @@ void app
             },
             { localRigConnector: connector },
         );
-        rigIpcHost = new RigIpcHost(
-            () => runtime.localRigTransport(),
-            (error) => void runtime.reconnectLocal(error).catch(() => undefined),
-        );
         rigInstallManager = new RigInstallTerminalManager(connector, {
             verified: () => void runtime.retry().catch(() => undefined),
         });
@@ -224,23 +208,15 @@ void app
         });
         runtime.subscribe((snapshot) => {
             const previous = windowLifecycle.get();
-            const nextRigConnectionId =
-                snapshot.phase === "ready" && snapshot.mode === "local"
-                    ? snapshot.connectionId
-                    : undefined;
-            if (
-                previous &&
-                activeRigConnectionId !== undefined &&
-                nextRigConnectionId !== activeRigConnectionId
-            )
-                rigIpcHost.closeOwner(previous.webContents.id);
-            activeRigConnectionId = nextRigConnectionId;
             const window = windowSynchronize(snapshot);
             applicationMenuInstall(snapshot);
             if (window === previous && desktopWindowTarget(snapshot).kind === "local")
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
+            Menu.getApplicationMenu()?.popup();
+        });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {
@@ -260,54 +236,6 @@ void app
         ipcMain.handle(desktopIpc.runtimeReset, () => runtime.reset());
         ipcMain.handle(desktopIpc.topologySelect, (_event, topologyId: unknown) =>
             runtime.topologySelect(desktopTopologyIdValidate(topologyId)),
-        );
-        ipcMain.handle(desktopIpc.rigRequest, (_event, request: unknown) =>
-            rigIpcHost.request(rigClientRequestValidate(request)),
-        );
-        ipcMain.handle(desktopIpc.rigStreamOpen, (event, request: unknown) =>
-            rigIpcHost.streamOpen(
-                event.sender.id,
-                rigStreamOpenRequestValidate(request),
-                (streamEvent) => {
-                    if (!event.sender.isDestroyed())
-                        event.sender.send(desktopIpc.rigStreamEvent, streamEvent);
-                },
-            ),
-        );
-        ipcMain.handle(desktopIpc.rigStreamClose, (event, streamId: unknown) =>
-            rigIpcHost.streamClose(event.sender.id, rigStreamIdValidate(streamId)),
-        );
-        ipcMain.handle(desktopIpc.rigTerminalWrite, (event, streamId: unknown, data: unknown) =>
-            rigIpcHost.terminalWrite(
-                event.sender.id,
-                rigStreamIdValidate(streamId),
-                rigTerminalInputValidate(data),
-            ),
-        );
-        ipcMain.handle(
-            desktopIpc.rigTerminalResize,
-            (event, streamId: unknown, cols: unknown, rows: unknown) => {
-                const size = rigTerminalSizeValidate(cols, rows);
-                rigIpcHost.terminalResize(
-                    event.sender.id,
-                    rigStreamIdValidate(streamId),
-                    size.cols,
-                    size.rows,
-                );
-            },
-        );
-        ipcMain.handle(
-            desktopIpc.rigTerminalScrollback,
-            (event, streamId: unknown, start: unknown, count: unknown, basis: unknown) => {
-                const range = rigScrollbackValidate(start, count);
-                return rigIpcHost.terminalScrollback(
-                    event.sender.id,
-                    rigStreamIdValidate(streamId),
-                    range.start,
-                    range.count,
-                    rigScrollbackBasisValidate(basis),
-                );
-            },
         );
         ipcMain.handle(desktopIpc.rigInstallOpen, (event) =>
             rigInstallManager.open(event.sender.id, (installEvent) => {
@@ -371,7 +299,6 @@ app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
     void runtime.close().finally(() => {
-        rigIpcHost?.[Symbol.dispose]();
         rigInstallManager?.[Symbol.dispose]();
         quitting = true;
         app.quit();

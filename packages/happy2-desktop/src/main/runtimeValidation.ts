@@ -57,11 +57,13 @@ export function desktopTopologyTarget(topology: DesktopTopology): DesktopTopolog
 export function desktopActiveTarget(
     topology: DesktopTopology,
     rigVersion?: string,
+    rigHttpUrl?: string,
 ): DesktopActiveTarget {
     const target = desktopTopologyTarget(topology);
     if (topology.mode === "local") {
         if (!rigVersion) throw new Error("The local Rig version is unavailable.");
-        return { ...target, authentication: "rig", mode: "local", rigVersion };
+        if (!rigHttpUrl) throw new Error("The local Rig HTTP proxy is unavailable.");
+        return { ...target, authentication: "rig", mode: "local", rigVersion, rigHttpUrl };
     }
     return {
         ...target,

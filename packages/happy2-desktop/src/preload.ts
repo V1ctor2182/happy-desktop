@@ -4,30 +4,17 @@ import {
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type HappyDesktopBridge,
-    type RigClientRequest,
     type RigInstallTerminalEvent,
-    type RigStreamEvent,
-    type RigStreamOpenRequest,
 } from "./shared/desktopContract";
 
 const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
+    applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),
     runtimeReset: () => ipcRenderer.invoke(desktopIpc.runtimeReset),
     runtimeRetry: () => ipcRenderer.invoke(desktopIpc.runtimeRetry),
     runtimeStart: (request: DesktopStartRequest) =>
         ipcRenderer.invoke(desktopIpc.runtimeStart, request),
-    rigRequest: (request: RigClientRequest) =>
-        ipcRenderer.invoke(desktopIpc.rigRequest, request) as never,
-    rigStreamOpen: (request: RigStreamOpenRequest) =>
-        ipcRenderer.invoke(desktopIpc.rigStreamOpen, request),
-    rigStreamClose: (streamId) => ipcRenderer.invoke(desktopIpc.rigStreamClose, streamId),
-    rigTerminalWrite: (streamId, data) =>
-        ipcRenderer.invoke(desktopIpc.rigTerminalWrite, streamId, data),
-    rigTerminalResize: (streamId, cols, rows) =>
-        ipcRenderer.invoke(desktopIpc.rigTerminalResize, streamId, cols, rows),
-    rigTerminalScrollback: (streamId, start, count, basis) =>
-        ipcRenderer.invoke(desktopIpc.rigTerminalScrollback, streamId, start, count, basis),
     rigInstallOpen: () => ipcRenderer.invoke(desktopIpc.rigInstallOpen),
     rigInstallConfirm: (terminalId, cols, rows) =>
         ipcRenderer.invoke(desktopIpc.rigInstallConfirm, terminalId, cols, rows),
@@ -43,12 +30,6 @@ const bridge: HappyDesktopBridge = {
             listener(snapshot);
         ipcRenderer.on(desktopIpc.runtimeChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.runtimeChanged, receive);
-    },
-    rigSubscribe(listener: (event: RigStreamEvent) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, event: RigStreamEvent) =>
-            listener(event);
-        ipcRenderer.on(desktopIpc.rigStreamEvent, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.rigStreamEvent, receive);
     },
     rigInstallSubscribe(listener: (event: RigInstallTerminalEvent) => void) {
         const receive = (_event: Electron.IpcRendererEvent, event: RigInstallTerminalEvent) =>

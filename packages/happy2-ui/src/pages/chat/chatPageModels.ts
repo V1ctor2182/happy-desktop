@@ -214,6 +214,53 @@ function messageEntry(item: DeepReadonly<ChatMessageItem>): LiveChatMessage {
         delivery: item.delivery,
     };
 }
+/** A turn whose trace has stopped advancing collapses to a single summary row. */
+function turnTerminal(trace: DeepReadonly<AgentTurnTraceSummary> | undefined): boolean {
+    return trace !== undefined && (trace.status === "complete" || trace.status === "failed");
+}
+function hasBodyText(entry: LiveChatMessage): boolean {
+    return entry.body.trim().length > 0;
+}
+/**
+ * Collapse each completed agent turn to a single row. While a turn is running its
+ * messages stay visible so the reader watches the tool calls stream in; once the
+ * turn's trace reports a terminal status the intermediate reasoning/tool messages
+ * are dropped and only the turn's last message with body text survives (falling
+ * back to the last message when the turn produced none). The surviving message
+ * keeps its `agentTrace`, so its meta row still summarizes the whole turn and the
+ * full step list stays reachable in the side trace panel. Non-agent messages,
+ * dividers, and notices always pass through untouched.
+ */
+export function turnsCollapse(entries: readonly WorkspaceEntry[]): WorkspaceEntry[] {
+    const result: WorkspaceEntry[] = [];
+    let index = 0;
+    while (index < entries.length) {
+        const entry = entries[index]!;
+        const turnId =
+            entry.kind === "message" ? (entry as LiveChatMessage).agentTrace?.turnId : undefined;
+        if (turnId === undefined) {
+            result.push(entry);
+            index += 1;
+            continue;
+        }
+        const run: LiveChatMessage[] = [];
+        while (index < entries.length) {
+            const next = entries[index];
+            if (next?.kind !== "message" || (next as LiveChatMessage).agentTrace?.turnId !== turnId)
+                break;
+            run.push(next as LiveChatMessage);
+            index += 1;
+        }
+        const last = run[run.length - 1]!;
+        if (!turnTerminal(last.agentTrace)) {
+            result.push(...run);
+            continue;
+        }
+        const survivor = [...run].reverse().find(hasBodyText) ?? last;
+        result.push(survivor);
+    }
+    return result;
+}
 export function entriesProject(items: readonly DeepReadonly<ChatMessageItem>[]): WorkspaceEntry[] {
     const result: WorkspaceEntry[] = [];
     let previousDay = "";
@@ -241,5 +288,5 @@ export function entriesProject(items: readonly DeepReadonly<ChatMessageItem>[]):
                 : messageEntry(item),
         );
     }
-    return result;
+    return turnsCollapse(result);
 }

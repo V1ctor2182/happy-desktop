@@ -7,10 +7,11 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import layoutPolicy from "../../eslint/layout-policy.mjs";
+import reactPolicy from "../../eslint/react-policy.mjs";
 import themePolicy from "../../eslint/theme-policy.mjs";
 
 const common = {
-    plugins: { "happy2-layout": layoutPolicy },
+    plugins: { "happy2-layout": layoutPolicy, "happy2-react": reactPolicy },
     extends: [
         js.configs.recommended,
         react.configs.flat.recommended,
@@ -28,7 +29,7 @@ const common = {
                         name: "react",
                         importNames: ["useEffect"],
                         message:
-                            "useEffect is not allowed in happy2-ui. Use event handlers, derived render state, or a scoped useLayoutEffect for imperative DOM work.",
+                            "useEffect is not allowed in happy2-ui. Use event handlers, derived render state, or a documented ref callback for imperative DOM work.",
                     },
                 ],
             },
@@ -41,11 +42,13 @@ const common = {
                 selector:
                     "CallExpression[callee.type='MemberExpression'][callee.property.name='useEffect']",
                 message:
-                    "useEffect is not allowed in happy2-ui. Use event handlers, derived render state, or a scoped useLayoutEffect for imperative DOM work.",
+                    "useEffect is not allowed in happy2-ui. Use event handlers, derived render state, or a documented ref callback for imperative DOM work.",
             },
         ],
         "react/prop-types": "off",
         "react-hooks/exhaustive-deps": "error",
+        "happy2-react/no-layout-effect": "error",
+        "happy2-react/require-react-exception-reason": "error",
         "jsx-a11y/no-autofocus": "off",
         "jsx-a11y/no-noninteractive-element-interactions": "off",
         "jsx-a11y/no-static-element-interactions": "off",

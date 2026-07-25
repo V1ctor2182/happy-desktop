@@ -45,6 +45,13 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
     const entry = props.entry;
     if (entry.kind === "divider") return <DayDivider label={entry.label} />;
     if (entry.kind === "notice") return <SystemNotice icon={entry.icon} text={entry.text} />;
+    const trace = entry.agentTrace;
+    /* A running turn streams its current tool call inline as a full trace row so
+       the reader watches it work; a completed turn instead carries the compact
+       "View trace" status line in the meta row. Both open the side trace panel. */
+    const traceRunning =
+        trace !== undefined && (trace.status === "pending" || trace.status === "running");
+    const traceOpen = props.onTraceSelect ? () => props.onTraceSelect!(entry) : undefined;
     return (
         <Message
             agent={entry.agent}
@@ -62,16 +69,12 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             initials={entry.initials}
             menuItems={props.menuItems}
             metaAccessory={
-                entry.agentTrace ? (
+                trace && !traceRunning ? (
                     <AgentTraceRow
-                        entryCount={entry.agentTrace.entryCount}
-                        onOpen={props.onTraceSelect ? () => props.onTraceSelect!(entry) : undefined}
+                        entryCount={trace.entryCount}
+                        onOpen={traceOpen}
                         open={props.traceOpen}
-                        status={
-                            entry.agentTrace.status === "pending"
-                                ? "running"
-                                : entry.agentTrace.status
-                        }
+                        status={trace.status === "pending" ? "running" : trace.status}
                         variant="meta"
                     />
                 ) : undefined
@@ -86,6 +89,18 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             time={entry.time}
             tone={entry.tone}
         >
+            {traceRunning && trace ? (
+                <AgentTraceRow
+                    detail={trace.latest?.detail}
+                    entryCount={trace.entryCount}
+                    kind={trace.latest?.kind}
+                    onOpen={traceOpen}
+                    open={props.traceOpen}
+                    status="running"
+                    title={trace.latest?.title}
+                    variant="row"
+                />
+            ) : null}
             {props.files.map((file) => (
                 <FileAttachment
                     aria-label={`Download ${file.name}`}

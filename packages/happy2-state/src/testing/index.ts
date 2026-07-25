@@ -44,8 +44,8 @@ export {
 export {
     createFakeRigTransport,
     fakeRigSession,
+    fakeRigSummary,
     type FakeRigCall,
     type FakeRigOperation,
-    type FakeRigTerminalController,
     type FakeRigTransport,
 } from "./fake-rig.js";

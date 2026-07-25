@@ -1,0 +1,742 @@
+import type {
+    GetSessionUsageResponse,
+    GlobalEventQueueEntry,
+    ModelCatalog,
+    ProtocolSession,
+    RunShellCommandResponse,
+    SessionEvent,
+    SessionSummary,
+    SubagentSummary,
+} from "@slopus/rig-client-runtime/dist/protocol/index.js";
+import type {
+    AgentBlock,
+    Message,
+    ToolResultBlock,
+} from "@slopus/rig-client-runtime/dist/agent/types.js";
+import type { AgentLoopEvent } from "@slopus/rig-client-runtime/dist/agent/loop.js";
+import type {
+    FileDiff,
+    ToolResultPresentation,
+} from "@slopus/rig-client-runtime/dist/agent/ToolResultPresentation.js";
+import type { BashSessionActivity } from "@slopus/rig-client-runtime/dist/agent/context/BashContext.js";
+import type {
+    AssistantMessage,
+    Model,
+    ToolCall,
+} from "@slopus/rig-client-runtime/dist/providers/types.js";
+import type { UserInputRequest } from "@slopus/rig-client-runtime/dist/user-input/index.js";
+import type { SessionTask } from "@slopus/rig-client-runtime/dist/tasks/index.js";
+import type { SessionGoal } from "@slopus/rig-client-runtime/dist/goals/index.js";
+import type {
+    RigAgentEvent,
+    RigBackgroundProcess,
+    RigBlock,
+    RigEventId,
+    RigFileDiff,
+    RigGlobalEvent,
+    RigGoal,
+    RigJson,
+    RigMessage,
+    RigModel,
+    RigModelCatalog,
+    RigQueuedMessage,
+    RigSession,
+    RigSessionEvent,
+    RigSessionId,
+    RigSessionSummary,
+    RigSessionUsage,
+    RigShellCommandResult,
+    RigUsageGroup,
+    RigUsageQuotaWindow,
+    RigSubagentSummary,
+    RigTask,
+    RigThinkingLevel,
+    RigToolFailure,
+    RigToolPresentation,
+    RigUserInputRequest,
+} from "happy2-state";
+
+/**
+ * Pure projections from Rig's raw `@slopus/rig` protocol types into the closed,
+ * serialization-safe `happy2-state` projections. They live in the desktop main
+ * process (and the dev-server plugin) so the renderer/app bundle never imports a
+ * `@slopus` wire shape: the loopback proxy exposes already-projected JSON/SSE.
+ *
+ * These are deliberately synchronous and side-effect free (only `displayCwd` reads
+ * an injected home directory), which keeps them exhaustively unit-testable.
+ */
+
+/** Renders a home-relative display path (`~/work`) without touching the filesystem. */
+export function rigDisplayCwd(cwd: string, homeDir: string): string {
+    if (!homeDir) return cwd;
+    if (cwd === homeDir) return "~";
+    if (cwd.startsWith(`${homeDir}/`)) return `~${cwd.slice(homeDir.length)}`;
+    return cwd;
+}
+
+export function rigCatalogProject(catalog: ModelCatalog): RigModelCatalog {
+    return {
+        defaultModelId: catalog.defaultModelId,
+        defaultProviderId: catalog.defaultProviderId,
+        models: catalog.models.map(modelProject),
+        providers: catalog.providers.map((provider) => ({
+            id: provider.providerId,
+            models: provider.models.map(modelProject),
+            serviceTiers: provider.serviceTiers ?? [],
+            ...(provider.disabledReason ? { disabledReason: provider.disabledReason } : {}),
+        })),
+    };
+}
+
+export function rigSessionSummaryProject(
+    summary: SessionSummary,
+    homeDir: string,
+): RigSessionSummary {
+    return {
+        id: summary.id as RigSessionId,
+        cwd: summary.cwd,
+        displayCwd: rigDisplayCwd(summary.cwd, homeDir),
+        providerId: summary.providerId,
+        modelId: summary.modelId,
+        permissionMode: summary.permissionMode,
+        status: summary.status,
+        createdAt: summary.createdAt,
+        updatedAt: summary.updatedAt,
+        ...(summary.effort ? { effort: summary.effort as RigThinkingLevel } : {}),
+        ...(summary.serviceTier ? { serviceTier: summary.serviceTier } : {}),
+        ...(summary.title ? { title: summary.title } : {}),
+        ...(summary.recap ? { recap: summary.recap } : {}),
+        ...(summary.lastMessageAt ? { lastMessageAt: summary.lastMessageAt } : {}),
+    };
+}
+
+export function rigSessionProject(session: ProtocolSession, homeDir: string): RigSession {
+    return {
+        id: session.id as RigSessionId,
+        cwd: session.cwd,
+        displayCwd: rigDisplayCwd(session.cwd, homeDir),
+        providerId: session.providerId,
+        modelId: session.modelId,
+        models: session.models.map(modelProject),
+        permissionMode: session.permissionMode,
+        modelLocked: session.modelLocked,
+        status: session.status,
+        messages: session.snapshot.messages.map(messageProject),
+        queuedMessages: queuedMessagesProject(session.snapshot.queue),
+        pendingUserInputs: session.pendingUserInputs.map(userInputProject),
+        tasks: session.tasks.map(taskProject),
+        subagents: [],
+        backgroundProcesses: (session.backgroundProcesses ?? []).map(backgroundProcessProject),
+        // ProtocolSession has no created/updated timestamps; the summary carries
+        // those, so the session snapshot uses metadata time as its best proxy.
+        createdAt: session.metadataUpdatedAt ?? 0,
+        updatedAt: session.metadataUpdatedAt ?? 0,
+        ...(session.effort ? { effort: session.effort as RigThinkingLevel } : {}),
+        ...(session.serviceTier ? { serviceTier: session.serviceTier } : {}),
+        ...(session.title ? { title: session.title } : {}),
+        ...(session.recap ? { recap: session.recap } : {}),
+        ...(session.goal ? { goal: goalProject(session.goal) } : {}),
+        ...(session.lastEventId ? { lastEventId: session.lastEventId as RigEventId } : {}),
+    };
+}
+
+export function rigSubagentProject(subagent: SubagentSummary): RigSubagentSummary {
+    return {
+        id: subagent.id as RigSessionId,
+        parentSessionId: subagent.parentSessionId as RigSessionId,
+        description: subagent.description,
+        modelId: subagent.modelId,
+        status: subagent.status,
+        depth: subagent.depth,
+        createdAt: subagent.createdAt,
+        updatedAt: subagent.updatedAt,
+        ...(subagent.taskName ? { taskName: subagent.taskName } : {}),
+        ...(subagent.activeSince ? { activeSince: subagent.activeSince } : {}),
+        ...(subagent.elapsedMs ? { elapsedMs: subagent.elapsedMs } : {}),
+        ...(subagent.latestText ? { latestText: subagent.latestText } : {}),
+        ...(subagent.totalTokens ? { totalTokens: subagent.totalTokens } : {}),
+    };
+}
+
+/**
+ * Projects the protocol's session-usage response into the client usage snapshot.
+ * Flattens per-model groups to plain token/cost numbers, sums a session total,
+ * and reduces provider quota windows to the two rate-limit windows the TUI shows.
+ * Pure read model for the on-demand `/usage` panel; holds no durable state.
+ */
+export function rigSessionUsageProject(response: GetSessionUsageResponse): RigSessionUsage {
+    const groups: RigUsageGroup[] = response.groups.map((group) => ({
+        modelId: group.modelId,
+        providerId: group.providerId,
+        inputTokens: group.usage.input,
+        outputTokens: group.usage.output,
+        cacheReadTokens: group.usage.cacheRead,
+        cacheWriteTokens: group.usage.cacheWrite,
+        totalTokens: group.usage.totalTokens,
+        cost: group.usage.cost.total,
+        ...(group.usage.reasoning !== undefined ? { reasoningTokens: group.usage.reasoning } : {}),
+    }));
+    const totalTokens = groups.reduce((sum, group) => sum + group.totalTokens, 0);
+    const totalCost = groups.reduce((sum, group) => sum + group.cost, 0);
+    const quotas = response.quotas.map((entry) => {
+        const windows: RigUsageQuotaWindow[] = [];
+        const five = entry.quota.windows.fiveHour;
+        if (five && five.status === "available")
+            windows.push({
+                kind: "fiveHour",
+                usedPercent: five.usedPercent,
+                resetsAt: five.resetsAt,
+            });
+        const weekly = entry.quota.windows.weekly;
+        if (weekly && weekly.status === "available")
+            windows.push({
+                kind: "weekly",
+                usedPercent: weekly.usedPercent,
+                resetsAt: weekly.resetsAt,
+            });
+        return { providerId: entry.providerId, windows };
+    });
+    return {
+        currentProviderId: response.currentProviderId,
+        groups,
+        totalTokens,
+        totalCost,
+        quotas,
+        ...(response.context
+            ? {
+                  context: {
+                      modelId: response.context.modelId,
+                      providerId: response.context.providerId,
+                      totalTokens: response.context.totalTokens,
+                      approximate: response.context.approximate,
+                  },
+              }
+            : {}),
+    };
+}
+
+export function rigMessageProject(message: Message): RigMessage {
+    return messageProject(message);
+}
+
+/**
+ * Projects one raw `SessionEvent` into the chat surface's `RigSessionEvent`, or
+ * `undefined` when the event has no chat projection (steering, quota, shell,
+ * secrets, MCP, workflows, external tools) and must be dropped. The background-
+ * process change is delivered nested inside `agent_event` on the wire but is a
+ * session-level concern here, so it is lifted out to its own top-level event.
+ */
+export function rigSessionEventProject(
+    event: SessionEvent,
+    homeDir: string,
+): RigSessionEvent | undefined {
+    const base = {
+        eventId: event.id as RigEventId,
+        sessionId: event.sessionId as RigSessionId,
+        createdAt: event.createdAt,
+    };
+    switch (event.type) {
+        case "session_created":
+            return {
+                ...base,
+                type: "session_created",
+                session: rigSessionProject(event.data.session, homeDir),
+            };
+        case "session_updated":
+            return {
+                ...base,
+                type: "session_updated",
+                session: rigSessionProject(event.data.session, homeDir),
+            };
+        case "message_submitted":
+            return {
+                ...base,
+                type: "message_submitted",
+                message: messageProject(event.data.message),
+                displayText: event.data.displayText,
+                runId: event.data.runId,
+                ...(event.data.delivery ? { delivery: event.data.delivery } : {}),
+            };
+        case "run_started":
+            return { ...base, type: "run_started", runId: event.data.runId };
+        case "agent_event": {
+            const inner = event.data.event;
+            if (inner.type === "background_processes_changed") {
+                return {
+                    ...base,
+                    type: "background_processes_changed",
+                    processes: (inner.processes ?? []).map(backgroundProcessProject),
+                };
+            }
+            const projected = agentEventProject(inner);
+            return projected
+                ? { ...base, type: "agent_event", runId: event.data.runId, event: projected }
+                : undefined;
+        }
+        case "agent_message":
+            return {
+                ...base,
+                type: "agent_message",
+                runId: event.data.runId,
+                message: messageProject(event.data.message),
+            };
+        case "run_finished":
+            return {
+                ...base,
+                type: "run_finished",
+                runId: event.data.runId,
+                stopReason: event.data.stopReason,
+                modelLocked: event.data.modelLocked,
+            };
+        case "run_error":
+            return {
+                ...base,
+                type: "run_error",
+                runId: event.data.runId,
+                errorMessage: event.data.errorMessage,
+                modelLocked: event.data.modelLocked,
+            };
+        case "session_reset":
+            return {
+                ...base,
+                type: "session_reset",
+                messages: event.data.snapshot.messages.map(messageProject),
+            };
+        case "session_rewound":
+            return {
+                ...base,
+                type: "session_rewound",
+                messageId: event.data.messageId,
+                messages: event.data.snapshot.messages.map(messageProject),
+            };
+        case "session_title_changed":
+            return {
+                ...base,
+                type: "session_title_changed",
+                status: event.data.status,
+                ...(event.data.title ? { title: event.data.title } : {}),
+                ...(event.data.recap ? { recap: event.data.recap } : {}),
+            };
+        case "model_changed":
+            return {
+                ...base,
+                type: "model_changed",
+                modelId: event.data.modelId,
+                providerId: event.data.snapshot.providerId,
+                ...(event.data.effort ? { effort: event.data.effort as RigThinkingLevel } : {}),
+            };
+        case "effort_changed":
+            return {
+                ...base,
+                type: "effort_changed",
+                modelId: event.data.modelId,
+                ...(event.data.effort ? { effort: event.data.effort as RigThinkingLevel } : {}),
+            };
+        case "service_tier_changed":
+            return { ...base, type: "service_tier_changed", serviceTier: event.data.serviceTier };
+        case "permission_mode_changed":
+            return {
+                ...base,
+                type: "permission_mode_changed",
+                permissionMode: event.data.permissionMode,
+            };
+        case "user_input_requested":
+            return {
+                ...base,
+                type: "user_input_requested",
+                request: userInputProject(event.data),
+            };
+        case "user_input_resolved":
+            return {
+                ...base,
+                type: "user_input_resolved",
+                requestId: event.data.requestId,
+                status: event.data.status,
+            };
+        case "tasks_changed":
+            return { ...base, type: "tasks_changed", tasks: event.data.tasks.map(taskProject) };
+        case "goal_changed":
+            return {
+                ...base,
+                type: "goal_changed",
+                goal: event.data.goal ? goalProject(event.data.goal) : null,
+            };
+        case "subagent_changed":
+            return {
+                ...base,
+                type: "subagent_changed",
+                subagent: rigSubagentProject(event.data.subagent),
+            };
+        case "shell_command_started":
+            return {
+                ...base,
+                type: "shell_command_started",
+                commandId: event.data.commandId,
+                command: event.data.command,
+            };
+        case "shell_command_finished":
+            return {
+                ...base,
+                type: "shell_command_finished",
+                commandId: event.data.commandId,
+                command: event.data.command,
+                output: event.data.output,
+                exitCode: event.data.exitCode,
+                timedOut: event.data.timedOut,
+            };
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * Projects one global-queue entry into a `RigGlobalEvent` used to keep the session
+ * list live, or `undefined` for entries the list does not consume. The session
+ * payload is a full `ProtocolSession`, so the envelope's `createdAt` seeds the
+ * summary timestamps the list sorts by until the next full reconcile.
+ */
+export function rigGlobalEventProject(
+    entry: GlobalEventQueueEntry,
+    homeDir: string,
+): RigGlobalEvent | undefined {
+    const event = entry.event;
+    if (event.type === "session_created") {
+        return {
+            cursor: entry.cursor,
+            type: "session_created",
+            session: summaryFromSession(event.data.session, event.createdAt, homeDir),
+        };
+    }
+    if (event.type === "session_updated") {
+        return {
+            cursor: entry.cursor,
+            type: "session_updated",
+            session: summaryFromSession(event.data.session, event.createdAt, homeDir),
+        };
+    }
+    return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function modelProject(model: Model): RigModel {
+    return {
+        id: model.id,
+        name: model.name,
+        thinkingLevels: model.thinkingLevels as readonly RigThinkingLevel[],
+        defaultThinkingLevel: model.defaultThinkingLevel as RigThinkingLevel,
+        ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+    };
+}
+
+/**
+ * Projects the agent's steering queue into displayable previews. Only non-internal
+ * user turns are shown (system/internal enqueues are runner plumbing), and each is
+ * flattened to its text blocks so the composer can preview what submits next.
+ */
+function queuedMessagesProject(
+    queue: readonly { readonly id: string; readonly message: Message }[],
+): readonly RigQueuedMessage[] {
+    const previews: RigQueuedMessage[] = [];
+    for (const entry of queue) {
+        if (entry.message.internal) continue;
+        if (entry.message.role !== "user") continue;
+        const text = entry.message.blocks
+            .map((block) => (block.type === "text" ? block.text : ""))
+            .join("")
+            .trim();
+        if (text.length === 0) continue;
+        previews.push({ id: entry.id, text });
+    }
+    return previews;
+}
+
+function messageProject(message: Message): RigMessage {
+    return {
+        id: message.id,
+        role: message.role,
+        blocks: (message.blocks as readonly AgentBlock[]).map(blockProject),
+        internal: message.internal ?? false,
+    };
+}
+
+function blockProject(block: AgentBlock): RigBlock {
+    switch (block.type) {
+        case "text":
+            return { type: "text", text: block.text };
+        case "image":
+            return {
+                type: "image",
+                mediaType: block.mediaType,
+                data: block.data,
+                ...(block.detail ? { detail: block.detail } : {}),
+            };
+        case "thinking":
+            return {
+                type: "thinking",
+                thinking: block.thinking,
+                redacted: block.redacted ?? false,
+            };
+        case "tool_call":
+            return {
+                type: "toolCall",
+                id: block.id,
+                name: block.name,
+                arguments: jsonProject(block.arguments),
+            };
+        case "tool_result":
+            return toolResultProject(block);
+    }
+}
+
+function toolResultProject(block: ToolResultBlock): RigBlock {
+    return {
+        type: "toolResult",
+        toolCallId: block.toolCallId,
+        toolName: block.toolName,
+        display: block.display,
+        failed: block.isError ?? Boolean(block.failure),
+        ...(block.failure ? { failure: failureProject(block.failure) } : {}),
+        ...(block.presentation ? { presentation: presentationProject(block.presentation) } : {}),
+    };
+}
+
+function failureProject(failure: NonNullable<ToolResultBlock["failure"]>): RigToolFailure {
+    return { kind: failure.kind, ...(failure.message ? { message: failure.message } : {}) };
+}
+
+function presentationProject(presentation: ToolResultPresentation): RigToolPresentation {
+    if (presentation.type === "file_diff") {
+        return {
+            type: "fileDiff",
+            files: presentation.files.map(fileDiffProject),
+            ...(presentation.omittedFiles ? { omittedFiles: presentation.omittedFiles } : {}),
+        };
+    }
+    if (presentation.type === "exec_command") {
+        return { type: "execCommand", command: presentation.command, output: presentation.output };
+    }
+    return {
+        type: "backgroundTerminalInteraction",
+        command: presentation.command,
+        input: presentation.input,
+    };
+}
+
+function fileDiffProject(diff: FileDiff): RigFileDiff {
+    return {
+        path: diff.path,
+        kind: diff.kind,
+        hunks: diff.hunks.map((hunk) => ({
+            oldStart: hunk.oldStart,
+            newStart: hunk.newStart,
+            lines: hunk.lines.map((line) => ({ kind: line.kind, text: line.text })),
+        })),
+        ...(diff.language ? { language: diff.language } : {}),
+        ...(diff.added !== undefined ? { added: diff.added } : {}),
+        ...(diff.deleted !== undefined ? { deleted: diff.deleted } : {}),
+        ...(diff.omittedLines ? { omittedLines: diff.omittedLines } : {}),
+    };
+}
+
+/**
+ * Projects one streaming `AgentLoopEvent` to the chat's `RigAgentEvent`, or
+ * `undefined` for loop events the chat surface does not render (iteration start,
+ * steering applied, batch rejected, ephemeral status labels, background-process
+ * changes — the last is lifted to a session-level event by the caller).
+ */
+function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
+    switch (event.type) {
+        case "text_start":
+            return { type: "text_start" };
+        case "text_delta":
+            return { type: "text_delta", text: event.delta };
+        case "text_end":
+            return { type: "text_end" };
+        case "thinking_start":
+            return { type: "thinking_start" };
+        case "thinking_delta":
+            return { type: "thinking_delta", thinking: event.delta };
+        case "thinking_end":
+            return { type: "thinking_end" };
+        case "toolcall_start": {
+            const call = toolCallAt(event.partial, event.contentIndex);
+            return call
+                ? { type: "toolcall_start", toolCallId: call.id, toolName: call.name }
+                : undefined;
+        }
+        case "toolcall_delta": {
+            const call = toolCallAt(event.partial, event.contentIndex);
+            return call
+                ? { type: "toolcall_delta", toolCallId: call.id, argumentsDelta: event.delta }
+                : undefined;
+        }
+        case "toolcall_end":
+            return {
+                type: "toolcall_end",
+                toolCallId: event.toolCall.id,
+                arguments: jsonProject(event.toolCall.arguments),
+            };
+        case "done":
+            return { type: "done", reason: event.reason };
+        case "error":
+            return { type: "error", reason: event.error.errorMessage ?? event.reason };
+        case "context_compacted":
+            return {
+                type: "context_compacted",
+                reason: event.reason,
+                estimatedTokensBefore: event.estimatedTokensBefore,
+                estimatedTokensAfter: event.estimatedTokensAfter,
+            };
+        case "inference_retry":
+            return {
+                type: "inference_retry",
+                attempt: event.attempt,
+                maxAttempts: event.maxAttempts,
+                reason: event.reason,
+            };
+        case "tool_execution_start":
+            return {
+                type: "tool_execution_start",
+                toolCallId: event.toolCall.id,
+                toolName: event.toolCall.name,
+                arguments: jsonProject(event.toolCall.arguments),
+            };
+        case "tool_execution_progress":
+            return {
+                type: "tool_execution_progress",
+                toolCallId: event.toolCallId,
+                display: event.display,
+            };
+        case "tool_execution_end":
+            return {
+                type: "tool_execution_end",
+                toolCallId: event.result.toolCallId,
+                toolName: event.result.toolName,
+                display: event.result.display,
+                failed: event.result.isError ?? Boolean(event.result.failure),
+                ...(event.result.failure ? { failure: failureProject(event.result.failure) } : {}),
+                ...(event.result.presentation
+                    ? { presentation: presentationProject(event.result.presentation) }
+                    : {}),
+            };
+        default:
+            return undefined;
+    }
+}
+
+function toolCallAt(partial: AssistantMessage, index: number): ToolCall | undefined {
+    const content = partial.content[index];
+    return content && content.type === "toolCall" ? content : undefined;
+}
+
+function userInputProject(request: UserInputRequest): RigUserInputRequest {
+    return {
+        requestId: request.requestId,
+        questions: request.questions.map((question) => ({
+            id: question.id,
+            header: question.header,
+            question: question.question,
+            multiSelect: question.multiSelect,
+            required: question.required ?? false,
+            options: question.options.map((option) => ({
+                label: option.label,
+                description: option.description,
+            })),
+        })),
+    };
+}
+
+function taskProject(task: SessionTask): RigTask {
+    return {
+        id: task.id,
+        subject: task.subject,
+        description: task.description,
+        status: task.status,
+        blockedBy: task.blockedBy,
+        blocks: task.blocks,
+        ...(task.activeForm ? { activeForm: task.activeForm } : {}),
+        ...(task.owner ? { owner: task.owner } : {}),
+    };
+}
+
+function goalProject(goal: SessionGoal): RigGoal {
+    return {
+        objective: goal.objective,
+        status: goal.status,
+        createdAt: goal.createdAt,
+        updatedAt: goal.updatedAt,
+    };
+}
+
+function backgroundProcessProject(process: BashSessionActivity): RigBackgroundProcess {
+    return {
+        id: process.sessionId,
+        command: process.command,
+        cwd: process.cwd,
+        status: process.status,
+    };
+}
+
+/**
+ * Projects a `runShellCommand` daemon response into the closed `RigShellCommandResult`.
+ * A still-running response (the command detached into a background terminal) carries
+ * no captured output yet, so it maps to an empty result flagged with the background id.
+ */
+export function rigShellResultProject(response: RunShellCommandResponse): RigShellCommandResult {
+    if (response.status === "running") {
+        return {
+            command: response.command,
+            commandId: response.commandId,
+            output: "",
+            exitCode: null,
+            timedOut: false,
+            backgroundProcessId: response.sessionId,
+        };
+    }
+    return {
+        command: response.command,
+        commandId: response.commandId,
+        output: response.output,
+        exitCode: response.exitCode,
+        timedOut: response.timedOut,
+        ...(response.errorMessage ? { errorMessage: response.errorMessage } : {}),
+        ...(response.sessionId !== undefined ? { backgroundProcessId: response.sessionId } : {}),
+    };
+}
+
+function summaryFromSession(
+    session: ProtocolSession,
+    createdAt: number,
+    homeDir: string,
+): RigSessionSummary {
+    return {
+        id: session.id as RigSessionId,
+        cwd: session.cwd,
+        displayCwd: rigDisplayCwd(session.cwd, homeDir),
+        providerId: session.providerId,
+        modelId: session.modelId,
+        permissionMode: session.permissionMode,
+        status: session.status,
+        createdAt,
+        updatedAt: session.metadataUpdatedAt ?? createdAt,
+        ...(session.effort ? { effort: session.effort as RigThinkingLevel } : {}),
+        ...(session.serviceTier ? { serviceTier: session.serviceTier } : {}),
+        ...(session.title ? { title: session.title } : {}),
+        ...(session.recap ? { recap: session.recap } : {}),
+    };
+}
+
+function jsonProject(value: unknown): RigJson {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (Array.isArray(value)) return value.map(jsonProject);
+    if (value && typeof value === "object") {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [key, jsonProject(entry)]),
+        );
+    }
+    return null;
+}

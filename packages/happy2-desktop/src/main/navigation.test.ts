@@ -68,6 +68,7 @@ describe("desktop window target", () => {
                     ...targets[0],
                     authentication: "rig",
                     rigVersion: "0.0.45",
+                    rigHttpUrl: "http://127.0.0.1:0",
                 },
                 activeTargetId: targets[0].id,
                 connectionId: 3,

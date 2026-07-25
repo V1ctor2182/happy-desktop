@@ -8,10 +8,11 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import layoutPolicy from "../../eslint/layout-policy.mjs";
+import reactPolicy from "../../eslint/react-policy.mjs";
 import themePolicy from "../../eslint/theme-policy.mjs";
 
 const common = {
-    plugins: { "happy2-layout": layoutPolicy },
+    plugins: { "happy2-layout": layoutPolicy, "happy2-react": reactPolicy },
     extends: [
         js.configs.recommended,
         react.configs.flat.recommended,
@@ -48,6 +49,9 @@ const common = {
         ],
         "react/prop-types": "off",
         "react-hooks/exhaustive-deps": "error",
+        "happy2-react/no-layout-effect": "error",
+        "happy2-react/no-local-state": "error",
+        "happy2-react/require-react-exception-reason": "error",
         "happy2-layout/require-layout-exception-reason": "error",
         "happy2-layout/scrollport-no-spacing": "error",
         "happy2-layout/use-flex-layout": "error",

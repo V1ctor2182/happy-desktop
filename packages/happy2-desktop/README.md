@@ -32,7 +32,15 @@ remain owned by the remote origin's browser session and never cross that bridge.
 pnpm dev:desktop
 ```
 
-The bundled renderer and preload bridge are used only by the local shell and
+This starts a normal browser-accessible Vite server. The loopback-only server
+connects to (and starts when necessary) the user's normal local Rig daemon and
+provides the renderer with the same closed Rig operations used by the Electron
+preload bridge. Open the URL printed by the command. This development mode does
+not expose cloud topology or native desktop features such as directory picking
+and in-app Rig installation.
+
+Use `pnpm dev:desktop:electron` when developing the Electron shell itself. The
+bundled renderer and preload bridge are used only by that local shell and
 topology chooser. Cloud mode loads the remote deployment's ordinary
 cookie-authenticated web app instead.
 

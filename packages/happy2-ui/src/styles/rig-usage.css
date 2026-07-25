@@ -1,0 +1,176 @@
+/*
+ * Rig session usage panel (`/usage`): per-model token/cost table, session totals,
+ * context-window occupancy, and provider rate-limit windows. Presentational only.
+ */
+
+.happy2-rig-usage {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px;
+    color: var(--text-primary);
+    background: var(--surface-raised, var(--surface));
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+}
+
+.happy2-rig-usage__header {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.happy2-rig-usage__title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.happy2-rig-usage__loading,
+.happy2-rig-usage__empty,
+.happy2-rig-usage__error {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-usage__error {
+    color: var(--status-error, var(--text-secondary));
+}
+
+.happy2-rig-usage__totals {
+    display: flex;
+    flex-direction: row;
+    gap: 24px;
+}
+
+.happy2-rig-usage__total {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy2-rig-usage__total-value {
+    font-size: 20px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage__total-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary, var(--text-secondary));
+}
+
+.happy2-rig-usage__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage__table thead th {
+    text-align: right;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy2-rig-usage__table thead th:first-child {
+    text-align: left;
+}
+
+.happy2-rig-usage__model {
+    text-align: left;
+    font-weight: 500;
+    padding: 6px 8px;
+}
+
+.happy2-rig-usage__num {
+    text-align: right;
+    padding: 6px 8px;
+}
+
+.happy2-rig-usage__row:not(:last-child) th,
+.happy2-rig-usage__row:not(:last-child) td {
+    border-bottom: 1px solid color-mix(in srgb, var(--divider) 50%, transparent);
+}
+
+.happy2-rig-usage__context {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.happy2-rig-usage__quotas {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 4px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-rig-usage__quota {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.happy2-rig-usage__quota-provider {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.happy2-rig-usage__quota-empty {
+    font-size: 12px;
+    color: var(--text-tertiary, var(--text-secondary));
+}
+
+.happy2-rig-usage__quota-window {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-usage__quota-label {
+    flex: none;
+    width: 56px;
+}
+
+.happy2-rig-usage__quota-bar {
+    flex: 1 1 auto;
+    height: 6px;
+    min-width: 80px;
+    border-radius: var(--happy2-radius-pill, 999px);
+    background: var(--surface-pressed, var(--divider));
+    overflow: hidden;
+}
+
+.happy2-rig-usage__quota-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--success, var(--text-link));
+}
+
+.happy2-rig-usage__quota-fill[data-full] {
+    background: var(--status-error, var(--text-link));
+}
+
+.happy2-rig-usage__quota-percent {
+    flex: none;
+    width: 40px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage__quota-reset {
+    flex: none;
+    color: var(--text-tertiary, var(--text-secondary));
+}

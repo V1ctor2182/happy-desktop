@@ -96,8 +96,19 @@ import { DocumentDeleteDialogPage } from "./pages/DocumentDeleteDialogPage";
 import { DocumentWritePermissionCardPage } from "./pages/DocumentWritePermissionCardPage";
 import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
-import { RigClientShellPage } from "./pages/RigClientShellPage";
-import { RigInstallScreenPage } from "./pages/RigInstallScreenPage";
+import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
+import { RigToolCallPage } from "./pages/RigToolCallPage";
+import { RigTranscriptPage } from "./pages/RigTranscriptPage";
+import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
+import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
+import { RigCommandPalettePage } from "./pages/RigCommandPalettePage";
+import { RigFileMentionPage } from "./pages/RigFileMentionPage";
+import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
+import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
+import { RigStatusBarPage } from "./pages/RigStatusBarPage";
+import { RigSessionListPanelPage } from "./pages/RigSessionListPanelPage";
+import { RigChatViewPage } from "./pages/RigChatViewPage";
+import { RigWorkspaceViewPage } from "./pages/RigWorkspaceViewPage";
 type BlueprintPage = {
     id: string;
     label: string;
@@ -168,16 +179,67 @@ const components: BlueprintPage[] = [
         page: DesktopInstanceSwitcherPage,
     },
     {
-        id: "rig-install-screen",
-        label: "Rig install screen",
+        id: "rig-connection-status",
+        label: "Rig connection status",
         number: "C-147",
-        page: RigInstallScreenPage,
+        page: RigConnectionStatusPage,
+    },
+    { id: "rig-tool-call", label: "Rig tool call", number: "C-148", page: RigToolCallPage },
+    { id: "rig-transcript", label: "Rig transcript", number: "C-149", page: RigTranscriptPage },
+    {
+        id: "rig-user-input-prompt",
+        label: "Rig user input prompt",
+        number: "C-150",
+        page: RigUserInputPromptPage,
     },
     {
-        id: "rig-client-shell",
-        label: "Rig client shell",
-        number: "C-148",
-        page: RigClientShellPage,
+        id: "rig-session-controls",
+        label: "Rig session controls",
+        number: "C-151",
+        page: RigSessionControlsPage,
+    },
+    {
+        id: "rig-command-palette",
+        label: "Rig command palette",
+        number: "C-152",
+        page: RigCommandPalettePage,
+    },
+    {
+        id: "rig-session-list-panel",
+        label: "Rig session list panel",
+        number: "C-153",
+        page: RigSessionListPanelPage,
+    },
+    { id: "rig-chat-view", label: "Rig chat view", number: "C-154", page: RigChatViewPage },
+    {
+        id: "rig-file-mention",
+        label: "Rig file mention",
+        number: "C-155",
+        page: RigFileMentionPage,
+    },
+    {
+        id: "rig-usage-panel",
+        label: "Rig usage panel",
+        number: "C-156",
+        page: RigUsagePanelPage,
+    },
+    {
+        id: "rig-activity-panel",
+        label: "Rig activity panel",
+        number: "C-157",
+        page: RigActivityPanelPage,
+    },
+    {
+        id: "rig-status-bar",
+        label: "Rig status bar",
+        number: "C-158",
+        page: RigStatusBarPage,
+    },
+    {
+        id: "rig-workspace-view",
+        label: "Rig workspace view",
+        number: "C-155",
+        page: RigWorkspaceViewPage,
     },
     { id: "app-shell", label: "App shell", number: "C-010", page: AppShellPage },
     { id: "channel-header", label: "Channel header", number: "C-011", page: ChannelHeaderPage },

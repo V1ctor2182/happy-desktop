@@ -54,9 +54,10 @@ describe("desktop topology targets", () => {
             kind: "local",
             mode: "local",
         });
-        expect(desktopActiveTarget(local, "0.0.45")).toMatchObject({
+        expect(desktopActiveTarget(local, "0.0.45", "http://127.0.0.1:0")).toMatchObject({
             authentication: "rig",
             rigVersion: "0.0.45",
+            rigHttpUrl: "http://127.0.0.1:0",
         });
         expect(desktopActiveTarget(cloud)).toMatchObject({
             authentication: "account",

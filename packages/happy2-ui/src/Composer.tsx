@@ -3,6 +3,7 @@ import {
     useRef,
     useState,
     type ChangeEvent,
+    type ClipboardEvent as ReactClipboardEvent,
     type CSSProperties,
     type FormEvent,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -248,7 +249,7 @@ export type ComposerProps = {
     onAttachFile?: () => void;
     /** Called for toggle clicks and Shift+Tab with the next audience. */
     onAudienceChange?: (audience: AudienceValue) => void;
-    /** Receives files selected through the composer's native attachment picker. */
+    /** Receives files selected through the native picker or images pasted into the text input. */
     onAttachmentsSelect?: (files: File[]) => void;
     onContextRemove?: (id: string) => void;
     /** Called after an emoji is selected. Unicode emoji are also inserted into the draft. */
@@ -527,6 +528,14 @@ export function Composer(props: ComposerProps) {
         rememberSelection();
         detectMention(event.currentTarget);
     };
+    const onPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+        const images = Array.from(event.clipboardData.files).filter((file) =>
+            file.type.startsWith("image/"),
+        );
+        if (images.length === 0 || !props.onAttachmentsSelect) return;
+        event.preventDefault();
+        props.onAttachmentsSelect(images);
+    };
     /*
      * The composer is one input surface, not a small textarea surrounded by
      * dead padding. Keep native and semantic controls in charge of their own
@@ -590,6 +599,7 @@ export function Composer(props: ComposerProps) {
                         onFocus={() => props.onFocusChange?.(true)}
                         onInput={onInput}
                         onKeyDown={onKeyDown}
+                        onPaste={onPaste}
                         onSelect={rememberSelection}
                         placeholder={props.placeholder}
                         ref={textareaEl}

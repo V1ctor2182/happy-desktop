@@ -37,6 +37,7 @@
         "dev:web": "pnpm --filter happy2-web dev",
         "web": "node scripts/web.mjs",
         "dev:desktop": "node scripts/dev-desktop.mjs",
+        "dev:desktop:electron": "pnpm --dir packages/happy2-desktop dev:electron",
         "desktop:assets": "node scripts/create-mac-icon.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs",
         "dev:server": "pnpm --dir packages/happy2-server dev",

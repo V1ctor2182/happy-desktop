@@ -204,16 +204,32 @@ export {
     type DesktopInstanceTarget,
     type DesktopInstanceUpdate,
 } from "./DesktopInstanceSwitcher";
-export { RigInstallScreen, type RigInstallScreenProps } from "./RigInstallScreen";
+export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
+export { RigToolCall, type RigToolCallProps } from "./RigToolCall";
+export { RigTranscript, type RigTranscriptProps } from "./RigTranscript";
 export {
-    RigClientShell,
-    type RigClientInputQuestion,
-    type RigClientInputRequest,
-    type RigClientMessage,
-    type RigClientSessionView,
-    type RigClientShellProps,
-    type RigClientTerminalView,
-} from "./RigClientShell";
+    RigUserInputPrompt,
+    type RigUserInputAnswerMap,
+    type RigUserInputPromptProps,
+} from "./RigUserInputPrompt";
+export {
+    RigControlMenu,
+    type RigControlMenuProps,
+    RigSessionControls,
+    type RigSessionControlsProps,
+} from "./RigSessionControls";
+export {
+    RigCommandPalette,
+    type RigCommandId,
+    type RigCommandPaletteProps,
+} from "./RigCommandPalette";
+export { RigSessionListPanel, type RigSessionListPanelProps } from "./RigSessionListPanel";
+export { RigFileMention, type RigFileMentionProps } from "./RigFileMention";
+export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
+export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
+export { RigStatusBar, type RigStatusBarProps } from "./RigStatusBar";
+export { RigChatView, type RigChatViewProps, rigMentionPrefix } from "./RigChatView";
+export { RigWorkspaceView, type RigWorkspaceViewProps } from "./RigWorkspaceView";
 export {
     SearchField,
     type SearchFieldEditableProps,

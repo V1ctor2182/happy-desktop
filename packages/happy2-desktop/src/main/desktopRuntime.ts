@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import type { RigTransport } from "happy2-state";
 import type {
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
@@ -27,8 +26,13 @@ import {
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
-import { RigProtocolTransport } from "./rigProtocolTransport";
+import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
+
+export type RigHttpProxyStart = (
+    connection: LocalRigConnection,
+    onConnectionError: (error: unknown) => void,
+) => Promise<RigHttpProxyHandle>;
 
 const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
 
@@ -38,7 +42,7 @@ export interface DesktopRuntimePaths {
 
 export interface DesktopRuntimeOptions {
     readonly localRigConnector?: LocalRigConnector;
-    readonly transportCreate?: (connection: LocalRigConnection) => RigTransport & Disposable;
+    readonly rigHttpProxyStart?: RigHttpProxyStart;
 }
 
 /** Owns the active local-Rig or remote-cloud topology and one immutable renderer snapshot. */
@@ -52,11 +56,11 @@ export class DesktopRuntime implements AsyncDisposable {
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
     private rigConnection?: LocalRigConnection;
-    private rigTransport?: RigTransport & Disposable;
+    private rigProxy?: RigHttpProxyHandle;
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
     private readonly connector: LocalRigConnector;
-    private readonly transportCreate: (connection: LocalRigConnection) => RigTransport & Disposable;
+    private readonly proxyStart: RigHttpProxyStart;
 
     private constructor(
         private readonly paths: DesktopRuntimePaths,
@@ -65,9 +69,10 @@ export class DesktopRuntime implements AsyncDisposable {
     ) {
         this.settings = settings;
         this.connector = options.localRigConnector ?? localRigConnectorCreate();
-        this.transportCreate =
-            options.transportCreate ??
-            ((connection) => new RigProtocolTransport(connection.client));
+        this.proxyStart =
+            options.rigHttpProxyStart ??
+            ((connection, onConnectionError) =>
+                rigHttpProxyCreate({ client: connection.client, onConnectionError }));
         const active = settings?.topologies.find(({ id }) => id === settings.activeTopologyId);
         if (active) {
             this.activeTopology = active;
@@ -170,17 +175,6 @@ export class DesktopRuntime implements AsyncDisposable {
         });
     }
 
-    /** Returns the active typed Rig transport without exposing its socket or token. */
-    localRigTransport(): RigTransport {
-        if (
-            this.snapshotValue.phase !== "ready" ||
-            this.snapshotValue.mode !== "local" ||
-            !this.rigTransport
-        )
-            throw new Error("The local Rig connection is not active.");
-        return this.rigTransport;
-    }
-
     updateSet(update: DesktopUpdateSnapshot): void {
         this.publish({ ...this.snapshotValue, update } as DesktopRuntimeSnapshot);
     }
@@ -219,6 +213,7 @@ export class DesktopRuntime implements AsyncDisposable {
         });
         try {
             let rigVersion: string | undefined;
+            let rigHttpUrl: string | undefined;
             if (topology.mode === "local") {
                 const connection = await this.connector.connect();
                 if (generation !== this.activationGeneration) {
@@ -226,8 +221,18 @@ export class DesktopRuntime implements AsyncDisposable {
                     return;
                 }
                 this.rigConnection = connection;
-                this.rigTransport = this.transportCreate(connection);
+                const proxy = await this.proxyStart(connection, (error) => {
+                    void this.reconnectLocal(error).catch(() => undefined);
+                });
+                if (generation !== this.activationGeneration) {
+                    proxy.close();
+                    connection.close();
+                    this.rigConnection = undefined;
+                    return;
+                }
+                this.rigProxy = proxy;
                 rigVersion = connection.version;
+                rigHttpUrl = proxy.url;
             }
             if (this.persistOnSuccess) {
                 const settings = desktopSettingsActivate(this.settings, topology);
@@ -239,7 +244,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 this.persistOnSuccess = false;
             }
             if (generation !== this.activationGeneration) return;
-            const activeTarget = desktopActiveTarget(topology, rigVersion);
+            const activeTarget = desktopActiveTarget(topology, rigVersion, rigHttpUrl);
             this.publish({
                 phase: "ready",
                 activeTarget,
@@ -276,8 +281,8 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private localDispose(): void {
-        this.rigTransport?.[Symbol.dispose]();
-        this.rigTransport = undefined;
+        this.rigProxy?.close();
+        this.rigProxy = undefined;
         this.rigConnection?.close();
         this.rigConnection = undefined;
     }

@@ -1,23 +1,26 @@
-import { useReducer, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
-import { App, DesktopStartupScreen, type DesktopStartupValues } from "happy2-app";
+import { App, AppRigView, DesktopStartupScreen } from "happy2-app";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "./shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
-import { RigClientBoundary, RigInstallBoundary } from "./rigClientRenderer";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
+import { rigSessionStoreCreate, type RigSessionStore } from "./rigSessionStore";
+import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
+import { browserDevBridgeCreate } from "./browserDevBridge";
 
 function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
 }
 
-function ChoosingScreen(props: { bridge: HappyDesktopBridge; update: DesktopUpdateSnapshot }) {
-    const [values, change] = useReducer(
-        (_current: DesktopStartupValues, next: DesktopStartupValues) => next,
-        { mode: "local", cloudUrl: "" } as DesktopStartupValues,
-    );
+function ChoosingScreen(props: {
+    bridge: HappyDesktopBridge;
+    update: DesktopUpdateSnapshot;
+    values: StartupValuesStore;
+}) {
+    const values = useSyncExternalStore(props.values.subscribe, props.values.get, props.values.get);
     return (
         <DesktopStartupScreen
-            onChange={change}
+            onChange={props.values.change}
             onInstallUpdate={() => desktopAction(props.bridge.updateInstall())}
             onSubmit={() =>
                 desktopAction(props.bridge.runtimeStart(desktopStartRequestFromValues(values)))
@@ -29,7 +32,35 @@ function ChoosingScreen(props: { bridge: HappyDesktopBridge; update: DesktopUpda
     );
 }
 
-function DesktopRenderer(props: { bridge: HappyDesktopBridge; store: DesktopRuntimeStore }) {
+function RigBoundary(props: { bridge: HappyDesktopBridge; store: RigSessionStore }) {
+    const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    if (!session)
+        return (
+            <DesktopStartupScreen
+                message="Connecting to your local Rig daemon…"
+                onChange={() => undefined}
+                onSubmit={() => undefined}
+                phase="starting"
+                values={desktopStartupValues({ mode: "local" })}
+            />
+        );
+    return (
+        <AppRigView
+            clock={session.clock}
+            connection={session.connection}
+            host={session.host}
+            key={session.connectionId}
+            workspace={session.workspace}
+        />
+    );
+}
+
+function DesktopRenderer(props: {
+    bridge: HappyDesktopBridge;
+    rigSession: RigSessionStore;
+    startupValues: StartupValuesStore;
+    store: DesktopRuntimeStore;
+}) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     if (!snapshot)
         return (
@@ -42,7 +73,13 @@ function DesktopRenderer(props: { bridge: HappyDesktopBridge; store: DesktopRunt
             />
         );
     if (snapshot.phase === "choosing")
-        return <ChoosingScreen bridge={props.bridge} update={snapshot.update} />;
+        return (
+            <ChoosingScreen
+                bridge={props.bridge}
+                update={snapshot.update}
+                values={props.startupValues}
+            />
+        );
     if (snapshot.phase === "starting")
         return (
             <DesktopStartupScreen
@@ -57,9 +94,15 @@ function DesktopRenderer(props: { bridge: HappyDesktopBridge; store: DesktopRunt
         );
     if (snapshot.phase === "installRequired")
         return (
-            <RigInstallBoundary
-                bridge={props.bridge}
+            <DesktopStartupScreen
+                error={`Rig is required for local mode. Install it with: ${snapshot.command}`}
+                onChange={() => undefined}
                 onChangeMode={() => desktopAction(props.bridge.runtimeReset())}
+                onRetry={() => desktopAction(props.bridge.runtimeRetry())}
+                onSubmit={() => undefined}
+                phase="error"
+                update={snapshot.update}
+                values={desktopStartupValues(snapshot.request)}
             />
         );
     if (snapshot.phase === "error")
@@ -97,21 +140,26 @@ function DesktopRenderer(props: { bridge: HappyDesktopBridge; store: DesktopRunt
             />
         );
 
-    return (
-        <RigClientBoundary
-            bridge={props.bridge}
-            connectionId={snapshot.connectionId}
-            onChangeMode={() => desktopAction(props.bridge.runtimeReset())}
-            rigVersion={active.rigVersion}
-        />
-    );
+    return <RigBoundary bridge={props.bridge} store={props.rigSession} />;
 }
 
-const bridge = window.happyDesktop;
-createRoot(document.getElementById("root")!).render(
-    bridge ? (
-        <DesktopRenderer bridge={bridge} store={desktopRuntimeStoreCreate(bridge)} />
-    ) : (
-        <App cookieAuth platform="web" serverUrl="/" />
-    ),
-);
+// Browser-local dev mode is signalled by a CSP-safe meta tag the dev server
+// injects (an inline script would be blocked by the page's script-src policy).
+const browserLocal =
+    document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
+const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
+if (bridge) {
+    const runtimeStore = desktopRuntimeStoreCreate(bridge);
+    createRoot(document.getElementById("root")!).render(
+        <DesktopRenderer
+            bridge={bridge}
+            rigSession={rigSessionStoreCreate(bridge, runtimeStore)}
+            startupValues={startupValuesStoreCreate()}
+            store={runtimeStore}
+        />,
+    );
+} else {
+    createRoot(document.getElementById("root")!).render(
+        <App cookieAuth platform="web" serverUrl="/" />,
+    );
+}

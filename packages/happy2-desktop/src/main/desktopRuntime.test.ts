@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProtocolHttpClient } from "@slopus/rig-client-runtime/dist/client/index.js";
-import type { RigTransport } from "happy2-state";
 import type { DesktopRuntimeSnapshot } from "../shared/desktopContract";
 import {
     RigCommandMissingError,
@@ -26,8 +25,8 @@ describe("desktop direct Rig topology", () => {
     it("connects to the normal daemon and leaves daemon ownership outside Happy", async () => {
         const close = vi.fn();
         const connector = connectorSequence([connection(close)]);
-        const transportDispose = vi.fn();
-        const runtime = await runtimeCreate(connector, transportDispose);
+        const proxyClose = vi.fn();
+        const runtime = await runtimeCreate(connector, proxyClose);
 
         await runtime.start({ mode: "local" });
 
@@ -38,12 +37,12 @@ describe("desktop direct Rig topology", () => {
                 label: "This Mac",
                 mode: "local",
                 rigVersion: "0.0.45",
+                rigHttpUrl: "http://127.0.0.1:0",
             },
             mode: "local",
         });
-        expect(runtime.localRigTransport()).toBeDefined();
         await runtime.close();
-        expect(transportDispose).toHaveBeenCalledOnce();
+        expect(proxyClose).toHaveBeenCalledOnce();
         expect(close).toHaveBeenCalledOnce();
     });
 
@@ -116,19 +115,18 @@ describe("desktop direct Rig topology", () => {
             mode: "cloud",
         });
         expect(connector.connect).not.toHaveBeenCalled();
-        expect(() => runtime.localRigTransport()).toThrow("not active");
     });
 
-    it("disposes local streams while switching topology without stopping the daemon", async () => {
+    it("disposes the local proxy while switching topology without stopping the daemon", async () => {
         const connectionClose = vi.fn();
         const connector = connectorSequence([connection(connectionClose)]);
-        const transportDispose = vi.fn();
-        const runtime = await runtimeCreate(connector, transportDispose);
+        const proxyClose = vi.fn();
+        const runtime = await runtimeCreate(connector, proxyClose);
         await runtime.start({ mode: "local" });
 
         await runtime.start({ mode: "cloud", serverUrl: "https://happy.example" });
 
-        expect(transportDispose).toHaveBeenCalledOnce();
+        expect(proxyClose).toHaveBeenCalledOnce();
         expect(connectionClose).toHaveBeenCalledOnce();
         expect(runtime.get()).toMatchObject({ phase: "ready", mode: "cloud" });
     });
@@ -141,7 +139,7 @@ describe("desktop direct Rig topology", () => {
 
         const second = await DesktopRuntime.create(paths, {
             localRigConnector: connector,
-            transportCreate: transportStub,
+            rigHttpProxyStart: proxyStub(),
         });
         runtimes.push(second);
         await waitFor(() => second.get().phase === "ready");
@@ -193,28 +191,27 @@ function connection(close: () => void): LocalRigConnection {
     };
 }
 
-function transportStub(): RigTransport & Disposable {
-    return { [Symbol.dispose]: vi.fn() } as unknown as RigTransport & Disposable;
+function proxyStub(close?: () => void) {
+    return async () => ({ url: "http://127.0.0.1:0", close: close ?? vi.fn() });
 }
 
 async function runtimeCreate(
     connector: LocalRigConnector,
-    dispose?: () => void,
+    proxyClose?: () => void,
 ): Promise<DesktopRuntime> {
-    return (await runtimeCreateWithPaths(connector, dispose)).runtime;
+    return (await runtimeCreateWithPaths(connector, proxyClose)).runtime;
 }
 
 async function runtimeCreateWithPaths(
     connector: LocalRigConnector,
-    dispose?: () => void,
+    proxyClose?: () => void,
 ): Promise<{ readonly runtime: DesktopRuntime; readonly paths: DesktopRuntimePaths }> {
     const root = await mkdtemp(join(tmpdir(), "happy2-desktop-runtime-"));
     directories.push(root);
     const paths = { root };
     const runtime = await DesktopRuntime.create(paths, {
         localRigConnector: connector,
-        transportCreate: () =>
-            ({ [Symbol.dispose]: dispose ?? vi.fn() }) as unknown as RigTransport & Disposable,
+        rigHttpProxyStart: proxyStub(proxyClose),
     });
     runtimes.push(runtime);
     return { runtime, paths };

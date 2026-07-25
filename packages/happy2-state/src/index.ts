@@ -193,13 +193,56 @@ export type {
     TerminalStore,
 } from "./modules/terminal/terminalState.js";
 export type { ReactionSelector } from "./modules/reaction/reactionState.js";
-export { RigState, rigStateCreate, type RigStateOptions } from "./rig/rigState.js";
+export {
+    rigConnectionLoaderCreate,
+    type RigConnectionLoaderOptions,
+    type RigConnectionSnapshot,
+    type RigConnectionStore,
+    type RigDaemonHealth,
+} from "./rig/rigConnection.js";
+export { rigHostNoop, type RigHost } from "./rig/rigHost.js";
+export * from "./rig/rigTypes.js";
 export type {
+    RigAgentEvent,
     RigEventObserver,
     RigGlobalEvent,
     RigSessionEvent,
-    RigTerminalConnection as RigDirectTerminalConnection,
-    RigTerminalObserver,
     RigTransport,
 } from "./rig/rigTransport.js";
-export type * from "./rig/rigTypes.js";
+export {
+    rigMenusDerive,
+    rigMenusStoreCreate,
+    type RigMenusStore,
+    type RigMenusStoreOptions,
+} from "./rig/rigMenusStore.js";
+export {
+    rigSessionListStoreCreate,
+    type RigSessionListDeps,
+    type RigSessionListOutput,
+    type RigSessionListSnapshot,
+    type RigSessionListStore,
+} from "./rig/rigSessionListStore.js";
+export {
+    rigChatStoreCreate,
+    type RigChatDeps,
+    type RigChatOutput,
+    type RigChatSnapshot,
+    type RigChatStore,
+} from "./rig/rigChatStore.js";
+export {
+    rigClientCreate,
+    type RigChatHandle,
+    type RigClient,
+    type RigClientDeps,
+} from "./rig/rigClient.js";
+export {
+    rigWorkspaceStoreCreate,
+    type RigWorkspaceSnapshot,
+    type RigWorkspaceStore,
+} from "./rig/rigWorkspaceStore.js";
+export {
+    rigClockStoreCreate,
+    type RigClockStore,
+    type RigClockStoreOptions,
+} from "./rig/rigClock.js";
+export { rigPermissionLabel, rigServiceTierLabel, rigThinkingLabel } from "./rig/rigSupport.js";

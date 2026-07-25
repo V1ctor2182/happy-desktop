@@ -1,93 +1,99 @@
 import type {
-    RigCatalogProjection,
-    RigDaemonHealth,
-    RigModelSelection,
-    RigSessionCreateInput,
-    RigSessionId,
-    RigSessionProjection,
-    RigSessionSummaryProjection,
-    RigSubagentProjection,
-    RigTerminalCreateInput,
-    RigTerminalGridProjection,
-    RigTerminalId,
-    RigTerminalScrollbackProjection,
-    RigTerminalSummaryProjection,
-} from "../rig/rigTypes.js";
-import type {
     RigEventObserver,
     RigGlobalEvent,
     RigSessionEvent,
-    RigTerminalConnection,
-    RigTerminalObserver,
     RigTransport,
 } from "../rig/rigTransport.js";
+import type {
+    RigEventId,
+    RigFileSearchResult,
+    RigModelCatalog,
+    RigModelSelection,
+    RigPermissionMode,
+    RigServiceTier,
+    RigSession,
+    RigSessionCreateInput,
+    RigSessionId,
+    RigSessionSummary,
+    RigSessionUsage,
+    RigShellCommandResult,
+    RigSubagentSummary,
+    RigThinkingLevel,
+    RigUserInputAnswers,
+} from "../rig/rigTypes.js";
 
 export type FakeRigOperation =
-    | "healthRead"
-    | "catalogRead"
+    | "modelsRead"
     | "sessionsRead"
     | "sessionRead"
     | "subagentsRead"
-    | "terminalsRead"
     | "sessionCreate"
     | "sessionFork"
     | "sessionReset"
     | "messageSubmit"
     | "messageSteer"
     | "runAbort"
-    | "userInputAnswer"
-    | "modelChange"
-    | "effortChange"
-    | "serviceTierChange"
-    | "permissionModeChange"
-    | "terminalCreate"
-    | "terminalStop"
-    | "terminalConnect"
-    | "sessionEventsSubscribe";
+    | "compact"
+    | "rewind"
+    | "shellRun"
+    | "backgroundProcessStop"
+    | "changeModel"
+    | "changeEffort"
+    | "changePermissionMode"
+    | "changeServiceTier"
+    | "answerUserInput"
+    | "filesSearch"
+    | "usageGet"
+    | "sessionEventsBackfill";
 
 export interface FakeRigCall {
     readonly operation: FakeRigOperation;
-    readonly after?: string;
     readonly sessionId?: RigSessionId;
-    readonly terminalId?: RigTerminalId;
-}
-
-export interface FakeRigTerminalController {
-    readonly sessionId: RigSessionId;
-    readonly terminalId: RigTerminalId;
-    readonly writes: readonly string[];
-    readonly sizes: readonly { readonly cols: number; readonly rows: number }[];
-    readonly closed: boolean;
-    connected(): void;
-    grid(value: RigTerminalGridProjection): void;
-    exit(exitCode: number | null): void;
-    error(error: unknown): void;
+    readonly idempotencyKey?: string;
+    readonly text?: string;
 }
 
 export interface FakeRigTransport {
     readonly transport: RigTransport;
     readonly calls: readonly FakeRigCall[];
-    readonly globalSubscriberCount: number;
     readonly sessionSubscriberCount: number;
-    sessionSet(session: RigSessionProjection): void;
+    readonly globalSubscriberCount: number;
+    /** Overrides the catalog returned by `modelsRead`. */
+    catalogSet(catalog: RigModelCatalog): void;
+    /** Inserts/replaces a session in the fake's durable store. */
+    sessionSet(session: RigSession): void;
     sessionRemove(sessionId: RigSessionId): void;
-    subagentsSet(sessionId: RigSessionId, subagents: readonly RigSubagentProjection[]): void;
-    terminalsSet(sessionId: RigSessionId, terminals: readonly RigTerminalSummaryProjection[]): void;
-    deferNext(operation: FakeRigOperation): { release(): void };
-    failNext(operation: FakeRigOperation, error?: unknown): void;
+    subagentsSet(sessionId: RigSessionId, subagents: readonly RigSubagentSummary[]): void;
+    /** Sets the file corpus `filesSearch` filters by substring for a session. */
+    filesSet(sessionId: RigSessionId, files: readonly RigFileSearchResult[]): void;
+    /** Sets the usage snapshot `usageGet` returns for a session. */
+    usageSet(sessionId: RigSessionId, usage: RigSessionUsage): void;
+    /** Overrides the result `shellRun` returns for a session (defaults to exit 0). */
+    shellResultSet(sessionId: RigSessionId, result: Partial<RigShellCommandResult>): void;
+    /** Emits one per-session realtime event (also recorded for backfill). */
+    sessionEmit(sessionId: RigSessionId, event: RigSessionEvent): void;
+    /** Appends an event to the backfill log without live delivery (simulates a gap). */
+    sessionLogAppend(sessionId: RigSessionId, event: RigSessionEvent): void;
+    sessionErrorEmit(sessionId: RigSessionId): void;
     globalEmit(event: RigGlobalEvent): void;
-    globalEnd(): void;
-    globalFail(error?: unknown): void;
-    sessionEmit(event: RigSessionEvent): void;
-    sessionEnd(sessionId: RigSessionId): void;
-    sessionFail(sessionId: RigSessionId, error?: unknown): void;
-    terminalRoute(handler: (controller: FakeRigTerminalController) => void): void;
-    close(): void;
+    globalErrorEmit(): void;
+    /** Fails the next call to `operation` with `error`. */
+    failNext(operation: FakeRigOperation, error?: unknown): void;
+    /** Defers the next call to `operation`; call the returned release to resolve it. */
+    deferNext(operation: FakeRigOperation): { release(): void };
 }
 
-const catalog: RigCatalogProjection = {
+const DEFAULT_CATALOG: RigModelCatalog = {
     defaultModelId: "gpt-default",
     defaultProviderId: "openai",
+    models: [
+        {
+            id: "gpt-default",
+            name: "GPT Default",
+            thinkingLevels: ["low", "medium", "high"],
+            defaultThinkingLevel: "medium",
+        },
+    ],
     providers: [
         {
             id: "openai",
@@ -95,8 +101,14 @@ const catalog: RigCatalogProjection = {
                 {
                     id: "gpt-default",
                     name: "GPT Default",
-                    thinkingLevels: ["medium", "high"],
+                    thinkingLevels: ["low", "medium", "high"],
                     defaultThinkingLevel: "medium",
+                },
+                {
+                    id: "gpt-fast",
+                    name: "GPT Fast",
+                    thinkingLevels: ["low", "medium"],
+                    defaultThinkingLevel: "low",
                 },
             ],
             serviceTiers: ["fast"],
@@ -104,404 +116,54 @@ const catalog: RigCatalogProjection = {
     ],
 };
 
-/** Creates a programmable, resource-counted direct-Rig boundary for deterministic state tests. */
-export function createFakeRigTransport(): FakeRigTransport {
-    return new FakeRigTransportModel();
-}
-
-export function fakeRigSession(
-    id: string,
-    overrides: Partial<RigSessionProjection> = {},
-): RigSessionProjection {
+/** Builds a minimal, valid session projection for tests, overridable per field. */
+export function fakeRigSession(id: string, overrides: Partial<RigSession> = {}): RigSession {
     return {
         id: id as RigSessionId,
         cwd: "/workspace",
         displayCwd: "/workspace",
         providerId: "openai",
         modelId: "gpt-default",
-        models: catalog.providers[0]!.models,
+        models: DEFAULT_CATALOG.providers[0]!.models,
         permissionMode: "auto",
-        status: "idle",
         modelLocked: false,
+        status: "idle",
         messages: [],
+        queuedMessages: [],
         pendingUserInputs: [],
+        tasks: [],
+        subagents: [],
         backgroundProcesses: [],
+        createdAt: 1_000,
+        updatedAt: 1_000,
         ...overrides,
     };
 }
 
-class FakeRigTransportModel implements FakeRigTransport {
-    private readonly sessions = new Map<RigSessionId, RigSessionProjection>();
-    private readonly subagents = new Map<RigSessionId, readonly RigSubagentProjection[]>();
-    private readonly terminals = new Map<RigSessionId, readonly RigTerminalSummaryProjection[]>();
-    private readonly failures = new Map<FakeRigOperation, unknown[]>();
-    private readonly deferrals = new Map<FakeRigOperation, Promise<void>[]>();
-    private readonly globalObservers = new Set<RigEventObserver<RigGlobalEvent>>();
-    private readonly sessionObservers = new Map<
-        RigSessionId,
-        Set<RigEventObserver<RigSessionEvent>>
-    >();
-    private terminalHandler?: (controller: FakeRigTerminalController) => void;
-    private recorded: FakeRigCall[] = [];
-    private closed = false;
-    private nextSession = 1;
-    private nextTerminal = 1;
-
-    readonly transport: RigTransport = {
-        healthRead: async () =>
-            this.perform(
-                "healthRead",
-                {},
-                async (): Promise<RigDaemonHealth> => ({
-                    status: "ready",
-                    version: "0.0.45",
-                    catalog,
-                }),
-            ),
-        catalogRead: async () =>
-            this.perform("catalogRead", {}, async () => structuredClone(catalog)),
-        sessionsRead: async () =>
-            this.perform("sessionsRead", {}, async () =>
-                [...this.sessions.values()].map(sessionSummary),
-            ),
-        sessionRead: async (sessionId) =>
-            this.perform("sessionRead", { sessionId }, async () =>
-                structuredClone(this.sessionRequired(sessionId)),
-            ),
-        subagentsRead: async (sessionId) =>
-            this.perform("subagentsRead", { sessionId }, async () =>
-                structuredClone(this.subagents.get(sessionId) ?? []),
-            ),
-        terminalsRead: async (sessionId) =>
-            this.perform("terminalsRead", { sessionId }, async () =>
-                structuredClone(this.terminals.get(sessionId) ?? []),
-            ),
-        sessionCreate: async (input) =>
-            this.perform("sessionCreate", {}, async () => this.createSession(input)),
-        sessionFork: async (sessionId) =>
-            this.perform("sessionFork", { sessionId }, async () => {
-                const id = `${sessionId}-fork-${this.nextSession++}` as RigSessionId;
-                const session = { ...structuredClone(this.sessionRequired(sessionId)), id };
-                this.sessions.set(id, session);
-                return structuredClone(session);
-            }),
-        sessionReset: async (sessionId) =>
-            this.perform("sessionReset", { sessionId }, async () =>
-                this.updateSession(sessionId, {
-                    status: "idle",
-                    messages: [],
-                    pendingUserInputs: [],
-                }),
-            ),
-        messageSubmit: async (sessionId) =>
-            this.perform("messageSubmit", { sessionId }, async () => {
-                this.updateSession(sessionId, { status: "running" });
-            }),
-        messageSteer: async (sessionId) =>
-            this.perform("messageSteer", { sessionId }, async () => {
-                this.sessionRequired(sessionId);
-            }),
-        runAbort: async (sessionId) =>
-            this.perform("runAbort", { sessionId }, async () => {
-                this.updateSession(sessionId, { status: "aborted" });
-            }),
-        userInputAnswer: async (sessionId, input) =>
-            this.perform("userInputAnswer", { sessionId }, async () =>
-                this.updateSession(sessionId, {
-                    pendingUserInputs: this.sessionRequired(sessionId).pendingUserInputs.filter(
-                        ({ requestId }) => requestId !== input.requestId,
-                    ),
-                }),
-            ),
-        modelChange: async (sessionId, input) =>
-            this.perform("modelChange", { sessionId }, async () =>
-                this.updateSession(sessionId, modelUpdate(input)),
-            ),
-        effortChange: async (sessionId, effort) =>
-            this.perform("effortChange", { sessionId }, async () =>
-                this.updateSession(sessionId, { effort }),
-            ),
-        serviceTierChange: async (sessionId, serviceTier) =>
-            this.perform("serviceTierChange", { sessionId }, async () =>
-                this.updateSession(sessionId, { serviceTier }),
-            ),
-        permissionModeChange: async (sessionId, permissionMode) =>
-            this.perform("permissionModeChange", { sessionId }, async () =>
-                this.updateSession(sessionId, { permissionMode }),
-            ),
-        terminalCreate: async (sessionId, input) =>
-            this.perform("terminalCreate", { sessionId }, async () =>
-                this.createTerminal(sessionId, input),
-            ),
-        terminalStop: async (sessionId, terminalId) =>
-            this.perform("terminalStop", { sessionId, terminalId }, async () =>
-                this.stopTerminal(sessionId, terminalId),
-            ),
-        terminalConnect: async (sessionId, terminalId, observer) =>
-            this.perform("terminalConnect", { sessionId, terminalId }, async () =>
-                this.terminalConnection(sessionId, terminalId, observer),
-            ),
-        globalEventsSubscribe: (observer) => {
-            this.assertOpen();
-            this.globalObservers.add(observer);
-            return () => this.globalObservers.delete(observer);
-        },
-        sessionEventsSubscribe: (sessionId, observer, after) => {
-            this.assertOpen();
-            this.recorded.push({
-                operation: "sessionEventsSubscribe",
-                sessionId,
-                ...(after ? { after } : {}),
-            });
-            let observers = this.sessionObservers.get(sessionId);
-            if (!observers) {
-                observers = new Set();
-                this.sessionObservers.set(sessionId, observers);
-            }
-            observers.add(observer);
-            return () => {
-                observers!.delete(observer);
-                if (observers!.size === 0) this.sessionObservers.delete(sessionId);
-            };
-        },
-    };
-
-    get calls(): readonly FakeRigCall[] {
-        return this.recorded;
-    }
-
-    get globalSubscriberCount(): number {
-        return this.globalObservers.size;
-    }
-
-    get sessionSubscriberCount(): number {
-        return [...this.sessionObservers.values()].reduce(
-            (total, observers) => total + observers.size,
-            0,
-        );
-    }
-
-    sessionSet(session: RigSessionProjection): void {
-        this.sessions.set(session.id, structuredClone(session));
-    }
-
-    sessionRemove(sessionId: RigSessionId): void {
-        this.sessions.delete(sessionId);
-    }
-
-    subagentsSet(sessionId: RigSessionId, values: readonly RigSubagentProjection[]): void {
-        this.subagents.set(sessionId, structuredClone(values));
-    }
-
-    terminalsSet(sessionId: RigSessionId, values: readonly RigTerminalSummaryProjection[]): void {
-        this.terminals.set(sessionId, structuredClone(values));
-    }
-
-    failNext(
-        operation: FakeRigOperation,
-        error: unknown = new Error(`Fake ${operation} failed.`),
-    ): void {
-        const failures = this.failures.get(operation);
-        if (failures) failures.push(error);
-        else this.failures.set(operation, [error]);
-    }
-
-    deferNext(operation: FakeRigOperation): { release(): void } {
-        let release: () => void = () => undefined;
-        const deferred = new Promise<void>((resolve) => {
-            release = resolve;
-        });
-        const deferrals = this.deferrals.get(operation);
-        if (deferrals) deferrals.push(deferred);
-        else this.deferrals.set(operation, [deferred]);
-        return { release };
-    }
-
-    globalEmit(event: RigGlobalEvent): void {
-        for (const observer of this.globalObservers) observer.event(structuredClone(event));
-    }
-
-    globalEnd(): void {
-        const observers = [...this.globalObservers];
-        this.globalObservers.clear();
-        for (const observer of observers) observer.end();
-    }
-
-    globalFail(error: unknown = new Error("Fake global stream failed.")): void {
-        const observers = [...this.globalObservers];
-        this.globalObservers.clear();
-        for (const observer of observers) observer.error(error);
-    }
-
-    sessionEmit(event: RigSessionEvent): void {
-        for (const observer of this.sessionObservers.get(event.sessionId) ?? [])
-            observer.event(structuredClone(event));
-    }
-
-    sessionEnd(sessionId: RigSessionId): void {
-        const observers = [...(this.sessionObservers.get(sessionId) ?? [])];
-        this.sessionObservers.delete(sessionId);
-        for (const observer of observers) observer.end();
-    }
-
-    sessionFail(
-        sessionId: RigSessionId,
-        error: unknown = new Error("Fake session stream failed."),
-    ): void {
-        const observers = [...(this.sessionObservers.get(sessionId) ?? [])];
-        this.sessionObservers.delete(sessionId);
-        for (const observer of observers) observer.error(error);
-    }
-
-    terminalRoute(handler: (controller: FakeRigTerminalController) => void): void {
-        this.terminalHandler = handler;
-    }
-
-    close(): void {
-        if (this.closed) return;
-        this.globalFail(new Error("Fake Rig transport closed."));
-        for (const id of this.sessionObservers.keys()) this.sessionFail(id);
-        this.closed = true;
-    }
-
-    private async perform<T>(
-        operation: FakeRigOperation,
-        target: Omit<FakeRigCall, "operation">,
-        work: () => Promise<T>,
-    ): Promise<T> {
-        this.assertOpen();
-        this.recorded.push({ operation, ...target });
-        const failures = this.failures.get(operation);
-        const failure = failures?.shift();
-        if (failures?.length === 0) this.failures.delete(operation);
-        if (failure !== undefined) throw failure;
-        const result = await work();
-        const deferrals = this.deferrals.get(operation);
-        const deferred = deferrals?.shift();
-        if (deferrals?.length === 0) this.deferrals.delete(operation);
-        await deferred;
-        return result;
-    }
-
-    private createSession(input: RigSessionCreateInput): RigSessionProjection {
-        const id = `session-${this.nextSession++}` as RigSessionId;
-        const session = fakeRigSession(id, {
-            cwd: input.cwd,
-            displayCwd: input.cwd,
-            providerId: input.providerId ?? catalog.defaultProviderId,
-            modelId: input.modelId ?? catalog.defaultModelId,
-            effort: input.effort,
-            serviceTier: input.serviceTier,
-            permissionMode: input.permissionMode ?? "auto",
-        });
-        this.sessions.set(id, session);
-        return structuredClone(session);
-    }
-
-    private createTerminal(
-        sessionId: RigSessionId,
-        input: RigTerminalCreateInput,
-    ): RigTerminalSummaryProjection {
-        const terminal: RigTerminalSummaryProjection = {
-            id: `terminal-${this.nextTerminal++}` as RigTerminalId,
-            cols: input.cols,
-            rows: input.rows,
-            epoch: "epoch-1",
-            status: "running",
-            exitCode: null,
-        };
-        this.terminals.set(sessionId, [...(this.terminals.get(sessionId) ?? []), terminal]);
-        return terminal;
-    }
-
-    private stopTerminal(
-        sessionId: RigSessionId,
-        terminalId: RigTerminalId,
-    ): RigTerminalSummaryProjection {
-        const current = this.terminals.get(sessionId) ?? [];
-        const terminal = current.find(({ id }) => id === terminalId);
-        if (!terminal) throw new Error(`Unknown fake terminal ${terminalId}.`);
-        const stopped = { ...terminal, status: "exited" as const, exitCode: 0 };
-        this.terminals.set(
-            sessionId,
-            current.map((value) => (value.id === terminalId ? stopped : value)),
-        );
-        return stopped;
-    }
-
-    private terminalConnection(
-        sessionId: RigSessionId,
-        terminalId: RigTerminalId,
-        observer: RigTerminalObserver,
-    ): RigTerminalConnection {
-        const writes: string[] = [];
-        const sizes: { cols: number; rows: number }[] = [];
-        let closed = false;
-        const controller: FakeRigTerminalController = {
-            sessionId,
-            terminalId,
-            writes,
-            sizes,
-            get closed() {
-                return closed;
-            },
-            connected: () => !closed && observer.connected(),
-            grid: (value) => !closed && observer.grid(structuredClone(value)),
-            exit: (exitCode) => !closed && observer.exit(exitCode),
-            error: (error) => !closed && observer.error(error),
-        };
-        this.terminalHandler?.(controller);
-        return {
-            write: (data) => {
-                if (!closed) writes.push(data);
-            },
-            resize: (cols, rows) => {
-                if (!closed) sizes.push({ cols, rows });
-            },
-            scrollback: async (start, count): Promise<RigTerminalScrollbackProjection> => ({
-                baseRow: 0,
-                count,
-                historyEpoch: "epoch-1",
-                historyRevision: 1,
-                rows: [],
-                start,
-                totalRows: 0,
-            }),
-            close: () => {
-                closed = true;
-            },
-        };
-    }
-
-    private sessionRequired(sessionId: RigSessionId): RigSessionProjection {
-        const session = this.sessions.get(sessionId);
-        if (!session) throw new Error(`Unknown fake session ${sessionId}.`);
-        return session;
-    }
-
-    private updateSession(
-        sessionId: RigSessionId,
-        update: Partial<RigSessionProjection>,
-    ): RigSessionProjection {
-        const session = { ...this.sessionRequired(sessionId), ...update };
-        this.sessions.set(sessionId, session);
-        return structuredClone(session);
-    }
-
-    private assertOpen(): void {
-        if (this.closed) throw new Error("Fake Rig transport is closed.");
-    }
-}
-
-function modelUpdate(input: RigModelSelection): Partial<RigSessionProjection> {
+export function fakeRigSummary(
+    id: string,
+    overrides: Partial<RigSessionSummary> = {},
+): RigSessionSummary {
     return {
-        modelId: input.modelId,
-        providerId: input.providerId,
-        effort: input.effort,
+        id: id as RigSessionId,
+        cwd: "/workspace",
+        displayCwd: "/workspace",
+        providerId: "openai",
+        modelId: "gpt-default",
+        permissionMode: "auto",
+        status: "idle",
+        createdAt: 1_000,
+        updatedAt: 1_000,
+        ...overrides,
     };
 }
 
-function sessionSummary(session: RigSessionProjection): RigSessionSummaryProjection {
+/** Creates a programmable, resource-counted direct-Rig boundary for deterministic state tests. */
+export function createFakeRigTransport(): FakeRigTransport {
+    return new FakeRigTransportModel();
+}
+
+function summaryOf(session: RigSession): RigSessionSummary {
     return {
         id: session.id,
         cwd: session.cwd,
@@ -514,7 +176,279 @@ function sessionSummary(session: RigSessionProjection): RigSessionSummaryProject
         status: session.status,
         title: session.title,
         recap: session.recap,
-        createdAt: 1,
-        updatedAt: 1,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
     };
+}
+
+class FakeRigTransportModel implements FakeRigTransport {
+    private catalog = DEFAULT_CATALOG;
+    private readonly sessions = new Map<RigSessionId, RigSession>();
+    private readonly subagents = new Map<RigSessionId, readonly RigSubagentSummary[]>();
+    private readonly files = new Map<RigSessionId, readonly RigFileSearchResult[]>();
+    private readonly usage = new Map<RigSessionId, RigSessionUsage>();
+    private readonly shellResults = new Map<RigSessionId, Partial<RigShellCommandResult>>();
+    private readonly eventLog = new Map<RigSessionId, RigSessionEvent[]>();
+    private readonly sessionObservers = new Map<
+        RigSessionId,
+        Set<RigEventObserver<RigSessionEvent>>
+    >();
+    private readonly globalObservers = new Set<RigEventObserver<RigGlobalEvent>>();
+    private readonly failures = new Map<FakeRigOperation, unknown[]>();
+    private readonly deferGates = new Map<FakeRigOperation, Promise<void>[]>();
+    private recorded: FakeRigCall[] = [];
+    private nextForkId = 1;
+
+    get calls(): readonly FakeRigCall[] {
+        return this.recorded;
+    }
+    get sessionSubscriberCount(): number {
+        let total = 0;
+        for (const set of this.sessionObservers.values()) total += set.size;
+        return total;
+    }
+    get globalSubscriberCount(): number {
+        return this.globalObservers.size;
+    }
+
+    catalogSet(catalog: RigModelCatalog): void {
+        this.catalog = catalog;
+    }
+    sessionSet(session: RigSession): void {
+        this.sessions.set(session.id, session);
+    }
+    sessionRemove(sessionId: RigSessionId): void {
+        this.sessions.delete(sessionId);
+    }
+    filesSet(sessionId: RigSessionId, files: readonly RigFileSearchResult[]): void {
+        this.files.set(sessionId, files);
+    }
+    usageSet(sessionId: RigSessionId, usage: RigSessionUsage): void {
+        this.usage.set(sessionId, usage);
+    }
+    shellResultSet(sessionId: RigSessionId, result: Partial<RigShellCommandResult>): void {
+        this.shellResults.set(sessionId, result);
+    }
+
+    subagentsSet(sessionId: RigSessionId, subagents: readonly RigSubagentSummary[]): void {
+        this.subagents.set(sessionId, subagents);
+    }
+    sessionEmit(sessionId: RigSessionId, event: RigSessionEvent): void {
+        const log = this.eventLog.get(sessionId) ?? [];
+        log.push(event);
+        this.eventLog.set(sessionId, log);
+        for (const observer of this.sessionObservers.get(sessionId) ?? []) observer.event(event);
+    }
+    sessionLogAppend(sessionId: RigSessionId, event: RigSessionEvent): void {
+        const log = this.eventLog.get(sessionId) ?? [];
+        log.push(event);
+        this.eventLog.set(sessionId, log);
+    }
+    sessionErrorEmit(sessionId: RigSessionId): void {
+        for (const observer of this.sessionObservers.get(sessionId) ?? [])
+            observer.error(new Error("stream dropped"));
+    }
+    globalEmit(event: RigGlobalEvent): void {
+        for (const observer of this.globalObservers) observer.event(event);
+    }
+    globalErrorEmit(): void {
+        for (const observer of this.globalObservers) observer.error(new Error("stream dropped"));
+    }
+    failNext(operation: FakeRigOperation, error: unknown = new Error(`${operation} failed`)): void {
+        const list = this.failures.get(operation) ?? [];
+        list.push(error);
+        this.failures.set(operation, list);
+    }
+    deferNext(operation: FakeRigOperation): { release(): void } {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const gates = this.deferGates.get(operation) ?? [];
+        gates.push(gate);
+        this.deferGates.set(operation, gates);
+        return { release };
+    }
+
+    private async perform<T>(
+        operation: FakeRigOperation,
+        call: Omit<FakeRigCall, "operation">,
+        run: () => T | Promise<T>,
+    ): Promise<T> {
+        this.recorded.push({ operation, ...call });
+        const gate = this.deferGates.get(operation)?.shift();
+        if (gate) await gate;
+        const failure = this.failures.get(operation);
+        if (failure && failure.length > 0) throw failure.shift();
+        return run();
+    }
+
+    private required(sessionId: RigSessionId): RigSession {
+        const session = this.sessions.get(sessionId);
+        if (!session) throw new Error(`Unknown session ${sessionId}`);
+        return session;
+    }
+
+    readonly transport: RigTransport = {
+        modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
+        sessionsRead: () =>
+            this.perform("sessionsRead", {}, () => [...this.sessions.values()].map(summaryOf)),
+        sessionRead: (sessionId) =>
+            this.perform("sessionRead", { sessionId }, () =>
+                structuredCloneSession(this.required(sessionId)),
+            ),
+        subagentsRead: (sessionId) =>
+            this.perform("subagentsRead", { sessionId }, () => this.subagents.get(sessionId) ?? []),
+        sessionCreate: (input: RigSessionCreateInput) =>
+            this.perform("sessionCreate", {}, () => {
+                const id = `session-${this.nextForkId++}` as RigSessionId;
+                const session = fakeSessionFromInput(id, input, this.catalog);
+                this.sessions.set(id, session);
+                return session;
+            }),
+        sessionFork: (sessionId) =>
+            this.perform("sessionFork", { sessionId }, () => {
+                const id = `${sessionId}-fork-${this.nextForkId++}` as RigSessionId;
+                const session = { ...this.required(sessionId), id };
+                this.sessions.set(id, session);
+                return session;
+            }),
+        sessionReset: (sessionId) =>
+            this.perform("sessionReset", { sessionId }, () => {
+                const session: RigSession = {
+                    ...this.required(sessionId),
+                    status: "idle",
+                    messages: [],
+                    pendingUserInputs: [],
+                };
+                this.sessions.set(sessionId, session);
+                return session;
+            }),
+        messageSubmit: (sessionId, text, idempotencyKey) =>
+            this.perform("messageSubmit", { sessionId, text, idempotencyKey }, () => undefined),
+        messageSteer: (sessionId, text, idempotencyKey) =>
+            this.perform("messageSteer", { sessionId, text, idempotencyKey }, () => undefined),
+        runAbort: (sessionId) => this.perform("runAbort", { sessionId }, () => undefined),
+        compact: (sessionId) => this.perform("compact", { sessionId }, () => undefined),
+        rewind: (sessionId, messageId) =>
+            this.perform("rewind", { sessionId }, () => {
+                const current = this.required(sessionId);
+                const index = current.messages.findIndex((message) => message.id === messageId);
+                const messages = index >= 0 ? current.messages.slice(0, index) : current.messages;
+                const session = { ...current, messages };
+                this.sessions.set(sessionId, session);
+                return session;
+            }),
+        shellRun: (sessionId, command, commandId) =>
+            this.perform("shellRun", { sessionId }, () => {
+                const override = this.shellResults.get(sessionId) ?? {};
+                return {
+                    command,
+                    commandId,
+                    output: override.output ?? "",
+                    exitCode: override.exitCode ?? 0,
+                    timedOut: override.timedOut ?? false,
+                    ...(override.errorMessage ? { errorMessage: override.errorMessage } : {}),
+                    ...(override.backgroundProcessId !== undefined
+                        ? { backgroundProcessId: override.backgroundProcessId }
+                        : {}),
+                };
+            }),
+        backgroundProcessStop: (sessionId) =>
+            this.perform("backgroundProcessStop", { sessionId }, () => undefined),
+        changeModel: (sessionId, input: RigModelSelection) =>
+            this.perform("changeModel", { sessionId }, () =>
+                this.patch(sessionId, {
+                    modelId: input.modelId,
+                    providerId: input.providerId ?? this.required(sessionId).providerId,
+                    effort: input.effort,
+                }),
+            ),
+        changeEffort: (sessionId, effort?: RigThinkingLevel) =>
+            this.perform("changeEffort", { sessionId }, () => this.patch(sessionId, { effort })),
+        changePermissionMode: (sessionId, permissionMode: RigPermissionMode) =>
+            this.perform("changePermissionMode", { sessionId }, () =>
+                this.patch(sessionId, { permissionMode }),
+            ),
+        changeServiceTier: (sessionId, serviceTier?: RigServiceTier) =>
+            this.perform("changeServiceTier", { sessionId }, () =>
+                this.patch(sessionId, { serviceTier }),
+            ),
+        answerUserInput: (sessionId, input: RigUserInputAnswers) =>
+            this.perform("answerUserInput", { sessionId }, () => {
+                const current = this.required(sessionId);
+                return this.patch(sessionId, {
+                    pendingUserInputs: current.pendingUserInputs.filter(
+                        (request) => request.requestId !== input.requestId,
+                    ),
+                });
+            }),
+        filesSearch: (sessionId, query: string, limit?: number) =>
+            this.perform("filesSearch", { sessionId, text: query }, () => {
+                const corpus = this.files.get(sessionId) ?? [];
+                const needle = query.trim().toLowerCase();
+                const matched = needle
+                    ? corpus.filter(
+                          (file) =>
+                              file.path.toLowerCase().includes(needle) ||
+                              file.fileName.toLowerCase().includes(needle),
+                      )
+                    : corpus;
+                return limit === undefined ? matched : matched.slice(0, limit);
+            }),
+        usageGet: (sessionId) =>
+            this.perform("usageGet", { sessionId }, () => {
+                const usage = this.usage.get(sessionId);
+                if (!usage) throw new Error(`No usage set for session ${sessionId}`);
+                return usage;
+            }),
+        sessionEventsSubscribe: (sessionId, observer) => {
+            const set = this.sessionObservers.get(sessionId) ?? new Set();
+            set.add(observer);
+            this.sessionObservers.set(sessionId, set);
+            return () => {
+                set.delete(observer);
+            };
+        },
+        globalEventsSubscribe: (observer) => {
+            this.globalObservers.add(observer);
+            return () => {
+                this.globalObservers.delete(observer);
+            };
+        },
+        sessionEventsBackfill: (sessionId, afterEventId) =>
+            this.perform("sessionEventsBackfill", { sessionId }, () => {
+                const log = this.eventLog.get(sessionId) ?? [];
+                const index = log.findIndex((event) => event.eventId === afterEventId);
+                return index >= 0 ? log.slice(index + 1) : [...log];
+            }),
+    };
+
+    private patch(sessionId: RigSessionId, patch: Partial<RigSession>): RigSession {
+        const session = { ...this.required(sessionId), ...patch };
+        this.sessions.set(sessionId, session);
+        return session;
+    }
+}
+
+function structuredCloneSession(session: RigSession): RigSession {
+    return { ...session, messages: [...session.messages] };
+}
+
+function fakeSessionFromInput(
+    id: RigSessionId,
+    input: RigSessionCreateInput,
+    catalog: RigModelCatalog,
+): RigSession {
+    return fakeRigSession(id, {
+        cwd: input.cwd,
+        displayCwd: input.cwd,
+        providerId: input.providerId ?? catalog.defaultProviderId,
+        modelId: input.modelId ?? catalog.defaultModelId,
+        effort: input.effort,
+        serviceTier: input.serviceTier,
+        permissionMode: input.permissionMode ?? "auto",
+        createdAt: 2_000,
+        updatedAt: 2_000,
+    });
 }

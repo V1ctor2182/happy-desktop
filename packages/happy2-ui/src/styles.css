@@ -100,3 +100,7 @@
 @import "./styles/desktop-instance-switcher.css";
 @import "./styles/rig-install.css";
 @import "./styles/rig-client.css";
+@import "./styles/rig-chat.css";
+@import "./styles/rig-usage.css";
+@import "./styles/rig-activity.css";
+@import "./styles/rig-status.css";

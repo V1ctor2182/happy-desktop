@@ -1,13 +1,27 @@
+/**
+ * Closed, serialization-safe product projections for the Rig chat surface. Every
+ * type here is what application code and the UI actually render; the injected
+ * transport maps the raw `@slopus/rig` protocol shapes into these projections so
+ * this package never depends on wire types, tokens, or sockets.
+ *
+ * Terminals (Rig's remote terminals) are intentionally out of scope for this
+ * chat-focused layer; they are deferred until the chat/tools/menus surface is
+ * complete.
+ */
+
 declare const rigSessionIdBrand: unique symbol;
-declare const rigTerminalIdBrand: unique symbol;
 declare const rigEventIdBrand: unique symbol;
 
+/** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
-export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
+
+/** Branded realtime event identifier used for ordering and backfill cursors. */
 export type RigEventId = string & { readonly [rigEventIdBrand]: true };
 
 export type RigPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
+
 export type RigServiceTier = "fast";
+
 export type RigSessionStatus =
     | "idle"
     | "queued"
@@ -17,71 +31,106 @@ export type RigSessionStatus =
     | "suspended"
     | "error";
 
-export type RigJsonValue =
+/** Reasoning/effort levels a model may expose, ordered from least to most reasoning. */
+export type RigThinkingLevel =
+    | "off"
+    | "on"
+    | "minimal"
+    | "low"
+    | "medium"
+    | "high"
+    | "xhigh"
+    | "max"
+    | "ultra";
+
+export type RigStopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
+
+export type RigTaskStatus = "pending" | "in_progress" | "completed";
+
+export type RigGoalStatus = "active" | "blocked" | "complete" | "paused";
+
+/** JSON value type for opaque tool-call arguments; kept fully closed (no `unknown`/`any`). */
+export type RigJson =
     | null
     | boolean
     | number
     | string
-    | readonly RigJsonValue[]
-    | { readonly [key: string]: RigJsonValue };
+    | readonly RigJson[]
+    | { readonly [key: string]: RigJson };
 
-export interface RigModelProjection {
+// ---------------------------------------------------------------------------
+// Model catalog
+// ---------------------------------------------------------------------------
+
+export interface RigModel {
     readonly id: string;
     readonly name: string;
-    readonly thinkingLevels: readonly string[];
-    readonly defaultThinkingLevel: string;
+    readonly thinkingLevels: readonly RigThinkingLevel[];
+    readonly defaultThinkingLevel: RigThinkingLevel;
     readonly contextWindow?: number;
 }
 
-export interface RigProviderProjection {
+export interface RigModelProvider {
     readonly id: string;
-    readonly disabledReason?: "not_authenticated" | "not_enabled" | "no_models";
-    readonly models: readonly RigModelProjection[];
+    readonly models: readonly RigModel[];
     readonly serviceTiers: readonly RigServiceTier[];
+    readonly disabledReason?: "not_authenticated" | "not_enabled" | "no_models";
 }
 
-export interface RigCatalogProjection {
+export interface RigModelCatalog {
     readonly defaultModelId: string;
     readonly defaultProviderId: string;
-    readonly providers: readonly RigProviderProjection[];
+    readonly models: readonly RigModel[];
+    readonly providers: readonly RigModelProvider[];
 }
 
-export type RigDaemonHealth =
+// ---------------------------------------------------------------------------
+// Messages, blocks, and tool presentations
+// ---------------------------------------------------------------------------
+
+export type RigFileDiffKind = "add" | "delete" | "update";
+export type RigFileDiffLineKind = "add" | "context" | "delete";
+
+export interface RigFileDiffLine {
+    readonly kind: RigFileDiffLineKind;
+    readonly text: string;
+}
+
+export interface RigFileDiffHunk {
+    readonly oldStart: number;
+    readonly newStart: number;
+    readonly lines: readonly RigFileDiffLine[];
+}
+
+export interface RigFileDiff {
+    readonly path: string;
+    readonly kind: RigFileDiffKind;
+    readonly hunks: readonly RigFileDiffHunk[];
+    readonly language?: string;
+    readonly added?: number;
+    readonly deleted?: number;
+    readonly omittedLines?: number;
+}
+
+export type RigToolPresentation =
     | {
-          readonly status: "starting";
-          readonly version: string;
+          readonly type: "fileDiff";
+          readonly files: readonly RigFileDiff[];
+          readonly omittedFiles?: number;
       }
+    | { readonly type: "execCommand"; readonly command: string; readonly output: string }
     | {
-          readonly status: "ready";
-          readonly version: string;
-          readonly catalog: RigCatalogProjection;
-      }
-    | {
-          readonly status: "error";
-          readonly version: string;
-          readonly message: string;
+          readonly type: "backgroundTerminalInteraction";
+          readonly command: string;
+          readonly input: string;
       };
 
-export interface RigSessionSummaryProjection {
-    readonly id: RigSessionId;
-    /** Canonical absolute directory used for grouping and identity. */
-    readonly cwd: string;
-    /** Original Rig path retained for presentation when it differs from `cwd`. */
-    readonly displayCwd: string;
-    readonly providerId: string;
-    readonly modelId: string;
-    readonly permissionMode: RigPermissionMode;
-    readonly effort?: string;
-    readonly serviceTier?: RigServiceTier;
-    readonly status: RigSessionStatus;
-    readonly title?: string;
-    readonly recap?: string;
-    readonly createdAt: number;
-    readonly updatedAt: number;
-    readonly lastMessageAt?: number;
+export interface RigToolFailure {
+    readonly kind: "execution_failed" | "interrupted" | "invalid_arguments" | "tool_unavailable";
+    readonly message?: string;
 }
 
-export type RigMessageBlock =
+export type RigBlock =
     | { readonly type: "text"; readonly text: string }
     | {
           readonly type: "image";
@@ -89,16 +138,12 @@ export type RigMessageBlock =
           readonly data: string;
           readonly detail?: "high" | "original";
       }
-    | {
-          readonly type: "thinking";
-          readonly thinking: string;
-          readonly redacted: boolean;
-      }
+    | { readonly type: "thinking"; readonly thinking: string; readonly redacted: boolean }
     | {
           readonly type: "toolCall";
           readonly id: string;
           readonly name: string;
-          readonly arguments: RigJsonValue;
+          readonly arguments: RigJson;
       }
     | {
           readonly type: "toolResult";
@@ -106,14 +151,21 @@ export type RigMessageBlock =
           readonly toolName: string;
           readonly display: string;
           readonly failed: boolean;
+          readonly failure?: RigToolFailure;
+          readonly presentation?: RigToolPresentation;
       };
 
-export interface RigMessageProjection {
+export interface RigMessage {
     readonly id: string;
     readonly role: "system" | "user" | "agent";
-    readonly blocks: readonly RigMessageBlock[];
+    readonly blocks: readonly RigBlock[];
+    /** Model-facing bookkeeping messages that must never render as transcript content. */
     readonly internal: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// User-input requests (question prompts)
+// ---------------------------------------------------------------------------
 
 export interface RigUserInputOption {
     readonly label: string;
@@ -134,20 +186,36 @@ export interface RigUserInputRequest {
     readonly questions: readonly RigUserInputQuestion[];
 }
 
-export interface RigBackgroundProcessProjection {
-    readonly id: number;
-    readonly command: string;
-    readonly cwd: string;
-    readonly status: "running";
+// ---------------------------------------------------------------------------
+// Tasks, goals, subagents, background processes
+// ---------------------------------------------------------------------------
+
+export interface RigTask {
+    readonly id: string;
+    readonly subject: string;
+    readonly description: string;
+    readonly status: RigTaskStatus;
+    readonly activeForm?: string;
+    readonly owner?: string;
+    readonly blockedBy: readonly string[];
+    readonly blocks: readonly string[];
 }
 
-export interface RigSubagentProjection {
+export interface RigGoal {
+    readonly objective: string;
+    readonly status: RigGoalStatus;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+}
+
+export interface RigSubagentSummary {
     readonly id: RigSessionId;
     readonly parentSessionId: RigSessionId;
     readonly description: string;
     readonly taskName?: string;
     readonly modelId: string;
     readonly status: RigSessionStatus;
+    readonly depth: number;
     readonly createdAt: number;
     readonly updatedAt: number;
     readonly activeSince?: number;
@@ -156,204 +224,321 @@ export interface RigSubagentProjection {
     readonly totalTokens?: number;
 }
 
-export interface RigSessionProjection {
+export interface RigQueuedMessage {
+    readonly id: string;
+    /** Flattened text of the queued user turn, shown as a preview in the composer. */
+    readonly text: string;
+}
+
+export interface RigFileSearchResult {
+    /** Basename shown as the primary label in the mention list. */
+    readonly fileName: string;
+    /** Workspace-relative path inserted into the composer as `@path`. */
+    readonly path: string;
+}
+
+// ---------------------------------------------------------------------------
+// Session usage (token/cost accounting, `/usage`)
+// ---------------------------------------------------------------------------
+
+/** Token + cost totals attributed to one model within a session. */
+export interface RigUsageGroup {
+    readonly modelId: string;
+    readonly providerId: string;
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly cacheReadTokens: number;
+    readonly cacheWriteTokens: number;
+    readonly totalTokens: number;
+    /** Reasoning tokens when the provider reports an exact breakdown. */
+    readonly reasoningTokens?: number;
+    /** Total US-dollar cost for this group. */
+    readonly cost: number;
+}
+
+/** Approximate context-window occupancy for the session's current model. */
+export interface RigUsageContext {
+    readonly modelId: string;
+    readonly providerId: string;
+    readonly totalTokens: number;
+    /** True when the count is estimated rather than provider-reported. */
+    readonly approximate: boolean;
+}
+
+/** One provider rate-limit window (five-hour or weekly) with reset timing. */
+export interface RigUsageQuotaWindow {
+    readonly kind: "fiveHour" | "weekly";
+    readonly usedPercent: number;
+    /** Epoch millis when the window resets. */
+    readonly resetsAt: number;
+}
+
+/** Provider-level quota for a session, with any reported rate-limit windows. */
+export interface RigUsageQuota {
+    readonly providerId: string;
+    readonly windows: readonly RigUsageQuotaWindow[];
+}
+
+/**
+ * Aggregate usage snapshot for a session (`/usage`). Read on demand and polled
+ * while its panel is visible: there is no realtime usage event, so this is the
+ * secondary-surface polling case, never durable snapshot state.
+ */
+export interface RigSessionUsage {
+    readonly currentProviderId: string;
+    readonly groups: readonly RigUsageGroup[];
+    readonly totalTokens: number;
+    readonly totalCost: number;
+    readonly context?: RigUsageContext;
+    readonly quotas: readonly RigUsageQuota[];
+}
+
+export interface RigBackgroundProcess {
+    readonly id: number;
+    readonly command: string;
+    readonly cwd: string;
+    readonly status: "running";
+}
+
+/** Terminal result of a composer shell-mode command run (`shellRun`). */
+export interface RigShellCommandResult {
+    readonly command: string;
+    readonly commandId: string;
+    readonly output: string;
+    readonly exitCode: number | null;
+    readonly timedOut: boolean;
+    readonly errorMessage?: string;
+    /** Background session id when the command detached into a background terminal. */
+    readonly backgroundProcessId?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+export interface RigSessionSummary {
+    readonly id: RigSessionId;
+    /** Canonical absolute working directory. */
+    readonly cwd: string;
+    /** Original Rig path retained for presentation when it differs from `cwd`. */
+    readonly displayCwd: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly permissionMode: RigPermissionMode;
+    readonly effort?: RigThinkingLevel;
+    readonly serviceTier?: RigServiceTier;
+    readonly status: RigSessionStatus;
+    readonly title?: string;
+    readonly recap?: string;
+    /** Chronological sort key: when the session was first created. */
+    readonly createdAt: number;
+    readonly updatedAt: number;
+    readonly lastMessageAt?: number;
+}
+
+export interface RigSession {
     readonly id: RigSessionId;
     readonly cwd: string;
     readonly displayCwd: string;
     readonly providerId: string;
     readonly modelId: string;
-    readonly models: readonly RigModelProjection[];
-    readonly effort?: string;
+    readonly models: readonly RigModel[];
+    readonly effort?: RigThinkingLevel;
     readonly serviceTier?: RigServiceTier;
     readonly permissionMode: RigPermissionMode;
+    readonly modelLocked: boolean;
     readonly status: RigSessionStatus;
     readonly title?: string;
     readonly recap?: string;
-    readonly modelLocked: boolean;
-    readonly messages: readonly RigMessageProjection[];
+    readonly messages: readonly RigMessage[];
+    /**
+     * Steering messages queued to submit after the current tool call. Non-internal
+     * user turns the runner has accepted but not yet started; the composer previews
+     * them so a person sees what will be sent next (and can flush early with esc).
+     */
+    readonly queuedMessages: readonly RigQueuedMessage[];
     readonly pendingUserInputs: readonly RigUserInputRequest[];
-    readonly backgroundProcesses: readonly RigBackgroundProcessProjection[];
+    readonly goal?: RigGoal;
+    readonly tasks: readonly RigTask[];
+    readonly subagents: readonly RigSubagentSummary[];
+    readonly backgroundProcesses: readonly RigBackgroundProcess[];
+    readonly createdAt: number;
+    readonly updatedAt: number;
     readonly lastEventId?: RigEventId;
 }
 
-export interface RigStreamingMessageProjection {
+// ---------------------------------------------------------------------------
+// Streaming / live tool execution
+// ---------------------------------------------------------------------------
+
+export type RigToolStatus = "running" | "awaiting_approval" | "success" | "failed" | "stopped";
+
+export interface RigPermissionReview {
+    readonly action: string;
+    readonly reason: string;
+    readonly decision: "allow" | "ask";
+    readonly risk: "low" | "medium" | "high";
+    readonly userAuthorization: "low" | "medium" | "high";
+}
+
+/** Live state of one tool call, merged from stream deltas and (once known) its result. */
+export interface RigToolEntry {
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly arguments: RigJson;
+    readonly status: RigToolStatus;
+    readonly display?: string;
+    readonly failed: boolean;
+    readonly failure?: RigToolFailure;
+    readonly presentation?: RigToolPresentation;
+    readonly permissionReview?: RigPermissionReview;
+}
+
+export type RigStreamingBlock =
+    | { readonly kind: "text"; readonly text: string }
+    | { readonly kind: "thinking"; readonly text: string }
+    | { readonly kind: "tool"; readonly tool: RigToolEntry };
+
+/** The in-flight agent message for the current run, assembled from `agent_event` deltas. */
+export interface RigStreamingMessage {
     readonly runId: string;
-    readonly blocks: readonly RigMessageBlock[];
+    readonly blocks: readonly RigStreamingBlock[];
 }
 
-export interface RigTerminalSummaryProjection {
-    readonly id: RigTerminalId;
-    readonly cols: number;
-    readonly rows: number;
-    readonly epoch: string;
-    readonly status: "running" | "exited";
-    readonly exitCode: number | null;
+// ---------------------------------------------------------------------------
+// Transcript projection (the UI renders these directly)
+// ---------------------------------------------------------------------------
+
+export type RigTranscriptEntry =
+    | {
+          readonly id: string;
+          readonly kind: "user";
+          readonly text: string;
+          readonly images: readonly { readonly mediaType: string; readonly data: string }[];
+      }
+    | {
+          readonly id: string;
+          readonly kind: "agentText";
+          readonly text: string;
+          readonly streaming: boolean;
+      }
+    | {
+          readonly id: string;
+          readonly kind: "thinking";
+          readonly text: string;
+          readonly streaming: boolean;
+      }
+    | { readonly id: string; readonly kind: "tool"; readonly tool: RigToolEntry }
+    | { readonly id: string; readonly kind: "system"; readonly text: string }
+    | {
+          /**
+           * A composer shell-mode command run (`!cmd`). `running` is true between the
+           * `shell_command_started` and `shell_command_finished` events; once finished
+           * the captured `output` and `exitCode` render inline in the transcript.
+           */
+          readonly id: string;
+          readonly kind: "shell";
+          readonly command: string;
+          readonly output: string;
+          readonly exitCode: number | null;
+          readonly running: boolean;
+          readonly timedOut: boolean;
+      }
+    | {
+          readonly id: string;
+          readonly kind: "notice";
+          readonly level: "info" | "warning" | "error";
+          readonly title: string;
+          readonly text: string;
+      }
+    | {
+          /**
+           * Boundary rule closing a completed turn (the agent activity following one
+           * user message). Derived, not durable: stats are summed from the turn's
+           * tool entries; `elapsedMs` is only known for the most recently completed
+           * turn, so historical separators render as a rule with stats or bare.
+           */
+          readonly id: string;
+          readonly kind: "turnSeparator";
+          readonly elapsedMs?: number;
+          readonly toolCount: number;
+          readonly fileCount: number;
+          readonly additions: number;
+          readonly deletions: number;
+      };
+
+// ---------------------------------------------------------------------------
+// Menus (pickers derived from catalog + current session selection)
+// ---------------------------------------------------------------------------
+
+export interface RigModelOption {
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly name: string;
+    readonly disabled: boolean;
+    readonly current: boolean;
 }
 
-export interface RigTerminalGridCell {
-    readonly x: number;
-    readonly text: string;
-    readonly width: 1 | 2;
-    readonly styleId: number;
+export interface RigEffortOption {
+    readonly level: RigThinkingLevel;
+    readonly label: string;
+    readonly current: boolean;
+    readonly isDefault: boolean;
 }
 
-export interface RigTerminalGridRow {
-    readonly cells: readonly RigTerminalGridCell[];
-    readonly wrapped: boolean;
+export interface RigPermissionModeOption {
+    readonly mode: RigPermissionMode;
+    readonly label: string;
+    readonly current: boolean;
 }
 
-export interface RigTerminalGridProjection {
-    readonly cols: number;
-    readonly cursor: { readonly x: number; readonly y: number; readonly visible: boolean } | null;
-    readonly palette: readonly string[];
-    readonly revision: number;
-    readonly rows: readonly RigTerminalGridRow[];
-    readonly startRow: number;
-    readonly styles: readonly RigJsonValue[];
-    readonly title: string;
-    readonly totalRows: number;
+export interface RigServiceTierOption {
+    readonly tier: RigServiceTier | null;
+    readonly label: string;
+    readonly current: boolean;
 }
 
-export interface RigTerminalScrollbackProjection {
-    readonly baseRow: number;
-    readonly count: number;
-    readonly historyEpoch: string;
-    readonly historyRevision: number;
-    readonly rows: readonly RigTerminalGridRow[];
-    readonly start: number;
-    readonly totalRows: number;
+export interface RigMenusSnapshot {
+    readonly modelOptions: readonly RigModelOption[];
+    readonly effortOptions: readonly RigEffortOption[];
+    readonly permissionModeOptions: readonly RigPermissionModeOption[];
+    readonly serviceTierOptions: readonly RigServiceTierOption[];
+    readonly currentProviderId: string;
+    readonly currentModelId: string;
+    readonly currentEffort?: RigThinkingLevel;
+    readonly currentPermissionMode: RigPermissionMode;
+    readonly currentServiceTier?: RigServiceTier;
 }
 
-export interface RigStateError {
-    readonly message: string;
+/** Current model/effort/permission/tier selection used to derive menu options. */
+export interface RigSelection {
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly effort?: RigThinkingLevel;
+    readonly permissionMode: RigPermissionMode;
+    readonly serviceTier?: RigServiceTier;
 }
 
-export type RigLoadStatus =
-    | { readonly type: "loading" }
-    | { readonly type: "ready" }
-    | { readonly type: "error"; readonly error: RigStateError };
-
-export interface RigDirectoryGroupProjection {
-    readonly id: string;
-    readonly displayPath: string;
-    readonly sessions: readonly RigSessionSummaryProjection[];
-    readonly latestActivityAt: number;
-}
-
-export interface RigDirectorySnapshot {
-    readonly status: RigLoadStatus;
-    readonly groups: readonly RigDirectoryGroupProjection[];
-    readonly mutationError?: RigStateError;
-}
-
-export interface RigSessionSnapshot {
-    readonly status: RigLoadStatus;
-    readonly session?: RigSessionProjection;
-    readonly streaming?: RigStreamingMessageProjection;
-    readonly mutationError?: RigStateError;
-}
-
-export interface RigActivitySnapshot {
-    readonly status: RigLoadStatus;
-    readonly subagents: readonly RigSubagentProjection[];
-    readonly backgroundProcesses: readonly RigBackgroundProcessProjection[];
-}
-
-export interface RigTerminalListSnapshot {
-    readonly status: RigLoadStatus;
-    readonly terminals: readonly RigTerminalSummaryProjection[];
-    readonly mutationError?: RigStateError;
-}
-
-export interface RigTerminalSnapshot {
-    readonly status: "connecting" | "connected" | "disconnected" | "exited" | "error";
-    readonly grid?: RigTerminalGridProjection;
-    readonly exitCode: number | null;
-    readonly error?: RigStateError;
-}
+// ---------------------------------------------------------------------------
+// Action inputs
+// ---------------------------------------------------------------------------
 
 export interface RigSessionCreateInput {
     readonly cwd: string;
     readonly providerId?: string;
     readonly modelId?: string;
-    readonly effort?: string;
+    readonly effort?: RigThinkingLevel;
     readonly serviceTier?: RigServiceTier;
     readonly permissionMode?: RigPermissionMode;
-}
-
-export interface RigSessionSubmitInput {
-    readonly text: string;
-}
-
-export interface RigSessionSteerInput {
-    readonly text: string;
-    readonly expectedRunId?: string;
-}
-
-export interface RigUserInputAnswers {
-    readonly requestId: string;
-    readonly answers: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface RigModelSelection {
     readonly providerId?: string;
     readonly modelId: string;
-    readonly effort?: string;
+    readonly effort?: RigThinkingLevel;
 }
 
-export interface RigTerminalCreateInput {
-    readonly cols: number;
-    readonly rows: number;
-}
-
-export type RigStateOutput =
-    | { readonly type: "sessionCreated"; readonly sessionId: RigSessionId }
-    | { readonly type: "sessionForked"; readonly sessionId: RigSessionId }
-    | { readonly type: "sessionSubmitted"; readonly sessionId: RigSessionId }
-    | { readonly type: "sessionSteered"; readonly sessionId: RigSessionId }
-    | { readonly type: "terminalCreated"; readonly terminalId: RigTerminalId };
-
-export interface RigSurfaceStore<Snapshot> {
-    get(): Snapshot;
-    subscribe(listener: () => void): () => void;
-}
-
-export interface RigDirectoryStore extends RigSurfaceStore<RigDirectorySnapshot> {
-    sessionCreate(input: RigSessionCreateInput): void;
-    sessionFork(sessionId: RigSessionId): void;
-    sessionReset(sessionId: RigSessionId): void;
-}
-
-export interface RigSessionStore extends RigSurfaceStore<RigSessionSnapshot> {
-    messageSubmit(input: RigSessionSubmitInput): void;
-    messageSteer(input: RigSessionSteerInput): void;
-    runAbort(expectedRunId?: string): void;
-    userInputAnswer(input: RigUserInputAnswers): void;
-    modelChange(input: RigModelSelection): void;
-    effortChange(effort?: string): void;
-    serviceTierChange(serviceTier?: RigServiceTier): void;
-    permissionModeChange(permissionMode: RigPermissionMode): void;
-}
-
-export interface RigSessionHandle extends RigSessionStore, Disposable {}
-
-export interface RigActivityStore extends RigSurfaceStore<RigActivitySnapshot> {}
-export interface RigActivityHandle extends RigActivityStore, Disposable {}
-
-export interface RigTerminalListStore extends RigSurfaceStore<RigTerminalListSnapshot> {
-    terminalCreate(input: RigTerminalCreateInput): void;
-    terminalStop(terminalId: RigTerminalId): void;
-}
-export interface RigTerminalListHandle extends RigTerminalListStore, Disposable {}
-
-export interface RigTerminalStore extends RigSurfaceStore<RigTerminalSnapshot>, Disposable {
-    terminalWrite(data: string): void;
-    terminalResize(cols: number, rows: number): void;
-    terminalScrollback(
-        start: number,
-        count: number,
-        basis?: { readonly historyEpoch: string; readonly historyRevision: number },
-    ): Promise<RigTerminalScrollbackProjection>;
-    terminalReconnect(): void;
-    terminalStop(): void;
+export interface RigUserInputAnswers {
+    readonly requestId: string;
+    readonly answers: Readonly<Record<string, readonly string[]>>;
 }

@@ -84,6 +84,7 @@ export function ComposerDock(props: ComposerDockProps) {
                     hint={props.composerHint}
                     mentions={props.composerMentions}
                     onAttachFile={() => fileInput.current?.click()}
+                    onAttachmentsSelect={(files) => props.onFilesSelected(fileListCreate(files))}
                     onMentionSelect={props.onMentionSelect}
                     onAudienceChange={props.onAudienceChange}
                     onContextRemove={props.onContextRemove}
@@ -98,4 +99,10 @@ export function ComposerDock(props: ComposerDockProps) {
             </Box>
         </Box>
     );
+}
+
+function fileListCreate(files: readonly File[]): FileList {
+    const transfer = new DataTransfer();
+    for (const file of files) transfer.items.add(file);
+    return transfer.files;
 }
