@@ -56,7 +56,7 @@
 .happy2-app-shell[data-window-controls] .happy2-sidebar__header,
 .happy2-app-shell[data-window-controls] .happy2-channel-header,
 .happy2-app-shell[data-window-controls] .happy2-tabbed-pane__bar,
-.happy2-app-shell__reveal[data-window-controls]:not([data-floating]) {
+.happy2-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
     app-region: drag;
 }
@@ -237,25 +237,14 @@
     border-right: 1px solid var(--divider);
 }
 
-/* Desktop: the collapsed sidebar leaves nothing behind. The lane stops taking
-   layout space and shrinks to exactly the toggle, floating at the spot it
-   occupied while expanded. It is deliberately not a drag region: a native drag
-   rect swallows the pointer for everything inside it, including a `no-drag`
-   descendant, so the control would render and never click. The drag lane it
-   sits over is a sibling (the tab strip, or the workspace's own lane), which
-   this control punches through the same way the expanded toggle does. */
-.happy2-app-shell__reveal[data-floating] {
+/* Desktop: the collapsed sidebar leaves no lane behind. The toggle floats at
+   the spot it occupied while expanded, as a bare control over the workspace's
+   own drag lane — exactly the arrangement the expanded toggle already uses. */
+.happy2-app-shell__reveal-button[data-floating] {
     position: absolute;
     z-index: 4;
     top: 14px;
     left: 78px;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border-right: 0;
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }

@@ -280,22 +280,31 @@ export function AppShell(props: AppShellProps) {
             : sidebarInteractive
               ? `${sidebarWidth + RESIZE_HANDLE_WIDTH}px`
               : "clamp(250px, 30vw, 360px)";
-    const reveal = sidebarHidden ? (
+    const revealButton = sidebarHidden ? (
+        <button
+            aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
+            className="happy2-app-shell__reveal-button"
+            data-floating={revealFloating ? "" : undefined}
+            data-happy2-ui="app-shell-reveal-button"
+            onClick={() => setSidebarCollapsed(false)}
+            type="button"
+        >
+            <Icon name="sidebar-expand" size={14} />
+        </button>
+    ) : null;
+    // Floating, the control is the bare button rather than a lane wrapping it:
+    // a wrapper around a control docked over native window chrome is what stops
+    // the pointer reaching it, so the collapsed toggle is structurally the same
+    // element as the expanded one and only its position differs.
+    const reveal = revealFloating ? (
+        revealButton
+    ) : sidebarHidden ? (
         <div
             className="happy2-app-shell__reveal"
-            data-floating={revealFloating ? "" : undefined}
             data-happy2-ui="app-shell-reveal"
             data-window-controls={local.windowControls ? "" : undefined}
         >
-            <button
-                aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
-                className="happy2-app-shell__reveal-button"
-                data-happy2-ui="app-shell-reveal-button"
-                onClick={() => setSidebarCollapsed(false)}
-                type="button"
-            >
-                <Icon name="sidebar-expand" size={14} />
-            </button>
+            {revealButton}
         </div>
     ) : null;
     const mainStyle: CSSProperties = {
