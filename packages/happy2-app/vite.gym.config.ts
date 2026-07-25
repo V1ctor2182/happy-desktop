@@ -7,8 +7,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
     plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
     test: {
-        include: ["src/**/*.gym.test.tsx"],
-        setupFiles: ["src/testing/gymSetup.ts"],
+        include: ["tests/**/*.gym.test.tsx"],
+        setupFiles: ["tests/gymSetup.ts"],
         testTimeout: 30_000,
         browser: {
             enabled: true,

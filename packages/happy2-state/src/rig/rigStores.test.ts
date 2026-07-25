@@ -548,7 +548,7 @@ describe("rigChatStore actions", () => {
         fake.filesSet("s1" as RigSessionId, [
             { fileName: "rigChatStore.ts", path: "packages/happy2-state/src/rig/rigChatStore.ts" },
             { fileName: "rigTypes.ts", path: "packages/happy2-state/src/rig/rigTypes.ts" },
-            { fileName: "AppRigView.tsx", path: "packages/happy2-app/src/AppRigView.tsx" },
+            { fileName: "AppRigView.tsx", path: "packages/happy2-app/sources/AppRigView.tsx" },
         ]);
         const { store, unsubscribe } = await chatReady(fake, "s1");
         const before = store.get();

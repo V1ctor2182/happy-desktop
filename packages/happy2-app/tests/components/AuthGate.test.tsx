@@ -1,8 +1,11 @@
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
-import { App } from "../App";
-import { desktopNavigationCreate } from "../navigation/desktopNavigationCreate";
-import { desktopMemoryHistoryCreate, desktopRouterCreate } from "../navigation/desktopRouter";
+import { App } from "../../sources/App";
+import { desktopNavigationCreate } from "../../sources/navigation/desktopNavigationCreate";
+import {
+    desktopMemoryHistoryCreate,
+    desktopRouterCreate,
+} from "../../sources/navigation/desktopRouter";
 
 /* AuthGate drives the password onboarding flow end to end against the real
  * server contract. A newly registered (or freshly signed-in) password account

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { desktopRouteFormat } from "./desktopRouteFormat";
-import { desktopRouteParse } from "./desktopRouteParse";
-import type { DesktopRoute } from "./desktopRouteTypes";
+import { desktopRouteFormat } from "../../sources/navigation/desktopRouteFormat";
+import { desktopRouteParse } from "../../sources/navigation/desktopRouteParse";
+import type { DesktopRoute } from "../../sources/navigation/desktopRouteTypes";
 
 const files = { filter: "all", query: "" } as const;
 

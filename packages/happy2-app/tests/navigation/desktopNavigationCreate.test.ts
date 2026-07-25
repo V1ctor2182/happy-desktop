@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { desktopNavigationCreate } from "./desktopNavigationCreate";
-import { desktopMemoryHistoryCreate, desktopRouterCreate } from "./desktopRouter";
+import { desktopNavigationCreate } from "../../sources/navigation/desktopNavigationCreate";
+import {
+    desktopMemoryHistoryCreate,
+    desktopRouterCreate,
+} from "../../sources/navigation/desktopRouter";
 
 const files = { filter: "all", query: "" } as const;
 

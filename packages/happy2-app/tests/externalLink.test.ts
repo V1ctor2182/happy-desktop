@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { openExternalLink } from "./externalLink";
+import { openExternalLink } from "../sources/externalLink";
 describe("openExternalLink", () => {
     afterEach(() => vi.unstubAllGlobals());
     it("opens absolute http and https URLs in a severed blank tab", () => {

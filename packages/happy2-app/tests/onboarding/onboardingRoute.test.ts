@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CombinedOnboardingStatus, OnboardingRoute } from "happy2-state";
-import { onboardingStepForStatus, preAuthOnboardingStep } from "./onboardingRoute";
+import {
+    onboardingStepForStatus,
+    preAuthOnboardingStep,
+} from "../../sources/onboarding/onboardingRoute";
 
 function status(route: OnboardingRoute): CombinedOnboardingStatus {
     return {

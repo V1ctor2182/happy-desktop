@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { happyStateCreate, type ChatSummary } from "happy2-state";
 import { createFakeServer as createBareFakeServer, jsonResponse } from "happy2-state/testing";
 import { afterEach, describe, expect, it, onTestFinished } from "vitest";
-import { DesktopApp } from "./components/DesktopApp";
-import { desktopNavigationCreate } from "./navigation/desktopNavigationCreate";
+import { DesktopApp } from "../../sources/components/DesktopApp";
+import { desktopNavigationCreate } from "../../sources/navigation/desktopNavigationCreate";
 
 afterEach(cleanup);
 

@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "../App";
-import { DevTokenGate } from "./DevTokenGate";
-import type { AuthSession } from "./AuthGate";
+import { App } from "../../sources/App";
+import { DevTokenGate } from "../../sources/components/DevTokenGate";
+import type { AuthSession } from "../../sources/components/AuthGate";
 
 /* DevTokenGate is the cookie-authenticated web sign-in. The user types a
  * development token; it is validated exactly once through an `Authorization:

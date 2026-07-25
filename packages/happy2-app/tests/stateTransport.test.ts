@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuthenticatedTransport } from "./stateTransport";
+import { createAuthenticatedTransport } from "../sources/stateTransport";
 
 function deferred<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;

@@ -8,7 +8,7 @@ export default defineConfig({
     plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
     build: {
         lib: {
-            entry: resolve(import.meta.dirname, "src/index.ts"),
+            entry: resolve(import.meta.dirname, "sources/index.ts"),
             formats: ["es"],
             fileName: "index",
         },
@@ -19,6 +19,6 @@ export default defineConfig({
     test: {
         exclude: [...configDefaults.exclude, "**/*.gym.test.tsx"],
         environment: "jsdom",
-        setupFiles: [resolve(import.meta.dirname, "src/testing/setup.ts")],
+        setupFiles: [resolve(import.meta.dirname, "tests/setup.ts")],
     },
 });

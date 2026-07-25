@@ -4,7 +4,7 @@ import { ComponentPage, Specimen } from "../kit";
 const files = [
     { fileName: "rigChatStore.ts", path: "packages/happy2-state/src/rig/rigChatStore.ts" },
     { fileName: "RigChatView.tsx", path: "packages/happy2-ui/src/RigChatView.tsx" },
-    { fileName: "AppRigView.tsx", path: "packages/happy2-app/src/AppRigView.tsx" },
+    { fileName: "AppRigView.tsx", path: "packages/happy2-app/sources/AppRigView.tsx" },
 ];
 
 export function RigFileMentionPage() {

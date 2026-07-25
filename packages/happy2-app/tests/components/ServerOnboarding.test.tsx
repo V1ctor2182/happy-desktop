@@ -2,10 +2,10 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { happyStateCreate, type HappyState } from "happy2-state";
 import { DEFAULT_AGENT_LUCKY_LABEL } from "happy2-ui";
-import { ServerOnboarding } from "./ServerOnboarding";
-import { createAuthenticatedTransport } from "../stateTransport";
-import { desktopNavigationCreate } from "../navigation/desktopNavigationCreate";
-import { DEFAULT_AGENT_PRESETS } from "../onboarding/defaultAgentIdentity";
+import { ServerOnboarding } from "../../sources/components/ServerOnboarding";
+import { createAuthenticatedTransport } from "../../sources/stateTransport";
+import { desktopNavigationCreate } from "../../sources/navigation/desktopNavigationCreate";
+import { DEFAULT_AGENT_PRESETS } from "../../sources/onboarding/defaultAgentIdentity";
 
 /* ServerOnboarding drives the durable server-configuration flow against the real
  * /v0/setup contract through a routed fetch mock, so route resumption, provider

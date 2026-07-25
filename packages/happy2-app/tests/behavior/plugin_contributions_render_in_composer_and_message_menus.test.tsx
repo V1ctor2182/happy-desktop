@@ -7,15 +7,15 @@ import {
 } from "happy2-state";
 import { createFakeServer as createBareFakeServer, jsonResponse } from "happy2-state/testing";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
-import { DesktopApp } from "./components/DesktopApp";
-import { desktopNavigationCreate } from "./navigation/desktopNavigationCreate";
-import type { PluginAssetMasks } from "./pluginAssets";
+import { DesktopApp } from "../../sources/components/DesktopApp";
+import { desktopNavigationCreate } from "../../sources/navigation/desktopNavigationCreate";
+import type { PluginAssetMasks } from "../../sources/pluginAssets";
 import {
     chatMenuContributionNodes,
     composerContributionNodes,
     messageMenuContributionNodes,
     type ContributionSurface,
-} from "./views/PluginContributionRenderer";
+} from "../../sources/views/PluginContributionRenderer";
 
 afterEach(cleanup);
 beforeEach(() => history.replaceState(null, "", "/chats"));

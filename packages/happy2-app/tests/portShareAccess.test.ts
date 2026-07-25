@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserError } from "happy2-state";
-import { portShareAccessCreate } from "./portShareAccess";
+import { portShareAccessCreate } from "../sources/portShareAccess";
 
 const SHARE_URL = "http://documentation-preview-abc123.preview.example";
 const SESSION_URL = `${SHARE_URL}/.happy2/auth/session`;

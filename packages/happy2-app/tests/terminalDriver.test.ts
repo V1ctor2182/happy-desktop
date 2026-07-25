@@ -2,8 +2,8 @@ import { Duplex } from "node:stream";
 import { RemoteTerminalProtocolServer } from "@slopus/ghostty-web";
 import type { TerminalConnection, TerminalGridSnapshot, TerminalReplica } from "happy2-state";
 import { expect, it } from "vitest";
-import { terminalDriverCreateWith } from "./terminalDriver";
-import type { TerminalEmulator } from "./ghosttyTerminal";
+import { terminalDriverCreateWith } from "../sources/terminalDriver";
+import type { TerminalEmulator } from "../sources/ghosttyTerminal";
 
 /** Deterministic emulator that renders written bytes as a single line of text. */
 function fakeEmulator(): TerminalEmulator {

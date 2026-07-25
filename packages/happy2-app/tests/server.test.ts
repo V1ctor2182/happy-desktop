@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createServerClient } from "./server";
+import { createServerClient } from "../sources/server";
 
 describe("Happy Place server client", () => {
     afterEach(() => vi.unstubAllGlobals());

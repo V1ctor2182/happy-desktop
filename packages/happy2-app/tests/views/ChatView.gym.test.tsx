@@ -10,8 +10,8 @@ import {
 } from "happy2-state";
 import "happy2-ui/styles.css";
 import { expect, it, onTestFinished } from "vitest";
-import type { DesktopNavigation, DesktopRoute } from "../navigation/desktopRouteTypes";
-import { ChatView } from "./ChatView";
+import type { DesktopNavigation, DesktopRoute } from "../../sources/navigation/desktopRouteTypes";
+import { ChatView } from "../../sources/views/ChatView";
 
 const files = { filter: "all", query: "" } as const;
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

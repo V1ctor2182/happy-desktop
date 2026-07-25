@@ -3,10 +3,10 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { happyStateCreate, type ChatSummary, type NotificationProjection } from "happy2-state";
 import { createFakeServer as createBareFakeServer, jsonResponse } from "happy2-state/testing";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
-import { App } from "./App";
-import { DesktopApp, type DesktopAppProps } from "./components/DesktopApp";
-import type { AuthSession } from "./components/AuthGate";
-import { desktopNavigationCreate } from "./navigation/desktopNavigationCreate";
+import { App } from "../sources/App";
+import { DesktopApp, type DesktopAppProps } from "../sources/components/DesktopApp";
+import type { AuthSession } from "../sources/components/AuthGate";
+import { desktopNavigationCreate } from "../sources/navigation/desktopNavigationCreate";
 const project = {
     id: "project-1",
     name: "Product",
@@ -15,7 +15,7 @@ const project = {
     createdAt: "now",
     updatedAt: "now",
 };
-import { InboxView } from "./views/InboxView";
+import { InboxView } from "../sources/views/InboxView";
 
 function createFakeServer() {
     const server = createBareFakeServer();
