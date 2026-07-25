@@ -1,9 +1,14 @@
 /*
  * Message + MessageList + DayDivider — the chat column.
  *
- * Message: 6px 20px flex row on the app surface [36px avatar | 12px gap |
- * content]. MessageList owns y-scrolling and bottom-anchors sparse histories
- * with a margin-top:auto spacer. DayDivider is quiet centered text.
+ * Message: 16px 20px flex row on the app surface (4px top/bottom when
+ * grouped). The incoming identity avatar hangs in an absolutely positioned
+ * 16x16 gutter slot instead of reserving flow width, so content alone sets
+ * the row's measure: an agent row's own 30px padding-left is the text start;
+ * a human row's bubble is pulled out to 18px padding-left so its 12px
+ * interior padding still lands the actual text on that same 30px line.
+ * MessageList owns y-scrolling and bottom-anchors sparse histories with a
+ * margin-top:auto spacer. DayDivider is quiet centered text.
  */
 
 .happy2-message,
