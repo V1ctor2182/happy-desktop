@@ -341,6 +341,14 @@
         color 120ms ease;
 }
 
+/* The row under the pointer rides above its neighbours and drops its transition,
+   so it tracks the pointer exactly while the rows it displaces still glide. */
+.happy2-sidebar__item[data-dragging] {
+    z-index: 1;
+    background: var(--surface-ripple);
+    transition: none;
+}
+
 .happy2-sidebar__item:hover {
     background: var(--surface-ripple);
 }

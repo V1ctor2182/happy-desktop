@@ -6,6 +6,7 @@ import {
     type CSSProperties,
     type HTMLAttributes,
     type MouseEvent,
+    type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
@@ -80,6 +81,13 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     itemMenuItems?: (item: SidebarItem) => MenuItem[];
     onItemMenuSelect?: (item: SidebarItem, actionId: string) => void;
     onItemSelect: (id: string) => void;
+    /**
+     * Enables dragging top-level rows into a different order and reports the new
+     * arrangement of their ids once, on release. Nested rows travel with the
+     * top-level row they sit under and are never reported themselves. Without
+     * this the rows are not draggable and nothing about them changes.
+     */
+    onItemReorder?: (sectionId: string, ids: readonly string[]) => void;
     onSectionAction?: (sectionId: string) => void;
     sections: SidebarSection[];
     style?: CSSProperties;
@@ -116,6 +124,68 @@ function isLastAtDepth(items: readonly SidebarItem[], index: number): boolean {
 function isFirstAtDepth(items: readonly SidebarItem[], index: number): boolean {
     return (items[index - 1]?.depth ?? 0) < (items[index]!.depth ?? 0);
 }
+
+/** Pointer travel, in px, before a press becomes a drag instead of a selection. */
+const DRAG_THRESHOLD = 4;
+
+interface SidebarDrag {
+    readonly pointerId: number;
+    readonly startY: number;
+    readonly deltaY: number;
+    /** Index into `blocks`, not into `items`: a top-level row travels with its children. */
+    readonly from: number;
+    readonly to: number;
+    readonly heights: readonly number[];
+    /** False until the pointer passes the threshold, so a click still selects. */
+    readonly moved: boolean;
+}
+
+/**
+ * The rows grouped into the units a drag moves: each top-level row followed by
+ * the nested rows that belong to it. A project and the worktrees listed under it
+ * are one thing on screen, so they travel together and a drag can never leave a
+ * child stranded under a different parent.
+ */
+function blocksOf(items: readonly SidebarItem[]): readonly (readonly number[])[] {
+    const blocks: number[][] = [];
+    items.forEach((item, index) => {
+        if ((item.depth ?? 0) === 0 || blocks.length === 0) blocks.push([index]);
+        else blocks[blocks.length - 1]!.push(index);
+    });
+    return blocks;
+}
+
+/** Where the dragged block lands: each neighbour it has passed by half that neighbour's height. */
+function dragTargetIndex(drag: SidebarDrag, deltaY: number): number {
+    let index = drag.from;
+    let travel = deltaY;
+    while (travel > 0 && index < drag.heights.length - 1) {
+        const next = drag.heights[index + 1]!;
+        if (travel <= next / 2) break;
+        travel -= next;
+        index += 1;
+    }
+    while (travel < 0 && index > 0) {
+        const previous = drag.heights[index - 1]!;
+        if (-travel <= previous / 2) break;
+        travel += previous;
+        index -= 1;
+    }
+    return index;
+}
+
+/**
+ * How far a block slides while another is dragged across it: every block between
+ * the drag's origin and its target steps aside by exactly the dragged block's
+ * height, which is what makes the gap follow the pointer.
+ */
+function blockShift(drag: SidebarDrag, index: number): number {
+    if (index === drag.from) return 0;
+    const height = drag.heights[drag.from] ?? 0;
+    if (drag.from < drag.to && index > drag.from && index <= drag.to) return -height;
+    if (drag.to < drag.from && index >= drag.to && index < drag.from) return height;
+    return 0;
+}
 function SidebarRow(props: {
     active: boolean;
     /** Renders the ASCII tree connector that ties a nested row to its parent. */
@@ -123,9 +193,15 @@ function SidebarRow(props: {
     /** Extends this row's stem up into the parent row, under its glyph. */
     branchFirst?: boolean;
     className?: string;
+    /** Set only while a reorder drag is live, so a static sidebar is untouched. */
+    dragging?: boolean;
     item: SidebarItem;
     onContextMenu?: (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => void;
+    onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onSelect: (id: string) => void;
+    shift?: number;
 }) {
     const item = () => props.item;
     const unread = () => item().unread === true;
@@ -146,13 +222,19 @@ function SidebarRow(props: {
             data-mentioned={mentioned() ? "" : undefined}
             data-happy2-ui="sidebar-item"
             data-unread={unread() ? "" : undefined}
+            data-dragging={props.dragging ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
-            style={
-                depth() > 0
+            onPointerDown={props.onPointerDown}
+            onPointerMove={props.onPointerMove}
+            onPointerCancel={props.onPointerUp}
+            onPointerUp={props.onPointerUp}
+            style={{
+                ...(depth() > 0
                     ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
-                    : undefined
-            }
+                    : {}),
+                ...(props.shift ? { transform: `translateY(${String(props.shift)}px)` } : {}),
+            }}
             type="button"
         >
             {props.branch ? (
@@ -247,6 +329,7 @@ export function Sidebar(props: SidebarProps) {
         "onCompose",
         "onItemSelect",
         "onItemMenuSelect",
+        "onItemReorder",
         "onSectionAction",
         "sections",
         "style",
@@ -288,6 +371,87 @@ export function Sidebar(props: SidebarProps) {
             window.removeEventListener("resize", dismiss);
         };
     }, [itemMenu]);
+    // Reorder drag. The live value is kept in a ref as well as in state because
+    // the pointer handlers read it in the same gesture that schedules the paint.
+    const dragRef = useRef<{ sectionId: string; drag: SidebarDrag } | undefined>(undefined);
+    // Set by a drag that actually moved, so the click the browser fires on
+    // release rearranges rather than also opening what was dragged.
+    const dragClick = useRef(false);
+    const [dragPaint, setDragPaint] = useState<{ sectionId: string; drag: SidebarDrag }>();
+    const dragSet = (next: { sectionId: string; drag: SidebarDrag } | undefined): void => {
+        dragRef.current = next;
+        setDragPaint(next);
+    };
+    const dragOf = (sectionId: string): SidebarDrag | undefined =>
+        dragPaint?.sectionId === sectionId ? dragPaint.drag : undefined;
+
+    const dragStart = (
+        event: ReactPointerEvent<HTMLButtonElement>,
+        section: SidebarSection,
+        blocks: readonly (readonly number[])[],
+        blockIndex: number,
+    ): void => {
+        dragClick.current = false;
+        if (!local.onItemReorder || event.button !== 0 || blocks.length < 2) return;
+        // Heights come from the laid-out rows: a block is as tall as the rows it
+        // holds, so a project with worktrees displaces more than a bare one.
+        const rows = event.currentTarget.parentElement?.children ?? [];
+        const heights = blocks.map((block) =>
+            block.reduce((total, index) => {
+                const row = rows[index] as HTMLElement | undefined;
+                return total + (row?.offsetHeight ?? 0);
+            }, 0),
+        );
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragSet({
+            sectionId: section.id,
+            drag: {
+                deltaY: 0,
+                from: blockIndex,
+                heights,
+                moved: false,
+                pointerId: event.pointerId,
+                startY: event.clientY,
+                to: blockIndex,
+            },
+        });
+    };
+
+    const dragMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
+        const current = dragRef.current;
+        if (!current || event.pointerId !== current.drag.pointerId) return;
+        const deltaY = event.clientY - current.drag.startY;
+        if (!current.drag.moved && Math.abs(deltaY) < DRAG_THRESHOLD) return;
+        dragSet({
+            ...current,
+            drag: {
+                ...current.drag,
+                deltaY,
+                moved: true,
+                to: dragTargetIndex(current.drag, deltaY),
+            },
+        });
+    };
+
+    const dragEnd = (
+        event: ReactPointerEvent<HTMLButtonElement>,
+        section: SidebarSection,
+        blocks: readonly (readonly number[])[],
+    ): void => {
+        const current = dragRef.current;
+        if (!current || event.pointerId !== current.drag.pointerId) return;
+        dragSet(undefined);
+        const { from, to, moved } = current.drag;
+        if (!moved) return;
+        dragClick.current = true;
+        if (from === to) return;
+        const topLevel = blocks.map((block) => section.items[block[0]!]!.id);
+        const next = [...topLevel];
+        const [reordered] = next.splice(from, 1);
+        next.splice(to, 0, reordered!);
+        local.onItemReorder?.(section.id, next);
+    };
+
     const openItemMenu = (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => {
         const items = local.itemMenuItems?.(item) ?? [];
         if (!items.some((entry) => entry.kind === "item")) {
@@ -438,26 +602,68 @@ export function Sidebar(props: SidebarProps) {
                                 </div>
                             ) : null}
                             {!section.headingOnly
-                                ? section.items.map((item, index) => (
-                                      <SidebarRow
-                                          active={item.id === local.activeItemId}
-                                          branch={
-                                              (item.depth ?? 0) > 0
-                                                  ? isLastAtDepth(section.items, index)
-                                                      ? "end"
-                                                      : "tee"
-                                                  : undefined
-                                          }
-                                          branchFirst={
-                                              (item.depth ?? 0) > 0 &&
-                                              isFirstAtDepth(section.items, index)
-                                          }
-                                          key={item.id}
-                                          item={item}
-                                          onContextMenu={openItemMenu}
-                                          onSelect={local.onItemSelect}
-                                      />
-                                  ))
+                                ? ((blocks) =>
+                                      section.items.map((item, index) => {
+                                          const blockIndex = blocks.findIndex((block) =>
+                                              block.includes(index),
+                                          );
+                                          const drag = dragOf(section.id);
+                                          const dragging = drag?.moved === true;
+                                          return (
+                                              <SidebarRow
+                                                  active={item.id === local.activeItemId}
+                                                  branch={
+                                                      (item.depth ?? 0) > 0
+                                                          ? isLastAtDepth(section.items, index)
+                                                              ? "end"
+                                                              : "tee"
+                                                          : undefined
+                                                  }
+                                                  branchFirst={
+                                                      (item.depth ?? 0) > 0 &&
+                                                      isFirstAtDepth(section.items, index)
+                                                  }
+                                                  dragging={dragging && blockIndex === drag.from}
+                                                  key={item.id}
+                                                  item={item}
+                                                  onContextMenu={openItemMenu}
+                                                  onPointerDown={
+                                                      local.onItemReorder && (item.depth ?? 0) === 0
+                                                          ? (event) =>
+                                                                dragStart(
+                                                                    event,
+                                                                    section,
+                                                                    blocks,
+                                                                    blockIndex,
+                                                                )
+                                                          : undefined
+                                                  }
+                                                  onPointerMove={
+                                                      local.onItemReorder ? dragMove : undefined
+                                                  }
+                                                  onPointerUp={
+                                                      local.onItemReorder
+                                                          ? (event) =>
+                                                                dragEnd(event, section, blocks)
+                                                          : undefined
+                                                  }
+                                                  onSelect={(id) => {
+                                                      if (dragClick.current) {
+                                                          dragClick.current = false;
+                                                          return;
+                                                      }
+                                                      local.onItemSelect(id);
+                                                  }}
+                                                  shift={
+                                                      dragging
+                                                          ? blockIndex === drag.from
+                                                              ? drag.deltaY
+                                                              : blockShift(drag, blockIndex)
+                                                          : undefined
+                                                  }
+                                              />
+                                          );
+                                      }))(blocksOf(section.items))
                                 : null}
                             {!section.headingOnly &&
                             (section.items.length === 0 ? section.empty : undefined)

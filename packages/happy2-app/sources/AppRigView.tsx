@@ -9,6 +9,7 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigProjectGroup,
+    RigProjectId,
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
@@ -304,6 +305,19 @@ export function AppRigView(props: AppRigViewProps) {
                     onItemSelect={(id) =>
                         props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id)
                     }
+                    onItemReorder={(_sectionId, projectIds) => {
+                        const move = reorderMoveOf(
+                            rows.map((project) => project.id),
+                            projectIds,
+                        );
+                        if (!move) return;
+                        void props.workspace
+                            .projectReorder(
+                                move.id as RigProjectId,
+                                move.afterId as RigProjectId | null,
+                            )
+                            .catch(() => undefined);
+                    }}
                     sections={[
                         {
                             id: "projects",
