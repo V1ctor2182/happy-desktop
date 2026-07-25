@@ -12,7 +12,7 @@ import {
     PluginContributionControl,
     type ButtonVariant,
 } from "happy2-ui";
-import type { PluginAssetMasks } from "../pluginAssets";
+import type { PluginAssetMasks } from "../assetUrls";
 import {
     pluginActionStateKey,
     pluginActionUiState,

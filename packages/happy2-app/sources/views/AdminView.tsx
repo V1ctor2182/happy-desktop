@@ -1,6 +1,6 @@
 import { AdminPage, type AdminPageSection } from "happy2-ui";
 import type { AdminSection, HappyState } from "happy2-state";
-import { usePluginIcons } from "../pluginIcons";
+import { useAssetUrls } from "../assetUrls";
 
 export interface AdminViewProps {
     state: HappyState;
@@ -15,7 +15,7 @@ export interface AdminViewProps {
 }
 
 export function AdminView(props: AdminViewProps) {
-    const icons = usePluginIcons(props.state);
+    const icons = useAssetUrls(props.state);
     const activeSection = props.sections.includes(props.section)
         ? props.section
         : (props.sections[0] ?? "users");

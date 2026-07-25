@@ -25,7 +25,7 @@ import type {
 } from "happy2-state";
 import type { InspectorSnapshot, OverlaysStore } from "happy2-state";
 import type { AuthSession } from "../components/AuthGate";
-import { usePluginAssetMasks } from "../pluginAssets";
+import { useAssetUrls } from "../assetUrls";
 import {
     chatMenuContributionNodes,
     composerContributionNodes,
@@ -96,7 +96,7 @@ function chatScrollCache(state: HappyState): Map<string, MessageListScrollPositi
 export function ChatView(props: ChatViewProps) {
     const state = props.state;
     const navigate = useNavigate();
-    const masks = usePluginAssetMasks(state);
+    const masks = useAssetUrls(state);
     const [resources, resourcesReplace] = useReducer(
         (_current: ChatResources, next: ChatResources) => next,
         {},

@@ -1,7 +1,6 @@
 import type { HappyState } from "happy2-state";
 import { Box, ProfilePage, StoreSurface } from "happy2-ui";
-import { useAvatarImages } from "../avatarImages";
-import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
+import { useAssetUrls, type PluginAssetMasks } from "../assetUrls";
 import type { PluginNavigationSurface } from "../pluginContributions";
 import { PluginInlineContribution } from "./PluginContributionRenderer";
 
@@ -11,17 +10,16 @@ export interface ProfileViewProps {
 }
 
 export function ProfileView(props: ProfileViewProps) {
-    const avatars = useAvatarImages(props.state);
-    const masks = usePluginAssetMasks(props.state);
+    const assets = useAssetUrls(props.state);
     return (
         <Box style={{ display: "flex", flexDirection: "column", width: "100%", minHeight: 0 }}>
             <ProfilePage
-                imageUrl={avatars.imageUrl}
+                imageUrl={assets.imageUrl}
                 store={props.state.directory()}
                 userId={props.userId}
             />
             <StoreSurface store={props.state.pluginNavigation()}>
-                {(nav) => renderProfileContributions(nav, masks)}
+                {(nav) => renderProfileContributions(nav, assets)}
             </StoreSurface>
         </Box>
     );

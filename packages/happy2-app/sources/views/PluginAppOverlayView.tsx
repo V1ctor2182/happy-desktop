@@ -14,7 +14,7 @@ import {
     type McpAppDisplayMode,
 } from "happy2-ui";
 import { useNavigate } from "@tanstack/react-router";
-import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
+import { useAssetUrls, type PluginAssetMasks } from "../assetUrls";
 import {
     pluginAppOpenTargetResolve,
     pluginOpenAppNavigate,
@@ -41,7 +41,7 @@ const APP_DISPLAY_MODES: readonly McpAppDisplayMode[] = ["inline", "fullscreen"]
  */
 export function PluginAppOverlayView(props: PluginAppOverlayViewProps) {
     const navigate = useNavigate();
-    const masks = usePluginAssetMasks(props.state);
+    const masks = useAssetUrls(props.state);
     const overlays = props.state.overlays();
     const [handle, setHandle] = useReducer(
         (_current: PluginAppHandle | undefined, next: PluginAppHandle | undefined) => next,

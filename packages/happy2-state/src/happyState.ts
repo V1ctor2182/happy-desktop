@@ -180,6 +180,12 @@ import {
 } from "./modules/admin/adminState.js";
 import { overlaysStoreCreate, type OverlaysStore } from "./modules/overlays/overlaysState.js";
 import {
+    assetUrlKey,
+    assetUrlsStoreCreate,
+    type AssetUrlRequest,
+    type AssetUrlsStore,
+} from "./modules/asset-urls/assetUrlsState.js";
+import {
     agentImagesLoad,
     agentImagesOutputRoute,
 } from "./modules/agent-images/agentImagesState.js";
@@ -361,6 +367,7 @@ export class HappyState implements AsyncDisposable, Disposable {
     private agentModelsBinding?: AgentModelsStore;
     private adminBinding?: AdminStore;
     private overlaysBinding?: OverlaysStore;
+    private assetUrlsBinding?: AssetUrlsStore;
     private readonly adminSections = new Set<AdminSection>();
     private setupBinding?: SetupStore;
     private agentImagesBinding?: AgentImagesStore;
@@ -632,6 +639,59 @@ export class HappyState implements AsyncDisposable, Disposable {
     overlays(): OverlaysStore {
         if (!this.overlaysBinding) this.overlaysBinding = overlaysStoreCreate();
         return this.overlaysBinding;
+    }
+
+    /** Cached object URLs for authenticated binary assets (avatars, plugin art). */
+    assetUrls(): AssetUrlsStore {
+        if (!this.assetUrlsBinding) this.assetUrlsBinding = assetUrlsStoreCreate();
+        return this.assetUrlsBinding;
+    }
+
+    /**
+     * Ensures one authenticated asset is being downloaded into the asset-URL
+     * cache, and returns immediately.
+     *
+     * This is idempotent per asset for the lifetime of the state: a `loading`,
+     * `ready`, or `failed` entry all suppress a second request, so the many
+     * surfaces that paint the same avatar or icon cause exactly one download and
+     * a failure is not retried on every render. Callers read the resulting URL
+     * from the `assetUrls()` snapshot; nothing here returns a URL, so a caller
+     * cannot come to depend on download timing.
+     */
+    assetUrlRequest(request: AssetUrlRequest): void {
+        const store = this.assetUrls();
+        const key = assetUrlKey(request);
+        if (store.getState().entries.has(key)) return;
+        store.getState().assetUrlInput({ key, type: "assetUrlLoading" });
+        this.runtime.background(this.assetUrlLoad(key, request));
+    }
+
+    /** Downloads one asset's bytes and records the object URL, or a terminal failure. */
+    private async assetUrlLoad(key: string, request: AssetUrlRequest): Promise<void> {
+        const store = this.assetUrls();
+        try {
+            const contents = await this.assetUrlDownload(request);
+            if (this.disposed) return;
+            const url = URL.createObjectURL(
+                new Blob([contents], request.kind === "avatar" ? {} : { type: "image/png" }),
+            );
+            store.getState().assetUrlInput({ key, type: "assetUrlLoaded", url });
+        } catch {
+            if (!this.disposed) store.getState().assetUrlInput({ key, type: "assetUrlFailed" });
+        }
+    }
+
+    private assetUrlDownload(request: AssetUrlRequest): Promise<ArrayBuffer> {
+        switch (request.kind) {
+            case "avatar":
+                return this.fileDownload(request.fileId);
+            case "pluginUiAsset":
+                return this.pluginUiAssetRead(request.installationId, request.assetId);
+            case "pluginCatalogIcon":
+                return this.pluginIconDownload(request.shortName);
+            case "pluginSystemIcon":
+                return this.systemPluginImageDownload(request.pluginId);
+        }
     }
 
     directory(): DirectoryStore {
@@ -1106,6 +1166,7 @@ export class HappyState implements AsyncDisposable, Disposable {
         this.chatContributions.dispose();
         this.settingsCoordinator?.[Symbol.dispose]();
         this.drafts[Symbol.dispose]();
+        this.assetUrlsBinding?.getState().assetUrlsDispose();
         this.identities.clear();
         this.sidebarChats.clear();
     }

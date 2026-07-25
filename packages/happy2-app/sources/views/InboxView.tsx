@@ -1,6 +1,6 @@
 import type { HappyState } from "happy2-state";
 import { ActivityPage } from "happy2-ui";
-import { useAvatarImages } from "../avatarImages";
+import { useAssetUrls } from "../assetUrls";
 import { useNotificationNavigation } from "../navigation/useNotificationNavigation";
 
 export interface InboxViewProps {
@@ -8,7 +8,7 @@ export interface InboxViewProps {
     virtualize?: boolean;
 }
 export function InboxView(props: InboxViewProps) {
-    const avatars = useAvatarImages(props.state);
+    const avatars = useAssetUrls(props.state);
     const notifications = useNotificationNavigation(props.state);
     return (
         <ActivityPage

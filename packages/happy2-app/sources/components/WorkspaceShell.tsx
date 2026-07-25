@@ -15,7 +15,7 @@ import {
 } from "happy2-ui";
 import type { AppRouterContext } from "../navigation/appRouterContext";
 import { adminSectionsProject } from "../navigation/adminSectionsProject";
-import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
+import { useAssetUrls, type PluginAssetMasks } from "../assetUrls";
 import { sidebarAppEntries } from "../views/AppsView";
 import { PluginMenuContribution } from "../views/PluginContributionRenderer";
 import type { PluginNavigationSurface } from "../pluginContributions";
@@ -62,7 +62,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     const context = props.context;
     const state = context.state;
     const navigate = useNavigate();
-    const masks = usePluginAssetMasks(state);
+    const masks = useAssetUrls(state);
     const overlays = state.overlays();
     const adminSections = adminSectionsProject(context.permissions);
     const user = context.session?.user;

@@ -1,6 +1,6 @@
 import { SearchPage, type SearchResultType } from "happy2-ui";
 import type { HappyState } from "happy2-state";
-import { useAvatarImages } from "../avatarImages";
+import { useAssetUrls } from "../assetUrls";
 
 export interface SearchOverlayProps {
     query: string;
@@ -10,7 +10,7 @@ export interface SearchOverlayProps {
 
 /** Selects the search surface and provides session-scoped avatar object URLs. */
 export function SearchOverlay(props: SearchOverlayProps) {
-    const avatars = useAvatarImages(props.state);
+    const avatars = useAssetUrls(props.state);
     return (
         <SearchPage
             imageUrl={avatars.imageUrl}

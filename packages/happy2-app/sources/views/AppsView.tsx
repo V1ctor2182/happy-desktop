@@ -17,7 +17,7 @@ import {
     type PluginSettingsAppRow,
 } from "happy2-ui";
 import { useNavigate } from "@tanstack/react-router";
-import { usePluginAssetMasks, type PluginAssetMasks } from "../pluginAssets";
+import { useAssetUrls, type PluginAssetMasks } from "../assetUrls";
 import {
     pluginAppOpenTargetResolve,
     pluginOpenAppNavigate,
@@ -42,7 +42,7 @@ const APP_DISPLAY_MODES: readonly McpAppDisplayMode[] = ["inline", "fullscreen"]
  * open instance and one coarse subscription to plugin navigation.
  */
 export function AppsView(props: AppsViewProps) {
-    const masks = usePluginAssetMasks(props.state);
+    const masks = useAssetUrls(props.state);
     if (props.appId)
         return <PluginAppPageView instanceId={props.appId} masks={masks} state={props.state} />;
     return <AppsManageView masks={masks} state={props.state} />;
