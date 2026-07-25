@@ -51,7 +51,7 @@ describe("channel composer audience routing", () => {
         expect(reconciled.getState()).toMatchObject({ audience: "agents", agentUserIds: [] });
     });
 
-    it("keeps the audience keys off the wire for a surface without audience routing", async () => {
+    it("addresses agents explicitly by default and names no extra agents", async () => {
         const server = createFakeServer();
         server.respond(
             "POST",
@@ -61,13 +61,19 @@ describe("channel composer audience routing", () => {
         await using state = happyStateCreate({ transport: server.transport });
 
         const composer = state.composer("dm-1");
+        expect(composer.getState().audience).toBe("agents");
         composer.getState().textUpdate("hello agent");
         composer.getState().textSubmit();
         await state.whenIdle();
 
         const send = server.requests.find((request) => request.path.endsWith("/dm-1/sendMessage"));
         expect(send?.body).toBeDefined();
-        expect(Object.keys(send!.body as Record<string, unknown>)).not.toContain("audience");
+        // The audience is stated rather than left out: the server reads an absent
+        // audience as "people", which would route a message meant for the agent to
+        // the humans in the conversation.
+        expect(send!.body).toMatchObject({ text: "hello agent", audience: "agents" });
+        // The chat's own default agent answers, so no explicit agent is named. An
+        // empty list must stay off the wire rather than being sent as `[]`.
         expect(Object.keys(send!.body as Record<string, unknown>)).not.toContain("agentUserIds");
     });
 });

@@ -123,7 +123,8 @@ it("contains a Sidebar within the width owned by the resizable shell", async () 
     const sidebarContent = view.$('[data-testid="sidebar-content"]');
     const contentSidebar = sidebarContent.bounds();
     expect(contentSidebar.width).toBe(shellSidebar.width);
-    expect(contentSidebar.right).toBe(shellSidebar.right);
+    // `Bounds` carries only the origin and size, so the trailing edge is derived.
+    expect(contentSidebar.x + contentSidebar.width).toBe(shellSidebar.x + shellSidebar.width);
     expect(sidebarContent.computedStyle("background-color")).toBe("rgb(245, 245, 245)");
 });
 

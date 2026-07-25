@@ -321,7 +321,6 @@ it("keeps automated attribution on own image-only and attachment-only messages",
 it("holds Message anatomy, segment styling, and affordances", async () => {
     const view = createRenderer();
     const selectedEmoji: string[] = [];
-    let replies = 0;
     let adds = 0;
     view.render(
         () =>
@@ -340,13 +339,11 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
                     ]}
                     onReactionSelect={(emoji) => selectedEmoji.push(emoji)}
                     onReactionAdd={() => (adds += 1)}
-                    onReplySelect={() => (replies += 1)}
                     reactions={[
                         { count: 1, emoji: "👍" },
                         { active: true, count: 12, emoji: "🎉" },
                         { count: 128, emoji: "🚀" },
                     ]}
-                    replyCount={3}
                     time="10:42"
                     tone="amber"
                 />,
@@ -606,18 +603,6 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
     (addButton.element as HTMLButtonElement).click();
     expect(selectedEmoji).toEqual(["👍"]);
     expect(adds).toBe(1);
-    /* ---- Reply affordance ------------------------------------------------ */
-    const repliesButton = view.$('[data-testid="m1"] [data-happy2-ui="message-replies"]');
-    expect(repliesButton.element.tagName).toBe("BUTTON");
-    expect(repliesButton.element.textContent).toBe("3 replies");
-    expect(repliesButton.computedStyles(["color", "font-size", "font-weight"])).toEqual({
-        color: "rgb(0, 122, 255)",
-        "font-size": "12px",
-        "font-weight": "700",
-    });
-    expect((await repliesButton.visibleMetrics()).pixelCount).toBeGreaterThan(0);
-    (repliesButton.element as HTMLButtonElement).click();
-    expect(replies).toBe(1);
     /* ---- Attachment slot -------------------------------------------------- */
     const m2Body = view.$('[data-testid="m2"] [data-happy2-ui="message-body"]');
     const attachments = view.$('[data-testid="m2"] [data-happy2-ui="message-attachments"]');
@@ -814,7 +799,6 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
     const view = createRenderer();
     const reactions: string[] = [];
     const menuSelections: string[] = [];
-    let threadStarts = 0;
     const messageMenu = [
         { kind: "item" as const, id: "copy-link", icon: "link" as const, label: "Copy link" },
         { kind: "item" as const, id: "edit", icon: "edit" as const, label: "Edit message" },
@@ -835,7 +819,6 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
                     menuItems={messageMenu}
                     onMenuSelect={(id) => menuSelections.push(id)}
                     onReactionSelect={(id) => reactions.push(id)}
-                    onReplySelect={() => (threadStarts += 1)}
                     reactionOptions={reactionOptions}
                     time="10:55"
                     tone="ocean"
@@ -879,7 +862,6 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
                     body="Waiting for acknowledgement."
                     deliveryState="sending"
                     grouped
-                    onReplySelect={() => {}}
                     time="11:03"
                 />,
             ),
@@ -934,7 +916,6 @@ it("exposes real hover actions and keeps grouped sending geometry stable", async
     }
     /* Thread callback and the picker/menu popovers perform actual selections. */
     actionButtons[1]?.click();
-    expect(threadStarts).toBe(1);
     actionButtons[0]?.click();
     await nextFrame();
     const picker = view.$('[data-testid="actions"] [data-happy2-ui="emoji-picker"]');

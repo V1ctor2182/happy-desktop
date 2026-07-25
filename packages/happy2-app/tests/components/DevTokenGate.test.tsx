@@ -131,6 +131,7 @@ const workspaceRoutes: Record<string, Handler> = {
     "GET /v0/sync/state": () =>
         json({ state: { generation: "1", sequence: "0" }, serverTime: expiresAt }),
     "GET /v0/chats": () => json({ chats: [] }),
+    "GET /v0/projects": () => json({ projects: [] }),
     "GET /v0/drafts": () => json({ drafts: [], serverTime: expiresAt }),
     "GET /v0/contacts": () => json({ users: [], presence: [], statuses: [] }),
     "GET /v0/presence": () => json({ presence: [], statuses: [] }),

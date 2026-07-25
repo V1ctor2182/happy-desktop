@@ -431,20 +431,14 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="Sparse history bottom-anchors against the 12px padding; intro block leads the chronology"
-                label="MessageList — bottom anchor + intro"
+                detail="Sparse history bottom-anchors against the 12px padding, so a short conversation sits on the composer instead of floating at the top"
+                label="MessageList — bottom anchor"
                 number="11"
                 stage="app"
             >
                 <div style={column}>
                     {channelFrame(
-                        <MessageList
-                            intro={{
-                                description:
-                                    "Ship mobile v2 by Friday. Humans and agents coordinate here.",
-                                title: "Welcome to #launch-week",
-                            }}
-                        >
+                        <MessageList>
                             <DayDivider label="Today" />
                             <Message
                                 author="Maya Johnson"
