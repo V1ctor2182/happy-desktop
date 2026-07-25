@@ -44,7 +44,7 @@ const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5
 const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
     ? new URL(process.env.VITE_DEV_SERVER_URL).origin
     : undefined;
-const titleBarHeight = 38;
+const titleBarHeight = 44;
 const macosTrafficLightSize = 14;
 const macosWindowChrome = {
     titleBarStyle: "hidden",
