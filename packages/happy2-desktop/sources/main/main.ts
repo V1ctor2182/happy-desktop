@@ -49,7 +49,10 @@ const macosTrafficLightSize = 14;
 const macosWindowChrome = {
     titleBarStyle: "hidden",
     trafficLightPosition: {
-        x: 14,
+        // The lights inset far enough that the gap to the sidebar toggle beside
+        // them reads as the same deliberate spacing as the gap from that toggle
+        // to the heading, rather than a wide hole before the first control.
+        x: 24,
         y: (titleBarHeight - macosTrafficLightSize) / 2,
     },
 } as const;

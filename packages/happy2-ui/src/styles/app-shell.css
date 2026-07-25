@@ -79,14 +79,14 @@
     height: 38px;
 }
 
-/* The native controls occupy x=14…78 and their window-server hit area runs
-   past the green light, so the toggle docks clear of it at x=96…124. Any
-   heading content starts after both. */
+/* The native controls occupy x=24…78 and their window-server hit area runs past
+   the green light, so the toggle docks clear of it at x=96…124. Both gaps in
+   the row — lights to toggle, toggle to heading — are the same 18px. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: 136px;
+    padding-left: 142px;
 }
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
@@ -96,7 +96,7 @@
     .happy2-app-shell__workspace
     > .happy2-tabbed-pane:first-child
     .happy2-tabbed-pane__bar {
-    padding-left: 136px;
+    padding-left: 142px;
 }
 
 .happy2-app-shell__title-bar {
