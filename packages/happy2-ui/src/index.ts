@@ -214,7 +214,11 @@ export {
     ConversationSettingsModal,
     type ConversationSettingsModalProps,
 } from "./ConversationSettingsModal";
-export { ConversationView, type ConversationViewProps } from "./ConversationView";
+export {
+    ConversationStatus,
+    ConversationView,
+    type ConversationViewProps,
+} from "./ConversationView";
 export {
     RigUserInputPrompt,
     type RigUserInputAnswerMap,

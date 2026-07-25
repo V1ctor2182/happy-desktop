@@ -19,7 +19,13 @@ import { RigCommandPalette } from "./RigCommandPalette";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 
 export type ConversationViewProps = {
-    title: string;
+    /**
+     * Titles this conversation's own 56px header. Omit it when the surface that
+     * hosts this view already names what is open — the local workspace heads a
+     * whole directory and switches sessions with tabs beneath that heading — and
+     * no header renders at all.
+     */
+    title?: string;
     /** Secondary header line: the working directory, topic, or participants. */
     subtitle?: string;
     /** True while the agent is working; drives the live activity line. */
@@ -87,6 +93,32 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
 }
 
 /**
+ * The agent's live run state for the header that names what is open. It sits
+ * here rather than inside `ConversationView` because a surface whose heading
+ * spans a whole directory still shows the open session's activity.
+ */
+export function ConversationStatus(props: { elapsedMs?: number; running?: boolean }) {
+    return (
+        <span
+            className="happy2-conversation__status"
+            data-happy2-ui="conversation-status"
+            data-running={props.running ? "" : undefined}
+        >
+            <span aria-hidden="true" className="happy2-conversation__status-dot" />
+            {props.running ? "Running" : "Idle"}
+            {props.running && props.elapsedMs !== undefined ? (
+                <span
+                    className="happy2-conversation__status-elapsed"
+                    data-happy2-ui="conversation-elapsed"
+                >
+                    {elapsedFormat(props.elapsedMs)}
+                </span>
+            ) : null}
+        </span>
+    );
+}
+
+/**
  * ConversationView — the assembled conversation surface: a `ChannelHeader` with
  * the title, subtitle, and owner-supplied controls; the virtualized shared
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
@@ -109,32 +141,22 @@ export function ConversationView(props: ConversationViewProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
-            <ChannelHeader
-                actions={
-                    <>
-                        <span
-                            className="happy2-conversation__status"
-                            data-happy2-ui="conversation-status"
-                            data-running={props.running ? "" : undefined}
-                        >
-                            <span aria-hidden="true" className="happy2-conversation__status-dot" />
-                            {props.running ? "Running" : "Idle"}
-                            {props.running && props.elapsedMs !== undefined ? (
-                                <span
-                                    className="happy2-conversation__status-elapsed"
-                                    data-happy2-ui="conversation-elapsed"
-                                >
-                                    {elapsedFormat(props.elapsedMs)}
-                                </span>
-                            ) : null}
-                        </span>
-                        {props.headerActions}
-                    </>
-                }
-                icon="spark"
-                title={props.title}
-                topic={props.subtitle}
-            />
+            {props.title === undefined ? null : (
+                <ChannelHeader
+                    actions={
+                        <>
+                            <ConversationStatus
+                                elapsedMs={props.elapsedMs}
+                                running={props.running}
+                            />
+                            {props.headerActions}
+                        </>
+                    }
+                    icon="spark"
+                    title={props.title}
+                    topic={props.subtitle}
+                />
+            )}
 
             {props.panel ? (
                 <div className="happy2-conversation__panel" data-happy2-ui="conversation-panel">

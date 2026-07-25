@@ -19,8 +19,10 @@ import {
     AppShell,
     Banner,
     Button,
+    ChannelHeader,
     ComposerModelControl,
     ConversationSettingsModal,
+    ConversationStatus,
     ConversationView,
     EmptyState,
     RigActivityPanel,
@@ -230,57 +232,78 @@ export function AppRigView(props: AppRigViewProps) {
             }
         >
             {openFolder ? (
-                <TabbedPane
-                    actions={
-                        <Button
-                            aria-label="New session in this folder"
-                            icon="plus"
-                            iconOnly
-                            onClick={() =>
-                                void props.workspace
-                                    .conversationCreate({ cwd: openFolder.path })
-                                    .catch(() => undefined)
-                            }
-                            size="small"
-                            variant="ghost"
-                        />
-                    }
-                    activeId={props.chatId ?? ""}
-                    closeLabel="Close session"
-                    onClose={(chatId) => {
-                        // Closing the addressed session addresses what is left
-                        // first, so the surface never sits on a session that has
-                        // just left the list. The address it replaces is gone,
-                        // so it does not belong in history either.
-                        if (chatId === props.chatId) {
-                            const rest = openFolder.conversations.filter(
-                                (summary) => summary.id !== chatId,
-                            );
-                            props.onChatSelect(
-                                rest.length > 0 ? openFolder.id : undefined,
-                                rest[0]?.id,
-                                true,
-                            );
+                <>
+                    {/* The heading names the working directory, not the session:
+                        every tab beneath it is another session in this one
+                        directory, so it stays put as they are switched. */}
+                    <ChannelHeader
+                        actions={
+                            conversation.type === "ready" ? (
+                                <ConversationStatus
+                                    elapsedMs={conversationElapsedMs(conversation.value, now)}
+                                    running={conversation.value.running}
+                                />
+                            ) : undefined
                         }
-                        void props.workspace
-                            .conversationArchive(chatId as RigSessionId)
-                            .catch(() => undefined);
-                    }}
-                    onReorder={(chatIds) =>
-                        void props.workspace
-                            .conversationsReorder(openFolder.id, chatIds as readonly RigSessionId[])
-                            .catch(() => undefined)
-                    }
-                    onSelect={(chatId) => props.onChatSelect(openFolder.id, chatId)}
-                    tabs={sessionTab(openFolder)}
-                >
-                    <RigConversationBody
-                        conversation={conversation}
-                        now={now}
-                        onCreate={conversationCreate}
-                        workspace={props.workspace}
+                        icon="inbox"
+                        title={openFolder.name}
+                        topic={openFolder.displayPath}
                     />
-                </TabbedPane>
+                    <TabbedPane
+                        actions={
+                            <Button
+                                aria-label="New session in this folder"
+                                icon="plus"
+                                iconOnly
+                                onClick={() =>
+                                    void props.workspace
+                                        .conversationCreate({ cwd: openFolder.path })
+                                        .catch(() => undefined)
+                                }
+                                size="small"
+                                variant="ghost"
+                            />
+                        }
+                        activeId={props.chatId ?? ""}
+                        closeLabel="Close session"
+                        onClose={(chatId) => {
+                            // Closing the addressed session addresses what is left
+                            // first, so the surface never sits on a session that has
+                            // just left the list. The address it replaces is gone,
+                            // so it does not belong in history either.
+                            if (chatId === props.chatId) {
+                                const rest = openFolder.conversations.filter(
+                                    (summary) => summary.id !== chatId,
+                                );
+                                props.onChatSelect(
+                                    rest.length > 0 ? openFolder.id : undefined,
+                                    rest[0]?.id,
+                                    true,
+                                );
+                            }
+                            void props.workspace
+                                .conversationArchive(chatId as RigSessionId)
+                                .catch(() => undefined);
+                        }}
+                        onReorder={(chatIds) =>
+                            void props.workspace
+                                .conversationsReorder(
+                                    openFolder.id,
+                                    chatIds as readonly RigSessionId[],
+                                )
+                                .catch(() => undefined)
+                        }
+                        onSelect={(chatId) => props.onChatSelect(openFolder.id, chatId)}
+                        tabs={sessionTab(openFolder)}
+                    >
+                        <RigConversationBody
+                            conversation={conversation}
+                            now={now}
+                            onCreate={conversationCreate}
+                            workspace={props.workspace}
+                        />
+                    </TabbedPane>
+                </>
             ) : (
                 <>
                     {/* With no directory open there is no tab strip, so this side of
@@ -350,6 +373,17 @@ function RigConversationBody(props: {
 }
 
 /**
+ * How long the open session's current turn has been running. A live run counts
+ * from its start against the ticking clock; a finished one keeps the duration
+ * the turn recorded.
+ */
+function conversationElapsedMs(conversation: RigConversationSnapshot, now: number) {
+    return conversation.running && conversation.runStartedAt !== undefined
+        ? Math.max(0, now - conversation.runStartedAt)
+        : conversation.turnElapsedMs;
+}
+
+/**
  * Projects one local conversation into `ConversationView`: the shared entries,
  * composer, and request prompts, plus the local-only header controls and panels
  * the shared surface hosts in its slots.
@@ -378,16 +412,11 @@ function RigConversationSurface(props: {
                 title="Session unavailable"
             />
         );
-    const elapsedMs =
-        conversation.running && conversation.runStartedAt !== undefined
-            ? Math.max(0, props.now - conversation.runStartedAt)
-            : conversation.turnElapsedMs;
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
     return (
         <ConversationView
             composer={conversation.composer}
             composerPlaceholder="Message Happy…"
-            elapsedMs={elapsedMs}
             entries={conversation.entries}
             composerControls={
                 <>
@@ -479,8 +508,6 @@ function RigConversationSurface(props: {
             queued={conversation.queuedMessages}
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
-            subtitle={conversation.subtitle}
-            title={conversation.title ?? "Untitled session"}
             viewerId={rigOwnerAuthor.id}
         />
     );

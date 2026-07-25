@@ -81,12 +81,13 @@
     padding-left: 136px;
 }
 
-/* Same reservation on the workspace's own top strip once the sidebar is hidden
-   and the traffic lights plus the floating toggle sit over it. The strip also
-   grows to the 56px chrome height so the floating lane covers only tab-bar
-   space, never the content beneath it. */
-.happy2-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-tabbed-pane__bar {
-    padding-top: 23px;
+/* Same reservation on whichever strip heads the workspace once the sidebar is
+   hidden and the traffic lights plus the floating toggle sit over it. */
+.happy2-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-channel-header,
+.happy2-app-shell[data-window-controls][data-sidebar-collapsed]
+    .happy2-app-shell__workspace
+    > .happy2-tabbed-pane:first-child
+    .happy2-tabbed-pane__bar {
     padding-left: 136px;
 }
 
