@@ -121,8 +121,11 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         sessionArchive: async (sessionId) => {
             await postJson<Record<string, never>>(`/sessions/${sessionId}/archive`);
         },
-        sessionsReorder: async (groupId, sessionIds) => {
-            await postJson<Record<string, never>>("/sessions/order", { groupId, sessionIds });
+        sessionReorder: async (sessionId, afterId) => {
+            await postJson<Record<string, never>>(`/sessions/${sessionId}/reorder`, { afterId });
+        },
+        projectReorder: async (projectId, afterId) => {
+            await postJson<Record<string, never>>(`/projects/${projectId}/reorder`, { afterId });
         },
 
         messageSubmit: async (sessionId, text, idempotencyKey) => {

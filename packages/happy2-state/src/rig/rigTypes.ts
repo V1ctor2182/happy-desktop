@@ -353,6 +353,11 @@ export interface RigProjectAvatar {
 export interface RigProject {
     readonly id: RigProjectId;
     readonly name: string;
+    /**
+     * Fractional index the host sorts projects by, ascending then by id. It is
+     * opaque: compare it, never parse it, and only the host mints new values.
+     */
+    readonly orderKey: string;
     /** Canonical absolute path of the project root. */
     readonly path: string;
     /** Presentation path (home-relative when the daemon's host supplied one). */
@@ -373,6 +378,8 @@ export interface RigWorktree {
     readonly id: RigWorktreeId;
     readonly projectId: RigProjectId;
     readonly name: string;
+    /** Fractional index the host sorts a project's worktrees by. */
+    readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
     readonly status:
@@ -400,6 +407,8 @@ export interface RigSessionSummary {
     readonly projectId: RigProjectId;
     /** Set when the session runs inside one of the project's worktrees. */
     readonly worktreeId?: RigWorktreeId;
+    /** Fractional index the host sorts sessions by within their own group. */
+    readonly orderKey: string;
     /** Canonical absolute working directory. */
     readonly cwd: string;
     /** Original Rig path retained for presentation when it differs from `cwd`. */
@@ -422,6 +431,8 @@ export interface RigSession {
     readonly id: RigSessionId;
     readonly projectId: RigProjectId;
     readonly worktreeId?: RigWorktreeId;
+    /** Fractional index this session sorts by within its own group. */
+    readonly orderKey: string;
     readonly cwd: string;
     readonly displayCwd: string;
     readonly providerId: string;

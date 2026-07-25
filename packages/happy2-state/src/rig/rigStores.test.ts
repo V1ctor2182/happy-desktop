@@ -130,12 +130,13 @@ async function chatReady(
 describe("rigSessionListStore", () => {
     it("keeps the order the host listed sessions in and reconciles durable truth after a hint", async () => {
         const fake = createFakeRigTransport();
-        // The host owns presentation order (it holds the user's durable tab
-        // arrangement), so the list renders what it was handed rather than
-        // re-sorting it.
-        fake.sessionSet(fakeRigSession("c", { createdAt: 300 }));
-        fake.sessionSet(fakeRigSession("b", { createdAt: 200 }));
-        fake.sessionSet(fakeRigSession("a", { createdAt: 100 }));
+        // The host owns presentation order (it holds the user's durable
+        // arrangement as a fractional index), so the list renders what the keys
+        // say rather than re-sorting by recency: `c` is listed first despite
+        // being the newest by nothing but its key.
+        fake.sessionSet(fakeRigSession("c", { createdAt: 300, orderKey: "a0" }));
+        fake.sessionSet(fakeRigSession("b", { createdAt: 200, orderKey: "a1" }));
+        fake.sessionSet(fakeRigSession("a", { createdAt: 100, orderKey: "a2" }));
         const store = rigSessionListStoreCreate({ transport: fake.transport });
         const unsubscribe = store.subscribe(() => undefined);
         await flush();
@@ -153,7 +154,7 @@ describe("rigSessionListStore", () => {
         await flush();
         expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a"]);
 
-        fake.sessionSet(fakeRigSession("d", { createdAt: 400 }));
+        fake.sessionSet(fakeRigSession("d", { createdAt: 400, orderKey: "a3" }));
         fake.globalEmit({
             cursor: "2",
             type: "session_created",
@@ -162,7 +163,7 @@ describe("rigSessionListStore", () => {
         await flush();
         expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a", "d"]);
 
-        fake.sessionSet(fakeRigSession("a", { createdAt: 100, title: "Renamed" }));
+        fake.sessionSet(fakeRigSession("a", { createdAt: 100, orderKey: "a2", title: "Renamed" }));
         fake.globalEmit({
             cursor: "3",
             type: "session_updated",

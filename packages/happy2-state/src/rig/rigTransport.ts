@@ -3,7 +3,6 @@ import type {
     RigEventId,
     RigFileSearchResult,
     RigGoal,
-    RigGroupId,
     RigJson,
     RigMessage,
     RigModelCatalog,
@@ -11,6 +10,7 @@ import type {
     RigPermissionMode,
     RigPermissionReview,
     RigProjectCatalog,
+    RigProjectId,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -256,12 +256,17 @@ export interface RigTransport {
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
     /**
-     * Records the complete order of one group's sessions — a project's or one of
-     * its worktrees' — as the user arranged them. The host owns presentation
-     * order — `sessionsRead` already returns sessions in it — so this reports an
-     * arrangement rather than asking the list to re-sort itself.
+     * Moves one session directly after `afterId` within its own group, or to the
+     * front of that group when `afterId` is null. The host owns presentation
+     * order — `sessionsRead` already returns sessions in it — and mints the
+     * moved session's new key, so this reports one move rather than restating
+     * the whole arrangement; two clients dragging different rows therefore both
+     * land instead of overwriting each other.
      */
-    sessionsReorder(groupId: RigGroupId, sessionIds: readonly RigSessionId[]): Promise<void>;
+    sessionReorder(sessionId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
+
+    /** Moves one project after `afterId`, or to the front of the list when null. */
+    projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
 
     /** Submits a fresh user turn; `idempotencyKey` is stable across retries of one send. */
     messageSubmit(sessionId: RigSessionId, text: string, idempotencyKey: string): Promise<void>;

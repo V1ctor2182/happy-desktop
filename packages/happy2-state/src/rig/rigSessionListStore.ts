@@ -7,10 +7,12 @@ import {
     type RigProjectGroup,
 } from "./rigProjectGroupProject.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
+import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
 import type {
     RigGroupId,
     RigProjectCatalog,
+    RigProjectId,
     RigSession,
     RigSessionCreateInput,
     RigSessionId,
@@ -70,12 +72,16 @@ export interface RigSessionListStore {
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
     /**
-     * Rearranges one group's sessions into the given order, which must name
-     * exactly that group's currently listed sessions. The rows move at once and
-     * the arrangement is recorded durably by the host; a failure is recorded in
-     * `mutationError` and the following reconcile restores the host's order.
+     * Moves one conversation directly after `afterId` inside its own group, or
+     * to the front of that group when `afterId` is null. The row moves at once —
+     * against a key minted the same way the host mints it, so the optimistic
+     * order is the one that lands — and a failure is recorded in `mutationError`
+     * with the following reconcile restoring the host's order.
      */
-    groupReorder(groupId: RigGroupId, sessionIds: readonly RigSessionId[]): Promise<void>;
+    conversationReorder(sessionId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
+
+    /** Moves one project after `afterId`, or to the front of the list when null. */
+    projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -279,30 +285,51 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     if (!disposed) await reconcile();
                 }
             }),
-        groupReorder: (groupId, sessionIds) =>
+        conversationReorder: (sessionId, afterId) =>
             mutate(async () => {
-                const ranked = new Map(sessionIds.map((id, index) => [id, index]));
-                // Only the addressed group moves; every other one keeps the
-                // relative order the host listed it in.
-                const reordered = [...sessions];
-                const positions = reordered.flatMap((session, index) =>
-                    rigSessionGroupIdOf(session) === groupId ? [index] : [],
+                const moved = sessions.find((session) => session.id === sessionId);
+                if (moved === undefined) return;
+                // Only the moved row's key changes, and it is minted the same way
+                // the host mints it, so the optimistic order is exactly the one
+                // the reconcile confirms rather than a guess it has to undo.
+                const group = rigSessionGroupIdOf(moved);
+                const orderKey = orderKeyAfter(
+                    sessions
+                        .filter((session) => rigSessionGroupIdOf(session) === group)
+                        .map((session) => ({ id: session.id, orderKey: session.orderKey })),
+                    sessionId,
+                    afterId,
                 );
-                if (positions.length === 0) return;
-                const arranged = positions
-                    .map((index) => reordered[index]!)
-                    .sort(
-                        (left, right) =>
-                            (ranked.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
-                            (ranked.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-                    );
-                positions.forEach((index, slot) => {
-                    reordered[index] = arranged[slot]!;
-                });
-                sessions = reordered;
+                sessions = sessions.map((session) =>
+                    session.id === sessionId ? { ...session, orderKey } : session,
+                );
                 publish();
                 try {
-                    await deps.transport.sessionsReorder(groupId, sessionIds);
+                    await deps.transport.sessionReorder(sessionId, afterId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        projectReorder: (projectId, afterId) =>
+            mutate(async () => {
+                if (!catalog.projects.some((project) => project.id === projectId)) return;
+                const orderKey = orderKeyAfter(
+                    catalog.projects.map((project) => ({
+                        id: project.id,
+                        orderKey: project.orderKey,
+                    })),
+                    projectId,
+                    afterId,
+                );
+                catalog = {
+                    ...catalog,
+                    projects: catalog.projects.map((project) =>
+                        project.id === projectId ? { ...project, orderKey } : project,
+                    ),
+                };
+                publish();
+                try {
+                    await deps.transport.projectReorder(projectId, afterId);
                 } finally {
                     if (!disposed) await reconcile();
                 }
@@ -332,6 +359,7 @@ function sessionSummaryOf(session: RigSession): RigSessionSummary {
         id: session.id,
         projectId: session.projectId,
         ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
+        orderKey: session.orderKey,
         cwd: session.cwd,
         displayCwd: session.displayCwd,
         providerId: session.providerId,

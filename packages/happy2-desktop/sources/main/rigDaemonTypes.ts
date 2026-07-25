@@ -26,9 +26,13 @@ export interface Project {
     readonly id: string;
     readonly kind: "regular" | "home";
     readonly name: string;
+    /** Fractional index the daemon sorts projects by, ascending then by id. */
+    readonly orderKey: string;
     readonly path: string;
     readonly initializationStatus: "initializing" | "ready" | "failed";
     readonly avatar?: ProjectAvatar;
+    /** Optimistic-concurrency token the daemon requires to guard a reorder. */
+    readonly version: number;
     readonly createdAt: number;
     readonly updatedAt: number;
 }
@@ -45,6 +49,8 @@ export interface ProjectWorkspace {
     readonly id: string;
     readonly projectId: string;
     readonly name: string;
+    /** Fractional index the daemon sorts a project's worktrees by. */
+    readonly orderKey: string;
     readonly path: string;
     readonly status: ProjectWorkspaceStatus;
     readonly createdAt: number;
@@ -84,6 +90,8 @@ export interface SessionSummary {
     readonly id: string;
     readonly projectId: string;
     readonly workspaceId?: string;
+    /** Fractional index the daemon sorts sessions by within their group. */
+    readonly orderKey: string;
     readonly cwd: string;
     readonly providerId: string;
     readonly modelId: string;

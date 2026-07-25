@@ -40,6 +40,7 @@ function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
         agentId: "agent-1",
         archived: false,
         projectId: "project-1",
+        orderKey: "a0",
         cwd: `${HOME}/work`,
         providerId: "openai",
         permissionMode: "auto",
@@ -228,6 +229,7 @@ describe("rigSessionSummaryProject", () => {
         const summary: SessionSummary = {
             id: "session-1",
             projectId: "project-1",
+            orderKey: "a0",
             cwd: `${HOME}/work`,
             providerId: "openai",
             modelId: "gpt-x",

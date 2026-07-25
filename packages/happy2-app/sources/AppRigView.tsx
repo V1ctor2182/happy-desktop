@@ -129,6 +129,29 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     }));
 }
 
+/**
+ * The single move that turns `before` into `after`, as the host records a
+ * reorder: the row that travelled and the row it now follows (null at the
+ * front). The tab strip reports a whole arrangement, but the host mints one key
+ * for one row — so the move is recovered by finding the row whose removal makes
+ * the two orders identical. Two rows swapping places yields either of them, and
+ * placing either one produces the arrangement that was dragged.
+ */
+function reorderMoveOf(
+    before: readonly string[],
+    after: readonly string[],
+): { readonly id: string; readonly afterId: string | null } | undefined {
+    for (const id of after) {
+        const withoutBefore = before.filter((candidate) => candidate !== id);
+        const withoutAfter = after.filter((candidate) => candidate !== id);
+        if (withoutBefore.every((candidate, index) => candidate === withoutAfter[index])) {
+            const index = after.indexOf(id);
+            return { id, afterId: index === 0 ? null : after[index - 1]! };
+        }
+    }
+    return undefined;
+}
+
 /** Resolves an addressed group id against the list, matching projects and worktrees alike. */
 function openGroupFind(
     projects: readonly RigProjectGroup[],
@@ -367,14 +390,19 @@ export function AppRigView(props: AppRigViewProps) {
                                     .conversationArchive(chatId as RigSessionId)
                                     .catch(() => undefined);
                             }}
-                            onReorder={(chatIds) =>
+                            onReorder={(chatIds) => {
+                                const move = reorderMoveOf(
+                                    openGroup.conversations.map((summary) => summary.id),
+                                    chatIds,
+                                );
+                                if (!move) return;
                                 void props.workspace
-                                    .conversationsReorder(
-                                        openGroup.id,
-                                        chatIds as readonly RigSessionId[],
+                                    .conversationReorder(
+                                        move.id as RigSessionId,
+                                        move.afterId as RigSessionId | null,
                                     )
-                                    .catch(() => undefined)
-                            }
+                                    .catch(() => undefined);
+                            }}
                             onSelect={(chatId) => props.onChatSelect(openGroup.id, chatId)}
                             tabs={sessionTabs(openGroup)}
                         >

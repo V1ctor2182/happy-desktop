@@ -212,8 +212,8 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.0.58
-        version: 0.0.58(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
+        specifier: 0.0.59
+        version: 0.0.59(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       '@tanstack/react-router':
         specifier: ^1.170.18
         version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2958,8 +2958,8 @@ packages:
     resolution: {integrity: sha512-+iB7Z6gs1yEidtcux3PxSpiMPVdQyfveCi5Lj9P1uChYoF5aUqmNYscM9YviNuRcZ9tp4YtcxcUI3pSPyEyeHg==}
     hasBin: true
 
-  '@slopus/rig@0.0.58':
-    resolution: {integrity: sha512-PIsX1mAekZ9zf6tF+I1F04HOwZRhfwBQkLFIibvcowcUg3oEYQo2r8L2TsgNukpJRG/N4CUPyQRdzcmO8dx96Q==}
+  '@slopus/rig@0.0.59':
+    resolution: {integrity: sha512-MvbqqP0eZcMUnmIIioErhfeyr3vkh2oYDqjDh6i69/FEydS5EjkFPy3XsyrI6FDjotOn6A8GWIKePYDbn9wPJQ==}
     hasBin: true
 
   '@smithy/core@3.29.6':
@@ -9882,7 +9882,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@slopus/rig@0.0.58(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
+  '@slopus/rig@0.0.59(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64

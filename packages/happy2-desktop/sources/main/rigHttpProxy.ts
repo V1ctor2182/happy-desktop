@@ -3,7 +3,6 @@ import type { AddressInfo } from "node:net";
 import type { HealthResponse } from "@slopus/rig/types";
 import type { RigDaemonHealth } from "happy2-state";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
-import type { RigSessionOrder } from "./rigSessionOrder";
 
 export interface RigHttpProxyHandle {
     /** Loopback base URL, for example `http://127.0.0.1:52344`. */
@@ -20,8 +19,6 @@ export interface RigHttpProxyOptions {
      * `error`/`starting` states resolve normally and never trigger this.
      */
     readonly onConnectionError?: (error: unknown) => void;
-    /** The desktop's durable per-directory tab arrangement, applied to the listing. */
-    readonly order?: RigSessionOrder;
     /**
      * The single browser origin allowed to call this proxy cross-origin, used only
      * by the development shell: there the renderer is served by Vite on its own
@@ -78,7 +75,6 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         }
         void rigProxyHandle({
             client: options.client,
-            order: options.order,
             method: request.method ?? "GET",
             path: url.pathname,
             query: url.searchParams,

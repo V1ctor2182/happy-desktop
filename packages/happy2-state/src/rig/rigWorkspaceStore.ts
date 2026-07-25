@@ -18,10 +18,10 @@ import type {
     RigBackgroundProcess,
     RigFileSearchResult,
     RigGoal,
-    RigGroupId,
     RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
+    RigProjectId,
     RigQueuedMessage,
     RigServiceTier,
     RigSession,
@@ -138,11 +138,13 @@ export interface RigWorkspaceStore {
      * conversation is the open one; this store does not navigate.
      */
     conversationArchive(conversationId: RigSessionId): Promise<void>;
-    /** Rearranges one group's conversations into the order the user dragged. */
-    conversationsReorder(
-        groupId: RigGroupId,
-        conversationIds: readonly RigSessionId[],
-    ): Promise<void>;
+    /**
+     * Moves one conversation after `afterId` inside its own group, or to the
+     * front of that group when null.
+     */
+    conversationReorder(conversationId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
+    /** Moves one project after `afterId`, or to the front of the list when null. */
+    projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
 
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
@@ -548,8 +550,9 @@ export function rigWorkspaceStoreCreate(
         conversationCreate: (input) => list.sessionCreate(input).then(openRequest),
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
         conversationArchive: (conversationId) => list.sessionArchive(conversationId),
-        conversationsReorder: (groupId, conversationIds) =>
-            list.groupReorder(groupId, conversationIds),
+        conversationReorder: (conversationId, afterId) =>
+            list.conversationReorder(conversationId, afterId),
+        projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
 
         composerTextUpdate: (text) => composer?.getState().textUpdate(text),
         composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),

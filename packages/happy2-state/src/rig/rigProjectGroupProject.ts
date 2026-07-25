@@ -21,6 +21,8 @@ export interface RigWorktreeGroup {
     readonly projectId: RigProjectId;
     /** Name the daemon reserved for the worktree; the row's label. */
     readonly name: string;
+    /** Fractional index this worktree sorts by among its project's worktrees. */
+    readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
     readonly conversations: readonly ConversationSummary[];
@@ -40,6 +42,8 @@ export interface RigWorktreeGroup {
 export interface RigProjectGroup {
     readonly id: RigProjectId;
     readonly name: string;
+    /** Fractional index this project sorts by in the list. */
+    readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
     /** `home` is the catch-all project for sessions started outside any repository. */
@@ -82,14 +86,13 @@ export function rigProjectGroupsProject(
     const worktreesByProject = new Map<RigProjectId, RigWorktreeGroup[]>();
     for (const worktree of catalog.worktrees) {
         if (worktree.status === "archived") continue;
-        const conversations = (worktreeSessions.get(worktree.id) ?? []).map(
-            rigConversationSummaryProject,
-        );
+        const conversations = conversationsOf(worktreeSessions.get(worktree.id));
         if (conversations.length === 0) continue;
         mapAppend(worktreesByProject, worktree.projectId).push({
             id: worktree.id,
             projectId: worktree.projectId,
             name: worktree.name,
+            orderKey: worktree.orderKey,
             path: worktree.path,
             displayPath: worktree.displayPath,
             conversations,
@@ -101,11 +104,11 @@ export function rigProjectGroupsProject(
     const groups = catalog.projects.map((project) =>
         projectGroup(
             project,
-            (projectSessions.get(project.id) ?? []).map(rigConversationSummaryProject),
-            (worktreesByProject.get(project.id) ?? []).sort(byRecency),
+            conversationsOf(projectSessions.get(project.id)),
+            (worktreesByProject.get(project.id) ?? []).sort(byOrderKey),
         ),
     );
-    return groups.sort(byRecency);
+    return groups.sort(byOrderKey);
 }
 
 function projectGroup(
@@ -119,6 +122,7 @@ function projectGroup(
     return {
         id: project.id,
         name: project.name,
+        orderKey: project.orderKey,
         path: project.path,
         displayPath: project.displayPath,
         kind: project.kind,
@@ -134,12 +138,29 @@ function projectGroup(
     };
 }
 
-/** True group ordering: most recently active first, then alphabetically so idle groups are stable. */
-function byRecency(
-    left: { readonly updatedAt: number; readonly name: string },
-    right: { readonly updatedAt: number; readonly name: string },
+/**
+ * The arrangement the user dragged, as the host records it: fractional index
+ * first, then id to break the tie the host breaks the same way. Sorting on the
+ * key rather than on recency is what keeps a dragged row where it was put
+ * instead of letting the next message throw it back to the top.
+ */
+function byOrderKey(
+    left: { readonly orderKey: string; readonly id: string },
+    right: { readonly orderKey: string; readonly id: string },
 ): number {
-    return right.updatedAt - left.updatedAt || left.name.localeCompare(right.name);
+    if (left.orderKey !== right.orderKey) return left.orderKey < right.orderKey ? -1 : 1;
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
+
+/**
+ * One group's rows in the arrangement the host records. The sessions are sorted
+ * here rather than trusted in arrival order because an optimistic reorder
+ * rewrites only the moved row's key: sorting on the key is what moves the row.
+ */
+function conversationsOf(
+    sessions: readonly RigSessionSummary[] | undefined,
+): readonly ConversationSummary[] {
+    return [...(sessions ?? [])].sort(byOrderKey).map(rigConversationSummaryProject);
 }
 
 function activityOf(

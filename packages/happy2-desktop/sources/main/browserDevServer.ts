@@ -1,30 +1,19 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { Plugin } from "vite";
 import type { LocalRigConnection } from "./localRig";
 import { localRigConnectorCreate } from "./localRig";
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigProxyHandle } from "./rigProxyHandle";
-import { rigSessionOrderCreate, type RigSessionOrder } from "./rigSessionOrder";
 
 const endpoint = "/__happy2_local_rig";
 
 interface DevRuntime {
     readonly connection: LocalRigConnection;
-    readonly order: RigSessionOrder;
 }
 
 export interface BrowserLocalRigOptions {
     /** Opens one daemon connection; injectable so tests drive reconnection deterministically. */
     readonly connect?: () => Promise<LocalRigConnection>;
-    /**
-     * Where this bridge keeps the tab arrangement the developer dragged. It
-     * defaults beside the user's other Happy desktop development state rather
-     * than inside the checkout, so rearranged tabs survive a `vite` restart and
-     * a rebuild.
-     */
-    readonly orderPath?: string;
 }
 
 /**
@@ -40,14 +29,10 @@ export interface BrowserLocalRigOptions {
  */
 export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plugin {
     const connect = options.connect ?? (() => localRigConnectorCreate().connect());
-    const orderPath =
-        options.orderPath ?? join(homedir(), ".happy2", "desktop-dev", "rig-session-order.json");
     let runtimeTask: Promise<DevRuntime> | undefined;
     const runtime = (): Promise<DevRuntime> => {
         if (runtimeTask) return runtimeTask;
-        const task = Promise.all([connect(), rigSessionOrderCreate(orderPath)]).then(
-            ([connection, order]) => ({ connection, order }),
-        );
+        const task = connect().then((connection) => ({ connection }));
         // A failed connect must not stay memoized, or one daemon outage at the
         // first request keeps this bridge dead for the whole Vite session.
         void task.catch(() => {
@@ -105,7 +90,6 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                         const active = await pending;
                         const handled = await rigProxyHandle({
                             client: active.connection.client,
-                            order: active.order,
                             method: request.method ?? "GET",
                             path: path.slice(endpoint.length) || "/",
                             query: url.searchParams,

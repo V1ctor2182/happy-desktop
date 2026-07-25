@@ -6,10 +6,13 @@ import type {
     RigServiceTier,
     RigSessionCreateInput,
 } from "happy2-state";
-import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
+import {
+    rigDaemonConnectionUnavailable,
+    RigDaemonHttpError,
+    type RigDaemonClient,
+} from "./rigDaemonClient";
 import type { EventId } from "./rigDaemonTypes";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
-import type { RigSessionOrder } from "./rigSessionOrder";
 import {
     rigCatalogProject,
     rigGlobalEventProject,
@@ -30,7 +33,10 @@ export type RigProxyClient = Pick<
     | "models"
     | "listSessions"
     | "listCatalog"
+    | "getProject"
     | "getProjectAsset"
+    | "reorderProject"
+    | "reorderSession"
     | "getSession"
     | "listSubagents"
     | "searchFiles"
@@ -74,12 +80,6 @@ export interface RigProxyHandleOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** Home directory used to compute home-relative `displayCwd`s. Defaults to the OS home. */
     readonly homeDir?: string;
-    /**
-     * The order the user dragged each directory's tabs into, which the listing
-     * is sorted by and the order route records. Omitting it lists sessions by
-     * recency alone.
-     */
-    readonly order?: RigSessionOrder;
 }
 
 /**
@@ -129,19 +129,12 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 return true;
             }
             if (path === "/sessions") {
-                // The daemon already leaves archived sessions out of its
-                // listing, so this only has to put the remaining ones in the
-                // order the workspace shows them in.
-                const sessions = (await client.listSessions()).sessions
-                    .map((summary) => rigSessionSummaryProject(summary, home))
-                    // The listing leaves here in the order the workspace shows:
-                    // a directory's arranged tabs first, in their arrangement,
-                    // then whatever was created since, newest first.
-                    .sort(
-                        (left, right) =>
-                            rank(options.order, left) - rank(options.order, right) ||
-                            right.createdAt - left.createdAt,
-                    );
+                // The daemon owns both the arrangement and leaving archived
+                // sessions out, and already lists them in fractional-index
+                // order, so this forwards its listing rather than re-sorting it.
+                const sessions = (await client.listSessions()).sessions.map((summary) =>
+                    rigSessionSummaryProject(summary, home),
+                );
                 writeJson(response, 200, sessions);
                 return true;
             }
@@ -222,6 +215,18 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             return false;
         }
 
+        if (
+            method === "POST" &&
+            segments[0] === "projects" &&
+            segments[2] === "reorder" &&
+            segments.length === 3
+        ) {
+            const body = await bodyReadJson(request);
+            await projectReorder(client, segments[1]!, afterIdOf(body));
+            writeJson(response, 200, {});
+            return true;
+        }
+
         if (method === "POST" && segments[0] === "sessions") {
             const body = await bodyReadJson(request);
             if (segments.length === 1) {
@@ -229,23 +234,6 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     createRequest(body as unknown as RigSessionCreateInput),
                 );
                 writeJson(response, 200, rigSessionProject(session.session, home));
-                return true;
-            }
-            if (segments.length === 2 && segments[1] === "order") {
-                // One group's complete tab arrangement. It is desktop state, not
-                // a daemon call: the daemon has no opinion about the order its
-                // sessions are presented in.
-                if (!options.order) return false;
-                const groupId = typeof body.groupId === "string" ? body.groupId : undefined;
-                const sessionIds = Array.isArray(body.sessionIds)
-                    ? body.sessionIds.filter((id): id is string => typeof id === "string")
-                    : undefined;
-                if (!groupId || !sessionIds) {
-                    writeJson(response, 400, { error: "A session order needs a group and ids." });
-                    return true;
-                }
-                await options.order.set(groupId, sessionIds);
-                writeJson(response, 200, {});
                 return true;
             }
             const sessionId = segments[1]!;
@@ -295,6 +283,16 @@ async function handleSessionPost(
                 response,
                 200,
                 rigSessionProject((await client.archiveSession(sessionId)).session, home),
+            );
+            return true;
+        case "reorder":
+            writeJson(
+                response,
+                200,
+                rigSessionProject(
+                    (await client.reorderSession(sessionId, afterIdOf(body))).session,
+                    home,
+                ),
             );
             return true;
         case "reset":
@@ -516,14 +514,33 @@ async function streamGlobalEvents(
     }
 }
 
-/** Sort position of one session inside its group's arrangement. */
-function rank(
-    order: RigSessionOrder | undefined,
-    session: { readonly id: string; readonly projectId: string; readonly worktreeId?: string },
-): number {
-    return order
-        ? order.rank(session.worktreeId ?? session.projectId, session.id)
-        : Number.MAX_SAFE_INTEGER;
+/** The `afterId` of a reorder request: a preceding id, or null for the front. */
+function afterIdOf(body: Record<string, unknown>): string | null {
+    return typeof body.afterId === "string" ? body.afterId : null;
+}
+
+/**
+ * Moves a project, supplying the version guard the daemon requires. The version
+ * has to be read here rather than sent by the renderer: it is an optimistic
+ * concurrency token of the wire protocol, and letting it reach product state
+ * would make every project row carry a value only this call can use. A losing
+ * race answers 409, which is retried once against the version that won.
+ */
+async function projectReorder(
+    client: RigProxyClient,
+    projectId: string,
+    afterId: string | null,
+): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+        const { project } = await client.getProject(projectId);
+        try {
+            await client.reorderProject(projectId, afterId, project.version);
+            return;
+        } catch (error) {
+            if (attempt >= 1 || !(error instanceof RigDaemonHttpError) || error.statusCode !== 409)
+                throw error;
+        }
+    }
 }
 
 function createRequest(input: RigSessionCreateInput) {

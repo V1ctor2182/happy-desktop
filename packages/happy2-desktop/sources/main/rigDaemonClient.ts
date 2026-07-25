@@ -9,6 +9,7 @@ import type {
     GlobalStateResponse,
     HealthResponse,
     ModelCatalog,
+    Project,
     ProjectAssetResponse,
     ProtocolSession,
     RunShellCommandResponse,
@@ -83,6 +84,42 @@ export class RigDaemonClient {
     /** Reads one project avatar's bytes so the loopback proxy can re-serve them. */
     getProjectAsset(assetHash: string): Promise<ProjectAssetResponse> {
         return this.#requestBuffer(`/project-assets/${encodeURIComponent(assetHash)}`);
+    }
+
+    getProject(projectId: string): Promise<{ readonly project: Project }> {
+        return this.#requestJson("GET", `/projects/${encodeURIComponent(projectId)}`);
+    }
+
+    /**
+     * Moves a project directly after `afterId`, or to the front when it is null.
+     * The daemon guards the move with the project version it was read at, so a
+     * caller that raced another writer is rejected rather than silently winning.
+     */
+    reorderProject(
+        projectId: string,
+        afterId: string | null,
+        expectedVersion: number,
+    ): Promise<{ readonly project: Project }> {
+        return this.#requestJson(
+            "POST",
+            `/projects/${encodeURIComponent(projectId)}/reorder`,
+            { afterId },
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
+    }
+
+    /**
+     * Moves a session directly after `afterId` within its own project or
+     * worktree, or to the front of that group when it is null. Sessions carry no
+     * version, so the daemon resolves the move against its current order.
+     */
+    reorderSession(
+        sessionId: string,
+        afterId: string | null,
+    ): Promise<{ readonly session: ProtocolSession }> {
+        return this.#requestJson("POST", `/sessions/${encodeURIComponent(sessionId)}/reorder`, {
+            afterId,
+        });
     }
 
     getSession(sessionId: string): Promise<SessionResponse> {
@@ -286,11 +323,17 @@ export class RigDaemonClient {
         }
     }
 
-    #requestJson<TResult>(method: string, path: string, body?: unknown): Promise<TResult> {
+    #requestJson<TResult>(
+        method: string,
+        path: string,
+        body?: unknown,
+        extraHeaders?: Record<string, string>,
+    ): Promise<TResult> {
         const payload = body === undefined ? undefined : JSON.stringify(body);
         const headers: Record<string, string | number> = {
             accept: "application/json",
             authorization: `Bearer ${this.#token}`,
+            ...extraHeaders,
         };
         if (payload !== undefined) {
             headers["content-length"] = Buffer.byteLength(payload);

@@ -1,3 +1,4 @@
+import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type {
     RigEventObserver,
     RigGlobalEvent,
@@ -33,7 +34,8 @@ export type FakeRigOperation =
     | "subagentsRead"
     | "sessionCreate"
     | "sessionArchive"
-    | "sessionsReorder"
+    | "sessionReorder"
+    | "projectReorder"
     | "sessionFork"
     | "sessionReset"
     | "messageSubmit"
@@ -55,8 +57,8 @@ export type FakeRigOperation =
 export interface FakeRigCall {
     readonly operation: FakeRigOperation;
     readonly sessionId?: RigSessionId;
-    /** The group a group-scoped call addressed, such as a reorder. */
-    readonly groupId?: RigGroupId;
+    /** The row a reorder moved and the row it was placed after (null for the front). */
+    readonly afterId?: string | null;
     /** The arrangement a reorder recorded, in order. */
     readonly sessionIds?: readonly RigSessionId[];
     readonly idempotencyKey?: string;
@@ -98,6 +100,7 @@ export interface FakeRigTransport {
 export const DEFAULT_PROJECT: RigProject = {
     id: "project-workspace" as RigProjectId,
     name: "workspace",
+    orderKey: "a0",
     path: "/workspace",
     displayPath: "/workspace",
     kind: "regular",
@@ -142,6 +145,7 @@ export function fakeRigSession(id: string, overrides: Partial<RigSession> = {}):
     return {
         id: id as RigSessionId,
         projectId: DEFAULT_PROJECT.id,
+        orderKey: "a0",
         cwd: "/workspace",
         displayCwd: "/workspace",
         providerId: "openai",
@@ -169,6 +173,7 @@ export function fakeRigSummary(
     return {
         id: id as RigSessionId,
         projectId: DEFAULT_PROJECT.id,
+        orderKey: "a0",
         cwd: "/workspace",
         displayCwd: "/workspace",
         providerId: "openai",
@@ -191,6 +196,7 @@ function summaryOf(session: RigSession): RigSessionSummary {
         id: session.id,
         projectId: session.projectId,
         ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
+        orderKey: session.orderKey,
         cwd: session.cwd,
         displayCwd: session.displayCwd,
         providerId: session.providerId,
@@ -214,7 +220,7 @@ class FakeRigTransportModel implements FakeRigTransport {
     private readonly archived = new Set<RigSessionId>();
     /* Per-directory arrangement, applied to the listing exactly as the desktop
        host applies its durable one. */
-    private readonly orders = new Map<string, readonly RigSessionId[]>();
+
     /** The project/worktree catalog this fake host reports; tests may replace it. */
     projects: RigProjectCatalog = { projects: [DEFAULT_PROJECT], worktrees: [] };
     private readonly subagents = new Map<RigSessionId, readonly RigSubagentSummary[]>();
@@ -322,11 +328,10 @@ class FakeRigTransportModel implements FakeRigTransport {
         return session;
     }
 
-    /** Sort position of a session in its group's arrangement, unranked last. */
-    private rank(session: RigSession): number {
-        const group = session.worktreeId ?? session.projectId;
-        const index = this.orders.get(group)?.indexOf(session.id) ?? -1;
-        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    /** The order this host lists in: fractional index, then id, exactly as Rig does. */
+    private static compare(left: RigSession, right: RigSession): number {
+        if (left.orderKey !== right.orderKey) return left.orderKey < right.orderKey ? -1 : 1;
+        return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
     }
 
     readonly transport: RigTransport = {
@@ -336,7 +341,7 @@ class FakeRigTransportModel implements FakeRigTransport {
             this.perform("sessionsRead", {}, () =>
                 [...this.sessions.values()]
                     .filter((session) => !this.archived.has(session.id))
-                    .sort((left, right) => this.rank(left) - this.rank(right))
+                    .sort(FakeRigTransportModel.compare)
                     .map(summaryOf),
             ),
         sessionRead: (sessionId) =>
@@ -370,9 +375,37 @@ class FakeRigTransportModel implements FakeRigTransport {
                 this.sessions.set(sessionId, session);
                 return session;
             }),
-        sessionsReorder: (groupId, sessionIds) =>
-            this.perform("sessionsReorder", { groupId, sessionIds }, () => {
-                this.orders.set(groupId, [...sessionIds]);
+        sessionReorder: (sessionId, afterId) =>
+            this.perform("sessionReorder", { sessionId, afterId }, () => {
+                const session = this.required(sessionId);
+                const group = session.worktreeId ?? session.projectId;
+                const peers = [...this.sessions.values()].filter(
+                    (candidate) => (candidate.worktreeId ?? candidate.projectId) === group,
+                );
+                const orderKey = orderKeyAfter(
+                    peers.map((peer) => ({ id: peer.id, orderKey: peer.orderKey })),
+                    sessionId,
+                    afterId,
+                );
+                this.sessions.set(sessionId, { ...session, orderKey });
+                return undefined;
+            }),
+        projectReorder: (projectId, afterId) =>
+            this.perform("projectReorder", { afterId }, () => {
+                const orderKey = orderKeyAfter(
+                    this.projects.projects.map((project) => ({
+                        id: project.id,
+                        orderKey: project.orderKey,
+                    })),
+                    projectId,
+                    afterId,
+                );
+                this.projects = {
+                    ...this.projects,
+                    projects: this.projects.projects.map((project) =>
+                        project.id === projectId ? { ...project, orderKey } : project,
+                    ),
+                };
                 return undefined;
             }),
         sessionArchive: (sessionId) =>
@@ -504,6 +537,7 @@ function fakeSessionFromInput(
     return fakeRigSession(id, {
         projectId: DEFAULT_PROJECT.id,
         ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+        orderKey: "a0",
         cwd: input.cwd,
         displayCwd: input.cwd,
         providerId: input.providerId ?? catalog.defaultProviderId,

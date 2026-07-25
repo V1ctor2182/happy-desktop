@@ -29,7 +29,6 @@ import {
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
-import { rigSessionOrderCreate, type RigSessionOrder } from "./rigSessionOrder";
 
 export type RigHttpProxyStart = (
     connection: LocalRigConnection,
@@ -73,7 +72,6 @@ export class DesktopRuntime implements AsyncDisposable {
     private constructor(
         private readonly paths: DesktopRuntimePaths,
         settings: DesktopSettings | undefined,
-        order: RigSessionOrder,
         options: DesktopRuntimeOptions,
     ) {
         this.settings = settings;
@@ -84,7 +82,6 @@ export class DesktopRuntime implements AsyncDisposable {
                 rigHttpProxyCreate({
                     client: connection.client,
                     onConnectionError,
-                    order,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                 }));
         const active = settings?.topologies.find(({ id }) => id === settings.activeTopologyId);
@@ -113,8 +110,7 @@ export class DesktopRuntime implements AsyncDisposable {
         options: DesktopRuntimeOptions = {},
     ): Promise<DesktopRuntime> {
         const settings = await desktopSettingsRead(join(paths.root, "desktop-settings.json"));
-        const order = await rigSessionOrderCreate(join(paths.root, "rig-session-order.json"));
-        const runtime = new DesktopRuntime(paths, settings, order, options);
+        const runtime = new DesktopRuntime(paths, settings, options);
         if (runtime.activeTopology)
             void runtime
                 .serial(() => runtime.startValidated(runtime.activeTopology!, false))
