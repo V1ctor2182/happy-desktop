@@ -2,6 +2,7 @@
     "name": "happy2-server",
     "version": "0.0.3",
     "description": "Happy (2) server and authentication service",
+    "license": "MIT",
     "bin": {
         "happy2-server": "bin/happy2-server.js"
     },

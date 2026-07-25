@@ -2,6 +2,7 @@
     "name": "happy2",
     "version": "0.0.18",
     "description": "Happy (2) desktop web app and server bundle",
+    "license": "MIT",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/slopus/happy2.git"

@@ -327,3 +327,7 @@ pnpm check                               # Format, lint, test, coverage, build
 
 For production server configuration, authentication modes, and deployment, see
 the [Happy Server documentation](packages/happy2-server/README.md).
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
