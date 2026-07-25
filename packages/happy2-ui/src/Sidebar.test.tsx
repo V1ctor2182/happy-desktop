@@ -1075,6 +1075,14 @@ it("nests child channels under their parent and dims archived rows", async () =>
         view.$(
             `[data-testid="nested"] [data-item-id="${id}"] [data-happy2-ui="sidebar-item-leading"]`,
         );
+    const leadingNode = (id: string) =>
+        view.container.querySelector(
+            `[data-testid="nested"] [data-item-id="${id}"] [data-happy2-ui="sidebar-item-leading"]`,
+        );
+    const branch = (id: string) =>
+        view.$(
+            `[data-testid="nested"] [data-item-id="${id}"] [data-happy2-ui="sidebar-item-branch"]`,
+        );
 
     /* ---- Indentation --------------------------------------------------- */
     expect(row("launch").computedStyle("padding-left"), "parent padding").toBe("10px");
@@ -1082,11 +1090,46 @@ it("nests child channels under their parent and dims archived rows", async () =>
     expect(row("ios").computedStyle("padding-left"), "child padding").toBe("26px");
     expect(row("ios").element.getAttribute("data-depth"), "child depth attr").toBe("1");
     expect(row("legacy").computedStyle("padding-left"), "archived child padding").toBe("26px");
-    /* The 16px indent shifts the child's leading lane exactly one level right. */
+
+    /* ---- ASCII branches replace the nested hash ------------------------- */
+    /* Only a top-level channel keeps the hash; children are introduced by the tree. */
+    expect(leadingNode("launch"), "top-level keeps its glyph").not.toBeNull();
+    expect(leadingNode("ios"), "child drops the hash").toBeNull();
+    expect(leadingNode("legacy"), "archived child drops the hash").toBeNull();
+    expect(branch("ios").element.getAttribute("data-branch"), "non-final child tees").toBe("tee");
+    expect(branch("legacy").element.getAttribute("data-branch"), "final child closes").toBe("end");
+
+    /* The connector occupies the parent's leading lane exactly, so its centred stem
+       rides the lane the hash above is box-centred in. (Box geometry, not the
+       glyph's ink, decides the lane.) */
+    const parentLane = leading("launch").bounds();
+    const teeBox = branch("ios").bounds();
     expect(
-        leading("ios").bounds().x - leading("launch").bounds().x,
-        "child leading indent",
-    ).toBeCloseTo(16, 1);
+        { x: teeBox.x, width: teeBox.width },
+        "connector occupies the parent glyph lane",
+    ).toEqual({ x: parentLane.x, width: parentLane.width });
+    const stem = getComputedStyle(branch("ios").element, "::before");
+    expect(
+        parseFloat(stem.left) + parseFloat(stem.width) / 2,
+        "stem centred in that lane",
+    ).toBeCloseTo(teeBox.width / 2, 1);
+
+    /* A tee runs from the gap above to the row's bottom edge, so consecutive children
+       read as one line; the last child's stem stops at its elbow. Each row draws only
+       into the gap above it, so no two segments overlap. */
+    const tee = await branch("ios").visibleMetrics();
+    const end = await branch("legacy").visibleMetrics();
+    expect(tee.bounds.height, "tee spans the full row").toBeCloseTo(row("ios").bounds().height, 0);
+    /* Half the row, plus the elbow's own hairline sitting on the centre line. */
+    expect(end.bounds.height, "elbow stops at the row centre").toBeCloseTo(
+        row("legacy").bounds().height / 2 + 1,
+        0,
+    );
+    /* One tone across rows: the archived row's 0.55 dimming is cancelled on the line. */
+    expect(
+        getComputedStyle(branch("legacy").element, "::before").opacity,
+        "archived rows keep the shared line tone",
+    ).toBe("0.509");
 
     /* ---- Archived dimming ---------------------------------------------- */
     expect(row("launch").computedStyle("opacity"), "resting opacity").toBe("1");

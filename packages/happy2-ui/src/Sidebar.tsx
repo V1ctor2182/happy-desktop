@@ -90,8 +90,37 @@ function leadingIcon(item: SidebarItem): IconName {
     if (item.kind === "action") return item.icon ?? "plus";
     return item.icon ?? "inbox";
 }
+/**
+ * Nested rows are introduced by an ASCII branch instead of repeating the parent's
+ * glyph, so the hash only ever marks a top-level channel. A row keeps an explicitly
+ * supplied icon (a private channel's lock, say) because that carries information the
+ * branch cannot.
+ */
+function showsLeadingSlot(item: SidebarItem): boolean {
+    if ((item.depth ?? 0) === 0) return true;
+    if (item.kind === "person" || item.kind === "agent" || item.kind === "app") return true;
+    return item.icon !== undefined;
+}
+/** `true` when no later sibling sits at this row's depth before the group closes. */
+function isLastAtDepth(items: readonly SidebarItem[], index: number): boolean {
+    const depth = items[index]!.depth ?? 0;
+    for (let next = index + 1; next < items.length; next += 1) {
+        const nextDepth = items[next]!.depth ?? 0;
+        if (nextDepth < depth) return true;
+        if (nextDepth === depth) return false;
+    }
+    return true;
+}
+/** `true` for the first row at its depth, whose stem rises to meet the parent glyph. */
+function isFirstAtDepth(items: readonly SidebarItem[], index: number): boolean {
+    return (items[index - 1]?.depth ?? 0) < (items[index]!.depth ?? 0);
+}
 function SidebarRow(props: {
     active: boolean;
+    /** Renders the ASCII tree connector that ties a nested row to its parent. */
+    branch?: "tee" | "end";
+    /** Extends this row's stem up into the parent row, under its glyph. */
+    branchFirst?: boolean;
     className?: string;
     item: SidebarItem;
     onContextMenu?: (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => void;
@@ -125,26 +154,40 @@ function SidebarRow(props: {
             }
             type="button"
         >
-            <span className="happy2-sidebar__item-leading" data-happy2-ui="sidebar-item-leading">
-                {item().kind === "person" || item().kind === "agent" ? (
-                    <Avatar
-                        imageUrl={item().imageUrl}
-                        initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
-                        online={item().kind === "person" ? item().online : undefined}
-                        size="xs"
-                        tone={item().tone}
-                        type={item().kind === "agent" ? "agent" : "human"}
-                    />
-                ) : item().kind === "app" ? (
-                    <PluginAssetGlyph
-                        fallbackIcon={item().icon ?? "spark"}
-                        maskUrl={item().maskUrl}
-                        size={16}
-                    />
-                ) : (
-                    <Icon name={leadingIcon(item())} size={16} />
-                )}
-            </span>
+            {props.branch ? (
+                <span
+                    aria-hidden="true"
+                    className="happy2-sidebar__item-branch"
+                    data-branch={props.branch}
+                    data-branch-first={props.branchFirst ? "" : undefined}
+                    data-happy2-ui="sidebar-item-branch"
+                />
+            ) : null}
+            {showsLeadingSlot(item()) ? (
+                <span
+                    className="happy2-sidebar__item-leading"
+                    data-happy2-ui="sidebar-item-leading"
+                >
+                    {item().kind === "person" || item().kind === "agent" ? (
+                        <Avatar
+                            imageUrl={item().imageUrl}
+                            initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
+                            online={item().kind === "person" ? item().online : undefined}
+                            size="xs"
+                            tone={item().tone}
+                            type={item().kind === "agent" ? "agent" : "human"}
+                        />
+                    ) : item().kind === "app" ? (
+                        <PluginAssetGlyph
+                            fallbackIcon={item().icon ?? "spark"}
+                            maskUrl={item().maskUrl}
+                            size={16}
+                        />
+                    ) : (
+                        <Icon name={leadingIcon(item())} size={16} />
+                    )}
+                </span>
+            ) : null}
             <span className="happy2-sidebar__item-label" data-happy2-ui="sidebar-item-label">
                 {item().label}
             </span>
@@ -393,9 +436,20 @@ export function Sidebar(props: SidebarProps) {
                                 </div>
                             ) : null}
                             {!section.headingOnly
-                                ? section.items.map((item) => (
+                                ? section.items.map((item, index) => (
                                       <SidebarRow
                                           active={item.id === local.activeItemId}
+                                          branch={
+                                              (item.depth ?? 0) > 0
+                                                  ? isLastAtDepth(section.items, index)
+                                                      ? "end"
+                                                      : "tee"
+                                                  : undefined
+                                          }
+                                          branchFirst={
+                                              (item.depth ?? 0) > 0 &&
+                                              isFirstAtDepth(section.items, index)
+                                          }
                                           key={item.id}
                                           item={item}
                                           onContextMenu={openItemMenu}

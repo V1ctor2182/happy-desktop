@@ -355,6 +355,72 @@
     color: var(--text);
 }
 
+/*
+ * ASCII tree connector for a nested row, drawn as hairlines rather than glyphs so
+ * the stem lands exactly on the parent glyph's centre lane. The span is pulled back
+ * over the row's own indent to occupy that lane exactly (same 20px box as a leading
+ * slot), and stretches the row height so the stem can reach across the 2px row gap.
+ */
+.happy2-sidebar__item-branch {
+    position: relative;
+    flex: none;
+    align-self: stretch;
+    width: 20px;
+    margin-left: -16px;
+}
+
+/*
+ * The tree is structure, not row state: it holds one tone whatever the row's own
+ * colour is (active/unread go to --text), so it never bands from row to row. Each
+ * row draws upward into the gap above it only, so neighbouring segments meet
+ * without doubling their alpha at the joint.
+ */
+.happy2-sidebar__item-branch::before,
+.happy2-sidebar__item-branch::after {
+    position: absolute;
+    background: var(--text-secondary);
+    content: "";
+    opacity: 0.28;
+}
+
+/* Vertical: through the row for a tee, stopping at the elbow for the last child. */
+.happy2-sidebar__item-branch::before {
+    top: -2px;
+    left: calc(50% - 0.5px);
+    width: 1px;
+}
+
+/*
+ * The first child rises into the parent row and stops 2px short of the parent
+ * glyph's ink, so the tree reads as hanging off that row rather than floating
+ * below it. Later siblings stay at -2px, so no two segments ever overlap.
+ */
+.happy2-sidebar__item-branch[data-branch-first]::before {
+    top: -8px;
+}
+
+.happy2-sidebar__item-branch[data-branch="tee"]::before {
+    bottom: 0;
+}
+
+.happy2-sidebar__item-branch[data-branch="end"]::before {
+    height: calc(50% + 2px);
+}
+
+/* Horizontal: from the stem out to the row's label lane. */
+.happy2-sidebar__item-branch::after {
+    top: 50%;
+    left: calc(50% - 0.5px);
+    width: 10px;
+    height: 1px;
+}
+
+/* Cancel the archived row's 0.55 dimming so the shared line keeps one tone. */
+.happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::before,
+.happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::after {
+    opacity: 0.509;
+}
+
 .happy2-sidebar__item-leading {
     display: flex;
     flex: none;
