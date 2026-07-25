@@ -1,8 +1,7 @@
-import { useLayoutEffect, useReducer, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useLayoutEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
     ChatPage,
-    StoreSurface,
     type AdminPageSection,
     type ChatPageActions,
     type ChatPageNavigation,
@@ -10,19 +9,7 @@ import {
     type MessageListScrollPosition,
     type SidebarSection,
 } from "happy2-ui";
-import type {
-    AgentTraceHandle,
-    ChatContributionsHandle,
-    ChatContributionsSnapshot,
-    ChatHandle,
-    ComposerStore,
-    DocumentHandle,
-    DocumentListHandle,
-    HappyState,
-    TerminalHandle,
-    WorkspaceFileHandle,
-    WorkspaceHandle,
-} from "happy2-state";
+import type { ChatContributionsSnapshot, HappyState } from "happy2-state";
 import type { InspectorSnapshot, OverlaysStore } from "happy2-state";
 import type { AuthSession } from "../components/AuthGate";
 import { useAssetUrls } from "../assetUrls";
@@ -36,6 +23,8 @@ import { MessageApp } from "./MessageApp";
 import { openExternalLink } from "../externalLink";
 import { useDisposableLease } from "../useDisposableLease";
 const AGENT_MODEL_CATALOG_POLL_MS = 5_000;
+const emptySubscribe = () => () => undefined;
+const emptySnapshot = () => undefined;
 export type ChatViewProps = {
     platform?: "desktop" | "web";
     session?: AuthSession;
@@ -93,14 +82,16 @@ export function ChatView(props: ChatViewProps) {
     const workspaceFileOverlay =
         layers.overlay.type === "workspaceFile" ? layers.overlay : undefined;
     const documentOverlay = layers.overlay.type === "document" ? layers.overlay : undefined;
+    const workspaceFileChatId = workspaceFileOverlay?.chatId;
+    const workspaceFilePath = workspaceFileOverlay?.path;
     const nextChatId = props.chatId;
     const nextConversationKind = props.chatId ? props.conversationKind : undefined;
     const nextTraceMessageId = inspector.type === "trace" ? inspector.messageId : undefined;
     const nextWorkspaceChatId =
         inspector.type === "workspace" || workspaceFileOverlay ? nextChatId : undefined;
     const nextWorkspaceFileKey =
-        workspaceFileOverlay?.chatId && workspaceFileOverlay.path
-            ? `${workspaceFileOverlay.chatId}\u0000${workspaceFileOverlay.path}`
+        workspaceFileChatId && workspaceFilePath
+            ? `${workspaceFileChatId}\u0000${workspaceFilePath}`
             : undefined;
     const nextDocumentListChatId = inspector.type === "documents" ? nextChatId : undefined;
     const nextDocumentId = documentOverlay?.documentId;
@@ -129,7 +120,7 @@ export function ChatView(props: ChatViewProps) {
         // The reload generation is part of the identity: re-reading the same path
         // is a new lease, not the existing one.
         nextWorkspaceFileKey && `${nextWorkspaceFileKey}\u0000${layers.workspaceFileGeneration}`,
-        () => state.workspaceFileOpen(workspaceFileOverlay!.chatId, workspaceFileOverlay!.path),
+        () => state.workspaceFileOpen(workspaceFileChatId!, workspaceFilePath!),
     );
     const documentList = useDisposableLease(nextDocumentListChatId, () =>
         state.documentListOpen(nextDocumentListChatId!),
@@ -294,31 +285,35 @@ export function ChatView(props: ChatViewProps) {
         />
     );
     const contributionHandle = conversation?.contributions;
-    if (!contributionHandle) return renderPage({});
-    // One coarse subscription for the active chat's contributions; the header,
-    // composer, and every message row are fanned out from this single snapshot.
-    return (
-        <StoreSurface store={contributionHandle}>
-            {(snapshot: ChatContributionsSnapshot & ContributionSurface) => {
-                const contributions =
-                    snapshot.contributions.type === "ready" ? snapshot.contributions.value : [];
-                return renderPage({
-                    chatMenuContributions: chatMenuContributionNodes(
-                        contributions,
-                        snapshot,
-                        masks,
-                    ),
-                    composerContributions: composerContributionNodes(
-                        contributions,
-                        snapshot,
-                        masks,
-                    ),
-                    messageContributions: (messageId: string) =>
-                        messageMenuContributionNodes(contributions, snapshot, masks, messageId),
-                });
-            }}
-        </StoreSurface>
-    );
+    // This subscription stays inside ChatView instead of wrapping ChatPage in a
+    // keyed StoreSurface. Selecting the first conversation or changing chats must
+    // replace only this store subscription, not remount the sidebar, composer, or
+    // workspace DOM below it.
+    const contributionSnapshot: (ChatContributionsSnapshot & ContributionSurface) | undefined =
+        useSyncExternalStore(
+            contributionHandle?.subscribe ?? emptySubscribe,
+            contributionHandle?.getState ?? emptySnapshot,
+            contributionHandle?.getInitialState ?? emptySnapshot,
+        );
+    if (!contributionSnapshot) return renderPage({});
+    const contributions =
+        contributionSnapshot.contributions.type === "ready"
+            ? contributionSnapshot.contributions.value
+            : [];
+    return renderPage({
+        chatMenuContributions: chatMenuContributionNodes(
+            contributions,
+            contributionSnapshot,
+            masks,
+        ),
+        composerContributions: composerContributionNodes(
+            contributions,
+            contributionSnapshot,
+            masks,
+        ),
+        messageContributions: (messageId: string) =>
+            messageMenuContributionNodes(contributions, contributionSnapshot, masks, messageId),
+    });
 }
 
 /**
