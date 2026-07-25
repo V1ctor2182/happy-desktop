@@ -403,8 +403,10 @@
     bottom: 0;
 }
 
+/* Anchored to the centre, not sized, so it still meets the elbow when the stem
+   also rises into the parent row as the first child. */
 .happy2-sidebar__item-branch[data-branch="end"]::before {
-    height: calc(50% + 2px);
+    bottom: 50%;
 }
 
 /* Horizontal: from the stem out to the row's label lane. */

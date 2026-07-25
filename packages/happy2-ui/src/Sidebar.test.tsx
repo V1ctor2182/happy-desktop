@@ -1059,6 +1059,8 @@ it("nests child channels under their parent and dims archived rows", async () =>
                                 kind: "channel",
                                 label: "support-fires",
                             },
+                            { id: "server", kind: "channel", label: "server-updates" },
+                            { depth: 1, icon: "lock", id: "root", kind: "channel", label: "root" },
                         ],
                         label: "Channels",
                     },
@@ -1066,7 +1068,7 @@ it("nests child channels under their parent and dims archived rows", async () =>
                 title="Nesting"
             />
         ),
-        { width: 360, height: 260 },
+        { width: 360, height: 340 },
     );
     await view.ready();
 
@@ -1125,6 +1127,20 @@ it("nests child channels under their parent and dims archived rows", async () =>
         row("legacy").bounds().height / 2 + 1,
         0,
     );
+    /* A lone child is both the first and the last: it rises into the parent row and
+       still runs all the way down to its own elbow. */
+    const solo = await branch("root").visibleMetrics();
+    expect(branch("root").element.getAttribute("data-branch"), "lone child closes").toBe("end");
+    expect(branch("root").element.getAttribute("data-branch-first"), "lone child also rises").toBe(
+        "",
+    );
+    expect(solo.bounds.height, "lone child's stem reaches its elbow").toBeCloseTo(
+        row("root").bounds().height / 2 + 1,
+        0,
+    );
+    /* Its own icon still identifies it; the branch only replaces the default hash. */
+    expect(leadingNode("root"), "an explicit icon survives nesting").not.toBeNull();
+
     /* One tone across rows: the archived row's 0.55 dimming is cancelled on the line. */
     expect(
         getComputedStyle(branch("legacy").element, "::before").opacity,
@@ -1148,7 +1164,14 @@ it("nests child channels under their parent and dims archived rows", async () =>
     const ordered = [
         ...view.container.querySelectorAll('[data-testid="nested"] [data-item-id]'),
     ].map((node) => node.getAttribute("data-item-id"));
-    expect(ordered, "parent precedes its children").toEqual(["launch", "ios", "legacy", "fires"]);
+    expect(ordered, "parent precedes its children").toEqual([
+        "launch",
+        "ios",
+        "legacy",
+        "fires",
+        "server",
+        "root",
+    ]);
     const archivedRow = row("fires").element as HTMLButtonElement;
     archivedRow.click();
     expect(selected, "archived rows stay clickable").toEqual(["fires"]);
