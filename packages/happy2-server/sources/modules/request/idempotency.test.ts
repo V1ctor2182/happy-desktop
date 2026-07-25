@@ -63,9 +63,9 @@ describe("request fingerprints", () => {
     });
 
     it("normalizes Fastify query dictionaries without weakening payload validation", () => {
-        const FastQueryDictionary = function () {};
-        FastQueryDictionary.prototype = Object.create(null);
-        const query = new FastQueryDictionary() as Record<string, string>;
+        // Fastify hands routes a dictionary whose prototype chain never reaches
+        // Object.prototype, so it is not a plain object to canonicalJson.
+        const query = Object.create(Object.create(null)) as Record<string, string>;
         query.cursor = "next";
         const request = {
             body: { text: "hello" },
