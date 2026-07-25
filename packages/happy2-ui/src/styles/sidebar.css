@@ -492,14 +492,17 @@
     background: var(--text-link);
 }
 
-/* Meta never claims free space, but it must give space back: a meta longer than
-   the row (a filesystem path, say) would otherwise overflow the row and squeeze
-   the label — the thing the reader actually scans — down to nothing. Shrinking
-   is distributed by content width, so a long meta yields before a short label. */
+/* Meta never claims free space, but it must give space back and it must never
+   take more than half the row. A meta longer than the row (a filesystem path,
+   say) would otherwise overflow it and — because the label absorbs the row's
+   free space rather than reserving width of its own — squeeze the name the
+   reader actually scans down to nothing. Capped and clipped, it ellipsizes and
+   the name always keeps at least half the row. */
 .happy2-sidebar__item-meta {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
+    max-width: 50%;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 11px;

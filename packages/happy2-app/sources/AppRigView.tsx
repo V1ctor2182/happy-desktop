@@ -200,10 +200,18 @@ export function AppRigView(props: AppRigViewProps) {
         );
     }
 
+    // Starting a session with no project in hand has to ask which directory to
+    // start it in; the daemon files the answer under a project by itself.
     const conversationCreate = () => {
         void props.host.directoryPick().then((cwd) => {
             if (cwd) void props.workspace.conversationCreate({ cwd }).catch(() => undefined);
         });
+    };
+
+    // Inside an open project the directory is already decided, so every "new
+    // session" affordance here starts one in it rather than asking again.
+    const groupConversationCreate = (group: OpenGroup) => {
+        void props.workspace.conversationCreate(group.create).catch(() => undefined);
     };
 
     const projects = workspace.list.projects;
@@ -292,60 +300,73 @@ export function AppRigView(props: AppRigViewProps) {
                         title={openGroup.name}
                         topic={openGroup.displayPath}
                     />
-                    <TabbedPane
-                        actions={
-                            <Button
-                                aria-label="New session in this project"
-                                icon="plus"
-                                iconOnly
-                                onClick={() =>
-                                    void props.workspace
-                                        .conversationCreate(openGroup.create)
-                                        .catch(() => undefined)
-                                }
-                                size="small"
-                                variant="ghost"
-                            />
-                        }
-                        activeId={props.chatId ?? ""}
-                        closeLabel="Close session"
-                        onClose={(chatId) => {
-                            // Closing the addressed session addresses what is left
-                            // first, so the surface never sits on a session that has
-                            // just left the list. The address it replaces is gone,
-                            // so it does not belong in history either.
-                            if (chatId === props.chatId) {
-                                const rest = openGroup.conversations.filter(
-                                    (summary) => summary.id !== chatId,
-                                );
-                                props.onChatSelect(
-                                    rest.length > 0 ? openGroup.id : undefined,
-                                    rest[0]?.id,
-                                    true,
-                                );
-                            }
-                            void props.workspace
-                                .conversationArchive(chatId as RigSessionId)
-                                .catch(() => undefined);
-                        }}
-                        onReorder={(chatIds) =>
-                            void props.workspace
-                                .conversationsReorder(
-                                    openGroup.id,
-                                    chatIds as readonly RigSessionId[],
-                                )
-                                .catch(() => undefined)
-                        }
-                        onSelect={(chatId) => props.onChatSelect(openGroup.id, chatId)}
-                        tabs={sessionTabs(openGroup)}
-                    >
-                        <RigConversationBody
-                            conversation={conversation}
-                            now={now}
-                            onCreate={conversationCreate}
-                            workspace={props.workspace}
+                    {openGroup.conversations.length === 0 ? (
+                        // A project with nothing in it gets no tab strip: an empty
+                        // strip is a control that does nothing but take a row, and
+                        // the one action worth offering is already the button below.
+                        <EmptyState
+                            action={{
+                                label: "New session",
+                                icon: "plus",
+                                onClick: () => groupConversationCreate(openGroup),
+                            }}
+                            description={`Start a session to begin working in ${openGroup.displayPath}.`}
+                            icon="chat"
+                            size="panel"
+                            title={`No sessions in ${openGroup.name} yet`}
                         />
-                    </TabbedPane>
+                    ) : (
+                        <TabbedPane
+                            actions={
+                                <Button
+                                    aria-label="New session in this project"
+                                    icon="plus"
+                                    iconOnly
+                                    onClick={() => groupConversationCreate(openGroup)}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            }
+                            activeId={props.chatId ?? ""}
+                            closeLabel="Close session"
+                            onClose={(chatId) => {
+                                // Closing the addressed session addresses what is left
+                                // first, so the surface never sits on a session that has
+                                // just left the list. The address it replaces is gone,
+                                // so it does not belong in history either.
+                                if (chatId === props.chatId) {
+                                    const rest = openGroup.conversations.filter(
+                                        (summary) => summary.id !== chatId,
+                                    );
+                                    props.onChatSelect(
+                                        rest.length > 0 ? openGroup.id : undefined,
+                                        rest[0]?.id,
+                                        true,
+                                    );
+                                }
+                                void props.workspace
+                                    .conversationArchive(chatId as RigSessionId)
+                                    .catch(() => undefined);
+                            }}
+                            onReorder={(chatIds) =>
+                                void props.workspace
+                                    .conversationsReorder(
+                                        openGroup.id,
+                                        chatIds as readonly RigSessionId[],
+                                    )
+                                    .catch(() => undefined)
+                            }
+                            onSelect={(chatId) => props.onChatSelect(openGroup.id, chatId)}
+                            tabs={sessionTabs(openGroup)}
+                        >
+                            <RigConversationBody
+                                conversation={conversation}
+                                now={now}
+                                onCreate={() => groupConversationCreate(openGroup)}
+                                workspace={props.workspace}
+                            />
+                        </TabbedPane>
+                    )}
                 </>
             ) : (
                 <>
