@@ -331,9 +331,14 @@ export function fingerprintFastifyRequest(
         action: idempotencyRequestAction(request),
         method: request.method,
         contentType: request.headers["content-type"],
-        query: request.query,
+        query: normalizedFastifyQuery(request.query),
         payload,
     });
+}
+
+function normalizedFastifyQuery(value: unknown): unknown {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value));
 }
 
 export function idempotencyRequestAction(request: Pick<FastifyRequest, "method" | "url">): string {

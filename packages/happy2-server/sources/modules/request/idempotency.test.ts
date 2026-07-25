@@ -61,6 +61,31 @@ describe("request fingerprints", () => {
             fingerprintFastifyRequest(request("/v0/messages/message-b/deleteMessage")),
         );
     });
+
+    it("normalizes Fastify query dictionaries without weakening payload validation", () => {
+        const FastQueryDictionary = function () {};
+        FastQueryDictionary.prototype = Object.create(null);
+        const query = new FastQueryDictionary() as Record<string, string>;
+        query.cursor = "next";
+        const request = {
+            body: { text: "hello" },
+            headers: { "content-type": "application/json" },
+            method: "POST",
+            query,
+            routeOptions: { url: "/v0/chats/:chatId/updateDraft" },
+            url: "/v0/chats/chat-1/updateDraft?cursor=next",
+        } as Parameters<typeof fingerprintFastifyRequest>[0];
+
+        expect(fingerprintFastifyRequest(request)).toBe(
+            fingerprintFastifyRequest({ ...request, query: { cursor: "next" } }),
+        );
+        expect(() =>
+            fingerprintFastifyRequest({
+                ...request,
+                body: new (class InvalidPayload {})(),
+            }),
+        ).toThrow("fingerprint objects must be plain objects");
+    });
 });
 
 describe("IdempotencyCoordinator", () => {
