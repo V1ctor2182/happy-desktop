@@ -1,4 +1,4 @@
-# Happy (2) desktop
+# Happy Place desktop
 
 The desktop package is macOS-only. Electron owns the window, update lifecycle,
 and child-process supervision; it does not run Happy or Rig inside Electron's

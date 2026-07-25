@@ -266,7 +266,7 @@ describe("App development-token wiring", () => {
 
         // The dev-token gate is shown — not any password sign-in form.
         expect(await screen.findByTestId("dev-token-gate-screen")).toBeTruthy();
-        expect(screen.getByText("Sign in to Happy (2).")).toBeTruthy();
+        expect(screen.getByText("Sign in to Happy Place.")).toBeTruthy();
         expect(screen.container.querySelector('input[type="password"]')).toBeNull();
         expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
 

@@ -18,7 +18,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const TARGETS = [join(repoRoot, "packages", "happy2-desktop", "src")];
+const TARGETS = [join(repoRoot, "packages", "happy2-desktop", "sources")];
 const SOURCE = /\.(?:ts|tsx)$/u;
 const SKIP = /\.test\.(?:ts|tsx)$/u;
 const MINIMUM_REASON_LENGTH = 12;

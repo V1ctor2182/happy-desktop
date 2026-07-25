@@ -5,7 +5,7 @@ export default defineConfig({
     build: {
         emptyOutDir: false,
         lib: {
-            entry: resolve(import.meta.dirname, "src/preload.ts"),
+            entry: resolve(import.meta.dirname, "sources/preload/preload.ts"),
             formats: ["cjs"],
             fileName: () => "preload.cjs",
         },

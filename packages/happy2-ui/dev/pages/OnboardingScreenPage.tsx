@@ -59,7 +59,7 @@ export function OnboardingScreenPage() {
                     <OnboardingScreen
                         backgroundUrl={backgroundDataUri}
                         bodyKey="sandbox-provider"
-                        brand={{ name: "Happy (2)" }}
+                        brand={{ name: "Happy Place" }}
                         copy="Agent code runs inside the selected sandbox provider, isolated from the Happy server process."
                         footer={
                             <Button fullWidth type="button">
@@ -101,7 +101,7 @@ export function OnboardingScreenPage() {
                         <OnboardingScreen
                             backgroundUrl={backgroundDataUri}
                             bodyKey="loading"
-                            brand={{ name: "Happy (2)" }}
+                            brand={{ name: "Happy Place" }}
                             kicker="Server setup"
                             loadingLabel="Loading server setup…"
                             state="loading"
@@ -116,7 +116,7 @@ export function OnboardingScreenPage() {
                         <OnboardingScreen
                             backgroundUrl={backgroundDataUri}
                             bodyKey="base-image"
-                            brand={{ name: "Happy (2)" }}
+                            brand={{ name: "Happy Place" }}
                             copy="The base image is downloaded and built once, then becomes the default sandbox for every agent."
                             kicker="Server setup"
                             steps={wizardSteps(1)}
@@ -143,7 +143,7 @@ export function OnboardingScreenPage() {
                     <OnboardingScreen
                         backgroundUrl={backgroundDataUri}
                         bodyKey="base-image-overflow"
-                        brand={{ name: "Happy (2)" }}
+                        brand={{ name: "Happy Place" }}
                         copy="Choose one image or provide a Dockerfile. Every option remains reachable inside the body scrollport."
                         footer={
                             <Button fullWidth type="button">
@@ -185,7 +185,7 @@ export function OnboardingScreenPage() {
                     <OnboardingScreen
                         backgroundUrl={backgroundDataUri}
                         bodyKey="default-agent"
-                        brand={{ name: "Happy (2)" }}
+                        brand={{ name: "Happy Place" }}
                         copy="Create the built-in agent that runs your workspace before you finish setup."
                         footer={
                             <Button form={agentFormId} fullWidth type="submit">
@@ -221,7 +221,7 @@ export function OnboardingScreenPage() {
                     <OnboardingScreen
                         backgroundUrl={backgroundDataUri}
                         bodyKey="short-registration"
-                        brand={{ name: "Happy (2)" }}
+                        brand={{ name: "Happy Place" }}
                         copy="Decide whether other people can create an account now."
                         footer={
                             <Button fullWidth type="button">

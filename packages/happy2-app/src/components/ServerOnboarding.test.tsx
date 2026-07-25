@@ -358,7 +358,7 @@ describe("ServerOnboarding", () => {
         expect(screen.getByText(/It runs inside the Docker sandbox\./)).toBeTruthy();
         expect(screen.container.querySelector('[data-happy2-ui="modal-overlay"]')).toBeNull();
         expect(screen.getByText("Registration")).toBeTruthy();
-        expect(screen.getByText("Happy (2)")).toBeTruthy();
+        expect(screen.getByText("Happy Place")).toBeTruthy();
         const submit = screen.getByTestId("default-agent-submit") as HTMLButtonElement;
         expect(submit.form).toBe(agentForm(screen));
         await waitFor(() =>

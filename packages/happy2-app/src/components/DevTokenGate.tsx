@@ -153,7 +153,7 @@ export function DevTokenGate(props: DevTokenGateProps) {
             <OnboardingScreen
                 backgroundUrl={onboardingBackgroundUrl}
                 bodyKey="input"
-                brand={{ name: "Happy (2)" }}
+                brand={{ name: "Happy Place" }}
                 copy={
                     mode === "loading"
                         ? undefined
@@ -163,7 +163,7 @@ export function DevTokenGate(props: DevTokenGateProps) {
                 kicker={mode === "loading" ? "Connecting to your workspace" : "Development access"}
                 loadingLabel="Signing in with your development token."
                 state={mode === "loading" ? "loading" : "form"}
-                title={mode === "loading" ? "One moment." : "Sign in to Happy (2)."}
+                title={mode === "loading" ? "One moment." : "Sign in to Happy Place."}
             >
                 {mode === "loading" ? null : (
                     <form onSubmit={submitToken} style={formStyle}>

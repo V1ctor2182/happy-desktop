@@ -51,7 +51,7 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
                 data-testid="cp"
                 onClose={() => {}}
                 onQueryChange={() => {}}
-                placeholder="Search Happy (2)…"
+                placeholder="Search Happy Place…"
                 query="calm"
             >
                 <SearchResults groups={shortGroups} query="calm" variant="flush" />
@@ -64,7 +64,7 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
     const card = view.$('[data-testid="cp"]');
     expect(card.element.getAttribute("role")).toBe("dialog");
     expect(card.element.getAttribute("aria-modal")).toBe("true");
-    expect(card.element.getAttribute("aria-label")).toBe("Search Happy (2)…");
+    expect(card.element.getAttribute("aria-label")).toBe("Search Happy Place…");
     expect(card.bounds()).toEqual({ x: 0, y: 0, width: 640, height: 461 });
     expect(
         card.computedStyles([
@@ -122,8 +122,8 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
     const input = view.$('[data-testid="cp"] [data-happy2-ui="command-palette-input"]');
     expect(input.element.tagName).toBe("INPUT");
     expect((input.element as HTMLInputElement).value).toBe("calm");
-    expect(input.element.getAttribute("placeholder")).toBe("Search Happy (2)…");
-    expect(input.element.getAttribute("aria-label")).toBe("Search Happy (2)…");
+    expect(input.element.getAttribute("placeholder")).toBe("Search Happy Place…");
+    expect(input.element.getAttribute("aria-label")).toBe("Search Happy Place…");
     expect(
         input.computedStyles([
             "background-color",

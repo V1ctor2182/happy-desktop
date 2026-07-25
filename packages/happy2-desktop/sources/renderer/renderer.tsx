@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { App, AppRigView, DesktopStartupScreen } from "happy2-app";
-import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "./shared/desktopContract";
+import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import { rigSessionStoreCreate, type RigSessionStore } from "./rigSessionStore";

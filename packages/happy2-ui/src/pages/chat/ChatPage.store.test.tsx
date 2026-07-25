@@ -1147,7 +1147,7 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
     const pendingRoot = view.container.querySelector('[data-happy2-ui="message"]')!;
     expect(pendingRoot.getAttribute("data-own")).toBe("");
     expect(pendingRoot.getAttribute("data-delivery-state")).toBe("sending");
-    expect(pendingRoot.textContent).not.toContain("Happy (2)");
+    expect(pendingRoot.textContent).not.toContain("Happy Place");
 
     update(confirmed);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -1155,7 +1155,7 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
     expect(confirmedRoot).toBe(pendingRoot);
     expect(confirmedRoot.getAttribute("data-own")).toBe("");
     expect(confirmedRoot.getAttribute("data-delivery-state")).toBe("sent");
-    expect(confirmedRoot.textContent).not.toContain("Happy (2)");
+    expect(confirmedRoot.textContent).not.toContain("Happy Place");
 });
 
 it("edits an own message through the desktop-safe dialog with its current revision", async () => {

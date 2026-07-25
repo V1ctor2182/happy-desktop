@@ -1,5 +1,5 @@
 import type { DesktopStartupValues } from "happy2-app";
-import type { DesktopStartRequest } from "./shared/desktopContract";
+import type { DesktopStartRequest } from "../shared/desktopContract";
 
 /**
  * Projects an in-flight or failed start request back to the startup form's two

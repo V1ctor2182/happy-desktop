@@ -78,7 +78,7 @@ export function SearchPage(props: SearchPageProps) {
             description="Find channels, people, messages, and files across your workspace."
             icon="search"
             size={props.variant === "flush" ? "inline" : undefined}
-            title="Search Happy (2)"
+            title="Search Happy Place"
         />
     );
 }

@@ -248,7 +248,7 @@ export function ChatView(props: ChatViewProps) {
         },
         [state],
     );
-    // Rig's catalog can change outside Happy (2). Load it as the desktop app
+    // Rig's catalog can change outside Happy Place. Load it as the desktop app
     // enters the chat surface, then refresh only while that surface is visible;
     // picker clicks consume this already-materialized catalog and never fetch.
     useLayoutEffect(() => {

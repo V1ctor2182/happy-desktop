@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { desktopRuntimeStoreCreate } from "./runtimeStore";
-import type { DesktopRuntimeSnapshot, HappyDesktopBridge } from "./shared/desktopContract";
+import type { DesktopRuntimeSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 
 const choosing: DesktopRuntimeSnapshot = {
     phase: "choosing",

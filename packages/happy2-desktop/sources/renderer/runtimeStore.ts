@@ -1,4 +1,4 @@
-import type { DesktopRuntimeSnapshot, HappyDesktopBridge } from "./shared/desktopContract";
+import type { DesktopRuntimeSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 
 export interface DesktopRuntimeStore {
     get(): DesktopRuntimeSnapshot | undefined;

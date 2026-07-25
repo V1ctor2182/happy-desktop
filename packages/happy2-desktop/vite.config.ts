@@ -3,7 +3,7 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { defineConfig } from "vite";
-import { browserLocalRigPlugin } from "./src/main/browserDevServer";
+import { browserLocalRigPlugin } from "./sources/main/browserDevServer";
 
 export default defineConfig({
     base: "./",

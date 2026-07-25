@@ -734,7 +734,7 @@ it("opens as a read-only well through click and Enter/Space in opener mode", asy
             <div style={{ background: "#ffffff", padding: "12px" }}>
                 <SearchField
                     onOpen={() => opens.push(1)}
-                    placeholder="Search Happy (2)…"
+                    placeholder="Search Happy Place…"
                     value="ENG-482"
                     width={300}
                 />

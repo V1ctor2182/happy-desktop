@@ -268,7 +268,7 @@ function ServerOnboardingBody(props: {
         <OnboardingScreen
             backgroundUrl={onboardingBackgroundUrl}
             bodyKey={canonicalStep}
-            brand={{ name: "Happy (2)" }}
+            brand={{ name: "Happy Place" }}
             copy={headline().copy}
             data-testid="server-onboarding"
             kicker={headline().kicker}

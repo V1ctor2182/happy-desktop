@@ -53,7 +53,7 @@ export type SidebarSection = {
 };
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     activeItemId: string;
-    /** Renders the product mark ("Happy" + faint "2") instead of a custom title row. */
+    /** Renders the product mark ("Happy" + faint "Place") instead of a custom title row. */
     brand?: boolean;
     composeLabel?: string;
     footer?: ReactNode;
@@ -241,7 +241,7 @@ export function Sidebar(props: SidebarProps) {
                                         data-happy2-ui="sidebar-title-suffix"
                                     >
                                         {" "}
-                                        2
+                                        Place
                                     </span>
                                 </span>
                             </span>

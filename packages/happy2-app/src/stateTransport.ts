@@ -42,7 +42,7 @@ export function createAuthenticatedTransport(baseUrl: string, token?: string): C
                 if (request.body instanceof ReadableStream) init.duplex = "half";
                 response = await fetch(`${base}${request.path}`, init);
             } catch (error) {
-                throw new TransportError("Happy (2) server is unreachable.", true, {
+                throw new TransportError("Happy Place server is unreachable.", true, {
                     cause: error,
                 });
             }
@@ -212,7 +212,7 @@ async function subscribeRealtime(
                 opened = true;
             });
             if (signal.aborted) return;
-            failure = new TransportError("Realtime disconnected from the Happy (2) server.");
+            failure = new TransportError("Realtime disconnected from the Happy Place server.");
         } catch (error) {
             if (signal.aborted) return;
             failure = error;
@@ -246,7 +246,7 @@ async function streamEvents(
         });
     } catch (error) {
         if (signal.aborted) return;
-        throw new TransportError("Realtime could not connect to the Happy (2) server.", true, {
+        throw new TransportError("Realtime could not connect to the Happy Place server.", true, {
             cause: error,
         });
     }
@@ -357,7 +357,7 @@ async function streamRequest(
     } catch (error) {
         if (!signal.aborted)
             observer.onError(
-                new TransportError("Happy (2) server is unreachable.", true, { cause: error }),
+                new TransportError("Happy Place server is unreachable.", true, { cause: error }),
             );
         return;
     }

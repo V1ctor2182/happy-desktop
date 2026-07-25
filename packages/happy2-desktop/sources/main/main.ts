@@ -13,23 +13,23 @@ import {
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { DesktopRuntime } from "./main/desktopRuntime";
-import { desktopInstanceMenuTargets } from "./main/applicationMenu";
+import { DesktopRuntime } from "./desktopRuntime";
+import { desktopInstanceMenuTargets } from "./applicationMenu";
 import {
     desktopWindowTarget,
     remoteNavigationAllowed,
     rendererNavigationAllowed,
-} from "./main/navigation";
-import { desktopUpdaterCreate } from "./main/updater";
-import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./main/windowLifecycle";
-import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./main/runtimeValidation";
-import { desktopIpc } from "./shared/desktopContract";
-import { localRigConnectorCreate } from "./main/localRig";
-import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./main/rigIpcValidation";
-import { RigInstallTerminalManager } from "./main/rigInstallTerminal";
+} from "./navigation";
+import { desktopUpdaterCreate } from "./updater";
+import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
+import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
+import { desktopIpc } from "../shared/desktopContract";
+import { localRigConnectorCreate } from "./localRig";
+import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
+import { RigInstallTerminalManager } from "./rigInstallTerminal";
 
 if (process.platform !== "darwin") {
-    console.error("Happy (2) desktop is available only on macOS.");
+    console.error("Happy Place desktop is available only on macOS.");
     app.exit(1);
 }
 if (!app.requestSingleInstanceLock()) app.quit();

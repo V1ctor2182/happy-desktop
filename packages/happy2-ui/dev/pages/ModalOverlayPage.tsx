@@ -57,14 +57,14 @@ function TopPalette() {
             autoFocus={false}
             onClose={() => {}}
             onQueryChange={() => {}}
-            placeholder="Search Happy (2)…"
+            placeholder="Search Happy Place…"
             query=""
         >
             <EmptyState
                 description="Find channels, people, messages, and files across your workspace."
                 icon="search"
                 size="inline"
-                title="Search Happy (2)"
+                title="Search Happy Place"
             />
         </CommandPalette>
     );

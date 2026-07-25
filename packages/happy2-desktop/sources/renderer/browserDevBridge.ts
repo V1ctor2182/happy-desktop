@@ -3,7 +3,7 @@ import type {
     DesktopStartRequest,
     HappyDesktopBridge,
     RigInstallTerminalEvent,
-} from "./shared/desktopContract";
+} from "../shared/desktopContract";
 
 const endpoint = "/__happy2_local_rig";
 

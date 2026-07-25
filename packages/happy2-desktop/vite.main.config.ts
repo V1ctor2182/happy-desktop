@@ -8,7 +8,7 @@ export default defineConfig({
         outDir: "dist",
         rollupOptions: {
             input: {
-                main: resolve(import.meta.dirname, "src/main.ts"),
+                main: resolve(import.meta.dirname, "sources/main/main.ts"),
             },
             external: [
                 /^@slopus\/rig(?:\/|$)/u,

@@ -22,7 +22,7 @@ function PaletteFrame(props: { children: ReactNode; query: string }) {
             autoFocus={false}
             onClose={() => {}}
             onQueryChange={() => {}}
-            placeholder="Search Happy (2)…"
+            placeholder="Search Happy Place…"
             query={props.query}
         >
             {props.children}
@@ -76,7 +76,7 @@ export function CommandPalettePage() {
                         description="Find channels, people, messages, and files across your workspace."
                         icon="search"
                         size="inline"
-                        title="Search Happy (2)"
+                        title="Search Happy Place"
                     />
                 </PaletteSpecimen>
                 <PaletteSpecimen

@@ -388,7 +388,7 @@ describe("persistent desktop routing", () => {
                 .querySelector('[data-happy2-ui="modal-overlay"]')
                 ?.getAttribute("data-placement"),
         ).toBe("top");
-        expect(screen.container.textContent).toContain("Search Happy (2)");
+        expect(screen.container.textContent).toContain("Search Happy Place");
         expect(chatPrimarySurface(screen.container)).toBe(primary);
         navigation.close("overlay");
         await waitFor(() =>

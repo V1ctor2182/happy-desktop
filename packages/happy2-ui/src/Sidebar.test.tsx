@@ -128,7 +128,7 @@ it("renders the Happy logo to the left of the product title", async () => {
 
     const title = view.$('[data-happy2-ui="sidebar-title"]');
     expect(title.bounds().x - (logo.bounds().x + logo.bounds().width)).toBe(5);
-    expect(title.element.textContent).toBe("Happy 2");
+    expect(title.element.textContent).toBe("Happy Place");
 
     await view.screenshot("Sidebar.brand.test");
 }, 120_000);

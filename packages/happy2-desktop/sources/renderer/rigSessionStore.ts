@@ -12,7 +12,7 @@ import {
 } from "happy2-state";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import type { DesktopRuntimeStore } from "./runtimeStore";
-import type { HappyDesktopBridge } from "./shared/desktopContract";
+import type { HappyDesktopBridge } from "../shared/desktopContract";
 
 export interface RigSession {
     readonly connectionId: number;

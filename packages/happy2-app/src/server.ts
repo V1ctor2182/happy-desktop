@@ -55,7 +55,7 @@ export function createServerClient(baseUrl: string) {
                 },
             });
         } catch {
-            throw new ServerError(0, "network_error", "Happy (2) server is unreachable.");
+            throw new ServerError(0, "network_error", "Happy Place server is unreachable.");
         }
         const body = (await response.json().catch(() => ({}))) as {
             error?: string;

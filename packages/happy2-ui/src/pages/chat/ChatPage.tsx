@@ -621,7 +621,7 @@ export function ChatPage(props: ChatPageProps) {
         if (!projection || !chat)
             return {
                 id: "empty",
-                title: "Your Happy (2)",
+                title: "Your Happy Place",
                 topic: "Create a channel or select a person to start chatting",
                 composerPlaceholder: "Type a message...",
             };

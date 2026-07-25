@@ -40,7 +40,7 @@ export function DesktopOverlaySurface(props: DesktopOverlaySurfaceProps) {
             <CommandPalette
                 onClose={close}
                 onQueryChange={props.onSearchQueryChange}
-                placeholder="Search Happy (2)…"
+                placeholder="Search Happy Place…"
                 query={searchOverlay()?.query ?? ""}
             >
                 <SearchOverlay

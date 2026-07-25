@@ -102,7 +102,7 @@ it("keeps flush SearchPage idle, searching, and no-results states inline near th
         "inline",
     ]);
     expect(states.map((state) => state.querySelector("h2")?.textContent)).toEqual([
-        "Search Happy (2)",
+        "Search Happy Place",
         "Searching…",
         "No results",
     ]);

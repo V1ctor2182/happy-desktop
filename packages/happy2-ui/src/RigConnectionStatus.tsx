@@ -102,7 +102,7 @@ export function RigConnectionStatus(props: RigConnectionStatusProps) {
             <OnboardingScreen
                 backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={model.bodyKey}
-                brand={{ name: "Happy (2)" }}
+                brand={{ name: "Happy Place" }}
                 className={props.className}
                 copy={model.copy}
                 data-testid={props["data-testid"] ?? "rig-connection-status"}

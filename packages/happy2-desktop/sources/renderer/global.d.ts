@@ -1,4 +1,4 @@
-import type { HappyDesktopBridge } from "./shared/desktopContract";
+import type { HappyDesktopBridge } from "../shared/desktopContract";
 
 declare global {
     interface Window {

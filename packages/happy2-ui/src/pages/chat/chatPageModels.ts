@@ -183,7 +183,7 @@ function messageEntry(item: DeepReadonly<ChatMessageItem>): LiveChatMessage {
     const message = item.message;
     const sender = message.sender;
     const own = item.source === "local" || item.clientMutationId !== undefined;
-    const name = sender?.displayName ?? message.senderBot?.name ?? (own ? "You" : "Happy (2)");
+    const name = sender?.displayName ?? message.senderBot?.name ?? (own ? "You" : "Happy Place");
     const deleted = Boolean(message.deletedAt);
     return {
         kind: "message",

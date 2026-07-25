@@ -5,7 +5,7 @@ import {
     type DesktopStartRequest,
     type HappyDesktopBridge,
     type RigInstallTerminalEvent,
-} from "./shared/desktopContract";
+} from "../shared/desktopContract";
 
 const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),

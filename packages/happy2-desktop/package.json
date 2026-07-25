@@ -2,7 +2,7 @@
     "name": "happy2-desktop",
     "version": "0.0.18",
     "private": true,
-    "description": "Happy (2) macOS desktop app",
+    "description": "Happy Place macOS desktop app",
     "author": "Slopus",
     "type": "module",
     "main": "dist/main.js",
@@ -56,7 +56,7 @@
     "packageManager": "pnpm@10.28.1",
     "build": {
         "appId": "com.slopus.happy2",
-        "productName": "Happy 2",
+        "productName": "Happy Place",
         "asar": true,
         "asarUnpack": [
             "node_modules/@libsql/**/*",

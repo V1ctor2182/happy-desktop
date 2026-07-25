@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServerClient } from "./server";
 
-describe("Happy (2) server client", () => {
+describe("Happy Place server client", () => {
     afterEach(() => vi.unstubAllGlobals());
 
     it("discovers the server method and sends bearer credentials", async () => {

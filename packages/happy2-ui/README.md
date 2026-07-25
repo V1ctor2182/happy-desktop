@@ -1,6 +1,6 @@
 # happy2-ui
 
-React visuals and product-surface composition for Happy (2), implementing the "Relay" dark
+React visuals and product-surface composition for Happy Place, implementing the "Relay" dark
 theme. Leaf components remain props-only. A complete product surface may use `StoreSurface` to
 consume one concrete framework-independent `happy2-state` store directly, without callback shims or
 framework-specific selectors. Colors use Happy's original `--colors-*` roles and typography uses

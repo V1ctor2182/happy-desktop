@@ -86,7 +86,7 @@ export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
             <OnboardingScreen
                 backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={props.phase}
-                brand={{ name: "Happy (2)" }}
+                brand={{ name: "Happy Place" }}
                 copy={
                     props.phase === "choosing"
                         ? "Choose where Happy runs for this machine. Happy remembers the choice and starts it automatically on future launches."

@@ -408,7 +408,7 @@ export function AuthGate(props: AuthGateProps) {
                 if (methods?.method === "password")
                     return {
                         kicker: isRegistering ? "Create your account" : "Welcome back",
-                        title: isRegistering ? "Set up Happy (2)." : "Sign in to Happy (2).",
+                        title: isRegistering ? "Set up Happy Place." : "Sign in to Happy Place.",
                         copy: isRegistering
                             ? "Your profile comes next."
                             : "Use the account you already created.",
@@ -434,7 +434,7 @@ export function AuthGate(props: AuthGateProps) {
             <OnboardingScreen
                 backgroundUrl={onboardingBackgroundUrl}
                 bodyKey={mode}
-                brand={{ name: "Happy (2)" }}
+                brand={{ name: "Happy Place" }}
                 copy={mode === "loading" ? undefined : headline().copy}
                 data-testid="auth-onboarding-screen"
                 kicker={mode === "loading" ? loadingHeadline.kicker : headline().kicker}

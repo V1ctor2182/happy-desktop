@@ -20,7 +20,7 @@ const loaded = {
         userId: "user-blueprint",
         availability: "online" as const,
         customStatusEmoji: "🚀",
-        customStatusText: "Building Happy (2)",
+        customStatusText: "Building Happy Place",
         updatedAt: "2026-07-17T12:00:00.000Z",
     },
     notifications: {
