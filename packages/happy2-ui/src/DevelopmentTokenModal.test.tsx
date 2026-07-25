@@ -5,6 +5,7 @@ import "./styles/banner.css";
 import "./styles/button.css";
 import "./styles/development-token-modal.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/modal-overlay.css";
 import "./styles/modal.css";
 import "./styles/secret-reveal.css";
@@ -88,8 +89,14 @@ it("hands off one session-bound development token in a controlled modal", async 
     expect(close).not.toHaveBeenCalled();
     (view.container.querySelector('button[aria-label="Hide secret"]') as HTMLButtonElement).click();
     expect(toggle).toHaveBeenCalledTimes(1);
+    /* Match on the button's label part: a button's own textContent also carries
+       the icon font's Private Use Area glyph character. */
     Array.from(view.container.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.trim() === "Copy")!
+        .find(
+            (button) =>
+                button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim() ===
+                "Copy",
+        )!
         .click();
     expect(copy).toHaveBeenCalledTimes(1);
     (view.container.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();

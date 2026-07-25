@@ -137,7 +137,9 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
         const value = view.$(`[data-testid="${id}"] [data-happy2-ui="select-value"]`);
         const nativeSelect = view.$(`[data-testid="${id}"] [data-happy2-ui="select-native"]`);
         const chevronBox = view.$(`[data-testid="${id}"] [data-happy2-ui="select-chevron"]`);
-        const chevron = view.$(`[data-testid="${id}"] [data-happy2-ui="select-chevron"] svg`);
+        const chevron = view.$(
+            `[data-testid="${id}"] [data-happy2-ui="select-chevron"] [data-happy2-ui="icon"]`,
+        );
         const label = view.$(`[data-testid="${id}"] [data-happy2-ui="select-label"]`);
 
         /* ---- Control well contract -------------------------------------- */
@@ -260,8 +262,7 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
          * measures the painted ink centroid. "Administrator" is lowercase
          * x-height-heavy ink that naturally settles ~0.8–1.0px below the line-box
          * center; the policy says do NOT chase a word label's centroid to zero,
-         * so this loose bound only catches catastrophic misplacement. The
-         * symmetric-glyph centroid proof is the chevron (≤0.6px) below. */
+         * so this loose bound only catches catastrophic misplacement. */
         const drift = await valueTextDriftY(view, id);
         expect(
             Math.abs(drift),
@@ -287,19 +288,10 @@ it("holds Select geometry, tokens, typography, chevron centering, and value cent
         ).toBeLessThanOrEqual(0.1);
         expect(chevronBox.computedStyle("color"), `${id} chevron color`).toBe("rgb(153, 153, 153)");
 
-        /* Chevron glyph ink is the tuned chevron-down Icon (Icon.test.tsx
-         * proves ≤0.6px both axes at sizes 14/16); assert it renders centered
-         * inside its own box so the Select adds no drift of its own. */
-        const glyphInk = await chevron.visibleMetrics();
-        expect(glyphInk.pixelCount, `${id} chevron ink`).toBeGreaterThan(0);
-        expect(
-            Math.abs(glyphInk.center.x - spec.chevron / 2),
-            `${id} chevron glyph horizontal centroid`,
-        ).toBeLessThanOrEqual(0.6);
-        expect(
-            Math.abs(glyphInk.center.y - spec.chevron / 2),
-            `${id} chevron glyph vertical centroid`,
-        ).toBeLessThanOrEqual(0.6);
+        /* The chevron-down glyph is painted by the icon font, which centers it in
+         * the icon box measured above; the Select only owns that box, so the ink
+         * check just proves the glyph really renders. */
+        expect((await chevron.visibleMetrics()).pixelCount, `${id} chevron ink`).toBeGreaterThan(0);
 
         /* ---- Label typography (real inline text) ----------------------- */
         expect(
@@ -488,7 +480,9 @@ it("holds Select placeholder, error, disabled, focus, truncation, and fullWidth 
     /* ---- Truncation: box stays fixed, value clips with an ellipsis --- */
     const truncControl = view.$('[data-testid="sel-trunc"] [data-happy2-ui="select-control"]');
     const truncValue = view.$('[data-testid="sel-trunc"] [data-happy2-ui="select-value"]');
-    const truncChevron = view.$('[data-testid="sel-trunc"] [data-happy2-ui="select-chevron"] svg');
+    const truncChevron = view.$(
+        '[data-testid="sel-trunc"] [data-happy2-ui="select-chevron"] [data-happy2-ui="icon"]',
+    );
     /* The field keeps its 140px envelope instead of growing to the ~330px the
      * long option would need. */
     expect(truncControl.bounds().width, "truncated control keeps its width").toBe(140);

@@ -42,9 +42,16 @@ function nextFrame() {
     return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+/* Visible word of a Button, or null when the button is icon-only. A button's
+   raw `textContent` also carries the icon font's Private Use Area glyph
+   character, so the label span is the only reliable read. */
+function buttonLabel(button: HTMLButtonElement) {
+    return button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim() ?? null;
+}
+
 function buttonNamed(root: ParentNode, name: string) {
     return Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
-        (button) => button.textContent?.trim() === name,
+        (button) => buttonLabel(button) === name,
     );
 }
 
@@ -531,16 +538,13 @@ it("gates development tokens, prevents duplicate creation, copies, and clears th
     );
     await view.ready();
 
-    const buttonNamed = (name: string) =>
-        Array.from(view.container.querySelectorAll<HTMLButtonElement>("button")).find(
-            (button) => button.textContent?.trim() === name,
-        );
-    const create = buttonNamed("Create development token")!;
+    const named = (name: string) => buttonNamed(view.container, name);
+    const create = named("Create development token")!;
     create.click();
     create.click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     expect(developmentTokenCreate).toHaveBeenCalledTimes(1);
-    expect(buttonNamed("Creating token…")?.disabled).toBe(true);
+    expect(named("Creating token…")?.disabled).toBe(true);
 
     const credential = {
         token: "happy2_dev_settings_secret",
@@ -558,10 +562,10 @@ it("gates development tokens, prevents duplicate creation, copies, and clears th
     expect(view.container.textContent).not.toContain(credential.token);
     view.container.querySelector<HTMLButtonElement>('button[aria-label="Reveal secret"]')!.click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    buttonNamed("Copy")!.click();
+    named("Copy")!.click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     expect(writeText).toHaveBeenCalledWith(credential.token);
-    await expect.poll(() => buttonNamed("Copied")).toBeTruthy();
+    await expect.poll(() => named("Copied")).toBeTruthy();
 
     view.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -591,9 +595,7 @@ it("keeps the development-token row absent when disabled and localizes creation 
         { width: 1024, height: 704 },
     );
     await failed.ready();
-    Array.from(failed.container.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.trim() === "Create development token")!
-        .click();
+    buttonNamed(failed.container, "Create development token")!.click();
     await vi.waitFor(() =>
         expect(
             failed.container.querySelector('[data-testid="development-token-error"]')?.textContent,

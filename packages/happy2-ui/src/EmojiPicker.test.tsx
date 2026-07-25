@@ -4,6 +4,7 @@ import "./theme.css";
 import "./styles/emoji-picker.css";
 import "./styles/text-field.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { createRenderer } from "./testing";
 
@@ -167,7 +168,9 @@ it("holds EmojiPicker card, search, fixed grid slots, and per-emoji centering", 
     expect(input.type).toBe("search");
     expect(input.value).toBe("");
     expect(input.placeholder).toBe("Search emoji");
-    const searchIcon = view.$('[data-testid="picker"] [data-happy2-ui="text-field-icon"] svg');
+    const searchIcon = view.$(
+        '[data-testid="picker"] [data-happy2-ui="text-field-icon"] [data-happy2-ui="icon"]',
+    );
     expect(searchIcon.bounds().width, "search icon box").toBe(14);
     expect(searchIcon.bounds().height, "search icon box").toBe(14);
 

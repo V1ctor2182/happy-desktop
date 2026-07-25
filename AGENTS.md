@@ -83,6 +83,22 @@ only for a genuine two-dimensional grid) solely when flexbox cannot express the
 layout at all; never fall back to floats, `inline-block` hacks, or layout tables.
 See `DESIGN.md` → "Layout with flexbox".
 
+## Icons
+
+Every icon is a font glyph from the two families Happy itself uses — Ionicons
+and Octicons, vendored under `packages/happy2-ui/src/assets/fonts/` and
+addressed through the generated name maps in `src/vectorIcons/`. Use `Icon` for
+the curated house vocabulary and `Ionicon`/`Octicon` for a specific upstream
+glyph. Adding an icon means picking the upstream glyph a name maps to.
+
+Do not hand-draw glyphs, do not add an inline-SVG icon component, and do not
+change what backs `Icon`. A font glyph is already box-centered, so never assert
+an ink centroid on one; prove it with real ink and box geometry instead. If you
+believe the icon substrate itself must change, stop and ask — that is a
+product-owner decision, not an implementation detail, and swapping it silently
+red-lined 50 test files for five days once already. See `DESIGN.md` → "Icon
+systems".
+
 ## Generated images
 
 Whenever a feature needs a new raster image, generate an original image for

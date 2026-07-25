@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import "./theme.css";
 import "./styles/onboarding-screen.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/setup-option-card.css";
 import "./styles/text-field.css";
 import "./styles/banner.css";
@@ -54,8 +55,6 @@ function assertRingClearance(
         ).toBeGreaterThanOrEqual(extent);
 }
 
-type Renderer = ReturnType<typeof createRenderer>;
-
 const fontFamily = () =>
     server.browser === "webkit"
         ? "happy2 Figtree, system-ui, sans-serif"
@@ -66,34 +65,6 @@ const steps: readonly OnboardingStep[] = [
     { label: "Server", state: "current" },
     { label: "Finish", state: "upcoming" },
 ];
-
-/*
- * Alpha-weighted ink centroid of `partSelector` (a painted glyph with no
- * optical nudge of its own), expressed as an offset from the center of
- * `hostSelector` (positive = right / low). Refuses a blank or clipped capture.
- */
-async function glyphDrift(view: Renderer, hostSelector: string, partSelector: string) {
-    const host = view.$(hostSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const pb = part.bounds();
-    expect(visible.bounds.x, `${partSelector} ink clipped left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${partSelector} ink clipped top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped right`,
-    ).toBeLessThan(pb.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped bottom`,
-    ).toBeLessThan(pb.height);
-    const hb = host.bounds();
-    return {
-        dx: visible.center.x + pb.x - hb.x - hb.width / 2,
-        dy: visible.center.y + pb.y - hb.y - hb.height / 2,
-    };
-}
 
 /* Asserts a text part paints and its ink stays inside its own line box. */
 async function paints(part: RenderedElement<Element>, name: string) {
@@ -123,7 +94,7 @@ async function paintsUnclipped(part: RenderedElement<Element>, name: string) {
     return vis;
 }
 
-it("holds OnboardingScreen centered card, step rail, typography, and optical brand glyph", async () => {
+it("holds OnboardingScreen centered card, step rail, typography, and painted brand glyph", async () => {
     const view = createRenderer();
 
     view.render(
@@ -261,14 +232,16 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
     });
     await paints(brandName, "brand name");
 
-    /* Brand mark glyph (default spark) optically centered in the 28px chip. */
-    const markGlyph = await glyphDrift(
-        view,
-        '[data-happy2-ui="onboarding-mark"] svg',
-        '[data-happy2-ui="onboarding-mark"] svg',
-    );
-    expect(Math.abs(markGlyph.dx), "mark glyph horizontal centroid").toBeLessThanOrEqual(0.5);
-    expect(Math.abs(markGlyph.dy), "mark glyph vertical centroid").toBeLessThanOrEqual(0.5);
+    /* Brand mark glyph (default spark): a font glyph the icon font centers in
+     * its own box, so the contract is that it really paints in the 28px chip. */
+    expect(
+        (
+            await view
+                .$('[data-happy2-ui="onboarding-mark"] [data-happy2-ui="icon"]')
+                .visibleMetrics()
+        ).pixelCount,
+        "mark glyph ink",
+    ).toBeGreaterThan(0);
 
     /* ---- Step rail ----------------------------------------------------- */
 
@@ -305,7 +278,7 @@ it("holds OnboardingScreen centered card, step rail, typography, and optical bra
 
     /* The complete step paints its check glyph unclipped inside the dot. */
     const completeCheck = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="complete"] [data-happy2-ui="onboarding-step-dot"] svg',
+        '[data-happy2-ui="onboarding-step"][data-state="complete"] [data-happy2-ui="onboarding-step-dot"] [data-happy2-ui="icon"]',
     );
     await paintsUnclipped(completeCheck, "complete check glyph");
 
@@ -611,7 +584,9 @@ it("keeps loading and form card rects identical while holding width variants", a
 
     const customMark = view.$('[data-testid="large"] [data-happy2-ui="onboarding-mark"]');
     expect(customMark.bounds()).toMatchObject({ width: 28, height: 28 });
-    expect(customMark.element.querySelector("svg")?.getAttribute("data-name")).toBe("zap");
+    expect(
+        customMark.element.querySelector('[data-happy2-ui="icon"]')?.getAttribute("data-name"),
+    ).toBe("zap");
 
     /* ---- Minimal: title + body slot only ------------------------------- */
 

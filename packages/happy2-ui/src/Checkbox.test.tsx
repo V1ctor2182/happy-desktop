@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/checkbox.css";
 import { Checkbox } from "./Checkbox";
 import { createRenderer } from "./testing";
@@ -219,16 +220,17 @@ it("holds Checkbox geometry, colors, glyph centering, and typography across stat
         text: LABEL,
     });
 
-    /* ---- Checked check glyph: reused Icon, optically centered -------------- */
+    /* ---- Checked check glyph: reused Icon on an exact 2px inset ------------ */
 
-    // The check is Icon's already-tuned glyph (Icon.test holds its centroid
-    // ≤0.6px of its own box center), and the box centers the 14px icon on an
-    // exact 2px integer inset. Measured true-2× drift is |dx| ≤ 0.038,
-    // |dy| ≤ 0.036 across all three engines, so the tuned 0.4px target holds
-    // (well inside the 0.75px contract ceiling for a single centered glyph).
+    // The check is the font-backed Icon glyph, which the icon font centers in
+    // its own square box, so only the box geometry belongs here: the 18px
+    // control centers the 14px icon on an exact 2px integer inset, and the
+    // glyph must actually paint (which also proves the icon font loaded).
     for (const id of ["cb-checked", "box-checked"]) {
         const box = view.$(`[data-testid="${id}"] [data-happy2-ui="checkbox-box"]`);
-        const glyph = view.$(`[data-testid="${id}"] [data-happy2-ui="checkbox-box"] svg`);
+        const glyph = view.$(
+            `[data-testid="${id}"] [data-happy2-ui="checkbox-box"] [data-happy2-ui="icon"]`,
+        );
         const boxBounds = box.bounds();
         const glyphBounds = glyph.bounds();
         expect(glyphBounds.x - boxBounds.x, `${id} check inset left`).toBe(2);
@@ -259,7 +261,7 @@ it("holds Checkbox geometry, colors, glyph centering, and typography across stat
 
     for (const id of ["cb-unchecked", "box-unchecked"]) {
         const box = view.$(`[data-testid="${id}"] [data-happy2-ui="checkbox-box"]`);
-        expect(box.element.querySelector("svg"), `${id} no check`).toBeNull();
+        expect(box.element.querySelector('[data-happy2-ui="icon"]'), `${id} no check`).toBeNull();
         expect(
             box.element.querySelector('[data-happy2-ui="checkbox-mark"]'),
             `${id} no dash`,
@@ -312,7 +314,9 @@ it("holds Checkbox geometry, colors, glyph centering, and typography across stat
     expect(
         (
             await view
-                .$('[data-testid="cb-disabled-checked"] [data-happy2-ui="checkbox-box"] svg')
+                .$(
+                    '[data-testid="cb-disabled-checked"] [data-happy2-ui="checkbox-box"] [data-happy2-ui="icon"]',
+                )
                 .visibleMetrics()
         ).pixelCount,
     ).toBeGreaterThan(0);

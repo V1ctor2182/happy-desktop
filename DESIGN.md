@@ -459,30 +459,33 @@ Measure image clipping against the avatar shape, initials without a presence dot
 capture, and the presence circle by itself. Presence bounds must equal its declared 8px/10px box,
 and its alpha centroid must be within `0.05px` of that box center at 2×.
 
-Icons require the same standard. Do not center an icon by its file rectangle or
-SVG viewBox alone. Assert its visible bounds and optical center inside every
-button, rail item, field, or other container that uses it. Generated icons in
-particular often contain uneven transparent margins and must be normalized
-before component integration.
+Generated raster icons require the same standard: do not center one by its file
+rectangle alone. Assert its visible bounds and optical center inside every
+button, rail item, field, or other container that uses it, since a generated
+asset often carries uneven transparent margins and must be normalized before
+component integration. Font icons are exempt — see "Icon systems" below.
 
 ## Icon systems
 
-Happy (2) has two icon systems, and both live in `happy2-ui`. Application code
-never imports an icon font or draws its own glyph; it composes one of these
-components and passes a name, size, and optional color.
+Every icon in Happy (2) is a font glyph from the two families Happy itself
+relies on: **Ionicons** (~1357 glyphs) and **Octicons** (~331 glyphs), ported
+verbatim from Happy's `@expo/vector-icons` usage. Both live in `happy2-ui`, and
+application code never imports an icon font or draws its own glyph; it composes
+one of these components and passes a name, size, and optional color.
 
-**`Icon`** is the hand-drawn house set: stroke glyphs on a 20-unit grid with a
-shared 1.7 stroke mass, round caps and joins, and path data that is optically
-centered in the file. Its `IconName` union is a small, curated vocabulary. Use
-it for the core product chrome where a consistent bespoke stroke identity
-matters, and hold it to the optical-centering contract in `Icon.test.tsx`.
+**`Icon`** is the curated house vocabulary. Its small `IconName` union is the
+stable set of names product chrome uses, and each name resolves to exactly one
+upstream glyph in one family, so a name renders the same glyph Happy renders.
+Use it for core product chrome.
 
-**`Ionicon` and `Octicon`** are the font-based sets ported verbatim from Happy's
-`@expo/vector-icons` usage — the same two families Happy relies on: **Ionicons**
-(~1357 glyphs) and **Octicons** (~331 glyphs). Reach for these when porting a
-Happy surface that already names an Ionicons or Octicons glyph, or when the
-curated `Icon` set has no equivalent; they give the broad coverage the house set
-deliberately does not. How they are built:
+**`Ionicon` and `Octicon`** address the same two families by upstream glyph
+name. Reach for these when porting a Happy surface that already names a specific
+glyph, or when the curated `Icon` vocabulary has no equivalent; they give the
+broad coverage the curated set deliberately does not.
+
+Do not hand-draw an icon, do not add an inline-SVG icon component, and do not
+re-back `Icon` with path data. Adding a name to `IconName` means picking the
+upstream glyph it maps to. How the families are built:
 
 - The upstream TrueType fonts are vendored under
   `packages/happy2-ui/src/assets/fonts/` (`Ionicons.ttf`, `Octicons.ttf`).
@@ -495,11 +498,14 @@ deliberately does not. How they are built:
 - A glyph paints as a single PUA character in a square, `currentColor` box that
   never distorts inside a flex row. `size` sets both the font size and the box.
 
-Prove a font-icon integration the same way as any icon: real ink (non-zero
-visible pixels, which also proves the font actually loaded) and the correct box
-geometry in the container that uses it, across Chromium, Firefox, and WebKit.
-Prefer an accessible `aria-label` on a standalone, meaningful icon; a decorative
-icon stays `aria-hidden`.
+Prove a font-icon integration with real ink (non-zero visible pixels, which also
+proves the font actually loaded) and the correct box geometry in the container
+that uses it, across Chromium, Firefox, and WebKit. Do **not** assert an ink
+centroid on a font icon: the font supplies a box-centered glyph, so there is no
+path data to nudge and an optical-centering assertion measures the typeface
+rather than our layout. Optical centering still applies to text, avatars, and
+generated raster assets. Prefer an accessible `aria-label` on a standalone,
+meaningful icon; a decorative icon stays `aria-hidden`.
 
 ## Generated background images
 

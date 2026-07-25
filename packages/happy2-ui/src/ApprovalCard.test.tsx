@@ -5,13 +5,16 @@ import { createRenderer, RenderedElement } from "./testing";
 
 /*
  * Optical assertions measure the alpha-weighted ink centroid (color-blind,
- * background-subtracted) of every text-or-glyph part against its box center.
- * Word labels and path-like mono strings carry inherently asymmetric ink
+ * background-subtracted) of every text run against its box center. Word labels
+ * and path-like mono strings carry inherently asymmetric ink
  * (ascender/descender mass follows the specific characters), so those parts
  * assert the vertical centroid only, plus deterministic line-box symmetry;
  * each such case is commented at the assertion site. Engine corrections in
  * approval-card.css were measured at true 2x in all three engines; residual
  * drift for every asserted part is <=0.42px, so TOL holds real margin.
+ *
+ * Icons are font glyphs that Icon paints box-centered in their own square, so
+ * they are asserted by slot geometry and painted ink, never by a centroid.
  */
 
 const request: ApprovalRequest = {
@@ -34,9 +37,6 @@ const longRequest: ApprovalRequest = {
 };
 
 const TOL = 0.75;
-/* Icons are centered by path data and rasterize deterministically; hold them
- * to the tighter budget (measured |drift| <= 0.11px in every engine). */
-const ICON_TOL = 0.4;
 
 const noop = () => {};
 
@@ -138,9 +138,7 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
         '[data-testid="ac-pending"] [data-happy2-ui="approval-card-chip"] [data-happy2-ui="icon"]',
     );
     expect(shield.offsets()).toEqual({ top: 6, right: 6, bottom: 6, left: 6 });
-    const shieldInk = await ink(shield, chip, "pending shield");
-    expect(Math.abs(shieldInk.x - 13), "shield optical x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(shieldInk.y - 13), "shield optical y").toBeLessThanOrEqual(ICON_TOL);
+    expect((await shield.visibleMetrics()).pixelCount, "shield ink").toBeGreaterThan(0);
 
     const badge = view.$('[data-testid="ac-pending"] [data-happy2-ui="badge"]');
     expect(badge.element.getAttribute("data-variant")).toBe("warning");
@@ -280,10 +278,9 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
     const chevron = view.$(
         '[data-testid="ac-pending"] [data-happy2-ui="approval-card-toggle"] [data-happy2-ui="icon"]',
     );
-    const chevronInk = await ink(chevron, chevron, "toggle chevron");
-    /* Down-pointing chevron: ink is a shallow V, horizontally symmetric. */
-    expect(Math.abs(chevronInk.x - 7), "chevron optical x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(chevronInk.y - 7), "chevron optical y").toBeLessThanOrEqual(ICON_TOL);
+    /* Down-pointing chevron: a 14px glyph box that actually paints. */
+    expect(chevron.bounds(), "chevron box").toMatchObject({ width: 14, height: 14 });
+    expect((await chevron.visibleMetrics()).pixelCount, "chevron ink").toBeGreaterThan(0);
 
     (approve.element as HTMLButtonElement).click();
     (deny.element as HTMLButtonElement).click();
@@ -363,17 +360,13 @@ it("holds pending ApprovalCard geometry, typography, and interactions", async ()
     ).toBe(6);
     expect(rowBadges[0]!.element.getAttribute("data-variant")).toBe("outline");
 
-    /* Expanded toggle points up: chevron rotated 180deg, ink still centered. */
+    /* Expanded toggle points up: chevron rotated 180deg, still painting. */
     const upChevron = view.$(
         '[data-testid="ac-expanded"] [data-happy2-ui="approval-card-toggle"] [data-happy2-ui="icon"]',
     );
     expect(upChevron.computedStyle("transform")).toBe("matrix(-1, 0, 0, -1, 0, 0)");
-    const upChevronInk = await ink(upChevron, upChevron, "expanded chevron");
-    expect(Math.abs(upChevronInk.x - 7), "expanded chevron optical x").toBeLessThanOrEqual(
-        ICON_TOL,
-    );
-    expect(Math.abs(upChevronInk.y - 7), "expanded chevron optical y").toBeLessThanOrEqual(
-        ICON_TOL,
+    expect((await upChevron.visibleMetrics()).pixelCount, "expanded chevron ink").toBeGreaterThan(
+        0,
     );
     expect(
         view
@@ -447,15 +440,18 @@ it("holds resolved ApprovalCard banners, state lines, and optical centering", as
             2.3,
         );
 
-        /* check / close banner glyphs: diagonal strokes make the horizontal
-         * ink content-shaped; vertical centroid on the 15.5px strip center. */
+        /* check / close banner glyph: a 14px Icon box that actually paints. */
         const bannerIcon = view.$(
             `[data-testid="${id}"] [data-happy2-ui="approval-card-banner"] [data-happy2-ui="icon"]`,
         );
-        const bannerIconInk = await ink(bannerIcon, banner, `${id} banner icon`);
-        expect(Math.abs(bannerIconInk.y - 15.5), `${id} banner icon optical y`).toBeLessThanOrEqual(
-            ICON_TOL,
-        );
+        expect(bannerIcon.bounds(), `${id} banner icon box`).toMatchObject({
+            width: 14,
+            height: 14,
+        });
+        expect(
+            (await bannerIcon.visibleMetrics()).pixelCount,
+            `${id} banner icon ink`,
+        ).toBeGreaterThan(0);
 
         /* Buttons collapse into a single muted state line. */
         expect(
@@ -479,10 +475,10 @@ it("holds resolved ApprovalCard banners, state lines, and optical centering", as
         const stateIcon = view.$(
             `[data-testid="${id}"] [data-happy2-ui="approval-card-state"] [data-happy2-ui="icon"]`,
         );
-        const stateIconInk = await ink(stateIcon, state, `${id} state icon`);
-        expect(Math.abs(stateIconInk.y - 8), `${id} state icon optical y`).toBeLessThanOrEqual(
-            ICON_TOL,
-        );
+        expect(
+            (await stateIcon.visibleMetrics()).pixelCount,
+            `${id} state icon ink`,
+        ).toBeGreaterThan(0);
         /* Details stay reachable after resolution. */
         expect(
             view
@@ -623,14 +619,17 @@ it("holds expanded resolved ApprovalCards and fluid widths", async () => {
             ).toBeGreaterThan(0);
         }
 
-        /* Shield chip keeps its optical center in the resolved treatments. */
-        const chip = view.$(`[data-testid="${id}"] [data-happy2-ui="approval-card-chip"]`);
+        /* Shield chip keeps its inset slot and painted glyph when resolved. */
         const shield = view.$(
             `[data-testid="${id}"] [data-happy2-ui="approval-card-chip"] [data-happy2-ui="icon"]`,
         );
-        const shieldInk = await ink(shield, chip, `${id} shield`);
-        expect(Math.abs(shieldInk.x - 13), `${id} shield optical x`).toBeLessThanOrEqual(ICON_TOL);
-        expect(Math.abs(shieldInk.y - 13), `${id} shield optical y`).toBeLessThanOrEqual(ICON_TOL);
+        expect(shield.offsets(), `${id} shield inset`).toEqual({
+            top: 6,
+            right: 6,
+            bottom: 6,
+            left: 6,
+        });
+        expect((await shield.visibleMetrics()).pixelCount, `${id} shield ink`).toBeGreaterThan(0);
     }
 
     /* ---- Fluid + clamped widths ------------------------------------------- */

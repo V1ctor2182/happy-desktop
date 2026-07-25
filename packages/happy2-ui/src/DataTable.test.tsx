@@ -3,6 +3,7 @@ import { server } from "vitest/browser";
 import "./theme.css";
 import "./styles/data-table.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/button.css";
 import { Button } from "./Button";
 import { DataTable, type DataTableColumn, type DataTableRow } from "./DataTable";
@@ -10,40 +11,6 @@ import { createRenderer } from "./testing";
 
 type Engine = "chromium" | "firefox" | "webkit";
 const engine = () => server.browser as Engine;
-
-type Renderer = ReturnType<typeof createRenderer>;
-
-/*
- * Alpha-weighted ink centroid of `partSelector`, expressed as an offset from
- * the center of `containerSelector` (positive = right/low). The captured part
- * must be an element with no optical nudge of its own (the raw Icon svg):
- * element captures frame the static box, so a corrected part would double-count
- * its offset. Refuses blank or clipped captures — the part must paint pixels
- * and its ink may not touch the captured box edges, so a truncated screenshot
- * can never pass silently. (Same guard as Button.test.tsx.)
- */
-async function inkDrift(view: Renderer, containerSelector: string, partSelector: string) {
-    const container = view.$(containerSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const partBounds = part.bounds();
-    expect(visible.bounds.y, `${partSelector} ink clipped at box top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped at box bottom`,
-    ).toBeLessThan(partBounds.height);
-    expect(visible.bounds.x, `${partSelector} ink clipped at box left`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped at box right`,
-    ).toBeLessThan(partBounds.width);
-    const containerBounds = container.bounds();
-    return {
-        dx: visible.center.x + partBounds.x - containerBounds.x - containerBounds.width / 2,
-        dy: visible.center.y + partBounds.y - containerBounds.y - containerBounds.height / 2,
-    };
-}
 
 const columns: DataTableColumn[] = [
     { id: "name", header: "Name", width: 240 },
@@ -300,26 +267,20 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
     expect(Math.abs(boxLeft - 13), "checkbox centered left").toBeLessThanOrEqual(0.5);
     expect(Math.abs(boxLeft - boxRight), "checkbox centered symmetry").toBeLessThanOrEqual(0.5);
 
-    // The check glyph is the already-tuned Icon glyph, centered in its 18px box.
-    // Horizontally it holds the tuned 0.4px in every engine. Vertically the
-    // reused glyph rasters ~0.42px high in Firefox in this cell's vertical band
-    // (Gecko snaps glyph ink lowest — same behavior documented in button.css);
-    // that is inside the 0.75px contract ceiling for symmetric content, so
-    // Firefox alone gets the ceiling while Chromium/WebKit keep the tuned 0.4px.
-    const checkVerticalCeiling: Record<Engine, number> = {
-        chromium: 0.4,
-        firefox: 0.75,
-        webkit: 0.4,
-    };
-    const glyph = await inkDrift(
-        view,
-        '[data-happy2-ui="data-table-select-row"] [data-happy2-ui="data-table-check-box"]',
-        '[data-happy2-ui="data-table-select-row"] svg',
-    );
-    expect(Math.abs(glyph.dx), "check glyph horizontal centroid").toBeLessThanOrEqual(0.4);
-    expect(Math.abs(glyph.dy), "check glyph vertical centroid").toBeLessThanOrEqual(
-        checkVerticalCeiling[engine()],
-    );
+    // The check is the font-backed Icon glyph, which the icon font centers in
+    // its own square box; the 18px control box centers that box, so the
+    // contract here is that the glyph actually paints inside it.
+    const glyph = view.$('[data-happy2-ui="data-table-select-row"] [data-happy2-ui="icon"]');
+    const glyphBounds = glyph.bounds();
+    expect(
+        Math.abs(glyphBounds.x - boxBounds.x - (boxBounds.width - glyphBounds.width) / 2),
+        "check glyph box horizontal centering",
+    ).toBeLessThanOrEqual(0.5);
+    expect(
+        Math.abs(glyphBounds.y - boxBounds.y - (boxBounds.height - glyphBounds.height) / 2),
+        "check glyph box vertical centering",
+    ).toBeLessThanOrEqual(0.5);
+    expect((await glyph.visibleMetrics()).pixelCount, "check glyph paints").toBeGreaterThan(0);
 
     // Header select-all reflects a partial selection as an indeterminate bar.
     const headerBox = view.$(

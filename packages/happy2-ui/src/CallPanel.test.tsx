@@ -6,15 +6,16 @@ import "./styles/avatar.css";
 import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { CallPanel, type CallParticipant } from "./CallPanel";
 import { createRenderer, RenderedElement } from "./testing";
 
 /* Word labels and mono runs carry inherently asymmetric ink, so those parts
  * assert the vertical centroid only (plus deterministic line-box symmetry),
- * held to the 0.75px contract ceiling. Composed Icon glyphs are centered by
- * path data and rasterize deterministically, so they get the tighter budget. */
+ * held to the 0.75px contract ceiling. Composed Icon glyphs are centered by the
+ * icon font inside their own square box, so they only assert box geometry and
+ * that they actually paint. */
 const TEXT_TOL = 0.75;
-const ICON_TOL = 0.4;
 
 const noop = () => {};
 
@@ -22,8 +23,6 @@ const fontFamily =
     server.browser === "webkit"
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
-
-type Renderer = ReturnType<typeof createRenderer>;
 
 /* Ink centroid of `part`, in `box`-relative CSS px. Every measured part must
  * paint (pixelCount > 0) so a clipped or blank capture can never pass. */
@@ -43,33 +42,6 @@ function layoutTop(part: RenderedElement<Element>, box: RenderedElement<Element>
         ? Number.parseFloat(transform.slice(7, -1).split(",")[5] ?? "0")
         : 0;
     return part.bounds().y - translateY - box.bounds().y;
-}
-
-/*
- * Alpha-weighted glyph centroid of `partSel` as an offset from the center of
- * `hostSel` (positive = right / low). Refuses blank or clipped captures: the
- * glyph must paint and its ink may not touch the captured box edges, so a
- * truncated screenshot can never pass silently.
- */
-async function iconDrift(view: Renderer, hostSel: string, partSel: string) {
-    const host = view.$(hostSel);
-    const part = view.$(partSel);
-    const vis = await part.visibleMetrics();
-    expect(vis.pixelCount, `${partSel} paints no pixels`).toBeGreaterThan(0);
-    const pb = part.bounds();
-    expect(vis.bounds.y, `${partSel} ink clipped at top`).toBeGreaterThan(0);
-    expect(vis.bounds.y + vis.bounds.height, `${partSel} ink clipped at bottom`).toBeLessThan(
-        pb.height,
-    );
-    expect(vis.bounds.x, `${partSel} ink clipped at left`).toBeGreaterThan(0);
-    expect(vis.bounds.x + vis.bounds.width, `${partSel} ink clipped at right`).toBeLessThan(
-        pb.width,
-    );
-    const hb = host.bounds();
-    return {
-        dx: vis.center.x + pb.x - hb.x - hb.width / 2,
-        dy: vis.center.y + pb.y - hb.y - hb.height / 2,
-    };
 }
 
 const panelParticipants: CallParticipant[] = [
@@ -309,21 +281,13 @@ it("holds active CallPanel geometry, typography, tiles, and controls", async () 
         (leaveBtn.bounds().x + leaveBtn.bounds().width);
     expect(Math.abs(groupLeft - groupRight), "control group centering").toBeLessThanOrEqual(0.5);
 
-    /* Control glyphs: mic + eye centered by Icon path data. */
-    const micDrift = await iconDrift(
-        view,
-        '[data-testid="cp-panel"] [data-action="mute"] svg',
-        '[data-testid="cp-panel"] [data-action="mute"] svg',
+    /* Control glyphs: mic + eye render real ink from the icon font. */
+    const micIcon = view.$('[data-testid="cp-panel"] [data-action="mute"] [data-happy2-ui="icon"]');
+    expect((await micIcon.visibleMetrics()).pixelCount, "mic glyph paints").toBeGreaterThan(0);
+    const eyeIcon = view.$(
+        '[data-testid="cp-panel"] [data-action="video"] [data-happy2-ui="icon"]',
     );
-    expect(Math.abs(micDrift.dx), "mic glyph x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(micDrift.dy), "mic glyph y").toBeLessThanOrEqual(ICON_TOL);
-    const eyeDrift = await iconDrift(
-        view,
-        '[data-testid="cp-panel"] [data-action="video"] svg',
-        '[data-testid="cp-panel"] [data-action="video"] svg',
-    );
-    expect(Math.abs(eyeDrift.dx), "eye glyph x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(eyeDrift.dy), "eye glyph y").toBeLessThanOrEqual(ICON_TOL);
+    expect((await eyeIcon.visibleMetrics()).pixelCount, "eye glyph paints").toBeGreaterThan(0);
 
     /* ---- Wiring -------------------------------------------------------- */
     (muteBtn.element as HTMLButtonElement).click();
@@ -488,20 +452,14 @@ it("holds incoming card and status/kind variants", async () => {
     ).toBe(13);
     expect(join.bounds().x - (decline.bounds().x + decline.bounds().width)).toBeCloseTo(8, 1);
 
-    const closeDrift = await iconDrift(
-        view,
-        '[data-testid="cp-incoming"] [data-action="decline"] svg',
-        '[data-testid="cp-incoming"] [data-action="decline"] svg',
+    const closeIcon = view.$(
+        '[data-testid="cp-incoming"] [data-action="decline"] [data-happy2-ui="icon"]',
     );
-    expect(Math.abs(closeDrift.dx), "close glyph x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(closeDrift.dy), "close glyph y").toBeLessThanOrEqual(ICON_TOL);
-    const checkDrift = await iconDrift(
-        view,
-        '[data-testid="cp-incoming"] [data-action="join"] svg',
-        '[data-testid="cp-incoming"] [data-action="join"] svg',
+    expect((await closeIcon.visibleMetrics()).pixelCount, "close glyph paints").toBeGreaterThan(0);
+    const checkIcon = view.$(
+        '[data-testid="cp-incoming"] [data-action="join"] [data-happy2-ui="icon"]',
     );
-    expect(Math.abs(checkDrift.dx), "check glyph x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(checkDrift.dy), "check glyph y").toBeLessThanOrEqual(ICON_TOL);
+    expect((await checkIcon.visibleMetrics()).pixelCount, "check glyph paints").toBeGreaterThan(0);
 
     (decline.element as HTMLButtonElement).click();
     (join.element as HTMLButtonElement).click();

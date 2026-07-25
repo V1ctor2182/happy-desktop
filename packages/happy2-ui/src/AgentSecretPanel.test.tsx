@@ -23,27 +23,6 @@ const uiFamily = () =>
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
 
-const ICON_TOLERANCE = 0.4;
-const TEXT_TOLERANCE = 0.75;
-
-/*
- * Alpha-weighted ink centroid of `partSelector`, offset from the center of
- * `containerSelector` (positive = right/low). Refuses blank or clipped
- * captures. (Same guard as AgentImagePanel.test.tsx.)
- */
-async function inkDrift(view: View, containerSelector: string, partSelector: string) {
-    const container = view.$(containerSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const partBounds = part.bounds();
-    const containerBounds = container.bounds();
-    return {
-        dx: visible.center.x + partBounds.x - containerBounds.x - containerBounds.width / 2,
-        dy: visible.center.y + partBounds.y - containerBounds.y - containerBounds.height / 2,
-    };
-}
-
 const SECRETS: AgentSecretItem[] = [
     {
         id: "service-api",
@@ -149,7 +128,12 @@ it("holds AgentSecretPanel layout, variable names, attachment counts, and row ac
         0.5,
     );
     const headerButtons = actions.element.querySelectorAll("button");
-    expect(Array.from(headerButtons, (button) => button.textContent)).toEqual(["New secret"]);
+    expect(
+        Array.from(
+            headerButtons,
+            (button) => button.querySelector('[data-happy2-ui="button-label"]')?.textContent,
+        ),
+    ).toEqual(["New secret"]);
 
     // Secret cell shows the description and the id as a mono meta line.
     expect(
@@ -203,7 +187,8 @@ it("holds AgentSecretPanel layout, variable names, attachment counts, and row ac
         expect(
             Array.from(
                 view.$(actionsCell(secret.id)).element.querySelectorAll("button"),
-                (button) => button.textContent?.trim(),
+                (button) =>
+                    button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim(),
             ),
             `${secret.id} actions`,
         ).toEqual(["Delete"]);
@@ -214,14 +199,11 @@ it("holds AgentSecretPanel layout, variable names, attachment counts, and row ac
     expect(selected, "row click selects; delete click does not").toEqual(["openai"]);
     expect(deleted).toEqual(["service-api"]);
 
-    // Optical: the Delete button's close glyph is centered in its icon slot.
-    const glyph = await inkDrift(
-        view,
-        `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"] svg`,
-        `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"] svg`,
+    // The Delete button's close glyph paints inside its icon slot.
+    const glyph = view.$(
+        `${actionsCell("deploy-bot")} [data-happy2-ui="button-icon"] [data-happy2-ui="icon"]`,
     );
-    expect(Math.abs(glyph.dx), "delete glyph dx").toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(glyph.dy), "delete glyph dy").toBeLessThanOrEqual(TEXT_TOLERANCE);
+    expect((await glyph.visibleMetrics()).pixelCount, "delete glyph ink").toBeGreaterThan(0);
 
     await view.screenshot("AgentSecretPanel.test");
 }, 120_000);

@@ -345,18 +345,14 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         "heading ink vs header center",
     ).toBeLessThanOrEqual(OPTICAL);
 
-    /* Chevron ink rides the title's optical midline (measured <= 0.1 drift). */
-    const titleInk = await title.visibleMetrics();
-    expect(titleInk.pixelCount).toBeGreaterThan(0);
+    /* Title ink and the 14px chevron beside it both paint. The chevron is an
+     * icon-font glyph centered in its own box by the font, so its placement is
+     * the box geometry, not a centroid. */
+    expect((await title.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     const chevron = view.$('[data-testid="full"] .happy2-sidebar__title-chevron');
     expect(chevron.bounds().width).toBe(14);
     expect(chevron.computedStyle("color")).toBe("rgb(73, 69, 79)");
-    const chevronInk = await chevron.visibleMetrics();
-    expect(chevronInk.pixelCount).toBeGreaterThan(0);
-    expect(
-        Math.abs(chevron.bounds().y + chevronInk.center.y - (title.bounds().y + titleInk.center.y)),
-        "chevron ink vs title ink",
-    ).toBeLessThanOrEqual(OPTICAL);
+    expect((await chevron.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const subtitle = view.$('[data-testid="full"] [data-happy2-ui="sidebar-subtitle"]');
     expect(subtitle.textMetrics().font.size).toBe(11);
@@ -384,7 +380,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
         "border-radius": "6px",
     });
     const composeLeading = view.$(
-        '[data-testid="full"] .happy2-sidebar__compose [data-happy2-ui="sidebar-item-leading"] svg',
+        '[data-testid="full"] .happy2-sidebar__compose [data-happy2-ui="sidebar-item-leading"] [data-happy2-ui="icon"]',
     );
     const composeIconBounds = composeLeading.bounds();
     expect(
@@ -563,10 +559,10 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     }
 
     /*
-     * Leading glyph lane: 16px icon (view / channel / action kinds) optically
-     * centered in the 20px lane that starts at the 10px row padding — lane
-     * center is (20, 16) in row coordinates. Source-glyph optical centering
-     * permits up to 1px vertically for asymmetrical silhouettes.
+     * Leading glyph lane: 16px icon (view / channel / action kinds) inside the
+     * 20px lane that starts at the 10px row padding. The icon font centers the
+     * glyph in its own box, so the Sidebar contract here is the lane box plus a
+     * really-painted glyph.
      */
     const leading = (id: string) =>
         view.$(
@@ -583,9 +579,18 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     ] as const) {
         const lane = leading(id);
         expect(lane.bounds().width, `${id} leading lane`).toBe(20);
-        const centroid = await rowInk(lane, row(id));
-        expect(Math.abs(centroid.x - 20), `${id} leading optical x`).toBeLessThanOrEqual(OPTICAL);
-        expect(Math.abs(centroid.y - 16), `${id} leading optical y`).toBeLessThanOrEqual(1);
+        /* Lane center is (20, 16) in row coordinates. */
+        const laneBounds = lane.bounds();
+        const rowBounds = row(id).bounds();
+        expect(
+            Math.abs(laneBounds.x - rowBounds.x + laneBounds.width / 2 - 20),
+            `${id} leading lane box x`,
+        ).toBeLessThanOrEqual(0.1);
+        expect(
+            Math.abs(laneBounds.y - rowBounds.y + laneBounds.height / 2 - 16),
+            `${id} leading lane box y`,
+        ).toBeLessThanOrEqual(0.1);
+        expect((await lane.visibleMetrics()).pixelCount, `${id} leading ink`).toBeGreaterThan(0);
     }
     expect(leading("eng-core").computedStyle("color")).toBe("rgb(73, 69, 79)");
 

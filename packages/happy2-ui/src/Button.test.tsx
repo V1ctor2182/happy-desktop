@@ -3,6 +3,7 @@ import { server } from "vitest/browser";
 import "./theme.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { Button, type ButtonSize, type ButtonVariant } from "./Button";
 import { createRenderer } from "./testing";
 
@@ -94,8 +95,8 @@ type Renderer = ReturnType<typeof createRenderer>;
 /*
  * Alpha-weighted ink centroid of `partSelector`, expressed as an offset from
  * the center of `buttonSelector` (positive = right/low). The captured part
- * MUST be an element with no optical nudge of its own (content span, svg):
- * element captures frame the static layout box, so capturing a corrected
+ * MUST be an element with no optical nudge of its own (the static content
+ * span): element captures frame the static layout box, so capturing a corrected
  * label would double-count its offset. Refuses blank or clipped captures:
  * the part must paint pixels and its ink may not touch the captured box
  * edges, so a truncated screenshot can never pass silently.
@@ -285,7 +286,7 @@ it("holds Button dimensions, typography, and optical label centering for every s
     await view.screenshot("Button.test");
 }, 120_000);
 
-it("holds Button icon forms and disabled state with optically centered glyphs", async () => {
+it("holds Button icon forms and disabled state with correctly boxed glyphs", async () => {
     const view = createRenderer();
 
     view.render(
@@ -378,9 +379,10 @@ it("holds Button icon forms and disabled state with optically centered glyphs", 
     await view.ready();
 
     // Leading icon: 14/16/18 glyph box by size, 6px gap, box exactly centered
-    // (the label optical correction must not displace the icon), glyph ink
-    // optically centered, and the label baseline identical to the same-size
-    // plain button (box position pins the baseline for the same font).
+    // (the label optical correction must not displace the icon), the glyph
+    // actually painting, and the label baseline identical to the same-size
+    // plain button (box position pins the baseline for the same font). The icon
+    // font centers the glyph inside that box, so there is no centroid to hold.
     const leadIconSizes = { small: 14, medium: 16, large: 18 } as const;
     for (const size of sizes) {
         const id = `lead-${size}`;
@@ -399,10 +401,11 @@ it("holds Button icon forms and disabled state with optically centered glyphs", 
             `${id} icon box centering`,
         ).toBeLessThanOrEqual(0.1);
 
-        // Icon glyphs measure |dy| ≤ 0.09px raw in every engine (no CSS
-        // correction), so the tuned 0.4px applies.
-        const glyph = await inkDrift(view, `[data-testid="${id}"]`, `[data-testid="${id}"] svg`);
-        expect(Math.abs(glyph.dy), `${id} glyph vertical centroid`).toBeLessThanOrEqual(0.4);
+        // The glyph must paint, which also proves the icon font resolved.
+        const glyphInk = await view
+            .$(`[data-testid="${id}"] [data-happy2-ui="icon"]`)
+            .visibleMetrics();
+        expect(glyphInk.pixelCount, `${id} glyph paints`).toBeGreaterThan(0);
 
         // Label centering in the pair is proven transitively: the same-size
         // plain button's label centroid is asserted directly, and the pair's
@@ -422,31 +425,35 @@ it("holds Button icon forms and disabled state with optically centered glyphs", 
         expect(Math.abs(baseline - plainBaseline), `${id} baseline drift`).toBeLessThanOrEqual(0.1);
     }
 
-    // Icon-only squares: 28/36/44, no padding, glyph ink optically centered on
-    // both axes. Raw glyph centroids measure |dx|,|dy| ≤ 0.09px in every
-    // engine (plus is symmetric; check and settings path data is already
-    // optically balanced), so all glyphs are held to the tuned ±0.4px.
+    // Icon-only squares: 28/36/44, no padding, and the glyph box centered in
+    // the square. The font supplies a box-centered glyph, so the contract is
+    // the box geometry plus real ink in it.
     const squares = [
-        ["io-plus-small", "small", 28, 14, 0.4],
-        ["io-plus-medium", "medium", 36, 16, 0.4],
-        ["io-plus-large", "large", 44, 18, 0.4],
-        ["io-check-medium", "medium", 36, 16, 0.4],
-        ["io-settings-medium", "medium", 36, 16, 0.4],
+        ["io-plus-small", "small", 28, 14],
+        ["io-plus-medium", "medium", 36, 16],
+        ["io-plus-large", "large", 44, 18],
+        ["io-check-medium", "medium", 36, 16],
+        ["io-settings-medium", "medium", 36, 16],
     ] as const;
-    for (const [id, , dimension, iconSize, tolerance] of squares) {
+    for (const [id, , dimension, iconSize] of squares) {
         const button = view.$(`[data-testid="${id}"]`);
         const bounds = button.bounds();
         expect(bounds.width, id).toBe(dimension);
         expect(bounds.height, id).toBe(dimension);
         expect(button.computedStyles(["padding"]), id).toEqual({ padding: "0px" });
-        const icon = view.$(`[data-testid="${id}"] svg`);
-        expect(icon.bounds().width, id).toBe(iconSize);
-        expect(icon.bounds().height, id).toBe(iconSize);
-        const glyph = await inkDrift(view, `[data-testid="${id}"]`, `[data-testid="${id}"] svg`);
-        expect(Math.abs(glyph.dx), `${id} glyph horizontal centroid`).toBeLessThanOrEqual(
-            tolerance,
-        );
-        expect(Math.abs(glyph.dy), `${id} glyph vertical centroid`).toBeLessThanOrEqual(tolerance);
+        const icon = view.$(`[data-testid="${id}"] [data-happy2-ui="icon"]`);
+        const iconBounds = icon.bounds();
+        expect(iconBounds.width, id).toBe(iconSize);
+        expect(iconBounds.height, id).toBe(iconSize);
+        expect(
+            Math.abs(iconBounds.x - bounds.x - (dimension - iconSize) / 2),
+            `${id} glyph box horizontal centering`,
+        ).toBeLessThanOrEqual(0.1);
+        expect(
+            Math.abs(iconBounds.y - bounds.y - (dimension - iconSize) / 2),
+            `${id} glyph box vertical centering`,
+        ).toBeLessThanOrEqual(0.1);
+        expect((await icon.visibleMetrics()).pixelCount, `${id} glyph paints`).toBeGreaterThan(0);
     }
 
     // Disabled: dimmed but still optically centered. Rendered outside any

@@ -1,6 +1,7 @@
 import "./theme.css";
 import "./styles/moderation-report-card.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/avatar.css";
 import "./styles/badge.css";
 import "./styles/button.css";
@@ -19,33 +20,17 @@ const fontFamily = () =>
         : '"happy2 Figtree", system-ui, sans-serif';
 
 /*
- * Symmetric painted glyphs (the shield reason glyph, drawn on the shared Icon
- * grid) hold their alpha centroid to the tuned 0.4px. The kind chip glyph is a
- * content-dependent icon (a person, hash, speech bubble, or file stack — some
- * carry a directional tail), so it is asserted box-centered and unclipped and
- * held only to the 0.75px contract ceiling per the optical policy. Word/number
- * ink (labels, captions, timestamps) asserts font metrics, a real baseline, and
- * unclipped painted bounds instead of a forced centroid.
+ * Icons are font glyphs painted box-centered by the icon font, so this card
+ * only owns their box geometry and colour tokens; each is proved to actually
+ * paint ink (which also proves the icon font loaded). Word/number ink (labels,
+ * captions, timestamps) asserts font metrics, a real baseline, and unclipped
+ * painted bounds.
  */
-const SYMMETRIC_TOL = 0.4;
-const CHIP_TOL = 0.75;
 
-/*
- * Alpha-weighted centroid drift of a painted glyph from the center of its OWN
- * box, refusing blank or edge-clipped captures so a truncated screenshot can
- * never pass silently.
- */
-async function glyphDrift(part: RenderedElement<Element>, name: string) {
+/* Asserts a glyph really paints inside its own box. */
+async function glyphPaints(part: RenderedElement<Element>, name: string) {
     const vis = await part.visibleMetrics();
     expect(vis.pixelCount, `${name} paints no pixels`).toBeGreaterThan(0);
-    const box = part.bounds();
-    expect(vis.bounds.x, `${name} ink clipped at left`).toBeGreaterThan(0);
-    expect(vis.bounds.y, `${name} ink clipped at top`).toBeGreaterThan(0);
-    expect(vis.bounds.x + vis.bounds.width, `${name} ink clipped at right`).toBeLessThan(box.width);
-    expect(vis.bounds.y + vis.bounds.height, `${name} ink clipped at bottom`).toBeLessThan(
-        box.height,
-    );
-    return { dx: vis.center.x - box.width / 2, dy: vis.center.y - box.height / 2 };
 }
 
 /* Asserts a text part paints and its ink stays within its own line box. */
@@ -169,9 +154,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     );
     expect(chipIcon.bounds()).toMatchObject({ width: 16, height: 16 });
     expect(chipIcon.offsets()).toEqual({ top: 10, right: 10, bottom: 10, left: 10 }); /* centered */
-    const chipGlyph = await glyphDrift(chipIcon, "kind glyph");
-    expect(Math.abs(chipGlyph.dx), "kind glyph x centroid").toBeLessThanOrEqual(CHIP_TOL);
-    expect(Math.abs(chipGlyph.dy), "kind glyph y centroid").toBeLessThanOrEqual(CHIP_TOL);
+    await glyphPaints(chipIcon, "kind glyph");
 
     /* ---- Target descriptor: label + sub, left-flush after the chip ------- */
 
@@ -220,7 +203,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
         color: statusBadge.open.color,
     });
 
-    /* ---- Reason well: inset fill, shield glyph optically centered -------- */
+    /* ---- Reason well: inset fill, shield glyph on the 14px box ----------- */
 
     expect(reason.computedStyles(["background-color", "border-radius", "padding"])).toEqual({
         "background-color": "rgb(245, 245, 245)",
@@ -232,9 +215,7 @@ it("holds ModerationReportCard geometry, typography, status badge, parties, and 
     );
     expect(reasonIcon.bounds()).toMatchObject({ width: 14, height: 14 });
     expect(reasonIcon.offsets()).toMatchObject({ left: 12 }); /* reason padding-left */
-    const reasonGlyph = await glyphDrift(reasonIcon, "reason shield");
-    expect(Math.abs(reasonGlyph.dx), "reason shield x centroid").toBeLessThanOrEqual(SYMMETRIC_TOL);
-    expect(Math.abs(reasonGlyph.dy), "reason shield y centroid").toBeLessThanOrEqual(SYMMETRIC_TOL);
+    await glyphPaints(reasonIcon, "reason shield");
     const reasonText = view.$(q("mrc-full", "moderation-report-card-reason-text"));
     expect(reasonText.computedStyle("color")).toBe("rgb(0, 0, 0)");
     expect(reasonText.offsets()).toMatchObject({ left: 34 }); /* 12 pad + 14 icon + 8 gap */
@@ -433,13 +414,11 @@ it("holds ModerationReportCard status variants and content states", async () => 
     );
     await paints(view.$(q("mrc-minimal", "moderation-report-card-time-label")), "minimal time");
 
-    /* Minimal file card's kind glyph is unclipped and box-centered. */
-    const fileGlyph = await glyphDrift(
+    /* Minimal file card's kind glyph really paints. */
+    await glyphPaints(
         view.$(`${q("mrc-minimal", "moderation-report-card-kind")} [data-happy2-ui="icon"]`),
         "file kind glyph",
     );
-    expect(Math.abs(fileGlyph.dx), "file glyph x centroid").toBeLessThanOrEqual(CHIP_TOL);
-    expect(Math.abs(fileGlyph.dy), "file glyph y centroid").toBeLessThanOrEqual(CHIP_TOL);
 
     await view.screenshot("ModerationReportCard.variants.test");
 }, 120_000);

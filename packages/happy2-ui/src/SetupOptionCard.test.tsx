@@ -14,33 +14,15 @@ const fontFamily = () =>
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
 
-/*
- * Alpha-weighted ink centroid of `partSelector` (a painted glyph with no
- * optical nudge of its own), expressed as an offset from the center of
- * `hostSelector` (positive = right / low). Refuses a blank or clipped capture:
- * the part must paint pixels and its ink may not touch any edge of the captured
- * box, so a truncated screenshot can never pass silently.
- */
-async function glyphDrift(view: Renderer, hostSelector: string, partSelector: string) {
-    const host = view.$(hostSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const pb = part.bounds();
-    expect(visible.bounds.x, `${partSelector} ink clipped left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${partSelector} ink clipped top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped right`,
-    ).toBeLessThan(pb.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped bottom`,
-    ).toBeLessThan(pb.height);
-    const hb = host.bounds();
+/* Signed offset of an icon box's center from the center of its host box
+ * (positive = right / low). Icon glyphs come from the icon font, which centers
+ * them inside that box, so the component contract is where the box lands. */
+function iconBoxOffset(view: Renderer, hostSelector: string, iconSelector: string) {
+    const hb = view.$(hostSelector).bounds();
+    const ib = view.$(iconSelector).bounds();
     return {
-        dx: visible.center.x + pb.x - hb.x - hb.width / 2,
-        dy: visible.center.y + pb.y - hb.y - hb.height / 2,
+        dx: ib.x + ib.width / 2 - (hb.x + hb.width / 2),
+        dy: ib.y + ib.height / 2 - (hb.y + hb.height / 2),
     };
 }
 
@@ -151,7 +133,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
         "border-top-width": "1px",
     });
 
-    /* ---- Leading icon chip: 36×36, optically centered glyph ------------- */
+    /* ---- Leading icon chip: 36×36, centered glyph box ------------------- */
 
     const iconChip = part(view, "chip", "setup-option-icon");
     expect(iconChip.bounds()).toMatchObject({ width: 36, height: 36 });
@@ -172,15 +154,20 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
         display: "flex",
         "justify-content": "center",
     });
-    /* The "code" glyph is bilaterally symmetric on both axes, so it holds a
-     * tight optical-centering tolerance in the 36px chip. */
-    const glyph = await glyphDrift(
+    /* The 18px icon box is centered in the 36px chip by the flex centering
+     * asserted above, and its font glyph really paints. */
+    const chipGlyphSelector =
+        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"] [data-happy2-ui="icon"]';
+    const chipGlyph = view.$(chipGlyphSelector);
+    expect(chipGlyph.bounds()).toMatchObject({ width: 18, height: 18 });
+    const chipOffset = iconBoxOffset(
         view,
-        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"] svg',
-        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"] svg',
+        '[data-testid="chip"] [data-happy2-ui="setup-option-icon"]',
+        chipGlyphSelector,
     );
-    expect(Math.abs(glyph.dx), "chip glyph horizontal centroid").toBeLessThanOrEqual(0.5);
-    expect(Math.abs(glyph.dy), "chip glyph vertical centroid").toBeLessThanOrEqual(0.5);
+    expect(Math.abs(chipOffset.dx), "chip glyph box horizontal centering").toBeLessThanOrEqual(0.5);
+    expect(Math.abs(chipOffset.dy), "chip glyph box vertical centering").toBeLessThanOrEqual(0.5);
+    expect((await chipGlyph.visibleMetrics()).pixelCount, "chip glyph ink").toBeGreaterThan(0);
 
     /* ---- Body typography + colors + unclipped paint -------------------- */
 
@@ -260,13 +247,21 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
     ).toBeNull();
     const check = part(view, "selected", "setup-option-check");
     expect(check.computedStyle("color")).toBe("rgb(43, 172, 204)");
-    const checkGlyph = await glyphDrift(
+    const checkGlyphSelector =
+        '[data-testid="selected"] [data-happy2-ui="setup-option-check"] [data-happy2-ui="icon"]';
+    const checkOffset = iconBoxOffset(
         view,
         '[data-testid="selected"] [data-happy2-ui="setup-option-trailing"]',
-        '[data-testid="selected"] [data-happy2-ui="setup-option-check"] svg',
+        checkGlyphSelector,
     );
-    expect(Math.abs(checkGlyph.dx), "check glyph horizontal centroid").toBeLessThanOrEqual(0.5);
-    expect(Math.abs(checkGlyph.dy), "check glyph vertical centroid").toBeLessThanOrEqual(0.5);
+    expect(Math.abs(checkOffset.dx), "check glyph box horizontal centering").toBeLessThanOrEqual(
+        0.5,
+    );
+    expect(Math.abs(checkOffset.dy), "check glyph box vertical centering").toBeLessThanOrEqual(0.5);
+    expect(
+        (await view.$(checkGlyphSelector).visibleMetrics()).pixelCount,
+        "check glyph ink",
+    ).toBeGreaterThan(0);
 
     /* ---- Disabled: dimmed, not-allowed, native control disabled -------- */
 

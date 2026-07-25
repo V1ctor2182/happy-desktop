@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 import "./theme.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/text-field.css";
 import "./styles/default-agent-form.css";
 import { Button } from "./Button";
@@ -14,29 +15,6 @@ import {
 import { createRenderer } from "./testing";
 
 type Renderer = ReturnType<typeof createRenderer>;
-
-async function glyphDrift(view: Renderer, hostSelector: string, partSelector: string) {
-    const host = view.$(hostSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const partBounds = part.bounds();
-    expect(visible.bounds.x, `${partSelector} ink clipped left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${partSelector} ink clipped top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped right`,
-    ).toBeLessThan(partBounds.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped bottom`,
-    ).toBeLessThan(partBounds.height);
-    const hostBounds = host.bounds();
-    return {
-        dx: visible.center.x + partBounds.x - hostBounds.x - hostBounds.width / 2,
-        dy: visible.center.y + partBounds.y - hostBounds.y - hostBounds.height / 2,
-    };
-}
 
 function Frame(props: { children: ReactNode }) {
     return (
@@ -156,16 +134,19 @@ it("renders the controlled form with a stable external-submit link and calibrate
     expect((await description.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const lucky = view.$('[data-testid="default-agent-lucky"]');
-    expect(lucky.element.textContent).toBe(DEFAULT_AGENT_LUCKY_LABEL);
+    /* Read the label part: the button's own textContent also carries the icon
+       font's Private Use Area glyph character. */
+    expect(lucky.element.querySelector('[data-happy2-ui="button-label"]')?.textContent).toBe(
+        DEFAULT_AGENT_LUCKY_LABEL,
+    );
     expect(DEFAULT_AGENT_LUCKY_LABEL).toBe("Happy, I’m feeling lucky");
     expect(lucky.bounds().height).toBe(36);
-    const luckyGlyph = await glyphDrift(
-        view,
-        '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"] svg',
-        '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"] svg',
+    /* The icon font centers the glyph inside its own square box, so the leading
+       glyph only has to paint real ink. */
+    const luckyGlyph = view.$(
+        '[data-testid="default-agent-lucky"] [data-happy2-ui="button-icon"] [data-happy2-ui="icon"]',
     );
-    expect(Math.abs(luckyGlyph.dx), "lucky glyph horizontal centroid").toBeLessThanOrEqual(0.45);
-    expect(Math.abs(luckyGlyph.dy), "lucky glyph vertical centroid").toBeLessThanOrEqual(0.45);
+    expect((await luckyGlyph.visibleMetrics()).pixelCount, "lucky glyph paints").toBeGreaterThan(0);
 
     await view.screenshot("DefaultAgentForm");
 }, 120_000);

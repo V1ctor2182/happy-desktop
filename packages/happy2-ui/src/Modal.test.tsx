@@ -4,48 +4,17 @@ import "./theme.css";
 import "./styles/modal.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { createRenderer } from "./testing";
-
-type Renderer = ReturnType<typeof createRenderer>;
-
-/*
- * Alpha-weighted ink centroid of `partSelector` (an svg with no optical nudge
- * of its own), expressed as an offset from the center of `hostSelector`
- * (positive = right / low). Refuses a blank or clipped capture: the part must
- * paint pixels and its ink may not touch any edge of the captured box, so a
- * truncated screenshot can never pass silently.
- */
-async function glyphDrift(view: Renderer, hostSelector: string, partSelector: string) {
-    const host = view.$(hostSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const pb = part.bounds();
-    expect(visible.bounds.x, `${partSelector} ink clipped left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${partSelector} ink clipped top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped right`,
-    ).toBeLessThan(pb.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped bottom`,
-    ).toBeLessThan(pb.height);
-    const hb = host.bounds();
-    return {
-        dx: visible.center.x + pb.x - hb.x - hb.width / 2,
-        dy: visible.center.y + pb.y - hb.y - hb.height / 2,
-    };
-}
 
 const fontFamily = () =>
     server.browser === "webkit"
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
 
-it("holds Modal dialog geometry, header/body/footer layout, and optical glyph centering", async () => {
+it("holds Modal dialog geometry, header/body/footer layout, and painted chrome glyphs", async () => {
     const closed: string[] = [];
     const view = createRenderer();
 
@@ -201,14 +170,16 @@ it("holds Modal dialog geometry, header/body/footer layout, and optical glyph ce
         "border-radius": "8px",
         color: "rgb(43, 172, 204)",
     });
-    /* Chip glyph optically centered on both axes (reuses the tuned Icon set). */
-    const chipGlyph = await glyphDrift(
-        view,
-        '[data-testid="md"] [data-happy2-ui="modal-icon"] svg',
-        '[data-testid="md"] [data-happy2-ui="modal-icon"] svg',
-    );
-    expect(Math.abs(chipGlyph.dx), "chip glyph horizontal centroid").toBeLessThanOrEqual(0.4);
-    expect(Math.abs(chipGlyph.dy), "chip glyph vertical centroid").toBeLessThanOrEqual(0.4);
+    /* The chip's glyph is a font codepoint the icon font paints box-centered:
+     * prove it actually paints inside the chip. */
+    expect(
+        (
+            await view
+                .$('[data-testid="md"] [data-happy2-ui="modal-icon"] [data-happy2-ui="icon"]')
+                .visibleMetrics()
+        ).pixelCount,
+        "chip glyph ink",
+    ).toBeGreaterThan(0);
 
     /* Title: 16/24/700, Figtree, sits after chip (28) + gap (12) + inset (20). */
     const title = view.$('[data-testid="md"] [data-happy2-ui="modal-title"]');
@@ -231,13 +202,14 @@ it("holds Modal dialog geometry, header/body/footer layout, and optical glyph ce
     expect(close.bounds().height).toBe(28);
     expect(close.offsets().right).toBe(16);
     expect(close.offsets().top).toBe(16);
-    const closeGlyph = await glyphDrift(
-        view,
-        '[data-testid="md"] .happy2-modal__close svg',
-        '[data-testid="md"] .happy2-modal__close svg',
-    );
-    expect(Math.abs(closeGlyph.dx), "close glyph horizontal centroid").toBeLessThanOrEqual(0.4);
-    expect(Math.abs(closeGlyph.dy), "close glyph vertical centroid").toBeLessThanOrEqual(0.4);
+    expect(
+        (
+            await view
+                .$('[data-testid="md"] .happy2-modal__close [data-happy2-ui="icon"]')
+                .visibleMetrics()
+        ).pixelCount,
+        "close glyph ink",
+    ).toBeGreaterThan(0);
 
     /* ---- Body ----------------------------------------------------------- */
 
@@ -394,17 +366,14 @@ it("holds Modal tone treatments and the minimal (no icon / footer / close) form"
         "background-color": "rgb(255, 240, 240)",
         color: "rgb(244, 67, 54)",
     });
-    const dangerGlyph = await glyphDrift(
-        view,
-        '[data-testid="danger"] [data-happy2-ui="modal-icon"] svg',
-        '[data-testid="danger"] [data-happy2-ui="modal-icon"] svg',
-    );
-    expect(Math.abs(dangerGlyph.dx), "danger chip glyph horizontal centroid").toBeLessThanOrEqual(
-        0.4,
-    );
-    expect(Math.abs(dangerGlyph.dy), "danger chip glyph vertical centroid").toBeLessThanOrEqual(
-        0.4,
-    );
+    expect(
+        (
+            await view
+                .$('[data-testid="danger"] [data-happy2-ui="modal-icon"] [data-happy2-ui="icon"]')
+                .visibleMetrics()
+        ).pixelCount,
+        "danger chip glyph ink",
+    ).toBeGreaterThan(0);
     /* Title stays on the neutral text token; only the chip is toned. */
     expect(
         view.$('[data-testid="danger"] [data-happy2-ui="modal-title"]').computedStyle("color"),

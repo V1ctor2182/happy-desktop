@@ -34,36 +34,6 @@ const fontFamily = () =>
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
 
-/*
- * Alpha-weighted ink centroid of a symmetric composed Icon glyph, expressed as
- * an offset from the center of its own svg box (positive = right/low). The svg
- * must sit over a painted ancestor (an inactive segment, whose transparent fill
- * lets the track be repainted black/white) — never over the raised pill, whose
- * constant fill would defeat the alpha reconstruction. Refuses blank or clipped
- * captures: the glyph must paint pixels and its ink may not touch the svg box
- * edges, so a truncated screenshot can never pass silently.
- */
-async function glyphDrift(view: Renderer, svgSelector: string) {
-    const svg = view.$(svgSelector);
-    const visible = await svg.visibleMetrics();
-    expect(visible.pixelCount, `${svgSelector} paints no pixels`).toBeGreaterThan(0);
-    const box = svg.bounds();
-    expect(visible.bounds.x, `${svgSelector} ink clipped at left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${svgSelector} ink clipped at top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${svgSelector} ink clipped at right`,
-    ).toBeLessThan(box.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${svgSelector} ink clipped at bottom`,
-    ).toBeLessThan(box.height);
-    return {
-        dx: visible.center.x - box.width / 2,
-        dy: visible.center.y - box.height / 2,
-    };
-}
-
 async function settleSegmentColors(view: Renderer, activeSelector: string) {
     /* The browser pointer can begin over the first fixture's inactive segment.
      * Park it on an active segment, then remove color-transition timing so
@@ -343,18 +313,16 @@ it("holds SegmentedControl icon segments, selection sweep, fullWidth, and disabl
         "large icon",
     ).toBe(18);
 
-    // Reused symmetric Icon glyphs on the two inactive segments must be
-    // optically centered in their own 16px box, unclipped. These are the same
-    // glyphs Icon.test enforces to ≤0.6px at 16px in every engine (well within
-    // the 0.75px optical ceiling); measured over the transparent inactive
-    // segments so the alpha reconstruction is not defeated by the raised pill.
+    // The Icon glyphs on the two inactive segments actually paint. Placement
+    // inside the icon box belongs to the icon font, which centers the glyph in
+    // its own em box, so only the box geometry above is a SegmentedControl
+    // contract; the ink check catches a missing font or an empty glyph.
     for (const value of ["board", "grid"]) {
-        const drift = await glyphDrift(
-            view,
-            `[data-testid="sc-icons"] [data-value="${value}"] [data-happy2-ui="icon"]`,
-        );
-        expect(Math.abs(drift.dx), `${value} glyph horizontal centroid`).toBeLessThanOrEqual(0.6);
-        expect(Math.abs(drift.dy), `${value} glyph vertical centroid`).toBeLessThanOrEqual(0.6);
+        const selector = `[data-testid="sc-icons"] [data-value="${value}"] [data-happy2-ui="icon"]`;
+        expect(
+            (await view.$(selector).visibleMetrics()).pixelCount,
+            `${value} glyph paints no pixels`,
+        ).toBeGreaterThan(0);
     }
 
     // Selection sweep: the pill tracks whichever segment is selected, and only

@@ -7,6 +7,7 @@ import "./styles/search-results.css";
 import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { KeyCap } from "./Badge";
 import { CommandPalette } from "./CommandPalette";
 import { SearchResults, type SearchResultGroup } from "./SearchResults";
@@ -141,7 +142,9 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
     });
     expect((await input.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     expect(
-        view.$('[data-testid="cp"] [data-happy2-ui="command-palette-icon"] svg').bounds().width,
+        view
+            .$('[data-testid="cp"] [data-happy2-ui="command-palette-icon"] [data-happy2-ui="icon"]')
+            .bounds().width,
     ).toBe(18);
     const cap = view.$('[data-testid="cp"] [data-happy2-ui="key-cap"]');
     expect(cap.element.getAttribute("aria-label")).toBe("ESC");

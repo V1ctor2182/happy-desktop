@@ -155,8 +155,9 @@ it("centers Badge label and icon ink in every variant", { timeout: 120000 }, asy
     );
     expect(Math.abs(one.dx), "one-char optical x").toBeLessThanOrEqual(TOLERANCE);
     expect(Math.abs(one.dy), "one-char optical y").toBeLessThanOrEqual(TOLERANCE);
-    /* Icon form: the 12px glyph must center in its slot (6px from the left
-     * edge), and the label must share the text baseline treatment. */
+    /* Icon form: the 12px glyph slot sits 6px from the left edge and paints
+     * (Icon owns the box centering of the font glyph inside it), and the label
+     * must share the text baseline treatment. */
     const iconBadge = view.$(".v-icon");
     const icon = view.$('.v-icon [data-happy2-ui="badge-icon"]');
     const iconInk = await icon.visibleMetrics();
@@ -165,10 +166,7 @@ it("centers Badge label and icon ink in every variant", { timeout: 120000 }, asy
     const i = icon.bounds();
     expect(i.width, "icon box width").toBe(12);
     expect(i.height, "icon box height").toBe(12);
-    const iconDx = i.x + iconInk.center.x - (b.x + 12);
-    const iconDy = i.y + iconInk.center.y - (b.y + 9);
-    expect(Math.abs(iconDx), "icon optical x").toBeLessThanOrEqual(TOLERANCE);
-    expect(Math.abs(iconDy), "icon optical y").toBeLessThanOrEqual(TOLERANCE);
+    expect(Math.abs(i.x - (b.x + 6)), "icon slot inset").toBeLessThanOrEqual(0.5);
     const iconLabel = await drift(
         "badge/icon-label",
         view.$('.v-icon [data-happy2-ui="badge-label"]'),

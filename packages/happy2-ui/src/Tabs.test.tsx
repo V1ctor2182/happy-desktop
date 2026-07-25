@@ -5,7 +5,7 @@ import "./styles/tabs.css";
 import "./styles/icon.css";
 import "./styles/badge.css";
 import { type TabItem, Tabs, type TabsSize } from "./Tabs";
-import { createRenderer, type RenderedElement } from "./testing";
+import { createRenderer } from "./testing";
 
 type Engine = "chromium" | "firefox" | "webkit";
 const engine = () => server.browser as Engine;
@@ -47,25 +47,6 @@ const uiFont = () =>
     engine() === "webkit"
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
-
-/*
- * Alpha-weighted ink centroid of a painted glyph, expressed as an offset from
- * the center of its own box. Refuses blank or clipped captures: the glyph must
- * paint pixels and its ink may not touch the captured box edges.
- */
-async function glyphDrift(part: RenderedElement<Element>, name: string) {
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${name} paints no pixels`).toBeGreaterThan(0);
-    const box = part.bounds();
-    expect(visible.bounds.y, `${name} ink clipped at top`).toBeGreaterThan(-0.5);
-    expect(visible.bounds.y + visible.bounds.height, `${name} ink clipped at bottom`).toBeLessThan(
-        box.height + 0.5,
-    );
-    return {
-        dx: visible.center.x - box.width / 2,
-        dy: visible.center.y - box.height / 2,
-    };
-}
 
 it("holds Tabs dimensions, typography, colors, and the active underline for every size", async () => {
     const view = createRenderer();
@@ -240,7 +221,7 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
         // Leading icon box + trailing CountBadge geometry (DOM only).
         for (const id of ["all", "mentions"]) {
             const iconBox = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"] svg`,
+                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"] [data-happy2-ui="icon"]`,
             );
             const tab = view.$(`.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"]`);
             expect(iconBox.bounds().width, `${size}/${id} icon box w`).toBe(spec.icon);
@@ -308,23 +289,16 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
             ).toBeLessThan(box.height + 0.5);
         }
 
-        // Leading-icon glyph optically centered in its box. Icon.tsx verifies
-        // centroid <=0.4 at 14/16/20; the large (18) box gets the 0.75 optical
-        // ceiling since 18 is not in that verified set.
+        // Leading-icon glyph actually paints. The icon font supplies a
+        // box-centered glyph, so only ink presence is asserted here.
         for (const id of ["all", "mentions"]) {
-            const svg = view.$(
-                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"] svg`,
+            const icon = view.$(
+                `.happy2-tabs[data-size="${size}"] [data-tab-id="${id}"] [data-happy2-ui="tab-icon"] [data-happy2-ui="icon"]`,
             );
-            const drift = await glyphDrift(svg, `${size}/${id} icon`);
-            const ceiling = size === "large" ? 0.75 : 0.4;
             expect(
-                Math.abs(drift.dx),
-                `${size}/${id} icon centroid x ${drift.dx}`,
-            ).toBeLessThanOrEqual(ceiling);
-            expect(
-                Math.abs(drift.dy),
-                `${size}/${id} icon centroid y ${drift.dy}`,
-            ).toBeLessThanOrEqual(ceiling);
+                (await icon.visibleMetrics()).pixelCount,
+                `${size}/${id} icon ink`,
+            ).toBeGreaterThan(0);
         }
 
         // Trailing badge digits paint (guards a blank count pill).

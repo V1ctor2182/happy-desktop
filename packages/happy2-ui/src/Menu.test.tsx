@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/menu.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/badge.css";
 import { Menu, type MenuItem } from "./Menu";
 import { createRenderer } from "./testing";
@@ -10,32 +11,21 @@ const FIGTREE = "happy2 Figtree, system-ui, sans-serif";
 const MONO = "happy2 Mono, ui-monospace, monospace";
 
 /*
- * Icon centroid inside its 16px slot. The Icon set is optically centered to
- * <=0.4px at size 16 in every engine (Icon.tsx / Icon.test.tsx); the slot is
- * the same size as the glyph, so the alpha-weighted centroid must land on the
- * slot center (8, 8). Refuses a blank or clipped capture: the glyph must paint
- * pixels and its ink may not touch the slot's captured edges.
+ * The leading glyph fills its 16px slot. The icon font paints the glyph
+ * box-centered, so Menu only owns the slot box and the fact that the glyph
+ * really paints — a blank or unloaded font then fails loudly.
  */
-async function iconCentroid(view: ReturnType<typeof createRenderer>, itemId: string) {
-    const svg = view.$(
-        `[data-testid="actions"] [data-item-id="${itemId}"] [data-happy2-ui="menu-item-icon"] svg`,
+async function assertIconInk(view: ReturnType<typeof createRenderer>, itemId: string) {
+    const icon = view.$(
+        `[data-testid="actions"] [data-item-id="${itemId}"] [data-happy2-ui="menu-item-icon"] [data-happy2-ui="icon"]`,
     );
-    expect(svg.bounds().width, `${itemId} icon box`).toBe(16);
-    expect(svg.bounds().height, `${itemId} icon box`).toBe(16);
-    const visible = await svg.visibleMetrics();
+    expect(icon.bounds().width, `${itemId} icon box`).toBe(16);
+    expect(icon.bounds().height, `${itemId} icon box`).toBe(16);
+    const visible = await icon.visibleMetrics();
     expect(visible.pixelCount, `${itemId} icon paints no pixels`).toBeGreaterThan(0);
-    expect(visible.bounds.x, `${itemId} icon clipped left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${itemId} icon clipped top`).toBeGreaterThan(0);
-    expect(visible.bounds.x + visible.bounds.width, `${itemId} icon clipped right`).toBeLessThan(
-        16,
-    );
-    expect(visible.bounds.y + visible.bounds.height, `${itemId} icon clipped bottom`).toBeLessThan(
-        16,
-    );
-    return visible.center;
 }
 
-it("holds Menu popover geometry, item rows, icon centroids, danger, and shortcuts", async () => {
+it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async () => {
     const selected: string[] = [];
     const view = createRenderer();
 
@@ -149,7 +139,7 @@ it("holds Menu popover geometry, item rows, icon centroids, danger, and shortcut
         "margin-bottom": "5px",
     });
 
-    /* ---- Leading icon gutter + centroids --------------------------------- */
+    /* ---- Leading icon gutter --------------------------------------------- */
 
     for (const id of rowIds) {
         const slot = view.$(
@@ -166,12 +156,9 @@ it("holds Menu popover geometry, item rows, icon centroids, danger, and shortcut
             .computedStyle("color"),
     ).toBe("rgb(73, 69, 79)");
 
-    /* Every glyph is a non-directional icon, so its ink centroid must land on
-     * the slot center (8, 8) within the tuned 0.4px (contract ceiling 0.75). */
+    /* Every row's glyph fills its 16px slot and actually paints. */
     for (const id of rowIds) {
-        const center = await iconCentroid(view, id);
-        expect(Math.abs(center.x - 8), `${id} icon centroid x`).toBeLessThanOrEqual(0.4);
-        expect(Math.abs(center.y - 8), `${id} icon centroid y`).toBeLessThanOrEqual(0.4);
+        await assertIconInk(view, id);
     }
 
     /* ---- Labels: typography, colors, shared baseline, alignment ---------- */

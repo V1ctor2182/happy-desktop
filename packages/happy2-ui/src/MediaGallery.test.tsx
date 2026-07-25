@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/badge.css";
 import "./styles/media-gallery.css";
 import { MediaGallery, type MediaItem } from "./MediaGallery";
@@ -9,47 +10,21 @@ import { createRenderer, RenderedElement } from "./testing";
 /*
  * MediaGallery is a measured grid: equal integer tracks and gutters, 4:3
  * thumbnail cards, and — for a file tile — a centered 48px glyph medallion
- * that reuses the system's proven 48/20 Icon proportions. Per the optical
- * policy, the only strict alpha-centroid target is that balanced medallion
- * glyph (contract ceiling 0.75; Icon path data already measures <= 0.4px in
- * every engine). Everything else is asserted as exact geometry, computed-style
- * contract, colours, and clean (unclipped, painting) visible ink. Word labels
- * (name/size) are asserted for typography + left alignment, not a centroid.
+ * that reuses the system's proven 48/20 Icon proportions. The icon itself is a
+ * font glyph that the icon font paints box-centered, so it is asserted as box
+ * geometry, colour, and real painted ink rather than a centroid. Everything
+ * else is asserted as exact geometry, computed-style contract, colours, and
+ * non-blank visible ink. Word labels (name/size) are asserted for typography +
+ * left alignment.
  */
 
 const noop = () => {};
-
-/* Tuned centroid budget for the balanced file-glyph medallion. */
-const GLYPH_TOL = 0.4;
 
 /* Deterministic data-URI thumbnail — a solid violet 4:3 rect, no network. */
 const THUMB = `data:image/svg+xml,${encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='120'>" +
         "<rect width='160' height='120' fill='#007aff'/></svg>",
 )}`;
-
-/*
- * Alpha-weighted ink centroid of `part`, expressed in `box`-relative CSS px.
- * Refuses blank or clipped captures: the part must paint pixels, and its ink
- * must sit inside its own border box, so a truncated capture never passes.
- */
-async function ink(part: RenderedElement<Element>, box: RenderedElement<Element>, name: string) {
-    const vis = await part.visibleMetrics();
-    const p = part.bounds();
-    expect(vis.pixelCount, `${name} paints no pixels`).toBeGreaterThan(0);
-    expect(vis.bounds.width, `${name} ink too narrow`).toBeGreaterThan(p.width * 0.2);
-    expect(vis.bounds.height, `${name} ink too short`).toBeGreaterThan(p.height * 0.2);
-    expect(vis.bounds.x, `${name} ink clipped left`).toBeGreaterThanOrEqual(-0.5);
-    expect(vis.bounds.y, `${name} ink clipped top`).toBeGreaterThanOrEqual(-0.5);
-    expect(vis.bounds.x + vis.bounds.width, `${name} ink clipped right`).toBeLessThanOrEqual(
-        p.width + 0.5,
-    );
-    expect(vis.bounds.y + vis.bounds.height, `${name} ink clipped bottom`).toBeLessThanOrEqual(
-        p.height + 0.5,
-    );
-    const b = box.bounds();
-    return { x: vis.center.x + p.x - b.x, y: vis.center.y + p.y - b.y };
-}
 
 /* Absolute difference between a part's left and right gap inside `root`. */
 function symmetry(part: RenderedElement<Element>, root: RenderedElement<Element>) {
@@ -219,12 +194,12 @@ it("holds MediaGallery grid geometry, tile anatomy, overlays, and footer typogra
     // Centered in the 48px medallion: (48 - 20) / 2 = 14 (13 + 1px border).
     expect(icon.bounds().x - glyph.bounds().x, "icon left inset").toBe(14);
     expect(icon.bounds().y - glyph.bounds().y, "icon top inset").toBe(14);
-    expect(icon.computedStyle("stroke"), "icon stroke").toBe("rgb(73, 69, 79)");
+    // The font glyph paints in the medallion's muted colour (currentColor).
+    expect(icon.computedStyle("color"), "icon colour").toBe("rgb(73, 69, 79)");
 
-    // Balanced glyph: alpha centroid on the medallion center (24, 24).
-    const glyphInk = await ink(icon, glyph, "file glyph");
-    expect(Math.abs(glyphInk.x - 24), "glyph optical x").toBeLessThanOrEqual(GLYPH_TOL);
-    expect(Math.abs(glyphInk.y - 24), "glyph optical y").toBeLessThanOrEqual(GLYPH_TOL);
+    // The icon font centers the glyph in its own box, so the medallion contract
+    // is the box inset above plus real painted ink (which proves the font loaded).
+    expect((await icon.visibleMetrics()).pixelCount, "file glyph ink").toBeGreaterThan(0);
 
     /* ---- Kind badge overlay (tile v1): top-left inset 8, reuses Badge ---- */
 

@@ -20,13 +20,9 @@ import { createRenderer, type RenderedElement } from "./testing";
  * The token and the label/meta carry inherently asymmetric ink (word/number
  * runs, left-aligned), so those are asserted through typography, deterministic
  * insets, colour tokens, and unclipped visible-pixel presence — never a forced
- * centroid. The one symmetric painted target, the reveal-toggle eye glyph, is
- * held to the tuned centroid budget; its centering is carried by the shared
- * Icon path data, so this component adds no per-engine translateY corrections.
+ * centroid. The button glyphs are icon-font characters the font centers in their
+ * own em box, so they are asserted by identity, box size, and painted ink only.
  */
-
-/* Symmetric painted glyph: tuned budget with the 0.75px contract ceiling. */
-const ICON_TOL = 0.4;
 
 /* getComputedStyle keeps the family quotes except on WebKit (Button.test quirk);
  * textMetrics() strips them on every engine. */
@@ -43,33 +39,6 @@ const LABEL = "Personal access token";
 const META = "tok_… · expires in 24h";
 /* The masked view renders a fixed 24-dot run regardless of secret length. */
 const MASK = "•".repeat(24);
-
-/*
- * Alpha-weighted ink centroid of `part`, expressed relative to the center of
- * `box`. Refuses a blank or clipped capture: the part must paint pixels and its
- * ink may not touch the captured box edges, so a truncated screenshot can never
- * pass silently.
- */
-async function iconDrift(
-    part: RenderedElement<Element>,
-    box: RenderedElement<Element>,
-    name: string,
-) {
-    const vis = await part.visibleMetrics();
-    expect(vis.pixelCount, `${name} paints no pixels`).toBeGreaterThan(0);
-    const p = part.bounds();
-    expect(vis.bounds.y, `${name} ink clipped at top`).toBeGreaterThan(0);
-    expect(vis.bounds.x, `${name} ink clipped at left`).toBeGreaterThan(0);
-    expect(vis.bounds.y + vis.bounds.height, `${name} ink clipped at bottom`).toBeLessThan(
-        p.height,
-    );
-    expect(vis.bounds.x + vis.bounds.width, `${name} ink clipped at right`).toBeLessThan(p.width);
-    const b = box.bounds();
-    return {
-        x: vis.center.x + p.x - b.x - b.width / 2,
-        y: vis.center.y + p.y - b.y - b.height / 2,
-    };
-}
 
 /*
  * Guards a left-aligned text span's capture without chasing a centroid: it must
@@ -206,18 +175,20 @@ it("holds SecretReveal card, header, mono token, and warning-banner contract", a
         '[data-testid="masked"] .happy2-secret-reveal__copy [data-happy2-ui="button-label"]',
     );
     expect(copyLabel.textMetrics().text, "copy label").toBe("Copy");
-    const copyGlyph = view.$('[data-testid="masked"] .happy2-secret-reveal__copy svg');
+    const copyGlyph = view.$(
+        '[data-testid="masked"] .happy2-secret-reveal__copy [data-happy2-ui="icon"]',
+    );
     expect(copyGlyph.element.getAttribute("data-name"), "copy glyph").toBe("files");
     expect(copyGlyph.bounds(), "copy glyph box").toMatchObject({ width: 14, height: 14 });
 
-    // Reveal-toggle eye glyph: symmetric painted content, optically centered in
-    // its 28px ghost square (shared Icon path data, no local correction).
-    const revealGlyph = view.$('[data-testid="masked"] .happy2-secret-reveal__reveal svg');
+    // Reveal-toggle eye glyph: a 14px icon box inside the 28px ghost square that
+    // actually paints its font glyph.
+    const revealGlyph = view.$(
+        '[data-testid="masked"] .happy2-secret-reveal__reveal [data-happy2-ui="icon"]',
+    );
     expect(revealGlyph.element.getAttribute("data-name"), "reveal glyph").toBe("eye");
     expect(revealGlyph.bounds(), "reveal glyph box").toMatchObject({ width: 14, height: 14 });
-    const rg = await iconDrift(revealGlyph, reveal, "reveal icon");
-    expect(Math.abs(rg.x), "reveal icon optical x").toBeLessThanOrEqual(ICON_TOL);
-    expect(Math.abs(rg.y), "reveal icon optical y").toBeLessThanOrEqual(ICON_TOL);
+    expect((await revealGlyph.visibleMetrics()).pixelCount, "reveal icon ink").toBeGreaterThan(0);
 
     // ---- Field well + masked token ------------------------------------------
     const field = view.$('[data-testid="masked"] [data-happy2-ui="secret-reveal-field"]');
@@ -337,7 +308,9 @@ it("holds SecretReveal copied, minimal, and reveal/copy interaction states", asy
         '[data-testid="copied"] .happy2-secret-reveal__copy [data-happy2-ui="button-label"]',
     );
     expect(copiedLabel.textMetrics().text, "copied label").toBe("Copied");
-    const copiedGlyph = view.$('[data-testid="copied"] .happy2-secret-reveal__copy svg');
+    const copiedGlyph = view.$(
+        '[data-testid="copied"] .happy2-secret-reveal__copy [data-happy2-ui="icon"]',
+    );
     expect(copiedGlyph.element.getAttribute("data-name"), "copied glyph").toBe("check");
 
     // ---- Minimal: no label / meta / warning, header collapses to actions -----

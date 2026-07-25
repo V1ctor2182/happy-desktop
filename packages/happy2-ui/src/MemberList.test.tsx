@@ -5,6 +5,7 @@ import "./styles/avatar.css";
 import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import { Button } from "./Button";
 import { MemberList, type MemberItem } from "./MemberList";
 import { createRenderer, type RenderedElement } from "./testing";
@@ -393,7 +394,7 @@ it("holds MemberList trailing variants, minimal rows, and role colors", async ()
         ["grace", "Grace Hopper"],
     ] as const) {
         const trailing = view.$(
-            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] svg`,
+            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] [data-happy2-ui="icon"]`,
         );
         expect(trailing.offsets().right, `${id} menu trailing right`).toBe(0);
         const button = view.$(
@@ -401,11 +402,11 @@ it("holds MemberList trailing variants, minimal rows, and role colors", async ()
         );
         expect(button.element.getAttribute("aria-label"), id).toBe(`Manage ${name}`);
         /* Icon-only 28px square kebab — no "Message" label leaks through. */
-        expect(button.element.textContent, id).toBe("");
+        expect(button.element.querySelector('[data-happy2-ui="button-label"]'), id).toBeNull();
         expect(button.bounds().width, id).toBe(28);
         expect(button.bounds().height, id).toBe(28);
         const icon = view.$(
-            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] svg`,
+            `[data-testid="menu"] [data-member-id="${id}"] [data-happy2-ui="member-trailing"] [data-happy2-ui="icon"]`,
         );
         expect(icon.bounds().width, id).toBe(14);
         expect((await icon.visibleMetrics()).pixelCount, id).toBeGreaterThan(0);

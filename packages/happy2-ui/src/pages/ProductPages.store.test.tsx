@@ -32,6 +32,16 @@ function owned<Fixture extends Disposable>(fixture: Fixture): Fixture {
     return fixture;
 }
 
+/* Visible word of a Button. A button's raw `textContent` also carries the icon
+   font's Private Use Area glyph character, so the label span is the only
+   reliable read. */
+function buttonNamed(root: ParentNode, name: string) {
+    return Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) =>
+            button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim() === name,
+    );
+}
+
 it("renders FilesPage from FilesStore input", async () => {
     const fixture = owned(filesStoreFixtureCreate());
     fixture.input({ type: "filesLoading" });
@@ -233,11 +243,10 @@ it("opens a generated password handoff from each authorized user row and submits
     await expect.poll(() => view.container.textContent).toContain(reset.password);
     expect(view.container.querySelector('[data-testid="password-reset"]')).toBe(dialog);
 
-    Array.from(
-        view.container.querySelectorAll<HTMLButtonElement>('[data-testid="password-reset"] button'),
-    )
-        .find((button) => button.textContent?.trim() === "Reset password")!
-        .click();
+    buttonNamed(
+        view.container.querySelector('[data-testid="password-reset"]')!,
+        "Reset password",
+    )!.click();
     expect(outputs).toEqual([
         {
             type: "userPasswordResetSubmitted",
@@ -281,11 +290,7 @@ it("renders a permission-scoped admin subpage without materializing the legacy a
     );
     await view.ready();
     expect(view.container.textContent).toContain("Agent images");
-    expect(
-        Array.from(view.container.querySelectorAll("button")).some(
-            (button) => button.textContent?.trim() === "New image",
-        ),
-    ).toBe(false);
+    expect(buttonNamed(view.container, "New image")).toBeUndefined();
     expect(adminAccesses).toBe(0);
 });
 

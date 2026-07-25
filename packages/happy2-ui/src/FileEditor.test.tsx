@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/file-editor.css";
 import { FileEditor } from "./FileEditor";
@@ -17,6 +18,15 @@ import { createRenderer } from "./testing";
 const fontUi = "happy2 Figtree, system-ui, sans-serif";
 const fontMono = "happy2 Mono, ui-monospace, monospace";
 const content = "const answer = 42;\nexport default answer;\n";
+
+/* Visible word labels of the action buttons, in DOM order. Icon-only buttons
+ * (Close) carry no label element and read as "" — their glyph is a font
+ * codepoint, so reading raw textContent would compare a PUA character. */
+function actionLabels(view: ReturnType<typeof createRenderer>, actionsSelector: string) {
+    return Array.from(
+        view.container.querySelectorAll(`${actionsSelector} [data-happy2-ui="button"]`),
+    ).map((button) => button.querySelector('[data-happy2-ui="button-label"]')?.textContent ?? "");
+}
 
 it("holds FileEditor header, code body, status bar, and dirty affordances", async () => {
     const view = createRenderer();
@@ -124,11 +134,7 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
     expect(cleanSave.element.textContent).toBe("Save");
     expect((cleanSave.element as HTMLButtonElement).disabled).toBe(true);
     /* Clean state offers no Revert. */
-    expect(
-        Array.from(
-            view.container.querySelectorAll(`${cleanActions} [data-happy2-ui="button"]`),
-        ).map((button) => button.textContent),
-    ).toEqual(["Save", ""]);
+    expect(actionLabels(view, cleanActions)).toEqual(["Save", ""]);
 
     const dirtyRoot = view.$('[data-testid="dirty"]');
     expect(dirtyRoot.element.getAttribute("data-dirty")).toBe("");
@@ -139,16 +145,14 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
     expect((await marker.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const dirtyActions = '[data-testid="dirty"] [data-happy2-ui="file-editor-actions"]';
-    expect(
-        Array.from(
-            view.container.querySelectorAll(`${dirtyActions} [data-happy2-ui="button"]`),
-        ).map((button) => button.textContent),
-    ).toEqual(["Revert", "Save", ""]);
+    expect(actionLabels(view, dirtyActions)).toEqual(["Revert", "Save", ""]);
     const dirtySave = Array.from(
         view.container.querySelectorAll<HTMLButtonElement>(
             `${dirtyActions} [data-happy2-ui="button"]`,
         ),
-    ).find((button) => button.textContent === "Save")!;
+    ).find(
+        (button) => button.querySelector('[data-happy2-ui="button-label"]')?.textContent === "Save",
+    )!;
     expect(dirtySave.disabled).toBe(false);
 
     window.scrollTo(0, 0);

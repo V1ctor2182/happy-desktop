@@ -417,9 +417,7 @@ it("renders a complete chat page from coarse HappyState surface stores", async (
     expect(
         view.container.querySelector('[data-section-id="agents"] [data-item-id="happy-chat"]'),
     ).not.toBeNull();
-    const adminButton = Array.from(view.container.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === "Administration",
-    );
+    const adminButton = buttonNamed(view.container, "Administration");
     expect(adminButton).not.toBeUndefined();
     adminButton!.click();
     expect(adminOpen).toHaveBeenCalledOnce();
@@ -1230,11 +1228,10 @@ it("edits an own message through the desktop-safe dialog with its current revisi
     editor.value = "Updated body";
     editor.dispatchEvent(new Event("input", { bubbles: true }));
     await nextFrame();
-    const save = Array.from(
-        view.container.querySelectorAll<HTMLButtonElement>(
-            '[data-happy2-ui="modal-dialog"] button',
-        ),
-    ).find((button) => button.textContent?.trim() === "Save changes")!;
+    const save = buttonNamed(
+        view.container.querySelector('[data-happy2-ui="modal-dialog"]')!,
+        "Save changes",
+    )!;
     expect(save.disabled).toBe(false);
     save.click();
     await nextFrame();
@@ -1979,4 +1976,13 @@ it("uses the shared expandable inspector shell for documents", async () => {
 });
 async function nextFrame(): Promise<void> {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+/* Visible word of a Button. A button's raw `textContent` also carries the icon
+   font's Private Use Area glyph character, so the label span is the only
+   reliable read. */
+function buttonNamed(root: ParentNode, name: string) {
+    return Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) =>
+            button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim() === name,
+    );
 }

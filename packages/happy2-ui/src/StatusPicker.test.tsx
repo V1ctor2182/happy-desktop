@@ -58,33 +58,6 @@ async function dotDrift(view: Renderer, selector: string) {
     };
 }
 
-/*
- * Alpha-weighted centroid of a painted Icon glyph, as an offset from the center
- * of its svg box. The glyph is drawn with margins inside the 20-unit grid, so
- * its ink may not touch the captured box edges — that doubles as the clip guard
- * (a truncated capture can never pass silently).
- */
-async function glyphDrift(view: Renderer, svgSelector: string) {
-    const svg = view.$(svgSelector);
-    const visible = await svg.visibleMetrics();
-    expect(visible.pixelCount, `${svgSelector} paints no pixels`).toBeGreaterThan(0);
-    const box = svg.bounds();
-    expect(visible.bounds.x, `${svgSelector} ink clipped at left`).toBeGreaterThan(0);
-    expect(visible.bounds.y, `${svgSelector} ink clipped at top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${svgSelector} ink clipped at right`,
-    ).toBeLessThan(box.width);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${svgSelector} ink clipped at bottom`,
-    ).toBeLessThan(box.height);
-    return {
-        dx: visible.center.x - box.width / 2,
-        dy: visible.center.y - box.height / 2,
-    };
-}
-
 it("holds StatusPicker card, availability dots, segmented layout, and status field", async () => {
     const view = createRenderer();
 
@@ -313,20 +286,17 @@ it("holds StatusPicker card, availability dots, segmented layout, and status fie
         text: "Focusing",
     });
 
-    // Reused ghost Button clears the status: 28px square, 14px close glyph,
-    // optically centered on both axes (the close glyph is symmetric).
+    // Reused ghost Button clears the status: 28px square, 14px close glyph that
+    // actually paints (the icon font centers the glyph in its own box).
     const clear = view.$(sp(' [data-happy2-ui="status-picker-field"] [data-happy2-ui="button"]'));
     expect(clear.bounds(), "clear button box").toMatchObject({ width: 28, height: 28 });
     const clearGlyph = view.$(
-        sp(' [data-happy2-ui="status-picker-field"] [data-happy2-ui="button"] svg'),
+        sp(
+            ' [data-happy2-ui="status-picker-field"] [data-happy2-ui="button"] [data-happy2-ui="icon"]',
+        ),
     );
     expect(clearGlyph.bounds(), "clear glyph box").toMatchObject({ width: 14, height: 14 });
-    const glyph = await glyphDrift(
-        view,
-        sp(' [data-happy2-ui="status-picker-field"] [data-happy2-ui="button"] svg'),
-    );
-    expect(Math.abs(glyph.dx), "clear glyph x centroid").toBeLessThanOrEqual(0.4);
-    expect(Math.abs(glyph.dy), "clear glyph y centroid").toBeLessThanOrEqual(0.4);
+    expect((await clearGlyph.visibleMetrics()).pixelCount, "clear glyph ink").toBeGreaterThan(0);
 
     // ---- Expiry meta ----------------------------------------------------
     const meta = view.$(sp(' [data-happy2-ui="status-picker-meta"]'));

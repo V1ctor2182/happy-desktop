@@ -11,6 +11,20 @@ import "./styles/user-password-reset-dialog.css";
 import { createRenderer } from "./testing";
 import { UserPasswordResetDialog } from "./UserPasswordResetDialog";
 
+/* Visible word of a Button, or null when the button is icon-only. A button's
+   raw `textContent` also carries the icon font's Private Use Area glyph
+   character, so the label span is the only reliable read. */
+const buttonLabel = (button: HTMLButtonElement) =>
+    button.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim() ?? null;
+
+function findButton(root: ParentNode, label: string) {
+    const button = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+        (candidate) => buttonLabel(candidate) === label,
+    );
+    expect(button, `button "${label}"`).toBeDefined();
+    return button!;
+}
+
 function WindowFrame(props: { children: ReactNode }) {
     return (
         <div
@@ -86,15 +100,9 @@ it("shows a client-generated password and routes every preflight action", async 
     expect(view.container.textContent).toContain("signs the user out of every existing session");
 
     (view.container.querySelector('button[aria-label="Hide secret"]') as HTMLButtonElement).click();
-    Array.from(view.container.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.trim() === "Copy")!
-        .click();
-    Array.from(view.container.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.trim() === "Generate another")!
-        .click();
-    Array.from(view.container.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.trim() === "Reset password")!
-        .click();
+    findButton(view.container, "Copy").click();
+    findButton(view.container, "Generate another").click();
+    findButton(view.container, "Reset password").click();
     (view.container.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();
     expect(toggle).toHaveBeenCalledTimes(1);
     expect(copy).toHaveBeenCalledTimes(1);
@@ -150,9 +158,7 @@ it("locks submission controls while pending and presents the session cutoff afte
     expect(
         pendingButtons
             .filter((button) =>
-                ["Cancel", "Generate another", "Resetting…"].includes(
-                    button.textContent?.trim() ?? "",
-                ),
+                ["Cancel", "Generate another", "Resetting…"].includes(buttonLabel(button) ?? ""),
             )
             .every((button) => button.disabled),
     ).toBe(true);
@@ -162,8 +168,6 @@ it("locks submission controls while pending and presents the session cutoff afte
     expect(frames[1]!.textContent).toContain("2 active sessions were revoked");
     expect(frames[1]!.textContent).toContain("will not be shown again");
     expect(
-        Array.from(frames[1]!.querySelectorAll<HTMLButtonElement>("button")).map((button) =>
-            button.textContent?.trim(),
-        ),
-    ).toEqual(["", "", "Copied", "Done"]);
+        Array.from(frames[1]!.querySelectorAll<HTMLButtonElement>("button")).map(buttonLabel),
+    ).toEqual([null, null, "Copied", "Done"]);
 }, 120000);

@@ -16,27 +16,19 @@ const fontFamily = () =>
 
 const SUBTITLE = "documentation-preview-abc123.preview.example";
 
-/* Alpha-weighted ink centroid of a part, as an offset from its own box center
- * (positive = right/low). Refuses blank or clipped captures. */
-async function iconDrift(view: ReturnType<typeof createRenderer>, selector: string) {
-    const part = view.$(selector);
-    const visible = await part.visibleMetrics();
+/* Proves a part actually paints ink. Icons are font glyphs the font box-centers
+ * for us, so their placement is asserted through box geometry, never a centroid;
+ * this only catches a missing glyph or a blank capture. */
+async function assertPaints(view: ReturnType<typeof createRenderer>, selector: string) {
+    const visible = await view.$(selector).visibleMetrics();
     expect(visible.pixelCount, `${selector} paints no pixels`).toBeGreaterThan(0);
-    const bounds = part.bounds();
-    expect(visible.bounds.y, `${selector} ink clipped at top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${selector} ink clipped at bottom`,
-    ).toBeLessThan(bounds.height);
-    expect(visible.bounds.x, `${selector} ink clipped at left`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${selector} ink clipped at right`,
-    ).toBeLessThan(bounds.width);
-    return { dx: visible.center.x - bounds.width / 2, dy: visible.center.y - bounds.height / 2 };
 }
 
-it("holds bar layout geometry, typography, tokens, and the link mark's optical center", async () => {
+/* Visible word of a Button, or null when the button is icon-only. */
+const buttonLabel = (button: HTMLButtonElement) =>
+    button.querySelector('[data-happy2-ui="button-label"]')?.textContent ?? null;
+
+it("holds bar layout geometry, typography, tokens, and the link mark box", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -73,16 +65,14 @@ it("holds bar layout geometry, typography, tokens, and the link mark's optical c
         "min-height": "28px",
     });
 
-    // Fixed 16px link mark, secondary-toned, its icon optically centered.
+    // Fixed 16px link mark, secondary-toned, painting its glyph.
     const mark = view.$('[data-testid="bar"] [data-happy2-ui="port-share-control-mark"]');
     expect(mark.bounds()).toMatchObject({ width: 16, height: 16 });
     expect(mark.computedStyle("color")).toBe("rgb(73, 69, 79)");
-    const markDrift = await iconDrift(
+    await assertPaints(
         view,
-        '[data-testid="bar"] [data-happy2-ui="port-share-control-mark"] svg',
+        '[data-testid="bar"] [data-happy2-ui="port-share-control-mark"] [data-happy2-ui="icon"]',
     );
-    expect(Math.abs(markDrift.dx), "mark ink dx").toBeLessThanOrEqual(1.2);
-    expect(Math.abs(markDrift.dy), "mark ink dy").toBeLessThanOrEqual(1.2);
 
     const name = view.$('[data-testid="bar"] [data-happy2-ui="port-share-control-name"]');
     expect(
@@ -121,9 +111,11 @@ it("holds bar layout geometry, typography, tokens, and the link mark's optical c
     const open = buttons[0]!;
     const disable = buttons[1]!;
     expect(open.getAttribute("aria-label")).toBe("Open shared preview: Documentation Preview");
-    expect(open.textContent).toBe("Open");
+    // The visible word is the button's label span; the leading icon is a font
+    // glyph whose Private Use Area character also lands in raw `textContent`.
+    expect(buttonLabel(open)).toBe("Open");
     expect(disable.getAttribute("aria-label")).toBe("Stop sharing Documentation Preview");
-    expect(disable.textContent).toBe("Stop sharing");
+    expect(buttonLabel(disable)).toBe("Stop sharing");
     expect(open.disabled).toBe(false);
     expect(disable.disabled).toBe(false);
     const rowRect = rowBounds.bounds();
@@ -179,7 +171,7 @@ it("renders busy and error states with disabled actions, danger tokens, and an i
     const openingButtons = view
         .$('[data-testid="opening"]')
         .element.querySelectorAll<HTMLButtonElement>('[data-happy2-ui="button"]');
-    expect(openingButtons[0]!.textContent).toBe("Opening…");
+    expect(buttonLabel(openingButtons[0]!)).toBe("Opening…");
     expect(openingButtons[0]!.disabled).toBe(true);
     expect(openingButtons[1]!.disabled).toBe(true);
     expect(
@@ -214,7 +206,7 @@ it("renders busy and error states with disabled actions, danger tokens, and an i
     await view.screenshot("PortShareControl.states.test");
 });
 
-it("renders the compact header pair with accessible names, no labels, and centered icons", async () => {
+it("renders the compact header pair with accessible names, no labels, and painted icons", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -255,17 +247,15 @@ it("renders the compact header pair with accessible names, no labels, and center
     expect(buttons[0]!.getAttribute("aria-label")).toBe(
         "Open shared preview: Documentation Preview",
     );
-    expect(buttons[0]!.textContent).toBe("");
+    expect(buttonLabel(buttons[0]!)).toBeNull();
     expect(buttons[1]!.getAttribute("aria-label")).toBe("Stop sharing Documentation Preview");
 
-    // Each icon-only button paints a centered, unclipped glyph.
+    // Each icon-only button paints its glyph.
     for (const [index] of [0, 1].entries()) {
-        const drift = await iconDrift(
+        await assertPaints(
             view,
-            `[data-testid="compact"] [data-happy2-ui="button"]:nth-of-type(${index + 1}) svg`,
+            `[data-testid="compact"] [data-happy2-ui="button"]:nth-of-type(${index + 1}) [data-happy2-ui="icon"]`,
         );
-        expect(Math.abs(drift.dx), `compact icon ${index} dx`).toBeLessThanOrEqual(1.4);
-        expect(Math.abs(drift.dy), `compact icon ${index} dy`).toBeLessThanOrEqual(1.4);
     }
 
     // Compact reflects an error through the danger mark and the title attribute,

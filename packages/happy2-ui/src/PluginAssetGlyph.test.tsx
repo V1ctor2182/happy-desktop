@@ -48,7 +48,7 @@ it("holds the slot with a neutral fallback icon before the mask loads", async ()
     expect(fallback.bounds()).toEqual({ x: 20, y: 20, width: 24, height: 24 });
     expect(fallback.element.getAttribute("data-state")).toBe("fallback");
     // The fallback holds the same square and renders an Icon glyph inside it.
-    expect(fallback.element.querySelector("svg")).not.toBeNull();
+    expect(fallback.element.querySelector('[data-happy2-ui="icon"]')).not.toBeNull();
     expect(fallback.computedStyles(["display", "width", "height"])).toEqual({
         display: "inline-flex",
         width: "24px",

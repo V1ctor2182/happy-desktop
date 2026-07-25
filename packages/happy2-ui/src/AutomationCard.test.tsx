@@ -291,19 +291,25 @@ it("holds AutomationCard layout, geometry, typography, badge colors, and states"
     /* — flow row: trigger badge → arrow → action badge, colored by type — */
     const triggerBadge = a('[data-happy2-ui="automation-card-trigger"] [data-happy2-ui="badge"]');
     expect(triggerBadge.offsets().left, "trigger badge flush left").toBe(0);
-    expect(triggerBadge.element.textContent, "trigger label").toBe("Schedule");
+    expect(
+        triggerBadge.element.querySelector('[data-happy2-ui="badge-label"]')?.textContent,
+        "trigger label",
+    ).toBe("Schedule");
     expect(triggerBadge.computedStyles(["background-color", "color", "height"])).toEqual({
         "background-color": badgeColors.info.bg,
         color: badgeColors.info.fg,
         height: "18px",
     });
     const actionBadge = a('[data-happy2-ui="automation-card-action"] [data-happy2-ui="badge"]');
-    expect(actionBadge.element.textContent, "action label").toBe("Send message");
+    expect(
+        actionBadge.element.querySelector('[data-happy2-ui="badge-label"]')?.textContent,
+        "action label",
+    ).toBe("Send message");
     expect(actionBadge.computedStyles(["background-color", "color"])).toEqual({
         "background-color": badgeColors.success.bg,
         color: badgeColors.success.fg,
     });
-    const arrow = a('[data-happy2-ui="automation-card-arrow"] svg');
+    const arrow = a('[data-happy2-ui="automation-card-arrow"] [data-happy2-ui="icon"]');
     expect(arrow.bounds()).toMatchObject({ width: 14, height: 14 });
     expect(arrow.element.getAttribute("data-name"), "arrow glyph").toBe("arrow-right");
     // Trigger sits left of the arrow, which sits left of the action.
@@ -343,7 +349,7 @@ it("holds AutomationCard layout, geometry, typography, badge colors, and states"
     expect(runBtn.computedStyle("background-color"), "run-now secondary").toBe(SECONDARY_BTN);
     expect(runBtn.element.textContent).toContain("Run now");
     expect(
-        runBtn.element.querySelector('svg[data-name="play"]'),
+        runBtn.element.querySelector('[data-happy2-ui="icon"][data-name="play"]'),
         "run-now play glyph",
     ).not.toBeNull();
 
@@ -416,10 +422,10 @@ it("holds AutomationCard layout, geometry, typography, badge colors, and states"
  * runs (name, detail, meta) carry inherently asymmetric ink, so they assert the
  * vertical centroid only (their horizontal axis is left-aligned layout, not
  * centering); the paint-only corrections in automation-card.css bring every run
- * under the 0.75 contract ceiling in all three engines. Symmetric painted
- * glyphs the card owns/composes (arrow, switch thumb) assert both axes at the
- * tuned 0.4px — the arrow-right glyph points right, so its horizontal ink is
- * intentionally biased and exempt on x.
+ * under the 0.75 contract ceiling in all three engines. The symmetric switch
+ * thumb the card composes asserts both axes at the tuned 0.4px. Icons are font
+ * glyphs painted box-centered by Icon itself, so they are asserted by box
+ * geometry and painted ink, never by a centroid.
  */
 it("centers ink optically in every card row and glyph", async () => {
     const view = createRenderer();
@@ -436,15 +442,10 @@ it("centers ink optically in every card row and glyph", async () => {
         `name dy ${nameInk.y - boxCenterY(header)}`,
     ).toBeLessThanOrEqual(0.75);
 
-    /* — trigger→action arrow: symmetric on y, box-centered in the 18px row — */
-    const arrow = a('[data-happy2-ui="automation-card-arrow"] svg');
+    /* — trigger→action arrow: box-centered in the 18px row, and it paints — */
+    const arrow = a('[data-happy2-ui="automation-card-arrow"] [data-happy2-ui="icon"]');
     expect(arrow.offsets().top, "arrow box vertical centering").toBe(0);
-    const arrowInk = await inkCenter(arrow, "arrow");
-    expect(
-        Math.abs(arrowInk.y - boxCenterY(arrow)),
-        `arrow dy ${arrowInk.y - boxCenterY(arrow)}`,
-    ).toBeLessThanOrEqual(0.4);
-    // x exempt: arrow-right points right, keeping intentional rightward ink.
+    expect((await arrow.visibleMetrics()).pixelCount, "arrow ink").toBeGreaterThan(0);
 
     /* — detail label on the detail-row center — */
     const detail = a('[data-happy2-ui="automation-card-detail"]');

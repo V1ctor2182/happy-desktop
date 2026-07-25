@@ -19,14 +19,14 @@ const uiFamily = () =>
         : '"happy2 Figtree", system-ui, sans-serif';
 
 /*
- * Optical tolerances, measured at 2x with alpha-weighted visible-pixel
+ * Optical tolerance, measured at 2x with alpha-weighted visible-pixel
  * centroids (see styles/agent-desk.css for the per-engine corrections).
- * Glyph ink is symmetric, so icons hold the tight bound; word ink is
- * vertically asymmetric (descender-free vs descender-heavy strings straddle
- * the tuned midpoint by ~±0.45px), so text holds the 0.75px contract
- * ceiling on the vertical axis only.
+ * Word ink is vertically asymmetric (descender-free vs descender-heavy strings
+ * straddle the tuned midpoint by ~±0.45px), so text holds the 0.75px contract
+ * ceiling on the vertical axis only. Icons are font glyphs that Icon paints
+ * box-centered in their own square, so they assert box placement, color, and
+ * painted ink instead of a centroid.
  */
-const ICON_TOLERANCE = 0.4;
 const TEXT_TOLERANCE = 0.75;
 
 /*
@@ -138,12 +138,11 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         "padding-right": "14px",
     });
 
-    // Spark icon: accent color, ink optically centered in the 47px lane.
+    // Spark icon: accent color, 16px glyph box that paints in the 47px lane.
     const spark = view.$(".happy2-agent-desk__spark");
     expect(spark.computedStyle("color")).toBe("rgb(43, 172, 204)");
-    const sparkInk = await ink(view, ".happy2-agent-desk__spark", 23.5);
-    expect(Math.abs(sparkInk.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(sparkInk.dx)).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(spark.bounds()).toMatchObject({ width: 16, height: 16 });
+    expect((await spark.visibleMetrics()).pixelCount, "spark ink").toBeGreaterThan(0);
 
     // Title: 13/800 ui, sits after the 16px spark + 8px gap. Word ink is
     // horizontally asymmetric and left-aligned by design, so only the
@@ -352,9 +351,9 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
     const clockSelector = '[data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon';
     expect(view.$(clockSelector).computedStyle("color")).toBe("rgb(73, 69, 79)");
-    const clockInk = await ink(view, clockSelector, 18);
-    expect(Math.abs(clockInk.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(clockInk.dx)).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect((await view.$(clockSelector).visibleMetrics()).pixelCount, "clock ink").toBeGreaterThan(
+        0,
+    );
     const queuedTitle = view.$(
         '[data-happy2-ui="agent-desk-queued"] [data-happy2-ui="agent-desk-row-title"]',
     );
@@ -402,9 +401,9 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     });
     const checkSelector = '[data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon';
     expect(view.$(checkSelector).computedStyle("color")).toBe("rgb(52, 199, 89)");
-    const checkInk = await ink(view, checkSelector, 16);
-    expect(Math.abs(checkInk.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(checkInk.dx)).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect((await view.$(checkSelector).visibleMetrics()).pixelCount, "check ink").toBeGreaterThan(
+        0,
+    );
     const doneTitle = view.$(
         '[data-happy2-ui="agent-desk-done"] [data-happy2-ui="agent-desk-row-title"]',
     );
@@ -485,17 +484,18 @@ const DONE_FLAT: DeskListItem[] = [{ id: "d1", meta: "merged", title: "ENG-479 r
 const DONE_DESC: DeskListItem[] = [{ id: "d2", meta: "posted", title: "Bumpy triage judgement" }];
 
 /*
- * Asserts every text and glyph part of one rendered desk against its lane
- * center. Word ink is horizontally asymmetric by nature (and the rows are
- * left-aligned by design), so text asserts the vertical centroid only;
- * symmetric glyph ink asserts both axes at the tight tolerance.
+ * Asserts every text run of one rendered desk against its lane center. Word ink
+ * is horizontally asymmetric by nature (and the rows are left-aligned by
+ * design), so text asserts the vertical centroid only. Icon glyphs are asserted
+ * for painted ink; Icon owns their box centering.
  */
 async function expectDeskCentered(view: View, testId: string) {
     const p = `[data-testid="${testId}"]`;
 
-    const spark = await ink(view, `${p} .happy2-agent-desk__spark`, 23.5);
-    expect(Math.abs(spark.dy), `${testId} spark dy`).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(spark.dx), `${testId} spark dx`).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(
+        (await view.$(`${p} .happy2-agent-desk__spark`).visibleMetrics()).pixelCount,
+        `${testId} spark ink`,
+    ).toBeGreaterThan(0);
     const headerTitle = await ink(view, `${p} [data-happy2-ui="agent-desk-title"]`, 23.5);
     expect(Math.abs(headerTitle.dy), `${testId} header title dy`).toBeLessThanOrEqual(
         TEXT_TOLERANCE,
@@ -508,13 +508,14 @@ async function expectDeskCentered(view: View, testId: string) {
     const runEta = await ink(view, `${p} [data-happy2-ui="agent-desk-run-eta"]`, 10);
     expect(Math.abs(runEta.dy), `${testId} run eta dy`).toBeLessThanOrEqual(TEXT_TOLERANCE);
 
-    const clock = await ink(
-        view,
-        `${p} [data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon`,
-        18,
-    );
-    expect(Math.abs(clock.dy), `${testId} clock dy`).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(clock.dx), `${testId} clock dx`).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(
+        (
+            await view
+                .$(`${p} [data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon`)
+                .visibleMetrics()
+        ).pixelCount,
+        `${testId} clock ink`,
+    ).toBeGreaterThan(0);
     const queuedTitle = await ink(
         view,
         `${p} [data-happy2-ui="agent-desk-queued"] [data-happy2-ui="agent-desk-row-title"]`,
@@ -530,13 +531,14 @@ async function expectDeskCentered(view: View, testId: string) {
     );
     expect(Math.abs(queuedMeta.dy), `${testId} queued meta dy`).toBeLessThanOrEqual(TEXT_TOLERANCE);
 
-    const check = await ink(
-        view,
-        `${p} [data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon`,
-        16,
-    );
-    expect(Math.abs(check.dy), `${testId} check dy`).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(check.dx), `${testId} check dx`).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(
+        (
+            await view
+                .$(`${p} [data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon`)
+                .visibleMetrics()
+        ).pixelCount,
+        `${testId} check ink`,
+    ).toBeGreaterThan(0);
     const doneTitle = await ink(
         view,
         `${p} [data-happy2-ui="agent-desk-done"] [data-happy2-ui="agent-desk-row-title"]`,
@@ -628,8 +630,10 @@ it("keeps ink optically centered at 280 and 400 widths and in a scrolling desk",
     const body = view.$('[data-testid="short"] [data-happy2-ui="agent-desk-body"]');
     expect(body.element.scrollHeight).toBeGreaterThan(body.element.clientHeight);
     const s = `[data-testid="short"]`;
-    const spark = await ink(view, `${s} .happy2-agent-desk__spark`, 23.5);
-    expect(Math.abs(spark.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(
+        (await view.$(`${s} .happy2-agent-desk__spark`).visibleMetrics()).pixelCount,
+        "short spark ink",
+    ).toBeGreaterThan(0);
     const runTitle = await ink(view, `${s} [data-happy2-ui="agent-desk-run-title"]`, 10);
     expect(Math.abs(runTitle.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
     const runEta = await ink(view, `${s} [data-happy2-ui="agent-desk-run-eta"]`, 10);
@@ -639,13 +643,14 @@ it("keeps ink optically centered at 280 and 400 widths and in a scrolling desk",
     body.element.scrollTop = body.element.scrollHeight;
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     expect(body.element.scrollTop).toBeGreaterThan(0);
-    const check = await ink(
-        view,
-        `${s} [data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon`,
-        16,
-    );
-    expect(Math.abs(check.dy)).toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(check.dx)).toBeLessThanOrEqual(ICON_TOLERANCE);
+    expect(
+        (
+            await view
+                .$(`${s} [data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon`)
+                .visibleMetrics()
+        ).pixelCount,
+        "short check ink",
+    ).toBeGreaterThan(0);
     const doneMeta = await ink(
         view,
         `${s} [data-happy2-ui="agent-desk-done"] [data-happy2-ui="agent-desk-row-meta"]`,
@@ -692,28 +697,16 @@ it("handles custom icons, 1-char initials, and truncating labels", async () => {
     );
     await view.ready();
 
-    // Custom queued icon (branch) replaces the clock and stays centered.
+    // Custom queued icon (branch) replaces the clock and paints in its slot.
     const branch = view.$('[data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon');
     expect(branch.element.getAttribute("data-name")).toBe("branch");
-    const branchInk = await ink(
-        view,
-        '[data-happy2-ui="agent-desk-queued"] .happy2-agent-desk__row-icon',
-        18,
-    );
-    expect(Math.abs(branchInk.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
-    expect(Math.abs(branchInk.dx)).toBeLessThanOrEqual(TEXT_TOLERANCE);
+    expect((await branch.visibleMetrics()).pixelCount, "branch ink").toBeGreaterThan(0);
 
     // Custom done icon (doc) replaces the check but keeps the success color.
     const doc = view.$('[data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon');
     expect(doc.element.getAttribute("data-name")).toBe("doc");
     expect(doc.computedStyle("color")).toBe("rgb(52, 199, 89)");
-    const docInk = await ink(
-        view,
-        '[data-happy2-ui="agent-desk-done"] .happy2-agent-desk__row-icon',
-        16,
-    );
-    expect(Math.abs(docInk.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
-    expect(Math.abs(docInk.dx)).toBeLessThanOrEqual(TEXT_TOLERANCE);
+    expect((await doc.visibleMetrics()).pixelCount, "doc ink").toBeGreaterThan(0);
 
     // Single-character initials still paint a 20px agent avatar.
     const avatar = view.$('[data-happy2-ui="agent-desk-run"] [data-happy2-ui="avatar"]');

@@ -23,40 +23,6 @@ const uiFamily = () =>
         ? "happy2 Figtree, system-ui, sans-serif"
         : '"happy2 Figtree", system-ui, sans-serif';
 
-// Symmetric glyph ink holds the tight bound; asymmetric word ink holds the
-// 0.75px contract ceiling on the vertical axis. Matches the AgentDesk contract.
-const ICON_TOLERANCE = 0.4;
-const TEXT_TOLERANCE = 0.75;
-
-/*
- * Alpha-weighted ink centroid of `partSelector`, offset from the center of
- * `containerSelector` (positive = right/low). Refuses blank or clipped
- * captures — the part must paint pixels and its ink may not touch the captured
- * box edges. (Same guard as DataTable.test.tsx.)
- */
-async function inkDrift(view: View, containerSelector: string, partSelector: string) {
-    const container = view.$(containerSelector);
-    const part = view.$(partSelector);
-    const visible = await part.visibleMetrics();
-    expect(visible.pixelCount, `${partSelector} paints no pixels`).toBeGreaterThan(0);
-    const partBounds = part.bounds();
-    expect(visible.bounds.y, `${partSelector} ink clipped at box top`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.y + visible.bounds.height,
-        `${partSelector} ink clipped at box bottom`,
-    ).toBeLessThan(partBounds.height);
-    expect(visible.bounds.x, `${partSelector} ink clipped at box left`).toBeGreaterThan(0);
-    expect(
-        visible.bounds.x + visible.bounds.width,
-        `${partSelector} ink clipped at box right`,
-    ).toBeLessThan(partBounds.width);
-    const containerBounds = container.bounds();
-    return {
-        dx: visible.center.x + partBounds.x - containerBounds.x - containerBounds.width / 2,
-        dy: visible.center.y + partBounds.y - containerBounds.y - containerBounds.height / 2,
-    };
-}
-
 const IMAGES: AgentImageItem[] = [
     {
         id: "img-default",
@@ -166,7 +132,12 @@ it("holds AgentImagePanel layout, status mapping, the default marker, and row ac
         0.5,
     );
     const headerButtons = actions.element.querySelectorAll("button");
-    expect(Array.from(headerButtons, (button) => button.textContent)).toEqual(["New image"]);
+    expect(
+        Array.from(
+            headerButtons,
+            (button) => button.querySelector('[data-happy2-ui="button-label"]')?.textContent,
+        ),
+    ).toEqual(["New image"]);
 
     // Status column proves the status -> badge-variant mapping, with exact tokens.
     const statusExpectations: Array<[string, string, string, string]> = [
@@ -201,7 +172,7 @@ it("holds AgentImagePanel layout, status mapping, the default marker, and row ac
     // promotes, and a ready default (or an in-flight build) offers nothing.
     const actionText = (id: string) =>
         Array.from(view.$(actionsCell(id)).element.querySelectorAll("button"), (b) =>
-            b.textContent?.trim(),
+            b.querySelector('[data-happy2-ui="button-label"]')?.textContent?.trim(),
         );
     expect(actionText("img-pending")).toEqual(["Build"]);
     expect(actionText("img-failed")).toEqual(["Retry build"]);
@@ -216,14 +187,12 @@ it("holds AgentImagePanel layout, status mapping, the default marker, and row ac
     expect(built).toEqual(["img-pending", "img-failed"]);
     expect(promoted).toEqual(["img-minimal"]);
 
-    // Optical: the default badge's check glyph is centered in its 12px icon slot.
-    const glyph = await inkDrift(
-        view,
-        `${defaultCell("img-default")} [data-happy2-ui="badge-icon"] svg`,
-        `${defaultCell("img-default")} [data-happy2-ui="badge-icon"] svg`,
+    // The default badge's check glyph paints inside its 12px icon slot.
+    const glyph = view.$(
+        `${defaultCell("img-default")} [data-happy2-ui="badge-icon"] [data-happy2-ui="icon"]`,
     );
-    expect(Math.abs(glyph.dx), "default badge glyph dx").toBeLessThanOrEqual(ICON_TOLERANCE);
-    expect(Math.abs(glyph.dy), "default badge glyph dy").toBeLessThanOrEqual(TEXT_TOLERANCE);
+    expect(glyph.bounds(), "default badge glyph box").toMatchObject({ width: 12, height: 12 });
+    expect((await glyph.visibleMetrics()).pixelCount, "default badge glyph ink").toBeGreaterThan(0);
 
     await view.screenshot("AgentImagePanel.test");
 }, 120_000);

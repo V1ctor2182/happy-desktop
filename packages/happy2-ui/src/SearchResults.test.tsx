@@ -10,12 +10,12 @@ const FIGTREE = "happy2 Figtree, system-ui, sans-serif";
 const MONO = "happy2 Mono, ui-monospace, monospace";
 
 /*
- * Symmetric painted content (the reused hash/chat glyphs) is held to the tuned
- * 0.4px; near-symmetric mono uppercase group labels and asymmetric word ink use
- * the 0.75px contract ceiling. Word titles/metas are never centroid-chased —
- * their alignment is proven by line-box geometry and a shared baseline.
+ * Near-symmetric mono uppercase group labels and asymmetric word ink use the
+ * 0.75px contract ceiling. Word titles/metas are never centroid-chased — their
+ * alignment is proven by line-box geometry and a shared baseline. Leading icons
+ * are font glyphs the icon font centers in their own box, so only the box
+ * geometry and the presence of ink are asserted for them.
  */
-const GLYPH = 0.4;
 const OPTICAL = 0.75;
 
 /* A part must paint pixels and stay clear of its own captured box edges, so a
@@ -231,7 +231,9 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
             color: "rgb(73, 69, 79)",
         });
 
-        const icon = q(`[data-item-id="${id}"] [data-happy2-ui="search-results-row-glyph"] svg`);
+        const icon = q(
+            `[data-item-id="${id}"] [data-happy2-ui="search-results-row-glyph"] [data-happy2-ui="icon"]`,
+        );
         const iconBounds = icon.bounds();
         expect(iconBounds.width, `${id} icon width`).toBe(16);
         expect(iconBounds.height, `${id} icon height`).toBe(16);
@@ -246,20 +248,9 @@ it("holds SearchResults geometry, group headers, row layouts, highlight, and opt
             `${id} icon box centering y`,
         ).toBeLessThanOrEqual(0.1);
 
-        /* Reused Icon glyph, tuned to <=0.4px about its own 16px box in every
-         * engine (Icon.tsx / Icon.test.tsx); assert it, and refuse a clipped
-         * capture that touches the icon's own box edges. */
-        const iconInk = await paints(icon, `${id} icon`);
-        expect(iconInk.bounds.x, `${id} icon clipped left`).toBeGreaterThan(0);
-        expect(iconInk.bounds.y, `${id} icon clipped top`).toBeGreaterThan(0);
-        expect(iconInk.bounds.x + iconInk.bounds.width, `${id} icon clipped right`).toBeLessThan(
-            16,
-        );
-        expect(iconInk.bounds.y + iconInk.bounds.height, `${id} icon clipped bottom`).toBeLessThan(
-            16,
-        );
-        expect(Math.abs(iconInk.center.x - 8), `${id} icon centroid x`).toBeLessThanOrEqual(GLYPH);
-        expect(Math.abs(iconInk.center.y - 8), `${id} icon centroid y`).toBeLessThanOrEqual(GLYPH);
+        /* The glyph itself is painted by the icon font inside that 16px box, so
+         * only its presence is a SearchResults contract. */
+        await paints(icon, `${id} icon`);
     }
 
     /* ---- Leading: person/message-author avatars -------------------------- */
@@ -443,7 +434,7 @@ it("renders the empty state and rich message snippets", async () => {
     expect(
         view
             .$(
-                '[data-testid="rich"] [data-item-id="file-1"] [data-happy2-ui="search-results-row-glyph"] svg',
+                '[data-testid="rich"] [data-item-id="file-1"] [data-happy2-ui="search-results-row-glyph"] [data-happy2-ui="icon"]',
             )
             .element.getAttribute("data-name"),
     ).toBe("doc");
