@@ -71,6 +71,14 @@
     app-region: no-drag;
 }
 
+/* The window chrome row is the native title bar's own 38px, so the traffic
+   lights, the sidebar toggle, and the heading beside them read as one band of
+   window furniture rather than a 56px product header the lights float inside. */
+.happy2-app-shell[data-window-controls] .happy2-sidebar__header,
+.happy2-app-shell[data-window-controls] .happy2-channel-header {
+    height: 38px;
+}
+
 /* The native controls occupy x=14…78 and their window-server hit area runs
    past the green light, so the toggle docks clear of it at x=96…124. Any
    heading content starts after both. */
@@ -203,7 +211,7 @@
 /* On desktop the toggle docks beside the traffic lights instead, so hiding and
    showing the sidebar never moves it. */
 .happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
-    top: 14px;
+    top: 5px;
     right: auto;
     left: 96px;
 }
@@ -244,7 +252,7 @@
 .happy2-app-shell__reveal-button[data-floating] {
     position: absolute;
     z-index: 4;
-    top: 14px;
+    top: 5px;
     left: 96px;
     -webkit-app-region: no-drag;
     app-region: no-drag;

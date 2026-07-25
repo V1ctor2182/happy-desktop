@@ -22,7 +22,6 @@ import {
     ChannelHeader,
     ComposerModelControl,
     ConversationSettingsModal,
-    ConversationStatus,
     ConversationView,
     EmptyState,
     RigActivityPanel,
@@ -237,14 +236,6 @@ export function AppRigView(props: AppRigViewProps) {
                         every tab beneath it is another session in this one
                         directory, so it stays put as they are switched. */}
                     <ChannelHeader
-                        actions={
-                            conversation.type === "ready" ? (
-                                <ConversationStatus
-                                    elapsedMs={conversationElapsedMs(conversation.value, now)}
-                                    running={conversation.value.running}
-                                />
-                            ) : undefined
-                        }
                         icon="inbox"
                         title={openFolder.name}
                         topic={openFolder.displayPath}
@@ -370,17 +361,6 @@ function RigConversationBody(props: {
             title="No session selected"
         />
     );
-}
-
-/**
- * How long the open session's current turn has been running. A live run counts
- * from its start against the ticking clock; a finished one keeps the duration
- * the turn recorded.
- */
-function conversationElapsedMs(conversation: RigConversationSnapshot, now: number) {
-    return conversation.running && conversation.runStartedAt !== undefined
-        ? Math.max(0, now - conversation.runStartedAt)
-        : conversation.turnElapsedMs;
 }
 
 /**
