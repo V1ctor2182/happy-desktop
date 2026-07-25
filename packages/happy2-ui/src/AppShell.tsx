@@ -334,7 +334,6 @@ export function AppShell(props: AppShellProps) {
                     />
                 </div>
             ) : null}
-            {revealFloating ? reveal : null}
             {local.windowControls && !local.sidebar && !local.titleBar ? (
                 <div
                     aria-hidden="true"
@@ -465,6 +464,11 @@ export function AppShell(props: AppShellProps) {
                     ) : null}
                 </div>
             </div>
+            {/* Last, after every drag surface in the body. Native draggable
+                regions are collected in tree order and later rectangles win, so
+                a control that punches a hole in one has to come after it — the
+                same order the sidebar's own toggle already sits in. */}
+            {revealFloating ? reveal : null}
         </div>
     );
 }
