@@ -2,7 +2,6 @@ import { useLayoutEffect, useReducer } from "react";
 import { happyStateCreate } from "happy2-state";
 import { AuthGate, type AuthCredentialStore, type AuthSession } from "./components/AuthGate";
 import { DesktopApp } from "./components/DesktopApp";
-import { DevTokenGate } from "./components/DevTokenGate";
 import { OnboardingBoundary } from "./components/OnboardingBoundary";
 import { appRouterCreate, type AppRouter } from "./navigation/appRouter";
 import type {
@@ -34,14 +33,6 @@ export interface AppProps {
      * cookie alone authenticates it.
      */
     cookieAuth?: boolean;
-    /**
-     * A cookie deployment whose only sign-in bootstraps the cookie from a
-     * development token the user types. Renders the development-token gate, which
-     * validates the token through a single bearer `/v0/me` and then relies on the
-     * cookie. Only meaningful together with `cookieAuth`, and takes precedence over
-     * the header sign-in flow.
-     */
-    requireDevelopmentToken?: boolean;
     /** Optional native credential boundary; browser header auth keeps localStorage. */
     credentialStore?: AuthCredentialStore;
     /** Native runtime identity rendered consistently in every sidebar variant. */
@@ -88,15 +79,6 @@ export function App(props: AppProps) {
             state={session.state}
         />
     );
-    if (props.cookieAuth && props.requireDevelopmentToken)
-        // Cookie-authenticated web mode: the user types a development token, it is
-        // validated once through a bearer `/v0/me`, and every later request rides
-        // the HttpOnly cookie. No header sign-in or server-onboarding boundary.
-        return (
-            <DevTokenGate serverUrl={props.serverUrl ?? ""} showWindowDragRegion={desktop}>
-                {renderWorkspace}
-            </DevTokenGate>
-        );
     if (props.serverUrl)
         return (
             <AuthGate

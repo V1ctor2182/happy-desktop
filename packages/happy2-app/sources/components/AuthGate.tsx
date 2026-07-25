@@ -75,6 +75,10 @@ type AuthModel = {
     password: string;
     firstName: string;
     username: string;
+    /** The development token being typed. Never persisted, in any mode. */
+    devToken: string;
+    /** Whether the sign-in screen is showing the development-token alternative. */
+    usingDevToken: boolean;
     error?: string;
     pending: boolean;
     hasBearer: boolean;
@@ -87,6 +91,8 @@ const initialAuthModel: AuthModel = {
     password: "",
     firstName: "",
     username: "",
+    devToken: "",
+    usingDevToken: false,
     pending: false,
     hasBearer: false,
     loadingMessage: "Checking the server and your saved session.",
@@ -118,6 +124,8 @@ export function AuthGate(props: AuthGateProps) {
         password,
         firstName,
         username,
+        devToken,
+        usingDevToken,
         error,
         pending,
         hasBearer,
@@ -348,7 +356,44 @@ export function AuthGate(props: AuthGateProps) {
             update({ pending: false });
         }
     }
-    const isPasswordSignIn = () => mode === "sign-in" && methods?.method === "password";
+    /* A development token is an ordinary bearer, so cookie mode can bootstrap the
+       HttpOnly cookie from one exactly the way it bootstraps from a password login.
+       Offered only when the server says it will accept one, because anywhere else
+       the token is rejected and the option would be a dead end. It is an
+       alternative to the configured method, never a replacement for it. */
+    async function submitDevToken(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const value = devToken.trim();
+        if (!value || pending) return;
+        update({ pending: true, error: undefined, loadingMessage: "Checking your token." });
+        try {
+            /* Spend the token once on the only request that mints the cookie. A
+               development token carries no refresh grant, so it is validated here
+               rather than through resolveSession's bearer path, which would try to
+               refresh it on rejection. */
+            await client.webSession(value);
+        } catch (reason) {
+            update({ pending: false, error: devTokenError(reason), mode: "sign-in" });
+            return;
+        }
+        /* The cookie now exists, so resume exactly like any other cookie session:
+           bearer-free, refresh-free, and holding no copy of the token. */
+        try {
+            update({ devToken: "" });
+            await resolveSession(undefined, { allowRefresh: false });
+        } catch (reason) {
+            update({ error: message(reason), mode: "sign-in" });
+        } finally {
+            update({ pending: false });
+        }
+    }
+    const isPasswordSignIn = () =>
+        mode === "sign-in" && methods?.method === "password" && !usingDevToken;
+    /* Development tokens reach the workspace through the same cookie the configured
+       sign-in mints, so they are only useful in cookie deployments. */
+    const devTokenOffered = () =>
+        mode === "sign-in" && cookieAuth && methods?.devTokensEnabled === true;
+    const isDevTokenSignIn = () => devTokenOffered() && usingDevToken;
     const loadingHeadline = { kicker: "Connecting to your workspace", title: "One moment." };
     const headline = (): {
         kicker?: string;
@@ -371,6 +416,12 @@ export function AuthGate(props: AuthGateProps) {
                     copy: "A profile activates your account and unlocks the workspace.",
                 };
             case "sign-in":
+                if (isDevTokenSignIn())
+                    return {
+                        kicker: "Development access",
+                        title: "Sign in to Happy (2).",
+                        copy: "Enter a development token to open this workspace.",
+                    };
                 if (methods?.method === "password")
                     return {
                         kicker: isRegistering ? "Create your account" : "Welcome back",
@@ -392,6 +443,40 @@ export function AuthGate(props: AuthGateProps) {
         }
     };
     const submitLabel = () => (pending ? "Working…" : isRegistering ? "Create account" : "Sign in");
+    /* Both toggles are optional, so the footer stays absent rather than rendering an
+       empty slot when neither applies. */
+    const gateFooter = (): ReactNode => {
+        const registerToggle = isPasswordSignIn() && methods?.signupEnabled;
+        if (!registerToggle && !devTokenOffered()) return null;
+        return (
+            <>
+                {registerToggle ? (
+                    <Button
+                        onClick={() => {
+                            update({ isRegistering: !isRegistering, error: undefined });
+                        }}
+                        size="small"
+                        type="button"
+                        variant="ghost"
+                    >
+                        {isRegistering ? "I already have an account" : "Create a new account"}
+                    </Button>
+                ) : null}
+                {devTokenOffered() ? (
+                    <Button
+                        onClick={() => {
+                            update({ usingDevToken: !usingDevToken, error: undefined });
+                        }}
+                        size="small"
+                        type="button"
+                        variant="ghost"
+                    >
+                        {usingDevToken ? "Back to sign in" : "Use a development token"}
+                    </Button>
+                ) : null}
+            </>
+        );
+    };
     // Loading, sign-in, and profile activation update inside one stable gate
     // layer. Only the body scrollport remounts when the mode lifetime changes.
     const renderGate = () => (
@@ -407,20 +492,7 @@ export function AuthGate(props: AuthGateProps) {
                 loadingLabel={loadingMessage}
                 state={mode === "loading" ? "loading" : "form"}
                 title={mode === "loading" ? loadingHeadline.title : headline().title}
-                footer={
-                    isPasswordSignIn() && methods?.signupEnabled ? (
-                        <Button
-                            onClick={() => {
-                                update({ isRegistering: !isRegistering, error: undefined });
-                            }}
-                            size="small"
-                            type="button"
-                            variant="ghost"
-                        >
-                            {isRegistering ? "I already have an account" : "Create a new account"}
-                        </Button>
-                    ) : null
-                }
+                footer={gateFooter()}
             >
                 {mode === "unavailable" ? (
                     /* The fixed headline/copy plus this retry are the complete
@@ -430,6 +502,32 @@ export function AuthGate(props: AuthGateProps) {
                     <Button disabled={pending} onClick={() => void probeServer()} type="button">
                         Try again
                     </Button>
+                ) : isDevTokenSignIn() ? (
+                    <form onSubmit={submitDevToken} style={formStyle}>
+                        <TextField
+                            autoComplete="off"
+                            data-testid="development-token-field"
+                            fullWidth
+                            label="Development token"
+                            onValueChange={(value) => update({ devToken: value })}
+                            required
+                            value={devToken}
+                        />
+                        {error
+                            ? ((reason) => (
+                                  <Banner tone="danger" title="Sign-in failed">
+                                      {reason}
+                                  </Banner>
+                              ))(error)
+                            : null}
+                        <Button
+                            disabled={pending || devToken.trim().length === 0}
+                            fullWidth
+                            type="submit"
+                        >
+                            {pending ? "Working…" : "Sign in"}
+                        </Button>
+                    </form>
                 ) : isPasswordSignIn() ? (
                     <form onSubmit={submitCredentials} style={formStyle}>
                         <TextField
@@ -527,4 +625,11 @@ export function AuthGate(props: AuthGateProps) {
 }
 function message(reason: unknown): string {
     return reason instanceof Error ? reason.message : "Something went wrong.";
+}
+/* A rejected token is distinct from an unreachable origin, but neither may leak
+   raw upstream or network detail into the product surface. */
+function devTokenError(reason: unknown): string {
+    if (reason instanceof ServerError && reason.status !== 0)
+        return "That development token wasn't accepted. Check it and try again.";
+    return "We couldn't reach your workspace. Check your connection and try again.";
 }

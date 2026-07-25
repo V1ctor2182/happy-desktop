@@ -91,8 +91,8 @@ importers:
         specifier: ^1.73.0
         version: 1.73.0
       portless:
-        specifier: ^0.15.1
-        version: 0.15.1
+        specifier: ^0.15.4
+        version: 0.15.4
       tsx:
         specifier: ^4.21.0
         version: 4.23.0
@@ -6366,8 +6366,8 @@ packages:
     resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
     engines: {node: '>=14.19.0'}
 
-  portless@0.15.1:
-    resolution: {integrity: sha512-MQTt405HrcIa3m9OSKpH6WjJDbfNP4oFMNg0VzAoUO4B19l1eFJBFcSWfQY8KYMhzZVfa+Gea2OUrlDm8+/M4A==}
+  portless@0.15.4:
+    resolution: {integrity: sha512-tOxEsdlDGuPHO6DPkuK3c3mMV5ctXEgVFm53Sa8nfZ2RsRGTq4By424C6z5+JWfNbd3ktR5SOd1FJBOlB1Woqg==}
     engines: {node: '>=24'}
     os: [darwin, linux, win32]
     hasBin: true
@@ -13878,7 +13878,7 @@ snapshots:
 
   pngjs@7.0.0: {}
 
-  portless@0.15.1: {}
+  portless@0.15.4: {}
 
   possible-typed-array-names@1.1.0: {}
 
