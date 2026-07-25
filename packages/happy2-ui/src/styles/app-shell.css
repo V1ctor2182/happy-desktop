@@ -79,14 +79,13 @@
     height: 38px;
 }
 
-/* The native controls occupy x=24…78 and their window-server hit area runs past
-   the green light, so the toggle docks clear of it at x=96…124. Both gaps in
-   the row — lights to toggle, toggle to heading — are the same 18px. */
+/* The native controls occupy x=14…68 and the toggle docks at x=84…112, so both
+   gaps in the row — lights to toggle, toggle to heading — are the same 16px. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: 142px;
+    padding-left: 128px;
 }
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
@@ -96,7 +95,7 @@
     .happy2-app-shell__workspace
     > .happy2-tabbed-pane:first-child
     .happy2-tabbed-pane__bar {
-    padding-left: 142px;
+    padding-left: 128px;
 }
 
 .happy2-app-shell__title-bar {
@@ -213,7 +212,7 @@
 .happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
     top: 5px;
     right: auto;
-    left: 96px;
+    left: 84px;
 }
 
 .happy2-app-shell__sidebar-collapse:hover {
@@ -253,7 +252,7 @@
     position: absolute;
     z-index: 4;
     top: 5px;
-    left: 96px;
+    left: 84px;
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }
