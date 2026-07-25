@@ -6,8 +6,10 @@ import type {
     EventId,
     GetSessionUsageResponse,
     GlobalEventQueueEntry,
+    GlobalStateResponse,
     HealthResponse,
     ModelCatalog,
+    ProjectAssetResponse,
     ProtocolSession,
     RunShellCommandResponse,
     SessionEvent,
@@ -33,7 +35,7 @@ interface WatchSessionEventsOptions {
 }
 
 interface WatchGlobalEventsOptions {
-    readonly after?: number;
+    readonly after?: string;
     readonly signal?: AbortSignal;
     readonly onEvent: (entry: GlobalEventQueueEntry) => void | Promise<void>;
 }
@@ -66,6 +68,21 @@ export class RigDaemonClient {
 
     listSessions(): Promise<{ readonly sessions: readonly SessionSummary[] }> {
         return this.#requestJson("GET", "/sessions");
+    }
+
+    /**
+     * The daemon's project/worktree catalog. It is read from `/state` rather than
+     * from `/projects` because worktrees have no global listing route of their
+     * own — only a per-project one — and one read of the whole catalog is both
+     * cheaper and internally consistent compared with fanning out per project.
+     */
+    listCatalog(): Promise<GlobalStateResponse> {
+        return this.#requestJson("GET", "/state");
+    }
+
+    /** Reads one project avatar's bytes so the loopback proxy can re-serve them. */
+    getProjectAsset(assetHash: string): Promise<ProjectAssetResponse> {
+        return this.#requestBuffer(`/project-assets/${encodeURIComponent(assetHash)}`);
     }
 
     getSession(sessionId: string): Promise<SessionResponse> {
@@ -252,7 +269,10 @@ export class RigDaemonClient {
         while (!options.signal?.aborted) {
             try {
                 after = await this.#watchOnce({
-                    path: after === undefined ? "/events/stream" : `/events/stream?after=${after}`,
+                    path:
+                        after === undefined
+                            ? "/events/stream"
+                            : `/events/stream?after=${encodeURIComponent(after)}`,
                     signal: options.signal,
                     parse: globalEventParse,
                     cursor: (entry) => entry.cursor,
@@ -306,6 +326,47 @@ export class RigDaemonClient {
             );
             request.on("error", reject);
             if (payload !== undefined) request.write(payload);
+            request.end();
+        });
+    }
+
+    #requestBuffer(path: string): Promise<ProjectAssetResponse> {
+        return new Promise((resolvePromise, reject) => {
+            const request = httpRequest(
+                {
+                    headers: { authorization: `Bearer ${this.#token}` },
+                    method: "GET",
+                    path,
+                    socketPath: this.socketPath,
+                },
+                (response) => {
+                    const chunks: Buffer[] = [];
+                    response.on("data", (chunk: Buffer | string) =>
+                        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+                    );
+                    response.on("end", () => {
+                        const statusCode = response.statusCode ?? 500;
+                        const bytes = Buffer.concat(chunks);
+                        if (statusCode >= 400) {
+                            reject(
+                                new RigDaemonHttpError(
+                                    statusCode,
+                                    bytes.length > 0
+                                        ? bytes.toString("utf8")
+                                        : `Rig daemon HTTP ${statusCode}`,
+                                ),
+                            );
+                            return;
+                        }
+                        resolvePromise({
+                            bytes,
+                            mediaType:
+                                response.headers["content-type"] ?? "application/octet-stream",
+                        });
+                    });
+                },
+            );
+            request.on("error", reject);
             request.end();
         });
     }
@@ -465,9 +526,9 @@ function globalEventParse(raw: string): GlobalEventQueueEntry | undefined {
         .find((line) => line.startsWith("id:"))
         ?.slice("id:".length)
         .trim();
-    if (!id || !/^\d+$/u.test(id)) return undefined;
-    const event = sseDataParse(raw) as SessionEvent | undefined;
-    return event ? { cursor: Number(id), event } : undefined;
+    if (!id) return undefined;
+    const event = sseDataParse(raw) as GlobalEventQueueEntry["event"] | undefined;
+    return event ? { cursor: id, event } : undefined;
 }
 
 function sseDataParse(raw: string): unknown {

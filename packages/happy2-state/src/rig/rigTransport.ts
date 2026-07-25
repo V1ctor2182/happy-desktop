@@ -3,12 +3,14 @@ import type {
     RigEventId,
     RigFileSearchResult,
     RigGoal,
+    RigGroupId,
     RigJson,
     RigMessage,
     RigModelCatalog,
     RigModelSelection,
     RigPermissionMode,
     RigPermissionReview,
+    RigProjectCatalog,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -185,26 +187,32 @@ export type RigSessionEvent = {
       }
 );
 
-/** Global (cross-session) realtime event used to keep the session list current. */
+/** Global (cross-session) realtime event used to keep the workspace list current. */
 export type RigGlobalEvent =
     | {
-          readonly cursor: number;
+          readonly cursor: string;
           readonly type: "session_created";
           readonly session: RigSessionSummary;
       }
     | {
-          readonly cursor: number;
+          readonly cursor: string;
           readonly type: "session_updated";
           readonly session: RigSessionSummary;
       }
     | {
-          readonly cursor: number;
+          readonly cursor: string;
           readonly type: "session_title_changed";
           readonly sessionId: RigSessionId;
           readonly status: RigSessionStatus;
           readonly title?: string;
           readonly recap?: string;
-      };
+      }
+    /**
+     * A project or worktree was created or changed — its name, picture, or
+     * initialization state. Payload-free on purpose: the list reconciles the
+     * catalog rather than trusting an event.
+     */
+    | { readonly cursor: string; readonly type: "catalog_changed" };
 
 export interface RigEventObserver<Event> {
     event(value: Event): void;
@@ -225,6 +233,14 @@ export interface RigTransport {
     /** The model catalog; read once and cached by the client composition root. */
     modelsRead(): Promise<RigModelCatalog>;
 
+    /**
+     * The host's project and worktree catalog: the durable groups the workspace
+     * lists sessions under. Read alongside `sessionsRead` on every reconcile, so
+     * a renamed project or a freshly created worktree lands with the sessions
+     * that belong to it rather than one tick apart.
+     */
+    projectsRead(): Promise<RigProjectCatalog>;
+
     sessionsRead(): Promise<readonly RigSessionSummary[]>;
     sessionRead(sessionId: RigSessionId): Promise<RigSession>;
     subagentsRead(sessionId: RigSessionId): Promise<readonly RigSubagentSummary[]>;
@@ -240,12 +256,12 @@ export interface RigTransport {
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
     /**
-     * Records the complete order of one working directory's sessions, as the
-     * user arranged them. The host owns presentation order — `sessionsRead`
-     * already returns sessions in it — so this reports an arrangement rather
-     * than asking the list to re-sort itself.
+     * Records the complete order of one group's sessions — a project's or one of
+     * its worktrees' — as the user arranged them. The host owns presentation
+     * order — `sessionsRead` already returns sessions in it — so this reports an
+     * arrangement rather than asking the list to re-sort itself.
      */
-    sessionsReorder(cwd: string, sessionIds: readonly RigSessionId[]): Promise<void>;
+    sessionsReorder(groupId: RigGroupId, sessionIds: readonly RigSessionId[]): Promise<void>;
 
     /** Submits a fresh user turn; `idempotencyKey` is stable across retries of one send. */
     messageSubmit(sessionId: RigSessionId, text: string, idempotencyKey: string): Promise<void>;
@@ -317,7 +333,7 @@ export interface RigTransport {
     /** Subscribes to the global event queue; returns an unsubscribe function. */
     globalEventsSubscribe(
         observer: RigEventObserver<RigGlobalEvent>,
-        afterCursor?: number,
+        afterCursor?: string,
     ): () => void;
     /** Fetches events missed since `afterEventId` after a reconnect gap. */
     sessionEventsBackfill(

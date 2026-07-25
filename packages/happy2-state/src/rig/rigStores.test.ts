@@ -17,7 +17,7 @@ import type {
     ConversationToolCall,
 } from "../conversation/conversationEntry.js";
 import type { Loadable } from "../conversation/loadable.js";
-import type { RigSessionFolder } from "./rigSessionFolderProject.js";
+import type { RigProjectGroup } from "./rigProjectGroupProject.js";
 import type {
     RigEventId,
     RigSession,
@@ -73,16 +73,19 @@ function sessionOf(store: RigChatStore): RigSession {
     return session.value;
 }
 
-/** The directory rows of a list snapshot, which must be loaded to assert on. */
-function foldersOf(store: { get(): { folders: Loadable<readonly RigSessionFolder[]> } }) {
-    const folders = store.get().folders;
-    if (folders.type !== "ready") throw new Error("The list is not loaded.");
-    return folders.value;
+/** The project rows of a list snapshot, which must be loaded to assert on. */
+function projectsOf(store: { get(): { projects: Loadable<readonly RigProjectGroup[]> } }) {
+    const projects = store.get().projects;
+    if (projects.type !== "ready") throw new Error("The list is not loaded.");
+    return projects.value;
 }
 
-/** Every conversation row of a list snapshot, in directory then session order. */
-function rowsOf(store: { get(): { folders: Loadable<readonly RigSessionFolder[]> } }) {
-    return foldersOf(store).flatMap((folder) => folder.conversations);
+/** Every conversation row of a list snapshot, in project then session order. */
+function rowsOf(store: { get(): { projects: Loadable<readonly RigProjectGroup[]> } }) {
+    return projectsOf(store).flatMap((project) => [
+        ...project.conversations,
+        ...project.worktrees.flatMap((worktree) => worktree.conversations),
+    ]);
 }
 
 async function catalogOf(fake: FakeRigTransport): Promise<RigModelCatalog> {
@@ -137,13 +140,13 @@ describe("rigSessionListStore", () => {
         const unsubscribe = store.subscribe(() => undefined);
         await flush();
 
-        expect(store.get().folders.type).toBe("ready");
+        expect(store.get().projects.type).toBe("ready");
         expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a"]);
 
         // A global event is only a delivery hint: the payload it carries is never
         // upserted, so a row appears exactly when the daemon durably has it.
         fake.globalEmit({
-            cursor: 1,
+            cursor: "1",
             type: "session_created",
             session: fakeRigSummary("d", { createdAt: 400 }),
         });
@@ -152,7 +155,7 @@ describe("rigSessionListStore", () => {
 
         fake.sessionSet(fakeRigSession("d", { createdAt: 400 }));
         fake.globalEmit({
-            cursor: 2,
+            cursor: "2",
             type: "session_created",
             session: fakeRigSummary("d", { createdAt: 400 }),
         });
@@ -161,7 +164,7 @@ describe("rigSessionListStore", () => {
 
         fake.sessionSet(fakeRigSession("a", { createdAt: 100, title: "Renamed" }));
         fake.globalEmit({
-            cursor: 3,
+            cursor: "3",
             type: "session_updated",
             session: fakeRigSummary("a", { createdAt: 100, title: "Renamed" }),
         });
@@ -192,12 +195,12 @@ describe("rigSessionListStore", () => {
         await flush();
 
         const before = store.get();
-        const folders = foldersOf(store);
+        const projects = projectsOf(store);
         notifications = 0;
         await store.sessionsRefresh();
 
         expect(store.get()).toBe(before);
-        expect(foldersOf(store)).toBe(folders);
+        expect(projectsOf(store)).toBe(projects);
         expect(notifications).toBe(0);
         unsubscribe();
     });

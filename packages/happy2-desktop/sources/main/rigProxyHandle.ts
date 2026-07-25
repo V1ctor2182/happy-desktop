@@ -13,12 +13,14 @@ import type { RigSessionOrder } from "./rigSessionOrder";
 import {
     rigCatalogProject,
     rigGlobalEventProject,
+    rigProjectProject,
     rigSessionEventProject,
     rigSessionProject,
     rigSessionSummaryProject,
     rigSessionUsageProject,
     rigShellResultProject,
     rigSubagentProject,
+    rigWorktreeProject,
 } from "./rigProjection";
 
 /** The subset of the daemon client the projected loopback surface calls. */
@@ -27,6 +29,8 @@ export type RigProxyClient = Pick<
     | "health"
     | "models"
     | "listSessions"
+    | "listCatalog"
+    | "getProjectAsset"
     | "getSession"
     | "listSubagents"
     | "searchFiles"
@@ -100,6 +104,28 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             }
             if (path === "/models") {
                 writeJson(response, 200, rigCatalogProject((await client.models()).catalog));
+                return true;
+            }
+            if (path === "/projects") {
+                const catalog = await client.listCatalog();
+                writeJson(response, 200, {
+                    projects: catalog.projects.map((project) => rigProjectProject(project, home)),
+                    worktrees: catalog.workspaces.map((workspace) =>
+                        rigWorktreeProject(workspace, home),
+                    ),
+                });
+                return true;
+            }
+            if (segments[0] === "project-assets" && segments.length === 2) {
+                // Re-served rather than linked so the renderer never needs the
+                // daemon's socket or its bearer token to paint a project row.
+                const asset = await client.getProjectAsset(segments[1]!);
+                response.writeHead(200, {
+                    "content-type": asset.mediaType,
+                    "content-length": String(asset.bytes.byteLength),
+                    "cache-control": "public, max-age=31536000, immutable",
+                });
+                response.end(asset.bytes);
                 return true;
             }
             if (path === "/sessions") {
@@ -206,19 +232,19 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 return true;
             }
             if (segments.length === 2 && segments[1] === "order") {
-                // One directory's complete tab arrangement. It is desktop state,
-                // not a daemon call: the daemon has no opinion about the order
-                // its sessions are presented in.
+                // One group's complete tab arrangement. It is desktop state, not
+                // a daemon call: the daemon has no opinion about the order its
+                // sessions are presented in.
                 if (!options.order) return false;
-                const cwd = typeof body.cwd === "string" ? body.cwd : undefined;
+                const groupId = typeof body.groupId === "string" ? body.groupId : undefined;
                 const sessionIds = Array.isArray(body.sessionIds)
                     ? body.sessionIds.filter((id): id is string => typeof id === "string")
                     : undefined;
-                if (!cwd || !sessionIds) {
-                    writeJson(response, 400, { error: "A session order needs a cwd and ids." });
+                if (!groupId || !sessionIds) {
+                    writeJson(response, 400, { error: "A session order needs a group and ids." });
                     return true;
                 }
-                await options.order.set(cwd, sessionIds);
+                await options.order.set(groupId, sessionIds);
                 writeJson(response, 200, {});
                 return true;
             }
@@ -469,11 +495,10 @@ async function streamGlobalEvents(
     const controller = new AbortController();
     request.on("close", () => controller.abort());
     sseStart(response);
-    const afterRaw = query.get("after");
-    const after = afterRaw !== null ? Number(afterRaw) : undefined;
+    const after = query.get("after") ?? undefined;
     try {
         await client.watchGlobalEvents({
-            ...(after !== undefined && Number.isFinite(after) ? { after } : {}),
+            ...(after !== undefined ? { after } : {}),
             signal: controller.signal,
             onEvent: (entry) => {
                 const projected = rigGlobalEventProject(entry, home);
@@ -491,12 +516,14 @@ async function streamGlobalEvents(
     }
 }
 
-/** Sort position of one session inside its directory's arrangement. */
+/** Sort position of one session inside its group's arrangement. */
 function rank(
     order: RigSessionOrder | undefined,
-    session: { readonly id: string; readonly cwd: string },
+    session: { readonly id: string; readonly projectId: string; readonly worktreeId?: string },
 ): number {
-    return order ? order.rank(session.cwd, session.id) : Number.MAX_SAFE_INTEGER;
+    return order
+        ? order.rank(session.worktreeId ?? session.projectId, session.id)
+        : Number.MAX_SAFE_INTEGER;
 }
 
 function createRequest(input: RigSessionCreateInput) {
@@ -507,6 +534,7 @@ function createRequest(input: RigSessionCreateInput) {
         // TUI asks for this) archive themselves once idle, and the workspace
         // list hides exactly those.
         archiveOnIdle: false,
+        ...(input.worktreeId ? { workspaceId: input.worktreeId } : {}),
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.modelId ? { modelId: input.modelId } : {}),
         ...(input.effort ? { effort: input.effort } : {}),

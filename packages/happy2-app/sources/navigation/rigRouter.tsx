@@ -82,15 +82,15 @@ const chatsIndexRoute = createRoute({
 });
 
 /**
- * Addressing a working directory without one of its sessions: the directory's
- * tabs are on screen but no session is open, so any previous one is released.
+ * Addressing a project or worktree without one of its sessions: the group's tabs
+ * are on screen but no session is open, so any previous one is released.
  */
-const folderRoute = createRoute({
+const groupRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context }) => {
         context.workspace.conversationClose();
     },
-    path: "/chats/$folderId",
+    path: "/chats/$groupId",
 });
 
 /** Addressing one local session materializes it, releasing the previous one. */
@@ -99,12 +99,12 @@ const chatRoute = createRoute({
     loader: ({ context, params }) => {
         context.workspace.conversationOpen(params.chatId as RigSessionId);
     },
-    path: "/chats/$folderId/$chatId",
+    path: "/chats/$groupId/$chatId",
 });
 
 const routeTree = rootRoute.addChildren([
     indexRoute,
-    workspaceRoute.addChildren([chatsIndexRoute, folderRoute, chatRoute]),
+    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
 ]);
 
 function RigWorkspaceLayout() {
@@ -121,10 +121,10 @@ function RigWorkspaceLayout() {
         replace?: boolean;
         to: string;
     }) => Promise<void>;
-    // `strict: false` because the list carries neither param and a directory
-    // carries only `folderId`.
+    // `strict: false` because the list carries neither param and a group
+    // carries only `groupId`.
     const params = useParams({ strict: false }) as {
-        folderId?: string;
+        groupId?: string;
         chatId?: string;
     };
     return (
@@ -133,20 +133,20 @@ function RigWorkspaceLayout() {
             chatId={params.chatId}
             clock={context.clock}
             connection={context.connection}
-            folderId={params.folderId}
+            groupId={params.groupId}
             host={context.host}
             platform={context.platform}
-            onChatSelect={(folderId, chatId, replace) =>
+            onChatSelect={(groupId, chatId, replace) =>
                 void navigate(
-                    folderId === undefined
+                    groupId === undefined
                         ? { replace, to: "/chats" }
                         : chatId
                           ? {
-                                params: { chatId, folderId },
+                                params: { chatId, groupId },
                                 replace,
-                                to: "/chats/$folderId/$chatId",
+                                to: "/chats/$groupId/$chatId",
                             }
-                          : { params: { folderId }, replace, to: "/chats/$folderId" },
+                          : { params: { groupId }, replace, to: "/chats/$groupId" },
                 )
             }
             workspace={context.workspace}
@@ -156,9 +156,10 @@ function RigWorkspaceLayout() {
 
 /**
  * Creates the router that owns the local window's location lifetime. Local
- * sessions are grouped by working directory, so their address is the directory
- * — a hash of its path, which keeps a filesystem layout out of the URL — and
- * then the session inside it: `/chats/$folderId/$chatId`. It stays the same
+ * sessions are grouped by the daemon's projects, so their address is the group —
+ * the project, or the worktree inside it, by the durable id the daemon assigned
+ * it, which keeps a filesystem layout out of the URL and survives a rename — and
+ * then the session inside it: `/chats/$groupId/$chatId`. It stays the same
  * cloud-shaped addressing, so a session is a URL in both modes and neither keeps
  * a second, competing selection in a store.
  */
@@ -189,8 +190,8 @@ export function rigRouterConversationOpen(router: RigRouter, location: RigSessio
             to: string;
         }) => Promise<void>
     )({
-        params: { chatId: location.sessionId, folderId: location.folderId },
-        to: "/chats/$folderId/$chatId",
+        params: { chatId: location.sessionId, groupId: location.groupId },
+        to: "/chats/$groupId/$chatId",
     });
 }
 

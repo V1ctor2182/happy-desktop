@@ -6,6 +6,7 @@ import type {
     RigModelCatalog,
     RigModelSelection,
     RigPermissionMode,
+    RigProjectCatalog,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -86,6 +87,23 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
 
     return {
         modelsRead: () => getJson<RigModelCatalog>("/models"),
+        projectsRead: async () => {
+            const catalog = await getJson<RigProjectCatalog>("/projects");
+            // The proxy leaves avatar urls origin-relative because only this side
+            // knows which loopback origin it is talking to; resolving them here
+            // keeps the projection pure and gives the UI a plain `<img>` src.
+            return {
+                worktrees: catalog.worktrees,
+                projects: catalog.projects.map((project) =>
+                    project.avatar
+                        ? {
+                              ...project,
+                              avatar: { ...project.avatar, url: `${base}${project.avatar.url}` },
+                          }
+                        : project,
+                ),
+            };
+        },
         sessionsRead: () => getJson<readonly RigSessionSummary[]>("/sessions"),
         sessionRead: (sessionId) => getJson<RigSession>(`/sessions/${sessionId}`),
         subagentsRead: (sessionId) =>
@@ -103,8 +121,8 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         sessionArchive: async (sessionId) => {
             await postJson<Record<string, never>>(`/sessions/${sessionId}/archive`);
         },
-        sessionsReorder: async (cwd, sessionIds) => {
-            await postJson<Record<string, never>>("/sessions/order", { cwd, sessionIds });
+        sessionsReorder: async (groupId, sessionIds) => {
+            await postJson<Record<string, never>>("/sessions/order", { groupId, sessionIds });
         },
 
         messageSubmit: async (sessionId, text, idempotencyKey) => {
@@ -141,12 +159,8 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
 
         sessionEventsSubscribe: (sessionId: RigSessionId, observer, afterEventId?: RigEventId) =>
             subscribe(`/sessions/${sessionId}/events/stream`, { after: afterEventId }, observer),
-        globalEventsSubscribe: (observer: RigEventObserver<RigGlobalEvent>, afterCursor?: number) =>
-            subscribe(
-                "/events/stream",
-                { after: afterCursor === undefined ? undefined : String(afterCursor) },
-                observer,
-            ),
+        globalEventsSubscribe: (observer: RigEventObserver<RigGlobalEvent>, afterCursor?: string) =>
+            subscribe("/events/stream", { after: afterCursor }, observer),
         sessionEventsBackfill: (sessionId, afterEventId) =>
             getJson<readonly RigSessionEvent[]>(`/sessions/${sessionId}/events`, {
                 after: afterEventId,

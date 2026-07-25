@@ -8,7 +8,11 @@ import type {
     RigFileSearchResult,
     RigModelCatalog,
     RigModelSelection,
+    RigGroupId,
     RigPermissionMode,
+    RigProject,
+    RigProjectCatalog,
+    RigProjectId,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -23,6 +27,7 @@ import type {
 
 export type FakeRigOperation =
     | "modelsRead"
+    | "projectsRead"
     | "sessionsRead"
     | "sessionRead"
     | "subagentsRead"
@@ -50,8 +55,8 @@ export type FakeRigOperation =
 export interface FakeRigCall {
     readonly operation: FakeRigOperation;
     readonly sessionId?: RigSessionId;
-    /** Working directory of a directory-scoped call, such as a reorder. */
-    readonly cwd?: string;
+    /** The group a group-scoped call addressed, such as a reorder. */
+    readonly groupId?: RigGroupId;
     /** The arrangement a reorder recorded, in order. */
     readonly sessionIds?: readonly RigSessionId[];
     readonly idempotencyKey?: string;
@@ -88,6 +93,16 @@ export interface FakeRigTransport {
     /** Defers the next call to `operation`; call the returned release to resolve it. */
     deferNext(operation: FakeRigOperation): { release(): void };
 }
+
+/** The one project every fake session is filed under unless a test says otherwise. */
+export const DEFAULT_PROJECT: RigProject = {
+    id: "project-workspace" as RigProjectId,
+    name: "workspace",
+    path: "/workspace",
+    displayPath: "/workspace",
+    kind: "regular",
+    status: "ready",
+};
 
 const DEFAULT_CATALOG: RigModelCatalog = {
     defaultModelId: "gpt-default",
@@ -126,6 +141,7 @@ const DEFAULT_CATALOG: RigModelCatalog = {
 export function fakeRigSession(id: string, overrides: Partial<RigSession> = {}): RigSession {
     return {
         id: id as RigSessionId,
+        projectId: DEFAULT_PROJECT.id,
         cwd: "/workspace",
         displayCwd: "/workspace",
         providerId: "openai",
@@ -152,6 +168,7 @@ export function fakeRigSummary(
 ): RigSessionSummary {
     return {
         id: id as RigSessionId,
+        projectId: DEFAULT_PROJECT.id,
         cwd: "/workspace",
         displayCwd: "/workspace",
         providerId: "openai",
@@ -172,6 +189,8 @@ export function createFakeRigTransport(): FakeRigTransport {
 function summaryOf(session: RigSession): RigSessionSummary {
     return {
         id: session.id,
+        projectId: session.projectId,
+        ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
         cwd: session.cwd,
         displayCwd: session.displayCwd,
         providerId: session.providerId,
@@ -196,6 +215,8 @@ class FakeRigTransportModel implements FakeRigTransport {
     /* Per-directory arrangement, applied to the listing exactly as the desktop
        host applies its durable one. */
     private readonly orders = new Map<string, readonly RigSessionId[]>();
+    /** The project/worktree catalog this fake host reports; tests may replace it. */
+    projects: RigProjectCatalog = { projects: [DEFAULT_PROJECT], worktrees: [] };
     private readonly subagents = new Map<RigSessionId, readonly RigSubagentSummary[]>();
     private readonly files = new Map<RigSessionId, readonly RigFileSearchResult[]>();
     private readonly usage = new Map<RigSessionId, RigSessionUsage>();
@@ -301,14 +322,16 @@ class FakeRigTransportModel implements FakeRigTransport {
         return session;
     }
 
-    /** Sort position of a session in its directory's arrangement, unranked last. */
+    /** Sort position of a session in its group's arrangement, unranked last. */
     private rank(session: RigSession): number {
-        const index = this.orders.get(session.cwd)?.indexOf(session.id) ?? -1;
+        const group = session.worktreeId ?? session.projectId;
+        const index = this.orders.get(group)?.indexOf(session.id) ?? -1;
         return index === -1 ? Number.MAX_SAFE_INTEGER : index;
     }
 
     readonly transport: RigTransport = {
         modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
+        projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
         sessionsRead: () =>
             this.perform("sessionsRead", {}, () =>
                 [...this.sessions.values()]
@@ -347,9 +370,9 @@ class FakeRigTransportModel implements FakeRigTransport {
                 this.sessions.set(sessionId, session);
                 return session;
             }),
-        sessionsReorder: (cwd, sessionIds) =>
-            this.perform("sessionsReorder", { cwd, sessionIds }, () => {
-                this.orders.set(cwd, [...sessionIds]);
+        sessionsReorder: (groupId, sessionIds) =>
+            this.perform("sessionsReorder", { groupId, sessionIds }, () => {
+                this.orders.set(groupId, [...sessionIds]);
                 return undefined;
             }),
         sessionArchive: (sessionId) =>
@@ -479,6 +502,8 @@ function fakeSessionFromInput(
     catalog: RigModelCatalog,
 ): RigSession {
     return fakeRigSession(id, {
+        projectId: DEFAULT_PROJECT.id,
+        ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
         cwd: input.cwd,
         displayCwd: input.cwd,
         providerId: input.providerId ?? catalog.defaultProviderId,

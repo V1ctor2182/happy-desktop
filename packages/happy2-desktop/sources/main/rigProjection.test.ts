@@ -39,6 +39,7 @@ function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
         id: "session-1",
         agentId: "agent-1",
         archived: false,
+        projectId: "project-1",
         cwd: `${HOME}/work`,
         providerId: "openai",
         permissionMode: "auto",
@@ -226,6 +227,7 @@ describe("rigSessionSummaryProject", () => {
     it("projects the list summary with a home-relative cwd", () => {
         const summary: SessionSummary = {
             id: "session-1",
+            projectId: "project-1",
             cwd: `${HOME}/work`,
             providerId: "openai",
             modelId: "gpt-x",
@@ -433,16 +435,16 @@ describe("rigShellResultProject", () => {
 describe("rigGlobalEventProject", () => {
     it("projects session_created using the envelope time and drops other entries", () => {
         const created: GlobalEventQueueEntry = {
-            cursor: 3,
+            cursor: "3",
             event: envelope("session_created", { session: session() }),
         };
         expect(rigGlobalEventProject(created, HOME)).toMatchObject({
-            cursor: 3,
+            cursor: "3",
             type: "session_created",
             session: { id: "session-1", createdAt: 5_000 },
         });
         const titled: GlobalEventQueueEntry = {
-            cursor: 4,
+            cursor: "4",
             event: envelope("session_title_changed", { status: "ready", title: "t" }),
         };
         expect(rigGlobalEventProject(titled, HOME)).toBeUndefined();

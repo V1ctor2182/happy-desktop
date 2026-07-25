@@ -9,6 +9,8 @@ import type {
     Message,
     ModelCatalog,
     Model,
+    Project,
+    ProjectWorkspace,
     ProtocolSession,
     RunShellCommandResponse,
     SessionGoal,
@@ -33,6 +35,8 @@ import type {
     RigMessage,
     RigModel,
     RigModelCatalog,
+    RigProject,
+    RigProjectId,
     RigQueuedMessage,
     RigSession,
     RigSessionEvent,
@@ -48,6 +52,8 @@ import type {
     RigToolFailure,
     RigToolPresentation,
     RigUserInputRequest,
+    RigWorktree,
+    RigWorktreeId,
 } from "happy2-state";
 
 /**
@@ -82,12 +88,52 @@ export function rigCatalogProject(catalog: ModelCatalog): RigModelCatalog {
     };
 }
 
+/**
+ * Projects one daemon project into the row the workspace list shows. The avatar
+ * `url` stays daemon-relative (`/project-assets/<hash>`): only the renderer knows
+ * which loopback origin it is talking to, so it — not this pure projection —
+ * resolves the path against that origin.
+ */
+export function rigProjectProject(project: Project, homeDir: string): RigProject {
+    return {
+        id: project.id as RigProjectId,
+        name: project.name,
+        path: project.path,
+        displayPath: rigDisplayCwd(project.path, homeDir),
+        kind: project.kind,
+        status: project.initializationStatus,
+        ...(project.avatar
+            ? {
+                  avatar: {
+                      url: project.avatar.url,
+                      width: project.avatar.width,
+                      height: project.avatar.height,
+                  },
+              }
+            : {}),
+    };
+}
+
+/** Projects one of a project's git worktrees into the nested group the list shows. */
+export function rigWorktreeProject(workspace: ProjectWorkspace, homeDir: string): RigWorktree {
+    return {
+        id: workspace.id as RigWorktreeId,
+        projectId: workspace.projectId as RigProjectId,
+        name: workspace.name,
+        path: workspace.path,
+        displayPath: rigDisplayCwd(workspace.path, homeDir),
+        status: workspace.status,
+    };
+}
+
 export function rigSessionSummaryProject(
     summary: SessionSummary,
     homeDir: string,
 ): RigSessionSummary {
     return {
         id: summary.id as RigSessionId,
+        projectId: summary.projectId as RigProjectId,
+        ...(summary.workspaceId ? { worktreeId: summary.workspaceId as RigWorktreeId } : {}),
         cwd: summary.cwd,
         displayCwd: rigDisplayCwd(summary.cwd, homeDir),
         providerId: summary.providerId,
@@ -107,6 +153,8 @@ export function rigSessionSummaryProject(
 export function rigSessionProject(session: ProtocolSession, homeDir: string): RigSession {
     return {
         id: session.id as RigSessionId,
+        projectId: session.projectId as RigProjectId,
+        ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,
@@ -387,10 +435,14 @@ export function rigSessionEventProject(
 }
 
 /**
- * Projects one global-queue entry into a `RigGlobalEvent` used to keep the session
- * list live, or `undefined` for entries the list does not consume. The session
- * payload is a full `ProtocolSession`, so the envelope's `createdAt` seeds the
- * summary timestamps the list sorts by until the next full reconcile.
+ * Projects one global-queue entry into a `RigGlobalEvent` used to keep the
+ * workspace list live, or `undefined` for entries the list does not consume. The
+ * session payload is a full `ProtocolSession`, so the envelope's `createdAt`
+ * seeds the summary timestamps the list sorts by until the next full reconcile.
+ *
+ * Project and worktree events carry no payload here: a project's name or picture
+ * changing only ever means "re-read the catalog", and the list treats every
+ * global event as a delivery hint anyway.
  */
 export function rigGlobalEventProject(
     entry: GlobalEventQueueEntry,
@@ -410,6 +462,14 @@ export function rigGlobalEventProject(
             type: "session_updated",
             session: summaryFromSession(event.data.session, event.createdAt, homeDir),
         };
+    }
+    if (
+        event.type === "project_created" ||
+        event.type === "project_updated" ||
+        event.type === "workspace_created" ||
+        event.type === "workspace_updated"
+    ) {
+        return { cursor: entry.cursor, type: "catalog_changed" };
     }
     return undefined;
 }
@@ -711,6 +771,8 @@ function summaryFromSession(
 ): RigSessionSummary {
     return {
         id: session.id as RigSessionId,
+        projectId: session.projectId as RigProjectId,
+        ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,

@@ -21,7 +21,7 @@ import type { RigRouterContext } from "../../sources/navigation/rigRouter";
 function workspaceSpy() {
     const applied: string[] = [];
     const store = {
-        get: () => ({ list: { folders: { type: "loading" } }, conversation: {} }),
+        get: () => ({ list: { projects: { type: "loading" } }, conversation: {} }),
         subscribe: () => () => undefined,
         conversationOpen: (conversationId: RigSessionId) => applied.push(`open:${conversationId}`),
         conversationClose: () => applied.push("close"),
@@ -56,22 +56,22 @@ async function resolve(url: string) {
     };
 }
 
-it("addresses a local session by its working directory and then itself", async () => {
-    const result = await resolve("/chats/f01d3r/ses_one");
-    expect(result.leaf).toBe("/_workspace/chats/$folderId/$chatId");
-    expect(result.params).toEqual({ chatId: "ses_one", folderId: "f01d3r" });
+it("addresses a local session by its project and then itself", async () => {
+    const result = await resolve("/chats/prj_one/ses_one");
+    expect(result.leaf).toBe("/_workspace/chats/$groupId/$chatId");
+    expect(result.params).toEqual({ chatId: "ses_one", groupId: "prj_one" });
 });
 
-it("addresses a working directory on its own, with no session open", async () => {
-    const result = await resolve("/chats/f01d3r");
-    expect(result.leaf).toBe("/_workspace/chats/$folderId");
-    expect(result.params).toEqual({ folderId: "f01d3r" });
+it("addresses a project on its own, with no session open", async () => {
+    const result = await resolve("/chats/prj_one");
+    expect(result.leaf).toBe("/_workspace/chats/$groupId");
+    expect(result.params).toEqual({ groupId: "prj_one" });
     expect(result.applied).toEqual(["close"]);
 });
 
 it("keeps the session list and one session under the same persistent workspace layout", async () => {
     expect((await resolve("/chats")).routeIds).toContain("/_workspace");
-    expect((await resolve("/chats/f01d3r/ses_one")).routeIds).toContain("/_workspace");
+    expect((await resolve("/chats/prj_one/ses_one")).routeIds).toContain("/_workspace");
 });
 
 it("sends the root to the session list, as the cloud root goes to the chat list", async () => {
@@ -81,13 +81,13 @@ it("sends the root to the session list, as the cloud root goes to the chat list"
 });
 
 it("materializes exactly the addressed session, and nothing when none is addressed", async () => {
-    expect((await resolve("/chats/f01d3r/ses_one")).applied).toEqual(["open:ses_one"]);
+    expect((await resolve("/chats/prj_one/ses_one")).applied).toEqual(["open:ses_one"]);
     expect((await resolve("/chats")).applied).toEqual(["close"]);
 });
 
 it("decodes a percent-encoded session id rather than passing it through", async () => {
-    expect((await resolve("/chats/f01d3r/ses%2Fone")).params).toEqual({
+    expect((await resolve("/chats/prj_one/ses%2Fone")).params).toEqual({
         chatId: "ses/one",
-        folderId: "f01d3r",
+        groupId: "prj_one",
     });
 });

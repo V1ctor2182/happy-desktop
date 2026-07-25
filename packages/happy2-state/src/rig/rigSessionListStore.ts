@@ -2,34 +2,42 @@ import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
 import type { UserError } from "../types.js";
 import {
-    rigFolderIdOf,
-    rigSessionFoldersProject,
-    type RigFolderId,
-    type RigSessionFolder,
-} from "./rigSessionFolderProject.js";
+    rigProjectGroupsProject,
+    rigSessionGroupIdOf,
+    type RigProjectGroup,
+} from "./rigProjectGroupProject.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
-import type { RigSessionCreateInput, RigSessionId, RigSessionSummary } from "./rigTypes.js";
+import type {
+    RigGroupId,
+    RigProjectCatalog,
+    RigSession,
+    RigSessionCreateInput,
+    RigSessionId,
+    RigSessionSummary,
+} from "./rigTypes.js";
 
 /**
- * The list surface of the local workspace: a `Loadable` of working directories,
- * each carrying its sessions as ordinary conversation rows. Local sessions are
- * conversations like any other; nothing here is Rig-shaped, and nothing here is
- * selected — the open directory and conversation are addressed by the URL.
+ * The list surface of the local workspace: a `Loadable` of projects, each
+ * carrying its sessions — and its worktrees' sessions — as ordinary conversation
+ * rows. Local sessions are conversations like any other; nothing here is
+ * Rig-shaped, and nothing here is selected — the open group and conversation are
+ * addressed by the URL.
  */
 export interface RigSessionListSnapshot {
-    readonly folders: Loadable<readonly RigSessionFolder[]>;
+    readonly projects: Loadable<readonly RigProjectGroup[]>;
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
     readonly mutationError?: UserError;
 }
 
 /**
  * Where a session lives: both halves of its address, since a local session is
- * addressed by its directory and then by itself.
+ * addressed by its group — its project, or the worktree inside it — and then by
+ * itself.
  */
 export interface RigSessionLocation {
     readonly sessionId: RigSessionId;
-    readonly folderId: RigFolderId;
+    readonly groupId: RigGroupId;
 }
 
 export type RigSessionListOutput =
@@ -62,12 +70,12 @@ export interface RigSessionListStore {
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
     /**
-     * Rearranges one directory's sessions into the given order, which must name
-     * exactly that directory's currently listed sessions. The rows move at once
-     * and the arrangement is recorded durably by the host; a failure is recorded
-     * in `mutationError` and the following reconcile restores the host's order.
+     * Rearranges one group's sessions into the given order, which must name
+     * exactly that group's currently listed sessions. The rows move at once and
+     * the arrangement is recorded durably by the host; a failure is recorded in
+     * `mutationError` and the following reconcile restores the host's order.
      */
-    folderReorder(folderId: RigFolderId, sessionIds: readonly RigSessionId[]): Promise<void>;
+    groupReorder(groupId: RigGroupId, sessionIds: readonly RigSessionId[]): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -78,14 +86,13 @@ export interface RigSessionListDeps {
 }
 
 /**
- * Owns the local conversation catalog grouped by working directory: sessions
- * are read as one flat list already in the host's presentation order — the host
- * owns both that arrangement and leaving archived sessions out — and projected
- * into directory rows, keeping that order inside each directory and putting the
- * most recently active directory first. The constructor opens
- * nothing; the first subscriber
- * triggers hydration and one global-event subscription, and the last
- * unsubscribe tears both down.
+ * Owns the local conversation catalog grouped by project: the host's projects
+ * and worktrees are read together with the flat session list, already in the
+ * host's presentation order — the host owns both that arrangement and leaving
+ * archived sessions out — and projected into project rows, keeping that order
+ * inside each group and putting the most recently active project first. The
+ * constructor opens nothing; the first subscriber triggers hydration and one
+ * global-event subscription, and the last unsubscribe tears both down.
  *
  * Daemon global events are delivery hints only: receiving one schedules a
  * reconcile of the durable list rather than trusting the payload it carried, so
@@ -97,8 +104,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const createId = deps.createId ?? defaultCreateId;
 
     const store = createStore<RigSessionListSnapshot>()(() => ({
-        folders: { type: "loading" },
+        projects: { type: "loading" },
     }));
+
+    const EMPTY_CATALOG: RigProjectCatalog = { projects: [], worktrees: [] };
 
     const listeners = new Set<() => void>();
     let active = false;
@@ -110,19 +119,20 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // The durable rows this surface last reconciled, kept so a projection can be
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
+    let catalog: RigProjectCatalog = EMPTY_CATALOG;
 
     const publish = (): void => {
         const previous = store.getState();
-        const projected = rigSessionFoldersProject(sessions);
-        // An unchanged directory keeps its previous object — and with it the
-        // identity of the conversation rows nested inside it — so a reconcile
-        // that changed one session does not replace every folder row.
-        const folders =
-            previous.folders.type === "ready"
-                ? referencesPreserve(previous.folders.value, projected)
+        const projected = rigProjectGroupsProject(catalog, sessions);
+        // An unchanged project keeps its previous object — and with it the
+        // identity of the worktrees and conversation rows nested inside it — so a
+        // reconcile that changed one session does not replace every project row.
+        const projects =
+            previous.projects.type === "ready"
+                ? referencesPreserve(previous.projects.value, projected)
                 : projected;
-        if (previous.folders.type === "ready" && previous.folders.value === folders) return;
-        store.setState({ ...previous, folders: { type: "ready", value: folders } });
+        if (previous.projects.type === "ready" && previous.projects.value === projects) return;
+        store.setState({ ...previous, projects: { type: "ready", value: projects } });
     };
 
     const reconcile = async (): Promise<void> => {
@@ -133,18 +143,25 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         reconciling = true;
         const current = ++generation;
         try {
-            const read = await deps.transport.sessionsRead();
+            // Read together so a project and the sessions filed under it are
+            // never one tick apart: a session whose project the catalog does not
+            // yet describe would otherwise vanish from the list for a moment.
+            const [readCatalog, read] = await Promise.all([
+                deps.transport.projectsRead(),
+                deps.transport.sessionsRead(),
+            ]);
             if (disposed || current !== generation) return;
+            catalog = readCatalog;
             sessions = read;
             publish();
         } catch (error) {
             if (disposed || current !== generation) return;
             const previous = store.getState();
             // A failed refresh of an already loaded list keeps the rows on screen.
-            if (previous.folders.type !== "ready")
+            if (previous.projects.type !== "ready")
                 store.setState({
                     ...previous,
-                    folders: { type: "error", error: rigUserError(error) },
+                    projects: { type: "error", error: rigUserError(error) },
                 });
         } finally {
             reconciling = false;
@@ -262,19 +279,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     if (!disposed) await reconcile();
                 }
             }),
-        folderReorder: (folderId, sessionIds) =>
+        groupReorder: (groupId, sessionIds) =>
             mutate(async () => {
-                const folder = sessions.find(
-                    (session) => rigFolderIdOf(session.cwd) === folderId,
-                )?.cwd;
-                if (folder === undefined) return;
                 const ranked = new Map(sessionIds.map((id, index) => [id, index]));
-                // Only the addressed directory moves; every other one keeps the
+                // Only the addressed group moves; every other one keeps the
                 // relative order the host listed it in.
                 const reordered = [...sessions];
                 const positions = reordered.flatMap((session, index) =>
-                    session.cwd === folder ? [index] : [],
+                    rigSessionGroupIdOf(session) === groupId ? [index] : [],
                 );
+                if (positions.length === 0) return;
                 const arranged = positions
                     .map((index) => reordered[index]!)
                     .sort(
@@ -288,7 +302,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 sessions = reordered;
                 publish();
                 try {
-                    await deps.transport.sessionsReorder(folder, sessionIds);
+                    await deps.transport.sessionsReorder(groupId, sessionIds);
                 } finally {
                     if (!disposed) await reconcile();
                 }
@@ -303,12 +317,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
 }
 
-/** The address of a session the caller just created: its directory, then itself. */
-function sessionLocationOf(session: {
-    readonly id: RigSessionId;
-    readonly cwd: string;
-}): RigSessionLocation {
-    return { sessionId: session.id, folderId: rigFolderIdOf(session.cwd) };
+/** The address of a session the caller just created: its group, then itself. */
+function sessionLocationOf(session: RigSessionSummary): RigSessionLocation {
+    return { sessionId: session.id, groupId: rigSessionGroupIdOf(session) };
 }
 
 function defaultCreateId(): string {
@@ -316,23 +327,11 @@ function defaultCreateId(): string {
 }
 
 /** Projects a full session down to the summary the list renders. */
-function sessionSummaryOf(session: {
-    readonly id: RigSessionId;
-    readonly cwd: string;
-    readonly displayCwd: string;
-    readonly providerId: string;
-    readonly modelId: string;
-    readonly permissionMode: RigSessionSummary["permissionMode"];
-    readonly effort?: RigSessionSummary["effort"];
-    readonly serviceTier?: RigSessionSummary["serviceTier"];
-    readonly status: RigSessionSummary["status"];
-    readonly title?: string;
-    readonly recap?: string;
-    readonly createdAt: number;
-    readonly updatedAt: number;
-}): RigSessionSummary {
+function sessionSummaryOf(session: RigSession): RigSessionSummary {
     return {
         id: session.id,
+        projectId: session.projectId,
+        ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
         cwd: session.cwd,
         displayCwd: session.displayCwd,
         providerId: session.providerId,

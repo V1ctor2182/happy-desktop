@@ -272,11 +272,11 @@ export {
     type RigSessionLocation,
 } from "./rig/rigSessionListStore.js";
 export {
-    rigFolderIdOf,
-    rigSessionFoldersProject,
-    type RigFolderId,
-    type RigSessionFolder,
-} from "./rig/rigSessionFolderProject.js";
+    rigProjectGroupsProject,
+    rigSessionGroupIdOf,
+    type RigProjectGroup,
+    type RigWorktreeGroup,
+} from "./rig/rigProjectGroupProject.js";
 export {
     rigChatStoreCreate,
     type RigChatDeps,

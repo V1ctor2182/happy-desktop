@@ -44,10 +44,10 @@ describe("rigWorkspaceStore", () => {
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
 
-        const list = workspace.get().list.folders;
+        const list = workspace.get().list.projects;
         expect(list.type).toBe("ready");
         const rows =
-            list.type === "ready" ? list.value.flatMap((folder) => folder.conversations) : [];
+            list.type === "ready" ? list.value.flatMap((project) => project.conversations) : [];
         expect(rows.map((row) => row.id)).toEqual(["session-a"]);
         expect(rows[0]!.title).toBe("Alpha");
         expect(workspace.get().conversation.type).toBe("unloaded");

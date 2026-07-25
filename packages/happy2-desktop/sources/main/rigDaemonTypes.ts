@@ -7,6 +7,62 @@ import type {
 
 export type { HealthResponse, ModelCatalog, ProtocolSession, SubagentSummary };
 
+/**
+ * Rig's project/worktree protocol shapes. They are part of the daemon's HTTP
+ * surface but not of its published `@slopus/rig/types` entry point, so — like the
+ * session summary and event shapes below — this file states the subset Happy
+ * reads. Anything the projection does not consume is deliberately absent.
+ */
+export interface ProjectAvatar {
+    readonly hash: string;
+    readonly width: number;
+    readonly height: number;
+    readonly mediaType: "image/webp";
+    /** Daemon-relative asset path (`/project-assets/<hash>`). */
+    readonly url: string;
+}
+
+export interface Project {
+    readonly id: string;
+    readonly kind: "regular" | "home";
+    readonly name: string;
+    readonly path: string;
+    readonly initializationStatus: "initializing" | "ready" | "failed";
+    readonly avatar?: ProjectAvatar;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+}
+
+export type ProjectWorkspaceStatus =
+    | "initializing"
+    | "ready"
+    | "failed"
+    | "archiving"
+    | "archive_failed"
+    | "archived";
+
+export interface ProjectWorkspace {
+    readonly id: string;
+    readonly projectId: string;
+    readonly name: string;
+    readonly path: string;
+    readonly status: ProjectWorkspaceStatus;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+}
+
+/** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */
+export interface GlobalStateResponse {
+    readonly projects: readonly Project[];
+    readonly workspaces: readonly ProjectWorkspace[];
+}
+
+/** One project avatar's bytes, as the daemon's asset route serves them. */
+export interface ProjectAssetResponse {
+    readonly bytes: Buffer;
+    readonly mediaType: string;
+}
+
 export type EventId = string;
 export type AgentSnapshot = ProtocolSession["snapshot"];
 export type Message = AgentSnapshot["messages"][number];
@@ -26,6 +82,8 @@ export type BashSessionActivity = NonNullable<ProtocolSession["backgroundProcess
 
 export interface SessionSummary {
     readonly id: string;
+    readonly projectId: string;
+    readonly workspaceId?: string;
     readonly cwd: string;
     readonly providerId: string;
     readonly modelId: string;
@@ -284,7 +342,29 @@ export type SessionEvent =
     | ProjectedSessionEvent
     | BaseSessionEvent<UnprojectedSessionEventType, unknown>;
 
+interface BaseProjectEvent<TType extends string, TData> {
+    readonly createdAt: number;
+    readonly data: TData;
+    readonly id: EventId;
+    readonly projectId: string;
+    readonly type: TType;
+}
+
+/** Project and worktree lifecycle events, delivered on the same global queue as session events. */
+export type ProjectEvent =
+    | BaseProjectEvent<"project_created" | "project_updated", { readonly project: Project }>
+    | (BaseProjectEvent<
+          "workspace_created" | "workspace_updated",
+          { readonly workspace: ProjectWorkspace }
+      > & { readonly workspaceId: string });
+
+export type GlobalEvent = SessionEvent | ProjectEvent;
+
 export interface GlobalEventQueueEntry {
-    readonly cursor: number;
-    readonly event: SessionEvent;
+    /**
+     * Opaque queue position. Rig made this a string when the queue started
+     * carrying project events, so it is echoed back as-is rather than parsed.
+     */
+    readonly cursor: string;
+    readonly event: GlobalEvent;
 }

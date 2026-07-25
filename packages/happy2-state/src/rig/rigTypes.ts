@@ -11,9 +11,24 @@
 
 declare const rigSessionIdBrand: unique symbol;
 declare const rigEventIdBrand: unique symbol;
+declare const rigProjectIdBrand: unique symbol;
+declare const rigWorktreeIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
+
+/** Branded identifier of a project the daemon owns durably (CUID2 on the wire). */
+export type RigProjectId = string & { readonly [rigProjectIdBrand]: true };
+
+/** Branded identifier of one of a project's git worktrees (CUID2 on the wire). */
+export type RigWorktreeId = string & { readonly [rigWorktreeIdBrand]: true };
+
+/**
+ * What the workspace lists sessions under: a project, or one of its worktrees.
+ * Both ids come from the same daemon id space, so one value addresses either
+ * kind of group and the URL needs a single segment for it.
+ */
+export type RigGroupId = RigProjectId | RigWorktreeId;
 
 /** Branded realtime event identifier used for ordering and backfill cursors. */
 export type RigEventId = string & { readonly [rigEventIdBrand]: true };
@@ -29,7 +44,8 @@ export type RigSessionStatus =
     | "completed"
     | "aborted"
     | "suspended"
-    | "error";
+    | "error"
+    | "archived";
 
 /** Reasoning/effort levels a model may expose, ordered from least to most reasoning. */
 export type RigThinkingLevel =
@@ -313,11 +329,77 @@ export interface RigShellCommandResult {
 }
 
 // ---------------------------------------------------------------------------
+// Projects and worktrees
+// ---------------------------------------------------------------------------
+
+/**
+ * The picture that stands for a project in a list. The daemon derives it from the
+ * repository or its hosting provider, so `url` is already a fetchable image the
+ * renderer can put straight into an `<img>`; `width`/`height` are the intrinsic
+ * pixel size so a row can reserve its box before the bytes arrive.
+ */
+export interface RigProjectAvatar {
+    readonly url: string;
+    readonly width: number;
+    readonly height: number;
+}
+
+/**
+ * One directory the daemon has adopted as a durable project. This — not the raw
+ * working directory — is what the workspace lists: it carries a name the daemon
+ * derived from the git remote (or the user renamed) and a picture, and it keeps
+ * a stable id across restarts, so a project is addressable without hashing a path.
+ */
+export interface RigProject {
+    readonly id: RigProjectId;
+    readonly name: string;
+    /** Canonical absolute path of the project root. */
+    readonly path: string;
+    /** Presentation path (home-relative when the daemon's host supplied one). */
+    readonly displayPath: string;
+    /** `home` is the catch-all project for sessions started outside any repository. */
+    readonly kind: "regular" | "home";
+    /** Whether the daemon has finished deriving the project's name and picture. */
+    readonly status: "initializing" | "ready" | "failed";
+    readonly avatar?: RigProjectAvatar;
+}
+
+/**
+ * One git worktree the daemon created inside a project. Sessions started in it
+ * belong to the project but list under the worktree, so parallel work on separate
+ * branches reads as separate groups rather than as unrelated directories.
+ */
+export interface RigWorktree {
+    readonly id: RigWorktreeId;
+    readonly projectId: RigProjectId;
+    readonly name: string;
+    readonly path: string;
+    readonly displayPath: string;
+    readonly status:
+        | "initializing"
+        | "ready"
+        | "failed"
+        | "archiving"
+        | "archive_failed"
+        | "archived";
+}
+
+/** Everything the workspace list needs to group sessions: the projects and their worktrees. */
+export interface RigProjectCatalog {
+    readonly projects: readonly RigProject[];
+    readonly worktrees: readonly RigWorktree[];
+}
+
+// ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 
 export interface RigSessionSummary {
     readonly id: RigSessionId;
+    /** The project the daemon filed this session under; always set. */
+    readonly projectId: RigProjectId;
+    /** Set when the session runs inside one of the project's worktrees. */
+    readonly worktreeId?: RigWorktreeId;
     /** Canonical absolute working directory. */
     readonly cwd: string;
     /** Original Rig path retained for presentation when it differs from `cwd`. */
@@ -338,6 +420,8 @@ export interface RigSessionSummary {
 
 export interface RigSession {
     readonly id: RigSessionId;
+    readonly projectId: RigProjectId;
+    readonly worktreeId?: RigWorktreeId;
     readonly cwd: string;
     readonly displayCwd: string;
     readonly providerId: string;
@@ -463,6 +547,8 @@ export interface RigSelection {
 
 export interface RigSessionCreateInput {
     readonly cwd: string;
+    /** Files the session under one of the project's worktrees rather than its root. */
+    readonly worktreeId?: RigWorktreeId;
     readonly providerId?: string;
     readonly modelId?: string;
     readonly effort?: RigThinkingLevel;

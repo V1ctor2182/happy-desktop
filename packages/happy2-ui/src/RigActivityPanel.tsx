@@ -49,6 +49,7 @@ const SUBAGENT_STATUS_LABELS: Record<RigSessionStatus, string> = {
     aborted: "Stopped",
     suspended: "Suspended",
     error: "Failed",
+    archived: "Closed",
 };
 
 const TOKENS = new Intl.NumberFormat("en-US");

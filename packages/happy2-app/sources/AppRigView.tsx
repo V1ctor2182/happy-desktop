@@ -5,10 +5,12 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigHost,
+    RigGroupId,
     RigModelSelection,
     RigPermissionMode,
+    RigProjectGroup,
     RigServiceTier,
-    RigSessionFolder,
+    RigSessionCreateInput,
     RigSessionId,
     RigThinkingLevel,
     RigWorkspaceSnapshot,
@@ -56,41 +58,94 @@ export interface AppRigViewProps {
      */
     platform?: "desktop" | "web";
     /**
-     * The addressed working directory and conversation, read from the route by
-     * the caller. This surface never decides what is shown; it renders the
-     * addressed directory's sessions and asks for a different address through
-     * `onChatSelect`, exactly as the cloud workspace does.
+     * The addressed group — a project or one of its worktrees — and conversation,
+     * read from the route by the caller. This surface never decides what is
+     * shown; it renders the addressed group's sessions and asks for a different
+     * address through `onChatSelect`, exactly as the cloud workspace does.
      */
-    folderId?: string;
+    groupId?: string;
     chatId?: string;
-    /** Addresses a directory and optionally one of its sessions; no directory means the list. */
-    onChatSelect(folderId: string | undefined, chatId?: string, replace?: boolean): void;
+    /** Addresses a group and optionally one of its sessions; no group means the list. */
+    onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
 }
 
 /**
- * One list row per working directory. The directory's name is what a reader
- * recognizes and its path is what tells two similarly named checkouts apart. How
- * many sessions it holds is the tab strip's job, not the row's.
+ * What the tab strip needs about the addressed group, flattened so a project and
+ * a worktree open the same way. `create` is what a new session in it takes: the
+ * project's root, or the worktree's checkout and its id.
  */
-function sidebarItem(folder: RigSessionFolder): SidebarItem {
-    return {
-        id: folder.id,
-        kind: "agent",
-        label: folder.name,
-        initials: folder.name.slice(0, 1).toUpperCase(),
-        meta: folder.displayPath,
-        // A row only carries a status while one of its sessions is live.
-        ...(folder.activity === "running" ? { status: "working" as const } : {}),
-    };
+interface OpenGroup {
+    readonly id: RigGroupId;
+    readonly name: string;
+    readonly displayPath: string;
+    readonly conversations: RigProjectGroup["conversations"];
+    readonly create: RigSessionCreateInput;
 }
 
-/** One tab per session in the open directory, marked while the agent is working. */
-function sessionTab(folder: RigSessionFolder): TabItem[] {
-    return folder.conversations.map((summary) => ({
+/**
+ * The rows one project contributes: the project itself, then a nested row per
+ * worktree that has work in it. A row is the project's name and its picture,
+ * both the daemon's — derived from the git remote — so a reader recognizes a
+ * repository at a glance. Its path is deliberately not here: it is long enough
+ * to crowd out the name it is supposed to disambiguate, and the heading over the
+ * open project states it in full.
+ */
+function sidebarItems(project: RigProjectGroup): SidebarItem[] {
+    return [
+        {
+            id: project.id,
+            kind: "agent",
+            label: project.name,
+            initials: project.name.slice(0, 1).toUpperCase(),
+            ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+            // A row only carries a status while one of its sessions is live.
+            ...(project.activity === "running" ? { status: "working" as const } : {}),
+        },
+        ...project.worktrees.map((worktree) => ({
+            id: worktree.id,
+            kind: "channel" as const,
+            depth: 1,
+            label: worktree.name,
+            ...(worktree.activity === "running" ? { status: "working" as const } : {}),
+        })),
+    ];
+}
+
+/** One tab per session in the open group, marked while the agent is working. */
+function sessionTabs(group: OpenGroup): TabItem[] {
+    return group.conversations.map((summary) => ({
         id: summary.id,
         label: summary.title,
         ...(summary.activity === "running" ? { icon: "dot" as const } : {}),
     }));
+}
+
+/** Resolves an addressed group id against the list, matching projects and worktrees alike. */
+function openGroupFind(
+    projects: readonly RigProjectGroup[],
+    groupId: string | undefined,
+): OpenGroup | undefined {
+    if (groupId === undefined) return undefined;
+    for (const project of projects) {
+        if (project.id === groupId)
+            return {
+                id: project.id,
+                name: project.name,
+                displayPath: project.displayPath,
+                conversations: project.conversations,
+                create: { cwd: project.path },
+            };
+        for (const worktree of project.worktrees)
+            if (worktree.id === groupId)
+                return {
+                    id: worktree.id,
+                    name: worktree.name,
+                    displayPath: worktree.displayPath,
+                    conversations: worktree.conversations,
+                    create: { cwd: worktree.path, worktreeId: worktree.id },
+                };
+    }
+    return undefined;
 }
 
 /**
@@ -151,20 +206,20 @@ export function AppRigView(props: AppRigViewProps) {
         });
     };
 
-    const folders = workspace.list.folders;
-    const rows = folders.type === "ready" ? folders.value : [];
-    const openFolder = rows.find((folder) => folder.id === props.folderId);
+    const projects = workspace.list.projects;
+    const rows = projects.type === "ready" ? projects.value : [];
+    const openGroup = openGroupFind(rows, props.groupId);
     const conversation = workspace.conversation;
     const listAccessory =
-        folders.type === "loading" || folders.type === "unloaded" ? (
+        projects.type === "loading" || projects.type === "unloaded" ? (
             <Banner tone="neutral">Loading sessions…</Banner>
-        ) : folders.type === "error" ? (
+        ) : projects.type === "error" ? (
             <Banner
                 action={{ label: "Retry", onClick: () => props.workspace.conversationListRetry() }}
                 tone="danger"
                 title="Sessions unavailable"
             >
-                {folders.error.message}
+                {projects.error.message}
             </Banner>
         ) : workspace.list.mutationError ? (
             <Banner
@@ -184,7 +239,7 @@ export function AppRigView(props: AppRigViewProps) {
             windowControls={desktop}
             sidebar={
                 <Sidebar
-                    activeItemId={props.folderId ?? ""}
+                    activeItemId={props.groupId ?? ""}
                     // The desktop window puts the traffic lights and the sidebar
                     // toggle in this heading, so the product mark stands down and
                     // the row becomes the window's drag lane.
@@ -202,26 +257,23 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     headerAccessory={listAccessory}
                     onCompose={conversationCreate}
-                    // Addressing a directory opens its most recent session, so a
-                    // list row lands on work rather than on an empty screen.
+                    // Addressing a group opens its most recent session, so a list
+                    // row lands on work rather than on an empty screen.
                     onItemSelect={(id) =>
-                        props.onChatSelect(
-                            id,
-                            rows.find((folder) => folder.id === id)?.conversations[0]?.id,
-                        )
+                        props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id)
                     }
                     sections={[
                         {
-                            id: "folders",
-                            label: "Folders",
-                            items: rows.map(sidebarItem),
-                            ...(folders.type === "ready"
+                            id: "projects",
+                            label: "Projects",
+                            items: rows.flatMap(sidebarItems),
+                            ...(projects.type === "ready"
                                 ? {
                                       empty: {
                                           actionLabel: "New session",
                                           description: "Start a session to begin working locally.",
                                           icon: "chat" as const,
-                                          title: "No sessions yet",
+                                          title: "No projects yet",
                                       },
                                   }
                                 : {}),
@@ -230,25 +282,25 @@ export function AppRigView(props: AppRigViewProps) {
                 />
             }
         >
-            {openFolder ? (
+            {openGroup ? (
                 <>
-                    {/* The heading names the working directory, not the session:
-                        every tab beneath it is another session in this one
-                        directory, so it stays put as they are switched. */}
+                    {/* The heading names the project, not the session: every tab
+                        beneath it is another session in this one project, so it
+                        stays put as they are switched. */}
                     <ChannelHeader
                         icon="inbox"
-                        title={openFolder.name}
-                        topic={openFolder.displayPath}
+                        title={openGroup.name}
+                        topic={openGroup.displayPath}
                     />
                     <TabbedPane
                         actions={
                             <Button
-                                aria-label="New session in this folder"
+                                aria-label="New session in this project"
                                 icon="plus"
                                 iconOnly
                                 onClick={() =>
                                     void props.workspace
-                                        .conversationCreate({ cwd: openFolder.path })
+                                        .conversationCreate(openGroup.create)
                                         .catch(() => undefined)
                                 }
                                 size="small"
@@ -263,11 +315,11 @@ export function AppRigView(props: AppRigViewProps) {
                             // just left the list. The address it replaces is gone,
                             // so it does not belong in history either.
                             if (chatId === props.chatId) {
-                                const rest = openFolder.conversations.filter(
+                                const rest = openGroup.conversations.filter(
                                     (summary) => summary.id !== chatId,
                                 );
                                 props.onChatSelect(
-                                    rest.length > 0 ? openFolder.id : undefined,
+                                    rest.length > 0 ? openGroup.id : undefined,
                                     rest[0]?.id,
                                     true,
                                 );
@@ -279,13 +331,13 @@ export function AppRigView(props: AppRigViewProps) {
                         onReorder={(chatIds) =>
                             void props.workspace
                                 .conversationsReorder(
-                                    openFolder.id,
+                                    openGroup.id,
                                     chatIds as readonly RigSessionId[],
                                 )
                                 .catch(() => undefined)
                         }
-                        onSelect={(chatId) => props.onChatSelect(openFolder.id, chatId)}
-                        tabs={sessionTab(openFolder)}
+                        onSelect={(chatId) => props.onChatSelect(openGroup.id, chatId)}
+                        tabs={sessionTabs(openGroup)}
                     >
                         <RigConversationBody
                             conversation={conversation}
@@ -297,15 +349,15 @@ export function AppRigView(props: AppRigViewProps) {
                 </>
             ) : (
                 <>
-                    {/* With no directory open there is no tab strip, so this side of
+                    {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
                     <EmptyState
                         action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
-                        description="Select a folder from the list or start a new session to begin."
+                        description="Select a project from the list or start a new session to begin."
                         icon="chat"
                         size="panel"
-                        title="No folder selected"
+                        title="No project selected"
                     />
                 </>
             )}

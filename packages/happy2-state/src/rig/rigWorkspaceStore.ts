@@ -14,11 +14,11 @@ import type {
     RigSessionListStore,
     RigSessionLocation,
 } from "./rigSessionListStore.js";
-import type { RigFolderId } from "./rigSessionFolderProject.js";
 import type {
     RigBackgroundProcess,
     RigFileSearchResult,
     RigGoal,
+    RigGroupId,
     RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
@@ -138,9 +138,9 @@ export interface RigWorkspaceStore {
      * conversation is the open one; this store does not navigate.
      */
     conversationArchive(conversationId: RigSessionId): Promise<void>;
-    /** Rearranges one directory's conversations into the order the user dragged. */
+    /** Rearranges one group's conversations into the order the user dragged. */
     conversationsReorder(
-        folderId: RigFolderId,
+        groupId: RigGroupId,
         conversationIds: readonly RigSessionId[],
     ): Promise<void>;
 
@@ -548,8 +548,8 @@ export function rigWorkspaceStoreCreate(
         conversationCreate: (input) => list.sessionCreate(input).then(openRequest),
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
         conversationArchive: (conversationId) => list.sessionArchive(conversationId),
-        conversationsReorder: (folderId, conversationIds) =>
-            list.folderReorder(folderId, conversationIds),
+        conversationsReorder: (groupId, conversationIds) =>
+            list.groupReorder(groupId, conversationIds),
 
         composerTextUpdate: (text) => composer?.getState().textUpdate(text),
         composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),
@@ -615,9 +615,12 @@ function conversationAcquiring(
     list: RigSessionListSnapshot,
 ): RigConversationSnapshot {
     const summary =
-        list.folders.type === "ready"
-            ? list.folders.value
-                  .flatMap((folder) => folder.conversations)
+        list.projects.type === "ready"
+            ? list.projects.value
+                  .flatMap((project) => [
+                      ...project.conversations,
+                      ...project.worktrees.flatMap((worktree) => worktree.conversations),
+                  ])
                   .find((row) => row.id === conversationId)
             : undefined;
     return {

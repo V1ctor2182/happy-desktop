@@ -34,14 +34,16 @@ function clock(): RigClockStore {
 function workspace(): RigWorkspaceStore {
     const snapshot = {
         list: {
-            folders: {
+            projects: {
                 type: "ready" as const,
                 value: [
                     {
-                        id: "fold_one",
+                        id: "prj_one",
                         path: "/Users/happy/happy2",
                         displayPath: "~/happy2",
                         name: "happy2",
+                        kind: "regular" as const,
+                        worktrees: [],
                         activity: "idle" as const,
                         updatedAt: 1_763_999_000_000,
                         conversations: [
@@ -73,9 +75,9 @@ function workspace(): RigWorkspaceStore {
 function view(
     options: {
         chatId?: string;
-        folderId?: string;
+        groupId?: string;
         host?: RigHost;
-        onChatSelect?: (folderId: string, chatId?: string) => void;
+        onChatSelect?: (groupId: string, chatId?: string) => void;
     } = {},
 ) {
     return render(
@@ -84,7 +86,7 @@ function view(
             chatId={options.chatId}
             clock={clock()}
             connection={connection()}
-            folderId={options.folderId}
+            groupId={options.groupId}
             host={options.host ?? rigHostNoop}
             onChatSelect={options.onChatSelect ?? (() => undefined)}
             workspace={workspace()}
@@ -109,33 +111,35 @@ it("heads the local sidebar with the shared brand mark, not a local-only title",
     expect(container.querySelector(".happy2-sidebar__title-chevron")).toBeNull();
 });
 
-it("highlights the addressed folder and asks to navigate into it when it is picked", () => {
+it("highlights the addressed project and asks to navigate into it when it is picked", () => {
     const selected: (string | undefined)[][] = [];
     const { container } = view({
-        folderId: "fold_one",
-        onChatSelect: (folderId, chatId) => selected.push([folderId, chatId]),
+        groupId: "prj_one",
+        onChatSelect: (groupId, chatId) => selected.push([groupId, chatId]),
     });
 
-    const row = container.querySelector('[data-item-id="fold_one"]');
+    const row = container.querySelector('[data-item-id="prj_one"]');
     expect(row?.getAttribute("aria-current")).toBe("page");
 
-    // Picking a row is a navigation request into the folder's most recent
+    // Picking a row is a navigation request into the project's most recent
     // session; this surface never selects a conversation in the store itself.
     row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(selected).toEqual([["fold_one", "ses_one"]]);
+    expect(selected).toEqual([["prj_one", "ses_one"]]);
 });
 
-it("lists one row per working directory and its sessions as tabs", () => {
-    const { container } = view({ folderId: "fold_one" });
+it("lists one row per project and its sessions as tabs", () => {
+    const { container } = view({ groupId: "prj_one" });
 
     // The shared sidebar renders its compose row ("New session") ahead of the
-    // list, so the folder rows follow it.
+    // list, so the project rows follow it.
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
-    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["new-chat", "fold_one"]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["new-chat", "prj_one"]);
+    // The row is the project's name alone; its path would crowd the name out,
+    // and the heading over the open project states it in full.
     expect(rows[1]?.textContent).toContain("happy2");
-    expect(rows[1]?.textContent).toContain("~/happy2");
+    expect(rows[1]?.textContent).not.toContain("~/happy2");
 
-    // The sessions inside the addressed directory are its tabs.
+    // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy2-ui="tab"]')];
     expect(tabs.map((tab) => tab.getAttribute("data-tab-id"))).toEqual(["ses_one"]);
     expect(tabs[0]?.textContent).toContain("Fix token rotation race");
