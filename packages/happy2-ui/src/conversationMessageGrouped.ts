@@ -22,6 +22,25 @@ function sameSender(left: MessageEntry, right: MessageEntry): boolean {
     return sender !== undefined && sender === other;
 }
 
+/**
+ * Whether this entry resumes prose directly under a run of tool rows. Those rows
+ * are deliberately tight, so such a message stays grouped — no repeated avatar or
+ * author — but needs the clearance a fresh block has, or the run reads as
+ * belonging to the text below it instead of the text above. Roomier activity
+ * (reasoning, shell runs) already carries that clearance itself.
+ */
+export function conversationEntryResumesAfterActivity(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    const previous = entries[index - 1];
+    return (
+        entries[index]?.kind === "message" &&
+        previous?.kind === "agentActivity" &&
+        previous.activity.kind === "tool"
+    );
+}
+
 /** Whether this message continues the previous row's author group (cloud-style). */
 export function conversationMessageGrouped(
     entries: readonly ConversationEntry[],

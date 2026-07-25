@@ -9,7 +9,10 @@ import { Button } from "./Button";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
-import { conversationMessageGrouped } from "./conversationMessageGrouped";
+import {
+    conversationEntryResumesAfterActivity,
+    conversationMessageGrouped,
+} from "./conversationMessageGrouped";
 import { EmptyState } from "./EmptyState";
 import { MessageList } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
@@ -158,6 +161,11 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
+                                className={
+                                    conversationEntryResumesAfterActivity(props.entries, index)
+                                        ? "happy2-conversation__resumed"
+                                        : undefined
+                                }
                                 entry={entry}
                                 grouped={
                                     entry.kind === "message"

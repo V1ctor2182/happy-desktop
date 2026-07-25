@@ -58,12 +58,22 @@
 }
 
 /*
- * Tool calls in the local conversation share the agent message measure and read
- * as one quiet text line (verb + subject), with no status dot or child result.
+ * Every activity row — reasoning, shell run, tool call — shares the agent
+ * message measure and its block spacing, so thinking reads as one more block of
+ * the reply rather than something pinned to the pane edge.
+ */
+.happy2-conversation .happy2-agent-activity-row {
+    flex: none;
+    padding: 8px 64px 8px 30px;
+}
+
+/*
+ * Tool calls are the exception: each reads as one quiet text line (verb +
+ * subject), with no status dot or child result, so a run of them stays tight.
  */
 .happy2-conversation .happy2-agent-activity-row[data-kind="tool"] {
-    flex: none;
-    padding: 2px 64px 2px 30px;
+    padding-top: 2px;
+    padding-bottom: 2px;
 }
 
 .happy2-conversation .happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity {
@@ -124,6 +134,19 @@
 .happy2-conversation .happy2-message[data-agent][data-grouped] {
     padding-top: 2px;
     padding-bottom: 2px;
+}
+
+/* Prose resuming under a run of tool rows opens the same gap that separates the
+   prose above from the first of those rows, so the run reads as belonging to the
+   text it followed. */
+.happy2-conversation .happy2-message[data-agent].happy2-conversation__resumed {
+    padding-top: 8px;
+}
+
+.happy2-conversation
+    .happy2-message[data-agent].happy2-conversation__resumed:not([data-own])
+    .happy2-message__gutter {
+    top: 10px;
 }
 
 /* The dangling avatar is positioned from the row's top edge, so it follows that
