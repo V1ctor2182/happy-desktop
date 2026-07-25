@@ -13,6 +13,7 @@ import {
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
 } from "./conversationMessageGrouped";
+import { conversationRowHeight } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { MessageList } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
@@ -172,7 +173,16 @@ export function ConversationView(props: ConversationViewProps) {
                     />
                 </div>
             ) : (
-                <MessageList virtualize>
+                <MessageList
+                    estimateRowSize={(index, width) =>
+                        conversationRowHeight(props.entries, index, {
+                            surface: "conversation",
+                            viewerId: props.viewerId,
+                            width,
+                        })
+                    }
+                    virtualize
+                >
                     {props.entries.map((entry, index) => {
                         const submission =
                             entry.kind === "request"

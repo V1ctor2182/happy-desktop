@@ -48,6 +48,7 @@ import {
     type WorkspaceEntry,
 } from "./chatPageModels.js";
 import { ChatMessageEntry } from "./ChatMessageEntry.js";
+import { chatRowHeight } from "./chatRowHeight.js";
 import { ChatAgentCreateDialog } from "./ChatAgentCreateDialog.js";
 import { ChatChannelCreateDialog } from "./ChatChannelCreateDialog.js";
 import { ChatChildChannelCreateDialog } from "./ChatChildChannelCreateDialog.js";
@@ -1218,6 +1219,20 @@ export function ChatPage(props: ChatPageProps) {
                                 activeConversationId() && channelModel.menuItems().length > 0
                                     ? channelModel.menuItems()
                                     : undefined
+                            }
+                            estimateRowSize={(index, width) =>
+                                chatRowHeight(conversationEntries(), index, {
+                                    attachments: (entry) => ({
+                                        images: mediaModel.images(entry),
+                                        files: entry.turnBlock ? 0 : mediaModel.files(entry).length,
+                                    }),
+                                    hasAppNodes: (entry) =>
+                                        props.renderMcpApp !== undefined &&
+                                        !entry.turnBlock &&
+                                        (entry.serverMessage?.mcpApps?.length ?? 0) > 0,
+                                    viewerId: user()?.id,
+                                    width,
+                                })
                             }
                             messageEntries={[
                                 ...conversationEntries().map((entry, index, list) =>

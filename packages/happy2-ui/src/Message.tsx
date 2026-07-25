@@ -738,6 +738,15 @@ export function Message(props: MessageProps) {
 export type MessageListProps = {
     children: ReactNode;
     className?: string;
+    /**
+     * Height of row `index` at the list's current content width, computed from
+     * the caller's own data rather than from the DOM. Every row is still
+     * measured once it mounts; this is what sizes the ones nobody has scrolled
+     * to yet, so the scrollbar tells the truth and reaching a row is not a
+     * correction. Return `undefined` for a row whose height genuinely needs
+     * layout — it falls back to the list's average measured row.
+     */
+    estimateRowSize?: (index: number, width: number) => number | undefined;
     /** Restores a previously detached reader position on this list's first layout. */
     initialScrollPosition?: MessageListScrollPosition;
     /** Reports user scrolling and the final position before this list detaches. */
@@ -758,6 +767,22 @@ export interface MessageListScrollPosition {
 }
 /** A reader this close to the bottom (px) still follows appended content. */
 const FOLLOW_BOTTOM_THRESHOLD = 8;
+/** Row height assumed before anything has ever been measured. */
+const ROW_SIZE_FALLBACK = 72;
+/**
+ * Mean height of the rows a previous lifetime actually measured. Every mounted
+ * row is measured for real, so this estimate only ever sizes rows the reader has
+ * not reached yet — but it sets the scrollbar's proportions, so a restored
+ * history whose bubbles run tall must not be re-estimated at the generic
+ * fallback: that is what makes the thumb jump as the reader scrolls into
+ * unmeasured territory.
+ */
+function averageMeasuredSize(measurements: readonly VirtualItem[] | undefined) {
+    if (!measurements || measurements.length === 0) return ROW_SIZE_FALLBACK;
+    let total = 0;
+    for (const item of measurements) total += item.size;
+    return total / measurements.length;
+}
 /**
  * Scrolling message column. A `margin-top: auto` spacer bottom-anchors sparse
  * histories while long histories scroll chronologically from the top.
@@ -770,30 +795,51 @@ const FOLLOW_BOTTOM_THRESHOLD = 8;
  */
 export function MessageList(props: MessageListProps) {
     const list = useRef<HTMLDivElement>(null);
-    const following = useRef(props.initialScrollPosition?.following ?? true);
-    const measurements = useRef(props.initialScrollPosition?.measurements);
+    /* The restore payload is read once, at mount. This list reports its own
+       position back out, and an owner that stores it where a later render can
+       read it would otherwise feed it back in mid-session — re-anchoring a list
+       the reader is actively scrolling. Restoring is a lifetime event, and the
+       lifetime boundary is the caller's `key`. */
+    const restore = useRef(props.initialScrollPosition);
+    const following = useRef(restore.current?.following ?? true);
+    const measurements = useRef(restore.current?.measurements);
     const positionChange = useRef(props.onScrollPositionChange);
     positionChange.current = props.onScrollPositionChange;
+    const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const items = Children.toArray(props.children);
     const virtualized = props.virtualize === true;
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
     // remains outside compiler memoization while every rendered row stays eligible.
     // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
+        /* Chat anchoring is the virtualizer's job, not the DOM's. `end` keeps the
+           row under the reader pinned when a row above it settles to its real
+           height — a bubble's Markdown, code block, or image resolving after
+           mount no longer shoves the text they are reading. `followOnAppend`
+           re-pins the bottom on a new message, but only for a reader who was
+           already there. Both replace hand-written `scrollTop` writes, which ran
+           after the virtualizer's own offset compensation and cancelled it. */
+        anchorTo: "end",
         count: virtualized ? items.length : 0,
-        estimateSize: () => 72,
+        estimateSize: (index) =>
+            props.estimateRowSize?.(index, list.current?.clientWidth ?? 0) ?? estimatedSize.current,
+        followOnAppend: true,
         getItemKey: (index) => {
             const item = items[index];
             return isValidElement(item) && item.key !== null ? item.key : index;
         },
         getScrollElement: () => list.current,
         initialOffset: virtualized
-            ? (props.initialScrollPosition?.scrollTop ?? items.length * 72)
+            ? (restore.current?.scrollTop ?? items.length * estimatedSize.current)
             : 0,
-        initialMeasurementsCache: props.initialScrollPosition?.measurements
-            ? [...props.initialScrollPosition.measurements]
+        initialMeasurementsCache: restore.current?.measurements
+            ? [...restore.current.measurements]
             : [],
         overscan: 12,
+        /* Same "still following" tolerance the scroll listener applies, so a
+           reader parked one subpixel off the bottom is treated identically by
+           the virtualizer's append-follow and by this component's reporting. */
+        scrollEndThreshold: FOLLOW_BOTTOM_THRESHOLD,
         useFlushSync: false,
     });
     const scrollToBottom = () => {
@@ -803,7 +849,7 @@ export function MessageList(props: MessageListProps) {
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
-        const savedScrollTop = props.initialScrollPosition?.scrollTop;
+        const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else element.scrollTop = savedScrollTop ?? 0;
         // Virtual-row measurement can compensate the scroll offset after this
@@ -831,23 +877,30 @@ export function MessageList(props: MessageListProps) {
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
-        const observer = new MutationObserver(() => {
-            if (following.current) scrollToBottom();
-        });
-        observer.observe(element, { characterData: true, childList: true, subtree: true });
+        /* Only the unmeasured path needs a DOM watcher to stay pinned. A
+           virtualized list learns about the same growth as a measurement and
+           compensates the offset itself; re-writing `scrollTop` on every
+           mutation would undo that compensation and make a streaming reply
+           stutter. */
+        const observer = virtualized
+            ? undefined
+            : new MutationObserver(() => {
+                  if (following.current) scrollToBottom();
+              });
+        observer?.observe(element, { characterData: true, childList: true, subtree: true });
         return () => {
             if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
-            observer.disconnect();
+            observer?.disconnect();
             element.removeEventListener("scroll", onScroll);
         };
-    }, [props.initialScrollPosition?.scrollTop, virtualized, virtualizer]);
+    }, [virtualized, virtualizer]);
     useLayoutEffect(() => {
-        if (!following.current) return;
-        if (virtualized && items.length > 0)
-            virtualizer.scrollToIndex(items.length - 1, { align: "end" });
-        else scrollToBottom();
-    }, [items.length, virtualized, virtualizer]);
+        // A virtualized list follows appended rows through `followOnAppend`,
+        // which anchors on the measured last row instead of an estimated one.
+        if (virtualized || !following.current) return;
+        scrollToBottom();
+    }, [items.length, virtualized]);
     return (
         <div
             className={["happy2-message-list", props.className].filter(Boolean).join(" ")}

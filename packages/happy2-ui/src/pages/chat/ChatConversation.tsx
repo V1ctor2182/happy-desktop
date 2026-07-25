@@ -28,6 +28,12 @@ export interface ChatConversationProps {
     composerContributions?: ReactNode;
     composerModelControl?: ReactNode;
     messageEntries: ReactNode;
+    /**
+     * Height of transcript row `index` at the list's content width, computed
+     * from the page's own entries rather than the DOM. It sizes the rows nobody
+     * has scrolled to, so the scrollbar is honest from the first frame.
+     */
+    estimateRowSize?: (index: number, width: number) => number | undefined;
     messageListScrollPosition?: MessageListScrollPosition;
     activities: readonly DeepReadonly<AgentActivityState>[];
     activityNow: number;
@@ -141,6 +147,7 @@ export function ChatConversation(props: ChatConversationProps) {
                 topic={props.conversation.topic}
             />
             <MessageList
+                estimateRowSize={props.estimateRowSize}
                 initialScrollPosition={props.messageListScrollPosition}
                 key={props.activeConversationId}
                 onScrollPositionChange={props.onMessageListScrollPositionChange}

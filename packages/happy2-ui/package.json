@@ -25,6 +25,7 @@
         "@blocknote/core": "^0.51.4",
         "@blocknote/mantine": "^0.51.4",
         "@blocknote/react": "^0.51.4",
+        "@chenglou/pretext": "^0.0.8",
         "@fontsource-variable/figtree": "^5.2.10",
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@mantine/core": "^9.4.1",
