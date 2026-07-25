@@ -236,7 +236,9 @@
     transform: rotate(180deg);
 }
 
-/* Slim lane shown when the sidebar is collapsed, carrying the reveal control. */
+/* Slim lane shown when the sidebar is collapsed, carrying the reveal control.
+   Its top inset is the collapse overlay's own `top`, so the glyph keeps its
+   line as the sidebar is hidden and shown rather than hopping by 2px. */
 .happy2-app-shell__reveal {
     box-sizing: border-box;
     display: flex;
@@ -245,7 +247,7 @@
     flex: none;
     width: 48px;
     min-height: 0;
-    padding-top: 12px;
+    padding-top: 14px;
     background: var(--groupped-background);
     border-right: 1px solid var(--divider);
 }
