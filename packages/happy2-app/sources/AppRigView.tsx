@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
-    ConversationSummary,
     RigClockStore,
     RigConnectionStore,
     RigConversationSnapshot,
@@ -9,7 +8,10 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigServiceTier,
+    RigSessionFolder,
+    RigSessionId,
     RigThinkingLevel,
+    RigWorkspaceSnapshot,
     RigWorkspaceStore,
 } from "happy2-state";
 import { rigOwnerAuthor } from "happy2-state";
@@ -27,8 +29,10 @@ import {
     RigUsagePanel,
     Sidebar,
     SidebarFooter,
+    TabbedPane,
     rigComposerModelControlProps,
     type SidebarItem,
+    type TabItem,
 } from "happy2-ui";
 
 export interface AppRigViewProps {
@@ -43,39 +47,41 @@ export interface AppRigViewProps {
     /** Theme selection behind the sidebar footer's appearance toggle. */
     appearance: AppearanceStore;
     /**
-     * The addressed conversation, read from the route by the caller. This surface
-     * never decides which conversation is shown; it renders the addressed one and
-     * asks for a different address through `onChatSelect`, exactly as the cloud
-     * workspace does.
+     * The addressed working directory and conversation, read from the route by
+     * the caller. This surface never decides what is shown; it renders the
+     * addressed directory's sessions and asks for a different address through
+     * `onChatSelect`, exactly as the cloud workspace does.
      */
+    folderId?: string;
     chatId?: string;
-    onChatSelect(chatId: string | undefined, replace?: boolean): void;
+    /** Addresses a directory and optionally one of its sessions; no directory means the list. */
+    onChatSelect(folderId: string | undefined, chatId?: string, replace?: boolean): void;
 }
 
-/** Relative age of a conversation's newest content, for its list row. */
-function relativeTime(then: number, now: number): string {
-    const seconds = Math.floor(Math.max(0, now - then) / 1000);
-    if (seconds < 45) return "just now";
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return `${Math.floor(days / 7)}w ago`;
-}
-
-function sidebarItem(summary: ConversationSummary, now: number): SidebarItem {
+/**
+ * One list row per working directory. The directory's name is what a reader
+ * recognizes and its path is what tells two similarly named checkouts apart. How
+ * many sessions it holds is the tab strip's job, not the row's.
+ */
+function sidebarItem(folder: RigSessionFolder): SidebarItem {
     return {
-        id: summary.id,
+        id: folder.id,
         kind: "agent",
-        label: summary.title,
-        initials: summary.title.slice(0, 1).toUpperCase(),
-        meta: summary.subtitle ?? relativeTime(summary.updatedAt, now),
-        // A row only carries a status while it is live; an idle row shows its
-        // directory instead, which is what tells two local sessions apart.
-        ...(summary.activity === "running" ? { status: "working" as const } : {}),
+        label: folder.name,
+        initials: folder.name.slice(0, 1).toUpperCase(),
+        meta: folder.displayPath,
+        // A row only carries a status while one of its sessions is live.
+        ...(folder.activity === "running" ? { status: "working" as const } : {}),
     };
+}
+
+/** One tab per session in the open directory, marked while the agent is working. */
+function sessionTab(folder: RigSessionFolder): TabItem[] {
+    return folder.conversations.map((summary) => ({
+        id: summary.id,
+        label: summary.title,
+        ...(summary.activity === "running" ? { icon: "dot" as const } : {}),
+    }));
 }
 
 /**
@@ -136,19 +142,20 @@ export function AppRigView(props: AppRigViewProps) {
         });
     };
 
-    const conversations = workspace.list.conversations;
-    const rows = conversations.type === "ready" ? conversations.value : [];
+    const folders = workspace.list.folders;
+    const rows = folders.type === "ready" ? folders.value : [];
+    const openFolder = rows.find((folder) => folder.id === props.folderId);
     const conversation = workspace.conversation;
     const listAccessory =
-        conversations.type === "loading" || conversations.type === "unloaded" ? (
+        folders.type === "loading" || folders.type === "unloaded" ? (
             <Banner tone="neutral">Loading sessions…</Banner>
-        ) : conversations.type === "error" ? (
+        ) : folders.type === "error" ? (
             <Banner
                 action={{ label: "Retry", onClick: () => props.workspace.conversationListRetry() }}
                 tone="danger"
                 title="Sessions unavailable"
             >
-                {conversations.error.message}
+                {folders.error.message}
             </Banner>
         ) : workspace.list.mutationError ? (
             <Banner
@@ -165,7 +172,7 @@ export function AppRigView(props: AppRigViewProps) {
             sidebarCollapsible
             sidebar={
                 <Sidebar
-                    activeItemId={props.chatId ?? ""}
+                    activeItemId={props.folderId ?? ""}
                     brand
                     composeLabel="New session"
                     footer={
@@ -180,13 +187,20 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     headerAccessory={listAccessory}
                     onCompose={conversationCreate}
-                    onItemSelect={(id) => props.onChatSelect(id)}
+                    // Addressing a directory opens its most recent session, so a
+                    // list row lands on work rather than on an empty screen.
+                    onItemSelect={(id) =>
+                        props.onChatSelect(
+                            id,
+                            rows.find((folder) => folder.id === id)?.conversations[0]?.id,
+                        )
+                    }
                     sections={[
                         {
-                            id: "sessions",
-                            label: "Sessions",
-                            items: rows.map((summary) => sidebarItem(summary, now)),
-                            ...(conversations.type === "ready"
+                            id: "folders",
+                            label: "Folders",
+                            items: rows.map(sidebarItem),
+                            ...(folders.type === "ready"
                                 ? {
                                       empty: {
                                           actionLabel: "New session",
@@ -201,41 +215,118 @@ export function AppRigView(props: AppRigViewProps) {
                 />
             }
         >
-            {conversation.type === "ready" ? (
-                <RigConversationSurface
-                    conversation={conversation.value}
-                    now={now}
-                    workspace={props.workspace}
-                />
-            ) : conversation.type === "loading" ? (
-                <EmptyState
-                    description="Loading the selected local session."
-                    icon="chat"
-                    size="panel"
-                    title="Loading session…"
-                />
-            ) : conversation.type === "error" ? (
-                <EmptyState
-                    action={{
-                        label: "Retry",
-                        icon: "arrow-right",
-                        onClick: () => props.workspace.conversationRetry(),
+            {openFolder ? (
+                <TabbedPane
+                    actions={
+                        <Button
+                            aria-label="New session in this folder"
+                            icon="plus"
+                            iconOnly
+                            onClick={() =>
+                                void props.workspace
+                                    .conversationCreate({ cwd: openFolder.path })
+                                    .catch(() => undefined)
+                            }
+                            size="small"
+                            variant="ghost"
+                        />
+                    }
+                    activeId={props.chatId ?? ""}
+                    closeLabel="Close session"
+                    onClose={(chatId) => {
+                        // Closing the addressed session addresses what is left
+                        // first, so the surface never sits on a session that has
+                        // just left the list. The address it replaces is gone,
+                        // so it does not belong in history either.
+                        if (chatId === props.chatId) {
+                            const rest = openFolder.conversations.filter(
+                                (summary) => summary.id !== chatId,
+                            );
+                            props.onChatSelect(
+                                rest.length > 0 ? openFolder.id : undefined,
+                                rest[0]?.id,
+                                true,
+                            );
+                        }
+                        void props.workspace
+                            .conversationArchive(chatId as RigSessionId)
+                            .catch(() => undefined);
                     }}
-                    description={conversation.error.message}
-                    icon="shield"
-                    size="panel"
-                    title="Session unavailable"
-                />
+                    onReorder={(chatIds) =>
+                        void props.workspace
+                            .conversationsReorder(openFolder.id, chatIds as readonly RigSessionId[])
+                            .catch(() => undefined)
+                    }
+                    onSelect={(chatId) => props.onChatSelect(openFolder.id, chatId)}
+                    tabs={sessionTab(openFolder)}
+                >
+                    <RigConversationBody
+                        conversation={conversation}
+                        now={now}
+                        onCreate={conversationCreate}
+                        workspace={props.workspace}
+                    />
+                </TabbedPane>
             ) : (
                 <EmptyState
                     action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
-                    description="Select a session from the list or start a new one to begin."
+                    description="Select a folder from the list or start a new session to begin."
                     icon="chat"
                     size="panel"
-                    title="No session selected"
+                    title="No folder selected"
                 />
             )}
         </AppShell>
+    );
+}
+
+/** The open conversation's materialization states, inside the directory's tabs. */
+function RigConversationBody(props: {
+    conversation: RigWorkspaceSnapshot["conversation"];
+    now: number;
+    onCreate: () => void;
+    workspace: RigWorkspaceStore;
+}) {
+    const conversation = props.conversation;
+    if (conversation.type === "ready")
+        return (
+            <RigConversationSurface
+                conversation={conversation.value}
+                now={props.now}
+                workspace={props.workspace}
+            />
+        );
+    if (conversation.type === "loading")
+        return (
+            <EmptyState
+                description="Loading the selected local session."
+                icon="chat"
+                size="panel"
+                title="Loading session…"
+            />
+        );
+    if (conversation.type === "error")
+        return (
+            <EmptyState
+                action={{
+                    label: "Retry",
+                    icon: "arrow-right",
+                    onClick: () => props.workspace.conversationRetry(),
+                }}
+                description={conversation.error.message}
+                icon="shield"
+                size="panel"
+                title="Session unavailable"
+            />
+        );
+    return (
+        <EmptyState
+            action={{ label: "New session", icon: "plus", onClick: props.onCreate }}
+            description="Select a session tab or start a new one to begin."
+            icon="chat"
+            size="panel"
+            title="No session selected"
+        />
     );
 }
 
@@ -250,15 +341,10 @@ function RigConversationSurface(props: {
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
-    if (conversation.session.type === "loading" || conversation.session.type === "unloaded")
-        return (
-            <EmptyState
-                description="Loading the selected local session."
-                icon="chat"
-                size="panel"
-                title="Loading session…"
-            />
-        );
+    // A session that is still being read is not a reason to unmount this
+    // surface: the composer is already live, the header already carries the
+    // title the list knew, and the transcript fills in underneath. Only a
+    // session that failed replaces it.
     if (conversation.session.type === "error")
         return (
             <EmptyState

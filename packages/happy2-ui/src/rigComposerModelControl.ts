@@ -1,8 +1,4 @@
-import type {
-    RigMenusSnapshot,
-    RigModelSelection,
-    RigThinkingLevel,
-} from "happy2-state";
+import type { RigMenusSnapshot, RigModelSelection, RigThinkingLevel } from "happy2-state";
 import type { ComposerModelControlProps } from "./ComposerModelControl";
 
 /** Provider and model ids joined for composer choice ids (matches rig menu ids). */

@@ -1,0 +1,80 @@
+/*
+ * C-160 TabbedPane — a scrolling tab bar over a body that takes the remaining
+ * height.
+ *
+ * The pane is a flex column so the body, not the pane, owns scrolling:
+ * `min-height: 0` lets the body shrink inside the column instead of pushing the
+ * bar out of view. The bar owns the hairline and keeps its trailing actions
+ * outside the strip's scrollport; inside it the strip scrolls horizontally,
+ * with `overflow-y: hidden` so a scrollbar never appears under the tabs. Because
+ * that scrollport would clip the tab underline's usual 1px overhang, the
+ * underline sits flush at the bottom of the tab here.
+ */
+
+.happy2-tabbed-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy2-tabbed-pane__bar {
+    display: flex;
+    flex: none;
+    align-items: stretch;
+    border-bottom: 1px solid var(--divider);
+    background: var(--surface);
+}
+
+.happy2-tabbed-pane__scroller {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.happy2-tabbed-pane__scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.happy2-tabbed-pane__tabs {
+    flex: none;
+    border-bottom: 0;
+}
+
+.happy2-tabbed-pane__tabs .happy2-tabs__tab {
+    max-width: 200px;
+}
+
+/* The label is the only part that gives way, so icons and badges stay whole. */
+.happy2-tabbed-pane__tabs .happy2-tabs__tab-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-tabbed-pane__tabs .happy2-tabs__tab-underline {
+    bottom: 0;
+}
+
+.happy2-tabbed-pane__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    border-left: 1px solid var(--divider);
+}
+
+.happy2-tabbed-pane__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}

@@ -1,7 +1,13 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
-import { App, DesktopStartupScreen, rigRouterCreate, type RigRouter } from "happy2-app";
+import {
+    App,
+    DesktopStartupScreen,
+    rigRouterConversationOpen,
+    rigRouterCreate,
+    type RigRouter,
+} from "happy2-app";
 import { appearanceStoreCreate, type AppearanceStore } from "happy2-state";
 import { ThemeScope } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
@@ -202,11 +208,7 @@ if (bridge) {
                 bridge={bridge}
                 rigRouter={rigRouter}
                 rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
-                    conversationOpen: (sessionId) =>
-                        void rigRouter.navigate({
-                            params: { chatId: sessionId },
-                            to: "/chats/$chatId",
-                        }),
+                    conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),
                 })}
                 startupValues={startupValuesStoreCreate()}
                 store={runtimeStore}

@@ -18,6 +18,7 @@ import type {
     RigConnectionStore,
     RigHost,
     RigSessionId,
+    RigSessionLocation,
     RigWorkspaceStore,
 } from "happy2-state";
 import { AppRigView } from "../AppRigView";
@@ -74,18 +75,30 @@ const chatsIndexRoute = createRoute({
     path: "/chats",
 });
 
+/**
+ * Addressing a working directory without one of its sessions: the directory's
+ * tabs are on screen but no session is open, so any previous one is released.
+ */
+const folderRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    loader: ({ context }) => {
+        context.workspace.conversationClose();
+    },
+    path: "/chats/$folderId",
+});
+
 /** Addressing one local session materializes it, releasing the previous one. */
 const chatRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
         context.workspace.conversationOpen(params.chatId as RigSessionId);
     },
-    path: "/chats/$chatId",
+    path: "/chats/$folderId/$chatId",
 });
 
 const routeTree = rootRoute.addChildren([
     indexRoute,
-    workspaceRoute.addChildren([chatsIndexRoute, chatRoute]),
+    workspaceRoute.addChildren([chatsIndexRoute, folderRoute, chatRoute]),
 ]);
 
 function RigWorkspaceLayout() {
@@ -94,21 +107,39 @@ function RigWorkspaceLayout() {
     // still typed by `RigRouterContext` (loaders read it directly); only this
     // hook needs to be told which context it is reading.
     const context = useRouteContext({ strict: false }) as unknown as RigRouterContext;
-    const navigate = useNavigate();
-    // `strict: false` because the conversation list carries no `chatId`.
-    const params = useParams({ strict: false });
+    // Same reason: the global `Register` names the cloud route tree, so the
+    // hook's literal path union is the cloud one. The local paths below are
+    // checked against this route tree by `rigRouterCreate`, not by this hook.
+    const navigate = useNavigate() as unknown as (options: {
+        params?: Record<string, string>;
+        replace?: boolean;
+        to: string;
+    }) => Promise<void>;
+    // `strict: false` because the list carries neither param and a directory
+    // carries only `folderId`.
+    const params = useParams({ strict: false }) as {
+        folderId?: string;
+        chatId?: string;
+    };
     return (
         <AppRigView
             appearance={context.appearance}
             chatId={params.chatId}
             clock={context.clock}
             connection={context.connection}
+            folderId={params.folderId}
             host={context.host}
-            onChatSelect={(chatId, replace) =>
+            onChatSelect={(folderId, chatId, replace) =>
                 void navigate(
-                    chatId
-                        ? { params: { chatId }, replace, to: "/chats/$chatId" }
-                        : { replace, to: "/chats" },
+                    folderId === undefined
+                        ? { replace, to: "/chats" }
+                        : chatId
+                          ? {
+                                params: { chatId, folderId },
+                                replace,
+                                to: "/chats/$folderId/$chatId",
+                            }
+                          : { params: { folderId }, replace, to: "/chats/$folderId" },
                 )
             }
             workspace={context.workspace}
@@ -117,10 +148,12 @@ function RigWorkspaceLayout() {
 }
 
 /**
- * Creates the router that owns the local window's location lifetime. Local mode
- * addresses its sessions with the same `/chats/$chatId` shape the cloud workspace
- * uses, so a session is a URL in both modes and neither keeps a second, competing
- * selection in a store.
+ * Creates the router that owns the local window's location lifetime. Local
+ * sessions are grouped by working directory, so their address is the directory
+ * — a hash of its path, which keeps a filesystem layout out of the URL — and
+ * then the session inside it: `/chats/$folderId/$chatId`. It stays the same
+ * cloud-shaped addressing, so a session is a URL in both modes and neither keeps
+ * a second, competing selection in a store.
  */
 export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
     return createRouter({
@@ -132,6 +165,25 @@ export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
         // router restore or reset window scroll would fight them.
         scrollRestoration: () => false,
         scrollToTopSelectors: [],
+    });
+}
+
+/**
+ * Addresses one local session: the single place that turns a session's location
+ * into a local URL. It exists because the global TanStack `Register` names the
+ * cloud route tree, so a caller outside this module cannot express a local path
+ * in the router's own types; keeping the cast here means the desktop shell never
+ * hand-builds a local URL.
+ */
+export function rigRouterConversationOpen(router: RigRouter, location: RigSessionLocation): void {
+    void (
+        router.navigate as unknown as (options: {
+            params: Record<string, string>;
+            to: string;
+        }) => Promise<void>
+    )({
+        params: { chatId: location.sessionId, folderId: location.folderId },
+        to: "/chats/$folderId/$chatId",
     });
 }
 

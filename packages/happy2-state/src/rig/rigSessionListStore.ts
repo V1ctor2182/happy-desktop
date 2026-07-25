@@ -1,21 +1,40 @@
 import { createStore } from "zustand/vanilla";
-import type { ConversationListSnapshot } from "../conversation/conversationSummary.js";
-import { rigConversationSummaryProject } from "./rigConversationProject.js";
+import type { Loadable } from "../conversation/loadable.js";
+import type { UserError } from "../types.js";
+import {
+    rigFolderIdOf,
+    rigSessionFoldersProject,
+    type RigFolderId,
+    type RigSessionFolder,
+} from "./rigSessionFolderProject.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
 import type { RigSessionCreateInput, RigSessionId, RigSessionSummary } from "./rigTypes.js";
 
 /**
- * The list surface of the local workspace, in the shared conversation
- * vocabulary: a `Loadable` of ordered rows. Local sessions are conversations
- * like any other; nothing here is Rig-shaped, and nothing here is selected —
- * the open conversation is addressed by the URL.
+ * The list surface of the local workspace: a `Loadable` of working directories,
+ * each carrying its sessions as ordinary conversation rows. Local sessions are
+ * conversations like any other; nothing here is Rig-shaped, and nothing here is
+ * selected — the open directory and conversation are addressed by the URL.
  */
-export type RigSessionListSnapshot = ConversationListSnapshot;
+export interface RigSessionListSnapshot {
+    readonly folders: Loadable<readonly RigSessionFolder[]>;
+    /** Last failed create/fork/reset, surfaced without rejecting the action. */
+    readonly mutationError?: UserError;
+}
+
+/**
+ * Where a session lives: both halves of its address, since a local session is
+ * addressed by its directory and then by itself.
+ */
+export interface RigSessionLocation {
+    readonly sessionId: RigSessionId;
+    readonly folderId: RigFolderId;
+}
 
 export type RigSessionListOutput =
-    | { readonly type: "sessionCreated"; readonly sessionId: RigSessionId }
-    | { readonly type: "sessionForked"; readonly sessionId: RigSessionId }
+    | { readonly type: "sessionCreated"; readonly location: RigSessionLocation }
+    | { readonly type: "sessionForked"; readonly location: RigSessionLocation }
     | { readonly type: "sessionReset"; readonly sessionId: RigSessionId };
 
 export interface RigSessionListStore {
@@ -27,14 +46,28 @@ export interface RigSessionListStore {
      */
     sessionsRefresh(): Promise<void>;
     /**
-     * Creates a session and resolves with its id, or with `undefined` when the
-     * mutation failed and was recorded in `mutationError`. The id is what lets
-     * the caller navigate to the new conversation; this store never selects.
+     * Creates a session and resolves with its address, or with `undefined` when
+     * the mutation failed and was recorded in `mutationError`. That address is
+     * what lets the caller navigate to the new conversation; this store never
+     * selects.
      */
-    sessionCreate(input: RigSessionCreateInput): Promise<RigSessionId | undefined>;
-    /** Forks a session, resolving with the new session's id as `sessionCreate` does. */
-    sessionFork(sessionId: RigSessionId): Promise<RigSessionId | undefined>;
+    sessionCreate(input: RigSessionCreateInput): Promise<RigSessionLocation | undefined>;
+    /** Forks a session, resolving with the new session's address as `sessionCreate` does. */
+    sessionFork(sessionId: RigSessionId): Promise<RigSessionLocation | undefined>;
     sessionReset(sessionId: RigSessionId): Promise<void>;
+    /**
+     * Closes a session: it leaves this list immediately and stays out of it
+     * durably, without ending the session itself. A failure is recorded in
+     * `mutationError` and the row returns on the following reconcile.
+     */
+    sessionArchive(sessionId: RigSessionId): Promise<void>;
+    /**
+     * Rearranges one directory's sessions into the given order, which must name
+     * exactly that directory's currently listed sessions. The rows move at once
+     * and the arrangement is recorded durably by the host; a failure is recorded
+     * in `mutationError` and the following reconcile restores the host's order.
+     */
+    folderReorder(folderId: RigFolderId, sessionIds: readonly RigSessionId[]): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -44,13 +77,13 @@ export interface RigSessionListDeps {
     readonly createId?: () => string;
 }
 
-function sortByCreatedAt(sessions: readonly RigSessionSummary[]): readonly RigSessionSummary[] {
-    return [...sessions].sort((left, right) => right.createdAt - left.createdAt);
-}
-
 /**
- * Owns the flat, chronologically ordered local conversation catalog (no
- * directory grouping). The constructor opens nothing; the first subscriber
+ * Owns the local conversation catalog grouped by working directory: sessions
+ * are read as one flat list already in the host's presentation order — the host
+ * owns both that arrangement and leaving archived sessions out — and projected
+ * into directory rows, keeping that order inside each directory and putting the
+ * most recently active directory first. The constructor opens
+ * nothing; the first subscriber
  * triggers hydration and one global-event subscription, and the last
  * unsubscribe tears both down.
  *
@@ -64,7 +97,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const createId = deps.createId ?? defaultCreateId;
 
     const store = createStore<RigSessionListSnapshot>()(() => ({
-        conversations: { type: "loading" },
+        folders: { type: "loading" },
     }));
 
     const listeners = new Set<() => void>();
@@ -80,17 +113,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const publish = (): void => {
         const previous = store.getState();
-        const projected = sessions.map(rigConversationSummaryProject);
-        const conversations =
-            previous.conversations.type === "ready"
-                ? referencesPreserve(previous.conversations.value, projected)
+        const projected = rigSessionFoldersProject(sessions);
+        // An unchanged directory keeps its previous object — and with it the
+        // identity of the conversation rows nested inside it — so a reconcile
+        // that changed one session does not replace every folder row.
+        const folders =
+            previous.folders.type === "ready"
+                ? referencesPreserve(previous.folders.value, projected)
                 : projected;
-        if (
-            previous.conversations.type === "ready" &&
-            previous.conversations.value === conversations
-        )
-            return;
-        store.setState({ ...previous, conversations: { type: "ready", value: conversations } });
+        if (previous.folders.type === "ready" && previous.folders.value === folders) return;
+        store.setState({ ...previous, folders: { type: "ready", value: folders } });
     };
 
     const reconcile = async (): Promise<void> => {
@@ -103,16 +135,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         try {
             const read = await deps.transport.sessionsRead();
             if (disposed || current !== generation) return;
-            sessions = sortByCreatedAt(read);
+            sessions = read;
             publish();
         } catch (error) {
             if (disposed || current !== generation) return;
             const previous = store.getState();
             // A failed refresh of an already loaded list keeps the rows on screen.
-            if (previous.conversations.type !== "ready")
+            if (previous.folders.type !== "ready")
                 store.setState({
                     ...previous,
-                    conversations: { type: "error", error: rigUserError(error) },
+                    folders: { type: "error", error: rigUserError(error) },
                 });
         } finally {
             reconciling = false;
@@ -180,27 +212,33 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 void createId();
                 const session = await deps.transport.sessionCreate(input);
                 if (disposed) return undefined;
-                sessions = sortByCreatedAt([
-                    ...sessions.filter((existing) => existing.id !== session.id),
+                // A session nobody has placed yet is newest-first for the host,
+                // so the optimistic row goes where the reconcile will put it.
+                sessions = [
                     sessionSummaryOf(session),
-                ]);
+                    ...sessions.filter((existing) => existing.id !== session.id),
+                ];
                 publish();
-                output({ type: "sessionCreated", sessionId: session.id });
+                const location = sessionLocationOf(session);
+                output({ type: "sessionCreated", location });
                 await reconcile();
-                return session.id;
+                return location;
             }),
         sessionFork: (sessionId) =>
             mutate(async () => {
                 const session = await deps.transport.sessionFork(sessionId);
                 if (disposed) return undefined;
-                sessions = sortByCreatedAt([
-                    ...sessions.filter((existing) => existing.id !== session.id),
+                // A session nobody has placed yet is newest-first for the host,
+                // so the optimistic row goes where the reconcile will put it.
+                sessions = [
                     sessionSummaryOf(session),
-                ]);
+                    ...sessions.filter((existing) => existing.id !== session.id),
+                ];
                 publish();
-                output({ type: "sessionForked", sessionId: session.id });
+                const location = sessionLocationOf(session);
+                output({ type: "sessionForked", location });
                 await reconcile();
-                return session.id;
+                return location;
             }),
         sessionReset: (sessionId) =>
             mutate(async () => {
@@ -208,6 +246,52 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 if (disposed) return;
                 output({ type: "sessionReset", sessionId: session.id });
                 await reconcile();
+            }),
+        sessionArchive: (sessionId) =>
+            mutate(async () => {
+                // The row leaves the list before the host confirms, because
+                // closing a tab must feel immediate. A failed archive is
+                // recorded in `mutationError` and the reconcile below puts the
+                // row back, so the list never keeps a session the host still
+                // lists.
+                sessions = sessions.filter((existing) => existing.id !== sessionId);
+                publish();
+                try {
+                    await deps.transport.sessionArchive(sessionId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        folderReorder: (folderId, sessionIds) =>
+            mutate(async () => {
+                const folder = sessions.find(
+                    (session) => rigFolderIdOf(session.cwd) === folderId,
+                )?.cwd;
+                if (folder === undefined) return;
+                const ranked = new Map(sessionIds.map((id, index) => [id, index]));
+                // Only the addressed directory moves; every other one keeps the
+                // relative order the host listed it in.
+                const reordered = [...sessions];
+                const positions = reordered.flatMap((session, index) =>
+                    session.cwd === folder ? [index] : [],
+                );
+                const arranged = positions
+                    .map((index) => reordered[index]!)
+                    .sort(
+                        (left, right) =>
+                            (ranked.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+                            (ranked.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+                    );
+                positions.forEach((index, slot) => {
+                    reordered[index] = arranged[slot]!;
+                });
+                sessions = reordered;
+                publish();
+                try {
+                    await deps.transport.sessionsReorder(folder, sessionIds);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
             }),
         [Symbol.dispose]() {
             if (disposed) return;
@@ -217,6 +301,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             listeners.clear();
         },
     };
+}
+
+/** The address of a session the caller just created: its directory, then itself. */
+function sessionLocationOf(session: {
+    readonly id: RigSessionId;
+    readonly cwd: string;
+}): RigSessionLocation {
+    return { sessionId: session.id, folderId: rigFolderIdOf(session.cwd) };
 }
 
 function defaultCreateId(): string {

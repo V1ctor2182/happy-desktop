@@ -14,10 +14,24 @@ const adminTabs: TabItem[] = [
     { id: "audit", label: "Audit log" },
     { id: "backups", label: "Backups" },
 ];
-function Bar(props: { active: string; size?: TabsSize; tabs: TabItem[]; width?: number }) {
+function Bar(props: {
+    active: string;
+    onClose?: (id: string) => void;
+    onReorder?: (ids: readonly string[]) => void;
+    size?: TabsSize;
+    tabs: TabItem[];
+    width?: number;
+}) {
     return (
         <div style={{ width: `${props.width ?? 560}px` }}>
-            <Tabs activeId={props.active} onSelect={() => {}} size={props.size} tabs={props.tabs} />
+            <Tabs
+                activeId={props.active}
+                onClose={props.onClose}
+                onReorder={props.onReorder}
+                onSelect={() => {}}
+                size={props.size}
+                tabs={props.tabs}
+            />
         </div>
     );
 }
@@ -63,6 +77,29 @@ export function TabsPage() {
                 >
                     <Stack rule="icon 16 · label 13 · badge 18 · gap 8">
                         <Bar active="mentions" tabs={inboxTabs} />
+                    </Stack>
+                </Specimen>
+            </div>
+
+            <div className="specimen-grid">
+                <Specimen
+                    detail="close control revealed on hover and on the active tab"
+                    label="Closable tabs"
+                    number="T-07"
+                    stage="app"
+                >
+                    <Stack rule="close 16 · reserved box · opacity only">
+                        <Bar active="unread" onClose={() => {}} tabs={inboxTabs} />
+                    </Stack>
+                </Specimen>
+                <Specimen
+                    detail="drag to rearrange · grab cursor · neighbours ease aside"
+                    label="Draggable tabs"
+                    number="T-08"
+                    stage="app"
+                >
+                    <Stack rule="threshold 4 · shift = dragged width · ease 140ms">
+                        <Bar active="unread" onReorder={() => {}} tabs={inboxTabs} />
                     </Stack>
                 </Specimen>
             </div>

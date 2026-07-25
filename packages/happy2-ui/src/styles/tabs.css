@@ -87,6 +87,42 @@
 }
 
 /*
+ * Close control. It keeps its box at all times so revealing it never reflows the
+ * bar or shifts a label sideways; only its paint changes. It shows on hover of
+ * its tab, on the active tab, and whenever it is focused, so a keyboard user can
+ * always see what they are about to close.
+ */
+.happy2-tabs__tab-close {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--happy2-radius-sm);
+    color: var(--text-secondary);
+    opacity: 0;
+    cursor: pointer;
+}
+
+.happy2-tabs__tab:hover .happy2-tabs__tab-close,
+.happy2-tabs__tab[data-active] .happy2-tabs__tab-close,
+.happy2-tabs__tab-close:focus-visible {
+    opacity: 1;
+}
+
+.happy2-tabs__tab-close:hover {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy2-tabs__tab-close:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+/*
  * Active underline. left/right:0 span the full tab (padding box included);
  * bottom:-1px drops the 2px bar over the container's 1px hairline so the accent
  * replaces the hairline directly beneath the active tab.
@@ -97,5 +133,40 @@
     right: 0;
     bottom: -1px;
     height: 2px;
-    background: var(--radio-active);
+    /* Neutral, not accent: the underline marks which tab you are on, which is
+       structure rather than an interactive or semantic state, and the active
+       tab's own text already switches to the primary color. */
+    background: var(--text);
+}
+
+/*
+ * Dragging. A reorderable tab grabs rather than points, and its neighbours ease
+ * into their new places while the dragged tab tracks the pointer exactly — so
+ * the tab under the cursor never lags behind it. Transitions are suppressed
+ * while no drag is running so an ordinary re-render never animates.
+ */
+.happy2-tabs__tab[data-reorderable] {
+    cursor: grab;
+    touch-action: none;
+}
+
+.happy2-tabs[data-dragging] .happy2-tabs__tab {
+    transition: transform 140ms ease;
+}
+
+.happy2-tabs[data-dragging] .happy2-tabs__tab[data-dragged] {
+    z-index: 1;
+    transition: none;
+    cursor: grabbing;
+    opacity: 0.9;
+}
+
+/* The pointer owns the drag; hover paint on the tabs it passes over would read
+   as a second, competing selection. */
+.happy2-tabs[data-dragging] .happy2-tabs__tab:hover:not([data-active]) {
+    color: var(--text-secondary);
+}
+
+.happy2-tabs[data-dragging] .happy2-tabs__tab-close {
+    opacity: 0;
 }

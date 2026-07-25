@@ -197,8 +197,9 @@ it("holds Tabs dimensions, typography, colors, and the active underline for ever
             Math.abs(ub.y - tb.y - (spec.height - 1)),
             `${size} underline drop`,
         ).toBeLessThanOrEqual(0.05);
+        // Neutral, not the accent: the underline marks position, not state.
         expect(underline.computedStyle("background-color"), `${size} underline color`).toBe(
-            "rgb(0, 122, 255)",
+            "rgb(0, 0, 0)",
         );
 
         // Idle tabs carry no underline element at all.

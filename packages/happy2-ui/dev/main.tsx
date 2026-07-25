@@ -84,6 +84,7 @@ import { SidebarPage } from "./pages/SidebarPage";
 import { StatTilePage } from "./pages/StatTilePage";
 import { StatusPickerPage } from "./pages/StatusPickerPage";
 import { SwitchPage } from "./pages/SwitchPage";
+import { TabbedPanePage } from "./pages/TabbedPanePage";
 import { TabsPage } from "./pages/TabsPage";
 import { TextFieldPage } from "./pages/TextFieldPage";
 import { TitleBarPage } from "./pages/TitleBarPage";
@@ -262,6 +263,7 @@ const components: BlueprintPage[] = [
     },
     { id: "empty-state", label: "Empty state", number: "C-024", page: EmptyStatePage },
     { id: "tabs", label: "Tabs", number: "C-025", page: TabsPage },
+    { id: "tabbed-pane", label: "Tabbed pane", number: "C-160", page: TabbedPanePage },
     { id: "toolbar", label: "Toolbar", number: "C-026", page: ToolbarPage },
     { id: "menu", label: "Menu", number: "C-027", page: MenuPage },
     { id: "modal", label: "Modal", number: "C-028", page: ModalPage },

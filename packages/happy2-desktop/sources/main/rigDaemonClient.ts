@@ -113,6 +113,10 @@ export class RigDaemonClient {
         return this.#requestJson("POST", `/sessions/${encodeURIComponent(sessionId)}/fork`);
     }
 
+    archiveSession(sessionId: string): Promise<SessionResponse> {
+        return this.#requestJson("POST", `/sessions/${encodeURIComponent(sessionId)}/archive`);
+    }
+
     reset(sessionId: string): Promise<SessionResponse> {
         return this.#requestJson("POST", `/sessions/${encodeURIComponent(sessionId)}/reset`);
     }

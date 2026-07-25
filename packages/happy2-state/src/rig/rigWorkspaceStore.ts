@@ -1,5 +1,4 @@
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
-import type { ConversationListSnapshot } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
     composerStoreCreate,
@@ -10,7 +9,12 @@ import {
 import type { RigChatHandle, RigClient } from "./rigClient.js";
 import type { RigChatSnapshot, RigChatStore } from "./rigChatStore.js";
 import { rigUserError } from "./rigSupport.js";
-import type { RigSessionListStore } from "./rigSessionListStore.js";
+import type {
+    RigSessionListSnapshot,
+    RigSessionListStore,
+    RigSessionLocation,
+} from "./rigSessionListStore.js";
+import type { RigFolderId } from "./rigSessionFolderProject.js";
 import type {
     RigBackgroundProcess,
     RigFileSearchResult,
@@ -92,7 +96,7 @@ export interface RigConversationSnapshot {
  * without joining independent stores in the view.
  */
 export interface RigWorkspaceSnapshot {
-    readonly list: ConversationListSnapshot;
+    readonly list: RigSessionListSnapshot;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
 }
@@ -105,7 +109,7 @@ export interface RigWorkspaceSnapshot {
  */
 export type RigWorkspaceOutput = {
     readonly type: "conversationOpenRequested";
-    readonly conversationId: RigSessionId;
+    readonly location: RigSessionLocation;
 };
 
 export interface RigWorkspaceDeps {
@@ -128,6 +132,17 @@ export interface RigWorkspaceStore {
     conversationRetry(): void;
     conversationCreate(input: RigSessionCreateInput): Promise<void>;
     conversationFork(conversationId: RigSessionId): Promise<void>;
+    /**
+     * Closes a conversation: it leaves the list durably without ending the
+     * session. The caller addresses somewhere else first when the closed
+     * conversation is the open one; this store does not navigate.
+     */
+    conversationArchive(conversationId: RigSessionId): Promise<void>;
+    /** Rearranges one directory's conversations into the order the user dragged. */
+    conversationsReorder(
+        folderId: RigFolderId,
+        conversationIds: readonly RigSessionId[],
+    ): Promise<void>;
 
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
@@ -209,6 +224,9 @@ export function rigWorkspaceStoreCreate(
     let unsubscribeChat: (() => void) | undefined;
     let composer: ComposerStore | undefined;
     let unsubscribeComposer: (() => void) | undefined;
+    // The chat store of the open conversation once it is acquired. Composer
+    // output that lands before then waits on this rather than being dropped.
+    let chatArrival: Promise<RigChatStore> | undefined;
     let acquisitionGeneration = 0;
     let mentionGeneration = 0;
 
@@ -258,8 +276,12 @@ export function rigWorkspaceStoreCreate(
         const listSnapshot = list.get();
         const chat = chatStore?.get();
         const draft = composer?.getState();
-        if (chat && draft) {
-            const next = conversationProject(chat, draft);
+        // A failed acquisition stays failed until something retries it; the
+        // composer must not paint over the error the reader has to act on.
+        if (draft && openId && conversation.type !== "error") {
+            const next = chat
+                ? conversationProject(chat, draft)
+                : conversationAcquiring(openId, draft, listSnapshot);
             if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
                 conversation = { type: "ready", value: next };
             }
@@ -267,6 +289,16 @@ export function rigWorkspaceStoreCreate(
         if (snapshot.list === listSnapshot && snapshot.conversation === conversation) return;
         snapshot = { list: listSnapshot, conversation };
         notify();
+    };
+
+    /**
+     * Runs an action against the open conversation's chat store, waiting for
+     * acquisition when the reader got there first. Only the composer needs this:
+     * it is on screen before the handle exists.
+     */
+    const withChatStore = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> => {
+        if (chatStore) return run(chatStore);
+        return chatArrival ? chatArrival.then(run) : noOpenConversation();
     };
 
     const releaseConversation = (): void => {
@@ -277,6 +309,7 @@ export function rigWorkspaceStoreCreate(
         unsubscribeChat?.();
         unsubscribeChat = undefined;
         chatStore = undefined;
+        chatArrival = undefined;
         handle?.[Symbol.dispose]();
         handle = undefined;
     };
@@ -329,16 +362,20 @@ export function rigWorkspaceStoreCreate(
         }
     };
 
-    const composerCreate = (conversationId: RigSessionId, store: RigChatStore): ComposerStore =>
+    const composerCreate = (conversationId: RigSessionId): ComposerStore =>
         composerStoreCreate(conversationId, {
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
             output: (event) => {
                 switch (event.type) {
                     case "textSubmitted":
-                        submitting(event.revision, () => store.messageSend(event.text));
+                        submitting(event.revision, () =>
+                            withChatStore((store) => store.messageSend(event.text)),
+                        );
                         return;
                     case "shellCommandSubmitted":
-                        submitting(event.revision, () => store.shellRun(event.command));
+                        submitting(event.revision, () =>
+                            withChatStore((store) => store.shellRun(event.command)),
+                        );
                         return;
                     case "commandInvoked":
                         commandRun(event.commandId);
@@ -348,7 +385,7 @@ export function rigWorkspaceStoreCreate(
                         const query = event.query;
                         if (query === undefined) return;
                         const target = composer;
-                        void store.filesSearch(query, MENTION_LIMIT).then(
+                        void withChatStore((store) => store.filesSearch(query, MENTION_LIMIT)).then(
                             (files: readonly RigFileSearchResult[]) => {
                                 if (
                                     requestGeneration !== mentionGeneration ||
@@ -375,14 +412,33 @@ export function rigWorkspaceStoreCreate(
             },
         });
 
+    /**
+     * Acquires the chat handle behind an already visible conversation. The
+     * composer exists before this runs, so nothing the reader can see waits on
+     * it: only the transcript, header, and menus arrive here.
+     */
     const acquireConversation = (conversationId: RigSessionId): void => {
         if (disposed || !active || openId !== conversationId || acquiringId === conversationId)
             return;
         const current = ++acquisitionGeneration;
         acquiringId = conversationId;
-        conversation = { type: "loading" };
+        // The composer is local: it is created and published in this same call
+        // stack, so addressing a conversation puts a usable, focusable input on
+        // screen immediately and the transcript fills in behind it. Anything
+        // typed before the chat handle arrives is submitted once it does. A
+        // retry after a failure starts from the same live composer.
+        if (!composer) {
+            composer = composerCreate(conversationId);
+            unsubscribeComposer = composer.subscribe(recompute);
+        }
+        if (conversation.type === "error") conversation = { type: "loading" };
         recompute();
-        void client.chat(conversationId).then(
+        const acquisition = client.chat(conversationId);
+        // What a message typed before the handle arrives is sent through. It is
+        // resolved with the store rather than the handle so a submission never
+        // has to know whether acquisition is still in flight.
+        chatArrival = acquisition.then((acquired) => acquired.store);
+        void acquisition.then(
             (acquired) => {
                 if (
                     disposed ||
@@ -396,9 +452,7 @@ export function rigWorkspaceStoreCreate(
                 acquiringId = undefined;
                 handle = acquired;
                 chatStore = acquired.store;
-                composer = composerCreate(conversationId, acquired.store);
                 unsubscribeChat = acquired.store.subscribe(recompute);
-                unsubscribeComposer = composer.subscribe(recompute);
                 recompute();
             },
             (error: unknown) => {
@@ -439,8 +493,8 @@ export function rigWorkspaceStoreCreate(
     };
 
     /** Reports a newly created conversation so the router can address it. */
-    const openRequest = (conversationId: RigSessionId | undefined): void => {
-        if (conversationId) output({ type: "conversationOpenRequested", conversationId });
+    const openRequest = (location: RigSessionLocation | undefined): void => {
+        if (location) output({ type: "conversationOpenRequested", location });
     };
 
     const start = (): void => {
@@ -493,6 +547,9 @@ export function rigWorkspaceStoreCreate(
         },
         conversationCreate: (input) => list.sessionCreate(input).then(openRequest),
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
+        conversationArchive: (conversationId) => list.sessionArchive(conversationId),
+        conversationsReorder: (folderId, conversationIds) =>
+            list.folderReorder(folderId, conversationIds),
 
         composerTextUpdate: (text) => composer?.getState().textUpdate(text),
         composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),
@@ -535,6 +592,56 @@ export function rigWorkspaceStoreCreate(
  * Whether a freshly projected conversation is indistinguishable from the current
  * one, so the existing object — and every React subtree bound to it — is kept.
  */
+/* Stable empties, so an acquiring snapshot recomputed twice stays equal to
+   itself and the surface is not notified for nothing. */
+const NO_ENTRIES: readonly ConversationEntry[] = [];
+const NO_QUEUED: readonly RigQueuedMessage[] = [];
+const NO_SUBMISSIONS: RigChatSnapshot["requestSubmissions"] = [];
+const NO_TASKS: readonly RigTask[] = [];
+const NO_SUBAGENTS: readonly RigSubagentSummary[] = [];
+const NO_PROCESSES: readonly RigBackgroundProcess[] = [];
+const NO_TURNS: ReadonlySet<string> = new Set();
+
+/**
+ * The conversation as it reads between being addressed and its chat handle
+ * arriving: a live composer, the header the list already knows, and a session
+ * that states it is loading. It exists so addressing a conversation never
+ * unmounts the input — the reader can type into the new conversation before its
+ * transcript has been read.
+ */
+function conversationAcquiring(
+    conversationId: RigSessionId,
+    composer: ComposerSnapshot,
+    list: RigSessionListSnapshot,
+): RigConversationSnapshot {
+    const summary =
+        list.folders.type === "ready"
+            ? list.folders.value
+                  .flatMap((folder) => folder.conversations)
+                  .find((row) => row.id === conversationId)
+            : undefined;
+    return {
+        conversationId,
+        session: { type: "loading" },
+        ...(summary?.title ? { title: summary.title } : {}),
+        ...(summary?.subtitle ? { subtitle: summary.subtitle } : {}),
+        entries: NO_ENTRIES,
+        composer,
+        running: false,
+        queuedMessages: NO_QUEUED,
+        requestSubmissions: NO_SUBMISSIONS,
+        tasks: NO_TASKS,
+        subagents: NO_SUBAGENTS,
+        backgroundProcesses: NO_PROCESSES,
+        showReasoning: false,
+        expandedTurnIds: NO_TURNS,
+        usagePanelOpen: false,
+        usageLoading: false,
+        activityPanelOpen: false,
+        settingsOpen: false,
+    };
+}
+
 function conversationEqual(left: RigConversationSnapshot, right: RigConversationSnapshot): boolean {
     const keys = Object.keys(left) as (keyof RigConversationSnapshot)[];
     if (keys.length !== Object.keys(right).length) return false;

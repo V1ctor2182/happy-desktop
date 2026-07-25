@@ -34,15 +34,25 @@ function clock(): RigClockStore {
 function workspace(): RigWorkspaceStore {
     const snapshot = {
         list: {
-            conversations: {
+            folders: {
                 type: "ready" as const,
                 value: [
                     {
-                        id: "ses_one",
-                        title: "Fix token rotation race",
-                        subtitle: "~/happy2",
-                        updatedAt: 1_763_999_000_000,
+                        id: "fold_one",
+                        path: "/Users/happy/happy2",
+                        displayPath: "~/happy2",
+                        name: "happy2",
                         activity: "idle" as const,
+                        updatedAt: 1_763_999_000_000,
+                        conversations: [
+                            {
+                                id: "ses_one",
+                                title: "Fix token rotation race",
+                                subtitle: "~/happy2",
+                                updatedAt: 1_763_999_000_000,
+                                activity: "idle" as const,
+                            },
+                        ],
                     },
                 ],
             },
@@ -61,7 +71,12 @@ function workspace(): RigWorkspaceStore {
 }
 
 function view(
-    options: { chatId?: string; host?: RigHost; onChatSelect?: (id?: string) => void } = {},
+    options: {
+        chatId?: string;
+        folderId?: string;
+        host?: RigHost;
+        onChatSelect?: (folderId: string, chatId?: string) => void;
+    } = {},
 ) {
     return render(
         <AppRigView
@@ -69,6 +84,7 @@ function view(
             chatId={options.chatId}
             clock={clock()}
             connection={connection()}
+            folderId={options.folderId}
             host={options.host ?? rigHostNoop}
             onChatSelect={options.onChatSelect ?? (() => undefined)}
             workspace={workspace()}
@@ -93,26 +109,34 @@ it("heads the local sidebar with the shared brand mark, not a local-only title",
     expect(container.querySelector(".happy2-sidebar__title-chevron")).toBeNull();
 });
 
-it("highlights the addressed session and asks to navigate when another is picked", () => {
-    const selected: (string | undefined)[] = [];
-    const { container } = view({ chatId: "ses_one", onChatSelect: (id) => selected.push(id) });
+it("highlights the addressed folder and asks to navigate into it when it is picked", () => {
+    const selected: (string | undefined)[][] = [];
+    const { container } = view({
+        folderId: "fold_one",
+        onChatSelect: (folderId, chatId) => selected.push([folderId, chatId]),
+    });
 
-    const row = container.querySelector('[data-item-id="ses_one"]');
+    const row = container.querySelector('[data-item-id="fold_one"]');
     expect(row?.getAttribute("aria-current")).toBe("page");
 
-    // Picking a row is a navigation request; this surface never selects a
-    // conversation in the workspace store itself.
+    // Picking a row is a navigation request into the folder's most recent
+    // session; this surface never selects a conversation in the store itself.
     row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(selected).toEqual(["ses_one"]);
+    expect(selected).toEqual([["fold_one", "ses_one"]]);
 });
 
-it("still lists local sessions under the branded heading", () => {
-    const { container } = view();
+it("lists one row per working directory and its sessions as tabs", () => {
+    const { container } = view({ folderId: "fold_one" });
 
     // The shared sidebar renders its compose row ("New session") ahead of the
-    // session list, so the local rows follow it.
+    // list, so the folder rows follow it.
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
-    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["new-chat", "ses_one"]);
-    expect(rows[0]?.textContent).toContain("New session");
-    expect(rows[1]?.textContent).toContain("Fix token rotation race");
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["new-chat", "fold_one"]);
+    expect(rows[1]?.textContent).toContain("happy2");
+    expect(rows[1]?.textContent).toContain("~/happy2");
+
+    // The sessions inside the addressed directory are its tabs.
+    const tabs = [...container.querySelectorAll('[data-happy2-ui="tab"]')];
+    expect(tabs.map((tab) => tab.getAttribute("data-tab-id"))).toEqual(["ses_one"]);
+    expect(tabs[0]?.textContent).toContain("Fix token rotation race");
 });

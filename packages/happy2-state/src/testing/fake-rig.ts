@@ -27,6 +27,8 @@ export type FakeRigOperation =
     | "sessionRead"
     | "subagentsRead"
     | "sessionCreate"
+    | "sessionArchive"
+    | "sessionsReorder"
     | "sessionFork"
     | "sessionReset"
     | "messageSubmit"
@@ -48,6 +50,10 @@ export type FakeRigOperation =
 export interface FakeRigCall {
     readonly operation: FakeRigOperation;
     readonly sessionId?: RigSessionId;
+    /** Working directory of a directory-scoped call, such as a reorder. */
+    readonly cwd?: string;
+    /** The arrangement a reorder recorded, in order. */
+    readonly sessionIds?: readonly RigSessionId[];
     readonly idempotencyKey?: string;
     readonly text?: string;
     readonly expectedRunId?: string;
@@ -184,6 +190,12 @@ function summaryOf(session: RigSession): RigSessionSummary {
 class FakeRigTransportModel implements FakeRigTransport {
     private catalog = DEFAULT_CATALOG;
     private readonly sessions = new Map<RigSessionId, RigSession>();
+    /* Archived sessions stay readable by id and only drop out of the listing,
+       which is exactly how the desktop host's durable archive behaves. */
+    private readonly archived = new Set<RigSessionId>();
+    /* Per-directory arrangement, applied to the listing exactly as the desktop
+       host applies its durable one. */
+    private readonly orders = new Map<string, readonly RigSessionId[]>();
     private readonly subagents = new Map<RigSessionId, readonly RigSubagentSummary[]>();
     private readonly files = new Map<RigSessionId, readonly RigFileSearchResult[]>();
     private readonly usage = new Map<RigSessionId, RigSessionUsage>();
@@ -289,10 +301,21 @@ class FakeRigTransportModel implements FakeRigTransport {
         return session;
     }
 
+    /** Sort position of a session in its directory's arrangement, unranked last. */
+    private rank(session: RigSession): number {
+        const index = this.orders.get(session.cwd)?.indexOf(session.id) ?? -1;
+        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    }
+
     readonly transport: RigTransport = {
         modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
         sessionsRead: () =>
-            this.perform("sessionsRead", {}, () => [...this.sessions.values()].map(summaryOf)),
+            this.perform("sessionsRead", {}, () =>
+                [...this.sessions.values()]
+                    .filter((session) => !this.archived.has(session.id))
+                    .sort((left, right) => this.rank(left) - this.rank(right))
+                    .map(summaryOf),
+            ),
         sessionRead: (sessionId) =>
             this.perform("sessionRead", { sessionId }, () =>
                 structuredCloneSession(this.required(sessionId)),
@@ -323,6 +346,16 @@ class FakeRigTransportModel implements FakeRigTransport {
                 };
                 this.sessions.set(sessionId, session);
                 return session;
+            }),
+        sessionsReorder: (cwd, sessionIds) =>
+            this.perform("sessionsReorder", { cwd, sessionIds }, () => {
+                this.orders.set(cwd, [...sessionIds]);
+                return undefined;
+            }),
+        sessionArchive: (sessionId) =>
+            this.perform("sessionArchive", { sessionId }, () => {
+                this.archived.add(sessionId);
+                return undefined;
             }),
         messageSubmit: (sessionId, text, idempotencyKey) =>
             this.perform("messageSubmit", { sessionId, text, idempotencyKey }, () => undefined),

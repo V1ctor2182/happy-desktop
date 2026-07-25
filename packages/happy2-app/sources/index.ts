@@ -5,6 +5,7 @@ export { AppRigView, type AppRigViewProps } from "./AppRigView";
 export { appMemoryHistoryCreate, appRouterCreate, type AppRouter } from "./navigation/appRouter";
 export {
     rigMemoryHistoryCreate,
+    rigRouterConversationOpen,
     rigRouterCreate,
     type RigRouter,
     type RigRouterContext,

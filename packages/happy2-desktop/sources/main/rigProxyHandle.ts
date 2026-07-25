@@ -9,6 +9,7 @@ import type {
 import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
 import type { EventId } from "./rigDaemonTypes";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
+import type { RigSessionOrder } from "./rigSessionOrder";
 import {
     rigCatalogProject,
     rigGlobalEventProject,
@@ -31,6 +32,7 @@ export type RigProxyClient = Pick<
     | "searchFiles"
     | "getSessionUsage"
     | "getEvents"
+    | "archiveSession"
     | "createSession"
     | "forkSession"
     | "reset"
@@ -68,6 +70,12 @@ export interface RigProxyHandleOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** Home directory used to compute home-relative `displayCwd`s. Defaults to the OS home. */
     readonly homeDir?: string;
+    /**
+     * The order the user dragged each directory's tabs into, which the listing
+     * is sorted by and the order route records. Omitting it lists sessions by
+     * recency alone.
+     */
+    readonly order?: RigSessionOrder;
 }
 
 /**
@@ -95,9 +103,19 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 return true;
             }
             if (path === "/sessions") {
-                const sessions = (await client.listSessions()).sessions.map((summary) =>
-                    rigSessionSummaryProject(summary, home),
-                );
+                // The daemon already leaves archived sessions out of its
+                // listing, so this only has to put the remaining ones in the
+                // order the workspace shows them in.
+                const sessions = (await client.listSessions()).sessions
+                    .map((summary) => rigSessionSummaryProject(summary, home))
+                    // The listing leaves here in the order the workspace shows:
+                    // a directory's arranged tabs first, in their arrangement,
+                    // then whatever was created since, newest first.
+                    .sort(
+                        (left, right) =>
+                            rank(options.order, left) - rank(options.order, right) ||
+                            right.createdAt - left.createdAt,
+                    );
                 writeJson(response, 200, sessions);
                 return true;
             }
@@ -187,6 +205,23 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 writeJson(response, 200, rigSessionProject(session.session, home));
                 return true;
             }
+            if (segments.length === 2 && segments[1] === "order") {
+                // One directory's complete tab arrangement. It is desktop state,
+                // not a daemon call: the daemon has no opinion about the order
+                // its sessions are presented in.
+                if (!options.order) return false;
+                const cwd = typeof body.cwd === "string" ? body.cwd : undefined;
+                const sessionIds = Array.isArray(body.sessionIds)
+                    ? body.sessionIds.filter((id): id is string => typeof id === "string")
+                    : undefined;
+                if (!cwd || !sessionIds) {
+                    writeJson(response, 400, { error: "A session order needs a cwd and ids." });
+                    return true;
+                }
+                await options.order.set(cwd, sessionIds);
+                writeJson(response, 200, {});
+                return true;
+            }
             const sessionId = segments[1]!;
             const action = segments[2];
             if (segments.length !== 3) return false;
@@ -227,6 +262,13 @@ async function handleSessionPost(
                 response,
                 200,
                 rigSessionProject((await client.forkSession(sessionId)).session, home),
+            );
+            return true;
+        case "archive":
+            writeJson(
+                response,
+                200,
+                rigSessionProject((await client.archiveSession(sessionId)).session, home),
             );
             return true;
         case "reset":
@@ -449,9 +491,22 @@ async function streamGlobalEvents(
     }
 }
 
+/** Sort position of one session inside its directory's arrangement. */
+function rank(
+    order: RigSessionOrder | undefined,
+    session: { readonly id: string; readonly cwd: string },
+): number {
+    return order ? order.rank(session.cwd, session.id) : Number.MAX_SAFE_INTEGER;
+}
+
 function createRequest(input: RigSessionCreateInput) {
     return {
         cwd: input.cwd,
+        // A session started from this app is one the user opened a window on, so
+        // it stays listed after it settles. Only sessions started elsewhere (the
+        // TUI asks for this) archive themselves once idle, and the workspace
+        // list hides exactly those.
+        archiveOnIdle: false,
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.modelId ? { modelId: input.modelId } : {}),
         ...(input.effort ? { effort: input.effort } : {}),

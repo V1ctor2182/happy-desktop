@@ -232,6 +232,20 @@ export interface RigTransport {
     sessionCreate(input: RigSessionCreateInput): Promise<RigSession>;
     sessionFork(sessionId: RigSessionId): Promise<RigSession>;
     sessionReset(sessionId: RigSessionId): Promise<RigSession>;
+    /**
+     * Closes a session: it stops being listed by `sessionsRead` from here on,
+     * durably, while the session itself keeps existing and stays readable by id.
+     * Archiving is a host decision, not a run-state change, so it reports nothing
+     * back beyond completing.
+     */
+    sessionArchive(sessionId: RigSessionId): Promise<void>;
+    /**
+     * Records the complete order of one working directory's sessions, as the
+     * user arranged them. The host owns presentation order — `sessionsRead`
+     * already returns sessions in it — so this reports an arrangement rather
+     * than asking the list to re-sort itself.
+     */
+    sessionsReorder(cwd: string, sessionIds: readonly RigSessionId[]): Promise<void>;
 
     /** Submits a fresh user turn; `idempotencyKey` is stable across retries of one send. */
     messageSubmit(sessionId: RigSessionId, text: string, idempotencyKey: string): Promise<void>;

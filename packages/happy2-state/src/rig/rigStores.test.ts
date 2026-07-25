@@ -16,8 +16,8 @@ import type {
     ConversationMessageEntry,
     ConversationToolCall,
 } from "../conversation/conversationEntry.js";
-import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
+import type { RigSessionFolder } from "./rigSessionFolderProject.js";
 import type {
     RigEventId,
     RigSession,
@@ -73,11 +73,16 @@ function sessionOf(store: RigChatStore): RigSession {
     return session.value;
 }
 
-/** The conversation rows of a list snapshot, which must be loaded to assert on. */
-function rowsOf(store: { get(): { conversations: Loadable<readonly ConversationSummary[]> } }) {
-    const conversations = store.get().conversations;
-    if (conversations.type !== "ready") throw new Error("The list is not loaded.");
-    return conversations.value;
+/** The directory rows of a list snapshot, which must be loaded to assert on. */
+function foldersOf(store: { get(): { folders: Loadable<readonly RigSessionFolder[]> } }) {
+    const folders = store.get().folders;
+    if (folders.type !== "ready") throw new Error("The list is not loaded.");
+    return folders.value;
+}
+
+/** Every conversation row of a list snapshot, in directory then session order. */
+function rowsOf(store: { get(): { folders: Loadable<readonly RigSessionFolder[]> } }) {
+    return foldersOf(store).flatMap((folder) => folder.conversations);
 }
 
 async function catalogOf(fake: FakeRigTransport): Promise<RigModelCatalog> {
@@ -120,16 +125,19 @@ async function chatReady(
 }
 
 describe("rigSessionListStore", () => {
-    it("orders rows newest-created first and reconciles durable truth after a hint", async () => {
+    it("keeps the order the host listed sessions in and reconciles durable truth after a hint", async () => {
         const fake = createFakeRigTransport();
-        fake.sessionSet(fakeRigSession("a", { createdAt: 100 }));
+        // The host owns presentation order (it holds the user's durable tab
+        // arrangement), so the list renders what it was handed rather than
+        // re-sorting it.
         fake.sessionSet(fakeRigSession("c", { createdAt: 300 }));
         fake.sessionSet(fakeRigSession("b", { createdAt: 200 }));
+        fake.sessionSet(fakeRigSession("a", { createdAt: 100 }));
         const store = rigSessionListStoreCreate({ transport: fake.transport });
         const unsubscribe = store.subscribe(() => undefined);
         await flush();
 
-        expect(store.get().conversations.type).toBe("ready");
+        expect(store.get().folders.type).toBe("ready");
         expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a"]);
 
         // A global event is only a delivery hint: the payload it carries is never
@@ -149,7 +157,7 @@ describe("rigSessionListStore", () => {
             session: fakeRigSummary("d", { createdAt: 400 }),
         });
         await flush();
-        expect(rowsOf(store).map((row) => row.id)).toEqual(["d", "c", "b", "a"]);
+        expect(rowsOf(store).map((row) => row.id)).toEqual(["c", "b", "a", "d"]);
 
         fake.sessionSet(fakeRigSession("a", { createdAt: 100, title: "Renamed" }));
         fake.globalEmit({
@@ -158,7 +166,7 @@ describe("rigSessionListStore", () => {
             session: fakeRigSummary("a", { createdAt: 100, title: "Renamed" }),
         });
         await flush();
-        expect(rowsOf(store)[3]?.title).toBe("Renamed");
+        expect(rowsOf(store)[2]?.title).toBe("Renamed");
         unsubscribe();
     });
 
@@ -184,12 +192,12 @@ describe("rigSessionListStore", () => {
         await flush();
 
         const before = store.get();
-        const rows = rowsOf(store);
+        const folders = foldersOf(store);
         notifications = 0;
         await store.sessionsRefresh();
 
         expect(store.get()).toBe(before);
-        expect(rowsOf(store)).toBe(rows);
+        expect(foldersOf(store)).toBe(folders);
         expect(notifications).toBe(0);
         unsubscribe();
     });

@@ -100,6 +100,12 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         sessionCreate: (input: RigSessionCreateInput) => postJson<RigSession>("/sessions", input),
         sessionFork: (sessionId) => postJson<RigSession>(`/sessions/${sessionId}/fork`),
         sessionReset: (sessionId) => postJson<RigSession>(`/sessions/${sessionId}/reset`),
+        sessionArchive: async (sessionId) => {
+            await postJson<Record<string, never>>(`/sessions/${sessionId}/archive`);
+        },
+        sessionsReorder: async (cwd, sessionIds) => {
+            await postJson<Record<string, never>>("/sessions/order", { cwd, sessionIds });
+        },
 
         messageSubmit: async (sessionId, text, idempotencyKey) => {
             await postJson(`/sessions/${sessionId}/messages`, { text, idempotencyKey });

@@ -38,6 +38,7 @@ function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
     return {
         id: "session-1",
         agentId: "agent-1",
+        archived: false,
         cwd: `${HOME}/work`,
         providerId: "openai",
         permissionMode: "auto",

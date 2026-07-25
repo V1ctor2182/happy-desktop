@@ -13,6 +13,20 @@ async function flush(): Promise<void> {
     for (let i = 0; i < 20; i += 1) await Promise.resolve();
 }
 
+/**
+ * Asserts the surface an addressed-but-not-yet-acquired conversation shows: it
+ * is a real conversation with a live composer, whose session states that it is
+ * still loading. Addressing a conversation never unmounts the input.
+ */
+function conversationAcquiring(workspace: RigWorkspaceStore): void {
+    const conversation = workspace.get().conversation;
+    expect(conversation.type).toBe("ready");
+    if (conversation.type !== "ready") throw new Error("Expected a ready conversation.");
+    expect(conversation.value.session.type).toBe("loading");
+    expect(conversation.value.entries).toEqual([]);
+    expect(conversation.value.composer.text).toBe("");
+}
+
 function conversationReady(workspace: RigWorkspaceStore): RigConversationSnapshot {
     const conversation = workspace.get().conversation;
     expect(conversation.type).toBe("ready");
@@ -30,10 +44,12 @@ describe("rigWorkspaceStore", () => {
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
 
-        const list = workspace.get().list.conversations;
+        const list = workspace.get().list.folders;
         expect(list.type).toBe("ready");
-        expect(list.type === "ready" && list.value.map((row) => row.id)).toEqual(["session-a"]);
-        expect(list.type === "ready" && list.value[0]!.title).toBe("Alpha");
+        const rows =
+            list.type === "ready" ? list.value.flatMap((folder) => folder.conversations) : [];
+        expect(rows.map((row) => row.id)).toEqual(["session-a"]);
+        expect(rows[0]!.title).toBe("Alpha");
         expect(workspace.get().conversation.type).toBe("unloaded");
 
         workspace.conversationOpen("session-a" as RigSessionId);
@@ -98,7 +114,7 @@ describe("rigWorkspaceStore", () => {
         const requested: string[] = [];
         const client = rigClientCreate({ transport: fake.transport });
         const workspace = rigWorkspaceStoreCreate(client, {
-            output: (event) => requested.push(event.conversationId),
+            output: (event) => requested.push(event.location.sessionId),
         });
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
@@ -262,7 +278,7 @@ describe("rigWorkspaceStore", () => {
         expect(failed.type === "error" && failed.error.message).toBe("catalog unavailable");
 
         workspace.conversationRetry();
-        expect(workspace.get().conversation.type).toBe("loading");
+        conversationAcquiring(workspace);
         await flush();
 
         expect(conversationReady(workspace).conversationId).toBe("session-a");
@@ -286,7 +302,7 @@ describe("rigWorkspaceStore", () => {
         expect(workspace.get().conversation.type).toBe("error");
 
         workspace.conversationOpen("session-a" as RigSessionId);
-        expect(workspace.get().conversation.type).toBe("loading");
+        conversationAcquiring(workspace);
         await flush();
 
         expect(conversationReady(workspace).conversationId).toBe("session-a");
@@ -307,9 +323,9 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         workspace.conversationOpen("session-a" as RigSessionId);
-        expect(workspace.get().conversation.type).toBe("loading");
+        conversationAcquiring(workspace);
         workspace.conversationOpen("session-b" as RigSessionId);
-        expect(workspace.get().conversation.type).toBe("loading");
+        conversationAcquiring(workspace);
 
         catalogGate.release();
         await flush();
