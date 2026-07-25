@@ -152,6 +152,38 @@ export function AvatarPage() {
             </Specimen>
 
             <Specimen
+                number="05A"
+                label="Glyph variant"
+                detail="Glyph 12 / 16 / 18 / 20 replaces initials for a place, not a person"
+                stage="app"
+            >
+                <div style={row}>
+                    {SIZES.map((entry) => (
+                        <div key={entry.size} style={cell}>
+                            <Avatar
+                                icon="home"
+                                initials={entry.initials}
+                                size={entry.size}
+                                tone="brand"
+                                type="agent"
+                            />
+                            <DimensionRule label={entry.size} />
+                        </div>
+                    ))}
+                    <div style={cell}>
+                        <Avatar
+                            icon="home"
+                            imageUrl={FIXTURE_IMAGE}
+                            initials="HM"
+                            size="lg"
+                            type="agent"
+                        />
+                        <DimensionRule label="image wins" />
+                    </div>
+                </div>
+            </Specimen>
+
+            <Specimen
                 number="06"
                 label="In context"
                 detail="Facepile overlap −6px with chrome ring · humans and agents mixed"

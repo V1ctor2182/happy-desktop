@@ -5,6 +5,7 @@
 
 .happy2-avatar,
 .happy2-avatar__initials,
+.happy2-avatar__glyph,
 .happy2-avatar__image,
 .happy2-avatar__presence {
     box-sizing: border-box;
@@ -111,6 +112,14 @@
 
 .happy2-avatar__initials {
     display: block;
+}
+
+/* A glyph carries the tile's meaning instead of initials; it inherits the same
+ * tint and is box-centered by the font, so it needs no optical nudge. */
+.happy2-avatar__glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Calibrated against the balanced O fixture's visible bounds. */

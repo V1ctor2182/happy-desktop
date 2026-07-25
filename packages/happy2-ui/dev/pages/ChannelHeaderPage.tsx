@@ -60,7 +60,7 @@ export function ChannelHeaderPage() {
             </Specimen>
 
             <Specimen
-                detail="hash · spark · inbox — 16px muted icon, title 15/700"
+                detail="hash · spark · inbox · home — 16px muted icon, title 15/700"
                 label="Icon variants"
                 number="02"
                 stage="app"
@@ -80,6 +80,7 @@ export function ChannelHeaderPage() {
                         topic="Every run across the workspace"
                     />
                     <ChannelHeader icon="inbox" memberCount={4} title="Inbox" />
+                    <ChannelHeader icon="home" title="Home" />
                 </div>
             </Specimen>
 

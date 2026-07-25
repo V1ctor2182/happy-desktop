@@ -159,6 +159,14 @@ const treatmentSections: SidebarSection[] = [
                 tone: "mint",
             },
             {
+                icon: "home",
+                id: "kind-agent-glyph",
+                initials: "H",
+                kind: "agent",
+                label: "Agent — glyph avatar",
+                tone: "brand",
+            },
+            {
                 id: "kind-person-photo",
                 imageUrl: PHOTO,
                 initials: "MJ",

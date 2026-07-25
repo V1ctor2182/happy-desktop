@@ -20,7 +20,7 @@ export type ChannelMember = {
 export type ChannelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     actions?: ReactNode;
     agentCount?: number;
-    icon?: "hash" | "spark" | "inbox";
+    icon?: "hash" | "spark" | "inbox" | "home";
     memberCount?: number;
     /** Overflow "⋮" menu shown at the right edge. No button renders when empty. */
     menuItems?: MenuItem[];

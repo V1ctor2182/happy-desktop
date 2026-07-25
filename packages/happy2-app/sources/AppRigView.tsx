@@ -78,6 +78,12 @@ interface OpenGroup {
     readonly id: RigGroupId;
     readonly name: string;
     readonly displayPath: string;
+    /**
+     * The catch-all project for sessions started outside any repository. It is
+     * addressed as a place rather than as a path, so the surface names it by its
+     * house glyph and never spells its `~` out.
+     */
+    readonly home: boolean;
     readonly conversations: RigProjectGroup["conversations"];
     readonly create: RigSessionCreateInput;
 }
@@ -88,7 +94,9 @@ interface OpenGroup {
  * both the daemon's — derived from the git remote — so a reader recognizes a
  * repository at a glance. Its path is deliberately not here: it is long enough
  * to crowd out the name it is supposed to disambiguate, and the heading over the
- * open project states it in full.
+ * open project states it in full. The home project is the exception both ways:
+ * it has no remote to derive a picture from, and an "H" plaque would read as one
+ * more repository, so it wears a house instead.
  */
 function sidebarItems(project: RigProjectGroup): SidebarItem[] {
     return [
@@ -97,6 +105,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             kind: "agent",
             label: project.name,
             initials: project.name.slice(0, 1).toUpperCase(),
+            ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
             // A row only carries a status while one of its sessions is live.
             ...(project.activity === "running" ? { status: "working" as const } : {}),
@@ -132,6 +141,7 @@ function openGroupFind(
                 id: project.id,
                 name: project.name,
                 displayPath: project.displayPath,
+                home: project.kind === "home",
                 conversations: project.conversations,
                 create: { cwd: project.path },
             };
@@ -141,6 +151,7 @@ function openGroupFind(
                     id: worktree.id,
                     name: worktree.name,
                     displayPath: worktree.displayPath,
+                    home: false,
                     conversations: worktree.conversations,
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                 };
@@ -296,9 +307,9 @@ export function AppRigView(props: AppRigViewProps) {
                         beneath it is another session in this one project, so it
                         stays put as they are switched. */}
                     <ChannelHeader
-                        icon="inbox"
+                        icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
-                        topic={openGroup.displayPath}
+                        {...(openGroup.home ? {} : { topic: openGroup.displayPath })}
                     />
                     {openGroup.conversations.length === 0 ? (
                         // A project with nothing in it gets no tab strip: an empty
@@ -310,10 +321,18 @@ export function AppRigView(props: AppRigViewProps) {
                                 icon: "plus",
                                 onClick: () => groupConversationCreate(openGroup),
                             }}
-                            description={`Start a session to begin working in ${openGroup.displayPath}.`}
-                            icon="chat"
+                            description={
+                                openGroup.home
+                                    ? "Start a session to begin working in your home folder."
+                                    : `Start a session to begin working in ${openGroup.displayPath}.`
+                            }
+                            icon={openGroup.home ? "home" : "chat"}
                             size="panel"
-                            title={`No sessions in ${openGroup.name} yet`}
+                            title={
+                                openGroup.home
+                                    ? "No sessions in your home folder yet"
+                                    : `No sessions in ${openGroup.name} yet`
+                            }
                         />
                     ) : (
                         <TabbedPane
@@ -373,12 +392,14 @@ export function AppRigView(props: AppRigViewProps) {
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
+                    {/* No project is open, so there is nowhere for a session to be
+                        started: the only move from here is picking a project, and
+                        offering a button that cannot answer that would misdirect. */}
                     <EmptyState
-                        action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
-                        description="Select a project from the list or start a new session to begin."
-                        icon="chat"
+                        description="Pick one in the sidebar to see its sessions."
+                        icon="files"
                         size="panel"
-                        title="No project selected"
+                        title="No project open"
                     />
                 </>
             )}

@@ -21,6 +21,7 @@ export type SidebarItem = {
     badge?: number;
     /** Nesting level. `0`/absent is top level; each level adds `SIDEBAR_ROW_INDENT` of left inset. */
     depth?: number;
+    /** The row's glyph. A `person`/`agent` row paints it inside the avatar tile. */
     icon?: IconName;
     id: string;
     imageUrl?: string;
@@ -170,6 +171,7 @@ function SidebarRow(props: {
                 >
                     {item().kind === "person" || item().kind === "agent" ? (
                         <Avatar
+                            icon={item().icon}
                             imageUrl={item().imageUrl}
                             initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
                             online={item().kind === "person" ? item().online : undefined}

@@ -1,9 +1,16 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type HTMLAttributes } from "react";
+import { Icon, type IconName } from "./Icon";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 export type AvatarType = "human" | "agent";
 export type ToneName = "violet" | "ember" | "mint" | "ocean" | "rose" | "amber" | "slate" | "brand";
 export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
+    /**
+     * Marks an entity that is named by a symbol rather than by a person or a
+     * picture — the home project, say. It replaces the initials, and an
+     * `imageUrl` still wins over it.
+     */
+    icon?: IconName;
     imageUrl?: string;
     initials: string;
     online?: boolean;
@@ -12,10 +19,13 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     tone?: ToneName;
     type?: AvatarType;
 };
+/** Glyph size per avatar box, leaving the tile's ink inset on every size. */
+const iconSize = { xs: 12, sm: 16, md: 18, lg: 20 } as const satisfies Record<AvatarSize, number>;
 export function Avatar(props: AvatarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "children",
         "className",
+        "icon",
         "imageUrl",
         "initials",
         "online",
@@ -48,6 +58,10 @@ export function Avatar(props: AvatarProps) {
                     alt=""
                     draggable={false}
                 />
+            ) : local.icon ? (
+                <span className="happy2-avatar__glyph" data-happy2-ui="avatar-glyph">
+                    <Icon name={local.icon} size={iconSize[size()]} />
+                </span>
             ) : (
                 <span className="happy2-avatar__initials" data-happy2-ui="avatar-initials">
                     {local.initials}
