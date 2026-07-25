@@ -189,10 +189,14 @@
 
 .happy2-app-shell__sidebar-collapse {
     /* Overlay pinned to the sidebar's empty top-right corner (clear of the
-       top-left macOS traffic lights); it is chrome above the sidebar content. */
+       top-left macOS traffic lights); it is chrome above the sidebar content.
+       Being an overlay it centres itself rather than inheriting the heading's
+       alignment: the 56px sidebar header centres its content on 28px, so this
+       28px box hangs at 14px to sit on that same line as the heading beside it
+       and the channel header's icon and title across the divider. */
     position: absolute;
     z-index: 2;
-    top: 12px;
+    top: 14px;
     right: 12px;
     box-sizing: border-box;
     display: flex;

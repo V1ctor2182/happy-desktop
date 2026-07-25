@@ -75,10 +75,15 @@
     top: 10px;
 }
 
-/* The dangling avatar is positioned from the row's top edge, so it follows that
-   halved padding down by exactly as much: keep it centred on the author line. */
+/* The dangling avatar is positioned from the row's top edge, so it has to be
+   placed against whatever padding that row actually carries. A plain agent row
+   here keeps the base 16px padding — the cloud surface halves it to 8px, which
+   is why the same rule reads 10px there and must not be copied across — so its
+   author line spans 16px..36px and the 16px avatar hangs at 18px to centre on
+   it. The grouped and resumed rows below halve or quarter that padding and take
+   their own offsets. */
 .happy2-conversation .happy2-message[data-agent]:not([data-own]) .happy2-message__gutter {
-    top: 10px;
+    top: 18px;
 }
 
 .happy2-conversation
