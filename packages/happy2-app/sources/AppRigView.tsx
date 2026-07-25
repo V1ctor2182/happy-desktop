@@ -30,6 +30,7 @@ import {
     Sidebar,
     SidebarFooter,
     TabbedPane,
+    WindowDragRegion,
     rigComposerModelControlProps,
     type SidebarItem,
     type TabItem,
@@ -281,13 +282,18 @@ export function AppRigView(props: AppRigViewProps) {
                     />
                 </TabbedPane>
             ) : (
-                <EmptyState
-                    action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
-                    description="Select a folder from the list or start a new session to begin."
-                    icon="chat"
-                    size="panel"
-                    title="No folder selected"
-                />
+                <>
+                    {/* With no directory open there is no tab strip, so this side of
+                        the window would have no lane to drag it by. */}
+                    {desktop ? <WindowDragRegion /> : null}
+                    <EmptyState
+                        action={{ label: "New session", icon: "plus", onClick: conversationCreate }}
+                        description="Select a folder from the list or start a new session to begin."
+                        icon="chat"
+                        size="panel"
+                        title="No folder selected"
+                    />
+                </>
             )}
         </AppShell>
     );
