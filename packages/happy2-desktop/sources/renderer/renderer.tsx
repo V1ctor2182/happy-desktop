@@ -1,7 +1,9 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { App, DesktopStartupScreen, rigRouterCreate, type RigRouter } from "happy2-app";
+import { appearanceStoreCreate, type AppearanceStore } from "happy2-state";
+import { ThemeScope } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
@@ -38,7 +40,25 @@ function ChoosingScreen(props: {
  * router owns which conversation is open, so the stores of a new connection are
  * handed to it as route context rather than as props to a screen.
  */
-function RigBoundary(props: { router: RigRouter; store: RigSessionStore }) {
+/**
+ * Renders the whole desktop tree in the selected appearance. The store outlives
+ * every daemon connection and every startup phase, so the startup screens and the
+ * workspace are one themed subtree rather than two.
+ */
+function DesktopAppearance(props: { appearance: AppearanceStore; children: ReactNode }) {
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
+    return <ThemeScope mode={appearance.mode}>{props.children}</ThemeScope>;
+}
+
+function RigBoundary(props: {
+    appearance: AppearanceStore;
+    router: RigRouter;
+    store: RigSessionStore;
+}) {
     const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     if (!session)
         return (
@@ -53,6 +73,7 @@ function RigBoundary(props: { router: RigRouter; store: RigSessionStore }) {
     return (
         <RouterProvider
             context={{
+                appearance: props.appearance,
                 clock: session.clock,
                 connection: session.connection,
                 host: session.host,
@@ -65,6 +86,7 @@ function RigBoundary(props: { router: RigRouter; store: RigSessionStore }) {
 }
 
 function DesktopRenderer(props: {
+    appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
     rigRouter: RigRouter;
     rigSession: RigSessionStore;
@@ -150,7 +172,13 @@ function DesktopRenderer(props: {
             />
         );
 
-    return <RigBoundary router={props.rigRouter} store={props.rigSession} />;
+    return (
+        <RigBoundary
+            appearance={props.appearance}
+            router={props.rigRouter}
+            store={props.rigSession}
+        />
+    );
 }
 
 // Browser-local dev mode is signalled by a CSP-safe meta tag the dev server
@@ -164,20 +192,26 @@ if (bridge) {
     // here and the session store navigates through it when a conversation it
     // created should be opened.
     const rigRouter = rigRouterCreate();
+    // Appearance is chosen for the window, not for one connection, so the store is
+    // created here beside the router and outlives both.
+    const appearance = appearanceStoreCreate();
     createRoot(document.getElementById("root")!).render(
-        <DesktopRenderer
-            bridge={bridge}
-            rigRouter={rigRouter}
-            rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
-                conversationOpen: (sessionId) =>
-                    void rigRouter.navigate({
-                        params: { chatId: sessionId },
-                        to: "/chats/$chatId",
-                    }),
-            })}
-            startupValues={startupValuesStoreCreate()}
-            store={runtimeStore}
-        />,
+        <DesktopAppearance appearance={appearance}>
+            <DesktopRenderer
+                appearance={appearance}
+                bridge={bridge}
+                rigRouter={rigRouter}
+                rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
+                    conversationOpen: (sessionId) =>
+                        void rigRouter.navigate({
+                            params: { chatId: sessionId },
+                            to: "/chats/$chatId",
+                        }),
+                })}
+                startupValues={startupValuesStoreCreate()}
+                store={runtimeStore}
+            />
+        </DesktopAppearance>,
     );
 } else {
     createRoot(document.getElementById("root")!).render(

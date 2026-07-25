@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type { RigClockStore, RigConnectionStore, RigHost, RigWorkspaceStore } from "happy2-state";
-import { rigHostNoop } from "happy2-state";
+import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
 import { AppRigView } from "../../sources/AppRigView";
 
 /* The local workspace renders the shared cloud components with local product
@@ -65,6 +65,7 @@ function view(
 ) {
     return render(
         <AppRigView
+            appearance={appearanceStoreCreate({ mode: "light" })}
             chatId={options.chatId}
             clock={clock()}
             connection={connection()}

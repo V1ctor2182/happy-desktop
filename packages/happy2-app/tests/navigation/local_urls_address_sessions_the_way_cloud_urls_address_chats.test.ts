@@ -6,7 +6,7 @@ import type {
     RigSessionId,
     RigWorkspaceStore,
 } from "happy2-state";
-import { rigHostNoop } from "happy2-state";
+import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
 import { rigMemoryHistoryCreate, rigRouterCreate } from "../../sources/navigation/rigRouter";
 import type { RigRouterContext } from "../../sources/navigation/rigRouter";
 
@@ -35,6 +35,7 @@ async function resolve(url: string) {
     const router = rigRouterCreate(rigMemoryHistoryCreate(url));
     onTestFinished(() => router.history.destroy());
     const context: RigRouterContext = {
+        appearance: appearanceStoreCreate(),
         clock: { get: () => 0, subscribe: () => () => undefined } as unknown as RigClockStore,
         connection: {
             get: () => ({ connection: "connected", daemon: "ready", attempt: 0 }),

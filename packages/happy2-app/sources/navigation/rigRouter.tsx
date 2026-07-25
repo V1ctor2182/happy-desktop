@@ -13,6 +13,7 @@ import {
     type RouterHistory,
 } from "@tanstack/react-router";
 import type {
+    AppearanceStore,
     RigClockStore,
     RigConnectionStore,
     RigHost,
@@ -23,7 +24,8 @@ import { AppRigView } from "../AppRigView";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
- * daemon connection, the workspace product store, the host, and the clock. It is
+ * daemon connection, the workspace product store, the host, the clock, and the
+ * appearance selection. It is
  * the local counterpart of `AppRouterContext` and is supplied to
  * `RouterProvider` once a connection exists, so the router can be constructed
  * before any of these do.
@@ -33,6 +35,7 @@ export interface RigRouterContext {
     readonly connection: RigConnectionStore;
     readonly workspace: RigWorkspaceStore;
     readonly clock: RigClockStore;
+    readonly appearance: AppearanceStore;
 }
 
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
@@ -96,6 +99,7 @@ function RigWorkspaceLayout() {
     const params = useParams({ strict: false });
     return (
         <AppRigView
+            appearance={context.appearance}
             chatId={params.chatId}
             clock={context.clock}
             connection={context.connection}

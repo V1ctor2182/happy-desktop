@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
+    AppearanceStore,
     ConversationSummary,
     RigClockStore,
     RigConnectionStore,
@@ -25,6 +26,7 @@ import {
     RigSessionControls,
     RigUsagePanel,
     Sidebar,
+    SidebarFooter,
     rigComposerModelControlProps,
     type SidebarItem,
 } from "happy2-ui";
@@ -38,6 +40,8 @@ export interface AppRigViewProps {
     workspace: RigWorkspaceStore;
     /** Ticking clock feeding relative timestamps in the conversation list. */
     clock: RigClockStore;
+    /** Theme selection behind the sidebar footer's appearance toggle. */
+    appearance: AppearanceStore;
     /**
      * The addressed conversation, read from the route by the caller. This surface
      * never decides which conversation is shown; it renders the addressed one and
@@ -76,14 +80,17 @@ function sidebarItem(summary: ConversationSummary, now: number): SidebarItem {
 
 /**
  * The local workspace surface. It subscribes once each to the connection,
- * workspace, and clock stores (no local React state) and composes the shared
- * `happy2-ui` components: the same `Sidebar` the cloud stack uses for its
- * conversation list — including its shared brand heading, so the two modes are
- * one component rendered twice rather than a local-only variant — and the same
- * `ConversationView` for the selected conversation. Local-only affordances (the
- * model and effort pickers beneath the composer, the settings dialog holding the
- * view toggles and access pickers, and the usage and activity panels) are passed
- * into that surface's slots.
+ * workspace, clock, and appearance stores (no local React state) and composes
+ * the shared `happy2-ui` components: the same `Sidebar` the cloud stack uses for
+ * its conversation list — including its shared brand heading, its collapsible
+ * and resizable shell column, and its pinned footer, so the two modes are one
+ * component rendered twice rather than a local-only variant — and the same
+ * `ConversationView` for the selected conversation. The footer carries only what
+ * a machine-owned workspace actually has: the appearance toggle and the
+ * application menu, with no account identity, profile, or administration.
+ * Local-only affordances (the model and effort pickers beneath the composer, the
+ * settings dialog holding the view toggles and access pickers, and the usage and
+ * activity panels) are passed into that surface's slots.
  *
  * Until the daemon connection is live it shows the connection status with a
  * retry. Which conversation is shown comes from the route through `chatId`, and
@@ -103,6 +110,11 @@ export function AppRigView(props: AppRigViewProps) {
         props.workspace.get,
     );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
 
     const ready = status.connection === "connected" && status.daemon === "ready";
     if (!ready) {
@@ -150,11 +162,22 @@ export function AppRigView(props: AppRigViewProps) {
 
     return (
         <AppShell
+            sidebarCollapsible
             sidebar={
                 <Sidebar
                     activeItemId={props.chatId ?? ""}
                     brand
                     composeLabel="New session"
+                    footer={
+                        <SidebarFooter
+                            appearance={appearance.appearance}
+                            onAppearanceToggle={() => props.appearance.appearanceToggle()}
+                            // Local app-level settings — the instance list and the
+                            // rest of the shell's own commands — live in the native
+                            // application menu, so that is what this opens.
+                            onSettingsOpen={() => props.host.applicationMenuOpen()}
+                        />
+                    }
                     headerAccessory={listAccessory}
                     onCompose={conversationCreate}
                     onItemSelect={(id) => props.onChatSelect(id)}

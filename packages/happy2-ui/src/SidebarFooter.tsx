@@ -4,10 +4,14 @@ import { Box } from "./Box";
 import { Button } from "./Button";
 
 export type SidebarFooterProps = {
-    /** Display name beside the avatar; the identity this surface is rendered for. */
-    name: string;
+    /**
+     * Display name beside the avatar; the identity this surface is rendered for.
+     * Omit it on a machine-owned surface that has no identity to show — the row
+     * then carries only its controls.
+     */
+    name?: string;
     /** Avatar initials fallback when no image is available. */
-    initials: string;
+    initials?: string;
     /** Durable avatar image, when the identity has one. */
     imageUrl?: string;
     /** Shows the presence dot on the avatar. */
@@ -44,27 +48,30 @@ export type SidebarFooterProps = {
  * column: who the surface is rendered for, the controls that belong to that
  * identity, and the appearance toggle.
  *
- * Every affordance beyond the identity and the appearance toggle is optional,
- * because the surfaces that use this differ in what genuinely exists rather than
- * in what they choose to show. A workspace with an account has a profile to open
- * and may have administration; a local machine-owned workspace has neither. An
- * absent handler removes its control entirely instead of rendering a disabled
- * one, so there is no mode flag here and no control wired to nothing.
+ * Every affordance beyond the appearance toggle is optional, because the
+ * surfaces that use this differ in what genuinely exists rather than in what
+ * they choose to show. A workspace with an account has a profile to open and may
+ * have administration; a local machine-owned workspace has no account at all, so
+ * it shows no identity either and its controls sit alone on the row. An absent
+ * handler removes its control entirely instead of rendering a disabled one, so
+ * there is no mode flag here and no control wired to nothing.
  */
 export function SidebarFooter(props: SidebarFooterProps) {
-    const identity = (
-        <>
-            <Avatar
-                aria-label={props.online ? `${props.name} — online` : props.name}
-                imageUrl={props.imageUrl}
-                initials={props.initials}
-                online={props.online}
-                size="sm"
-                tone="brand"
-            />
-            <span className="happy2-sidebar__profile-name">{props.name}</span>
-        </>
-    );
+    const name = props.name;
+    const identity =
+        name === undefined ? undefined : (
+            <>
+                <Avatar
+                    aria-label={props.online ? `${name} — online` : name}
+                    imageUrl={props.imageUrl}
+                    initials={props.initials ?? ""}
+                    online={props.online}
+                    size="sm"
+                    tone="brand"
+                />
+                <span className="happy2-sidebar__profile-name">{name}</span>
+            </>
+        );
     return (
         <Box
             className={props.className}
@@ -78,7 +85,11 @@ export function SidebarFooter(props: SidebarFooterProps) {
                 ...props.style,
             }}
         >
-            {props.onProfileOpen ? (
+            {identity === undefined ? (
+                // No identity to show: the controls keep their trailing position
+                // rather than sliding to the left of an empty row.
+                <span style={{ flex: "1 1 auto" }} />
+            ) : props.onProfileOpen ? (
                 <button
                     aria-label="Open profile"
                     className="happy2-sidebar__profile"
