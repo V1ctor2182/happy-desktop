@@ -29,8 +29,8 @@ function message(
                       }
                     : {
                           id: "rig:agent",
-                          displayName: "Rig",
-                          username: "rig",
+                          displayName: "Happy",
+                          username: "happy",
                           kind: "agent",
                           agentRole: "default",
                       },
@@ -142,8 +142,8 @@ it("routes every entry kind to its shared chat component", async () => {
     expect(mine.element.getAttribute("data-own")).toBe("");
     expect(view.container.querySelector('[data-testid="theirs"][data-own]')).toBeNull();
     expect(
-        view.$('[data-testid="theirs"] [data-happy2-ui="message-author"]').element.textContent,
-    ).toBe("Rig");
+        view.container.querySelector('[data-testid="theirs"] [data-happy2-ui="message-author"]'),
+    ).toBeNull();
 
     // Agent activity is one AgentActivityRow, not a message bubble.
     expect(view.$('[data-testid="activity"]').element.getAttribute("data-happy2-ui")).toBe(

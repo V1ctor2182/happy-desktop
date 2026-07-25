@@ -141,6 +141,7 @@ export {
     type ComposerModelChoice,
     type ComposerModelControlProps,
 } from "./ComposerModelControl";
+export { rigComposerModelControlProps } from "./rigComposerModelControl";
 export { ComposerDock, type ComposerDockProps } from "./pages/chat/ComposerDock";
 export {
     DiffSnippet,
@@ -231,7 +232,6 @@ export {
 } from "./RigCommandPalette";
 export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
-export { RigStatusBar, type RigStatusBarProps } from "./RigStatusBar";
 export {
     SearchField,
     type SearchFieldEditableProps,

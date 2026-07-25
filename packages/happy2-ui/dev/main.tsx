@@ -106,7 +106,6 @@ import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
 import { RigCommandPalettePage } from "./pages/RigCommandPalettePage";
 import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
 import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
-import { RigStatusBarPage } from "./pages/RigStatusBarPage";
 type BlueprintPage = {
     id: string;
     label: string;
@@ -235,12 +234,6 @@ const components: BlueprintPage[] = [
         label: "Rig activity panel",
         number: "C-157",
         page: RigActivityPanelPage,
-    },
-    {
-        id: "rig-status-bar",
-        label: "Rig status bar",
-        number: "C-158",
-        page: RigStatusBarPage,
     },
     { id: "app-shell", label: "App shell", number: "C-010", page: AppShellPage },
     { id: "channel-header", label: "Channel header", number: "C-011", page: ChannelHeaderPage },

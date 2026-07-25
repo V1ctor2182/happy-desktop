@@ -15,6 +15,11 @@ export type AgentActivityRowProps = {
     activity: ConversationActivity;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
+    /**
+     * Local conversation tool rows: one neutral line aligned with agent text, with
+     * no inline result or expand affordance.
+     */
+    singleLine?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -213,12 +218,17 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
  * approval" child line. Collapse/expand of the rich body is the only local UI
  * state; every value comes from props.
  */
-function AgentToolActivity(props: { tool: ConversationToolCall; defaultExpanded?: boolean }) {
+function AgentToolActivity(props: {
+    tool: ConversationToolCall;
+    defaultExpanded?: boolean;
+    singleLine?: boolean;
+}) {
     const { tool } = props;
     const presentation = tool.presentation;
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
+    const singleLine = props.singleLine ?? false;
 
-    const tone = statusTone(tool.status);
+    const tone = singleLine ? "neutral" : statusTone(tool.status);
 
     // MCP tool calls (`mcp__server__tool`) have no protocol presentation; the TUI
     // derives their block at render time from the name, arguments, and result. We
@@ -266,14 +276,15 @@ function AgentToolActivity(props: { tool: ConversationToolCall; defaultExpanded?
             ? presentation.input.replace(/\n+$/, "").split("\n")
             : undefined;
 
-    const hasBody =
-        presentation?.type === "fileDiff"
-            ? presentation.files.length > 0
-            : presentation?.type === "execCommand"
-              ? presentation.output.trim().length > 0
-              : presentation?.type === "backgroundTerminalInteraction"
-                ? presentation.input.trim().length > 0
-                : Boolean(argsJson);
+    const hasBody = singleLine
+        ? false
+        : presentation?.type === "fileDiff"
+          ? presentation.files.length > 0
+          : presentation?.type === "execCommand"
+            ? presentation.output.trim().length > 0
+            : presentation?.type === "backgroundTerminalInteraction"
+              ? presentation.input.trim().length > 0
+              : Boolean(argsJson);
 
     // MCP results render as capped dim rows (≤5, then "… N more"); an interrupted
     // call collapses to a single "Interrupted." row, matching the TUI.
@@ -292,60 +303,76 @@ function AgentToolActivity(props: { tool: ConversationToolCall; defaultExpanded?
               ? tool.display
               : "(empty result)";
 
-    return (
-        <div
-            className="happy2-agent-activity"
-            data-status={tool.status}
-            data-tone={tone}
-            data-presentation={presentation?.type ?? "generic"}
-            data-expanded={expanded ? "" : undefined}
-            data-happy2-ui="agent-activity-call"
-        >
-            <button
-                aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
-                className="happy2-agent-activity__header"
-                data-happy2-ui="agent-activity-header"
-                disabled={!hasBody}
-                onClick={() => hasBody && setExpanded((open) => !open)}
-                type="button"
-            >
+    const header = (
+        <>
+            {singleLine ? null : (
                 <span
                     aria-hidden="true"
                     className="happy2-agent-activity__dot"
                     data-tone={tone}
                     data-happy2-ui="agent-activity-dot"
                 />
-                <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
-                    {verb}
+            )}
+            <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
+                {verb}
+            </span>
+            <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                {primaryText}
+            </span>
+            {stats ? (
+                <span
+                    className="happy2-agent-activity__stats"
+                    data-happy2-ui="agent-activity-stats"
+                >
+                    <span className="happy2-agent-activity__added">+{stats.added}</span>
+                    <span className="happy2-agent-activity__deleted">&minus;{stats.deleted}</span>
                 </span>
-                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
-                    {primaryText}
+            ) : null}
+            {hasBody ? (
+                <span aria-hidden="true" className="happy2-agent-activity__chevron">
+                    <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
-                {stats ? (
-                    <span
-                        className="happy2-agent-activity__stats"
-                        data-happy2-ui="agent-activity-stats"
-                    >
-                        <span className="happy2-agent-activity__added">+{stats.added}</span>
-                        <span className="happy2-agent-activity__deleted">
-                            &minus;{stats.deleted}
-                        </span>
-                    </span>
-                ) : null}
-                {hasBody ? (
-                    <span aria-hidden="true" className="happy2-agent-activity__chevron">
-                        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
-                    </span>
-                ) : null}
-            </button>
+            ) : null}
+        </>
+    );
 
-            {tool.review ? <PermissionReviewRow review={tool.review} /> : null}
+    return (
+        <div
+            className="happy2-agent-activity"
+            data-status={tool.status}
+            data-tone={tone}
+            data-presentation={presentation?.type ?? "generic"}
+            data-single-line={singleLine ? "" : undefined}
+            data-expanded={expanded ? "" : undefined}
+            data-happy2-ui="agent-activity-call"
+        >
+            {singleLine ? (
+                <div
+                    className="happy2-agent-activity__header"
+                    data-happy2-ui="agent-activity-header"
+                >
+                    {header}
+                </div>
+            ) : (
+                <button
+                    aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
+                    className="happy2-agent-activity__header"
+                    data-happy2-ui="agent-activity-header"
+                    disabled={!hasBody}
+                    onClick={() => hasBody && setExpanded((open) => !open)}
+                    type="button"
+                >
+                    {header}
+                </button>
+            )}
 
-            {genericResult !== undefined ? (
+            {!singleLine && tool.review ? <PermissionReviewRow review={tool.review} /> : null}
+
+            {!singleLine && genericResult !== undefined ? (
                 <ChildRow tone={tool.failed ? "error" : "muted"}>{genericResult}</ChildRow>
             ) : null}
 
-            {mcpResult ? (
+            {!singleLine && mcpResult ? (
                 <div data-happy2-ui="agent-activity-mcp-result">
                     {mcpResult.rows.map((row, index) => (
                         <ChildRow key={index} tone={tool.failed ? "error" : "muted"}>
@@ -585,7 +612,11 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
             style={props.style}
         >
             {activity.kind === "tool" ? (
-                <AgentToolActivity defaultExpanded={props.defaultExpanded} tool={activity.tool} />
+                <AgentToolActivity
+                    defaultExpanded={props.defaultExpanded}
+                    singleLine={props.singleLine}
+                    tool={activity.tool}
+                />
             ) : activity.kind === "reasoning" ? (
                 <AgentReasoningActivity
                     defaultExpanded={props.defaultExpanded}

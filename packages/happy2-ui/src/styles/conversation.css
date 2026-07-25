@@ -54,6 +54,107 @@
     margin-inline: auto;
 }
 
+/*
+ * Tool calls in the local conversation share the agent message measure and read
+ * as one quiet text line (verb + subject), with no status dot or child result.
+ */
+.happy2-conversation .happy2-agent-activity-row[data-kind="tool"] {
+    flex: none;
+    padding: 2px 64px 2px 30px;
+}
+
+.happy2-conversation .happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity {
+    gap: 0;
+}
+
+.happy2-conversation .happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity__header {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0;
+    cursor: default;
+}
+
+.happy2-conversation .happy2-agent-activity[data-single-line] .happy2-agent-activity__verb {
+    flex: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.happy2-conversation .happy2-agent-activity[data-single-line] .happy2-agent-activity__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--warning);
+}
+
+.happy2-conversation
+    .happy2-agent-activity[data-single-line][data-presentation="execCommand"]
+    .happy2-agent-activity__text,
+.happy2-conversation
+    .happy2-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
+    .happy2-agent-activity__text {
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+}
+
+.happy2-conversation .happy2-agent-activity[data-single-line] .happy2-agent-activity__stats {
+    color: var(--warning);
+}
+
+.happy2-conversation .happy2-agent-activity[data-single-line] .happy2-agent-activity__added,
+.happy2-conversation .happy2-agent-activity[data-single-line] .happy2-agent-activity__deleted {
+    color: var(--warning);
+}
+
+.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity] {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity][data-grouped] {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+/*
+ * Local agent rows keep hover meta (time, View trace) off the layout until the
+ * row is focused so consecutive replies read as one block.
+ */
+.happy2-conversation .happy2-message[data-agent][data-hide-incoming-identity] .happy2-message__meta[data-minimal] {
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.happy2-conversation
+    .happy2-message[data-agent][data-hide-incoming-identity]:hover
+    .happy2-message__meta[data-minimal],
+.happy2-conversation
+    .happy2-message[data-agent][data-hide-incoming-identity]:focus-within
+    .happy2-message__meta[data-minimal] {
+    height: 20px;
+    overflow: visible;
+    pointer-events: auto;
+}
+
+.happy2-conversation
+    .happy2-message[data-agent][data-hide-incoming-identity]
+    .happy2-message__meta[data-minimal][data-trail] {
+    margin-top: 0;
+}
+
+.happy2-conversation
+    .happy2-message[data-agent][data-hide-incoming-identity]:hover
+    .happy2-message__meta[data-minimal][data-trail],
+.happy2-conversation
+    .happy2-message[data-agent][data-hide-incoming-identity]:focus-within
+    .happy2-message__meta[data-minimal][data-trail] {
+    margin-top: 4px;
+}
+
 .happy2-conversation__panel,
 .happy2-conversation__empty {
     display: flex;

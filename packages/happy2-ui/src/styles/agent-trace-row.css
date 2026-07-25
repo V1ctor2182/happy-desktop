@@ -101,6 +101,22 @@
     display: none;
 }
 
+.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__meta-stats {
+    flex: none;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__meta-stats::before {
+    content: "·";
+    margin: 0 6px;
+    color: var(--input-placeholder);
+    font-weight: 400;
+}
+
 .happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__title,
 .happy2-agent-trace-row[data-variant="meta"][data-status="complete"] .happy2-agent-trace-row__title,
 .happy2-agent-trace-row[data-variant="meta"][data-status="failed"] .happy2-agent-trace-row__title {

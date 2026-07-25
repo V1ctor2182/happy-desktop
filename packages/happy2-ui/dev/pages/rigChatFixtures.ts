@@ -28,8 +28,8 @@ function message(
                     ? { id: "rig:owner", displayName: "You", username: "you", kind: "human" }
                     : {
                           id: "rig:agent",
-                          displayName: "Rig",
-                          username: "rig",
+                          displayName: "Happy",
+                          username: "happy",
                           kind: "agent",
                           agentRole: "default",
                       },
@@ -238,16 +238,8 @@ export const conversationEntries: readonly ConversationEntry[] = [
     },
     {
         kind: "notice",
-        id: "turn-1",
-        sequence: "7",
-        variant: "divider",
-        level: "info",
-        text: "Worked for 1m 24s · 3 tools · 1 file · +18 −5",
-    },
-    {
-        kind: "notice",
         id: "sys1",
-        sequence: "8",
+        sequence: "7",
         variant: "notice",
         level: "info",
         title: "System",
@@ -256,7 +248,7 @@ export const conversationEntries: readonly ConversationEntry[] = [
     {
         kind: "notice",
         id: "n1",
-        sequence: "9",
+        sequence: "8",
         variant: "notice",
         level: "warning",
         title: "Retrying",

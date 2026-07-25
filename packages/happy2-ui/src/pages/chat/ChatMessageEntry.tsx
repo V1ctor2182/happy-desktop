@@ -69,12 +69,14 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             initials={entry.initials}
             menuItems={props.menuItems}
             metaAccessory={
-                trace && !traceRunning ? (
+                trace && !traceRunning && trace.entryCount > 0 ? (
                     <AgentTraceRow
                         entryCount={trace.entryCount}
                         onOpen={traceOpen}
                         open={props.traceOpen}
                         status={trace.status === "pending" ? "running" : trace.status}
+                        toolCallCount={trace.toolCallCount}
+                        totalTokens={trace.totalTokens}
                         variant="meta"
                     />
                 ) : undefined

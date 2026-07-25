@@ -165,6 +165,10 @@ export interface AgentTurnTraceSummary {
     readonly completedAt?: string;
     readonly latest?: AgentTurnTraceLatest;
     readonly entryCount: number;
+    /** Tool invocations in the turn, when the producer can count them separately from steps. */
+    readonly toolCallCount?: number;
+    /** Total tokens attributed to the turn, when the producer reports them. */
+    readonly totalTokens?: number;
     readonly subagents: readonly AgentTurnSubagentSummary[];
     readonly backgroundTerminals: readonly AgentTurnBackgroundTerminalSummary[];
 }

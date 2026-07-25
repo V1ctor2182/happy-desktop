@@ -9,8 +9,6 @@ import type {
 } from "../conversation/conversationEntry.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type {
-    RigFileDiffHunk,
-    RigFileDiffLineKind,
     RigMessage,
     RigSession,
     RigSessionSummary,
@@ -31,8 +29,8 @@ export const rigOwnerAuthor: ConversationAuthor = {
 /** Stable identity of the local agent; a local session has exactly one. */
 export const rigAgentAuthor: ConversationAuthor = {
     id: "rig:agent",
-    displayName: "Rig",
-    username: "rig",
+    displayName: "Happy",
+    username: "happy",
     kind: "agent",
     agentRole: "default",
 };
@@ -134,60 +132,6 @@ export function rigShellEntry(
     },
 ): ConversationEntry {
     return { kind: "agentActivity", id, activity: { kind: "shell", ...run }, sequence: "" };
-}
-
-interface TurnStats {
-    count: number;
-    tools: number;
-    files: Set<string>;
-    additions: number;
-    deletions: number;
-}
-
-function countLines(hunk: RigFileDiffHunk, kind: RigFileDiffLineKind): number {
-    return hunk.lines.reduce((sum, line) => sum + (line.kind === kind ? 1 : 0), 0);
-}
-
-/** Folds one entry into the in-progress turn's aggregate tool stats. */
-function accumulateTurnStats(turn: TurnStats, entry: ConversationEntry): void {
-    turn.count += 1;
-    if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return;
-    turn.tools += 1;
-    const presentation = entry.activity.tool.presentation;
-    if (presentation?.type !== "fileDiff") return;
-    for (const file of presentation.files) {
-        turn.files.add(file.path);
-        turn.additions +=
-            file.added ?? file.hunks.reduce((sum, hunk) => sum + countLines(hunk, "add"), 0);
-        turn.deletions +=
-            file.deleted ?? file.hunks.reduce((sum, hunk) => sum + countLines(hunk, "delete"), 0);
-    }
-}
-
-function elapsedFormat(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
-}
-
-function turnDivider(index: number, turn: TurnStats, elapsedMs?: number): ConversationEntry {
-    const parts: string[] = [];
-    // Match the TUI: only surface elapsed once a turn ran long enough to matter.
-    if (elapsedMs !== undefined && elapsedMs >= 60_000)
-        parts.push(`Worked for ${elapsedFormat(elapsedMs)}`);
-    if (turn.tools > 0) parts.push(`${turn.tools} ${turn.tools === 1 ? "tool" : "tools"}`);
-    if (turn.files.size > 0)
-        parts.push(`${turn.files.size} ${turn.files.size === 1 ? "file" : "files"}`);
-    if (turn.additions > 0 || turn.deletions > 0)
-        parts.push(`+${turn.additions} \u2212${turn.deletions}`);
-    return {
-        kind: "notice",
-        id: `turn-divider:${index}`,
-        variant: "divider",
-        level: "info",
-        text: parts.join(" · "),
-        sequence: "",
-    };
 }
 
 function messageText(message: RigMessage): string {
@@ -295,14 +239,13 @@ export interface RigConversationBuildInput {
     /** Run notices and shell runs that are not part of the durable message log. */
     readonly ephemeral: readonly ConversationEntry[];
     readonly showReasoning: boolean;
-    readonly turnElapsedMs?: number;
     readonly compactTurns: boolean;
     readonly pendingUserInputs: readonly RigUserInputRequest[];
 }
 
 /**
  * Builds the ordered conversation a local session renders: durable messages
- * (with their tool calls correlated to results), turn dividers, run notices,
+ * (with their tool calls correlated to results), run notices,
  * the streaming reply, and anything currently waiting on the reader. Streaming
  * output is an ordinary message entry carrying a generation status rather than
  * a separate top-level field, so the same row settles in place when the run ends.
@@ -338,39 +281,34 @@ export function rigConversationBuild(
         }
     }
 
-    // Close each completed turn with a divider. A turn is a user message and its
-    // following agent activity; the divider precedes the next user message, and a
-    // trailing one closes the last turn once the run is idle. Only the last
-    // completed turn has a known elapsed. When `compactTurns` is on, a completed
-    // turn's activity is dropped, collapsing it to the prompt plus the summary; an
-    // in-flight turn always stays expanded so live output is visible.
+    // A turn is a user message and its following agent activity. When
+    // `compactTurns` is on, a completed turn's activity is dropped, collapsing it
+    // to the prompt; an in-flight turn always stays expanded so live output is visible.
     const entries: ConversationEntry[] = [];
-    let turn: TurnStats | undefined;
+    let inTurn = false;
     let buffer: ConversationEntry[] = [];
-    const closeTurn = (elapsedMs?: number): void => {
-        if (!turn) return;
+    const closeTurn = (): void => {
+        if (!inTurn) return;
         if (!input.compactTurns) for (const entry of buffer) entries.push(entry);
-        if (turn.count > 0) entries.push(turnDivider(entries.length, turn, elapsedMs));
-        turn = undefined;
+        inTurn = false;
         buffer = [];
     };
     for (const entry of durable) {
         if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
             closeTurn();
-            turn = { count: 0, tools: 0, files: new Set(), additions: 0, deletions: 0 };
+            inTurn = true;
             entries.push(entry);
             continue;
         }
         // Entries before the first user message are a preamble with no turn to close.
-        if (!turn) {
+        if (!inTurn) {
             entries.push(entry);
             continue;
         }
-        accumulateTurnStats(turn, entry);
         buffer.push(entry);
     }
     if (input.streaming) for (const entry of buffer) entries.push(entry);
-    else closeTurn(input.turnElapsedMs);
+    else closeTurn();
 
     for (const notice of input.ephemeral) entries.push(notice);
 

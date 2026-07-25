@@ -1,14 +1,20 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useMemo } from "react";
 import type {
+    AgentTurnTraceDetails,
     ComposerSnapshot,
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
+import { AgentTracePanel } from "./AgentTracePanel";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
+import {
+    conversationMessageGroupContinues,
+    conversationMessageGrouped,
+} from "./conversationMessageGrouped";
 import { EmptyState } from "./EmptyState";
 import { MessageList } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
@@ -41,8 +47,11 @@ export type ConversationViewProps = {
     overlay?: ReactNode;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
-    /** Persistent strip between the conversation and the composer. */
-    statusBar?: ReactNode;
+    /** When set, replaces `panel` with the activity trace for this agent message. */
+    traceMessageId?: string;
+    traceDetails?: AgentTurnTraceDetails;
+    onTraceOpen?: (messageId: string) => void;
+    onTraceClose?: () => void;
     /** Steering messages queued to submit after the current tool call (preview only). */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** The composer surface snapshot; the draft never lives in this component. */
@@ -84,8 +93,8 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
  * ConversationView — the assembled conversation surface: a `ChannelHeader` with
  * the title, subtitle, and owner-supplied controls; the virtualized shared
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
- * the body; a status strip; and the shared `Composer` with its `/` command
- * palette and `@` mention candidates.
+ * the body; and the shared `Composer` with its `/` command palette and `@`
+ * mention candidates.
  *
  * Every value comes from props and every draft keystroke goes back out through
  * `onComposerValueChange`, so the composer store — not this component — owns the
@@ -96,6 +105,20 @@ export function ConversationView(props: ConversationViewProps) {
     const paletteOpen = composer.commandQuery !== undefined && props.onCommandInvoke !== undefined;
     const sendEnabled =
         !paletteOpen && (composer.text.trim().length > 0 || composer.attachments.length > 0);
+    const tracePanel = useMemo(() => {
+        if (!props.traceMessageId || !props.traceDetails) return undefined;
+        const trace = props.traceDetails;
+        return (
+            <AgentTracePanel
+                entries={trace.entries}
+                entryCount={trace.entryCount}
+                onClose={props.onTraceClose}
+                status={trace.status === "pending" ? "running" : trace.status}
+                title="Happy"
+            />
+        );
+    }, [props.onTraceClose, props.traceDetails, props.traceMessageId]);
+    const bodyPanel = tracePanel ?? props.panel;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -130,9 +153,9 @@ export function ConversationView(props: ConversationViewProps) {
                 topic={props.subtitle}
             />
 
-            {props.panel ? (
+            {bodyPanel ? (
                 <div className="happy2-conversation__panel" data-happy2-ui="conversation-panel">
-                    {props.panel}
+                    {bodyPanel}
                 </div>
             ) : props.entries.length === 0 ? (
                 <div className="happy2-conversation__empty" data-happy2-ui="conversation-empty">
@@ -145,7 +168,7 @@ export function ConversationView(props: ConversationViewProps) {
                 </div>
             ) : (
                 <MessageList virtualize>
-                    {props.entries.map((entry) => {
+                    {props.entries.map((entry, index) => {
                         const submission =
                             entry.kind === "request"
                                 ? props.requestSubmissions?.find(
@@ -153,16 +176,31 @@ export function ConversationView(props: ConversationViewProps) {
                                           candidate.requestId === entry.request.requestId,
                                   )
                                 : undefined;
+                        const messageId = entry.kind === "message" ? entry.message.id : undefined;
                         return (
                             <ConversationEntryView
                                 entry={entry}
+                                groupContinues={
+                                    entry.kind === "message"
+                                        ? conversationMessageGroupContinues(props.entries, index)
+                                        : undefined
+                                }
+                                grouped={
+                                    entry.kind === "message"
+                                        ? conversationMessageGrouped(props.entries, index)
+                                        : undefined
+                                }
                                 key={entry.kind === "message" ? entry.message.id : entry.id}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRewind={props.onRewind}
+                                onTraceOpen={props.onTraceOpen}
                                 requestError={
                                     submission?.status === "failed" ? submission.error : undefined
                                 }
                                 requestPending={submission?.status === "pending"}
+                                traceOpen={
+                                    messageId !== undefined && props.traceMessageId === messageId
+                                }
                                 viewerId={props.viewerId}
                             />
                         );
@@ -193,8 +231,6 @@ export function ConversationView(props: ConversationViewProps) {
                     ))}
                 </div>
             ) : null}
-
-            {props.statusBar}
 
             <div className="happy2-conversation__dock" data-happy2-ui="conversation-dock">
                 {composer.submission.status === "failed" ? (

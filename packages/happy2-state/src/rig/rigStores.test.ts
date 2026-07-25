@@ -1021,10 +1021,7 @@ describe("rigChatStore actions", () => {
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
         const kinds = shapesOf(store);
-        // Separator between the two turns and a trailing one closing the last turn.
-        expect(kinds).toEqual(["user", "tool", "divider", "user", "agentText", "divider"]);
-        // The divider summarizes its turn: one tool call, no file changes.
-        expect(entriesOfShape(store, "divider")[0]).toMatchObject({ text: "1 tool" });
+        expect(kinds).toEqual(["user", "tool", "user", "agentText"]);
         unsubscribe();
     });
 
@@ -1066,14 +1063,14 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        expect(shapesOf(store)).toEqual(["user", "agentText", "tool", "divider"]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "tool"]);
 
         store.turnCompactToggle();
-        // The completed turn collapses to just the prompt plus its summary line.
-        expect(shapesOf(store)).toEqual(["user", "divider"]);
+        // The completed turn collapses to just the prompt.
+        expect(shapesOf(store)).toEqual(["user"]);
 
         store.turnCompactToggle();
-        expect(shapesOf(store)).toEqual(["user", "agentText", "tool", "divider"]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "tool"]);
         unsubscribe();
     });
 

@@ -58,6 +58,10 @@
     background: var(--status-error);
 }
 
+.happy2-agent-activity__dot[data-tone="neutral"] {
+    background: var(--text-secondary);
+}
+
 .happy2-agent-activity__verb {
     flex: none;
     font-weight: 600;

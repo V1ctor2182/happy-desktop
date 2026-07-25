@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type {
     ConversationSummary,
     RigClockStore,
@@ -12,20 +12,21 @@ import type {
     RigThinkingLevel,
     RigWorkspaceStore,
 } from "happy2-state";
-import { rigOwnerAuthor } from "happy2-state";
+import { rigOwnerAuthor, rigTurnTraceDetails } from "happy2-state";
 import {
     AppShell,
     Banner,
     Button,
+    ComposerModelControl,
     ConversationSettingsModal,
     ConversationView,
     EmptyState,
     RigActivityPanel,
     RigConnectionStatus,
     RigSessionControls,
-    RigStatusBar,
     RigUsagePanel,
     Sidebar,
+    rigComposerModelControlProps,
     type SidebarItem,
 } from "happy2-ui";
 
@@ -74,8 +75,8 @@ function sidebarItem(summary: ConversationSummary, now: number): SidebarItem {
  * one component rendered twice rather than a local-only variant — and the same
  * `ConversationView` for the selected conversation. Local-only affordances (the
  * model and effort pickers beneath the composer, the settings dialog holding the
- * view toggles and access pickers, the usage and activity panels, and the status
- * bar) are passed into that surface's slots.
+ * view toggles and access pickers, and the usage and activity panels) are passed
+ * into that surface's slots.
  *
  * Until the daemon connection is live it shows the connection status with a
  * retry. Selection, materialization, and every draft keystroke live in the
@@ -208,8 +209,8 @@ export function AppRigView(props: AppRigViewProps) {
 
 /**
  * Projects one local conversation into `ConversationView`: the shared entries,
- * composer, and request prompts, plus the local-only header controls, panels,
- * and status bar the shared surface hosts in its slots.
+ * composer, and request prompts, plus the local-only header controls and panels
+ * the shared surface hosts in its slots.
  */
 function RigConversationSurface(props: {
     conversation: RigConversationSnapshot;
@@ -245,31 +246,34 @@ function RigConversationSurface(props: {
             ? Math.max(0, props.now - conversation.runStartedAt)
             : conversation.turnElapsedMs;
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    const [traceMessageId, setTraceMessageId] = useState<string | undefined>();
+    const traceDetails = useMemo(() => {
+        if (!traceMessageId) return undefined;
+        const row = conversation.entries.find(
+            (entry) => entry.kind === "message" && entry.message.id === traceMessageId,
+        );
+        const turnId =
+            row?.kind === "message" ? row.message.agentTrace?.turnId : undefined;
+        if (!turnId) return undefined;
+        return rigTurnTraceDetails(conversation.entries, turnId);
+    }, [conversation.entries, traceMessageId]);
 
     return (
         <ConversationView
             composer={conversation.composer}
-            composerPlaceholder="Message Rig…"
+            composerPlaceholder="Message Happy…"
             elapsedMs={elapsedMs}
             entries={conversation.entries}
             composerControls={
                 <>
                     {conversation.menus ? (
-                        <RigSessionControls
-                            fields={["model", "effort"]}
-                            menus={conversation.menus}
-                            onEffortChange={(effort?: RigThinkingLevel) =>
-                                swallow(workspace.effortChange(effort))
-                            }
-                            onModelChange={(selection: RigModelSelection) =>
-                                swallow(workspace.modelChange(selection))
-                            }
-                            onPermissionModeChange={(mode: RigPermissionMode) =>
-                                swallow(workspace.permissionModeChange(mode))
-                            }
-                            onServiceTierChange={(tier?: RigServiceTier) =>
-                                swallow(workspace.serviceTierChange(tier))
-                            }
+                        <ComposerModelControl
+                            {...rigComposerModelControlProps(conversation.menus, {
+                                onEffortChange: (effort?: RigThinkingLevel) =>
+                                    swallow(workspace.effortChange(effort)),
+                                onModelChange: (selection: RigModelSelection) =>
+                                    swallow(workspace.modelChange(selection)),
+                            })}
                         />
                     ) : null}
                     <Button
@@ -291,6 +295,8 @@ function RigConversationSurface(props: {
                 swallow(workspace.answerInput({ requestId, answers }))
             }
             onRewind={(messageId) => swallow(workspace.rewind(messageId))}
+            onTraceClose={() => setTraceMessageId(undefined)}
+            onTraceOpen={(messageId) => setTraceMessageId(messageId)}
             panel={
                 conversation.usagePanelOpen ? (
                     <RigUsagePanel
@@ -351,20 +357,10 @@ function RigConversationSurface(props: {
             queued={conversation.queuedMessages}
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
-            statusBar={
-                <RigStatusBar
-                    backgroundCount={conversation.backgroundProcesses.length}
-                    cwd={conversation.subtitle}
-                    menus={conversation.menus}
-                    queuedCount={conversation.queuedMessages.length}
-                    runningSubagentCount={
-                        conversation.subagents.filter((subagent) => subagent.status === "running")
-                            .length
-                    }
-                />
-            }
             subtitle={conversation.subtitle}
             title={conversation.title ?? "Untitled session"}
+            traceDetails={traceDetails}
+            traceMessageId={traceMessageId}
             viewerId={rigOwnerAuthor.id}
         />
     );

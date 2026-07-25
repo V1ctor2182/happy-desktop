@@ -1,8 +1,9 @@
 import type { ComposerSnapshot } from "happy2-state";
 import { ConversationView } from "../../src/ConversationView";
 import { Button } from "../../src/Button";
+import { ComposerModelControl } from "../../src/ComposerModelControl";
 import { RigSessionControls } from "../../src/RigSessionControls";
-import { RigStatusBar } from "../../src/RigStatusBar";
+import { rigComposerModelControlProps } from "../../src/rigComposerModelControl";
 import { ComponentPage, Specimen } from "../kit";
 import { conversationEntries, rigMenus } from "./rigChatFixtures";
 
@@ -33,11 +34,11 @@ export function ConversationViewPage() {
         <ComponentPage
             contract="Props only"
             number="C-154"
-            summary="The assembled conversation surface: channel header with live status and owner controls, the shared entry list, an optional owner panel, a status strip, and the shared composer with its command palette."
+            summary="The assembled conversation surface: channel header with live status and owner controls, the shared entry list, an optional owner panel, and the shared composer with its command palette."
             title="ConversationView"
         >
             <Specimen
-                detail="running conversation with queued steering and the local status bar"
+                detail="running conversation with queued steering"
                 label="Primary"
                 number="01"
                 stage="app"
@@ -48,13 +49,11 @@ export function ConversationViewPage() {
                         elapsedMs={92_000}
                         composerControls={
                             <>
-                                <RigSessionControls
-                                    fields={["model", "effort"]}
-                                    menus={rigMenus}
-                                    onEffortChange={() => undefined}
-                                    onModelChange={() => undefined}
-                                    onPermissionModeChange={() => undefined}
-                                    onServiceTierChange={() => undefined}
+                                <ComposerModelControl
+                                    {...rigComposerModelControlProps(rigMenus, {
+                                        onEffortChange: () => undefined,
+                                        onModelChange: () => undefined,
+                                    })}
                                 />
                                 <Button
                                     aria-label="Session settings"
@@ -71,7 +70,6 @@ export function ConversationViewPage() {
                         onComposerValueChange={() => undefined}
                         queued={[{ id: "q1", text: "Also update the changelog" }]}
                         running
-                        statusBar={<RigStatusBar cwd="~/happy2" menus={rigMenus} queuedCount={1} />}
                         subtitle="~/happy2"
                         title="Fix token rotation race"
                         viewerId="rig:owner"

@@ -8,6 +8,7 @@ import {
     type ConversationRequestSubmission,
 } from "../conversation/conversationEntry.js";
 import { rigConversationBuild, rigShellEntry } from "./rigConversationProject.js";
+import { rigConversationAttachTurnTraces } from "./rigConversationTurnTrace.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
 import { deepEqual, rigUserError } from "./rigSupport.js";
 import type {
@@ -262,16 +263,18 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
 
     const commit = (): void => {
         const previous = store.getState();
-        const built = rigConversationBuild({
-            sessionId,
-            session,
-            streaming: transientStreamingPresentation,
-            ephemeral,
-            showReasoning,
-            turnElapsedMs,
-            compactTurns,
-            pendingUserInputs: session?.pendingUserInputs ?? [],
-        });
+        const built = rigConversationAttachTurnTraces(
+            rigConversationBuild({
+                sessionId,
+                session,
+                streaming: transientStreamingPresentation,
+                ephemeral,
+                showReasoning,
+                compactTurns,
+                pendingUserInputs: session?.pendingUserInputs ?? [],
+            }),
+            { running: runStatus === "running" },
+        );
         const visible =
             clearedIds.size === 0
                 ? built

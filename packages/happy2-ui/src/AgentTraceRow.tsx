@@ -19,6 +19,10 @@ export interface AgentTraceRowProps {
     readonly title?: string;
     readonly detail?: string;
     readonly entryCount: number;
+    /** Tool invocations when known (shown beside “View trace” in the message meta row). */
+    readonly toolCallCount?: number;
+    /** Turn token total when the producer reports it. */
+    readonly totalTokens?: number;
     /** The trace panel is currently showing this turn. */
     readonly open?: boolean;
     readonly onOpen?: () => void;
@@ -38,6 +42,28 @@ const KIND_ICONS: Record<AgentTraceRowKind, IconName> = {
 /** Existing Icon glyph for a trace activity kind (shared with AgentTracePanel). */
 export function agentTraceKindIcon(kind: AgentTraceRowKind): IconName {
     return KIND_ICONS[kind];
+}
+
+function formatTokenCount(value: number): string {
+    if (value >= 1_000_000) {
+        const scaled = value / 1_000_000;
+        return `${scaled >= 10 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}M`;
+    }
+    if (value >= 10_000) return `${Math.round(value / 1_000)}k`;
+    if (value >= 1_000) {
+        const scaled = value / 1_000;
+        return `${scaled >= 10 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}k`;
+    }
+    return String(value);
+}
+
+function metaStats(toolCallCount?: number, totalTokens?: number): string | undefined {
+    const parts: string[] = [];
+    if (toolCallCount !== undefined && toolCallCount > 0)
+        parts.push(`${toolCallCount} ${toolCallCount === 1 ? "tool" : "tools"}`);
+    if (totalTokens !== undefined && totalTokens > 0)
+        parts.push(`${formatTokenCount(totalTokens)} tokens`);
+    return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 /**
  * C-067 AgentTraceRow — a compact, single-line 28px button row rendered inside
@@ -59,6 +85,8 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
         "title",
         "detail",
         "entryCount",
+        "toolCallCount",
+        "totalTokens",
         "open",
         "onOpen",
         "label",
@@ -66,10 +94,18 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
     ]);
     const running = () => local.status === "running";
     const meta = () => local.variant === "meta";
+    const stats = () => metaStats(local.toolCallCount, local.totalTokens);
     return (
         <button
             aria-expanded={local.open === true ? "true" : "false"}
-            aria-label={local.label ?? "Agent activity"}
+            aria-label={
+                local.label ??
+                (meta() && stats()
+                    ? `View trace, ${stats()}`
+                    : meta()
+                      ? "View trace"
+                      : "Agent activity")
+            }
             className={["happy2-agent-trace-row", local.className].filter(Boolean).join(" ")}
             data-happy2-ui="agent-trace-row"
             data-status={local.status}
@@ -98,6 +134,14 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
             <span className="happy2-agent-trace-row__title" data-happy2-ui="agent-trace-row-title">
                 {meta() ? "View trace" : running() ? (local.title ?? "Working") : "View trace"}
             </span>
+            {meta() && stats() ? (
+                <span
+                    className="happy2-agent-trace-row__meta-stats"
+                    data-happy2-ui="agent-trace-row-meta-stats"
+                >
+                    {stats()}
+                </span>
+            ) : null}
             {!meta() && running() && local.detail !== undefined ? (
                 <span
                     className="happy2-agent-trace-row__detail"

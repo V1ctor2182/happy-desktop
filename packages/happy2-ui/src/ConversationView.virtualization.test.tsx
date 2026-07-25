@@ -35,7 +35,7 @@ function messageEntry(id: string, text: string, agent: boolean): ConversationEnt
             sequence: id,
             changePts: id,
             sender: agent
-                ? { id: "rig:agent", displayName: "Rig", username: "rig", kind: "agent" }
+                ? { id: "rig:agent", displayName: "Happy", username: "happy", kind: "agent" }
                 : { id: "rig:owner", displayName: "Ada", username: "ada", kind: "human" },
             kind: agent ? "automated" : "user",
             automated: false,
@@ -192,20 +192,11 @@ it("settling a streaming run must not overlap rows when keys change", async () =
         messageEntry("run-9:stream:0", "Partial reply while streaming…", true),
         toolEntry("run-9:stream:1"),
     ];
-    // After settling: the same content is re-keyed by durable message id and a
-    // turn divider is inserted, exactly as rigConversationBuild does.
+    // After settling: the same content is re-keyed by durable message id.
     const settled: ConversationEntry[] = [
         ...base,
         messageEntry("msg-77:0", "Partial reply while streaming… done.", true),
         toolEntry("call-77"),
-        {
-            kind: "notice",
-            id: "turn-divider:62",
-            variant: "divider",
-            level: "info",
-            text: "2 tools · +12 −3",
-            sequence: "63",
-        },
     ];
     const renderer = createRenderer();
     let entries = streaming;
