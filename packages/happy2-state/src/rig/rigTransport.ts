@@ -14,6 +14,7 @@ import type {
     RigPermissionMode,
     RigPermissionReview,
     RigOpenInTarget,
+    RigWorkspaceFiles,
     RigProjectCatalog,
     RigProjectId,
     RigServiceTier,
@@ -283,6 +284,9 @@ export interface RigTransport {
      * own catalog, so this can only ever open something it already knows about.
      */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
+
+    /** Lists every file in a project or worktree checkout, changed or not. */
+    workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
 
     /** Writes one changed text file back to its checkout. */
     changedFileWrite(groupId: RigGroupId, path: string, content: string): Promise<void>;

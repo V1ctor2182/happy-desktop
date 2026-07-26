@@ -6,6 +6,9 @@ import type {
     RigChangedFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
+    RigFileLayout,
+    RigWorkspaceFiles,
+    RigFileScope,
     RigFileViewMode,
     RigHost,
     RigGroupId,
@@ -43,6 +46,10 @@ import {
     RigActivityPanel,
     RigConnectionStatus,
     RigControlMenu,
+    SegmentedControl,
+    fileTreeBuild,
+    fileTreeFlatten,
+    type FileTreeBuildEntry,
     RigSessionControls,
     RigUsagePanel,
     PanelHeader,
@@ -405,12 +412,22 @@ export function AppRigView(props: AppRigViewProps) {
                     <RigPanelBody
                         canStartTerminal={props.chatId !== undefined}
                         changes={openGroup?.changes ?? []}
+                        expanded={workspace.fileTreeExpanded}
+                        layout={workspace.fileLayout}
                         onFileSelect={(path) => {
                             if (openGroup) props.workspace.fileOpen(openGroup.id, path);
                         }}
+                        onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
+                        onScopeChange={(scope) => {
+                            if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
+                        }}
+                        onToggle={(path) => props.workspace.fileTreeToggle(path)}
                         panel={panel}
+                        scope={workspace.fileScope}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
+                        workspaceFiles={workspace.workspaceFiles}
+                        workspaceFilesLoading={workspace.workspaceFilesLoading}
                     />
                 ) : undefined
             }
@@ -1106,17 +1123,34 @@ function rigTurnElapsedMs(
 function RigPanelBody(props: {
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
+    expanded: ReadonlySet<string>;
+    layout: RigFileLayout;
     onFileSelect: (path: string) => void;
+    onLayoutChange: (layout: RigFileLayout) => void;
+    onScopeChange: (scope: RigFileScope) => void;
+    onToggle: (path: string) => void;
     panel: RigPanelSnapshot;
+    scope: RigFileScope;
     selectedPath?: string;
     store: RigPanelStore;
+    workspaceFiles?: RigWorkspaceFiles;
+    workspaceFilesLoading: boolean;
 }) {
-    const nodes: FileTreeNode[] = props.changes.map((change) => ({
-        id: change.path,
-        name: change.path,
-        kind: "file",
-        gitStatus: change.status,
-    }));
+    const all = props.scope === "all";
+    // Under "All files" the changed ones keep their status marks, so the work in
+    // progress stays findable inside the whole tree rather than becoming
+    // indistinguishable from everything around it.
+    const statuses = new Map(props.changes.map((change) => [change.path, change.status]));
+    const entries: FileTreeBuildEntry[] = all
+        ? (props.workspaceFiles?.paths ?? []).map((path: string) => {
+              const status = statuses.get(path);
+              return { path, ...(status ? { gitStatus: status } : {}) };
+          })
+        : props.changes.map((change) => ({ path: change.path, gitStatus: change.status }));
+    const nodes: FileTreeNode[] =
+        props.layout === "tree" ? fileTreeBuild(entries, props.expanded) : fileTreeFlatten(entries);
+    const loading = all && props.workspaceFilesLoading;
+    const count = entries.length;
     return (
         <>
             <PanelHeader />
@@ -1133,14 +1167,47 @@ function RigPanelBody(props: {
                 minTopHeight={120}
                 resizeLabel="Resize terminal section"
                 top={
-                    <FilePanel
-                        emptyLabel="No changed files."
-                        nodes={nodes}
-                        onSelect={props.onFileSelect}
-                        selectedId={props.selectedPath}
-                        subtitle={`${String(nodes.length)} ${nodes.length === 1 ? "file" : "files"}`}
-                        title="Changes"
-                    />
+                    <>
+                        <div className="happy2-rig-file-controls">
+                            <SegmentedControl
+                                onChange={(value: string) =>
+                                    props.onScopeChange(value as RigFileScope)
+                                }
+                                segments={[
+                                    { value: "changed", label: "Changed" },
+                                    { value: "all", label: "All files" },
+                                ]}
+                                size="small"
+                                value={props.scope}
+                            />
+                            <SegmentedControl
+                                onChange={(value: string) =>
+                                    props.onLayoutChange(value as RigFileLayout)
+                                }
+                                segments={[
+                                    { value: "flat", label: "List", icon: "files" },
+                                    { value: "tree", label: "Tree", icon: "branch" },
+                                ]}
+                                size="small"
+                                value={props.layout}
+                            />
+                        </div>
+                        <FilePanel
+                            emptyLabel={all ? "No files." : "No changed files."}
+                            loading={loading}
+                            nodes={nodes}
+                            // A truncated listing says so rather than passing off
+                            // part of a repository as the whole of it.
+                            {...(all && props.workspaceFiles?.truncated
+                                ? { note: "Showing the first 20,000 files." }
+                                : {})}
+                            onSelect={props.onFileSelect}
+                            onToggle={props.onToggle}
+                            selectedId={props.selectedPath}
+                            subtitle={`${String(count)} ${count === 1 ? "file" : "files"}`}
+                            title={all ? "Files" : "Changes"}
+                        />
+                    </>
                 }
             />
         </>

@@ -15,10 +15,10 @@ that consumes it, per AGENTS.md "Order of work".
 - [x] 2. Offer the model, effort, and access pickers before a group's first
       message. Derive a pre-session menu snapshot from the model catalog and
       feed the chosen values into both `groupSubmit` and `conversationCreate`.
-- [ ] 3. Align diff colors with the theme and add preview/unified/split/edit
+- [x] 3. Align diff colors with the theme and add preview/unified/split/edit
       modes to `ChangedFileDiff`. One `--diff-*` token substrate for both the
       full-file view and the inline `DiffSnippet`.
-- [ ] 4. Give the changed-file panel "Changed"/"All files" tabs plus tree and
+- [x] 4. Give the changed-file panel "Changed"/"All files" tabs plus tree and
       flat modes. Needs a workspace file-listing read in the desktop proxy.
 - [x] 5. Match the TUI's end-of-turn footer: elapsed turn duration plus tool
       count under the final message, for every turn (including single-message

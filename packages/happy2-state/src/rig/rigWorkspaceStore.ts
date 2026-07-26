@@ -36,6 +36,7 @@ import type {
     RigQueuedMessage,
     RigContextGauge,
     RigOpenInTarget,
+    RigWorkspaceFiles,
     RigScrollPosition,
     RigSelection,
     RigServiceTier,
@@ -175,7 +176,30 @@ export interface RigWorkspaceSnapshot {
      * having it reset on every file they open would make it not a preference.
      */
     readonly fileViewMode: RigFileViewMode;
+    /** Whether the panel lists only changed files or every file in the checkout. */
+    readonly fileScope: RigFileScope;
+    /** Whether the panel nests paths into folders or lists them whole. */
+    readonly fileLayout: RigFileLayout;
+    /** Directories the reader has opened in the tree, by full path. */
+    readonly fileTreeExpanded: ReadonlySet<string>;
+    /**
+     * Every file in the open group's checkout, once it has been asked for.
+     * Absent until then, which is what "All files" is loading.
+     */
+    readonly workspaceFiles?: RigWorkspaceFiles;
+    /** True while that listing is being read. */
+    readonly workspaceFilesLoading: boolean;
 }
+
+/** Which files the panel lists. */
+export type RigFileScope = "changed" | "all";
+
+/**
+ * How the panel arranges them. Flat suits a handful of changed files, where a
+ * folder per file is only indentation; tree suits a whole repository, where the
+ * shape is the point.
+ */
+export type RigFileLayout = "tree" | "flat";
 
 /** How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`. */
 export type RigFileViewMode = "preview" | "unified" | "split" | "edit";
@@ -285,6 +309,16 @@ export interface RigWorkspaceStore {
     fileRetry(tabId: string): void;
     /** Chooses how changed files are displayed, for every tab. */
     fileViewModeUpdate(mode: RigFileViewMode): void;
+    /**
+     * Chooses whether the panel lists changed files or all of them. Asking for
+     * all of them is what reads the checkout's listing, so it is never read for
+     * a reader who only ever looks at their own changes.
+     */
+    fileScopeUpdate(groupId: RigGroupId, scope: RigFileScope): void;
+    /** Chooses whether the panel nests paths into folders. */
+    fileLayoutUpdate(layout: RigFileLayout): void;
+    /** Opens or closes one directory in the tree. */
+    fileTreeToggle(path: string): void;
     /** Records an unsaved edit to one file's working-tree text. */
     fileDraftUpdate(tabId: string, draft: string): void;
     /** Writes one file's pending edit back to the checkout. */
@@ -453,6 +487,16 @@ export function rigWorkspaceStoreCreate(
     let openInTargetsRequested = false;
     let rename: RigRenameSnapshot | undefined;
     let fileViewMode: RigFileViewMode = "unified";
+    // Changed and flat by default: the panel opens on the work in progress,
+    // which is short and reads better as a list than as a tree of one-file
+    // folders. Asking for the whole repository is what switches both.
+    let fileScope: RigFileScope = "changed";
+    let fileLayout: RigFileLayout = "flat";
+    let fileTreeExpanded: ReadonlySet<string> = new Set();
+    let workspaceFiles: RigWorkspaceFiles | undefined;
+    let workspaceFilesLoading = false;
+    let workspaceFilesGroupId: RigGroupId | undefined;
+    let workspaceFilesGeneration = 0;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
     /**
@@ -489,6 +533,10 @@ export function rigWorkspaceStoreCreate(
         fileTabs,
         openInTargets,
         fileViewMode,
+        fileScope,
+        fileLayout,
+        fileTreeExpanded,
+        workspaceFilesLoading,
     };
 
     const notify = (): void => {
@@ -560,7 +608,12 @@ export function rigWorkspaceStoreCreate(
             snapshot.activeFileTabId === activeFileTabId &&
             snapshot.openInTargets === openInTargets &&
             snapshot.rename === rename &&
-            snapshot.fileViewMode === fileViewMode
+            snapshot.fileViewMode === fileViewMode &&
+            snapshot.fileScope === fileScope &&
+            snapshot.fileLayout === fileLayout &&
+            snapshot.fileTreeExpanded === fileTreeExpanded &&
+            snapshot.workspaceFiles === workspaceFiles &&
+            snapshot.workspaceFilesLoading === workspaceFilesLoading
         )
             return;
         snapshot = {
@@ -569,6 +622,11 @@ export function rigWorkspaceStoreCreate(
             fileTabs,
             openInTargets,
             fileViewMode,
+            fileScope,
+            fileLayout,
+            fileTreeExpanded,
+            ...(workspaceFiles ? { workspaceFiles } : {}),
+            workspaceFilesLoading,
             ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -1026,6 +1084,37 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
+    /**
+     * Reads the open group's full file listing, once per group. The listing is
+     * a property of a checkout rather than of the session in it, so switching
+     * sessions within a group reuses it and switching groups discards it.
+     */
+    const workspaceFilesEnsure = (groupId: RigGroupId): void => {
+        if (workspaceFilesGroupId === groupId && (workspaceFiles || workspaceFilesLoading)) return;
+        workspaceFilesGroupId = groupId;
+        workspaceFiles = undefined;
+        workspaceFilesLoading = true;
+        const current = (workspaceFilesGeneration += 1);
+        recompute();
+        void client.workspaceFilesRead(groupId).then(
+            (files) => {
+                if (disposed || current !== workspaceFilesGeneration) return;
+                workspaceFiles = files;
+                workspaceFilesLoading = false;
+                recompute();
+            },
+            () => {
+                if (disposed || current !== workspaceFilesGeneration) return;
+                // An unreadable checkout lists nothing. The panel says it is
+                // empty, which is what the reader can act on; a failed `git
+                // ls-files` is not something they can do anything about.
+                workspaceFiles = { paths: [], truncated: false };
+                workspaceFilesLoading = false;
+                recompute();
+            },
+        );
+    };
+
     const start = (): void => {
         active = true;
         unsubscribeList = list.subscribe(() => {
@@ -1063,6 +1152,11 @@ export function rigWorkspaceStoreCreate(
             fileTabs,
             openInTargets,
             fileViewMode,
+            fileScope,
+            fileLayout,
+            fileTreeExpanded,
+            ...(workspaceFiles ? { workspaceFiles } : {}),
+            workspaceFilesLoading,
             ...(activeFileTabId ? { activeFileTabId } : {}),
         };
     };
@@ -1206,6 +1300,26 @@ export function rigWorkspaceStoreCreate(
         fileViewModeUpdate(mode) {
             if (fileViewMode === mode) return;
             fileViewMode = mode;
+            recompute();
+        },
+        fileScopeUpdate(groupId, scope) {
+            if (fileScope === scope) return;
+            fileScope = scope;
+            // A whole-repository listing costs a Git invocation over a tree that
+            // may be enormous, so it is read when it is first wanted rather than
+            // kept current against a group nobody is listing files for.
+            if (scope === "all") workspaceFilesEnsure(groupId);
+            recompute();
+        },
+        fileLayoutUpdate(layout) {
+            if (fileLayout === layout) return;
+            fileLayout = layout;
+            recompute();
+        },
+        fileTreeToggle(path) {
+            const next = new Set(fileTreeExpanded);
+            if (!next.delete(path)) next.add(path);
+            fileTreeExpanded = next;
             recompute();
         },
         fileDraftUpdate(tabId, draft) {

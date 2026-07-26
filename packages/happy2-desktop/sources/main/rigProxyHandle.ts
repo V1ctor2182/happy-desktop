@@ -144,6 +144,51 @@ async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined>
     }
 }
 
+/**
+ * Cap on how many paths one workspace listing returns. A repository can hold far
+ * more files than anyone can scan, and shipping all of them would cost more in
+ * transfer and rendering than the tail is worth. The listing says when it was
+ * truncated so the panel can admit it rather than quietly showing part of a
+ * repository as if it were the whole one.
+ */
+const WORKSPACE_FILE_LIMIT = 20_000;
+
+/**
+ * Every file Git tracks in a checkout, plus the untracked ones it does not
+ * ignore — which is what "all files" means to someone looking at a working
+ * tree. Asking Git rather than walking the directory means .gitignore, nested
+ * ignore files, and the exclusion of .git itself are all already handled, and
+ * handled the same way the changed-file list handles them.
+ */
+async function workspaceFilesRead(
+    client: RigProxyClient,
+    groupId: string,
+): Promise<{ readonly paths: readonly string[]; readonly truncated: boolean }> {
+    const catalog = await client.listCatalog();
+    const project = catalog.projects.find((candidate) => candidate.id === groupId);
+    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
+    const root = project?.path ?? workspace?.path;
+    if (!root) throw new Error("That project or workspace is no longer available.");
+    let stdout: string;
+    try {
+        stdout = await gitExecText(
+            ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            { cwd: root, maxBuffer: 16 * 1024 * 1024, timeout: 10_000 },
+        );
+    } catch {
+        // A directory that is not a repository has no listing to give, and that
+        // is an ordinary state rather than a failure: the panel shows nothing
+        // under "All files" and the changed list beside it is empty too.
+        return { paths: [], truncated: false };
+    }
+    const all = stdout.split("\0").filter((entry) => entry.length > 0);
+    all.sort((left, right) => left.localeCompare(right));
+    return {
+        paths: all.slice(0, WORKSPACE_FILE_LIMIT),
+        truncated: all.length > WORKSPACE_FILE_LIMIT,
+    };
+}
+
 const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
@@ -382,6 +427,14 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         ),
                     ),
                 });
+                return true;
+            }
+            if (path === "/workspace-files") {
+                writeJson(
+                    response,
+                    200,
+                    await workspaceFilesRead(client, query.get("group") ?? ""),
+                );
                 return true;
             }
             if (path === "/open-in-targets") {

@@ -645,6 +645,16 @@ export interface RigScrollPosition {
     readonly measurements?: readonly RigScrollMeasurement[];
 }
 
+/**
+ * Every file in a project or worktree checkout, not just the changed ones.
+ * `truncated` says the repository held more than the host was willing to list,
+ * so the panel can admit it rather than showing part of a tree as the whole.
+ */
+export interface RigWorkspaceFiles {
+    readonly paths: readonly string[];
+    readonly truncated: boolean;
+}
+
 /** One application a project directory can be opened in. */
 export interface RigOpenInTarget {
     readonly id: string;

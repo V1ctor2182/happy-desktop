@@ -11,6 +11,7 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigOpenInTarget,
+    RigWorkspaceFiles,
     RigProjectCatalog,
     RigServiceTier,
     RigSession,
@@ -120,6 +121,8 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 ),
             };
         },
+        workspaceFilesRead: (groupId) =>
+            getJson<RigWorkspaceFiles>("/workspace-files", { group: groupId }),
         changedFileWrite: async (groupId, path, content) => {
             await postJson<Record<string, never>>("/changed-file", {
                 group: groupId,
