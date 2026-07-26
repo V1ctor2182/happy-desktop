@@ -549,8 +549,8 @@ export const agentTurnTraceEntries = sqliteTable(
 
 export const rigEventSyncState = sqliteTable("rig_event_sync_state", {
     id: integer("id").primaryKey().notNull(),
-    cursor: integer("cursor"),
-    trimmedThrough: integer("trimmed_through"),
+    cursor: text("cursor"),
+    trimmedThrough: text("trimmed_through"),
     eventsSinceTrim: integer("events_since_trim").notNull().default(0),
     lastTrimmedAt: text("last_trimmed_at").notNull().default(sql.raw("CURRENT_TIMESTAMP")),
     updatedAt: text("updated_at").notNull().default(sql.raw("CURRENT_TIMESTAMP")),

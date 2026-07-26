@@ -1,23 +1,20 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createNodeFileSystemContext, loadSkills } from "@slopus/rig/dist/agent/index.js";
 import { describe, expect, it } from "vitest";
 import { pluginPackageLoad } from "./catalog.js";
 import { PluginPackageStore } from "./packageStore.js";
 
 describe("installed plugin skills", () => {
-    it("are discovered by Rig and reconcile only Happy-owned skill files", async () => {
+    it("are placed in Rig's skill tree and reconcile only Happy-owned files", async () => {
         const temporary = await mkdtemp(join(tmpdir(), "happy2-plugin-skills-"));
         try {
             const packageRoot = join(temporary, "packages");
             const agentHome = join(temporary, "home");
-            const workspace = join(temporary, "workspace");
             const userSkill = join(agentHome, ".agents", "skills", "user-skill");
             await Promise.all([
                 mkdir(packageRoot, { recursive: true }),
                 mkdir(userSkill, { recursive: true }),
-                mkdir(workspace, { recursive: true }),
             ]);
             await writeFile(
                 join(userSkill, "SKILL.md"),
@@ -40,18 +37,20 @@ describe("installed plugin skills", () => {
             ];
 
             await store.syncSkills(ready, agentHome);
-            const context = createNodeFileSystemContext(workspace, { home: agentHome });
-            await expect(loadSkills(context)).resolves.toEqual(
-                expect.arrayContaining([
-                    expect.objectContaining({ name: "happy2-plugin-development" }),
-                    expect.objectContaining({ name: "user-skill" }),
-                ]),
+            const installedSkill = join(
+                agentHome,
+                ".agents",
+                "skills",
+                "happy2-plugins",
+                "pluginid-happy2-plugin-development",
+                "SKILL.md",
             );
+            await expect(access(installedSkill)).resolves.toBeUndefined();
+            await expect(access(join(userSkill, "SKILL.md"))).resolves.toBeUndefined();
 
             await store.syncSkills([], agentHome);
-            await expect(loadSkills(context)).resolves.toEqual([
-                expect.objectContaining({ name: "user-skill" }),
-            ]);
+            await expect(access(installedSkill)).rejects.toThrow();
+            await expect(access(join(userSkill, "SKILL.md"))).resolves.toBeUndefined();
         } finally {
             await rm(temporary, { recursive: true, force: true });
         }

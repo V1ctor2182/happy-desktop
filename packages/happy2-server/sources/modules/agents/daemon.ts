@@ -3,7 +3,7 @@ import { chmod, mkdir, readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { dirname } from "node:path";
 import type { Duplex } from "node:stream";
-import { readPackageVersion } from "@slopus/rig/dist/readPackageVersion.js";
+import { readPackageVersion } from "@slopus/rig/package-version";
 import WebSocket, { createWebSocketStream } from "ws";
 
 import {
@@ -14,13 +14,16 @@ import {
 import { managedPrivateDirectoryPrepare } from "./impl/managedPrivateDirectoryPrepare.js";
 
 import type {
-    AbortRunResponse,
     AttachSecretRequest,
     ChangeEffortRequest,
     ChangePermissionModeRequest,
+    CreateRemoteTerminalRequest,
     CreateSessionRequest,
     CreateSessionResponse,
     DurableSkillDefinition,
+    ExternalToolCall,
+    ExternalToolCallResolution,
+    ExternalToolDefinition,
     GetDaemonConfigResponse,
     HealthResponse,
     ListSecretsResponse,
@@ -33,24 +36,15 @@ import type {
     RegisterSecretResponse,
     ResolveExternalToolCallRequest,
     ResolveExternalToolCallResponse,
+    RemoteTerminalResponse,
+    RemoteTerminalSummary,
     SecretSummary,
-    SteerMessageRequest,
     SubmitMessageRequest,
     SubmitMessageResponse,
     TrimGlobalEventsRequest,
     UnregisterSecretResponse,
     UpdateDaemonConfigRequest,
-} from "@slopus/rig/dist/protocol/index.js";
-import type {
-    ExternalToolCall,
-    ExternalToolCallResolution,
-    ExternalToolDefinition,
-} from "@slopus/rig/dist/external-tools/index.js";
-import type {
-    CreateRemoteTerminalRequest,
-    RemoteTerminalResponse,
-    RemoteTerminalSummary,
-} from "@slopus/rig/dist/terminal/index.js";
+} from "@slopus/rig/types";
 
 const MAX_TERMINAL_WIRE_BYTES = 4 * 1024 * 1024 + 20;
 
@@ -143,9 +137,13 @@ export interface RigEvent {
 }
 
 export interface RigGlobalEvent {
-    cursor: number;
+    cursor: string;
     event: RigEvent;
 }
+
+type RigSteerMessageRequest = SubmitMessageRequest & {
+    expectedRunId?: string;
+};
 
 export type RigTurnInspection =
     | { kind: "not_submitted" }
@@ -401,12 +399,12 @@ export class RigDaemonClient {
     }
 
     async watchGlobalEvents(
-        after: number | undefined,
+        after: string | undefined,
         onEvent: (event: RigGlobalEvent) => Promise<void>,
         signal?: AbortSignal,
     ): Promise<void> {
         const parameters = new URLSearchParams();
-        if (after !== undefined) parameters.set("after", String(after));
+        if (after !== undefined) parameters.set("after", after);
         const path = `/events/stream${parameters.size ? `?${parameters.toString()}` : ""}`;
         await this.ensureReady();
         try {
@@ -453,7 +451,7 @@ export class RigDaemonClient {
         }
     }
 
-    async trimGlobalEvents(through: number, signal?: AbortSignal): Promise<void> {
+    async trimGlobalEvents(through: string, signal?: AbortSignal): Promise<void> {
         await this.connectedRequest(
             "POST",
             "/events/trim",
@@ -565,7 +563,7 @@ export class RigDaemonClient {
                 clientSubmissionId: input.clientSubmissionId,
                 expectedRunId: input.expectedRunId,
                 text: input.text,
-            } satisfies SteerMessageRequest,
+            } satisfies RigSteerMessageRequest,
             signal,
         );
     }
@@ -579,9 +577,9 @@ export class RigDaemonClient {
         sessionId: string,
         expectedRunId: string | undefined,
         signal?: AbortSignal,
-    ): Promise<AbortRunResponse> {
+    ): Promise<void> {
         const query = expectedRunId ? `?expectedRunId=${encodeURIComponent(expectedRunId)}` : "";
-        return this.connectedRequest<AbortRunResponse>(
+        await this.connectedRequest<unknown>(
             "POST",
             `/sessions/${encodeURIComponent(sessionId)}/abort${query}`,
             undefined,
@@ -1096,10 +1094,7 @@ function parseGlobalEventFrame(frame: string): RigGlobalEvent | undefined {
         if (field === "data") data.push(value);
     }
     if (!id || data.length === 0) return undefined;
-    const cursor = Number(id);
-    if (!Number.isSafeInteger(cursor) || cursor < 0)
-        throw new RigTransportError(`Rig sent an invalid global event cursor: ${id}`);
-    return { cursor, event: JSON.parse(data.join("\n")) as RigEvent };
+    return { cursor: id, event: JSON.parse(data.join("\n")) as RigEvent };
 }
 
 function parseSessionEventFrame(frame: string): RigEvent | undefined {

@@ -1,9 +1,9 @@
 import { type RigEventCheckpoint } from "../types.js";
 export function asRigEventCheckpoint(row: {
-    cursor: number | null;
+    cursor: string | null;
     eventsSinceTrim: number;
     lastTrimmedAt: string;
-    trimmedThrough: number | null;
+    trimmedThrough: string | null;
 }): RigEventCheckpoint {
     return {
         ...(row.cursor === null

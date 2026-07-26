@@ -386,6 +386,13 @@
             "when": 1786492800000,
             "tag": "0054_agent_turn_final_text_block",
             "breakpoints": true
+        },
+        {
+            "idx": 55,
+            "version": "6",
+            "when": 1786579200000,
+            "tag": "0055_rig_opaque_event_cursors",
+            "breakpoints": true
         }
     ]
 }

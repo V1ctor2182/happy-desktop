@@ -72,8 +72,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { RemoteTerminalSummary } from "@slopus/rig/dist/terminal/index.js";
-import type { ModelCatalog } from "@slopus/rig/dist/protocol/index.js";
+import type { ModelCatalog, RemoteTerminalSummary } from "@slopus/rig/types";
 import type {
     AgentTurnBackgroundTerminalSummary,
     AgentTurnSubagentSummary,
