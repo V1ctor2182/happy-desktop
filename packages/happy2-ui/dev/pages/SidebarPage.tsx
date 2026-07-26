@@ -1,7 +1,7 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Avatar } from "../../src/Avatar";
 import { Button } from "../../src/Button";
-import { Sidebar, type SidebarSection } from "../../src/Sidebar";
+import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const workspaceSections: SidebarSection[] = [
     {
@@ -250,6 +250,129 @@ function FooterUser() {
         </div>
     );
 }
+/* Reorder specimen. The tree is held here rather than flattened into items so a
+   reported move can be applied the way a product store applies it: a top-level
+   row carries its children, a nested row stays inside its own parent. */
+interface ReorderNode {
+    readonly children: readonly ReorderNode[];
+    readonly id: string;
+    readonly label: string;
+}
+const REORDER_TREE: readonly ReorderNode[] = [
+    { children: [], id: "chan-one", label: "Chan one" },
+    {
+        children: [
+            { children: [], id: "sub-a", label: "Sub a" },
+            { children: [], id: "sub-b", label: "Sub b" },
+        ],
+        id: "chan-two",
+        label: "Chan two",
+    },
+    { children: [], id: "chan-three", label: "Chan three" },
+    {
+        children: [
+            { children: [], id: "sub-c", label: "Sub c" },
+            { children: [], id: "sub-d", label: "Sub d" },
+        ],
+        id: "chan-four",
+        label: "Chan four",
+    },
+    { children: [], id: "chan-five", label: "Chan five" },
+];
+function reorderItems(tree: readonly ReorderNode[]): SidebarItem[] {
+    return tree.flatMap((node) => [
+        { id: node.id, kind: "channel" as const, label: node.label },
+        ...node.children.map((child) => ({
+            depth: 1,
+            id: child.id,
+            kind: "channel" as const,
+            label: child.label,
+        })),
+    ]);
+}
+function listMove<T extends { id: string }>(
+    values: readonly T[],
+    id: string,
+    afterId: string | null,
+): readonly T[] {
+    const moved = values.find((value) => value.id === id);
+    if (!moved) return values;
+    const rest = values.filter((value) => value.id !== id);
+    const at = afterId === null ? 0 : rest.findIndex((value) => value.id === afterId) + 1;
+    const next = [...rest];
+    next.splice(at, 0, moved);
+    return next;
+}
+function ReorderDemo() {
+    const [tree, setTree] = useState(REORDER_TREE);
+    const [move, setMove] = useState<string>("— drag a row —");
+    const [added, setAdded] = useState(0);
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Frame height={420}>
+                <Sidebar
+                    activeItemId="chan-one"
+                    onItemReorder={(sectionId, reorder) => {
+                        setMove(
+                            `${sectionId}: ${reorder.id} after ${reorder.afterId ?? "«front»"}${
+                                reorder.parentId ? ` in ${reorder.parentId}` : ""
+                            }`,
+                        );
+                        setTree((current) =>
+                            reorder.parentId === undefined
+                                ? listMove(current, reorder.id, reorder.afterId)
+                                : current.map((node) =>
+                                      node.id === reorder.parentId
+                                          ? {
+                                                ...node,
+                                                children: listMove(
+                                                    node.children,
+                                                    reorder.id,
+                                                    reorder.afterId,
+                                                ),
+                                            }
+                                          : node,
+                                  ),
+                        );
+                    }}
+                    onItemSelect={() => {}}
+                    sections={[{ id: "channels", items: reorderItems(tree), label: "Channels" }]}
+                    title="Reorder"
+                />
+            </Frame>
+            <div style={{ alignItems: "center", display: "flex", gap: "8px" }}>
+                <Button
+                    onClick={() => {
+                        // Lands while a drag is still in flight, which is what a
+                        // live workspace does when an agent opens a channel
+                        // mid-gesture: the drop must survive it.
+                        const at = added + 1;
+                        setAdded(at);
+                        window.setTimeout(
+                            () =>
+                                setTree((current) => [
+                                    ...current,
+                                    { children: [], id: `late-${at}`, label: `Late ${at}` },
+                                ]),
+                            1500,
+                        );
+                    }}
+                    size="small"
+                    variant="ghost"
+                >
+                    Add a channel in 1.5s
+                </Button>
+                <span
+                    data-blueprint="sidebar-reorder-move"
+                    style={{ color: "var(--text-secondary)", font: "var(--font-caption)" }}
+                >
+                    {move}
+                </span>
+            </div>
+            <DimensionRule label="drag a row · nested rows reorder inside their parent" />
+        </div>
+    );
+}
 function Frame(props: { children: ReactNode; height: number }) {
     return (
         <div
@@ -374,6 +497,15 @@ export function SidebarPage() {
                     </Frame>
                     <DimensionRule label="row 32 px · radius 6 · pad 0 10 · gap 8" />
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="A top-level row carries its nested rows; a nested row reorders among its siblings and cannot leave its parent. The drop reports one move — the row and the row it now follows — so a list that changes mid-drag cannot lose it."
+                label="Reorder by dragging"
+                number="02b"
+                stage="app"
+            >
+                <ReorderDemo />
             </Specimen>
 
             <Specimen

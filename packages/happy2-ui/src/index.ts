@@ -193,6 +193,7 @@ export {
     sidebarReorderMove,
     type SidebarItem,
     type SidebarProps,
+    type SidebarReorder,
     type SidebarSection,
 } from "./Sidebar";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";

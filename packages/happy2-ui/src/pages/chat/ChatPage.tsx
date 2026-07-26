@@ -9,7 +9,6 @@ import {
     Lightbox,
     ModalOverlay,
     Sidebar,
-    sidebarReorderMove,
     type ContextItem,
     type ComposerModelChoice,
     type SidebarSection,
@@ -1033,22 +1032,19 @@ export function ChatPage(props: ChatPageProps) {
                             onItemMenuSelect={(item, actionId) =>
                                 sidebarChannelModel(item.id).menuSelect(actionId)
                             }
-                            onItemReorder={(sectionId, ids) => {
+                            onItemReorder={(sectionId, move) => {
                                 // Only the chat sections carry a personal order;
                                 // workspace navigation and shared links are fixed.
-                                const section = sidebarSections.find(
-                                    (candidate) => candidate.id === sectionId,
-                                );
-                                if (!section) return;
-                                const move = sidebarReorderMove(
-                                    section.items
-                                        .filter((item) => (item.depth ?? 0) === 0)
-                                        .map((item) => item.id),
-                                    ids,
-                                );
-                                if (!move) return;
+                                if (!sidebarSections.some((section) => section.id === sectionId))
+                                    return;
+                                // Every chat shares one order, and the sidebar
+                                // builds the tree by hanging each child off its
+                                // parent, so a sub-chat dragged to the front of
+                                // its siblings goes directly after the parent
+                                // itself: that is the slot between the parent and
+                                // whatever follows it.
                                 void props.actions
-                                    .chatReorder(move.id, move.afterId ?? undefined)
+                                    .chatReorder(move.id, move.afterId ?? move.parentId)
                                     .catch(showError);
                             }}
                             onSectionAction={(sectionId) => {

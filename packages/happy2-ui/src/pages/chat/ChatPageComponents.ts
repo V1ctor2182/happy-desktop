@@ -35,12 +35,7 @@ export { PortShareControl } from "../../PortShareControl.js";
 export { ModalOverlay } from "../../ModalOverlay.js";
 export { SegmentedControl } from "../../SegmentedControl.js";
 export { Select, type SelectOption } from "../../Select.js";
-export {
-    Sidebar,
-    sidebarReorderMove,
-    type SidebarItem,
-    type SidebarSection,
-} from "../../Sidebar.js";
+export { Sidebar, type SidebarItem, type SidebarSection } from "../../Sidebar.js";
 export { Switch } from "../../Switch.js";
 export { TextField } from "../../TextField.js";
 export { TerminalPanel } from "../../TerminalPanel.js";

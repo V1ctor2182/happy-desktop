@@ -74,6 +74,22 @@ export type SidebarSection = {
     items: SidebarItem[];
     label?: string;
 };
+/**
+ * The one move a reorder drag made: the row that travelled and the row it now
+ * follows among the peers it was dragged between, `null` when it landed first.
+ *
+ * A move is reported rather than a rearranged list of ids because only the
+ * sidebar knows which rows the drag was actually moving — the top-level blocks,
+ * or one row's children — and a durable order is stated as one row relative to
+ * one neighbour anyway. Recovering that from a restated arrangement means
+ * guessing which list it belongs to, and guessing wrong silently drops the drop.
+ */
+export interface SidebarReorder {
+    readonly id: string;
+    readonly afterId: string | null;
+    /** Set when the drag rearranged one row's children rather than the top level. */
+    readonly parentId?: string;
+}
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     activeItemId: string;
     /** Renders the product mark ("Happy" + faint "Place") instead of a custom title row. */
@@ -96,12 +112,13 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Invoked when a row's trailing `action` control is used. */
     onItemAction?: (id: string) => void;
     /**
-     * Enables dragging top-level rows into a different order and reports the new
-     * arrangement of their ids once, on release. Nested rows travel with the
-     * top-level row they sit under and are never reported themselves. Without
-     * this the rows are not draggable and nothing about them changes.
+     * Enables dragging rows into a different order and reports the one move a
+     * drag made, on release. A top-level row carries its nested rows with it; a
+     * nested row travels among its siblings inside its own parent and never
+     * leaves it. Without this the rows are not draggable and nothing about them
+     * changes.
      */
-    onItemReorder?: (sectionId: string, ids: readonly string[], parentId?: string) => void;
+    onItemReorder?: (sectionId: string, move: SidebarReorder) => void;
     onSectionAction?: (sectionId: string) => void;
     sections: SidebarSection[];
     style?: CSSProperties;
@@ -153,6 +170,13 @@ function reducedMotion(): boolean {
 /** How long a dropped row takes to travel from where it was to where it now is. */
 const SETTLE_MS = 160;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+/**
+ * How long a drop holds the geometry it captured while it waits for the render
+ * that rearranges the rows. Long enough for a reorder to come back through the
+ * store, short enough that a move which never lands lets the row go rather than
+ * leaving it lit and replaying it much later from coordinates that have expired.
+ */
+const SETTLE_WAIT_MS = 500;
 
 interface SidebarDrag {
     readonly pointerId: number;
@@ -163,6 +187,14 @@ interface SidebarDrag {
     readonly to: number;
     /** The rows each unit holds, so a unit that spans several rows moves as one. */
     readonly units: readonly (readonly number[])[];
+    /**
+     * The id of each unit, in the order they stood in when the drag began. The
+     * move is read from these rather than from the rows at the drop, because a
+     * live workspace keeps adding and removing rows: an arrival mid-drag shifts
+     * every index the drag captured, and reading the drop through those indices
+     * would report a different row, or no move at all.
+     */
+    readonly peers: readonly string[];
     readonly heights: readonly number[];
     /** Set when the drag rearranges one row's children rather than the top level. */
     readonly parentId?: string;
@@ -187,11 +219,12 @@ function blocksOf(items: readonly SidebarItem[]): readonly (readonly number[])[]
 
 /**
  * The single move that turns `before` into `after`: the row that travelled and
- * the row it now follows (null at the front). `onItemReorder` reports a whole
- * arrangement, but a durable order is stated as one row moving relative to one
- * neighbour — so the move is recovered by finding the row whose removal makes
- * the two orders identical. Two rows swapping places yields either of them, and
- * placing either one produces the arrangement that was dragged.
+ * the row it now follows (null at the front). For a control that reports a whole
+ * rearranged list, such as a tab strip, where a durable order is stated as one
+ * row moving relative to one neighbour — so the move is recovered by finding the
+ * row whose removal makes the two orders identical. Two rows swapping places
+ * yields either of them, and placing either one produces the arrangement that
+ * was dragged.
  */
 export function sidebarReorderMove(
     before: readonly string[],
@@ -490,6 +523,12 @@ export function Sidebar(props: SidebarProps) {
     const rowNodes = useRef(new Map<string, HTMLButtonElement>());
     // Row tops captured at the drop, consumed by the layout effect below.
     const flipRef = useRef<Map<string, number> | undefined>(undefined);
+    // Lets go of a capture the rearranging render never came for.
+    const flipWait = useRef<number | undefined>(undefined);
+    const flipWaitClear = (): void => {
+        if (flipWait.current !== undefined) window.clearTimeout(flipWait.current);
+        flipWait.current = undefined;
+    };
     // The row that was just dropped, kept lit until it has finished travelling.
     const [dropped, setDropped] = useState<string>();
     // Set by a drag that actually moved, so the click the browser fires on
@@ -548,6 +587,7 @@ export function Sidebar(props: SidebarProps) {
                 from: blockIndex,
                 heights,
                 moved: false,
+                peers: units.map((unit) => section.items[unit[0]!]!.id),
                 pointerId: event.pointerId,
                 startY: event.clientY,
                 to: blockIndex,
@@ -591,7 +631,7 @@ export function Sidebar(props: SidebarProps) {
         // positions to wherever it puts them — so the one commit that moves DOM
         // nodes happens here, under the pointer, and never once the row is
         // supposed to be sitting still.
-        const movedId = section.items[drag.units[drag.from]?.[0] ?? -1]?.id;
+        const movedId = drag.peers[drag.from];
         if (!reducedMotion() && drag.from !== drag.to) {
             const firsts = new Map<string, number>();
             for (const item of section.items) {
@@ -602,15 +642,30 @@ export function Sidebar(props: SidebarProps) {
             // Released lit, not resting: the highlight is handed from the drag to
             // the travelling row and only let go once it has arrived.
             setDropped(movedId);
+            // The capture waits for the render that applies the new order, but
+            // it cannot wait forever: a move the caller declines to make, or one
+            // the server rejects, never produces that render, and an unclaimed
+            // capture would leave the row lit and then play it back from stale
+            // coordinates on the next unrelated render.
+            flipWaitClear();
+            flipWait.current = window.setTimeout(() => {
+                flipWait.current = undefined;
+                flipRef.current = undefined;
+                setDropped(undefined);
+            }, SETTLE_WAIT_MS);
         }
         dragSet(undefined);
-        if (drag.from === drag.to) return;
+        if (drag.from === drag.to || movedId === undefined) return;
         haptic("impact");
-        const peers = drag.units.map((unit) => section.items[unit[0]!]!.id);
-        const next = [...peers];
-        const [reordered] = next.splice(drag.from, 1);
-        next.splice(drag.to, 0, reordered!);
-        local.onItemReorder?.(section.id, next, drag.parentId);
+        // Stated against the peers the drag started with: the row it now follows
+        // is whichever peer precedes its landing slot once it has been lifted
+        // out, and nothing at the front of the list.
+        const remaining = drag.peers.filter((_, index) => index !== drag.from);
+        local.onItemReorder?.(section.id, {
+            afterId: drag.to === 0 ? null : (remaining[drag.to - 1] ?? null),
+            id: movedId,
+            ...(drag.parentId !== undefined ? { parentId: drag.parentId } : {}),
+        });
     };
 
     /*
@@ -647,6 +702,7 @@ export function Sidebar(props: SidebarProps) {
         // pass would lose the animation entirely.
         if (played.length === 0) return;
         flipRef.current = undefined;
+        flipWaitClear();
         // The row stays lit until it stops moving. Rearranging the list moves its
         // node, which drops `:hover` until the pointer moves again — so releasing
         // straight into the resting style would blink the highlight out and let

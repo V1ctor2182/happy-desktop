@@ -425,21 +425,13 @@ export function AppRigView(props: AppRigViewProps) {
                                 : props.workspace.worktreeCreate(owner.project.id)
                         ).catch(() => undefined);
                     }}
-                    onItemReorder={(_sectionId, ids, parentId) => {
+                    onItemReorder={(_sectionId, move) => {
                         // A drag inside a project rearranges its worktrees; a drag
                         // at the top level rearranges the projects themselves.
-                        const parent = parentId
-                            ? rows.find((project) => project.id === parentId)
-                            : undefined;
-                        const before = parent
-                            ? parent.worktrees.map((worktree) => worktree.id)
-                            : rows.map((project) => project.id);
-                        const move = sidebarReorderMove(before, ids);
-                        if (!move) return;
                         void (
-                            parent
+                            move.parentId
                                 ? props.workspace.worktreeReorder(
-                                      parent.id,
+                                      move.parentId as RigProjectId,
                                       move.id as RigWorktreeId,
                                       move.afterId as RigWorktreeId | null,
                                   )
