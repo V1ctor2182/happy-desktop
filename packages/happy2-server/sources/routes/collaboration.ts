@@ -531,9 +531,11 @@ export function registerCollaborationRoutes(
             };
         }),
     );
-    for (const [path, archived, membershipFlag] of [
-        ["archiveChannel", true, "leave"],
-        ["unarchiveChannel", false, "join"],
+    // Membership follows archival rather than being chosen per request: an
+    // archived channel has no members, and unarchiving returns the actor.
+    for (const [path, archived] of [
+        ["archiveChannel", true],
+        ["unarchiveChannel", false],
     ] as const)
         app.post(
             `/v0/chats/:chatId/${path}`,
@@ -541,7 +543,7 @@ export function registerCollaborationRoutes(
                 const body =
                     request.body === undefined || request.body === null
                         ? {}
-                        : requestBody(request, ["reason", membershipFlag]);
+                        : requestBody(request, ["reason"]);
                 const result = await channelSetArchived(executor, {
                     actorUserId: userId,
                     chatId: pathId(request, "chatId"),
@@ -549,9 +551,6 @@ export function registerCollaborationRoutes(
                     reason: has(body, "reason")
                         ? (nullableTrimmedString(body, "reason", 500) ?? undefined)
                         : undefined,
-                    membership: has(body, membershipFlag)
-                        ? booleanField(body, membershipFlag)
-                        : false,
                 });
                 await publishHints(request, pubsub, [membershipUserHint(result)], {
                     server: result.chat.kind === "public_channel",

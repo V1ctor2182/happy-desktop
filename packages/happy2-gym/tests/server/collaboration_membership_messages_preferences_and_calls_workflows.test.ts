@@ -119,22 +119,14 @@ describe("collaboration membership, messages, personal organization, and calls",
             membershipRole: "owner",
         });
         expect(
-            (
-                await asMember.post(`/v0/chats/${privateChannelId}/archiveChannel`, {
-                    leave: true,
-                })
-            ).statusCode,
+            (await asMember.post(`/v0/chats/${privateChannelId}/archiveChannel`)).statusCode,
         ).toBe(200);
         expect(
             (await asMember.post(`/v0/chats/${privateChannelId}/sendMessage`, { text: "blocked" }))
                 .statusCode,
         ).toBe(404);
         expect(
-            (
-                await asMember.post(`/v0/chats/${privateChannelId}/unarchiveChannel`, {
-                    join: true,
-                })
-            ).statusCode,
+            (await asMember.post(`/v0/chats/${privateChannelId}/unarchiveChannel`)).statusCode,
         ).toBe(200);
         expect(
             (await asMember.post(`/v0/chats/${privateChannelId}/deleteChannel`, {})).statusCode,

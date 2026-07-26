@@ -118,13 +118,7 @@ describe("channel sidebar departures and lifecycle service messages", () => {
             ).statusCode,
         ).toBe(200);
 
-        expect(
-            (
-                await asOwner.post(`/v0/chats/${chatId}/archiveChannel`, {
-                    leave: true,
-                })
-            ).statusCode,
-        ).toBe(200);
+        expect((await asOwner.post(`/v0/chats/${chatId}/archiveChannel`)).statusCode).toBe(200);
         const services = await lifecycleServices(asOwner, chatId);
         expect(services.filter((service) => service.type === "channel_archived")).toEqual([
             expect.objectContaining({

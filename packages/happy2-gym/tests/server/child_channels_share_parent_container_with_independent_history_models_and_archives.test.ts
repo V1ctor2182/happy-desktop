@@ -312,30 +312,20 @@ describe("child channel runtime and lifecycle", () => {
             ).statusCode,
         ).toBe(404);
 
-        expect(
-            (
-                await asOwner.post(`/v0/chats/${childChatId}/archiveChannel`, {
-                    leave: true,
-                })
-            ).statusCode,
-        ).toBe(200);
+        expect((await asOwner.post(`/v0/chats/${childChatId}/archiveChannel`)).statusCode).toBe(
+            200,
+        );
         expect((await asOwner.get(`/v0/chats/${parentChatId}`)).json().chat.archivedAt).toBe(
             undefined,
         );
         expect((await asOwner.get(`/v0/chats/${childChatId}`)).json().chat.archivedAt).toEqual(
             expect.any(String),
         );
-        expect(
-            (
-                await asOwner.post(`/v0/chats/${childChatId}/unarchiveChannel`, {
-                    join: true,
-                })
-            ).statusCode,
-        ).toBe(200);
+        expect((await asOwner.post(`/v0/chats/${childChatId}/unarchiveChannel`)).statusCode).toBe(
+            200,
+        );
 
-        const parentArchived = await asOwner.post(`/v0/chats/${parentChatId}/archiveChannel`, {
-            leave: true,
-        });
+        const parentArchived = await asOwner.post(`/v0/chats/${parentChatId}/archiveChannel`);
         expect(parentArchived.statusCode).toBe(200);
         expect(parentArchived.json().sync.chats).toEqual(
             expect.arrayContaining([
@@ -353,13 +343,9 @@ describe("child channel runtime and lifecycle", () => {
                 })
             ).statusCode,
         ).toBe(404);
-        expect(
-            (
-                await asOwner.post(`/v0/chats/${parentChatId}/unarchiveChannel`, {
-                    join: true,
-                })
-            ).statusCode,
-        ).toBe(200);
+        expect((await asOwner.post(`/v0/chats/${parentChatId}/unarchiveChannel`)).statusCode).toBe(
+            200,
+        );
         expect((await asOwner.get(`/v0/chats/${childChatId}`)).json().chat.archivedAt).toBe(
             undefined,
         );

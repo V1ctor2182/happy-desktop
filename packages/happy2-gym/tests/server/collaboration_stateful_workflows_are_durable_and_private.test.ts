@@ -205,13 +205,12 @@ describe("stateful collaboration workflows", () => {
         });
         await expectOk(asAdmin, `/v0/chats/${chatId}/archiveChannel`, {
             reason: "maintenance",
-            leave: true,
         });
         expect(
             (await asMember.post(`/v0/chats/${chatId}/sendMessage`, { text: "blocked" }))
                 .statusCode,
         ).toBe(404);
-        await expectOk(asAdmin, `/v0/chats/${chatId}/unarchiveChannel`, { join: true });
+        await expectOk(asAdmin, `/v0/chats/${chatId}/unarchiveChannel`);
 
         const search = await asMember.get("/v0/search?q=relase&limit=2");
         expect(search.statusCode).toBe(200);

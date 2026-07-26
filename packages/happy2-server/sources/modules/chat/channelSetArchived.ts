@@ -21,11 +21,12 @@ import { asChat } from "./impl/asChat.js";
 import { areaHint } from "./areaHint.js";
 import { createId } from "@paralleldrive/cuid2";
 import { chatDescendantMembershipSync } from "./impl/chatDescendantMembershipSync.js";
+import { chatOrderKeyClearDb } from "./impl/chatOrderKeyClearDb.js";
 import { createChannelServiceMessageDb } from "./impl/createChannelServiceMessageDb.js";
 
 /**
- * Updates chats archival state for a manageable channel and optionally applies the matching top-level chatMembers transition in the same transaction.
- * An archive may voluntarily deactivate every member, while an unarchive may restore the actor without allowing an explicitly removed membership to bypass revocation.
+ * Updates chats archival state for a manageable channel and applies the matching top-level chatMembers transition in the same transaction.
+ * An archived channel has no members: archiving deactivates every membership voluntarily, so the channel leaves everyone's sidebar and no one holds a position in it, while the preserved rows and roles let any manager unarchive and return. Unarchiving restores the actor from their own preserved membership and never lets an explicitly removed one bypass revocation.
  */
 export async function channelSetArchived(
     executor: DrizzleExecutor,
@@ -33,7 +34,6 @@ export async function channelSetArchived(
         actorUserId: string;
         chatId: string;
         archived: boolean;
-        membership?: boolean;
         reason?: string;
     },
 ): Promise<{
@@ -59,8 +59,12 @@ export async function channelSetArchived(
                 "conflict",
                 input.archived ? "Channel is already archived" : "Channel is not archived",
             );
+        // Unarchiving returns the actor to the channel they archived themselves
+        // out of, at the role their preserved row still carries. A manager whose
+        // membership was explicitly revoked stays out, and a server administrator
+        // who was never a member unarchives without joining.
         let joinRole: ChatRole | undefined;
-        if (!input.archived && input.membership && !access.membershipRole && !access.parentChatId) {
+        if (!input.archived && !access.membershipRole && !access.parentChatId) {
             const [previous] = await tx
                 .select({
                     role: chatMembers.role,
@@ -74,12 +78,8 @@ export async function channelSetArchived(
                     ),
                 )
                 .limit(1);
-            if (
-                previous?.removedByUserId ||
-                (access.kind === "private_channel" && !access.isRecoverableMember)
-            )
-                throw new CollaborationError("not_found", "Joinable channel was not found");
-            joinRole = (previous?.role as ChatRole | undefined) ?? "member";
+            if (previous && !previous.removedByUserId)
+                joinRole = previous.role as ChatRole | undefined;
         }
         const sequence = await syncSequenceNext(tx);
         const descendantIds = await chatDescendantIds(tx, input.chatId);
@@ -103,7 +103,7 @@ export async function channelSetArchived(
                 ),
             );
         const memberships =
-            input.archived && input.membership && !access.parentChatId
+            input.archived && !access.parentChatId
                 ? await tx
                       .select({
                           chatId: chatMembers.chatId,
@@ -132,7 +132,8 @@ export async function channelSetArchived(
             await tx
                 .delete(agentRigBindings)
                 .where(inArray(agentRigBindings.chatId, affectedChatIds));
-            for (const membership of memberships)
+            for (const membership of memberships) {
+                await chatOrderKeyClearDb(tx, membership.userId, membership.chatId, sequence);
                 await syncEventInsert(tx, {
                     sequence,
                     kind: "member.left",
@@ -141,6 +142,7 @@ export async function channelSetArchived(
                     actorUserId: input.actorUserId,
                     targetUserId: membership.userId,
                 });
+            }
         }
         let servicePts: number | undefined;
         let documentsChanged = false;

@@ -113,24 +113,19 @@ describe("voluntary private-channel departure and explicit membership revocation
         expect((await asMember.get(`/v0/chats/${chatId}`)).statusCode).toBe(404);
         expect((await asMember.post(`/v0/chats/${chatId}/join`)).statusCode).toBe(404);
 
+        // Archiving empties the channel: every active membership becomes a
+        // voluntary departure, so nobody keeps a role or a sidebar row while it
+        // is archived. Unarchiving returns the actor at their preserved role.
+        const memberBaseline = (await asArchivedMember.get("/v0/sync/state")).json().state;
         const archiveOnly = await asOwner.post(`/v0/chats/${chatId}/archiveChannel`);
         expect(archiveOnly.statusCode).toBe(200);
-        expect(archiveOnly.json().chat.membershipRole).toBe("owner");
-        expect(
-            (await asOwner.get(`/v0/chats/${chatId}/members`))
-                .json()
-                .memberships.map((membership: { user: { id: string } }) => membership.user.id),
-        ).toEqual(expect.arrayContaining([owner.id, channelAdmin.id, archivedMember.id]));
-        const activeOwnerUnarchived = await asOwner.post(`/v0/chats/${chatId}/unarchiveChannel`, {
-            join: true,
-        });
+        expect(archiveOnly.json().chat.membershipRole).toBeUndefined();
+        expect((await asOwner.get(`/v0/chats/${chatId}/members`)).json().memberships).toEqual([]);
+        const activeOwnerUnarchived = await asOwner.post(`/v0/chats/${chatId}/unarchiveChannel`);
         expect(activeOwnerUnarchived.statusCode).toBe(200);
         expect(activeOwnerUnarchived.json().chat.membershipRole).toBe("owner");
 
-        const memberBaseline = (await asArchivedMember.get("/v0/sync/state")).json().state;
-        const archived = await asOwner.post(`/v0/chats/${chatId}/archiveChannel`, {
-            leave: true,
-        });
+        const archived = await asOwner.post(`/v0/chats/${chatId}/archiveChannel`);
         expect(archived.statusCode).toBe(200);
         expect(archived.json().chat.archivedAt).toEqual(expect.any(String));
         expect(archived.json().chat.membershipRole).toBeUndefined();
@@ -153,16 +148,20 @@ describe("voluntary private-channel departure and explicit membership revocation
         expect((await asChannelAdmin.get(`/v0/chats/${chatId}/messages`)).statusCode).toBe(200);
         expect((await asArchivedMember.get(`/v0/chats/${chatId}/messages`)).statusCode).toBe(200);
 
-        expect((await asChannelAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`)).statusCode).toBe(
-            200,
-        );
-        expect((await asOwner.get(`/v0/chats/${chatId}/members`)).json().memberships).toEqual([]);
+        // A departed manager still administers the archive, and unarchiving puts
+        // that manager back in as the channel's only member.
+        const adminUnarchived = await asChannelAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`);
+        expect(adminUnarchived.statusCode).toBe(200);
+        expect(adminUnarchived.json().chat.membershipRole).toBe("admin");
+        expect(
+            (await asOwner.get(`/v0/chats/${chatId}/members`))
+                .json()
+                .memberships.map((membership: { user: { id: string } }) => membership.user.id),
+        ).toEqual([channelAdmin.id]);
         expect((await asChannelAdmin.post(`/v0/chats/${chatId}/archiveChannel`)).statusCode).toBe(
             200,
         );
-        const joinedAgain = await asChannelAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`, {
-            join: true,
-        });
+        const joinedAgain = await asChannelAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`);
         expect(joinedAgain.statusCode).toBe(200);
         expect(joinedAgain.json().chat.membershipRole).toBe("admin");
         const archivedMemberRejoined = await asArchivedMember.post(`/v0/chats/${chatId}/join`);
@@ -171,7 +170,7 @@ describe("voluntary private-channel departure and explicit membership revocation
         expect((await asOwner.post(`/v0/chats/${chatId}/join`)).statusCode).toBe(200);
     });
 
-    it("rolls back unarchive when an explicitly removed server admin also requests to join", async () => {
+    it("unarchives for an explicitly removed server admin without restoring the revoked membership", async () => {
         await using server = await createGymServer();
         const serverAdmin = await server.createUser({ username: "removed_server_admin" });
         const channelOwner = await server.createUser({ username: "replacement_channel_owner" });
@@ -203,15 +202,17 @@ describe("voluntary private-channel departure and explicit membership revocation
             200,
         );
 
-        expect(
-            (
-                await asServerAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`, {
-                    join: true,
-                })
-            ).statusCode,
-        ).toBe(404);
-        expect((await asChannelOwner.get(`/v0/chats/${chatId}`)).json().chat.archivedAt).toEqual(
-            expect.any(String),
+        // Server administration is enough to unarchive, but an explicitly revoked
+        // membership is not restored by it: the channel reopens with no members.
+        const unarchived = await asServerAdmin.post(`/v0/chats/${chatId}/unarchiveChannel`);
+        expect(unarchived.statusCode).toBe(200);
+        expect(unarchived.json().chat.membershipRole).toBeUndefined();
+        expect((await asChannelOwner.get(`/v0/chats/${chatId}`)).json().chat.archivedAt).toBe(
+            undefined,
         );
+        expect((await asServerAdmin.get(`/v0/chats/${chatId}/members`)).json().memberships).toEqual(
+            [],
+        );
+        expect((await asServerAdmin.post(`/v0/chats/${chatId}/join`)).statusCode).toBe(404);
     });
 });
