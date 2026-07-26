@@ -156,6 +156,15 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         projectArchive: async (projectId) => {
             await postJson<Record<string, never>>(`/projects/${projectId}/archive`);
         },
+        projectRename: async (projectId, name) => {
+            await postJson<Record<string, never>>(`/projects/${projectId}/rename`, { name });
+        },
+        worktreeRename: async (projectId, worktreeId, name) => {
+            await postJson<Record<string, never>>(
+                `/projects/${projectId}/worktrees/${worktreeId}/rename`,
+                { name },
+            );
+        },
         worktreeCreate: (projectId, input) =>
             postJson<RigWorktree>(`/projects/${projectId}/worktrees`, input),
         worktreeArchive: async (projectId, worktreeId) => {

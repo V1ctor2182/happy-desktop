@@ -37,6 +37,7 @@ import {
     EmptyState,
     FilePanel,
     Lightbox,
+    Modal,
     ModalOverlay,
     RigActivityPanel,
     RigConnectionStatus,
@@ -48,6 +49,7 @@ import {
     SidebarFooter,
     SplitColumn,
     TabbedPane,
+    TextField,
     TerminalPanel,
     WindowDragRegion,
     rigComposerModelControlProps,
@@ -172,6 +174,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
 
 /** The row action ids the sidebar's context menu dispatches back to this surface. */
 const ROW_MENU_ARCHIVE = "archive";
+const ROW_MENU_RENAME = "rename";
 
 /**
  * The context menu one sidebar row offers. Archiving is the only thing on it,
@@ -186,6 +189,8 @@ function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): 
     if (!owner) return [];
     if (owner.worktreeId)
         return [
+            { kind: "item", id: ROW_MENU_RENAME, label: "Rename workspace", icon: "edit" },
+            { kind: "separator" },
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -194,8 +199,12 @@ function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): 
                 danger: true,
             },
         ];
+    // The home project's name is the machine's, not the reader's to set, so it
+    // offers neither renaming nor archiving.
     if (owner.project.kind === "home") return [];
     return [
+        { kind: "item", id: ROW_MENU_RENAME, label: "Rename project", icon: "edit" },
+        { kind: "separator" },
         {
             kind: "item",
             id: ROW_MENU_ARCHIVE,
@@ -426,9 +435,13 @@ export function AppRigView(props: AppRigViewProps) {
                     itemMenuItems={(item) => rowMenuItems(rows, item)}
                     onCompose={conversationCreate}
                     onItemMenuSelect={(item, actionId) => {
-                        if (actionId !== ROW_MENU_ARCHIVE) return;
                         const owner = rowOwnerFind(rows, item.id);
                         if (!owner) return;
+                        if (actionId === ROW_MENU_RENAME) {
+                            props.workspace.renameOpen(owner.project.id, owner.worktreeId);
+                            return;
+                        }
+                        if (actionId !== ROW_MENU_ARCHIVE) return;
                         // The archived row is about to stop existing, so the URL
                         // stops naming it: addressing the list is this surface's
                         // job, since the store never navigates. Archiving a
@@ -759,6 +772,48 @@ export function AppRigView(props: AppRigViewProps) {
                     />
                 </>
             )}
+            {/* Renaming is a workspace-level act — the row being renamed may not
+                be the project that is open — so its dialog hangs off the shell
+                rather than off any one surface inside it. */}
+            {workspace.rename ? (
+                <ModalOverlay onDismiss={() => props.workspace.renameCancel()}>
+                    <Modal
+                        footer={
+                            <>
+                                <Button
+                                    onClick={() => props.workspace.renameCancel()}
+                                    variant="ghost"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    disabled={workspace.rename.submitting}
+                                    onClick={() => {
+                                        void props.workspace.renameSubmit().catch(() => undefined);
+                                    }}
+                                    variant="primary"
+                                >
+                                    Rename
+                                </Button>
+                            </>
+                        }
+                        onClose={() => props.workspace.renameCancel()}
+                        size="small"
+                        title={`Rename ${workspace.rename.currentName}`}
+                    >
+                        <TextField
+                            disabled={workspace.rename.submitting}
+                            fullWidth
+                            label="Name"
+                            onSubmit={() => {
+                                void props.workspace.renameSubmit().catch(() => undefined);
+                            }}
+                            onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
+                            value={workspace.rename.draft}
+                        />
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
         </AppShell>
     );
 }

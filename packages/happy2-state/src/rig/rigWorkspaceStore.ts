@@ -159,6 +159,24 @@ export interface RigWorkspaceSnapshot {
      * empty one.
      */
     readonly openInTargets: readonly RigOpenInTarget[];
+    /** The rename in progress, if any: what is being renamed and the draft name. */
+    readonly rename?: RigRenameSnapshot;
+}
+
+/**
+ * A rename the reader has opened but not committed. The draft lives here rather
+ * than in the field so the surface stays a pure function of this snapshot, and
+ * so an in-flight rename survives the row list being republished underneath it.
+ */
+export interface RigRenameSnapshot {
+    readonly projectId: RigProjectId;
+    /** Absent when the project itself is being renamed rather than one of its worktrees. */
+    readonly worktreeId?: RigWorktreeId;
+    /** What it is called now, for the dialog's title. */
+    readonly currentName: string;
+    readonly draft: string;
+    /** True while the host is being told; the dialog stays up and inert. */
+    readonly submitting: boolean;
 }
 
 /**
@@ -302,6 +320,14 @@ export interface RigWorkspaceStore {
      * named, not the directory: the host resolves the path from its own catalog.
      */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
+    /** Starts renaming a project, or one of its worktrees, from its current name. */
+    renameOpen(projectId: RigProjectId, worktreeId: RigWorktreeId | undefined): void;
+    /** Edits the pending name. */
+    renameDraftUpdate(draft: string): void;
+    /** Abandons the rename. */
+    renameCancel(): void;
+    /** Commits the pending name; a blank one is not a rename and closes instead. */
+    renameSubmit(): Promise<void>;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /**
@@ -402,6 +428,7 @@ export function rigWorkspaceStoreCreate(
        open the menu. */
     let openInTargets: readonly RigOpenInTarget[] = [];
     let openInTargetsRequested = false;
+    let rename: RigRenameSnapshot | undefined;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
     /**
@@ -506,7 +533,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId &&
-            snapshot.openInTargets === openInTargets
+            snapshot.openInTargets === openInTargets &&
+            snapshot.rename === rename
         )
             return;
         snapshot = {
@@ -517,6 +545,7 @@ export function rigWorkspaceStoreCreate(
             ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
+            ...(rename ? { rename } : {}),
         };
         notify();
     };
@@ -1203,6 +1232,63 @@ export function rigWorkspaceStoreCreate(
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
         openIn: (groupId, targetId) => client.openIn(groupId, targetId),
+        renameOpen(projectId, worktreeId) {
+            const projects = list.get().projects;
+            if (projects.type !== "ready") return;
+            const project = projects.value.find((candidate) => candidate.id === projectId);
+            if (!project) return;
+            const currentName = worktreeId
+                ? project.worktrees.find((worktree) => worktree.id === worktreeId)?.name
+                : project.name;
+            if (currentName === undefined) return;
+            // Seeded with the current name because renaming is usually editing
+            // rather than replacing, and an empty field would throw away the
+            // thing most renames start from.
+            rename = {
+                projectId,
+                ...(worktreeId ? { worktreeId } : {}),
+                currentName,
+                draft: currentName,
+                submitting: false,
+            };
+            recompute();
+        },
+        renameDraftUpdate(draft) {
+            if (!rename || rename.submitting) return;
+            rename = { ...rename, draft };
+            recompute();
+        },
+        renameCancel() {
+            if (!rename) return;
+            rename = undefined;
+            recompute();
+        },
+        async renameSubmit() {
+            const pending = rename;
+            if (!pending || pending.submitting) return;
+            const name = pending.draft.trim();
+            // A blank name is not a rename, and neither is the name it already
+            // has; both just close, rather than making the host answer for it.
+            if (name.length === 0 || name === pending.currentName) {
+                rename = undefined;
+                recompute();
+                return;
+            }
+            rename = { ...pending, submitting: true };
+            recompute();
+            try {
+                await (pending.worktreeId
+                    ? list.worktreeRename(pending.projectId, pending.worktreeId, name)
+                    : list.projectRename(pending.projectId, name));
+            } finally {
+                // Closed either way: the list store reports a failed rename by
+                // reconciling the old name back, which says more than a dialog
+                // stuck open over a row that already shows the answer.
+                if (rename === undefined || rename.projectId === pending.projectId)
+                    rename = undefined;
+                recompute();
+            }
+        },
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
         conversationScrollUpdate(conversationId, position) {
             // Deliberately no `recompute()`. The transcript is the one thing

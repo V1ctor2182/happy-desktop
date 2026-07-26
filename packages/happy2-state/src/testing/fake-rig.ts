@@ -45,6 +45,8 @@ export type FakeRigOperation =
     | "sessionReorder"
     | "projectReorder"
     | "projectArchive"
+    | "projectRename"
+    | "worktreeRename"
     | "worktreeCreate"
     | "worktreeArchive"
     | "worktreeReorder"
@@ -496,6 +498,26 @@ class FakeRigTransportModel implements FakeRigTransport {
                     ),
                 };
                 return undefined;
+            }),
+        projectRename: (projectId, name) =>
+            this.perform("projectRename", {}, () => {
+                this.projects = {
+                    ...this.projects,
+                    projects: this.projects.projects.map((project) =>
+                        project.id === projectId ? { ...project, name } : project,
+                    ),
+                };
+            }),
+        worktreeRename: (projectId, worktreeId, name) =>
+            this.perform("worktreeRename", {}, () => {
+                this.projects = {
+                    ...this.projects,
+                    worktrees: this.projects.worktrees.map((worktree) =>
+                        worktree.id === worktreeId && worktree.projectId === projectId
+                            ? { ...worktree, name }
+                            : worktree,
+                    ),
+                };
             }),
         projectArchive: (projectId) =>
             this.perform("projectArchive", {}, () => {

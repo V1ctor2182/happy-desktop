@@ -327,6 +327,9 @@ export interface RigTransport {
      */
     projectArchive(projectId: RigProjectId): Promise<void>;
 
+    /** Renames a project. The name is presentation only; nothing derives from it. */
+    projectRename(projectId: RigProjectId, name: string): Promise<void>;
+
     /**
      * Reserves a worktree in the project and resolves with it while its checkout
      * is still being prepared — `status` says whether it is usable yet, and the
@@ -344,6 +347,9 @@ export interface RigTransport {
      * checkout. The sessions that ran in it are closed by the host.
      */
     worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
+
+    /** Renames a worktree. */
+    worktreeRename(projectId: RigProjectId, worktreeId: RigWorktreeId, name: string): Promise<void>;
 
     /** Moves one worktree after `afterId` within its project, or to the front when null. */
     worktreeReorder(

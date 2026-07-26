@@ -221,6 +221,8 @@ export type RigProxyClient = Pick<
     | "reorderWorkspace"
     | "reorderProject"
     | "archiveProject"
+    | "renameProject"
+    | "renameWorkspace"
     | "reorderSession"
     | "getSession"
     | "listSubagents"
@@ -493,6 +495,15 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 writeJson(response, 200, {});
                 return true;
             }
+            if (segments[2] === "rename" && segments.length === 3) {
+                const body = await bodyReadJson(request);
+                // A project rename is unguarded because the daemon asks for no
+                // version: the name has nothing derived from it, so the worst a
+                // lost race costs is the later of two names.
+                await client.renameProject(projectId, nameRead(body));
+                writeJson(response, 200, {});
+                return true;
+            }
             if (segments[2] === "archive" && segments.length === 3) {
                 await projectGuarded(client, projectId, (version) =>
                     client.archiveProject(projectId, version),
@@ -518,6 +529,15 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 if (segments[4] === "archive") {
                     await worktreeGuarded(client, projectId, worktreeId, (version) =>
                         client.archiveWorkspace(projectId, worktreeId, version),
+                    );
+                    writeJson(response, 200, {});
+                    return true;
+                }
+                if (segments[4] === "rename") {
+                    const body = await bodyReadJson(request);
+                    const name = nameRead(body);
+                    await worktreeGuarded(client, projectId, worktreeId, (version) =>
+                        client.renameWorkspace(projectId, worktreeId, name, version),
                     );
                     writeJson(response, 200, {});
                     return true;
@@ -909,6 +929,17 @@ async function worktreeGuarded(
  * use. A losing race answers 409, which is retried once against the version that
  * won.
  */
+/**
+ * Reads a name from a rename body. Blank is rejected here rather than passed on:
+ * a row with no name is unaddressable in the sidebar, and the daemon would
+ * accept the empty string.
+ */
+function nameRead(body: Record<string, unknown>): string {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (name.length === 0) throw new Error("A name is required.");
+    return name;
+}
+
 async function projectGuarded(
     client: RigProxyClient,
     projectId: string,

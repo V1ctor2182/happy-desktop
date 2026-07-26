@@ -92,6 +92,8 @@ export interface RigSessionListStore {
      * back.
      */
     projectArchive(projectId: RigProjectId): Promise<void>;
+    /** Renames a project; the new name shows before the host confirms it. */
+    projectRename(projectId: RigProjectId, name: string): Promise<void>;
 
     /**
      * Reserves a worktree in the project and resolves as soon as it exists, with
@@ -119,6 +121,8 @@ export interface RigSessionListStore {
 
     /** Archives a worktree: it leaves the list and the host removes its checkout. */
     worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
+    /** Renames a worktree; the new name shows before the host confirms it. */
+    worktreeRename(projectId: RigProjectId, worktreeId: RigWorktreeId, name: string): Promise<void>;
 
     /** Moves one worktree after `afterId` within its project, or to the front when null. */
     worktreeReorder(
@@ -481,6 +485,40 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 publish();
                 try {
                     await deps.transport.projectReorder(projectId, afterId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        projectRename: (projectId, name) =>
+            mutate(async () => {
+                // The new name shows immediately: renaming is a direct
+                // manipulation of a label, and a name that lags behind the
+                // typing that produced it reads as the rename having failed.
+                // The reconcile below is what makes the host's answer final.
+                catalog = {
+                    ...catalog,
+                    projects: catalog.projects.map((project) =>
+                        project.id === projectId ? { ...project, name } : project,
+                    ),
+                };
+                publish();
+                try {
+                    await deps.transport.projectRename(projectId, name);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        worktreeRename: (projectId, worktreeId, name) =>
+            mutate(async () => {
+                catalog = {
+                    ...catalog,
+                    worktrees: catalog.worktrees.map((worktree) =>
+                        worktree.id === worktreeId ? { ...worktree, name } : worktree,
+                    ),
+                };
+                publish();
+                try {
+                    await deps.transport.worktreeRename(projectId, worktreeId, name);
                 } finally {
                     if (!disposed) await reconcile();
                 }
