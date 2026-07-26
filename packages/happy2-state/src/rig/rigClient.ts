@@ -1,4 +1,6 @@
+import type { TerminalDriverCreate } from "../modules/terminal/terminalState.js";
 import type { UserError } from "../types.js";
+import { rigTerminalOpen, type RigTerminalHandle } from "./rigTerminalStore.js";
 import {
     rigChatStoreCreate,
     type RigChatDeps,
@@ -30,6 +32,13 @@ export interface RigClient {
      * last lease is released.
      */
     chat(sessionId: RigSessionId): Promise<RigChatHandle>;
+    /**
+     * Opens one interactive terminal in a session's working directory. Unlike a
+     * chat store these are not shared or reference-counted: two terminals in the
+     * same session are two separate shells, which is the whole point of being able
+     * to open more than one. Disposing the handle stops the remote terminal.
+     */
+    terminalOpen(sessionId: RigSessionId): RigTerminalHandle;
     [Symbol.dispose](): void;
 }
 
@@ -40,6 +49,13 @@ export interface RigClientDeps {
     readonly sessionListOutput?: (event: RigSessionListOutput) => void;
     readonly chatOutput?: (sessionId: RigSessionId, event: RigChatOutput) => void;
     readonly backgroundError?: (error: UserError) => void;
+    /**
+     * Builds the driver behind a terminal: the app-layer machinery that owns the
+     * terminal protocol client and the VT emulator. Omitting it leaves terminals
+     * unavailable — they report that instead of failing silently — which is what an
+     * app with no emulator to offer should do.
+     */
+    readonly terminalDriverCreate?: TerminalDriverCreate;
 }
 
 interface ChatBinding {
@@ -133,6 +149,18 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     }
                 },
             };
+        },
+        terminalOpen(sessionId) {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            return rigTerminalOpen(
+                {
+                    transport,
+                    ...(deps.terminalDriverCreate
+                        ? { driverCreate: deps.terminalDriverCreate }
+                        : {}),
+                },
+                sessionId,
+            );
         },
         [Symbol.dispose]() {
             if (disposed) return;

@@ -23,6 +23,7 @@ import {
     rigSessionUsageProject,
     rigShellResultProject,
     rigSubagentProject,
+    rigTerminalProject,
     rigWorktreeProject,
 } from "./rigProjection";
 
@@ -53,6 +54,8 @@ export type RigProxyClient = Pick<
     | "rewind"
     | "runShellCommand"
     | "stopBackgroundProcess"
+    | "createTerminal"
+    | "stopTerminal"
     | "answerUserInput"
     | "changeModel"
     | "changeEffort"
@@ -348,6 +351,21 @@ async function handleSessionPost(
         }
         case "stopBackgroundProcess":
             await client.stopBackgroundProcess(sessionId, Number(body.processId));
+            writeJson(response, 200, {});
+            return true;
+        case "createTerminal": {
+            // The size is the only thing the renderer decides: the shell and the
+            // working directory are the daemon's, so a terminal opened here is the
+            // user's own shell in the session it belongs to.
+            const created = await client.createTerminal(sessionId, {
+                cols: Number(body.cols),
+                rows: Number(body.rows),
+            });
+            writeJson(response, 200, rigTerminalProject(created.terminal));
+            return true;
+        }
+        case "stopTerminal":
+            await client.stopTerminal(sessionId, String(body.terminalId ?? ""));
             writeJson(response, 200, {});
             return true;
         case "answerInput":

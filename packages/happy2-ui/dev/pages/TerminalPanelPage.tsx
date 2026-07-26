@@ -102,6 +102,22 @@ export function TerminalPanelPage() {
                     <TerminalPanel exitCode={0} height={280} status="exited" {...handlers} />
                 </div>
             </Specimen>
+            <Specimen
+                detail="no height · fills a 320 × 360 panel column · no divider, no close"
+                label="Filling a panel column"
+                number="04"
+                stage="app"
+            >
+                <div style={{ ...frame, width: "320px" }}>
+                    <TerminalPanel
+                        grid={grid}
+                        onInput={noop}
+                        onReconnect={noop}
+                        onResize={noop}
+                        status="connected"
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

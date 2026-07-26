@@ -8,6 +8,7 @@ import {
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
 import type { RigChatSnapshot, RigChatStore } from "./rigChatStore.js";
+import { rigPanelStoreCreate, type RigPanelStore } from "./rigPanelStore.js";
 import { rigUserError } from "./rigSupport.js";
 import type {
     RigSessionListSnapshot,
@@ -120,6 +121,14 @@ export interface RigWorkspaceStore {
     get(): RigWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
 
+    /**
+     * The workspace's right-hand tool panel. It is a store of its own, not part of
+     * the snapshot above, because a terminal in it repaints far faster than the
+     * conversation does and must not drag the whole workspace through a render to
+     * do it. The workspace keeps it pointed at the open conversation.
+     */
+    readonly panel: RigPanelStore;
+
     // Navigation-applied conversation lifetime. These are not user selection:
     // the router applies them from the addressed URL.
     /** Materializes the addressed conversation, releasing any previously open one. */
@@ -209,6 +218,9 @@ export function rigWorkspaceStoreCreate(
 ): RigWorkspaceStore {
     const list: RigSessionListStore = client.sessionList();
     const output = deps.output ?? (() => undefined);
+    const panel: RigPanelStore = rigPanelStoreCreate({
+        terminalOpen: (sessionId) => client.terminalOpen(sessionId),
+    });
 
     const listeners = new Set<() => void>();
     let active = false;
@@ -474,6 +486,10 @@ export function rigWorkspaceStoreCreate(
 
     /** Applies the addressed conversation, releasing whichever one was open. */
     const openConversation = (conversationId: RigSessionId | undefined): void => {
+        // The panel shows the addressed conversation's tabs, so it learns the new
+        // address in this same call stack — before the chat handle is acquired, so
+        // a terminal is never briefly attributed to the conversation just left.
+        panel.conversationApply(conversationId);
         if (conversationId === openId) {
             // Re-addressing the same conversation is how a failed acquisition is
             // retried, which is what a repeated navigation to it should do.
@@ -525,6 +541,7 @@ export function rigWorkspaceStoreCreate(
 
     return {
         get: () => snapshot,
+        panel,
         subscribe(listener) {
             listeners.add(listener);
             if (listeners.size === 1 && !disposed) start();
@@ -586,6 +603,9 @@ export function rigWorkspaceStoreCreate(
             if (disposed) return;
             disposed = true;
             stop();
+            // Disposing the panel stops every terminal it opened: this connection is
+            // going away, and a shell nobody can reach again is an orphan.
+            panel[Symbol.dispose]();
             listeners.clear();
         },
     };

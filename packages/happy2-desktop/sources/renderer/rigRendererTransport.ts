@@ -1,3 +1,4 @@
+import { BrowserTerminalConnection, TERMINAL_PROTOCOL, terminalSocketUrl } from "happy2-app";
 import type {
     RigEventId,
     RigEventObserver,
@@ -16,6 +17,8 @@ import type {
     RigSessionUsage,
     RigShellCommandResult,
     RigSubagentSummary,
+    RigTerminal,
+    RigTerminalId,
     RigThinkingLevel,
     RigTransport,
     RigUserInputAnswers,
@@ -147,6 +150,27 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         backgroundProcessStop: async (sessionId, processId) => {
             await postJson(`/sessions/${sessionId}/stopBackgroundProcess`, { processId });
         },
+
+        terminalCreate: (sessionId, cols, rows) =>
+            postJson<RigTerminal>(`/sessions/${sessionId}/createTerminal`, { cols, rows }),
+        terminalStop: async (sessionId, terminalId) => {
+            await postJson(`/sessions/${sessionId}/stopTerminal`, { terminalId });
+        },
+        // A terminal's live bytes are the one part of this transport that cannot be
+        // a request: they ride a WebSocket the main process upgrades on the same
+        // loopback origin the JSON routes are served from. Nothing authenticates
+        // here because nothing can — the daemon's token stays in the main process,
+        // which is exactly why this bridge exists.
+        terminalConnect: (sessionId, terminalId: RigTerminalId) =>
+            new BrowserTerminalConnection(
+                terminalSocketUrl(
+                    base,
+                    `/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(
+                        terminalId,
+                    )}/attach`,
+                ),
+                [TERMINAL_PROTOCOL],
+            ),
 
         changeModel: (sessionId, input: RigModelSelection) =>
             postJson<RigSession>(`/sessions/${sessionId}/model`, input),

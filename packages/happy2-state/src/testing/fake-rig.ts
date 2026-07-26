@@ -5,6 +5,7 @@ import type {
     RigSessionEvent,
     RigTransport,
 } from "../rig/rigTransport.js";
+import { fakeTerminalChannelCreate, type FakeTerminalChannel } from "./fake-terminal-channel.js";
 import type {
     RigFileSearchResult,
     RigModelCatalog,
@@ -22,6 +23,8 @@ import type {
     RigSessionUsage,
     RigShellCommandResult,
     RigSubagentSummary,
+    RigTerminal,
+    RigTerminalId,
     RigThinkingLevel,
     RigUserInputAnswers,
 } from "../rig/rigTypes.js";
@@ -52,6 +55,9 @@ export type FakeRigOperation =
     | "answerUserInput"
     | "filesSearch"
     | "usageGet"
+    | "terminalCreate"
+    | "terminalStop"
+    | "terminalConnect"
     | "sessionEventsBackfill";
 
 export interface FakeRigCall {
@@ -64,6 +70,11 @@ export interface FakeRigCall {
     readonly idempotencyKey?: string;
     readonly text?: string;
     readonly expectedRunId?: string;
+    /** The terminal a terminal-scoped call addressed. */
+    readonly terminalId?: RigTerminalId;
+    /** The size a terminal create asked for. */
+    readonly cols?: number;
+    readonly rows?: number;
 }
 
 export interface FakeRigTransport {
@@ -94,6 +105,12 @@ export interface FakeRigTransport {
     failNext(operation: FakeRigOperation, error?: unknown): void;
     /** Defers the next call to `operation`; call the returned release to resolve it. */
     deferNext(operation: FakeRigOperation): { release(): void };
+    /**
+     * The far end of each terminal byte channel opened so far, newest last. Every
+     * attach — including a driver's reconnect — appends one, so a test drives the
+     * exact channel the client is currently on.
+     */
+    readonly terminalChannels: readonly FakeTerminalChannel[];
 }
 
 /** The one project every fake session is filed under unless a test says otherwise. */
@@ -235,11 +252,16 @@ class FakeRigTransportModel implements FakeRigTransport {
     private readonly globalObservers = new Set<RigEventObserver<RigGlobalEvent>>();
     private readonly failures = new Map<FakeRigOperation, unknown[]>();
     private readonly deferGates = new Map<FakeRigOperation, Promise<void>[]>();
+    private readonly terminals = new Map<RigTerminalId, RigTerminal>();
+    private readonly channels: FakeTerminalChannel[] = [];
     private recorded: FakeRigCall[] = [];
     private nextForkId = 1;
 
     get calls(): readonly FakeRigCall[] {
         return this.recorded;
+    }
+    get terminalChannels(): readonly FakeTerminalChannel[] {
+        return this.channels;
     }
     get sessionSubscriberCount(): number {
         let total = 0;
@@ -450,6 +472,27 @@ class FakeRigTransportModel implements FakeRigTransport {
             }),
         backgroundProcessStop: (sessionId) =>
             this.perform("backgroundProcessStop", { sessionId }, () => undefined),
+        terminalCreate: (sessionId, cols, rows) =>
+            this.perform("terminalCreate", { sessionId, cols, rows }, (): RigTerminal => {
+                this.required(sessionId);
+                const id = `terminal-${this.terminals.size + 1}` as RigTerminalId;
+                const terminal: RigTerminal = { id, cols, rows, status: "running", exitCode: null };
+                this.terminals.set(id, terminal);
+                return terminal;
+            }),
+        terminalStop: (sessionId, terminalId) =>
+            this.perform("terminalStop", { sessionId, terminalId }, () => {
+                this.terminals.delete(terminalId);
+            }),
+        terminalConnect: (sessionId, terminalId) => {
+            // Attaching is not a request, so it is recorded directly rather than
+            // through `perform`: there is no promise here for a failure or a defer
+            // gate to attach to.
+            this.recorded.push({ operation: "terminalConnect", sessionId, terminalId });
+            const { connection, channel } = fakeTerminalChannelCreate();
+            this.channels.push(channel);
+            return connection;
+        },
         changeModel: (sessionId, input: RigModelSelection) =>
             this.perform("changeModel", { sessionId }, () =>
                 this.patch(sessionId, {

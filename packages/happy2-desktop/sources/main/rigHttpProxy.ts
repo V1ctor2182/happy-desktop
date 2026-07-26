@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { HealthResponse } from "@slopus/rig/types";
 import type { RigDaemonHealth } from "happy2-state";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
+import { rigTerminalBridgeCreate, type RigTerminalClient } from "./rigTerminalBridge";
 
 export interface RigHttpProxyHandle {
     /** Loopback base URL, for example `http://127.0.0.1:52344`. */
@@ -12,7 +13,7 @@ export interface RigHttpProxyHandle {
 
 export interface RigHttpProxyOptions {
     /** The daemon client whose projected surface this proxy exposes. */
-    readonly client: RigProxyClient;
+    readonly client: RigProxyClient & RigTerminalClient;
     /**
      * Invoked when a health request fails at the transport level (the daemon is
      * unreachable), so the runtime can restart the connection. Daemon-reported
@@ -46,6 +47,10 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * only already-projected `happy2-state` shapes. It binds to loopback only and 404s
  * every unmatched path. Resolves once the port is bound so the caller can advertise
  * the URL.
+ *
+ * The same port also upgrades one route to a WebSocket: a terminal's byte channel,
+ * which cannot be a request/response at all. That is the only upgrade this server
+ * answers, so any other upgrade attempt is refused rather than left hanging.
  */
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
     const server = createServer((request, response) => {
@@ -100,6 +105,13 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             },
         );
     });
+    const terminals = rigTerminalBridgeCreate({
+        client: () => Promise.resolve(options.client),
+        ...(options.allowedOrigin === undefined ? {} : { allowedOrigin: options.allowedOrigin }),
+    });
+    server.on("upgrade", (request, socket, head) => {
+        if (!terminals.upgrade(request, socket, head)) socket.destroy();
+    });
     return new Promise<RigHttpProxyHandle>((resolvePromise, reject) => {
         const onError = (error: unknown) => reject(error as Error);
         server.once("error", onError);
@@ -113,7 +125,10 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             }
             resolvePromise({
                 url: `http://127.0.0.1:${address.port}`,
-                close: () => server.close(),
+                close: () => {
+                    terminals.close();
+                    server.close();
+                },
             });
         });
     });

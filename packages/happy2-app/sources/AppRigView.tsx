@@ -7,12 +7,16 @@ import type {
     RigHost,
     RigGroupId,
     RigModelSelection,
+    RigPanelSnapshot,
+    RigPanelStore,
+    RigPanelTabId,
     RigPermissionMode,
     RigProjectGroup,
     RigProjectId,
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
+    RigTerminalStore,
     RigThinkingLevel,
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
@@ -34,6 +38,7 @@ import {
     Sidebar,
     SidebarFooter,
     TabbedPane,
+    TerminalPanel,
     WindowDragRegion,
     rigComposerModelControlProps,
     type SidebarItem,
@@ -121,6 +126,15 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
     ];
 }
 
+/** One tab per tool open in the right panel, iconed by what it holds. */
+function panelTabs(panel: RigPanelSnapshot): TabItem[] {
+    return panel.tabs.map((tab) => ({
+        id: tab.id,
+        label: tab.label,
+        icon: tab.kind === "terminal" ? ("terminal" as const) : ("globe" as const),
+    }));
+}
+
 /** One tab per session in the open group, marked while the agent is working. */
 function sessionTabs(group: OpenGroup): TabItem[] {
     return group.conversations.map((summary) => ({
@@ -197,6 +211,11 @@ function openGroupFind(
  * settings dialog holding the view toggles and access pickers, and the usage and
  * activity panels) are passed into that surface's slots.
  *
+ * The right panel is the workspace's tool column: terminals now, other kinds of
+ * tab later. It is a second subscription rather than part of the workspace
+ * snapshot because a live terminal repaints far faster than the conversation does
+ * and must not drag this whole surface through a render to do it.
+ *
  * Until the daemon connection is live it shows the connection status with a
  * retry. Which conversation is shown comes from the route through `chatId`, and
  * choosing another one is a navigation request; materialization and every draft
@@ -213,6 +232,11 @@ export function AppRigView(props: AppRigViewProps) {
         props.workspace.subscribe,
         props.workspace.get,
         props.workspace.get,
+    );
+    const panel = useSyncExternalStore(
+        props.workspace.panel.subscribe,
+        props.workspace.panel.get,
+        props.workspace.panel.get,
     );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const appearance = useSyncExternalStore(
@@ -280,6 +304,12 @@ export function AppRigView(props: AppRigViewProps) {
         <AppShell
             sidebarCollapsible
             windowControls={desktop}
+            panelResizable
+            panel={
+                panel.open ? (
+                    <RigPanelBody panel={panel} store={props.workspace.panel} />
+                ) : undefined
+            }
             sidebar={
                 <Sidebar
                     activeItemId={props.groupId ?? ""}
@@ -374,14 +404,29 @@ export function AppRigView(props: AppRigViewProps) {
                     ) : (
                         <TabbedPane
                             actions={
-                                <Button
-                                    aria-label="New session in this project"
-                                    icon="plus"
-                                    iconOnly
-                                    onClick={() => groupConversationCreate(openGroup)}
-                                    size="small"
-                                    variant="ghost"
-                                />
+                                <>
+                                    {/* The panel toggle sits with the session tabs
+                                        because that is the row that owns this side of
+                                        the window; opening it with nothing in it yet
+                                        starts a terminal, so one click gets a shell. */}
+                                    <Button
+                                        aria-label={panel.open ? "Hide panel" : "Show panel"}
+                                        aria-pressed={panel.open}
+                                        icon="terminal"
+                                        iconOnly
+                                        onClick={() => props.workspace.panel.panelToggle()}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                    <Button
+                                        aria-label="New session in this project"
+                                        icon="plus"
+                                        iconOnly
+                                        onClick={() => groupConversationCreate(openGroup)}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                </>
                             }
                             activeId={props.chatId ?? ""}
                             closeLabel="Close session"
@@ -625,6 +670,110 @@ function RigConversationSurface(props: {
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
             viewerId={rigOwnerAuthor.id}
+        />
+    );
+}
+
+/**
+ * The right panel's tab strip and the body of whichever tab is selected. Only the
+ * strip re-renders from this component's subscription; a terminal's own output
+ * lands in `RigTerminalTab`, which subscribes to that terminal alone, so a busy
+ * shell never re-renders its neighbours or the tab bar above it.
+ */
+function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
+    const { panel, store } = props;
+    const activeId = panel.activeTabId;
+    const active = panel.tabs.find((tab) => tab.id === activeId);
+    return (
+        <TabbedPane
+            actions={
+                <>
+                    <Button
+                        aria-label="New terminal"
+                        icon="plus"
+                        iconOnly
+                        onClick={() => store.terminalAdd()}
+                        size="small"
+                        variant="ghost"
+                    />
+                    <Button
+                        aria-label="Hide panel"
+                        icon="close"
+                        iconOnly
+                        onClick={() => store.panelClose()}
+                        size="small"
+                        variant="ghost"
+                    />
+                </>
+            }
+            activeId={activeId ?? ""}
+            closeLabel="Close tab"
+            onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
+            onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
+            tabs={panelTabs(panel)}
+        >
+            {/* The key is the tab's identity, so selecting another tab mounts its
+                body rather than re-pointing this one at a different terminal — a
+                terminal's scroll position, focus, and grid belong to it alone. */}
+            {active?.kind === "terminal" ? (
+                <RigTerminalTab key={active.id} store={store} tabId={active.id} />
+            ) : active?.kind === "browser" ? (
+                <EmptyState
+                    description="A browser tab will render a page here."
+                    icon="globe"
+                    size="panel"
+                    title="Not built yet"
+                />
+            ) : (
+                <EmptyState
+                    action={{
+                        label: "New terminal",
+                        icon: "plus",
+                        onClick: () => store.terminalAdd(),
+                    }}
+                    description="Open a terminal to work beside the conversation."
+                    icon="terminal"
+                    size="panel"
+                    title="Nothing open"
+                />
+            )}
+        </TabbedPane>
+    );
+}
+
+/**
+ * One terminal tab. It reads the terminal's own store, which is the only thing in
+ * this surface that changes on every frame of output, and hands it to the shared
+ * `TerminalPanel` with no height of its own so it fills the panel column. Closing
+ * is the tab strip's, so no second close control appears in its header.
+ */
+function RigTerminalTab(props: { store: RigPanelStore; tabId: RigPanelTabId }) {
+    const terminal: RigTerminalStore | undefined = props.store.terminal(props.tabId);
+    if (!terminal)
+        return (
+            <EmptyState
+                description="This terminal is no longer available."
+                icon="terminal"
+                size="panel"
+                title="Terminal closed"
+            />
+        );
+    return <RigTerminalScreen terminal={terminal} />;
+}
+
+/** The subscribed half of a terminal tab, split out so the store is non-optional. */
+function RigTerminalScreen(props: { terminal: RigTerminalStore }) {
+    const { terminal } = props;
+    const snapshot = useSyncExternalStore(terminal.subscribe, terminal.get, terminal.get);
+    return (
+        <TerminalPanel
+            exitCode={snapshot.exitCode}
+            {...(snapshot.grid ? { grid: snapshot.grid } : {})}
+            {...(snapshot.error ? { error: snapshot.error.message } : {})}
+            onInput={(data) => terminal.terminalWrite(data)}
+            onReconnect={() => terminal.terminalReconnect()}
+            onResize={(cols, rows) => terminal.terminalResize(cols, rows)}
+            status={snapshot.status}
         />
     );
 }

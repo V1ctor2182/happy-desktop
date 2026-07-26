@@ -12,6 +12,7 @@ import type {
     Project,
     ProjectWorkspace,
     ProtocolSession,
+    RemoteTerminalSummary,
     RunShellCommandResponse,
     SessionGoal,
     SessionEvent,
@@ -48,6 +49,8 @@ import type {
     RigUsageQuotaWindow,
     RigSubagentSummary,
     RigTask,
+    RigTerminal,
+    RigTerminalId,
     RigThinkingLevel,
     RigToolFailure,
     RigToolPresentation,
@@ -765,6 +768,22 @@ export function rigShellResultProject(response: RunShellCommandResponse): RigShe
         timedOut: response.timedOut,
         ...(response.errorMessage ? { errorMessage: response.errorMessage } : {}),
         ...(response.sessionId !== undefined ? { backgroundProcessId: response.sessionId } : {}),
+    };
+}
+
+/**
+ * Projects a daemon terminal summary into the closed `RigTerminal`. The wire
+ * shape also carries the protocol `epoch`, which belongs to the attachment's
+ * resume handshake rather than to product state — the renderer learns it from the
+ * channel itself — so it is deliberately dropped here.
+ */
+export function rigTerminalProject(summary: RemoteTerminalSummary): RigTerminal {
+    return {
+        id: summary.id as RigTerminalId,
+        cols: summary.cols,
+        rows: summary.rows,
+        status: summary.status,
+        exitCode: summary.exitCode,
     };
 }
 

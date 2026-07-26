@@ -4,6 +4,7 @@ import type { LocalRigConnection } from "./localRig";
 import { localRigConnectorCreate } from "./localRig";
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigProxyHandle } from "./rigProxyHandle";
+import { rigTerminalBridgeCreate } from "./rigTerminalBridge";
 
 const endpoint = "/__happy2_local_rig";
 
@@ -74,6 +75,16 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             ];
         },
         configureServer(server) {
+            // A terminal's bytes cannot ride the middleware stack, so the dev
+            // bridge claims the one upgrade path it owns and leaves every other
+            // upgrade — Vite's own HMR socket above all — to Vite's listeners.
+            const terminals = rigTerminalBridgeCreate({
+                client: () => runtime().then(({ connection }) => connection.client),
+                prefix: endpoint,
+            });
+            server.httpServer?.on("upgrade", (request, socket, head) => {
+                terminals.upgrade(request, socket, head);
+            });
             server.middlewares.use(async (request, response, next) => {
                 const url = new URL(request.url ?? "/", "http://127.0.0.1");
                 const path = url.pathname;
@@ -107,6 +118,7 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                 next();
             });
             server.httpServer?.once("close", () => {
+                terminals.close();
                 void runtimeTask?.then(({ connection }) => connection.close());
             });
         },

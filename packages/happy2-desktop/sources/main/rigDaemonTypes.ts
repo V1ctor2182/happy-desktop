@@ -1,11 +1,22 @@
 import type {
+    CreateRemoteTerminalRequest,
     HealthResponse,
     ModelCatalog,
     ProtocolSession,
+    RemoteTerminalResponse,
+    RemoteTerminalSummary,
     SubagentSummary,
 } from "@slopus/rig/types";
 
-export type { HealthResponse, ModelCatalog, ProtocolSession, SubagentSummary };
+export type {
+    CreateRemoteTerminalRequest,
+    HealthResponse,
+    ModelCatalog,
+    ProtocolSession,
+    RemoteTerminalResponse,
+    RemoteTerminalSummary,
+    SubagentSummary,
+};
 
 /**
  * Rig's project/worktree protocol shapes. They are part of the daemon's HTTP

@@ -1,3 +1,4 @@
+import type { TerminalConnection } from "../transport.js";
 import type {
     RigBackgroundProcess,
     RigEventId,
@@ -22,6 +23,8 @@ import type {
     RigStopReason,
     RigSubagentSummary,
     RigTask,
+    RigTerminal,
+    RigTerminalId,
     RigThinkingLevel,
     RigToolFailure,
     RigToolPresentation,
@@ -225,9 +228,6 @@ export interface RigEventObserver<Event> {
  * implementation (in the desktop/app layer) owns URLs, tokens, sockets, retries,
  * and the projection from raw `@slopus/rig` protocol types into the closed
  * projections above — this state package never sees a wire shape.
- *
- * Terminals are deliberately absent: the chat/tools/menus surface does not need
- * remote terminals yet, so that protocol area is deferred.
  */
 export interface RigTransport {
     /** The model catalog; read once and cached by the client composition root. */
@@ -321,6 +321,28 @@ export interface RigTransport {
         query: string,
         limit?: number,
     ): Promise<readonly RigFileSearchResult[]>;
+
+    /**
+     * Starts one interactive terminal in the session's working directory, running
+     * the user's own login shell. The terminal is ephemeral and lives only as long
+     * as it is attached to and not stopped; the returned summary is its identity
+     * and the size the daemon actually gave it, which may differ from the
+     * requested one.
+     */
+    terminalCreate(sessionId: RigSessionId, cols: number, rows: number): Promise<RigTerminal>;
+    /**
+     * Ends one terminal and kills its process. Resolves once the daemon has
+     * processed the request; a terminal that had already exited is not an error,
+     * because stopping is what the caller wanted either way.
+     */
+    terminalStop(sessionId: RigSessionId, terminalId: RigTerminalId): Promise<void>;
+    /**
+     * Opens the byte channel carrying one terminal's binary protocol frames. The
+     * channel begins connecting immediately and buffers writes until it is ready;
+     * every attach and every reconnect asks for a fresh one, so the protocol's
+     * resume state is the caller's to hold, not the transport's.
+     */
+    terminalConnect(sessionId: RigSessionId, terminalId: RigTerminalId): TerminalConnection;
 
     /**
      * Fetches the current token/cost usage snapshot for a session (`/usage`). No

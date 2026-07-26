@@ -17,6 +17,7 @@ export default defineConfig({
                 "electron",
                 "electron-updater",
                 "happy2-state",
+                "ws",
             ],
             output: {
                 entryFileNames: "[name].js",

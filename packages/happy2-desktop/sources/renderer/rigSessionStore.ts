@@ -11,6 +11,7 @@ import {
     type RigSessionLocation,
     type RigWorkspaceStore,
 } from "happy2-state";
+import { terminalDriverCreate } from "happy2-app";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
@@ -109,6 +110,10 @@ export function rigSessionStoreCreate(
         dispose();
         const client = rigClientCreate({
             transport: rigRendererTransportCreate(target.rigHttpUrl),
+            // The Ghostty emulator and the terminal protocol client live in the app
+            // layer, so the client is handed the factory rather than reaching for
+            // them itself.
+            terminalDriverCreate,
         });
         session = {
             connectionId: target.connectionId,

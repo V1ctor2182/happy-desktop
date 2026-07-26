@@ -3,16 +3,13 @@
  * type here is what application code and the UI actually render; the injected
  * transport maps the raw `@slopus/rig` protocol shapes into these projections so
  * this package never depends on wire types, tokens, or sockets.
- *
- * Terminals (Rig's remote terminals) are intentionally out of scope for this
- * chat-focused layer; they are deferred until the chat/tools/menus surface is
- * complete.
  */
 
 declare const rigSessionIdBrand: unique symbol;
 declare const rigEventIdBrand: unique symbol;
 declare const rigProjectIdBrand: unique symbol;
 declare const rigWorktreeIdBrand: unique symbol;
+declare const rigTerminalIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
@@ -32,6 +29,23 @@ export type RigGroupId = RigProjectId | RigWorktreeId;
 
 /** Branded realtime event identifier used for ordering and backfill cursors. */
 export type RigEventId = string & { readonly [rigEventIdBrand]: true };
+
+/** Branded identifier of one interactive terminal the daemon runs for a session. */
+export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
+
+/**
+ * One interactive terminal the daemon has started, as its create/stop actions
+ * report it. It is the terminal's identity and size only: the live screen never
+ * comes through here, it arrives on the terminal's own byte channel, so this
+ * shape stays small and cheap to re-read.
+ */
+export interface RigTerminal {
+    readonly id: RigTerminalId;
+    readonly cols: number;
+    readonly rows: number;
+    readonly status: "running" | "exited";
+    readonly exitCode: number | null;
+}
 
 export type RigPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
 

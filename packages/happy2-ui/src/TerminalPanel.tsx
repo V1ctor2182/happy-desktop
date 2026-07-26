@@ -15,9 +15,20 @@ export interface TerminalPanelProps {
     status: "connecting" | "connected" | "disconnected" | "exited" | "error";
     error?: string;
     exitCode?: number | null;
-    height: number;
-    onClose(): void;
-    onHeightChange(height: number): void;
+    /**
+     * Fixed height in pixels, for a terminal docked at the bottom of a surface it
+     * shares with other content. Omitting it — together with `onHeightChange` —
+     * makes the terminal fill whatever box its parent gives it and drops the drag
+     * divider, which is what a terminal that owns its whole column wants: there is
+     * nothing above or below for a divider to trade space with.
+     */
+    height?: number;
+    /**
+     * Closes the terminal. Omit it where the container already owns closing (a tab
+     * strip, say), so the header does not offer a second control for the same act.
+     */
+    onClose?(): void;
+    onHeightChange?(height: number): void;
     onInput(data: string): void;
     onReconnect(): void;
     onResize(cols: number, rows: number): void;
@@ -100,8 +111,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) input.current?.focus({ preventScroll: true });
     }
+    const height = props.height;
+    const onHeightChange = props.onHeightChange;
+    // A terminal with no height of its own fills its parent, so it has nothing to
+    // trade space with and offers no divider.
+    const resizable = height !== undefined && onHeightChange !== undefined;
     function dragStart(event: React.PointerEvent<HTMLDivElement>) {
-        drag.current = { startHeight: props.height, startY: event.clientY };
+        if (height === undefined) return;
+        drag.current = { startHeight: height, startY: event.clientY };
         event.currentTarget.setPointerCapture(event.pointerId);
     }
     const cursor = props.grid?.cursor;
@@ -109,18 +126,19 @@ export function TerminalPanel(props: TerminalPanelProps) {
         <section
             className="happy2-terminal-panel"
             data-collapsed={collapsed ? "" : undefined}
+            data-fill={height === undefined ? "" : undefined}
             data-happy2-ui="terminal-panel"
             style={
                 collapsed
                     ? undefined
                     : ({
-                          height: `${props.height}px`,
+                          ...(height === undefined ? {} : { height: `${height}px` }),
                           "--happy2-terminal-cell-width": `${CELL_WIDTH}px`,
                           "--happy2-terminal-cell-height": `${CELL_HEIGHT}px`,
                       } as CSSProperties)
             }
         >
-            {collapsed ? null : (
+            {collapsed || !resizable ? null : (
                 <div
                     aria-label="Resize terminal"
                     className="happy2-terminal-panel__resize"
@@ -129,7 +147,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     onPointerMove={(event) => {
                         const current = drag.current;
                         if (!current) return;
-                        props.onHeightChange(current.startHeight + current.startY - event.clientY);
+                        onHeightChange(current.startHeight + current.startY - event.clientY);
                     }}
                     onPointerUp={() => (drag.current = undefined)}
                     role="separator"
@@ -151,14 +169,16 @@ export function TerminalPanel(props: TerminalPanelProps) {
                             Reconnect
                         </Button>
                     ) : null}
-                    <Button
-                        aria-label="Close terminal"
-                        icon="close"
-                        iconOnly
-                        onClick={props.onClose}
-                        size="small"
-                        variant="ghost"
-                    />
+                    {props.onClose ? (
+                        <Button
+                            aria-label="Close terminal"
+                            icon="close"
+                            iconOnly
+                            onClick={props.onClose}
+                            size="small"
+                            variant="ghost"
+                        />
+                    ) : null}
                 </div>
             </header>
             {collapsed ? null : (

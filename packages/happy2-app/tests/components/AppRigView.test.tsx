@@ -1,6 +1,12 @@
 import { render } from "@testing-library/react";
 import { expect, it } from "vitest";
-import type { RigClockStore, RigConnectionStore, RigHost, RigWorkspaceStore } from "happy2-state";
+import type {
+    RigClockStore,
+    RigConnectionStore,
+    RigHost,
+    RigPanelStore,
+    RigWorkspaceStore,
+} from "happy2-state";
 import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
 import { AppRigView } from "../../sources/AppRigView";
 
@@ -29,6 +35,25 @@ function clock(): RigClockStore {
         subscribe: () => () => undefined,
         [Symbol.dispose]: () => undefined,
     } as unknown as RigClockStore;
+}
+
+/* The right panel starts hidden, so these projections render the workspace
+ * without it and never reach a terminal. */
+const PANEL_CLOSED = { open: false, tabs: [] } as const;
+
+function panel(): RigPanelStore {
+    return {
+        get: () => PANEL_CLOSED,
+        subscribe: () => () => undefined,
+        panelToggle: () => undefined,
+        panelClose: () => undefined,
+        terminalAdd: () => undefined,
+        tabSelect: () => undefined,
+        tabClose: () => undefined,
+        terminal: () => undefined,
+        conversationApply: () => undefined,
+        [Symbol.dispose]: () => undefined,
+    } as unknown as RigPanelStore;
 }
 
 function workspace(): RigWorkspaceStore {
@@ -63,6 +88,7 @@ function workspace(): RigWorkspaceStore {
     };
     return {
         get: () => snapshot,
+        panel: panel(),
         subscribe: () => () => undefined,
         conversationOpen: () => undefined,
         conversationClose: () => undefined,

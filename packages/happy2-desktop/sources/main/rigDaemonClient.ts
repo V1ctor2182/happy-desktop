@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import type { Duplex } from "node:stream";
+import { WebSocket, createWebSocketStream } from "ws";
 import type {
+    CreateRemoteTerminalRequest,
     EventId,
     GetSessionUsageResponse,
     GlobalEventQueueEntry,
@@ -12,11 +15,21 @@ import type {
     Project,
     ProjectAssetResponse,
     ProtocolSession,
+    RemoteTerminalResponse,
     RunShellCommandResponse,
     SessionEvent,
     SessionSummary,
     SubagentSummary,
 } from "./rigDaemonTypes";
+
+/**
+ * Largest terminal protocol frame either direction of the attachment may carry.
+ * The binary protocol caps a single input frame at 64 KiB, and an output or
+ * scrollback-recovery frame is larger, so this bounds both the daemon
+ * attachment and the renderer socket well above the protocol's own limits while
+ * still refusing a frame no legitimate peer would send.
+ */
+export const RIG_TERMINAL_MAX_WIRE_BYTES = 4 * 1024 * 1024;
 
 export interface RigDaemonClientOptions {
     readonly socketPath: string;
@@ -220,6 +233,74 @@ export class RigDaemonClient {
             `/sessions/${encodeURIComponent(sessionId)}/shell`,
             request,
         );
+    }
+
+    /**
+     * Starts one interactive PTY in the session's working directory. The shell is
+     * deliberately unspecified so the daemon spawns the user's login shell: a
+     * local terminal belongs to the person at the machine, not to a shell this
+     * bridge picked for them.
+     */
+    createTerminal(
+        sessionId: string,
+        request: CreateRemoteTerminalRequest,
+    ): Promise<RemoteTerminalResponse> {
+        return this.#requestJson(
+            "POST",
+            `/sessions/${encodeURIComponent(sessionId)}/terminals`,
+            request,
+        );
+    }
+
+    /** Ends one terminal, killing its process; the terminal stops being attachable. */
+    stopTerminal(sessionId: string, terminalId: string): Promise<RemoteTerminalResponse> {
+        return this.#requestJson(
+            "DELETE",
+            `/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}`,
+        );
+    }
+
+    /**
+     * Opens the daemon's binary attachment for one terminal as a byte stream. The
+     * frames are opaque here: this bridge only carries them between the daemon's
+     * Unix socket — which the sandboxed renderer cannot open — and the renderer's
+     * own socket, so terminal emulation and the protocol state machine stay in the
+     * one client that owns them.
+     */
+    attachTerminal(sessionId: string, terminalId: string): Promise<Duplex> {
+        const path = `/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/attach`;
+        return new Promise((resolvePromise, reject) => {
+            const socket = new WebSocket(`ws+unix://${this.socketPath}:${path}`, {
+                handshakeTimeout: 10_000,
+                headers: { authorization: `Bearer ${this.#token}` },
+                maxPayload: RIG_TERMINAL_MAX_WIRE_BYTES,
+                perMessageDeflate: false,
+            });
+            let settled = false;
+            const fail = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                socket.terminate();
+                reject(error);
+            };
+            const unexpected = (_request: unknown, response: { statusCode?: number }) => {
+                fail(
+                    new RigDaemonHttpError(
+                        response.statusCode ?? 500,
+                        "The Rig terminal attachment was refused.",
+                    ),
+                );
+            };
+            socket.once("error", fail);
+            socket.once("unexpected-response", unexpected);
+            socket.once("open", () => {
+                if (settled) return;
+                settled = true;
+                socket.off("error", fail);
+                socket.off("unexpected-response", unexpected);
+                resolvePromise(createWebSocketStream(socket, { allowHalfOpen: false }));
+            });
+        });
     }
 
     stopBackgroundProcess(sessionId: string, processId: number): Promise<unknown> {

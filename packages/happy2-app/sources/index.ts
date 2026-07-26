@@ -18,5 +18,11 @@ export {
     DesktopStartupScreen,
     type DesktopStartupValues,
 } from "happy2-ui";
+export {
+    BrowserTerminalConnection,
+    TERMINAL_PROTOCOL,
+    terminalSocketUrl,
+} from "./browserTerminalConnection";
+export { terminalDriverCreate } from "./terminalDriver";
 export { createServerClient, ServerError } from "./server";
 export type { AuthMethods, User } from "./server";

@@ -35,6 +35,19 @@
     height: auto;
 }
 
+/*
+ * A terminal that owns its whole column takes the box its parent gives it. It
+ * keeps no minimum and no ceiling: those exist to stop a bottom-docked terminal
+ * from crowding out the conversation above it, and here there is nothing above.
+ * The top border goes with them — the column's own edge already divides it.
+ */
+.happy2-terminal-panel[data-fill] {
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: none;
+    border-top: none;
+}
+
 .happy2-terminal-panel__resize {
     flex: none;
     height: 5px;

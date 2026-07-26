@@ -291,6 +291,22 @@ export {
     type RigClientDeps,
 } from "./rig/rigClient.js";
 export {
+    rigTerminalOpen,
+    type RigTerminalDeps,
+    type RigTerminalHandle,
+    type RigTerminalSnapshot,
+    type RigTerminalStore,
+} from "./rig/rigTerminalStore.js";
+export {
+    rigPanelStoreCreate,
+    type RigPanelDeps,
+    type RigPanelSnapshot,
+    type RigPanelStore,
+    type RigPanelTabId,
+    type RigPanelTabKind,
+    type RigPanelTabSnapshot,
+} from "./rig/rigPanelStore.js";
+export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
     type RigConversationSnapshot,

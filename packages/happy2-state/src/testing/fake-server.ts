@@ -8,6 +8,7 @@ import type {
     TerminalConnectTarget,
 } from "../transport.js";
 import { TransportError } from "../transport.js";
+import { fakeTerminalChannelCreate } from "./fake-terminal-channel.js";
 import type {
     AgentActivityPhase,
     AgentTurnBackgroundTerminalSummary,
@@ -278,60 +279,24 @@ class FakeServerModel implements FakeServer {
         },
         connectTerminal: (target: TerminalConnectTarget): TerminalConnection => {
             this.terminalTargets.push({ ...target });
-            const dataListeners = new Set<(chunk: Uint8Array) => void>();
-            const closeListeners = new Set<() => void>();
-            const errorListeners = new Set<(error: Error) => void>();
-            const written: Uint8Array[] = [];
-            const inbound: Uint8Array[] = [];
-            let paused = false;
-            let destroyed = false;
-            const deliver = (chunk: Uint8Array) => {
-                if (paused) inbound.push(chunk);
-                else for (const listener of dataListeners) listener(chunk);
-            };
-            const tearDown = (error?: Error) => {
-                if (destroyed) return;
-                destroyed = true;
-                if (error) for (const listener of errorListeners) listener(error);
-                for (const listener of closeListeners) listener();
-            };
-            const connection: TerminalConnection = {
-                on: (_event, listener) => {
-                    dataListeners.add(listener);
-                },
-                once: (event, listener) => {
-                    if (event === "error") errorListeners.add(listener as (error: Error) => void);
-                    else closeListeners.add(listener as () => void);
-                },
-                write: (chunk) => {
-                    if (!destroyed) written.push(chunk);
-                },
-                pause: () => {
-                    paused = true;
-                },
-                resume: () => {
-                    paused = false;
-                    for (const chunk of inbound.splice(0)) deliver(chunk);
-                },
-                destroy: () => tearDown(),
-                get destroyed() {
-                    return destroyed;
-                },
-            };
+            const { connection, channel } = fakeTerminalChannelCreate();
             if (this.closed || !this.terminalHandler) {
-                queueMicrotask(() => tearDown(new TransportError("Fake terminal is unavailable.")));
+                queueMicrotask(() =>
+                    channel.error(new TransportError("Fake terminal is unavailable.")),
+                );
                 return connection;
             }
             this.terminalHandler({
                 target,
                 get written() {
-                    return written;
+                    return channel.written;
                 },
-                emit: (chunk) => deliver(chunk),
-                close: () => tearDown(),
-                error: (error = new TransportError("Fake terminal failed.")) => tearDown(error),
+                emit: (chunk) => channel.emit(chunk),
+                close: () => channel.close(),
+                error: (error = new TransportError("Fake terminal failed.")) =>
+                    channel.error(error),
                 get destroyed() {
-                    return destroyed;
+                    return channel.destroyed;
                 },
             });
             return connection;
