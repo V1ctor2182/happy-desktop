@@ -48,6 +48,29 @@ export function conversationMessageGrouped(
 ): boolean {
     const entry = entries[index];
     if (entry?.kind !== "message") return false;
+    if (entry.message.sender?.kind === "agent" && entries[index - 1]?.kind === "agentActivity")
+        return true;
     const previous = previousMessage(entries, index);
     return previous !== undefined && sameSender(entry, previous);
+}
+
+/**
+ * Whether this activity is the first agent-authored row after a user boundary.
+ * It owns the identity header for a tool-first turn; later activity rows and the
+ * final answer continue that same visual group.
+ */
+export function conversationAgentActivityStartsGroup(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    if (entries[index]?.kind !== "agentActivity") return false;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const entry = entries[cursor];
+        if (!entry) break;
+        if (entry.kind === "agentActivity") return false;
+        if (entry.kind === "message") return entry.message.sender?.kind !== "agent";
+        if (entry.kind === "notice") continue;
+        break;
+    }
+    return true;
 }

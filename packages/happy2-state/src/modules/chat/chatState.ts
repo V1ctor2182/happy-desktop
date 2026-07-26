@@ -34,6 +34,31 @@ function sorted(messages: ConversationMessageEntry[]): readonly ConversationMess
     return messages.sort(entryCompare);
 }
 
+function messagesUpsert(initial: ChatState, items: readonly ConversationMessageEntry[]): ChatState {
+    let snapshot = initial;
+    for (const item of items) {
+        const index = snapshot.messages.findIndex(
+            (current) =>
+                current.message.id === item.message.id ||
+                (item.clientMutationId !== undefined &&
+                    current.clientMutationId === item.clientMutationId),
+        );
+        if (index < 0) {
+            snapshot = agentEffortMessageApply(
+                { ...snapshot, messages: sorted([...snapshot.messages, item]) },
+                item,
+            );
+            continue;
+        }
+        if (snapshot.messages[index] === item || entryEquivalent(snapshot.messages[index]!, item))
+            continue;
+        const messages = [...snapshot.messages];
+        messages[index] = item;
+        snapshot = agentEffortMessageApply({ ...snapshot, messages: sorted(messages) }, item);
+    }
+    return snapshot;
+}
+
 function sameIds(
     left: readonly { readonly expiresAt: number }[],
     right: readonly { readonly expiresAt: number }[],
@@ -713,34 +738,10 @@ export function chatStoreCreate(
                             ? snapshot
                             : { ...snapshot, status: { type: "ready", value: event.chat } };
                     case "messageUpserted": {
-                        const index = snapshot.messages.findIndex(
-                            (item) =>
-                                item.message.id === event.item.message.id ||
-                                (event.item.clientMutationId !== undefined &&
-                                    item.clientMutationId === event.item.clientMutationId),
-                        );
-                        if (index < 0) {
-                            const messages = sorted([...snapshot.messages, event.item]);
-                            return agentEffortMessageApply(
-                                {
-                                    ...snapshot,
-                                    messages,
-                                },
-                                event.item,
-                            );
-                        }
-                        if (
-                            snapshot.messages[index] === event.item ||
-                            entryEquivalent(snapshot.messages[index]!, event.item)
-                        )
-                            return snapshot;
-                        const messages = [...snapshot.messages];
-                        messages[index] = event.item;
-                        return agentEffortMessageApply(
-                            { ...snapshot, messages: sorted(messages) },
-                            event.item,
-                        );
+                        return messagesUpsert(snapshot, [event.item]);
                     }
+                    case "messagesUpserted":
+                        return messagesUpsert(snapshot, event.items);
                     case "messageRemoved": {
                         const messages = snapshot.messages.filter(
                             (item) => item.message.id !== event.messageId,
@@ -1342,6 +1343,10 @@ export type ChatInput =
     | { readonly type: "chatFailed"; readonly error: UserError }
     | { readonly type: "chatSummaryReconciled"; readonly chat: ChatSummary }
     | { readonly type: "messageUpserted"; readonly item: ConversationMessageEntry }
+    | {
+          readonly type: "messagesUpserted";
+          readonly items: readonly ConversationMessageEntry[];
+      }
     | { readonly type: "messageRemoved"; readonly messageId: string }
     | { readonly type: "membersLoading" }
     | { readonly type: "membersLoaded"; readonly members: readonly ChatMemberProjection[] }

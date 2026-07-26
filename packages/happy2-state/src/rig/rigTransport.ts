@@ -476,9 +476,9 @@ export interface RigTransport {
         observer: RigEventObserver<RigGlobalEvent>,
         afterCursor?: string,
     ): () => void;
-    /** Fetches events missed since `afterEventId` after a reconnect gap. */
+    /** Fetches durable event history, optionally only events after `afterEventId`. */
     sessionEventsBackfill(
         sessionId: RigSessionId,
-        afterEventId: RigEventId,
+        afterEventId?: RigEventId,
     ): Promise<readonly RigSessionEvent[]>;
 }

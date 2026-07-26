@@ -1,10 +1,14 @@
 import { type CSSProperties } from "react";
-import type { ConversationAttachment, ConversationEntry, UserError } from "happy2-state";
+import type {
+    ConversationAttachment,
+    ConversationAuthor,
+    ConversationEntry,
+    UserError,
+} from "happy2-state";
 import { AgentActivityRow } from "./AgentActivityRow";
-import { AgentStatusLine } from "./AgentStatusLine";
+import { TurnSummary } from "./TurnSummary";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
-import { type MenuItem } from "./Menu";
 import {
     ConversationRequestView,
     type ConversationRequestDecision,
@@ -13,12 +17,12 @@ import { type RigUserInputAnswerMap } from "./RigUserInputPrompt";
 
 export type ConversationEntryViewProps = {
     entry: ConversationEntry;
+    /** Identity heading for the first activity in an agent turn. */
+    activityAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
-    /** Rewinds the conversation to a message; enables the per-message affordance. */
-    onRewind?: (messageId: string) => void;
     /** Answers a pending question request entry. */
     onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Approves or denies a pending gate request entry. */
@@ -62,29 +66,46 @@ const NOTICE_ICON = { info: "dot", warning: "shield", error: "shield" } as const
  */
 export function ConversationEntryView(props: ConversationEntryViewProps) {
     const entry = props.entry;
-    if (entry.kind === "agentActivity")
-        return (
+    if (entry.kind === "agentActivity") {
+        const time = eventTime(entry.occurredAt);
+        const activity = (
             <AgentActivityRow
                 activity={entry.activity}
-                className={props.className}
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
                 singleLine={entry.activity.kind === "tool"}
-                style={props.style}
+                time={props.activityAuthor ? undefined : time}
             />
         );
+        return props.activityAuthor ? (
+            <Message
+                agent
+                author={props.activityAuthor.displayName}
+                body=""
+                className={props.className}
+                initials={initialsOf(props.activityAuthor.displayName)}
+                style={props.style}
+                time={time}
+            >
+                {activity}
+            </Message>
+        ) : (
+            <div className={props.className} style={props.style}>
+                {activity}
+            </div>
+        );
+    }
     if (entry.kind === "turnStatus")
         return (
-            <AgentStatusLine
+            <TurnSummary
                 className={["happy2-conversation-turn-status", props.className]
                     .filter(Boolean)
                     .join(" ")}
+                copyText={entry.copyText ?? ""}
                 data-testid={props["data-testid"]}
-                elapsedMs={entry.durationMs}
+                durationMs={entry.durationMs}
                 status={entry.status}
                 style={props.style}
-                tokens={entry.tokens}
-                tools={entry.tools}
             />
         );
     if (entry.kind === "notice")
@@ -120,7 +141,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     const message = entry.message;
     const author = message.sender;
     const own = author !== undefined && author.id === props.viewerId;
-    const rewindable = props.onRewind !== undefined && author?.kind !== "agent";
     const images = imagesOf(message.attachments, props.attachmentUrl);
     const trace = message.agentTrace;
     /* A running turn lists its steps in the transcript and keeps its live
@@ -134,25 +154,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         trace.entryCount > 0;
     const traceToggle =
         trace && props.onTraceToggle ? () => props.onTraceToggle?.(trace.turnId) : undefined;
-    /* Any message with text can be copied — an answer is the thing most worth
-       taking out of the transcript, and a streaming one is still incomplete, so
-       it waits until the text has settled. */
-    const copyable = message.generationStatus !== "streaming" && message.text.trim().length > 0;
-    const menuItems: MenuItem[] = [
-        ...(copyable
-            ? [{ id: "copy", kind: "item" as const, label: "Copy message", icon: "doc" as const }]
-            : []),
-        ...(rewindable
-            ? [
-                  {
-                      id: "rewind",
-                      kind: "item" as const,
-                      label: "Rewind to here",
-                      icon: "reply" as const,
-                  },
-              ]
-            : []),
-    ];
     return (
         <Message
             agent={author?.kind === "agent"}
@@ -164,7 +165,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             generationStatus={message.generationStatus}
             grouped={props.grouped}
             initials={initialsOf(author?.displayName)}
-            menuItems={menuItems.length > 0 ? menuItems : undefined}
             metaAccessory={
                 traceCollapsible && trace ? (
                     <AgentTraceRow
@@ -178,17 +178,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                         variant="meta"
                     />
                 ) : undefined
-            }
-            onMenuSelect={
-                menuItems.length > 0
-                    ? (actionId: string) => {
-                          if (actionId === "copy") {
-                              void navigator.clipboard?.writeText(message.text);
-                              return;
-                          }
-                          if (actionId === "rewind") props.onRewind?.(message.id);
-                      }
-                    : undefined
             }
             images={images.length > 0 ? [...images] : undefined}
             onImageOpen={
@@ -241,6 +230,11 @@ function messageTime(value: string): string | undefined {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return undefined;
     return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function eventTime(value: number | undefined): string | undefined {
+    if (value === undefined || !Number.isFinite(value)) return undefined;
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(value);
 }
 
 function initialsOf(displayName: string | undefined): string {

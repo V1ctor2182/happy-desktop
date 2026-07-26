@@ -93,21 +93,19 @@ export function PluginInlineContribution(props: {
 }
 
 /**
- * Renders one menu-placement contribution (sidebar/chat/composer/message) as a
- * native trigger: a `button` invokes directly; a `staticMenu` opens a bounded
- * list; an `asyncMenu` resolves on open. `messageId` scopes a message-menu
- * invocation to its message.
+ * Renders one menu-placement contribution (sidebar/chat/composer) as a native
+ * trigger: a `button` invokes directly; a `staticMenu` opens a bounded list; an
+ * `asyncMenu` resolves on open.
  */
 export function PluginMenuContribution(props: {
     contribution: PluginContributionSummary;
     surface: ContributionSurface;
     masks: PluginAssetMasks;
-    messageId?: string;
     iconOnly?: boolean;
     variant?: ButtonVariant;
     size?: "small" | "medium";
 }): ReactNode {
-    const { contribution, surface, masks, messageId } = props;
+    const { contribution, surface, masks } = props;
     const spec = contribution.spec;
     // Menu placements only carry button/static-menu/async-menu specs; a section
     // spec is a settings/profile shape and has no trigger here.
@@ -117,7 +115,6 @@ export function PluginMenuContribution(props: {
             contributionId: contribution.id,
             actionId,
             ...(value === undefined ? {} : { value }),
-            ...(messageId ? { messageId } : {}),
         });
     const glyph = assetGlyphFactory(masks, contribution.installationId, 16);
     const kind = spec.kind;
@@ -127,9 +124,7 @@ export function PluginMenuContribution(props: {
             actionState={
                 spec.kind === "button"
                     ? pluginActionUiState(
-                          surface.actionStates.get(
-                              pluginActionStateKey(contribution.id, spec.id, messageId),
-                          ),
+                          surface.actionStates.get(pluginActionStateKey(contribution.id, spec.id)),
                       )
                     : undefined
             }
@@ -139,23 +134,19 @@ export function PluginMenuContribution(props: {
             iconOnly={props.iconOnly}
             itemActionState={(actionId) =>
                 pluginActionUiState(
-                    surface.actionStates.get(
-                        pluginActionStateKey(contribution.id, actionId, messageId),
-                    ),
+                    surface.actionStates.get(pluginActionStateKey(contribution.id, actionId)),
                 )
             }
             items={spec.kind === "staticMenu" ? spec.items : undefined}
             kind={kind}
             menuState={
                 spec.kind === "asyncMenu"
-                    ? pluginMenuUiState(
-                          surface.menuStates.get(pluginMenuStateKey(contribution.id, messageId)),
-                      )
+                    ? pluginMenuUiState(surface.menuStates.get(pluginMenuStateKey(contribution.id)))
                     : undefined
             }
             onMenuOpen={
                 spec.kind === "asyncMenu"
-                    ? () => surface.pluginContributionMenuResolve(contribution.id, messageId)
+                    ? () => surface.pluginContributionMenuResolve(contribution.id)
                     : undefined
             }
             onInvoke={invoke}
@@ -182,7 +173,6 @@ function menuNodes(
     surface: ContributionSurface,
     masks: PluginAssetMasks,
     options?: {
-        messageId?: string;
         iconOnlyFor?: (contribution: PluginContributionSummary) => boolean;
     },
 ): ReactNode {
@@ -193,7 +183,6 @@ function menuNodes(
             iconOnly={options?.iconOnlyFor?.(contribution)}
             key={contribution.id}
             masks={masks}
-            messageId={options?.messageId}
             surface={surface}
         />
     ));
@@ -219,15 +208,4 @@ export function chatMenuContributionNodes(
 ): ReactNode {
     const items = contributions.filter((item) => item.location === "chatMenu");
     return menuNodes(items, surface, masks);
-}
-
-/** Builds one message's message-menu contribution triggers, bound to its id. */
-export function messageMenuContributionNodes(
-    contributions: readonly PluginContributionSummary[],
-    surface: ContributionSurface,
-    masks: PluginAssetMasks,
-    messageId: string,
-): ReactNode {
-    const items = contributions.filter((item) => item.location === "messageMenu");
-    return menuNodes(items, surface, masks, { messageId });
 }

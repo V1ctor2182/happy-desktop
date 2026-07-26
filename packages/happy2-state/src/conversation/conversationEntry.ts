@@ -248,6 +248,8 @@ export interface ConversationActivityEntry {
     readonly kind: "agentActivity";
     readonly id: string;
     readonly activity: ConversationActivity;
+    /** Durable event time for the activity, in Unix milliseconds when available. */
+    readonly occurredAt?: number;
     /** Ordering key inside the conversation, compared like a message sequence. */
     readonly sequence: string;
 }
@@ -278,11 +280,12 @@ export interface ConversationTurnStatusEntry {
     readonly kind: "turnStatus";
     readonly id: string;
     readonly sequence: string;
-    readonly status: "complete" | "failed";
+    readonly status: "complete" | "failed" | "steered";
+    /** Final assistant text copied by the settled footer action. */
+    readonly copyText?: string;
     /** Final duration from request sent through completion, when known. */
     readonly durationMs?: number;
     readonly tools?: number;
-    readonly tokens?: number;
 }
 
 /**

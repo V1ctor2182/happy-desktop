@@ -1,0 +1,60 @@
+/* Settled summaries share the message body's 16px/24px type measure. */
+.happy2-turn-summary,
+.happy2-turn-summary * {
+    box-sizing: border-box;
+}
+
+.happy2-turn-summary {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    background: transparent;
+    font-family: var(--happy2-font-ui);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    color: var(--text-secondary);
+}
+
+.happy2-turn-summary[data-status="failed"] {
+    color: var(--text-destructive);
+}
+
+.happy2-turn-summary__label {
+    flex: none;
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
+.happy2-turn-summary__copy {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    color: inherit;
+    appearance: none;
+    cursor: pointer;
+    transition: background-color 100ms ease;
+}
+
+.happy2-turn-summary__copy:hover {
+    background: var(--surface-pressed);
+}
+
+.happy2-turn-summary__copy:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-turn-summary__copy[data-copied] {
+    color: var(--success);
+}

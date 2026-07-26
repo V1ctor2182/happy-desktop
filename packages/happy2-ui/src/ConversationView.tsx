@@ -1,15 +1,17 @@
 import { type CSSProperties, type ReactNode } from "react";
 import type {
     ComposerSnapshot,
+    ConversationAuthor,
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
-import { AgentStatusLine } from "./AgentStatusLine";
+import { AgentWorkingStatus } from "./AgentWorkingStatus";
 import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type ContextItem, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
 import {
+    conversationAgentActivityStartsGroup,
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
 } from "./conversationMessageGrouped";
@@ -33,7 +35,13 @@ export type ConversationViewProps = {
     running?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
     elapsedMs?: number;
+    /** Subagents currently running under the active turn. */
+    runningAgents?: number;
+    /** Background tasks currently owned by the active turn. */
+    backgroundTasks?: number;
     entries: readonly ConversationEntry[];
+    /** Agent identity shown when a tool/activity row opens a turn before prose exists. */
+    agentAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
     /**
@@ -89,7 +97,6 @@ export type ConversationViewProps = {
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
     onAbort?: () => void;
-    onRewind?: (messageId: string) => void;
     onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -102,6 +109,16 @@ function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60) return `${seconds}s`;
     return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
+}
+
+function turnStatusAfterActivity(entries: readonly ConversationEntry[], index: number): boolean {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const entry = entries[cursor];
+        if (entry?.kind === "agentActivity") return true;
+        if (entry?.kind === "turnStatus") return false;
+        if (entry?.kind === "message" && entry.message.sender?.kind !== "agent") return false;
+    }
+    return false;
 }
 
 /** The draft's attachments as composer chips; an image chip carries its size. */
@@ -161,7 +178,7 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  * the title, subtitle, and owner-supplied controls; the virtualized shared
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
  * the body; and the shared `Composer` with its `/` command palette and `@`
- * mention candidates. A running turn keeps one minimal `AgentStatusLine` in the
+ * mention candidates. A running turn keeps one minimal `AgentWorkingStatus` in the
  * message list footer — braille spinner and elapsed clock — which scrolls with
  * the transcript rather than floating over it.
  *
@@ -222,7 +239,9 @@ export function ConversationView(props: ConversationViewProps) {
                     }
                     footer={
                         props.running ? (
-                            <AgentStatusLine
+                            <AgentWorkingStatus
+                                agents={props.runningAgents}
+                                backgroundTasks={props.backgroundTasks}
                                 className="happy2-conversation-turn-status"
                                 elapsedMs={props.elapsedMs}
                             />
@@ -246,10 +265,25 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
-                                className={
-                                    conversationEntryResumesAfterActivity(props.entries, index)
-                                        ? "happy2-conversation__resumed"
+                                activityAuthor={
+                                    props.agentAuthor &&
+                                    conversationAgentActivityStartsGroup(props.entries, index)
+                                        ? props.agentAuthor
                                         : undefined
+                                }
+                                className={
+                                    entry.kind === "agentActivity" &&
+                                    props.entries[index + 1]?.kind !== "agentActivity"
+                                        ? "happy2-agent-activity-row--trace-end"
+                                        : entry.kind === "turnStatus" &&
+                                            turnStatusAfterActivity(props.entries, index)
+                                          ? "happy2-turn-status--after-trace"
+                                          : conversationEntryResumesAfterActivity(
+                                                  props.entries,
+                                                  index,
+                                              )
+                                            ? "happy2-conversation__resumed"
+                                            : undefined
                                 }
                                 entry={entry}
                                 grouped={
@@ -266,7 +300,6 @@ export function ConversationView(props: ConversationViewProps) {
                                 }
                                 onImageOpen={props.onImageOpen}
                                 onRequestAnswer={props.onRequestAnswer}
-                                onRewind={props.onRewind}
                                 onTraceToggle={props.onTraceToggle}
                                 traceOpen={
                                     entry.kind === "message" &&

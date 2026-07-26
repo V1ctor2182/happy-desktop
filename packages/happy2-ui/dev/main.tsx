@@ -4,8 +4,9 @@ import "../src/index";
 import "./workbench.css";
 import { AgentDeskPage } from "./pages/AgentDeskPage";
 import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
-import { AgentStatusLinePage } from "./pages/AgentStatusLinePage";
+import { AgentWorkingStatusPage } from "./pages/AgentWorkingStatusPage";
 import { AgentTraceRowPage } from "./pages/AgentTraceRowPage";
+import { TurnSummaryPage } from "./pages/TurnSummaryPage";
 import { AgentImageDetailPage } from "./pages/AgentImageDetailPage";
 import { AgentImagePanelPage } from "./pages/AgentImagePanelPage";
 import { AgentRunCardPage } from "./pages/AgentRunCardPage";
@@ -197,6 +198,12 @@ const components: BlueprintPage[] = [
         label: "Conversation entry",
         number: "C-149",
         page: ConversationEntryViewPage,
+    },
+    {
+        id: "turn-summary",
+        label: "Turn summary",
+        number: "C-164",
+        page: TurnSummaryPage,
     },
     {
         id: "rig-user-input-prompt",
@@ -401,10 +408,10 @@ const components: BlueprintPage[] = [
         page: DevelopmentTokenModalPage,
     },
     {
-        id: "agent-status-line",
-        label: "Agent status line",
+        id: "agent-working-status",
+        label: "Agent working status",
         number: "C-072",
-        page: AgentStatusLinePage,
+        page: AgentWorkingStatusPage,
     },
     {
         id: "agent-trace-row",

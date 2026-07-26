@@ -132,8 +132,7 @@
 }
 
 .happy2-message:hover .happy2-message__gutter-time,
-.happy2-message:focus-within .happy2-message__gutter-time,
-.happy2-message[data-actions-visible] .happy2-message__gutter-time {
+.happy2-message:focus-within .happy2-message__gutter-time {
     opacity: 1;
 }
 
@@ -157,24 +156,27 @@
 .happy2-message__meta {
     display: flex;
     align-items: baseline;
+    column-gap: 6px;
     height: 20px;
     margin-bottom: 5px;
 }
 
 .happy2-message:not([data-own]) .happy2-message__meta {
-    align-items: center;
+    align-items: baseline;
 }
 
 .happy2-message:not([data-agent]):not([data-own]) .happy2-message__meta {
     margin-left: 12px;
 }
 
-.happy2-message__meta > * + *::before {
-    content: "·";
-    margin: 0 6px;
-    color: var(--input-placeholder);
-    font-family: var(--happy2-font-ui);
-    font-weight: 400;
+.happy2-message__meta-separator {
+    display: block;
+    flex: none;
+    align-self: center;
+    width: 2px;
+    height: 2px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--input-placeholder);
 }
 
 .happy2-message__author {
@@ -258,26 +260,36 @@
 }
 
 .happy2-message__time {
-    display: block;
+    display: flex;
+    align-items: center;
+    height: 16px;
     font-family: var(--happy2-font-mono);
     font-size: 11px;
     font-weight: 500;
     line-height: 16px;
     color: var(--text-secondary);
     white-space: nowrap;
-    /* The mono glyphs' ascent is optically high beside the UI author face. */
-    position: relative;
-    top: 1px;
-    opacity: 0;
 }
 
+.happy2-message__hover-meta,
 .happy2-message__meta-accessory {
     display: flex;
     align-items: center;
     height: 16px;
-    position: relative;
-    top: 1px;
+}
+
+.happy2-message__hover-meta {
+    display: inline-flex;
+    column-gap: 6px;
+    padding-left: 8px;
+    vertical-align: baseline;
     opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-message__hover-meta[data-placement="header"] {
+    align-items: baseline;
+    padding-left: 0;
 }
 
 /* The automation marker is durable identity metadata, not a hover affordance, so
@@ -302,15 +314,8 @@
     margin-bottom: 13px;
 }
 
-.happy2-message:hover .happy2-message__time,
-.happy2-message:focus-within .happy2-message__time,
-.happy2-message[data-actions-visible] .happy2-message__time {
-    opacity: 1;
-}
-
-.happy2-message:hover .happy2-message__meta-accessory,
-.happy2-message:focus-within .happy2-message__meta-accessory,
-.happy2-message[data-actions-visible] .happy2-message__meta-accessory {
+.happy2-message:hover .happy2-message__hover-meta,
+.happy2-message:focus-within .happy2-message__hover-meta {
     opacity: 1;
 }
 
@@ -396,7 +401,7 @@
 }
 
 /* Own bubble + its hover time sit on one right-justified line so the 11px mono
-   time reveals immediately to the left of the accent bubble. The line spans the
+   time reveals immediately before the accent bubble, on its left. The line spans the
    full content width, so the body's 76% cap resolves against the column. */
 .happy2-message__bubble-line {
     display: flex;
@@ -405,6 +410,21 @@
     gap: 8px;
     width: 100%;
     min-width: 0;
+}
+
+.happy2-message__incoming-line {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-message__incoming-line > .happy2-message__body {
+    min-width: 0;
+}
+
+.happy2-message[data-agent] .happy2-message__incoming-line > .happy2-message__body {
+    flex: 1 1 auto;
 }
 
 .happy2-message__aside-time {
@@ -422,9 +442,12 @@
     transition: opacity 100ms ease;
 }
 
+.happy2-message[data-agent] .happy2-message__incoming-line > .happy2-message__aside-time {
+    margin-bottom: 0;
+}
+
 .happy2-message:hover .happy2-message__aside-time,
-.happy2-message:focus-within .happy2-message__aside-time,
-.happy2-message[data-actions-visible] .happy2-message__aside-time {
+.happy2-message:focus-within .happy2-message__aside-time {
     opacity: 1;
 }
 
@@ -432,12 +455,6 @@
 .happy2-message:not([data-agent]):not([data-own]) .happy2-message__body {
     background: var(--surface-pressed);
     color: var(--text);
-}
-
-/* Hover toolbar flips to the left edge so it never sits over the right bubble. */
-.happy2-message[data-own] > .happy2-message__actions {
-    right: auto;
-    left: 20px;
 }
 
 /* Every ink stays legible on the accent fill of an own bubble. Inline code
@@ -488,12 +505,22 @@
     margin-top: 8px;
 }
 
+.happy2-message__body--markdown > .happy2-message__hover-meta {
+    margin-top: 0;
+}
+
 /* Body type ramp adopted from the original Happy Markdown view: 16px/24px
    paragraphs, headings that peak at h2, underlined body-color links, and
    unfilled inline code. */
 .happy2-message__body--markdown p {
     font-size: 16px;
     line-height: 24px;
+}
+
+/* A trailing hover-metadata cluster is inline with a final paragraph so its
+   timestamp follows the last glyph instead of the message column's far edge. */
+.happy2-message__body--markdown > p:nth-last-child(2):has(+ .happy2-message__hover-meta) {
+    display: inline;
 }
 
 .happy2-message__body--markdown h1,
@@ -647,11 +674,8 @@
     background: var(--divider);
 }
 
-/*
- * Generation state paints as a zero-width cursor at the measured end of the
- * final text run. The absolute marker never participates in text flow, so
- * streaming and failure updates cannot change a message's dimensions.
- */
+/* Failure state paints at the measured end of the final text run. The absolute
+ * marker never participates in text flow, so settling cannot change dimensions. */
 .happy2-message__generation-marker {
     position: absolute;
     top: 0;
@@ -674,19 +698,6 @@
     content: "";
 }
 
-.happy2-message__generation-marker[data-generation-marker="streaming"]::after {
-    background: var(--radio-active);
-}
-
-.happy2-message__generation-marker[data-empty][data-generation-marker="streaming"] {
-    width: 8px;
-}
-
-.happy2-message__generation-marker[data-empty][data-generation-marker="streaming"]::after {
-    width: 8px;
-    border-radius: 2px;
-}
-
 .happy2-message__generation-marker[data-generation-marker="failed"]::after {
     width: 8px;
     height: 8px;
@@ -694,8 +705,8 @@
     border-radius: var(--happy2-radius-pill);
 }
 
-/* A durable non-breaking-space line box anchors the empty reply cursor and
- * remains after completion, preventing a status-only geometry change. */
+/* A durable non-breaking-space line box keeps an empty generated reply stable
+ * across status-only changes. */
 .happy2-message__generation-anchor {
     display: block;
 }
@@ -803,39 +814,6 @@
     margin-top: 6px;
 }
 
-.happy2-message__react-add {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 24px;
-    height: 24px;
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: var(--happy2-radius-pill);
-    color: var(--text-secondary);
-    font-family: var(--happy2-font-ui);
-    appearance: none;
-    cursor: pointer;
-    transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        color 120ms ease;
-}
-
-.happy2-message__react-add:hover {
-    background: var(--input-background);
-    border-color: var(--divider);
-    color: var(--text-secondary);
-}
-
-.happy2-message__react-add:focus-visible {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 2px;
-}
-
 .happy2-message__replies {
     display: inline-flex;
     align-items: center;
@@ -863,69 +841,6 @@
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
     border-radius: 4px;
-}
-
-/* ---- Hover actions ---------------------------------------------------- */
-
-.happy2-message__actions {
-    position: absolute;
-    z-index: 2;
-    top: 4px;
-    right: 20px;
-    display: flex;
-    align-items: center;
-    padding: 2px;
-    background: var(--surface-pressed);
-    border: 1px solid var(--surface-selected);
-    border-radius: var(--happy2-radius-sm);
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--button-primary-background) 32%, transparent);
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-2px);
-    transition:
-        opacity 100ms ease,
-        transform 100ms ease;
-}
-
-.happy2-message:hover > .happy2-message__actions,
-.happy2-message:focus-within > .happy2-message__actions,
-.happy2-message[data-actions-visible] > .happy2-message__actions {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateY(0);
-}
-
-/* Native plugin message-menu contribution triggers sit inline with the built-in
-   reaction/reply/more actions in the hover toolbar. */
-.happy2-message__contributions {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-}
-
-/* The 28px buttons are 3px inside the toolbar border box. At the occupied
- * outer corners their 3px curve is the true parallel of the 6px toolbar. */
-.happy2-message__action.happy2-button:first-child {
-    border-top-left-radius: 3px;
-    border-bottom-left-radius: 3px;
-}
-
-.happy2-message__action.happy2-button:last-child {
-    border-top-right-radius: 3px;
-    border-bottom-right-radius: 3px;
-}
-
-.happy2-message__popover {
-    position: fixed;
-    z-index: 30;
-}
-
-.happy2-message__popover--reaction {
-    width: 234px;
-}
-
-.happy2-message__popover--menu {
-    width: 196px;
 }
 
 /* ---- MessageList ------------------------------------------------------ */
@@ -1177,12 +1092,25 @@
  *   it needs a deeper below-baseline padding split than the base rule.
  * - code pill: Gecko glyph-vs-pill dy 0.00 with symmetric padding — the base
  *   1.5/0.5 split (tuned for Blink/WebKit -0.50) must be undone for Gecko.
- * - day-divider label, meta time, gutter time, reaction row: measured within
- *   tolerance in all engines after the base rules above; no scoped overrides.
+ * - the author correction also lifts its baseline 1px in Gecko/WebKit, so the
+ *   header hover metadata and its separators follow it by the same amount.
+ * - day-divider label, gutter time, reaction row: measured within tolerance in
+ *   all engines after the base rules above; no scoped overrides.
  */
 
 @supports (-moz-appearance: none) {
     .happy2-message__author {
+        position: relative;
+        top: -1px;
+    }
+
+    .happy2-message__hover-meta[data-placement="header"] {
+        position: relative;
+        top: -1px;
+    }
+
+    .happy2-message__hover-meta .happy2-message__meta-separator,
+    .happy2-message__hover-meta .happy2-agent-trace-row__meta-separator {
         position: relative;
         top: -1px;
     }
@@ -1203,6 +1131,26 @@
 
 @supports (background: -webkit-named-image(i)) {
     .happy2-message__author {
+        position: relative;
+        top: -1px;
+    }
+
+    .happy2-message__hover-meta[data-placement="header"] {
+        position: relative;
+        top: -1px;
+    }
+
+    .happy2-message__hover-meta .happy2-agent-trace-row__meta-separator {
+        position: relative;
+        top: -1.2px;
+    }
+
+    .happy2-message__hover-meta > .happy2-message__meta-separator:first-child {
+        position: relative;
+        top: -1.05px;
+    }
+
+    .happy2-message__hover-meta > .happy2-message__meta-separator:not(:first-child) {
         position: relative;
         top: -1px;
     }

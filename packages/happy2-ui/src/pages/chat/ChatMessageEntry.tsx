@@ -1,8 +1,8 @@
 import { type ReactNode } from "react";
-import type { InfoPanelProfile, MenuItem, MessageImage } from "./ChatPageComponents.js";
+import type { InfoPanelProfile, MessageImage } from "./ChatPageComponents.js";
 import {
     AgentActivityRow,
-    AgentStatusLine,
+    TurnSummary,
     AgentTraceRow,
     DayDivider,
     FileAttachment,
@@ -10,7 +10,7 @@ import {
     SteeringNotice,
     SystemNotice,
 } from "./ChatPageComponents.js";
-import { emojiItems, type LiveChatMessage, type WorkspaceEntry } from "./chatPageModels.js";
+import { type LiveChatMessage, type WorkspaceEntry } from "./chatPageModels.js";
 export interface ChatMessageEntryProps {
     entry: WorkspaceEntry;
     /** Layout class for this row's place in the transcript, e.g. prose resuming under tool steps. */
@@ -21,7 +21,6 @@ export interface ChatMessageEntryProps {
     audienceLabel?: string;
     avatarUrl?: string;
     images: MessageImage[];
-    menuItems: MenuItem[];
     profile?: InfoPanelProfile;
     files: Array<{
         name: string;
@@ -36,14 +35,8 @@ export interface ChatMessageEntryProps {
      * by the application because each owns its own materialized surface store.
      */
     appNodes?: ReactNode;
-    /**
-     * Native plugin message-menu contribution triggers for this message, supplied
-     * by the application and bound to this message's id.
-     */
-    menuContributions?: ReactNode;
     onProfileOpen(profile: InfoPanelProfile): void;
     onImageOpen(message: LiveChatMessage, imageId: string): void;
-    onMenuSelect(message: LiveChatMessage, action: string): void;
     onReactionSelect(message: LiveChatMessage, emoji: string): void;
     onTraceSelect?(message: LiveChatMessage): void;
 }
@@ -56,14 +49,11 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
         return <AgentActivityRow activity={entry.activity} className={props.className} />;
     if (entry.kind === "turnStatus")
         return (
-            <AgentStatusLine
-                agents={entry.subagentCount}
+            <TurnSummary
                 className={["happy2-chat-turn-status", props.className].filter(Boolean).join(" ")}
-                elapsedMs={entry.elapsedMs}
-                processes={entry.terminalCount}
-                status={entry.status}
-                tokens={entry.totalTokens}
-                tools={entry.tools}
+                copyText={entry.copyText ?? ""}
+                durationMs={entry.elapsedMs}
+                status={entry.status === "failed" ? "failed" : "complete"}
             />
         );
     /* A running turn needs no status row of its own: its steps are listed in the
@@ -87,7 +77,6 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             author={entry.author}
             automated={entry.automated}
             body={entry.body}
-            contributions={props.menuContributions}
             deliveryState={entry.delivery ?? (entry.id.startsWith("local:") ? "sending" : "sent")}
             generationStatus={entry.generationStatus}
             grouped={props.grouped}
@@ -95,7 +84,6 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             imageUrl={props.avatarUrl}
             images={props.images}
             initials={entry.initials}
-            menuItems={props.menuItems}
             metaAccessory={
                 traceCollapsible && trace ? (
                     <AgentTraceRow
@@ -112,13 +100,8 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             }
             onAuthorSelect={props.profile ? () => props.onProfileOpen(props.profile!) : undefined}
             onImageOpen={(id) => props.onImageOpen(entry, id)}
-            onMenuSelect={(action) => props.onMenuSelect(entry, action)}
             onReactionSelect={(emoji) => props.onReactionSelect(entry, emoji)}
             own={props.own}
-            /* An agent turn is a transcript of work, not a post: it carries no
-               reaction picker and no message menu, so hovering a step or a reply
-               never offers to react to the machine. */
-            reactionOptions={entry.agent ? undefined : emojiItems}
             reactions={entry.agent ? undefined : entry.reactions}
             time={entry.time}
             tone={entry.tone}

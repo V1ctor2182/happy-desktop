@@ -351,11 +351,13 @@ export class SyncCoordinator {
             return;
         }
         current.getState().chatInput({ type: "chatSummaryReconciled", chat: difference.chat });
+        current.getState().chatInput({
+            type: "messagesUpserted",
+            items: difference.messages.map((message) =>
+                messageItemProject(this.context.identities, message),
+            ),
+        });
         for (const message of difference.messages) {
-            current.getState().chatInput({
-                type: "messageUpserted",
-                item: messageItemProject(this.context.identities, message),
-            });
             this.context.agentTraceReconcile(chatId, message);
             this.context.mcpAppReconcile(message);
         }

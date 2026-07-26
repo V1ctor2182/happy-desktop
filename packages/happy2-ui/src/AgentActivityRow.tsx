@@ -21,6 +21,8 @@ export type AgentActivityRowProps = {
      * no inline result or expand affordance.
      */
     singleLine?: boolean;
+    /** Durable event time, revealed with the row's trailing hover metadata. */
+    time?: string;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -34,6 +36,14 @@ const EXEC_HEAD_TAIL = 5;
 const JSON_BUDGET = 4096;
 /** MCP result-row budget: dim child rows shown before an overflow note (A3). */
 const MCP_RESULT_ROWS = 5;
+
+function AgentActivityTime(props: { time?: string }) {
+    return props.time ? (
+        <span className="happy2-agent-activity__time" data-happy2-ui="agent-activity-time">
+            {props.time}
+        </span>
+    ) : null;
+}
 
 /**
  * Parses an MCP tool name (`mcp__server__tool`) into its server and tool parts.
@@ -247,6 +257,7 @@ function AgentToolActivity(props: {
     tool: ConversationToolCall;
     defaultExpanded?: boolean;
     singleLine?: boolean;
+    time?: string;
 }) {
     const { tool } = props;
     const presentation = tool.presentation;
@@ -368,6 +379,7 @@ function AgentToolActivity(props: {
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
             ) : null}
+            <AgentActivityTime time={props.time} />
         </>
     );
 
@@ -510,6 +522,7 @@ function AgentReasoningActivity(props: {
     text: string;
     streaming: boolean;
     defaultExpanded?: boolean;
+    time?: string;
 }) {
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
     const summary = props.text.split("\n").find((line) => line.trim().length > 0) ?? "";
@@ -543,6 +556,7 @@ function AgentReasoningActivity(props: {
                 <span aria-hidden="true" className="happy2-agent-activity__chevron">
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
+                <AgentActivityTime time={props.time} />
             </button>
             {expanded ? (
                 <div
@@ -564,6 +578,7 @@ function AgentShellActivity(props: {
     running: boolean;
     timedOut: boolean;
     defaultExpanded?: boolean;
+    time?: string;
 }) {
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? true);
     const failed = !props.running && (props.timedOut || (props.exitCode ?? 0) !== 0);
@@ -613,6 +628,7 @@ function AgentShellActivity(props: {
                         <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                     </span>
                 ) : null}
+                <AgentActivityTime time={props.time} />
             </button>
             {expanded && hasBody ? (
                 <div className="happy2-agent-activity__body" data-happy2-ui="agent-activity-body">
@@ -638,6 +654,7 @@ function AgentLabeledActivity(props: {
     subject?: string;
     status: ConversationActivityStatus;
     mono: boolean;
+    time?: string;
 }) {
     return (
         <div
@@ -660,6 +677,7 @@ function AgentLabeledActivity(props: {
                         {props.subject}
                     </span>
                 ) : null}
+                <AgentActivityTime time={props.time} />
             </div>
         </div>
     );
@@ -687,6 +705,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                 <AgentToolActivity
                     defaultExpanded={props.defaultExpanded}
                     singleLine={props.singleLine}
+                    time={props.time}
                     tool={activity.tool}
                 />
             ) : activity.kind === "labeled" ? (
@@ -695,12 +714,14 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     mono={activity.mono}
                     status={activity.status}
                     subject={activity.subject}
+                    time={props.time}
                 />
             ) : activity.kind === "reasoning" ? (
                 <AgentReasoningActivity
                     defaultExpanded={props.defaultExpanded}
                     streaming={activity.streaming}
                     text={activity.text}
+                    time={props.time}
                 />
             ) : (
                 <AgentShellActivity
@@ -710,6 +731,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     output={activity.output}
                     running={activity.running}
                     timedOut={activity.timedOut}
+                    time={props.time}
                 />
             )}
         </div>

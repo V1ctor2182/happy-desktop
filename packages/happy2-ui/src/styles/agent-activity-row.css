@@ -115,6 +115,23 @@
     color: var(--text-secondary);
 }
 
+.happy2-agent-activity__time {
+    flex: none;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-agent-activity-row:hover .happy2-agent-activity__time,
+.happy2-agent-activity-row:focus-within .happy2-agent-activity__time {
+    opacity: 1;
+}
+
 .happy2-agent-activity__child,
 .happy2-agent-activity__review {
     display: flex;
@@ -239,14 +256,19 @@
     padding: 8px 96px 8px 30px;
 }
 
-/*
- * Tool calls are the exception: each reads as one quiet text line (verb +
- * subject), with no status dot or child result, so a run of them stays tight.
- */
+/* Tool calls remain compact single lines, but each owns 6px above and below so
+ * a run scans as distinct actions rather than one dense paragraph. */
 .happy2-agent-activity-row[data-kind="tool"],
 .happy2-agent-activity-row[data-kind="labeled"] {
-    padding-top: 2px;
-    padding-bottom: 2px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* The last action in a contiguous trace block closes with message-sized
+ * clearance before prose or a turn footer resumes. */
+.happy2-agent-activity-row--trace-end[data-kind="tool"],
+.happy2-agent-activity-row--trace-end[data-kind="labeled"] {
+    padding-bottom: 14px;
 }
 
 .happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity,

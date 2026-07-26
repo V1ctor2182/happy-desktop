@@ -31,9 +31,11 @@ import type {
 } from "./rigTransport.js";
 import type {
     RigBackgroundProcess,
+    RigEventId,
     RigFileSearchResult,
     RigGoal,
     RigImageInput,
+    RigMessage,
     RigMenusSnapshot,
     RigContextGauge,
     RigModelCatalog,
@@ -56,6 +58,14 @@ import type {
     RigUserInputRequest,
 } from "./rigTypes.js";
 
+function latestUserMessageId(messages: readonly RigMessage[]): string | undefined {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (message && !message.internal && message.role === "user") return message.id;
+    }
+    return undefined;
+}
+
 export interface RigChatSnapshot {
     readonly sessionId: RigSessionId;
     /** Durable session snapshot; the authoritative source for entries + config. */
@@ -65,6 +75,8 @@ export interface RigChatSnapshot {
     /** In-flight assistant message assembled from streaming deltas, when running. */
     readonly streaming?: RigStreamingMessage;
     readonly runStatus: "idle" | "running";
+    /** Durable user-message id of the one turn currently running. */
+    readonly activeTurnId?: string;
     readonly runId?: string;
     readonly runStartedAt?: number;
     /** Wall-clock duration of the most recently completed run, in milliseconds. */
@@ -328,9 +340,11 @@ export interface RigChatDeps {
  * first subscriber hydrates the durable session (`sessionRead`) and opens the
  * per-session realtime subscription, and the last unsubscribe tears both down.
  * Every `SessionEvent` is a delivery hint that schedules a coalesced
- * `sessionRead`; event and backfill payloads never write durable session state or
- * its cursor. Agent deltas alone feed explicitly transient streaming
- * presentation, which a successful durable read supersedes on completion.
+ * `sessionRead`; SSE payloads never write durable session state or its cursor.
+ * The HTTP event-history difference read supplies message timestamps and
+ * per-message run outcomes because Rig's durable message objects omit them.
+ * Agent deltas alone feed explicitly transient streaming presentation, which a
+ * successful durable read supersedes on completion.
  */
 export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): RigChatStore {
     const output = deps.output ?? (() => undefined);
@@ -344,6 +358,21 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
 
     // --- durable state + explicitly transient presentation -----------------
     let session: RigSession | undefined;
+    let messageCreatedAt = new Map<string, number>();
+    let messageGenerationStatus = new Map<string, "streaming" | "complete" | "failed">();
+    let agentMessageIdsByRun = new Map<string, ReadonlySet<string>>();
+    let runGenerationStatus = new Map<string, "complete" | "failed">();
+    // Original request start, retained across every steering segment so the
+    // final "Completed in" reports the whole run.
+    let runStartedAtByRun = new Map<string, number>();
+    // Current segment start, advanced by steering so intermediate boundaries
+    // can report "Steered after" for the work since the preceding prompt.
+    let turnStartedAtByRun = new Map<string, number>();
+    let turnUserIdByRun = new Map<string, string>();
+    let turnFinishedAtByRun = new Map<string, number>();
+    let steeringMessageIds: ReadonlySet<string> = new Set();
+    let toolCallCreatedAt = new Map<string, readonly number[]>();
+    let messageTimestampCursor: RigEventId | undefined;
     let transientStreamingPresentation: RigStreamingMessage | undefined;
     let transientStreamingBaseAgentIds = new Set<string>();
     // Run ids retired by durable completion. The bounded session-lifetime set
@@ -361,14 +390,18 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
      */
     let selectionIntent: RigSelection | undefined;
     let runStatus: "idle" | "running" = "idle";
+    // A run can be locally pending before its submitted user message exists in
+    // the durable session. Keep that gap unbound: inferring the last visible
+    // turn here briefly reopens the previous completed turn on every send.
+    let activeTurnId: string | undefined;
+    let pendingFreshTurn: { readonly precedingUserId?: string } | undefined;
     let runId: string | undefined;
     let runStartedAt: number | undefined;
     let turnElapsedMs: number | undefined;
     /**
      * Final duration of each finished turn, keyed by the user message that
-     * opened it. Local messages carry no timestamps, so the store records the
-     * request-send clock when a run ends and the turn pass reads it for the
-     * permanent status line.
+     * opened it. Durable event-history timestamps are authoritative; the live
+     * request clock is only a fallback when that history is unavailable.
      */
     let turnDurations = new Map<string, number>();
     let showReasoning = false;
@@ -398,6 +431,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         modelLocked: false,
         entries: [],
         runStatus: "idle",
+        activeTurnId: undefined,
         pendingUserInputs: [],
         requestSubmissions: [],
         queuedMessages: [],
@@ -424,14 +458,21 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             rigConversationBuild({
                 sessionId,
                 session,
-                streaming: transientStreamingPresentation,
+                // Streaming belongs to a turn only after the authoritative
+                // session identifies that turn. Showing it earlier would append
+                // it to whichever completed turn happened to be last.
+                streaming: activeTurnId === undefined ? undefined : transientStreamingPresentation,
                 ephemeral,
                 showReasoning,
                 pendingUserInputs: session?.pendingUserInputs ?? [],
+                messageCreatedAt,
+                messageGenerationStatus,
+                toolCallCreatedAt,
             }),
             {
-                running: runStatus === "running",
+                activeTurnId,
                 expandedTurnIds,
+                steeringMessageIds,
                 durations: turnDurations,
             },
         );
@@ -446,6 +487,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             entries,
             streaming: transientStreamingPresentation,
             runStatus,
+            activeTurnId,
             runId,
             runStartedAt,
             turnElapsedMs,
@@ -829,6 +871,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         for (let index = loaded.messages.length - 1; index >= 0; index -= 1) {
             const message = loaded.messages[index];
             if (!message || message.internal || message.role !== "user") continue;
+            if (turnDurations.has(message.id)) break;
             turnDurations = new Map(turnDurations).set(message.id, elapsedMs);
             break;
         }
@@ -880,6 +923,22 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             loaded.lastEventId === undefined && session?.lastEventId !== undefined
                 ? { ...loaded, lastEventId: session.lastEventId }
                 : loaded;
+        // The user message is the durable turn identity in Rig. Bind activity
+        // only while the session itself says that exact turn is running; the
+        // optimistic request interval intentionally has no active turn.
+        const latestUserId = latestUserMessageId(loaded.messages);
+        if (
+            loaded.status === "running" &&
+            latestUserId !== undefined &&
+            (pendingFreshTurn === undefined || latestUserId !== pendingFreshTurn.precedingUserId)
+        ) {
+            activeTurnId = latestUserId;
+            pendingFreshTurn = undefined;
+        } else if (loaded.status !== "running") {
+            activeTurnId = undefined;
+            if (loaded.status === "error" || loaded.status === "aborted")
+                pendingFreshTurn = undefined;
+        }
         // The session already is what was pending — applied here, or changed to
         // it elsewhere — so there is nothing left to apply and the pickers go
         // back to reading the session directly.
@@ -916,8 +975,100 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         reconciling = true;
         const current = generation;
         try {
-            const loaded = await deps.transport.sessionRead(sessionId);
+            const [loaded, timestampEvents] = await Promise.all([
+                deps.transport.sessionRead(sessionId),
+                deps.transport
+                    .sessionEventsBackfill(sessionId, messageTimestampCursor)
+                    .catch(() => []),
+            ]);
             if (disposed || !active || current !== generation) return;
+            if (timestampEvents.length > 0) {
+                const next = new Map(messageCreatedAt);
+                const nextStatuses = new Map(messageGenerationStatus);
+                const nextMessageIdsByRun = new Map(agentMessageIdsByRun);
+                const nextRunStatuses = new Map(runGenerationStatus);
+                const nextRunStartedAtByRun = new Map(runStartedAtByRun);
+                const nextTurnStartedAtByRun = new Map(turnStartedAtByRun);
+                const nextTurnUserIdByRun = new Map(turnUserIdByRun);
+                const nextTurnFinishedAtByRun = new Map(turnFinishedAtByRun);
+                const nextSteeringMessageIds = new Set(steeringMessageIds);
+                const nextTools = new Map(toolCallCreatedAt);
+                const durationReconcile = (eventRunId: string): void => {
+                    const turnId = nextTurnUserIdByRun.get(eventRunId);
+                    const startedAt = nextRunStartedAtByRun.get(eventRunId);
+                    const finishedAt = nextTurnFinishedAtByRun.get(eventRunId);
+                    if (turnId === undefined || startedAt === undefined || finishedAt === undefined)
+                        return;
+                    turnDurations = new Map(turnDurations).set(
+                        turnId,
+                        Math.max(0, finishedAt - startedAt),
+                    );
+                };
+                for (const event of timestampEvents) {
+                    if (event.type === "message_submitted") {
+                        next.set(event.message.id, event.createdAt);
+                        if (event.delivery === "steer") {
+                            const priorTurnId = nextTurnUserIdByRun.get(event.runId);
+                            const priorStartedAt = nextTurnStartedAtByRun.get(event.runId);
+                            if (priorTurnId !== undefined && priorStartedAt !== undefined)
+                                turnDurations = new Map(turnDurations).set(
+                                    priorTurnId,
+                                    Math.max(0, event.createdAt - priorStartedAt),
+                                );
+                            nextSteeringMessageIds.add(event.message.id);
+                            nextTurnUserIdByRun.set(event.runId, event.message.id);
+                            nextTurnStartedAtByRun.set(event.runId, event.createdAt);
+                            durationReconcile(event.runId);
+                        } else if (!nextTurnUserIdByRun.has(event.runId)) {
+                            nextTurnUserIdByRun.set(event.runId, event.message.id);
+                            nextRunStartedAtByRun.set(event.runId, event.createdAt);
+                            nextTurnStartedAtByRun.set(event.runId, event.createdAt);
+                            durationReconcile(event.runId);
+                        }
+                        continue;
+                    }
+                    if (event.type === "agent_message") {
+                        next.set(event.message.id, event.createdAt);
+                        const messageIds = new Set(nextMessageIdsByRun.get(event.runId) ?? []);
+                        messageIds.add(event.message.id);
+                        nextMessageIdsByRun.set(event.runId, messageIds);
+                        nextStatuses.set(
+                            event.message.id,
+                            nextRunStatuses.get(event.runId) ?? "streaming",
+                        );
+                        continue;
+                    }
+                    if (event.type === "run_error" || event.type === "run_finished") {
+                        const outcome =
+                            event.type === "run_error" ||
+                            event.stopReason === "error" ||
+                            event.stopReason === "aborted"
+                                ? "failed"
+                                : "complete";
+                        nextRunStatuses.set(event.runId, outcome);
+                        nextTurnFinishedAtByRun.set(event.runId, event.createdAt);
+                        durationReconcile(event.runId);
+                        for (const messageId of nextMessageIdsByRun.get(event.runId) ?? [])
+                            nextStatuses.set(messageId, outcome);
+                        continue;
+                    }
+                    if (event.type !== "agent_event" || event.event.type !== "toolcall_start")
+                        continue;
+                    const prior = nextTools.get(event.event.toolCallId) ?? [];
+                    nextTools.set(event.event.toolCallId, [...prior, event.createdAt]);
+                }
+                messageCreatedAt = next;
+                messageGenerationStatus = nextStatuses;
+                agentMessageIdsByRun = nextMessageIdsByRun;
+                runGenerationStatus = nextRunStatuses;
+                runStartedAtByRun = nextRunStartedAtByRun;
+                turnStartedAtByRun = nextTurnStartedAtByRun;
+                turnUserIdByRun = nextTurnUserIdByRun;
+                turnFinishedAtByRun = nextTurnFinishedAtByRun;
+                steeringMessageIds = nextSteeringMessageIds;
+                toolCallCreatedAt = nextTools;
+                messageTimestampCursor = timestampEvents[timestampEvents.length - 1]?.eventId;
+            }
             sessionAuthoritativeWrite(loaded);
         } catch (caught) {
             if (disposed || !active || current !== generation) return;
@@ -940,7 +1091,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             if (disposed || !active) return;
             transientStreamingHintApply(value);
             if (value.type === "run_started" || value.type === "agent_event") commit();
-            // Delivery hint: durable fields and lastEventId come only from sessionRead.
+            // Delivery hint: the session and its cursor come only from sessionRead;
+            // message times and run outcomes reconcile from HTTP event history.
             void reconcile();
         },
         error: () => {
@@ -1153,15 +1305,30 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 // connection is made, before the first token — not when the first
                 // stream event arrives.
                 if (!steered) {
+                    pendingFreshTurn = {
+                        precedingUserId: session
+                            ? latestUserMessageId(session.messages)
+                            : undefined,
+                    };
                     runStartedAt = now();
                     turnElapsedMs = undefined;
                     runStatus = "running";
                     commit();
                 }
-                if (steered) {
-                    await deps.transport.messageSteer(sessionId, text, key, runId, images);
-                } else {
-                    await deps.transport.messageSubmit(sessionId, text, key, images);
+                try {
+                    if (steered) {
+                        await deps.transport.messageSteer(sessionId, text, key, runId, images);
+                    } else {
+                        await deps.transport.messageSubmit(sessionId, text, key, images);
+                    }
+                } catch (caught) {
+                    if (!steered) {
+                        pendingFreshTurn = undefined;
+                        runStartedAt = undefined;
+                        runStatus = session?.status === "running" ? "running" : "idle";
+                        commit();
+                    }
+                    throw caught;
                 }
                 output({ type: "messageSent", sessionId, steered });
             }),

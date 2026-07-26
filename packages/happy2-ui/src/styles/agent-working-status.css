@@ -1,0 +1,60 @@
+/* Pull the footer into the preceding message's 16px bottom inset. Its layout
+ * slot stays put, so the reclaimed space becomes separation before the next
+ * user message instead of a gap between the response and its footer. */
+.happy2-chat-turn-status,
+.happy2-conversation-turn-status {
+    position: relative;
+    top: -12px;
+    margin-top: 0;
+    padding: 0 20px 0 30px;
+}
+
+/* A trace block already closes with its own larger bottom inset. Pulling the
+ * footer upward here would erase that boundary and crowd the final tool row. */
+.happy2-turn-status--after-trace {
+    top: 0;
+}
+
+/* The running footer uses the same 16px/24px type measure as message content. */
+.happy2-agent-working-status,
+.happy2-agent-working-status * {
+    box-sizing: border-box;
+}
+
+.happy2-agent-working-status {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    background: transparent;
+    font-family: var(--happy2-font-ui);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.happy2-agent-working-status__state {
+    flex: none;
+}
+
+.happy2-agent-working-status__spinner {
+    position: absolute;
+    left: 8px;
+}
+
+.happy2-agent-working-status__state {
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
+.happy2-agent-working-status__details {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--input-placeholder);
+}

@@ -16,7 +16,6 @@ import { useAssetUrls } from "../assetUrls";
 import {
     chatMenuContributionNodes,
     composerContributionNodes,
-    messageMenuContributionNodes,
     type ContributionSurface,
 } from "./PluginContributionRenderer";
 import { MessageApp } from "./MessageApp";
@@ -194,10 +193,6 @@ export function ChatView(props: ChatViewProps) {
             state.reactionAdd(selectedChatId, messageId, { emoji }),
         reactionRemove: (selectedChatId, messageId, emoji) =>
             state.reactionRemove(selectedChatId, messageId, { emoji }),
-        messageEdit: (selectedChatId, messageId, text, revision) =>
-            state.messageEdit(selectedChatId, messageId, text, revision),
-        messageDelete: (selectedChatId, messageId) =>
-            state.messageDelete(selectedChatId, messageId),
         chatJoin: (selectedChatId) => state.chatJoin(selectedChatId),
         chatLeave: (selectedChatId) => state.chatLeave(selectedChatId),
         chatStarSet: (selectedChatId, starred) => state.chatStarSet(selectedChatId, starred),
@@ -244,7 +239,6 @@ export function ChatView(props: ChatViewProps) {
     const renderPage = (contributions: {
         chatMenuContributions?: ReactNode;
         composerContributions?: ReactNode;
-        messageContributions?: (messageId: string) => ReactNode;
     }) => (
         <ChatPage
             actions={actions}
@@ -256,7 +250,6 @@ export function ChatView(props: ChatViewProps) {
             composerContributions={contributions.composerContributions}
             createRequest={props.createRequest}
             directory={state.directory()}
-            messageContributions={contributions.messageContributions}
             messageListScrollPosition={
                 conversation ? chatScrollPositions.get(conversation.chatId) : undefined
             }
@@ -312,8 +305,6 @@ export function ChatView(props: ChatViewProps) {
             contributionSnapshot,
             masks,
         ),
-        messageContributions: (messageId: string) =>
-            messageMenuContributionNodes(contributions, contributionSnapshot, masks, messageId),
     });
 }
 

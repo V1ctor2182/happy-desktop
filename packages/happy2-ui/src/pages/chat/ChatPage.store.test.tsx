@@ -115,8 +115,6 @@ function chatPageActionsCreate(overrides: Partial<ChatPageActions> = {}): ChatPa
         typingSet: () => undefined,
         reactionAdd: async () => undefined,
         reactionRemove: async () => undefined,
-        messageEdit: async () => undefined,
-        messageDelete: async () => undefined,
         chatJoin: async () => undefined,
         chatLeave: async () => undefined,
         chatStarSet: async () => undefined,
@@ -243,7 +241,7 @@ it("projects channel lifecycle service messages as generic user notices with ser
         },
     ]);
 });
-it("updates one mounted message while preserving its open menu and sibling DOM", async () => {
+it("updates one mounted message while preserving sibling DOM", async () => {
     const first = messageItem("message-1", "first");
     const second = messageItem("message-2", "second");
     let update!: (items: ConversationMessageEntry[]) => void;
@@ -259,9 +257,7 @@ it("updates one mounted message while preserving its open menu and sibling DOM",
                         files={[]}
                         grouped={false}
                         images={[]}
-                        menuItems={[{ id: "copy", kind: "item", label: "Copy text" }]}
                         onImageOpen={() => undefined}
-                        onMenuSelect={() => undefined}
                         onProfileOpen={() => undefined}
                         onReactionSelect={() => undefined}
                     />
@@ -277,17 +273,6 @@ it("updates one mounted message while preserving its open menu and sibling DOM",
     const secondRoot = view.container.querySelector(
         '[data-slot-id="message-2"] [data-happy2-ui="message"]',
     )!;
-    view.container
-        .querySelector<HTMLButtonElement>(
-            '[data-slot-id="message-1"] [aria-label="More message actions"]',
-        )!
-        .click();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    expect(
-        view.container.querySelector(
-            '[data-slot-id="message-1"] [data-happy2-ui="message-menu-popover"]',
-        ),
-    ).not.toBeNull();
     update([{ ...first, message: { ...first.message, text: "streamed body" } }, second]);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     expect(
@@ -297,11 +282,6 @@ it("updates one mounted message while preserving its open menu and sibling DOM",
         view.container.querySelector('[data-slot-id="message-2"] [data-happy2-ui="message"]'),
     ).toBe(secondRoot);
     expect(firstRoot.textContent).toContain("streamed body");
-    expect(
-        view.container.querySelector(
-            '[data-slot-id="message-1"] [data-happy2-ui="message-menu-popover"]',
-        ),
-    ).not.toBeNull();
 });
 it("renders a complete chat page from coarse HappyState surface stores", async () => {
     const sidebar = sidebarStoreFixtureCreate();
@@ -1018,9 +998,7 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
                         grouped={false}
                         images={[]}
                         key={entry.renderKey}
-                        menuItems={[]}
                         onImageOpen={() => undefined}
-                        onMenuSelect={() => undefined}
                         onProfileOpen={() => undefined}
                         onReactionSelect={() => undefined}
                         own={entry.own}
@@ -1043,88 +1021,6 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
     expect(confirmedRoot.getAttribute("data-own")).toBe("");
     expect(confirmedRoot.getAttribute("data-delivery-state")).toBe("sent");
     expect(confirmedRoot.textContent).not.toContain("Happy Place");
-});
-
-it("edits an own message through the desktop-safe dialog with its current revision", async () => {
-    const sidebar = sidebarStoreFixtureCreate();
-    const directory = directoryStoreFixtureCreate();
-    const chatSurface = chatStoreFixtureCreate(chat.id);
-    onTestFinished(() => {
-        sidebar[Symbol.dispose]();
-        directory[Symbol.dispose]();
-        chatSurface[Symbol.dispose]();
-    });
-    const owner = {
-        id: "user-1",
-        displayName: "Ada Lovelace",
-        username: "ada",
-        kind: "human" as const,
-        role: "admin" as const,
-        presence: "online" as const,
-    };
-    const baseMessage = messageItem("message-7", "Original body");
-    const ownMessage: ConversationMessageEntry = {
-        ...baseMessage,
-        message: {
-            ...baseMessage.message,
-            revision: 7,
-            sender: owner,
-        },
-    };
-    directory.input({ type: "directoryLoaded", users: [owner], channels: [] });
-    sidebar.input({
-        type: "sidebarLoaded",
-        projects: [testProject],
-        chats: [{ chat, id: chat.id, displayName: chat.name!, participants: [owner] }],
-        sync: { protocolVersion: 1, generation: "test", sequence: "0" },
-    });
-    chatSurface.input({
-        type: "chatLoaded",
-        chat,
-        messages: [ownMessage],
-        hasMoreMessages: false,
-    });
-    const messageEdit = vi.fn(async () => undefined);
-    const view = createRenderer();
-    view.render(
-        () => (
-            <ChatPage
-                actions={chatPageActionsCreate({ messageEdit })}
-                chat={chatSurface.store}
-                directory={directory.store}
-                navigation={{ chatId: chat.id }}
-                rail={<div>Rail</div>}
-                sidebarSearch=""
-                sidebar={sidebar.store}
-                windowControls={false}
-                user={{ id: owner.id, firstName: "Ada" }}
-            />
-        ),
-        { width: 1200, height: 800 },
-    );
-    await view.ready();
-
-    view.container.querySelector<HTMLButtonElement>('[aria-label="More message actions"]')!.click();
-    await nextFrame();
-    view.container.querySelector<HTMLButtonElement>('[data-item-id="edit"]')!.click();
-    await nextFrame();
-    expect(view.container.textContent).toContain("Edit message");
-    const editor = view.container.querySelector<HTMLTextAreaElement>(
-        '[data-happy2-ui="modal-dialog"] textarea',
-    )!;
-    expect(editor.value).toBe("Original body");
-    editor.value = "Updated body";
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
-    await nextFrame();
-    const save = buttonNamed(
-        view.container.querySelector('[data-happy2-ui="modal-dialog"]')!,
-        "Save changes",
-    )!;
-    expect(save.disabled).toBe(false);
-    save.click();
-    await nextFrame();
-    expect(messageEdit).toHaveBeenCalledExactlyOnceWith(chat.id, "message-7", "Updated body", 7);
-    await expect.poll(() => view.container.textContent).not.toContain("Edit message");
 });
 
 function traceSummary(overrides: Partial<AgentTurnTraceSummary> = {}): AgentTurnTraceSummary {

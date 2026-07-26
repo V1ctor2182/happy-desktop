@@ -50,7 +50,7 @@ export function AgentActivityRowPage() {
             </Specimen>
 
             <Specimen
-                detail="running, awaiting approval, failed, stopped, and generic collapsed"
+                detail="running, awaiting approval, failed, stopped, and generic collapsed · trailing time reveals on row hover"
                 label="Status treatments"
                 number="02"
                 stage="surface"
@@ -63,7 +63,10 @@ export function AgentActivityRowPage() {
                         width: "720px",
                     }}
                 >
-                    <AgentActivityRow activity={{ kind: "tool", tool: rigRunningTool }} />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: rigRunningTool }}
+                        time="10:42 AM"
+                    />
                     <AgentActivityRow activity={{ kind: "tool", tool: rigAwaitingTool }} />
                     <AgentActivityRow activity={{ kind: "tool", tool: rigFailedTool }} />
                     <AgentActivityRow activity={{ kind: "tool", tool: rigStoppedTool }} />

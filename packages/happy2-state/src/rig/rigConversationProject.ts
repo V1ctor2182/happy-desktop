@@ -46,6 +46,7 @@ function messageProjection(input: {
     readonly sessionId: string;
     readonly author: ConversationAuthor;
     readonly text: string;
+    readonly createdAt?: number;
     readonly attachments?: readonly ConversationAttachment[];
     readonly generationStatus?: "streaming" | "complete" | "failed";
 }): ConversationMessageProjection {
@@ -67,7 +68,10 @@ function messageProjection(input: {
         reactions: [],
         receipts: [],
         expiryMode: "none",
-        createdAt: "",
+        createdAt:
+            input.createdAt !== undefined && Number.isFinite(input.createdAt)
+                ? new Date(input.createdAt).toISOString()
+                : "",
     };
 }
 
@@ -76,6 +80,7 @@ function messageEntry(input: {
     readonly sessionId: string;
     readonly author: ConversationAuthor;
     readonly text: string;
+    readonly createdAt?: number;
     readonly attachments?: readonly ConversationAttachment[];
     readonly generationStatus?: "streaming" | "complete" | "failed";
 }): ConversationMessageEntry {
@@ -186,12 +191,13 @@ function messageAttachments(message: RigMessage): readonly ConversationAttachmen
     return attachments;
 }
 
-function userEntry(sessionId: string, message: RigMessage): ConversationEntry {
+function userEntry(sessionId: string, message: RigMessage, createdAt?: number): ConversationEntry {
     return messageEntry({
         id: message.id,
         sessionId,
         author: rigOwnerAuthor,
         text: messageText(message),
+        createdAt,
         attachments: messageAttachments(message),
     });
 }
@@ -229,6 +235,9 @@ function appendAgentEntries(
     message: RigMessage,
     results: ReadonlyMap<string, RigToolResultBlock>,
     showReasoning: boolean,
+    generationStatus: "streaming" | "complete" | "failed",
+    createdAt?: number,
+    toolCallCreatedAt?: (toolCallId: string) => number | undefined,
 ): void {
     message.blocks.forEach((block, index) => {
         // Every entry id — text, reasoning, tool — is the block's position in its
@@ -243,7 +252,8 @@ function appendAgentEntries(
                         sessionId,
                         author: rigAgentAuthor,
                         text: block.text,
-                        generationStatus: "complete",
+                        createdAt,
+                        generationStatus,
                     }),
                 );
         } else if (block.type === "thinking") {
@@ -259,6 +269,7 @@ function appendAgentEntries(
             entries.push({
                 kind: "agentActivity",
                 id,
+                occurredAt: toolCallCreatedAt?.(block.id) ?? createdAt,
                 sequence: "",
                 activity: {
                     kind: "tool",
@@ -296,6 +307,12 @@ export interface RigConversationBuildInput {
     readonly ephemeral: readonly ConversationEntry[];
     readonly showReasoning: boolean;
     readonly pendingUserInputs: readonly RigUserInputRequest[];
+    /** Durable message timestamps reconciled from Rig's event-history endpoint. */
+    readonly messageCreatedAt?: ReadonlyMap<string, number>;
+    /** Per-agent-message lifecycle reconciled from its Rig run's terminal event. */
+    readonly messageGenerationStatus?: ReadonlyMap<string, "streaming" | "complete" | "failed">;
+    /** Durable tool-call start times in occurrence order for reused provider ids. */
+    readonly toolCallCreatedAt?: ReadonlyMap<string, readonly number[]>;
 }
 
 /**
@@ -311,13 +328,21 @@ export function rigConversationBuild(
     input: RigConversationBuildInput,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
+    const toolCallOccurrence = new Map<string, number>();
+    const toolCallCreatedAt = (toolCallId: string): number | undefined => {
+        const index = toolCallOccurrence.get(toolCallId) ?? 0;
+        toolCallOccurrence.set(toolCallId, index + 1);
+        return input.toolCallCreatedAt?.get(toolCallId)?.[index];
+    };
     const session = input.session;
     if (session) {
         const results = toolResultsPair(session.messages);
         for (const message of session.messages) {
             if (message.internal) continue;
             if (message.role === "user") {
-                entries.push(userEntry(input.sessionId, message));
+                entries.push(
+                    userEntry(input.sessionId, message, input.messageCreatedAt?.get(message.id)),
+                );
                 continue;
             }
             if (message.role === "system") {
@@ -325,7 +350,16 @@ export function rigConversationBuild(
                 if (text) entries.push(rigNoticeEntry(message.id, "info", "System", text));
                 continue;
             }
-            appendAgentEntries(entries, input.sessionId, message, results, input.showReasoning);
+            appendAgentEntries(
+                entries,
+                input.sessionId,
+                message,
+                results,
+                input.showReasoning,
+                input.messageGenerationStatus?.get(message.id) ?? "complete",
+                input.messageCreatedAt?.get(message.id),
+                toolCallCreatedAt,
+            );
         }
     }
 

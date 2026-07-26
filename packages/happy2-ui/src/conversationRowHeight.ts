@@ -1,5 +1,6 @@
 import type { ConversationEntry } from "happy2-state";
 import {
+    conversationAgentActivityStartsGroup,
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
 } from "./conversationMessageGrouped";
@@ -72,7 +73,8 @@ const MEDIA_SINGLE_MAX_W = 380;
 const MEDIA_SINGLE_MAX_H = 320;
 const MEDIA_FALLBACK_H = 180;
 /** Collapsed `.happy2-agent-activity-row` heights, by activity kind. */
-const ACTIVITY_HEIGHT = { tool: 24, labeled: 24, reasoning: 40 } as const;
+const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
+const ACTIVITY_BLOCK_END = 8;
 /** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
 export const DIVIDER_HEIGHT = 60;
 /** `.happy2-system-notice`: 4px padding at `align="start"`, 16px centered. */
@@ -204,9 +206,21 @@ export function conversationRowHeight(
     const entry = entries[index];
     if (!entry) return undefined;
     const width = contentWidth(context.width);
-    if (entry.kind === "agentActivity") return conversationActivityHeight(entry.activity.kind);
-    /* 12px margin above the 24px status line — the gap after the last message. */
-    if (entry.kind === "turnStatus") return 36;
+    if (entry.kind === "agentActivity") {
+        const activityHeight = conversationActivityHeight(entry.activity.kind);
+        const blockEnd = entries[index + 1]?.kind !== "agentActivity" ? ACTIVITY_BLOCK_END : 0;
+        if (
+            context.surface === "conversation" &&
+            conversationAgentActivityStartsGroup(entries, index) &&
+            activityHeight !== undefined
+        )
+            return (
+                MESSAGE_CHROME.conversation.agent[0] + MEDIA_MARGIN_BARE + activityHeight + blockEnd
+            );
+        return activityHeight === undefined ? undefined : activityHeight + blockEnd;
+    }
+    /* Message-sized settled footer with no extra vertical separation. */
+    if (entry.kind === "turnStatus") return 32;
     if (entry.kind === "notice") {
         if (entry.variant === "divider") return DIVIDER_HEIGHT;
         const text = entry.title ? `${entry.title}: ${entry.text}` : entry.text;

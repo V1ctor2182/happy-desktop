@@ -1,14 +1,14 @@
 import { CollaborationError, type MessageSummary } from "../chat/types.js";
 import { type DrizzleExecutor } from "../drizzle.js";
 
-import { and, asc, desc, eq, gt, lt, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, lt, type SQL } from "drizzle-orm";
 
 import { messages } from "../schema.js";
 import { chatGetAccess } from "../chat/chatGetAccess.js";
 import { messageGetProjection } from "./messageGetProjection.js";
 /**
  * Pages messages in an accessible chat before or after a sequence, returning chronological projections and the current chat point.
- * Loading one extra identifier detects continuation while projecting each message through current deletion, expiry, and viewer-access rules.
+ * A newest-first page expands its oldest edge back to the user message that owns an assistant turn, so consumers never receive or render half a turn.
  */
 export async function messageList(
     executor: DrizzleExecutor,
@@ -42,14 +42,55 @@ export async function messageList(
         .where(and(...conditions))
         .orderBy(ascending ? asc(messages.sequence) : desc(messages.sequence))
         .limit(input.limit + 1);
-    const hasMore = result.length > input.limit;
-    const ids = result.slice(0, input.limit).map((row) => row.id);
-    const summaries: MessageSummary[] = [];
+    let ids = result.slice(0, input.limit).map((row) => row.id);
+    let summaries: MessageSummary[] = [];
     for (const id of ids) {
         const message = await messageGetProjection(executor, input.userId, id);
         if (message) summaries.push(message);
     }
-    if (!ascending) summaries.reverse();
+    let hasMore = result.length > input.limit;
+    if (!ascending) {
+        summaries.reverse();
+        const oldest = summaries[0];
+        const turnId = oldest?.agentTrace?.turnId;
+        if (turnId && turnId !== oldest.id) {
+            const turnStart = await messageGetProjection(executor, input.userId, turnId);
+            if (turnStart && turnStart.chatId === input.chatId) {
+                const turnSequence = Number(turnStart.sequence);
+                const rangeConditions: SQL[] = [
+                    eq(messages.chatId, input.chatId),
+                    gte(messages.sequence, turnSequence),
+                ];
+                if (input.beforeSequence !== undefined)
+                    rangeConditions.push(lt(messages.sequence, input.beforeSequence));
+                const completeTurnRange = await executor
+                    .select({ id: messages.id })
+                    .from(messages)
+                    .where(and(...rangeConditions))
+                    .orderBy(asc(messages.sequence));
+                ids = completeTurnRange.map((row) => row.id);
+                summaries = [];
+                for (const id of ids) {
+                    const message = await messageGetProjection(executor, input.userId, id);
+                    if (message) summaries.push(message);
+                }
+            }
+        }
+        const oldestSequence = summaries[0]?.sequence;
+        if (oldestSequence !== undefined) {
+            const older = await executor
+                .select({ id: messages.id })
+                .from(messages)
+                .where(
+                    and(
+                        eq(messages.chatId, input.chatId),
+                        lt(messages.sequence, Number(oldestSequence)),
+                    ),
+                )
+                .limit(1);
+            hasMore = older.length > 0;
+        }
+    }
     return {
         messages: summaries,
         chatPts: chat.pts,

@@ -85,6 +85,7 @@
 /* A trace link in a message header follows the timestamp's quiet mono style;
  * the surrounding Message metadata controls its hover visibility. */
 .happy2-agent-trace-row[data-variant="meta"] {
+    gap: 6px;
     width: auto;
     height: 16px;
     padding: 0;
@@ -102,7 +103,10 @@
 }
 
 .happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__meta-stats {
+    display: flex;
     flex: none;
+    align-items: center;
+    height: 16px;
     font-family: inherit;
     font-size: 11px;
     font-weight: 500;
@@ -110,11 +114,14 @@
     color: var(--text-secondary);
 }
 
-.happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__meta-stats::before {
-    content: "·";
-    margin: 0 6px;
-    color: var(--input-placeholder);
-    font-weight: 400;
+.happy2-agent-trace-row__meta-separator {
+    display: block;
+    flex: none;
+    align-self: center;
+    width: 2px;
+    height: 2px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--input-placeholder);
 }
 
 .happy2-agent-trace-row[data-variant="meta"] .happy2-agent-trace-row__title,

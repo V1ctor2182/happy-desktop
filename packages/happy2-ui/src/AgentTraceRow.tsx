@@ -140,15 +140,24 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                   ))(local.kind)
                 : null}
             <span className="happy2-agent-trace-row__title" data-happy2-ui="agent-trace-row-title">
-                {meta() ? linkLabel() : running() ? (local.title ?? "Working") : linkLabel()}
+                <span data-happy2-ui="agent-trace-row-title-label">
+                    {meta() ? linkLabel() : running() ? (local.title ?? "Working") : linkLabel()}
+                </span>
             </span>
             {meta() && stats() ? (
-                <span
-                    className="happy2-agent-trace-row__meta-stats"
-                    data-happy2-ui="agent-trace-row-meta-stats"
-                >
-                    {stats()}
-                </span>
+                <>
+                    <span
+                        aria-hidden="true"
+                        className="happy2-agent-trace-row__meta-separator"
+                        data-happy2-ui="agent-trace-row-meta-separator"
+                    />
+                    <span
+                        className="happy2-agent-trace-row__meta-stats"
+                        data-happy2-ui="agent-trace-row-meta-stats"
+                    >
+                        <span data-happy2-ui="agent-trace-row-meta-stats-label">{stats()}</span>
+                    </span>
+                </>
             ) : null}
             {!meta() && running() && local.detail !== undefined ? (
                 <span

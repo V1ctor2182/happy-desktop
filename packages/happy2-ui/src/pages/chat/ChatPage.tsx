@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-    AgentStatusLine,
+    AgentWorkingStatus,
     AppShell,
     Banner,
     Button,
@@ -55,7 +55,6 @@ import { ChatAgentCreateDialog } from "./ChatAgentCreateDialog.js";
 import { ChatChannelCreateDialog } from "./ChatChannelCreateDialog.js";
 import { ChatChildChannelCreateDialog } from "./ChatChildChannelCreateDialog.js";
 import { ChatDirectMessageDialog } from "./ChatDirectMessageDialog.js";
-import { ChatMessageEditDialog } from "./ChatMessageEditDialog.js";
 import { ChatInfoPanel } from "./ChatInfoPanel.js";
 import { ChatDocumentPane } from "./ChatDocumentPane.js";
 import { ChatWorkspaceEditor } from "./ChatWorkspaceEditor.js";
@@ -73,7 +72,7 @@ import {
 } from "./chatSidebarModel.js";
 import { chatSharedLinksSectionCreate, sharedLinkUriFromItemId } from "./chatSharedLinksModel.js";
 import { useChatInfoModel } from "./chatInfoModel.js";
-import { chatMessageActionsModelCreate } from "./chatMessageActionsModel.js";
+import { chatMessageReactionModelCreate } from "./chatMessageReactionModel.js";
 import { chatCreationModelCreate, useChatCreateRequest } from "./chatCreationModel.js";
 import { chatChannelModelCreate } from "./chatChannelModel.js";
 import { chatChannelAccessProject } from "./chatChannelAccessModel.js";
@@ -147,12 +146,6 @@ export type ChatPageProps = {
     chatMenuContributions?: ReactNode;
     /** Native plugin composer contribution triggers, shown in the composer toolbar. */
     composerContributions?: ReactNode;
-    /**
-     * Builds the message-menu contribution triggers for one message id. ChatPage
-     * calls it per message row from the same single chat subscription; the app
-     * fans the shared snapshot out to each row and never subscribes per message.
-     */
-    messageContributions?: (messageId: string) => ReactNode;
     /** Saved message viewport for the active conversation. */
     messageListScrollPosition?: MessageListScrollPosition;
     /** Reports the active conversation's message viewport to application-owned cache state. */
@@ -218,8 +211,6 @@ export interface ChatPageActions {
     typingSet(chatId: string, active: boolean): void;
     reactionAdd(chatId: string, messageId: string, emoji: string): Promise<void>;
     reactionRemove(chatId: string, messageId: string, emoji: string): Promise<void>;
-    messageEdit(chatId: string, messageId: string, text: string, revision: number): Promise<void>;
-    messageDelete(chatId: string, messageId: string): Promise<void>;
     chatJoin(chatId: string): Promise<void>;
     chatLeave(chatId: string): Promise<void>;
     chatStarSet(chatId: string, starred: boolean): Promise<void>;
@@ -304,13 +295,6 @@ export function ChatPage(props: ChatPageProps) {
     const [directMessageOpen, setDirectMessageOpen] = useState(false);
     // Every right-panel mode shares AppShell's expanded workspace geometry.
     const [panelExpanded, setPanelExpanded] = useState(false);
-    const [messageEdit, setMessageEdit] = useState<{
-        chatId: string;
-        error?: string;
-        initialText: string;
-        messageId: string;
-        revision: number;
-    }>();
     const [activityNow, setActivityNow] = useState(() => Date.now());
     const pendingSelection = useRef<
         | undefined
@@ -486,20 +470,9 @@ export function ChatPage(props: ChatPageProps) {
             : undefined;
         return chatChannelAccessProject({ chat, directoryUsers: directoryUsers(), parent });
     };
-    const messageActions = chatMessageActionsModelCreate({
-        userId: () => user().id,
+    const messageReactions = chatMessageReactionModelCreate({
         actions: props.actions,
         onError: showError,
-        onEdit: (message) => {
-            const source = message.serverMessage;
-            if (!source) return;
-            setMessageEdit({
-                chatId: source.chatId,
-                initialText: source.text,
-                messageId: source.id,
-                revision: source.revision,
-            });
-        },
     });
     const creationModel = chatCreationModelCreate({
         actions: props.actions,
@@ -572,23 +545,6 @@ export function ChatPage(props: ChatPageProps) {
             props.actions.messageSend(chatId, input.prompt);
             setComposeOpen(false);
         } catch (error) {
-            showError(error);
-        } finally {
-            finishBusy();
-        }
-    }
-    async function messageEditSave(text: string) {
-        const edit = messageEdit;
-        if (!edit) return;
-        startBusy();
-        try {
-            await props.actions.messageEdit(edit.chatId, edit.messageId, text, edit.revision);
-            setMessageEdit(undefined);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Could not edit this message.";
-            setMessageEdit((current) =>
-                current?.messageId === edit.messageId ? { ...current, error: message } : current,
-            );
             showError(error);
         } finally {
             finishBusy();
@@ -1278,14 +1234,11 @@ export function ChatPage(props: ChatPageProps) {
                             ]}
                             messageFooter={((status) =>
                                 status ? (
-                                    <AgentStatusLine
+                                    <AgentWorkingStatus
                                         agents={status.subagentCount}
+                                        backgroundTasks={status.terminalCount}
                                         className="happy2-chat-turn-status"
                                         elapsedMs={status.elapsedMs}
-                                        processes={status.terminalCount}
-                                        status={status.status}
-                                        tokens={status.totalTokens}
-                                        tools={status.tools}
                                     />
                                 ) : undefined)(turnStatus())}
                             messageListScrollPosition={props.messageListScrollPosition}
@@ -1369,16 +1322,6 @@ export function ChatPage(props: ChatPageProps) {
                     )}
                 />
             ) : null}
-            {messageEdit ? (
-                <ChatMessageEditDialog
-                    busy={busy()}
-                    error={messageEdit.error}
-                    initialText={messageEdit.initialText}
-                    key={messageEdit.messageId}
-                    onClose={() => setMessageEdit(undefined)}
-                    onSave={(text) => void messageEditSave(text)}
-                />
-            ) : null}
             {composeOpen ? (
                 <ComposeModal
                     busy={busy()}
@@ -1455,7 +1398,7 @@ export function ChatPage(props: ChatPageProps) {
     ): ReactNode {
         const message = entry.kind === "message" ? entry : undefined;
         // An earlier text block of a turn is a projection of the reply below it,
-        // so attachments, apps, menus, and reactions stay on that one real
+        // so attachments, apps, and reactions stay on that one real
         // message and are not repeated per block.
         const server = message?.turnBlock ? undefined : message?.serverMessage;
         const apps = server?.mcpApps ?? [];
@@ -1490,18 +1433,11 @@ export function ChatPage(props: ChatPageProps) {
                         (message.senderId !== undefined && message.senderId === user()?.id))
                 }
                 images={message && !message.turnBlock ? mediaModel.images(message) : []}
-                menuContributions={server ? props.messageContributions?.(server.id) : undefined}
-                menuItems={
-                    message && !message.turnBlock && !message.agent
-                        ? messageActions.menuItems(message)
-                        : []
-                }
                 profile={message ? infoModel.messageProfile(message) : undefined}
                 onImageOpen={(message, id) => void mediaModel.imageOpen(message, id)}
-                onMenuSelect={(message, action) => void messageActions.menuSelect(message, action)}
                 onProfileOpen={infoModel.open}
                 onReactionSelect={(message, emoji) =>
-                    void messageActions.reactionToggle(message, emoji)
+                    void messageReactions.reactionToggle(message, emoji)
                 }
                 onTraceSelect={(message) => props.chat?.getState().traceToggle(message.id)}
                 traceOpen={message ? traceStepsShown(message, traceProjection()) : false}

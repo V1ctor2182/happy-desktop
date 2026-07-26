@@ -138,6 +138,8 @@ export type ChatTurnStatus = {
     /** The assistant message whose turn this summarizes. */
     messageId: string;
     status: "running" | "complete" | "failed";
+    /** Final assistant text; present only on a settled summary row. */
+    copyText?: string;
     subagentCount: number;
     terminalCount: number;
     totalTokens: number;
@@ -193,6 +195,17 @@ export function afterToolSteps(list: readonly WorkspaceEntry[], index: number): 
     const previous = list[index - 1];
     return list[index]?.kind === "message" && previous?.kind === "traceStep" && previous.tool;
 }
+
+/** Whether this settled footer closes a turn whose trace is currently expanded. */
+function turnStatusAfterTrace(list: readonly WorkspaceEntry[], index: number): boolean {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const entry = list[cursor];
+        if (entry?.kind === "traceStep") return true;
+        if (entry?.kind === "turnStatus") return false;
+        if (entry?.kind === "message" && !entry.agent) return false;
+    }
+    return false;
+}
 /**
  * The layout class for one row's place in the transcript: the identity line that
  * opens a turn owns no body, and prose resuming under a run of tool steps needs
@@ -205,6 +218,10 @@ export function entryLayoutClass(
     const entry = list[index];
     if (entry?.kind === "message" && entry.turnBlock && entry.body.length === 0)
         return "happy2-message--turn-header";
+    if (entry?.kind === "traceStep" && list[index + 1]?.kind !== "traceStep")
+        return "happy2-agent-activity-row--trace-end";
+    if (entry?.kind === "turnStatus" && turnStatusAfterTrace(list, index))
+        return "happy2-turn-status--after-trace";
     return afterToolSteps(list, index) ? "happy2-message--after-trace-steps" : undefined;
 }
 export function messagesGrouped(
@@ -563,6 +580,7 @@ function turnSettledStatus(entry: LiveChatMessage, requestAt?: number): ChatTurn
         conversationId: entry.conversationId,
         messageId: entry.id,
         status: trace.status === "failed" ? "failed" : "complete",
+        copyText: entry.body,
         subagentCount: 0,
         terminalCount: 0,
         totalTokens: trace.totalTokens ?? 0,

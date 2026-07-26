@@ -3,10 +3,8 @@ import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import {
     Children,
     isValidElement,
-    useCallback,
     useLayoutEffect,
     useRef,
-    useState,
     type CSSProperties,
     type HTMLAttributes,
     type ReactNode,
@@ -15,11 +13,8 @@ import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
 import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
-import { Button } from "./Button";
-import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
-import { Menu, type MenuItem } from "./Menu";
 export type MessageSegment =
     | {
           kind: "text";
@@ -127,8 +122,6 @@ function MessageMediaItem(props: {
 }
 export type MessageDeliveryState = "failed" | "sending" | "sent";
 export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
-    /** Keeps a backed toolbar visible without hover (controlled/blueprint state). */
-    actionsVisible?: boolean;
     /** Author is an agent → accent AGENT badge next to the name. */
     agent?: boolean;
     /**
@@ -171,16 +164,7 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      *  follow-ups intentionally carry no profile affordance. */
     onAuthorSelect?: () => void;
     initials?: string;
-    /** Real actions for the overflow menu. No menu button renders when empty. */
-    menuItems?: MenuItem[];
-    onMenuSelect?: (id: string) => void;
-    /**
-     * Native plugin message-menu contribution triggers rendered in the hover
-     * action toolbar, supplied by the application (each owns its own invocation
-     * state). Message-scoped, so the app binds each to this message's id.
-     */
-    contributions?: ReactNode;
-    onReactionAdd?: () => void;
+    /** Selects one of the existing reaction chips rendered below the message. */
     onReactionSelect?: (emoji: string) => void;
     /**
      * The viewer's own outgoing message. Renders as a right-aligned accent
@@ -190,8 +174,6 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      */
     own?: boolean;
     reactions?: MessageReaction[];
-    /** Emoji available in the hover reaction picker. IDs are passed to `onReactionSelect`. */
-    reactionOptions?: EmojiItem[];
     style?: CSSProperties;
     /**
      * Rendered send time. Optional because a producer may genuinely have none
@@ -247,7 +229,6 @@ function hasRenderableChild(value: ReactNode): boolean {
 export function Message(props: MessageProps) {
     const [local, rest] = partitionComponentProps(props, [
         "agent",
-        "actionsVisible",
         "audienceLabel",
         "automated",
         "author",
@@ -255,7 +236,6 @@ export function Message(props: MessageProps) {
         "children",
         "className",
         "compact",
-        "contributions",
         "deliveryState",
         "generationStatus",
         "grouped",
@@ -264,25 +244,16 @@ export function Message(props: MessageProps) {
         "images",
         "onImageOpen",
         "initials",
-        "menuItems",
         "metaAccessory",
         "onAuthorSelect",
-        "onMenuSelect",
-        "onReactionAdd",
         "onReactionSelect",
         "own",
         "reactions",
-        "reactionOptions",
         "style",
         "time",
         "tone",
     ]);
     const attachments = local.children;
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [reactionOpen, setReactionOpen] = useState(false);
-    const [reactionQuery, setReactionQuery] = useState("");
-    const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
-    const root = useRef<HTMLDivElement>(null);
     const body = useRef<HTMLDivElement>(null);
     const generationMarker = useRef<HTMLSpanElement>(null);
     const segments = (): MessageSegment[] =>
@@ -290,17 +261,14 @@ export function Message(props: MessageProps) {
     const isMarkdownBody = () => typeof local.body === "string";
     /* A string body renders as Markdown; recompiles only when the streamed text
        changes, so an in-place stream tick reuses the surrounding row and swaps
-       just the body nodes. Generation status drives the caret/marker below, not
-       the Markdown output. */
+       just the body nodes. Generation status stays outside the Markdown output. */
     const markdownBody = typeof local.body === "string" ? renderMessageMarkdown(local.body) : null;
     const hasAttachments = () => hasRenderableChild(attachments);
     const grouped = () => local.grouped || local.compact;
     const showIncomingIdentity = () => !local.own && !grouped();
-    /* A grouped follow-up still needs its meta row when it carries an accessory —
-       the trace control of a turn lives there — but the run's identity was
-       already established by the message that opened it, so the row holds the
-       accessory alone: no avatar, no repeated name, no second timestamp. */
-    const showIncomingMeta = () => !local.own && (!grouped() || Boolean(local.metaAccessory));
+    /* The leading incoming message owns the author line. Grouped follow-ups keep
+       their hover metadata inline after the body instead of repeating identity. */
+    const showIncomingMeta = () => !local.own && !grouped();
     const authorActionLabel = () => `View ${local.author}’s profile`;
     const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
     const renderAvatar = (size: AvatarSize) => (
@@ -327,86 +295,9 @@ export function Message(props: MessageProps) {
             <span className="happy2-message__avatar-dangling">{renderAvatar("xs")}</span>
         );
     const deliveryState = () => local.deliveryState ?? "sent";
-    const hasReactionAction = () =>
-        Boolean(local.onReactionAdd) ||
-        Boolean(local.onReactionSelect && local.reactionOptions?.length);
-    const hasMenuAction = () =>
-        Boolean(local.onMenuSelect) &&
-        Boolean(local.menuItems?.some((item) => item.kind === "item"));
-    const hasContributions = () => hasRenderableChild(local.contributions);
-    const hasActions = () =>
-        deliveryState() !== "sending" &&
-        (hasReactionAction() || hasMenuAction() || hasContributions());
-    const filteredReactionOptions = () => {
-        const query = reactionQuery.trim().toLocaleLowerCase();
-        if (!query) return local.reactionOptions ?? [];
-        return (local.reactionOptions ?? []).filter((emoji) =>
-            emoji.name.toLocaleLowerCase().includes(query),
-        );
-    };
-    const menuOpenSet = (open: boolean) => {
-        setMenuOpen(open);
-    };
-    const reactionOpenSet = (open: boolean) => {
-        setReactionOpen(open);
-    };
-    const closePopovers = useCallback(() => {
-        menuOpenSet(false);
-        reactionOpenSet(false);
-    }, []);
-    const menuHeight = () =>
-        12 +
-        (local.menuItems ?? []).reduce((height, item) => {
-            if (item.kind === "item") return height + 32;
-            if (item.kind === "label") return height + 24;
-            return height + 11;
-        }, 0);
-    const placePopover = (width: number, height: number) => {
-        const bounds = root.current?.getBoundingClientRect();
-        if (!bounds) return;
-        const edge = 8;
-        const left = Math.max(edge, Math.min(bounds.right - 20 - width, innerWidth - width - edge));
-        const below = bounds.top + 40;
-        const above = bounds.top - height - 4;
-        const top =
-            below + height <= innerHeight - edge
-                ? below
-                : above >= edge
-                  ? above
-                  : Math.max(edge, innerHeight - height - edge);
-        setPopoverStyle({ left: `${Math.round(left)}px`, top: `${Math.round(top)}px` });
-    };
-    const toggleReactionPicker = () => {
-        menuOpenSet(false);
-        if (local.reactionOptions?.length) {
-            placePopover(234, 62 + Math.ceil(local.reactionOptions.length / 6) * 36);
-            setReactionOpen((open) => !open);
-            setReactionQuery("");
-        }
-        local.onReactionAdd?.();
-    };
-    useLayoutEffect(() => {
-        if (!menuOpen && !reactionOpen) return;
-        const onPointerDown = (event: PointerEvent) => {
-            if (!root.current?.contains(event.target as Node)) {
-                closePopovers();
-            }
-        };
-        const onViewportChange = () => {
-            closePopovers();
-        };
-        document.addEventListener("pointerdown", onPointerDown);
-        document.addEventListener("scroll", onViewportChange, true);
-        window.addEventListener("resize", onViewportChange);
-        return () => {
-            document.removeEventListener("pointerdown", onPointerDown);
-            document.removeEventListener("scroll", onViewportChange, true);
-            window.removeEventListener("resize", onViewportChange);
-        };
-    }, [closePopovers, menuOpen, reactionOpen]);
-    /* The live cursor is painted at the end of the final rendered text run. It
-       stays absolutely positioned so neither a generation-state update nor a
-       streamed text tick can alter the message's flow geometry. */
+    /* A failed-generation marker is painted at the end of the final rendered
+       text run. It stays absolutely positioned so settling cannot alter the
+       message's flow geometry. Streaming itself has no typing marker. */
     useLayoutEffect(() => {
         const bodyElement = body.current;
         const marker = generationMarker.current;
@@ -453,6 +344,46 @@ export function Message(props: MessageProps) {
                 <AutomatedTag />
             </span>
         ) : null;
+    const renderIncomingHoverMeta = (placement: "header" | "inline", leadingSeparator = false) =>
+        !local.own && (local.metaAccessory || local.time) ? (
+            <span
+                className="happy2-message__hover-meta"
+                data-happy2-ui="message-hover-meta"
+                data-has-accessory={local.metaAccessory ? "" : undefined}
+                data-placement={placement}
+            >
+                {leadingSeparator ? (
+                    <span
+                        aria-hidden="true"
+                        className="happy2-message__meta-separator"
+                        data-happy2-ui="message-meta-separator"
+                    />
+                ) : null}
+                {local.metaAccessory ? (
+                    <span
+                        className="happy2-message__meta-accessory"
+                        data-happy2-ui="message-meta-accessory"
+                    >
+                        {local.metaAccessory}
+                    </span>
+                ) : null}
+                {local.metaAccessory && local.time ? (
+                    <span
+                        aria-hidden="true"
+                        className="happy2-message__meta-separator"
+                        data-happy2-ui="message-meta-separator"
+                    />
+                ) : null}
+                {local.time ? (
+                    <span className="happy2-message__time" data-happy2-ui="message-time">
+                        <span data-happy2-ui="message-time-label">{local.time}</span>
+                    </span>
+                ) : null}
+            </span>
+        ) : null;
+    const inlineIncomingHoverMeta = showIncomingIdentity()
+        ? null
+        : renderIncomingHoverMeta("inline");
     const bodyNode =
         !local.body && local.generationStatus === undefined ? null : isMarkdownBody() ? (
             <div
@@ -463,30 +394,28 @@ export function Message(props: MessageProps) {
             >
                 {ownAutomatedLine}
                 {markdownBody}
+                {inlineIncomingHoverMeta ? (
+                    <>
+                        {"\u00a0"}
+                        {inlineIncomingHoverMeta}
+                    </>
+                ) : null}
                 {/* An empty generated reply keeps a non-breaking-space line box
-                    after completion. The visible stream cursor can therefore
-                    disappear without collapsing the message row. */}
+                    so generation-state changes cannot collapse the message row. */}
                 {!local.body && local.generationStatus !== undefined ? (
                     <p aria-hidden="true" className="happy2-message__generation-anchor">
                         {"\u00a0"}
                     </p>
                 ) : null}
-                {local.generationStatus === "streaming" || local.generationStatus === "failed" ? (
+                {local.generationStatus === "failed" ? (
                     <span
-                        aria-hidden={local.generationStatus === "failed" ? undefined : true}
-                        aria-label={
-                            local.generationStatus === "failed" ? "Generation failed" : undefined
-                        }
+                        aria-label="Generation failed"
                         className="happy2-message__generation-marker"
                         data-empty={!local.body ? "" : undefined}
-                        data-generation-marker={local.generationStatus}
-                        data-happy2-ui={
-                            local.generationStatus === "streaming"
-                                ? "message-stream-caret"
-                                : "message-generation-failed"
-                        }
+                        data-generation-marker="failed"
+                        data-happy2-ui="message-generation-failed"
                         ref={generationMarker}
-                        role={local.generationStatus === "failed" ? "img" : undefined}
+                        role="img"
                     />
                 ) : null}
             </div>
@@ -496,6 +425,12 @@ export function Message(props: MessageProps) {
                 {segments().map((segment, index) => (
                     <span key={`${segment.kind}-${index}`}>{renderSegment(segment)}</span>
                 ))}
+                {inlineIncomingHoverMeta ? (
+                    <>
+                        {"\u00a0"}
+                        {inlineIncomingHoverMeta}
+                    </>
+                ) : null}
             </div>
         );
     // An own attachment/image-only automated message still needs the durable
@@ -505,6 +440,12 @@ export function Message(props: MessageProps) {
         local.own &&
         (bodyNode !== null ||
             (local.automated && (Boolean(local.images?.length) || hasAttachments())));
+    const groupedIncomingLine =
+        !local.own && grouped() && bodyNode !== null ? (
+            <div className="happy2-message__incoming-line" data-happy2-ui="message-incoming-line">
+                {bodyNode}
+            </div>
+        ) : null;
     const incomingMeta = showIncomingMeta() ? (
         <div className="happy2-message__meta" data-happy2-ui="message-meta">
             {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
@@ -515,31 +456,28 @@ export function Message(props: MessageProps) {
                     onClick={() => local.onAuthorSelect?.()}
                     type="button"
                 >
-                    {local.author}
+                    <span data-happy2-ui="message-author-label">{local.author}</span>
                 </button>
             ) : (
                 <span className="happy2-message__author" data-happy2-ui="message-author">
-                    {local.author}
+                    <span data-happy2-ui="message-author-label">{local.author}</span>
                 </span>
             )}
             {local.automated && showIncomingIdentity() ? (
-                <span className="happy2-message__automated" data-happy2-ui="message-automated">
-                    <AutomatedTag />
-                </span>
+                <>
+                    <span
+                        aria-hidden="true"
+                        className="happy2-message__meta-separator"
+                        data-happy2-ui="message-meta-separator"
+                    />
+                    <span className="happy2-message__automated" data-happy2-ui="message-automated">
+                        <AutomatedTag />
+                    </span>
+                </>
             ) : null}
-            {local.metaAccessory ? (
-                <span
-                    className="happy2-message__meta-accessory"
-                    data-happy2-ui="message-meta-accessory"
-                >
-                    {local.metaAccessory}
-                </span>
-            ) : null}
-            {showIncomingIdentity() ? (
-                <span className="happy2-message__time" data-happy2-ui="message-time">
-                    {local.time ?? ""}
-                </span>
-            ) : null}
+            {showIncomingIdentity() && (local.metaAccessory || local.time)
+                ? renderIncomingHoverMeta("header", true)
+                : null}
         </div>
     ) : null;
     return (
@@ -548,12 +486,10 @@ export function Message(props: MessageProps) {
             className={["happy2-message", local.className].filter(Boolean).join(" ")}
             data-agent={local.agent ? "" : undefined}
             data-own={local.own ? "" : undefined}
-            data-actions-visible={local.actionsVisible ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
             data-grouped={grouped() ? "" : undefined}
-            data-has-actions={hasActions() ? "" : undefined}
             data-has-body={local.body ? "" : undefined}
             data-happy2-ui="message"
             aria-busy={
@@ -561,10 +497,6 @@ export function Message(props: MessageProps) {
                     ? "true"
                     : undefined
             }
-            onKeyDown={(event) => {
-                if (event.key === "Escape") closePopovers();
-            }}
-            ref={root}
             style={local.style}
         >
             <div className="happy2-message__gutter" data-happy2-ui="message-gutter">
@@ -599,7 +531,7 @@ export function Message(props: MessageProps) {
                         {bodyNode}
                     </div>
                 ) : (
-                    bodyNode
+                    (groupedIncomingLine ?? bodyNode)
                 )}
                 {local.images && local.images.length > 0 ? (
                     <div
@@ -636,102 +568,9 @@ export function Message(props: MessageProps) {
                                 key={`${reaction.emoji}-${index}`}
                             />
                         ))}
-                        {hasReactionAction() ? (
-                            <button
-                                aria-expanded={reactionOpen}
-                                aria-haspopup={local.reactionOptions?.length ? "dialog" : undefined}
-                                aria-label="Add reaction"
-                                className="happy2-message__react-add"
-                                data-happy2-ui="message-react-add"
-                                onClick={toggleReactionPicker}
-                                type="button"
-                            >
-                                <Icon name="smile" size={14} />
-                            </button>
-                        ) : null}
                     </div>
                 ) : null}
             </div>
-            {hasActions() ? (
-                <>
-                    <div className="happy2-message__actions" data-happy2-ui="message-actions">
-                        {hasReactionAction() ? (
-                            <Button
-                                aria-expanded={reactionOpen}
-                                aria-haspopup={local.reactionOptions?.length ? "dialog" : undefined}
-                                aria-label="Add reaction"
-                                className="happy2-message__action"
-                                icon="smile"
-                                iconOnly
-                                onClick={toggleReactionPicker}
-                                size="small"
-                                variant="ghost"
-                            />
-                        ) : null}
-                        {hasMenuAction() ? (
-                            <Button
-                                aria-expanded={menuOpen}
-                                aria-haspopup="menu"
-                                aria-label="More message actions"
-                                className="happy2-message__action"
-                                icon="more"
-                                iconOnly
-                                onClick={() => {
-                                    reactionOpenSet(false);
-                                    placePopover(196, menuHeight());
-                                    menuOpenSet(!menuOpen);
-                                }}
-                                size="small"
-                                variant="ghost"
-                            />
-                        ) : null}
-                        {hasContributions() ? (
-                            <span
-                                className="happy2-message__contributions"
-                                data-happy2-ui="message-contributions"
-                            >
-                                {local.contributions}
-                            </span>
-                        ) : null}
-                    </div>
-                    {reactionOpen && local.reactionOptions?.length ? (
-                        <div
-                            className="happy2-message__popover happy2-message__popover--reaction"
-                            data-happy2-ui="message-reaction-popover"
-                            style={popoverStyle}
-                        >
-                            <EmojiPicker
-                                columns={6}
-                                emoji={filteredReactionOptions()}
-                                onQueryChange={setReactionQuery}
-                                onSelect={(id) => {
-                                    local.onReactionSelect?.(id);
-                                    closePopovers();
-                                }}
-                                query={reactionQuery}
-                            />
-                        </div>
-                    ) : null}
-                    {menuOpen && local.menuItems
-                        ? ((items) => (
-                              <div
-                                  className="happy2-message__popover happy2-message__popover--menu"
-                                  data-happy2-ui="message-menu-popover"
-                                  style={popoverStyle}
-                              >
-                                  <Menu
-                                      items={items}
-                                      onSelect={(id) => {
-                                          local.onMenuSelect?.(id);
-                                          closePopovers();
-                                      }}
-                                      width={196}
-                                  />
-                              </div>
-                          ))(menuOpen && local.menuItems)
-                        : null}
-                </>
-            ) : null}
         </div>
     );
 }

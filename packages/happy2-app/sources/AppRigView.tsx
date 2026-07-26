@@ -30,7 +30,7 @@ import type {
     RigWorkspaceStore,
     RigWorktreeId,
 } from "happy2-state";
-import { rigOwnerAuthor, rigWindowStoreNoop } from "happy2-state";
+import { rigAgentAuthor, rigOwnerAuthor, rigWindowStoreNoop } from "happy2-state";
 import {
     AppShell,
     Banner,
@@ -655,6 +655,7 @@ export function AppRigView(props: AppRigViewProps) {
                         // project or worktree to type into never leaves an empty
                         // session behind.
                         <ConversationView
+                            agentAuthor={rigAgentAuthor}
                             composer={workspace.groupComposer}
                             composerPlaceholder="Message Happy…"
                             entries={NO_ENTRIES}
@@ -1004,6 +1005,7 @@ function RigConversationSurface(props: {
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
     return (
         <ConversationView
+            agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
             composerPlaceholder="Message Happy…"
             conversationId={conversation.conversationId}
@@ -1104,6 +1106,10 @@ function RigConversationSurface(props: {
             queued={conversation.queuedMessages}
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
+            runningAgents={
+                conversation.subagents.filter((subagent) => subagent.status === "running").length
+            }
+            backgroundTasks={conversation.backgroundProcesses.length}
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             viewerId={rigOwnerAuthor.id}
         />

@@ -67,7 +67,6 @@ export function MessagePage() {
                                 tone="amber"
                             />
                             <Message
-                                actionsVisible
                                 author="Steve"
                                 body="On it — publishing in five."
                                 own
@@ -114,7 +113,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="Accent AGENT badge · agent avatar (rounded square) · reactions + ghost add · reply affordance"
+                detail="Accent AGENT badge · agent avatar (rounded square) · existing reactions"
                 label="Message — agent author with reactions"
                 number="02"
                 stage="app"
@@ -125,7 +124,6 @@ export function MessagePage() {
                         author="Codex"
                         body="Fix is up — moved token registration behind the handshake promise and added a cold-start retry."
                         initials="CX"
-                        onReactionAdd={() => {}}
                         reactions={[
                             { count: 3, emoji: "🎉" },
                             { count: 2, emoji: "🚀" },
@@ -274,14 +272,12 @@ export function MessagePage() {
                             tone="ember"
                         />
                         <Message
-                            actionsVisible
                             grouped
                             author="Claude"
                             body="Handing the fix to Codex and I'll draft release notes in parallel."
                             time="10:44"
                         />
                         <Message
-                            actionsVisible
                             grouped
                             author="Claude"
                             body={[
@@ -292,34 +288,6 @@ export function MessagePage() {
                             time="10:44"
                         />
                     </>,
-                )}
-            </Specimen>
-
-            <Specimen
-                detail="Hover/focus toolbar · reaction picker trigger · real supplied overflow actions"
-                label="Message — hover actions"
-                number="06"
-                stage="app"
-            >
-                {channelFrame(
-                    <Message
-                        actionsVisible
-                        author="Sasha K."
-                        body="Review is green. I left one note on the retry boundary."
-                        menuItems={[
-                            { kind: "item", id: "copy-link", icon: "link", label: "Copy link" },
-                            { kind: "item", id: "edit", icon: "edit", label: "Edit message" },
-                        ]}
-                        onMenuSelect={() => {}}
-                        onReactionSelect={() => {}}
-                        reactionOptions={[
-                            { char: "👍", id: "👍", name: "Thumbs up" },
-                            { char: "🎉", id: "🎉", name: "Celebrate" },
-                            { char: "✅", id: "✅", name: "Done" },
-                        ]}
-                        time="10:55"
-                        tone="ocean"
-                    />,
                 )}
             </Specimen>
 

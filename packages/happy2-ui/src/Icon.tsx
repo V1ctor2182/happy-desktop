@@ -16,6 +16,7 @@ export type IconName =
     | "send"
     | "check"
     | "check-circle"
+    | "copy"
     | "chevron-down"
     | "chevron-right"
     | "close"
@@ -107,6 +108,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     send: { set: "ionicons", name: "paper-plane-outline" },
     check: { set: "ionicons", name: "checkmark-outline" },
     "check-circle": { set: "ionicons", name: "checkmark-circle-outline" },
+    copy: { set: "ionicons", name: "copy-outline" },
     "chevron-down": { set: "ionicons", name: "chevron-down-outline" },
     "chevron-right": { set: "ionicons", name: "chevron-forward-outline" },
     close: { set: "ionicons", name: "close-outline" },

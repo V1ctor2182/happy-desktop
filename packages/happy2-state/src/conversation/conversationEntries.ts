@@ -118,9 +118,9 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
     if (left.kind === "turnStatus" && right.kind === "turnStatus")
         return (
             left.status === right.status &&
+            left.copyText === right.copyText &&
             left.durationMs === right.durationMs &&
-            left.tools === right.tools &&
-            left.tokens === right.tokens
+            left.tools === right.tools
         );
     return false;
 }

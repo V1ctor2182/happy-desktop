@@ -68,9 +68,14 @@ export function chatRowHeight(
     if (entry.kind === "divider") return DIVIDER_HEIGHT;
     if (entry.kind === "notice") return noticeRowHeight(entry.text, width, "center");
     if (entry.kind === "steering") return steeringNoticeRowHeight(entry.text, entry.quote, width);
-    if (entry.kind === "traceStep") return conversationActivityHeight(entry.activity.kind);
-    /* 12px margin above the 24px status line — the gap after the last message. */
-    if (entry.kind === "turnStatus") return 36;
+    if (entry.kind === "traceStep") {
+        const height = conversationActivityHeight(entry.activity.kind);
+        return height === undefined
+            ? undefined
+            : height + (entries[index + 1]?.kind === "traceStep" ? 0 : 8);
+    }
+    /* Message-sized settled footer with no extra vertical separation. */
+    if (entry.kind === "turnStatus") return 32;
     if (context.hasAppNodes(entry)) return undefined;
     const own = !entry.agent && (entry.own || entry.senderId === context.viewerId);
     const treatment: MessageTreatment = entry.agent ? "agent" : own ? "own" : "incoming";

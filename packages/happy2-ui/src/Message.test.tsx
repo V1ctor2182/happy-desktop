@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import "./styles.css";
 import { expect, it } from "vitest";
 import { FileAttachment } from "./FileAttachment";
+import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, MessageList, SystemNotice } from "./Message";
 import { happyLogoUrl } from "./assets";
 import { assertParallelRoundedCorners, createRenderer, type RenderedElement } from "./testing";
@@ -60,6 +61,178 @@ async function glyphVsBox(part: () => RenderedElement<Element>) {
         dy: glyph.center.y - bounds.height / 2,
     };
 }
+
+it("aligns named agent header metadata to one browser-laid-out baseline", async () => {
+    const view = createRenderer().render(
+        () =>
+            stage(
+                "agent-header-alignment",
+                <>
+                    <style>
+                        {`[data-testid="agent-header-alignment"] [data-happy2-ui="message-hover-meta"] { opacity: 1; }`}
+                    </style>
+                    <Message
+                        agent
+                        author="Happy"
+                        body="Correct—the Blueprint had frozen frames."
+                        metaAccessory={
+                            <AgentTraceRow
+                                entryCount={12}
+                                onOpen={() => undefined}
+                                status="complete"
+                                toggles
+                                toolCallCount={12}
+                                variant="meta"
+                            />
+                        }
+                        time="3:00 PM"
+                    />
+                </>,
+            ),
+        { width: 720, height: 120, padding: 16 },
+    );
+    await view.ready();
+    const parts = [
+        view.$('[data-happy2-ui="message-author-label"]'),
+        view.$('[data-happy2-ui="agent-trace-row-title-label"]'),
+        view.$('[data-happy2-ui="agent-trace-row-meta-stats-label"]'),
+        view.$('[data-happy2-ui="message-time-label"]'),
+    ];
+    const baselines = parts.map((part) => part.textMetrics().baseline.fromSurfaceTop);
+    expect(
+        Math.max(...baselines) - Math.min(...baselines),
+        `author/title/stats/time baselines: ${baselines.join(", ")}`,
+    ).toBeLessThanOrEqual(0.1);
+    const meta = view.$('[data-happy2-ui="message-meta"]').bounds();
+    const separators = [
+        view.$(
+            '[data-happy2-ui="message-hover-meta"] > [data-happy2-ui="message-meta-separator"]:first-child',
+        ),
+        view.$(
+            '[data-happy2-ui="agent-trace-row"] [data-happy2-ui="agent-trace-row-meta-separator"]',
+        ),
+        view.$(
+            '[data-happy2-ui="message-hover-meta"] > [data-happy2-ui="message-meta-separator"]:not(:first-child)',
+        ),
+    ];
+    const separatorBounds = separators.map((separator) => separator.bounds());
+    expect(
+        separators.map((separator) =>
+            separator.computedStyles([
+                "background-color",
+                "border-radius",
+                "transition-duration",
+                "transition-property",
+            ]),
+        ),
+    ).toEqual([
+        {
+            "background-color": "rgb(153, 153, 153)",
+            "border-radius": "999px",
+            "transition-duration": "0s",
+            "transition-property": "all",
+        },
+        {
+            "background-color": "rgb(153, 153, 153)",
+            "border-radius": "999px",
+            "transition-duration": "0s",
+            "transition-property": "all",
+        },
+        {
+            "background-color": "rgb(153, 153, 153)",
+            "border-radius": "999px",
+            "transition-duration": "0s",
+            "transition-property": "all",
+        },
+    ]);
+    expect(
+        view
+            .$('[data-happy2-ui="message-hover-meta"]')
+            .computedStyles(["transition-duration", "transition-property"]),
+    ).toEqual({
+        "transition-duration": "0.1s",
+        "transition-property": "opacity",
+    });
+    const separatorCenters = separatorBounds.map(
+        (separator) => separator.y - meta.y + separator.height / 2,
+    );
+    expect(
+        Math.max(...separatorCenters) - Math.min(...separatorCenters),
+        `separator DOM centers: ${separatorCenters.join(", ")}`,
+    ).toBeLessThanOrEqual(0.5);
+    const separatorInkCenters = await Promise.all(
+        separators.map(async (separator) => {
+            const bounds = separator.bounds();
+            const ink = await separator.visibleMetrics();
+            expect(ink.pixelCount, "separator pixels").toBeGreaterThan(0);
+            return bounds.y - meta.y + ink.center.y;
+        }),
+    );
+    expect(
+        Math.abs(separatorInkCenters[0]! - separatorInkCenters[1]!),
+        `first/trace separator painted centers: ${separatorInkCenters.join(", ")}`,
+    ).toBeLessThanOrEqual(0.05);
+    expect(
+        Math.max(...separatorInkCenters) - Math.min(...separatorInkCenters),
+        `all separator painted centers: ${separatorInkCenters.join(", ")}`,
+    ).toBeLessThanOrEqual(0.3);
+    for (const separator of separatorBounds) {
+        expect(separator.width).toBe(2);
+        expect(separator.height).toBe(2);
+    }
+    await view.screenshot("Message.header-alignment.test");
+}, 120000);
+
+it("keeps an inline timestamp attached to the final message text with a non-breaking space", async () => {
+    const view = createRenderer().render(
+        () =>
+            stage(
+                "inline-time-wrap",
+                <>
+                    <style>
+                        {`[data-testid="inline-time-wrap"] [data-happy2-ui="message-hover-meta"] { opacity: 1; }`}
+                    </style>
+                    <Message
+                        agent
+                        author="Rig"
+                        body="Alpha beta gamma delta epsilon zeta eta finalword"
+                        compact
+                        time="4:02 PM"
+                    />
+                </>,
+            ),
+        { width: 420, height: 120 },
+    );
+    await view.ready();
+
+    const body = view.$('[data-happy2-ui="message-body"]');
+    const hoverMeta = view.$('[data-happy2-ui="message-hover-meta"]');
+    const boundary = hoverMeta.element.previousSibling;
+    expect(boundary?.nodeType, "timestamp boundary is a text node").toBe(Node.TEXT_NODE);
+    expect(boundary?.textContent, "timestamp boundary is non-breaking").toBe("\u00a0");
+
+    const paragraph = body.element.querySelector("p");
+    expect(paragraph).not.toBeNull();
+    const text = paragraph!.firstChild;
+    expect(text?.nodeType).toBe(Node.TEXT_NODE);
+    const finalWordStart = text!.textContent!.lastIndexOf("finalword");
+    expect(finalWordStart).toBeGreaterThanOrEqual(0);
+    const finalWord = document.createRange();
+    finalWord.setStart(text!, finalWordStart);
+    finalWord.setEnd(text!, text!.textContent!.length);
+    const finalWordRect = finalWord.getBoundingClientRect();
+    const timeRect = view
+        .$('[data-happy2-ui="message-time-label"]')
+        .element.getBoundingClientRect();
+
+    expect(
+        Math.min(finalWordRect.bottom, timeRect.bottom) - Math.max(finalWordRect.top, timeRect.top),
+        "final word and timestamp share one rendered line",
+    ).toBeGreaterThan(0);
+    expect(timeRect.x, "timestamp follows the final word").toBeGreaterThan(finalWordRect.right);
+    await view.screenshot("Message.inline-time-wrap.test");
+}, 120000);
+
 it("does not render audience routing labels in the message header", async () => {
     const view = createRenderer()
         .render(
@@ -321,7 +494,6 @@ it("keeps automated attribution on own image-only and attachment-only messages",
 it("holds Message anatomy, segment styling, and affordances", async () => {
     const view = createRenderer();
     const selectedEmoji: string[] = [];
-    let adds = 0;
     view.render(
         () =>
             stage(
@@ -338,7 +510,6 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
                         { kind: "text", text: "?" },
                     ]}
                     onReactionSelect={(emoji) => selectedEmoji.push(emoji)}
-                    onReactionAdd={() => (adds += 1)}
                     reactions={[
                         { count: 1, emoji: "👍" },
                         { active: true, count: 12, emoji: "🎉" },
@@ -383,7 +554,6 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
             stage(
                 "m3",
                 <Message
-                    actionsVisible
                     compact
                     author="Claude"
                     body={[
@@ -607,24 +777,8 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
         Math.abs(chipC.bounds().x - (chipB.bounds().x + chipB.bounds().width) - 6),
     ).toBeLessThanOrEqual(0.001);
     expect(chipB.element.getAttribute("aria-pressed")).toBe("true");
-    const addButton = view.$('[data-testid="m1"] [data-happy2-ui="message-react-add"]');
-    expect(addButton.element.tagName).toBe("BUTTON");
-    expect(addButton.bounds().width).toBe(24);
-    expect(addButton.bounds().height).toBe(24);
-    expect(addButton.bounds().y).toBe(chipA.bounds().y);
-    expect(addButton.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgba(0, 0, 0, 0)",
-        "border-radius": "999px",
-        color: "rgb(73, 69, 79)",
-    });
-    const addIcon = await view
-        .$('[data-testid="m1"] [data-happy2-ui="message-react-add"] [data-happy2-ui="icon"]')
-        .visibleMetrics();
-    expect(addIcon.pixelCount).toBeGreaterThan(0);
     (chipA.element as HTMLButtonElement).click();
-    (addButton.element as HTMLButtonElement).click();
     expect(selectedEmoji).toEqual(["👍"]);
-    expect(adds).toBe(1);
     /* ---- Attachment slot -------------------------------------------------- */
     const m2Body = view.$('[data-testid="m2"] [data-happy2-ui="message-body"]');
     const attachments = view.$('[data-testid="m2"] [data-happy2-ui="message-attachments"]');
@@ -828,203 +982,6 @@ it("keeps file attachments intrinsic inside the full-width attachment slot", asy
         content.bounds().width,
     );
 });
-it("exposes real hover actions and keeps grouped sending geometry stable", async () => {
-    const view = createRenderer();
-    const reactions: string[] = [];
-    const menuSelections: string[] = [];
-    const messageMenu = [
-        { kind: "item" as const, id: "copy-link", icon: "link" as const, label: "Copy link" },
-        { kind: "item" as const, id: "edit", icon: "edit" as const, label: "Edit message" },
-    ];
-    const reactionOptions = [
-        { char: "👍", id: "👍", name: "Thumbs up" },
-        { char: "🎉", id: "🎉", name: "Celebrate" },
-        { char: "✅", id: "✅", name: "Done" },
-    ];
-    view.render(
-        () =>
-            stage(
-                "actions",
-                <Message
-                    actionsVisible
-                    author="Sasha K."
-                    body="Review is green."
-                    menuItems={messageMenu}
-                    onMenuSelect={(id) => menuSelections.push(id)}
-                    onReactionSelect={(id) => reactions.push(id)}
-                    reactionOptions={reactionOptions}
-                    time="10:55"
-                    tone="ocean"
-                />,
-            ),
-        { width: 560, height: 260 },
-    );
-    view.render(
-        () =>
-            stage(
-                "actionless",
-                <Message
-                    author="Sasha K."
-                    body="No handlers means no controls."
-                    menuItems={messageMenu}
-                    reactionOptions={reactionOptions}
-                    time="10:56"
-                />,
-            ),
-        { width: 560, height: 70 },
-    );
-    view.render(
-        () =>
-            stage(
-                "grouped-sent",
-                <Message
-                    author="Maya Johnson"
-                    body="Waiting for acknowledgement."
-                    grouped
-                    time="11:03"
-                />,
-            ),
-        { width: 560, height: 48 },
-    );
-    view.render(
-        () =>
-            stage(
-                "grouped-sending",
-                <Message
-                    author="Maya Johnson"
-                    body="Waiting for acknowledgement."
-                    deliveryState="sending"
-                    grouped
-                    time="11:03"
-                />,
-            ),
-        { width: 560, height: 48 },
-    );
-    await view.ready();
-    /* A message only exposes controls backed by callbacks and supplied data. */
-    expect(
-        view.container.querySelector(
-            '[data-testid="actionless"] [data-happy2-ui="message-actions"]',
-        ),
-    ).toBeNull();
-    const toolbar = view.$('[data-testid="actions"] [data-happy2-ui="message-actions"]');
-    expect(toolbar.bounds()).toEqual({ x: 478, y: 4, width: 62, height: 34 });
-    expect(
-        toolbar.computedStyles([
-            "background-color",
-            "border-radius",
-            "display",
-            "opacity",
-            "padding-bottom",
-            "padding-left",
-            "padding-right",
-            "padding-top",
-            "pointer-events",
-            "position",
-        ]),
-    ).toEqual({
-        "background-color": "rgb(240, 240, 242)",
-        "border-radius": "6px",
-        display: "flex",
-        opacity: "1",
-        "padding-bottom": "2px",
-        "padding-left": "2px",
-        "padding-right": "2px",
-        "padding-top": "2px",
-        "pointer-events": "auto",
-        position: "absolute",
-    });
-    const actionButtons = toolbar.element.querySelectorAll<HTMLButtonElement>(
-        '[data-happy2-ui="button"]',
-    );
-    expect(actionButtons.length).toBe(2);
-    expect(Array.from(actionButtons, (button) => button.getAttribute("aria-label"))).toEqual([
-        "Add reaction",
-        "More message actions",
-    ]);
-    for (const button of actionButtons) {
-        expect(button.getBoundingClientRect().width).toBe(28);
-        expect(button.getBoundingClientRect().height).toBe(28);
-    }
-    /* The picker/menu popovers perform actual selections. */
-    actionButtons[1]?.click();
-    actionButtons[0]?.click();
-    await nextFrame();
-    const picker = view.$('[data-testid="actions"] [data-happy2-ui="emoji-picker"]');
-    assertParallelRoundedCorners(view.container);
-    expect(picker.bounds().width).toBe(234);
-    expect(picker.bounds().y).toBe(40);
-    expect(actionButtons[0]?.getAttribute("aria-expanded")).toBe("true");
-    await view.screenshot("MessageReactionPicker.test");
-    const celebrate = view.$('[data-testid="actions"] [data-emoji-id="🎉"]');
-    (celebrate.element as HTMLButtonElement).click();
-    await nextFrame();
-    expect(reactions).toEqual(["🎉"]);
-    expect(
-        view.container.querySelector('[data-testid="actions"] [data-happy2-ui="emoji-picker"]'),
-    ).toBeNull();
-    actionButtons[1]?.click();
-    await nextFrame();
-    const menu = view.$('[data-testid="actions"] [data-happy2-ui="menu"]');
-    assertParallelRoundedCorners(view.container);
-    expect(menu.bounds().width).toBe(196);
-    expect(actionButtons[1]?.getAttribute("aria-expanded")).toBe("true");
-    const edit = view.$('[data-testid="actions"] [data-item-id="edit"]');
-    (edit.element as HTMLButtonElement).click();
-    await nextFrame();
-    expect(menuSelections).toEqual(["edit"]);
-    expect(
-        view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
-    ).toBeNull();
-    /* Escape and an outside pointer both dismiss without selecting an action. */
-    actionButtons[1]?.click();
-    actionButtons[1]?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
-    await nextFrame();
-    expect(
-        view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
-    ).toBeNull();
-    actionButtons[1]?.click();
-    await nextFrame();
-    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    await nextFrame();
-    expect(
-        view.container.querySelector('[data-testid="actions"] [data-happy2-ui="menu"]'),
-    ).toBeNull();
-    /* Grouping suppresses repeated identity and leaves the shared gutter empty. */
-    for (const testid of ["grouped-sent", "grouped-sending"] as const) {
-        const root = view.$(`[data-testid="${testid}"] [data-happy2-ui="message"]`);
-        expect(root.element.hasAttribute("data-grouped")).toBe(true);
-        expect(
-            root.element.querySelector('[data-happy2-ui="avatar"]'),
-            `${testid} avatar`,
-        ).toBeNull();
-        expect(
-            root.element.querySelector('[data-happy2-ui="message-meta"]'),
-            `${testid} meta`,
-        ).toBeNull();
-        expect(
-            root.element.querySelector('[data-happy2-ui="message-gutter-time"]'),
-            `${testid} gutter time`,
-        ).toBeNull();
-    }
-    /* Delivery paint changes without moving or resizing any row part. */
-    const sentRoot = view.$('[data-testid="grouped-sent"] [data-happy2-ui="message"]');
-    const sendingRoot = view.$('[data-testid="grouped-sending"] [data-happy2-ui="message"]');
-    const sentContent = view.$('[data-testid="grouped-sent"] [data-happy2-ui="message-content"]');
-    const sendingContent = view.$(
-        '[data-testid="grouped-sending"] [data-happy2-ui="message-content"]',
-    );
-    expect(sendingRoot.bounds()).toEqual(sentRoot.bounds());
-    expect(sendingContent.bounds()).toEqual(sentContent.bounds());
-    expect(sendingRoot.element.getAttribute("aria-busy")).toBe("true");
-    expect(sentContent.computedStyle("opacity")).toBe("1");
-    expect(sendingContent.computedStyle("opacity")).toBe("0.56");
-    expect(
-        sendingRoot.element.querySelector('[data-happy2-ui="message-actions"]'),
-        "actions remain unavailable before the message is durable",
-    ).toBeNull();
-    await view.screenshot("MessageActions.test");
-});
 it("centers painted ink optically in every Message text-in-a-box part", async () => {
     const view = createRenderer();
     view.render(
@@ -1032,7 +989,6 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
             stage(
                 "o1",
                 <Message
-                    actionsVisible
                     agent
                     author="Maya Johnson"
                     body={[
@@ -1056,7 +1012,6 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
             stage(
                 "o2",
                 <Message
-                    actionsVisible
                     agent
                     compact
                     author="Claude"
@@ -1069,26 +1024,6 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
     view.render(() => stage("d1", <DayDivider label="Today" />), { width: 560, height: 44 });
     view.render(() => stage("d2", <DayDivider label="Wednesday" />), { width: 560, height: 44 });
     view.render(() => stage("d3", <DayDivider label="Mon, June 3" />), { width: 560, height: 44 });
-    /* Pinned chip width puts the ghost add button on an integer x so its icon
-       capture is not quantized by fractional emoji/count text advances. */
-    view.render(
-        () =>
-            stage(
-                "o3",
-                <>
-                    <style>{`[data-testid="o3"] .happy2-reaction-chip { width: 44px; }`}</style>
-                    <Message
-                        author="Sasha K."
-                        body="shipping"
-                        onReactionAdd={() => {}}
-                        reactions={[{ count: 2, emoji: "👍" }]}
-                        time="11:02"
-                        tone="ocean"
-                    />
-                </>,
-            ),
-        { width: 560, height: 110 },
-    );
     await view.ready();
     /* ---- Meta row: author + time ink vs the 20px row ---------------------- */
     const meta = view.$('[data-testid="o1"] [data-happy2-ui="message-meta"]');
@@ -1102,16 +1037,18 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
     expect(Math.abs(authorRowY - metaRect.height / 2), "author optical y").toBeLessThanOrEqual(
         0.75,
     );
-    /* The "·" separator now paints inside the time's own box (via `::before`
-       with 6px margins), so the box-centered dx probe no longer isolates the
-       digits — only the vertical centroid is asserted for the meta time. */
-    const time = view.$('[data-testid="o1"] [data-happy2-ui="message-time"]');
+    /* The separator is independently measurable, so this probe isolates the
+       timestamp's glyph ink. */
+    const hoverMeta = view.$('[data-testid="o1"] [data-happy2-ui="message-hover-meta"]');
+    (hoverMeta.element as HTMLElement).style.opacity = "1";
+    await nextFrame();
+    const time = view.$('[data-testid="o1"] [data-happy2-ui="message-time-label"]');
     const timeInk = await time.visibleMetrics();
     expect(timeInk.pixelCount, "time pixels").toBeGreaterThan(0);
     const timeRect = time.element.getBoundingClientRect();
     const timeRowY = timeRect.y - metaRect.y + timeInk.center.y;
-    /* The included dot ink drags the centroid off the digit center; measured
-       0.0 (Blink) / 1.16 (Gecko) / 1.14 (WebKit) with the dot in the box. */
+    /* Numeric content is top-heavy, so its strict contract is the shared
+       baseline above; this loose centroid guard catches gross row drift. */
     expect(Math.abs(timeRowY - metaRect.height / 2), "time optical y").toBeLessThanOrEqual(1.5);
     /* ---- Inline pills: glyph ink centered in the pill background ---------- */
     /* "@Claude" / "MOB-217" ink is horizontally content-weighted (the dense @
@@ -1170,19 +1107,6 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
             labelBounds.x + labelBounds.width / 2 - (dividerBounds.x + dividerBounds.width / 2),
         ),
     ).toBeLessThanOrEqual(1);
-    /* ---- Ghost add-reaction button: smile glyph centered ------------------- */
-    const addButton = view.$('[data-testid="o3"] [data-happy2-ui="message-react-add"]');
-    const addIconEl = view.$(
-        '[data-testid="o3"] [data-happy2-ui="message-react-add"] [data-happy2-ui="icon"]',
-    );
-    const iconInk = await addIconEl.visibleMetrics();
-    expect(iconInk.pixelCount, "add icon pixels").toBeGreaterThan(0);
-    const buttonRect = addButton.element.getBoundingClientRect();
-    const iconRect = addIconEl.element.getBoundingClientRect();
-    const iconDx = iconRect.x - buttonRect.x + iconInk.center.x - buttonRect.width / 2;
-    const iconDy = iconRect.y - buttonRect.y + iconInk.center.y - buttonRect.height / 2;
-    expect(Math.abs(iconDx), "add icon optical x").toBeLessThanOrEqual(0.75);
-    expect(Math.abs(iconDy), "add icon optical y").toBeLessThanOrEqual(0.75);
 });
 it("renders only http/https/mailto Markdown targets as live hrefs", async () => {
     const view = createRenderer();
@@ -1517,14 +1441,7 @@ it("keeps grouped rows aligned to incoming messages and lays out media without a
         () =>
             stage(
                 "g-shown",
-                <Message
-                    actionsVisible
-                    compact
-                    author="Ada"
-                    body="ok"
-                    gutterTime="12:55"
-                    time="12:55 AM"
-                />,
+                <Message compact author="Ada" body="ok" gutterTime="12:55" time="12:55 AM" />,
             ),
         { width: 480, height: 60 },
     );
@@ -1585,8 +1502,8 @@ it("keeps grouped rows aligned to incoming messages and lays out media without a
     expect(shownBody.bounds().x).toBe(18);
     expect(shownRoot.computedStyle("padding-left")).toBe("18px");
     /* First-message time reserves its meta geometry but paints only on hover. */
-    const firstTime = view.$('[data-testid="first"] [data-happy2-ui="message-time"]');
-    expect(firstTime.computedStyle("opacity")).toBe("0");
+    const firstHoverMeta = view.$('[data-testid="first"] [data-happy2-ui="message-hover-meta"]');
+    expect(firstHoverMeta.computedStyle("opacity")).toBe("0");
     expect(
         view.container.querySelector(
             '[data-testid="first"] [data-happy2-ui="message-gutter-time"]',
@@ -1963,25 +1880,21 @@ it("preserves Message DOM identity while a streamed Markdown body advances", asy
 });
 it("keeps Message geometry fixed across non-content state changes", async () => {
     let update = (_next: {
-        actionsVisible: boolean;
         deliveryState: "failed" | "sent";
         generationStatus: "complete" | "failed" | "streaming";
     }) => {};
     function StableMessage() {
         const [state, setState] = useState<{
-            actionsVisible: boolean;
             deliveryState: "failed" | "sent";
             generationStatus: "complete" | "failed" | "streaming";
-        }>({ actionsVisible: false, deliveryState: "sent", generationStatus: "streaming" });
+        }>({ deliveryState: "sent", generationStatus: "streaming" });
         update = setState;
         return stage(
             "geometry-stable",
             <Message
-                actionsVisible={state.actionsVisible}
                 agent
                 author="Codex"
                 body="This exact message body must keep its dimensions while presentation state changes."
-                contributions={<button type="button">Copy</button>}
                 deliveryState={state.deliveryState}
                 generationStatus={state.generationStatus}
                 initials="CX"
@@ -1998,17 +1911,13 @@ it("keeps Message geometry fixed across non-content state changes", async () => 
     const body = () => view.$('[data-testid="geometry-stable"] [data-happy2-ui="message-body"]');
     const baseline = { root: root().bounds(), content: content().bounds(), body: body().bounds() };
 
-    flushSync(() =>
-        update({ actionsVisible: true, deliveryState: "failed", generationStatus: "failed" }),
-    );
+    flushSync(() => update({ deliveryState: "failed", generationStatus: "failed" }));
     await nextFrame();
     expect(root().bounds()).toEqual(baseline.root);
     expect(content().bounds()).toEqual(baseline.content);
     expect(body().bounds()).toEqual(baseline.body);
 
-    flushSync(() =>
-        update({ actionsVisible: false, deliveryState: "sent", generationStatus: "complete" }),
-    );
+    flushSync(() => update({ deliveryState: "sent", generationStatus: "complete" }));
     await nextFrame();
     expect(root().bounds()).toEqual(baseline.root);
     expect(content().bounds()).toEqual(baseline.content);
