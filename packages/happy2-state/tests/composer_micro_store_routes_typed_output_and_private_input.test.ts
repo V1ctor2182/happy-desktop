@@ -23,7 +23,7 @@ describe("composer micro-store boundaries", () => {
     it("provides explicit attachment and submit actions with no generic field mutation", () => {
         const output = vi.fn();
         const composer = composerStoreCreate("chat-1", { output });
-        const attachment = { id: "file-1", name: "notes.txt", size: 12 } as const;
+        const attachment = { kind: "file", id: "file-1", name: "notes.txt", size: 12 } as const;
 
         composer.getState().attachmentAdd(attachment);
         composer.getState().attachmentAdd(attachment);
@@ -160,12 +160,12 @@ describe("HappyState registry shell", () => {
         expect(first.getState().text).toBe("still acquired");
         state.composerRelease("chat-1");
         first.getState().textUpdate("detached store");
-        first.getState().attachmentAdd({ id: "file-1", name: "notes.txt", size: 12 });
+        first.getState().attachmentAdd({ kind: "file", id: "file-1", name: "notes.txt", size: 12 });
         expect(first.getState().text).toBe("detached store");
         const reopened = state.composer("chat-1");
         expect(reopened).toBe(first);
         expect(reopened.getState().attachments).toEqual([
-            { id: "file-1", name: "notes.txt", size: 12 },
+            { kind: "file", id: "file-1", name: "notes.txt", size: 12 },
         ]);
         state[Symbol.dispose]();
     });

@@ -7,8 +7,10 @@ describe("composer module", () => {
         const output = vi.fn();
         const binding = composerStoreCreate("chat-1", { output });
         binding.getState().textUpdate("hello");
-        binding.getState().attachmentAdd({ id: "file-1", name: "a.txt", size: 3 });
-        binding.getState().attachmentAdd({ id: "file-1", name: "duplicate", size: 9 });
+        binding.getState().attachmentAdd({ kind: "file", id: "file-1", name: "a.txt", size: 3 });
+        binding
+            .getState()
+            .attachmentAdd({ kind: "file", id: "file-1", name: "duplicate", size: 9 });
         binding.getState().attachmentRemove("missing");
         binding.getState().textSubmit();
         const revision = binding.getState().revision;

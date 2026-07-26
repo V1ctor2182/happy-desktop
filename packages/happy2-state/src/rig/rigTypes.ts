@@ -160,6 +160,15 @@ export interface RigToolFailure {
     readonly message?: string;
 }
 
+/**
+ * One image sent with a local user turn. A local session has no upload step, so
+ * the bytes travel with the message; `data` is base64 without a data-URL prefix.
+ */
+export interface RigImageInput {
+    readonly mediaType: string;
+    readonly data: string;
+}
+
 export type RigBlock =
     | { readonly type: "text"; readonly text: string }
     | {

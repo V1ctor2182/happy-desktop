@@ -6,7 +6,7 @@ import type {
 } from "happy2-state";
 import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
-import { Composer, type Mentionable } from "./Composer";
+import { Composer, type ContextItem, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
 import {
     conversationEntryResumesAfterActivity,
@@ -63,6 +63,12 @@ export type ConversationViewProps = {
     onComposerValueChange: (value: string) => void;
     onComposerFocusChange?: (focused: boolean) => void;
     onComposerSend: () => void;
+    /** Receives images picked through the composer's picker or pasted into it. */
+    onComposerAttachmentsSelect?: (files: File[]) => void;
+    /** Removes one attachment chip from the draft. */
+    onComposerAttachmentRemove?: (attachmentId: string) => void;
+    /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
+    onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -80,6 +86,22 @@ function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60) return `${seconds}s`;
     return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
+}
+
+/** The draft's attachments as composer chips; an image chip carries its size. */
+function contextItemsOf(composer: ComposerSnapshot): ContextItem[] {
+    return composer.attachments.map((attachment) => ({
+        id: attachment.id,
+        kind: "file",
+        label: attachment.name,
+        detail: attachmentSizeFormat(attachment.size),
+    }));
+}
+
+function attachmentSizeFormat(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
@@ -204,6 +226,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         : undefined
                                 }
                                 key={entry.kind === "message" ? entry.message.id : entry.id}
+                                onImageOpen={props.onImageOpen}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRewind={props.onRewind}
                                 onTraceToggle={props.onTraceToggle}
@@ -276,11 +299,16 @@ export function ConversationView(props: ConversationViewProps) {
                 ) : null}
                 <div className="happy2-conversation__dock-inner">
                     <Composer
+                        attachmentAccept="image/*"
+                        attachmentMultiple
+                        contextItems={contextItemsOf(composer)}
                         hint={
                             composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"
                         }
                         mentions={mentionsOf(composer)}
                         modelControl={props.composerControls}
+                        onAttachmentsSelect={props.onComposerAttachmentsSelect}
+                        onContextRemove={props.onComposerAttachmentRemove}
                         onFocusChange={props.onComposerFocusChange}
                         onSend={props.onComposerSend}
                         onStop={props.onAbort}

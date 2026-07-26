@@ -8,6 +8,7 @@ import type {
 import { fakeTerminalChannelCreate, type FakeTerminalChannel } from "./fake-terminal-channel.js";
 import type {
     RigFileSearchResult,
+    RigImageInput,
     RigModelCatalog,
     RigModelSelection,
     RigGroupId,
@@ -75,6 +76,8 @@ export interface FakeRigCall {
     readonly sessionIds?: readonly RigSessionId[];
     readonly idempotencyKey?: string;
     readonly text?: string;
+    /** Images a submitted or steering turn carried inline. */
+    readonly images?: readonly RigImageInput[];
     readonly expectedRunId?: string;
     /** The terminal a terminal-scoped call addressed. */
     readonly terminalId?: RigTerminalId;
@@ -508,12 +511,16 @@ class FakeRigTransportModel implements FakeRigTransport {
                 this.archived.add(sessionId);
                 return undefined;
             }),
-        messageSubmit: (sessionId, text, idempotencyKey) =>
-            this.perform("messageSubmit", { sessionId, text, idempotencyKey }, () => undefined),
-        messageSteer: (sessionId, text, idempotencyKey, expectedRunId) =>
+        messageSubmit: (sessionId, text, idempotencyKey, images) =>
+            this.perform(
+                "messageSubmit",
+                { sessionId, text, idempotencyKey, images },
+                () => undefined,
+            ),
+        messageSteer: (sessionId, text, idempotencyKey, expectedRunId, images) =>
             this.perform(
                 "messageSteer",
-                { sessionId, text, idempotencyKey, expectedRunId },
+                { sessionId, text, idempotencyKey, expectedRunId, images },
                 () => undefined,
             ),
         runAbort: (sessionId, expectedRunId) =>

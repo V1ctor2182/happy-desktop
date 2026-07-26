@@ -931,6 +931,7 @@ export function ChatPage(props: ChatPageProps) {
             );
             for (const file of uploaded)
                 props.composer.getState().attachmentAdd({
+                    kind: "file",
                     id: file.id,
                     name: file.originalName ?? "Attachment",
                     size: file.size,

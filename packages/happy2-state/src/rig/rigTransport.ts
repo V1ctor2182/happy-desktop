@@ -4,6 +4,7 @@ import type {
     RigEventId,
     RigFileSearchResult,
     RigGoal,
+    RigImageInput,
     RigJson,
     RigMessage,
     RigModelCatalog,
@@ -304,14 +305,24 @@ export interface RigTransport {
         afterId: RigWorktreeId | null,
     ): Promise<void>;
 
-    /** Submits a fresh user turn; `idempotencyKey` is stable across retries of one send. */
-    messageSubmit(sessionId: RigSessionId, text: string, idempotencyKey: string): Promise<void>;
+    /**
+     * Submits a fresh user turn; `idempotencyKey` is stable across retries of one
+     * send. `images` are carried inline with the turn, since a local session has
+     * no upload step to reference bytes by id.
+     */
+    messageSubmit(
+        sessionId: RigSessionId,
+        text: string,
+        idempotencyKey: string,
+        images?: readonly RigImageInput[],
+    ): Promise<void>;
     /** Steers the in-flight run with an additional user message. */
     messageSteer(
         sessionId: RigSessionId,
         text: string,
         idempotencyKey: string,
         expectedRunId?: string,
+        images?: readonly RigImageInput[],
     ): Promise<void>;
     runAbort(sessionId: RigSessionId, expectedRunId?: string): Promise<void>;
     compact(sessionId: RigSessionId): Promise<void>;

@@ -319,6 +319,32 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     }
 }
 
+/** The daemon's user-message content blocks, as this proxy composes them. */
+type ContentBlock =
+    | { readonly type: "text"; readonly text: string }
+    | { readonly type: "image"; readonly mediaType: string; readonly data: string };
+
+/**
+ * The daemon content blocks one submitted turn carries beyond its text. A local
+ * turn has no upload step, so an attached image travels as base64 alongside the
+ * text block; a turn with no images sends no `content` at all and the daemon
+ * builds the message from `text` as before.
+ */
+function contentOf(body: Record<string, unknown>): {
+    readonly content?: readonly ContentBlock[];
+} {
+    const images = Array.isArray(body.images) ? body.images : [];
+    const blocks: ContentBlock[] = [];
+    for (const image of images) {
+        if (typeof image !== "object" || image === null) continue;
+        const { mediaType, data } = image as { mediaType?: unknown; data?: unknown };
+        if (typeof mediaType !== "string" || typeof data !== "string") continue;
+        blocks.push({ type: "image", mediaType, data });
+    }
+    if (blocks.length === 0) return {};
+    return { content: [{ type: "text", text: String(body.text ?? "") }, ...blocks] };
+}
+
 async function handleSessionPost(
     client: RigProxyClient,
     sessionId: string,
@@ -363,6 +389,7 @@ async function handleSessionPost(
             await client.submitMessage(sessionId, {
                 text: String(body.text ?? ""),
                 clientSubmissionId: String(body.idempotencyKey ?? ""),
+                ...contentOf(body),
             });
             writeJson(response, 200, {});
             return true;
@@ -371,6 +398,7 @@ async function handleSessionPost(
                 text: String(body.text ?? ""),
                 clientSubmissionId: String(body.idempotencyKey ?? ""),
                 ...(body.expectedRunId ? { expectedRunId: String(body.expectedRunId) } : {}),
+                ...contentOf(body),
             });
             writeJson(response, 200, {});
             return true;

@@ -33,6 +33,8 @@ import {
     ConversationSettingsModal,
     ConversationView,
     EmptyState,
+    Lightbox,
+    ModalOverlay,
     RigActivityPanel,
     RigConnectionStatus,
     RigSessionControls,
@@ -509,6 +511,12 @@ export function AppRigView(props: AppRigViewProps) {
                             composer={workspace.groupComposer}
                             composerPlaceholder="Message Happy…"
                             entries={NO_ENTRIES}
+                            onComposerAttachmentRemove={(attachmentId) =>
+                                props.workspace.composerAttachmentRemove(attachmentId)
+                            }
+                            onComposerAttachmentsSelect={(files) =>
+                                props.workspace.composerAttachmentsAdd(files)
+                            }
                             onComposerFocusChange={(focused) =>
                                 props.workspace.composerFocusUpdate(focused)
                             }
@@ -705,9 +713,14 @@ function RigConversationSurface(props: {
             }
             onAbort={() => swallow(workspace.runAbort())}
             onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
+            onComposerAttachmentRemove={(attachmentId) =>
+                workspace.composerAttachmentRemove(attachmentId)
+            }
+            onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
             onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
             onComposerSend={() => workspace.composerTextSubmit()}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+            onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
             onRequestAnswer={(requestId, answers) =>
                 swallow(workspace.answerInput({ requestId, answers }))
             }
@@ -734,7 +747,15 @@ function RigConversationSurface(props: {
                 ) : undefined
             }
             overlay={
-                conversation.settingsOpen ? (
+                conversation.openImage ? (
+                    <ModalOverlay onDismiss={() => workspace.imageClose()}>
+                        <Lightbox
+                            alt={conversation.openImage.alt}
+                            imageUrl={conversation.openImage.url}
+                            onClose={() => workspace.imageClose()}
+                        />
+                    </ModalOverlay>
+                ) : conversation.settingsOpen ? (
                     <ConversationSettingsModal
                         activityOpen={conversation.activityPanelOpen}
                         controls={

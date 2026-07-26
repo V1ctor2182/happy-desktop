@@ -7,7 +7,8 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
-import type { RigChatSnapshot, RigChatStore } from "./rigChatStore.js";
+import type { RigChatSnapshot, RigChatStore, RigOpenImage } from "./rigChatStore.js";
+import { rigImageAttachmentRead, rigImageInputsOf } from "./rigImageAttachment.js";
 import { rigPanelStoreCreate, type RigPanelStore } from "./rigPanelStore.js";
 import { rigUserError } from "./rigSupport.js";
 import type {
@@ -20,6 +21,7 @@ import type {
     RigFileSearchResult,
     RigGoal,
     RigGroupId,
+    RigImageInput,
     RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
@@ -89,6 +91,8 @@ export interface RigConversationSnapshot {
     readonly activityPanelOpen: boolean;
     /** Whether the session settings dialog is open. */
     readonly settingsOpen: boolean;
+    /** The transcript image opened full size, if any. */
+    readonly openImage?: RigOpenImage;
     readonly menus?: RigMenusSnapshot;
 }
 
@@ -196,6 +200,15 @@ export interface RigWorkspaceStore {
     composerFocusUpdate(focused: boolean): void;
     composerTextSubmit(): void;
     composerCommandInvoke(commandId: string): void;
+    /**
+     * Attaches picked or pasted images to the addressed draft. Reading the bytes
+     * is asynchronous, so this returns immediately and each image appears in the
+     * draft as it is read; a file that is not an image is ignored, since a local
+     * turn can only carry images inline.
+     */
+    composerAttachmentsAdd(files: readonly File[]): void;
+    /** Removes one attachment from the addressed draft. */
+    composerAttachmentRemove(attachmentId: string): void;
 
     // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
@@ -219,6 +232,10 @@ export interface RigWorkspaceStore {
     /** Closes the session settings dialog for the open conversation. */
     settingsClose(): void;
     reasoningToggle(): void;
+    /** Opens one transcript image of the open conversation full size. */
+    imageOpen(messageId: string, attachmentId: string): void;
+    /** Closes the full-size image viewer. */
+    imageClose(): void;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /** View-only clear of the active conversation's visible entries (TUI `/clear`). */
@@ -279,6 +296,8 @@ export function rigWorkspaceStoreCreate(
     let chatArrival: Promise<RigChatStore> | undefined;
     let acquisitionGeneration = 0;
     let mentionGeneration = 0;
+    // Names one attached image within its draft; the daemon never sees this id.
+    let attachmentSequence = 0;
 
     let conversation: Loadable<RigConversationSnapshot> = { type: "unloaded" };
     // An addressed group with nothing in it yet: its composer is live, and the
@@ -321,6 +340,7 @@ export function rigWorkspaceStoreCreate(
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             settingsOpen: chat.settingsOpen,
+            ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : {}),
         };
     };
@@ -434,7 +454,9 @@ export function rigWorkspaceStoreCreate(
                 switch (event.type) {
                     case "textSubmitted":
                         submitting(event.revision, () =>
-                            withChatStore((store) => store.messageSend(event.text)),
+                            withChatStore((store) =>
+                                store.messageSend(event.text, rigImageInputsOf(event.attachments)),
+                            ),
                         );
                         return;
                     case "shellCommandSubmitted":
@@ -588,7 +610,11 @@ export function rigWorkspaceStoreCreate(
      * reported before the message is delivered, so the reader lands in the new
      * conversation while it is being sent rather than after.
      */
-    const groupSubmit = (groupId: RigGroupId, text: string): Promise<void> => {
+    const groupSubmit = (
+        groupId: RigGroupId,
+        text: string,
+        images: readonly RigImageInput[],
+    ): Promise<void> => {
         const start = groupStartFind(groupId);
         if (!start) return Promise.reject(new Error("That group is no longer listed."));
         return (
@@ -600,7 +626,7 @@ export function rigWorkspaceStoreCreate(
             output({ type: "conversationOpenRequested", location });
             const acquired = await client.chat(location.sessionId);
             try {
-                await acquired.store.messageSend(text);
+                await acquired.store.messageSend(text, images);
             } finally {
                 acquired[Symbol.dispose]();
             }
@@ -669,7 +695,9 @@ export function rigWorkspaceStoreCreate(
                 capabilities: { shellMode: false, commands: [], mentions: false },
                 output: (event) => {
                     if (event.type !== "textSubmitted") return;
-                    submitting(event.revision, () => groupSubmit(groupId, event.text));
+                    submitting(event.revision, () =>
+                        groupSubmit(groupId, event.text, rigImageInputsOf(event.attachments)),
+                    );
                 },
             });
             unsubscribeGroupComposer = groupComposer.subscribe(recompute);
@@ -714,6 +742,25 @@ export function rigWorkspaceStoreCreate(
             (groupComposer ?? composer)?.getState().focusUpdate(focused),
         composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
         composerCommandInvoke: (commandId) => composer?.getState().commandInvoke(commandId),
+        composerAttachmentsAdd(files) {
+            const target = groupComposer ?? composer;
+            if (!target) return;
+            for (const file of files) {
+                const id = `attachment:${++attachmentSequence}`;
+                void rigImageAttachmentRead(id, file).then(
+                    (attachment) => {
+                        // The draft may have been released (or replaced by
+                        // addressing elsewhere) while the bytes were read; an
+                        // image never lands in a composer other than its own.
+                        if (!attachment || (groupComposer ?? composer) !== target) return;
+                        target.getState().attachmentAdd(attachment);
+                    },
+                    () => undefined,
+                );
+            }
+        },
+        composerAttachmentRemove: (attachmentId) =>
+            (groupComposer ?? composer)?.getState().attachmentRemove(attachmentId),
 
         runAbort: () => withChat((store) => store.runAbort()),
         answerInput: (input) => withChat((store) => store.answerInput(input)),
@@ -735,6 +782,8 @@ export function rigWorkspaceStoreCreate(
         settingsOpen: () => chatStore?.settingsOpen(),
         settingsClose: () => chatStore?.settingsClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
+        imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
+        imageClose: () => chatStore?.imageClose(),
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
         viewClear: () => chatStore?.viewClear(),
 

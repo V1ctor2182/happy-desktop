@@ -36,11 +36,31 @@ export const composerCapabilitiesNone: ComposerCapabilities = {
     mentions: false,
 };
 
-export interface ComposerAttachment {
-    readonly id: string;
-    readonly name: string;
-    readonly size: number;
-}
+/**
+ * One thing attached to a draft. A cloud draft attaches a durable server file
+ * that was uploaded before it was attached; a local draft has no upload step, so
+ * its image carries its own base64 bytes to the daemon. Both are attachments to
+ * the composer — the send path reads the discriminant rather than each surface
+ * keeping its own pending list beside the draft.
+ */
+export type ComposerAttachment =
+    | {
+          readonly kind: "file";
+          /** The durable server file id the send references. */
+          readonly id: string;
+          readonly name: string;
+          readonly size: number;
+      }
+    | {
+          readonly kind: "inlineImage";
+          /** Client-minted; unique within this draft only. */
+          readonly id: string;
+          readonly name: string;
+          readonly size: number;
+          readonly mediaType: string;
+          /** Base64 payload of the image bytes, without a data-URL prefix. */
+          readonly data: string;
+      };
 
 export type ComposerSubmission =
     | { readonly status: "idle" }

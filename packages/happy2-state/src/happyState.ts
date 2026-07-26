@@ -1210,7 +1210,11 @@ export class HappyState implements AsyncDisposable, Disposable {
                     event.scopeId,
                     {
                         text: event.text,
-                        attachmentFileIds: event.attachments.map((attachment) => attachment.id),
+                        // A cloud send references uploaded files; an inline image
+                        // belongs to a local session and never reaches this stack.
+                        attachmentFileIds: event.attachments
+                            .filter((attachment) => attachment.kind === "file")
+                            .map((attachment) => attachment.id),
                         ...(event.audience
                             ? {
                                   audience: event.audience,

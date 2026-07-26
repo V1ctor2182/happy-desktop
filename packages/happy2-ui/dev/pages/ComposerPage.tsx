@@ -56,8 +56,8 @@ const EMOJI: EmojiItem[] = [
 ];
 const noop = () => {};
 const INITIAL_ATTACHMENTS: ComposerAttachment[] = [
-    { id: "refresh.ts", name: "refresh.ts", size: 4096 },
-    { id: "handshake.md", name: "handshake.md", size: 12800 },
+    { kind: "file", id: "refresh.ts", name: "refresh.ts", size: 4096 },
+    { kind: "file", id: "handshake.md", name: "handshake.md", size: 12800 },
 ];
 const RECONCILED_TEXT = "Draft restored from the server after reconnect.";
 const TOOLBAR_STAGES = [
@@ -184,6 +184,7 @@ function Playground() {
                         onAttachmentsSelect={(files) => {
                             for (const file of files) {
                                 store.attachmentAdd({
+                                    kind: "file",
                                     id: `file-${attachmentSequence.current++}-${file.name}`,
                                     name: file.name,
                                     size: file.size,

@@ -158,11 +158,16 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             );
         },
 
-        messageSubmit: async (sessionId, text, idempotencyKey) => {
-            await postJson(`/sessions/${sessionId}/messages`, { text, idempotencyKey });
+        messageSubmit: async (sessionId, text, idempotencyKey, images) => {
+            await postJson(`/sessions/${sessionId}/messages`, { text, idempotencyKey, images });
         },
-        messageSteer: async (sessionId, text, idempotencyKey, expectedRunId) => {
-            await postJson(`/sessions/${sessionId}/steer`, { text, idempotencyKey, expectedRunId });
+        messageSteer: async (sessionId, text, idempotencyKey, expectedRunId, images) => {
+            await postJson(`/sessions/${sessionId}/steer`, {
+                text,
+                idempotencyKey,
+                expectedRunId,
+                images,
+            });
         },
         runAbort: async (sessionId, expectedRunId) => {
             await postJson(`/sessions/${sessionId}/abort`, { expectedRunId });

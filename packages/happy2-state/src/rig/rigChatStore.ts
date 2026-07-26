@@ -21,6 +21,7 @@ import type {
     RigBackgroundProcess,
     RigFileSearchResult,
     RigGoal,
+    RigImageInput,
     RigMenusSnapshot,
     RigModelCatalog,
     RigModelSelection,
@@ -78,8 +79,22 @@ export interface RigChatSnapshot {
     readonly activityPanelOpen: boolean;
     /** View state: whether the session settings dialog is open. */
     readonly settingsOpen: boolean;
+    /** The transcript image the reader opened full size, if any. */
+    readonly openImage?: RigOpenImage;
     /** Derived pickers for model/effort/permission/service-tier. */
     readonly menus?: RigMenusSnapshot;
+}
+
+/**
+ * The transcript image currently shown full size. Resolved when it is opened, so
+ * the viewer renders from one value rather than the surface re-deriving a source
+ * from the entry list on every notification.
+ */
+export interface RigOpenImage {
+    readonly id: string;
+    /** Displayable source for the image; a local image is a data URL. */
+    readonly url: string;
+    readonly alt: string;
 }
 
 export type RigChatOutput =
@@ -96,8 +111,12 @@ export interface RigChatStore {
     subscribe(listener: () => void): () => void;
     /** Retries a failed authoritative session read. */
     sessionRetry(): void;
-    /** Submits when idle, steers when a run is active; rejects with a `UserError`. */
-    messageSend(text: string): Promise<void>;
+    /**
+     * Submits when idle, steers when a run is active; rejects with a `UserError`.
+     * `images` ride along inline with the turn, since a local session has no
+     * upload step to reference bytes by id.
+     */
+    messageSend(text: string, images?: readonly RigImageInput[]): Promise<void>;
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
     modelChange(input: RigModelSelection): Promise<void>;
@@ -156,6 +175,14 @@ export interface RigChatStore {
     settingsOpen(): void;
     /** Closes the session settings dialog. */
     settingsClose(): void;
+    /**
+     * Opens one transcript image full size. The image is resolved from the named
+     * message's attachments here rather than by the surface, so the viewer has a
+     * source the moment it opens; an id that names nothing opens nothing.
+     */
+    imageOpen(messageId: string, attachmentId: string): void;
+    /** Closes the full-size image viewer. */
+    imageClose(): void;
     /** Local view toggle: show or hide thinking entries. */
     reasoningToggle(): void;
     /**
@@ -171,6 +198,32 @@ export interface RigChatStore {
      */
     viewClear(): void;
     [Symbol.dispose](): void;
+}
+
+/**
+ * Finds one message's image attachment and states it as a viewable source. A
+ * local attachment carries its own bytes, so the data URL is built here and the
+ * viewer needs no fetch; anything else (an unknown id, a non-image) resolves to
+ * nothing rather than opening an empty viewer.
+ */
+function openImageResolve(
+    entries: readonly ConversationEntry[],
+    messageId: string,
+    attachmentId: string,
+): RigOpenImage | undefined {
+    for (const entry of entries) {
+        if (entry.kind !== "message" || entry.message.id !== messageId) continue;
+        for (const attachment of entry.message.attachments) {
+            if (attachment.kind !== "inlineImage" || attachment.id !== attachmentId) continue;
+            return {
+                id: attachment.id,
+                url: `data:${attachment.mediaType};base64,${attachment.data}`,
+                alt: "Attached image",
+            };
+        }
+        return undefined;
+    }
+    return undefined;
 }
 
 export interface RigChatDeps {
@@ -234,6 +287,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let usageGeneration = 0;
     let activityPanelOpen = false;
     let settingsOpen = false;
+    let openImage: RigOpenImage | undefined;
     // Entry ids hidden by a view-only `/clear`; new entries render as usual.
     let clearedIds = new Set<string>();
     let status: "loading" | "ready" | "error" = "loading";
@@ -309,6 +363,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             usageError,
             activityPanelOpen,
             settingsOpen,
+            openImage,
             menus: session ? rigMenusDerive(deps.catalog, selectionOf(session)) : undefined,
         };
         if (deepEqual(previous, next)) return;
@@ -752,14 +807,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         sessionRetry: () => {
             if (status === "error" && active && !disposed) void reconcile();
         },
-        messageSend: (text) =>
+        messageSend: (text, images) =>
             rejecting(async () => {
                 const key = createId();
                 const steered = runStatus === "running";
                 if (steered) {
-                    await deps.transport.messageSteer(sessionId, text, key, runId);
+                    await deps.transport.messageSteer(sessionId, text, key, runId, images);
                 } else {
-                    await deps.transport.messageSubmit(sessionId, text, key);
+                    await deps.transport.messageSubmit(sessionId, text, key, images);
                 }
                 output({ type: "messageSent", sessionId, steered });
             }),
@@ -901,6 +956,17 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         settingsClose() {
             if (!settingsOpen) return;
             settingsOpen = false;
+            commit();
+        },
+        imageOpen(messageId, attachmentId) {
+            const resolved = openImageResolve(store.getState().entries, messageId, attachmentId);
+            if (!resolved) return;
+            openImage = resolved;
+            commit();
+        },
+        imageClose() {
+            if (!openImage) return;
+            openImage = undefined;
             commit();
         },
         reasoningToggle() {
