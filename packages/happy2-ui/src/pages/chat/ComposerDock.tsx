@@ -1,17 +1,8 @@
 import { useRef, type ReactNode } from "react";
-import type { AgentActivityState, DeepReadonly } from "happy2-state";
-import {
-    AgentActivityStrip,
-    Box,
-    Composer,
-    type ContextItem,
-    type Mentionable,
-} from "./ChatPageComponents.js";
+import { Box, Composer, type ContextItem, type Mentionable } from "./ChatPageComponents.js";
 import type { AudienceValue } from "../../AudienceToggle.js";
 import { emojiItems } from "./chatPageModels.js";
 export interface ComposerDockProps {
-    activities: readonly DeepReadonly<AgentActivityState>[];
-    activityNow: number;
     composerAudience?: AudienceValue;
     composerCompactHint: string;
     /** Native plugin composer contribution triggers, temporarily hidden by the composer. */
@@ -39,8 +30,9 @@ export interface ComposerDockProps {
     onValueChange(value: string): void;
 }
 /**
- * The grounded chat input bar: an optional live agent-activity strip above a
- * Composer, centered on the shared chat measure with a top hairline. It is
+ * The grounded chat input bar: a Composer centered on the shared chat measure
+ * with a top hairline. A working turn reports itself on the transcript's last
+ * line, not here, so the dock stays the one place the reader types. It is
  * reusable so the same input can sit at the bottom of the conversation column
  * and, when a trace panel is expanded to fill the shell, at the bottom of that
  * expanded panel. It owns only the hidden file-input ref; every value and every
@@ -51,25 +43,6 @@ export function ComposerDock(props: ComposerDockProps) {
     return (
         <Box className="happy2-composer-dock" data-happy2-ui="composer-dock">
             <Box className="happy2-composer-dock__compose">
-                {props.activities.length > 0 ? (
-                    <AgentActivityStrip
-                        now={props.activityNow}
-                        // Rig subagent/terminal ids are only unique per agent, so
-                        // two concurrently active agents need namespaced row keys.
-                        subagents={props.activities.flatMap((activity) =>
-                            activity.subagents.map((subagent) => ({
-                                ...subagent,
-                                id: `${activity.agentUserId}:${subagent.id}`,
-                            })),
-                        )}
-                        terminals={props.activities.flatMap((activity) =>
-                            activity.backgroundTerminals.map((terminal) => ({
-                                ...terminal,
-                                id: `${activity.agentUserId}:${terminal.id}`,
-                            })),
-                        )}
-                    />
-                ) : null}
                 <input
                     hidden
                     multiple

@@ -33,6 +33,7 @@ export async function agentTurnTraceGet(
             traceLatestDetail: agentTurns.traceLatestDetail,
             traceLatestAt: agentTurns.traceLatestAt,
             traceEntryCount: agentTurns.traceEntryCount,
+            traceFinalTextOffset: agentTurns.traceFinalTextOffset,
             traceSubagentsJson: agentTurns.traceSubagentsJson,
             traceBackgroundTerminalsJson: agentTurns.traceBackgroundTerminalsJson,
             messageDeletedAt: messages.deletedAt,

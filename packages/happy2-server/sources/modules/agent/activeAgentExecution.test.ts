@@ -231,6 +231,7 @@ describe("users.active agent execution authority", () => {
                 agentUserId,
                 actorUserId,
                 eventId: "late-event",
+                finalTextOffset: 0,
                 sessionId,
                 streamCommittedText: "Late output",
                 userMessageId: queued.message.id,

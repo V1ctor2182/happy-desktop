@@ -1,8 +1,3 @@
-export {
-    AgentActivityStrip,
-    type AgentActivityStripSubagent,
-    type AgentActivityStripTerminal,
-} from "../../AgentActivityStrip.js";
 export { AgentActivityRow } from "../../AgentActivityRow.js";
 export { AgentTraceRow } from "../../AgentTraceRow.js";
 export { AppShell } from "../../AppShell.js";

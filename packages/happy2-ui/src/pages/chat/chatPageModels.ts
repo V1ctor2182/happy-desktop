@@ -1,4 +1,5 @@
 import type {
+    AgentActivityState,
     AgentTurnTraceDetails,
     AgentTurnTraceEntrySummary,
     AgentTurnTraceSummary,
@@ -125,12 +126,35 @@ export type ChatTraceStep = {
     /** Projected for the shared activity row, so both stacks render one component. */
     activity: ConversationActivity;
 };
+/**
+ * The live status line a running turn keeps at the bottom of the transcript:
+ * what it is doing right now plus what that work is costing — subagents,
+ * background terminals, tokens, elapsed. It replaces the strip that used to
+ * float above the composer, so a working turn reports itself in the one place
+ * the reader is already looking.
+ */
+export type ChatTurnStatus = {
+    kind: "turnStatus";
+    id: string;
+    conversationId: string;
+    /** The assistant message whose turn is running. */
+    messageId: string;
+    stepKind?: AgentTurnTraceEntrySummary["kind"];
+    title: string;
+    detail?: string;
+    subagentCount: number;
+    terminalCount: number;
+    totalTokens: number;
+    /** Undefined until the turn reports when it started. */
+    elapsedMs?: number;
+};
 export type WorkspaceEntry =
     | ChatDivider
     | LiveChatMessage
     | ChatNotice
     | ChatSteeringNotice
-    | ChatTraceStep;
+    | ChatTraceStep
+    | ChatTurnStatus;
 export function formatBytes(size: number): string {
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
@@ -367,72 +391,85 @@ function traceStepActivity(step: DeepReadonly<AgentTurnTraceEntrySummary>): Conv
     };
 }
 /**
- * Splits the reply back into the text blocks the agent committed, using the
- * turn's `response` steps as the split points. The server joins those blocks
- * with a blank line to build the one durable reply, so each block must match the
+ * Splits the reply back into the text blocks the agent wrote, using the turn's
+ * `response` steps as the split points. The server joins those blocks with a
+ * blank line to build the one durable reply, so each block must match the
  * reply's next run of text exactly; anything else — a truncated step detail, an
  * edited message — fails the match and the reply stays whole rather than being
- * rendered from a guess.
+ * rendered from a guess. A trailing run of text no step accounts for is the
+ * block still streaming and closes the list.
  */
-function turnTextBlocks(
-    body: string,
-    responses: readonly string[],
-): { readonly leading: string[]; readonly tail: string } {
-    const leading: string[] = [];
+function turnTextBlocks(body: string, responses: readonly string[]): string[] {
+    if (body.length === 0) return [];
+    const blocks: string[] = [];
     let rest = body;
     for (const response of responses) {
         const block = response.trim();
         if (block.length === 0) continue;
-        // The turn's closing block is the reply itself, so it keeps the durable
-        // message's identity, actions, and trace control instead of becoming a
-        // projection of it.
-        if (rest === block) return { leading, tail: block };
-        if (!rest.startsWith(`${block}\n\n`)) return { leading: [], tail: body };
-        leading.push(block);
+        if (rest === block) {
+            blocks.push(block);
+            return blocks;
+        }
+        if (!rest.startsWith(`${block}\n\n`)) return [body];
+        blocks.push(block);
         rest = rest.slice(block.length + 2);
     }
-    // Text the turn has not committed yet — the block still streaming — closes
-    // the turn the same way a committed final block does.
-    if (rest.length > 0) return { leading, tail: rest };
-    const tail = leading.pop();
-    return tail === undefined ? { leading: [], tail: body } : { leading, tail };
+    if (rest.length > 0) blocks.push(rest);
+    return blocks;
 }
 /**
- * Expands one turn into the entries that precede its reply: the text blocks the
- * agent committed before its final answer, with the steps it took interleaved in
- * the order they happened. The reply itself is not returned here — it follows
- * these entries, carrying the tail text plus every message action, so a turn
- * opens under one avatar and its answer lands last as a continuation.
+ * The block a collapsed turn keeps on screen: the last one the agent wrote. A
+ * finished turn folds down to the answer it settled on the way a local session's
+ * collapsed turn keeps only its final message, and the server reports where that
+ * block starts so folding a turn away never waits on its steps.
+ */
+function turnFinalBlock(entry: LiveChatMessage): string {
+    const offset = entry.agentTrace?.finalTextOffset ?? 0;
+    return offset > 0 && offset < entry.body.length ? entry.body.slice(offset) : entry.body;
+}
+/**
+ * Expands one turn into the rows the transcript renders for it: every text block
+ * the agent wrote, each one where it was written, with the steps it took
+ * interleaved in the order they happened. Exactly one of those rows is the
+ * durable reply — the last block — so the turn keeps one set of message actions
+ * wherever that block falls, and steps the agent ran after it still list below.
+ * A collapsed turn returns that final block alone, which is what a finished turn
+ * shows in a local session.
  */
 function turnEntries(
     entry: LiveChatMessage,
     projection: ChatTraceProjection | undefined,
-): { readonly entries: WorkspaceEntry[]; readonly body: string } {
-    if (!traceStepsShown(entry, projection)) return { entries: [], body: entry.body };
+): WorkspaceEntry[] {
     const loaded = projection?.traces[entry.id];
-    if (loaded?.type !== "ready") return { entries: [], body: entry.body };
+    if (!traceStepsShown(entry, projection) || loaded?.type !== "ready")
+        return [{ ...entry, body: turnFinalBlock(entry) }];
     const steps = loaded.value.entries;
-    const { leading, tail } = turnTextBlocks(
+    const blocks = turnTextBlocks(
         entry.body,
         steps.flatMap((step) => (step.kind === "response" && step.detail ? [step.detail] : [])),
     );
+    // The reply row is placed by index rather than appended, so a turn that ran
+    // one more tool after its closing words keeps that tool below them.
     const entries: WorkspaceEntry[] = [];
+    let replyIndex = -1;
     let block = 0;
+    const pushBlock = (text: string) => {
+        replyIndex = entries.length;
+        entries.push({
+            ...entry,
+            renderKey: `${entry.renderKey} block-${block}`,
+            body: text,
+            turnBlock: true,
+            reactions: undefined,
+            agentTrace: undefined,
+            generationStatus: undefined,
+        });
+        block += 1;
+    };
     for (const step of steps) {
         if (step.kind === "response") {
-            const text = leading[block];
-            if (text === undefined) continue;
-            block += 1;
-            entries.push({
-                ...entry,
-                id: entry.id,
-                renderKey: `${entry.renderKey} block-${block}`,
-                body: text,
-                turnBlock: true,
-                reactions: undefined,
-                agentTrace: undefined,
-                generationStatus: undefined,
-            });
+            const text = blocks[block];
+            if (text !== undefined) pushBlock(text);
             continue;
         }
         if (!traceStepListed(step)) continue;
@@ -445,6 +482,16 @@ function turnEntries(
             activity: traceStepActivity(step),
         });
     }
+    // Text the turn has written but not committed yet closes the list: no step
+    // announced it, so nothing places it earlier.
+    while (block < blocks.length) pushBlock(blocks[block]!);
+    if (replyIndex === -1) {
+        replyIndex = entries.length;
+        entries.push(entry);
+    }
+    // The durable reply carries the message identity: actions, reactions, and
+    // generation status ride the block the turn finished on.
+    entries[replyIndex] = { ...entry, body: blocks[blocks.length - 1] ?? "" };
     // A turn that went to work before writing anything would otherwise open with
     // bare steps and only name the agent afterwards, so its own steps would read
     // as trailing whatever came before it. The identity leads instead, and every
@@ -462,15 +509,51 @@ function turnEntries(
     // The control that folds a turn away rides the line that opened it, beside
     // the agent's name, so expanding and collapsing never moves it: what changes
     // is what hangs below that line, not where the reader clicks.
-    const opening = entries[0];
-    if (opening?.kind === "message") opening.agentTrace = entry.agentTrace;
-    return { entries, body: tail };
+    for (const [index, row] of entries.entries())
+        if (row.kind === "message") row.agentTrace = index === 0 ? entry.agentTrace : undefined;
+    return entries;
+}
+/**
+ * The live status line for a turn that is still working, or nothing once it has
+ * settled. Counts come from the turn's own trace so a reconnected reader sees
+ * them immediately; the realtime activity for the same turn overrides them while
+ * it is being delivered, because it reports token spend the durable summary does
+ * not carry.
+ */
+function turnStatusEntry(
+    entry: LiveChatMessage,
+    activity: DeepReadonly<AgentActivityState> | undefined,
+    now: number,
+): ChatTurnStatus | undefined {
+    const trace = entry.agentTrace;
+    if (!trace || turnTerminal(trace)) return undefined;
+    const startedAt = activity?.startedAt ?? (trace.startedAt ? Date.parse(trace.startedAt) : NaN);
+    const subagents = activity?.subagents ?? trace.subagents;
+    const terminals = activity?.backgroundTerminals ?? trace.backgroundTerminals;
+    return {
+        kind: "turnStatus",
+        id: `${entry.id} status`,
+        conversationId: entry.conversationId,
+        messageId: entry.id,
+        ...(trace.latest ? { stepKind: trace.latest.kind } : {}),
+        title: trace.latest?.title ?? "Working",
+        ...(trace.latest?.detail ? { detail: traceStepSubject(trace.latest.detail) } : {}),
+        subagentCount: subagents.filter((subagent) => subagent.status === "running").length,
+        terminalCount: terminals.length,
+        totalTokens: activity?.tokenCount ?? trace.totalTokens ?? 0,
+        ...(Number.isFinite(startedAt) ? { elapsedMs: Math.max(0, now - startedAt) } : {}),
+    };
 }
 export function entriesProject(
     items: readonly DeepReadonly<ConversationMessageEntry>[],
     traces?: ChatTraceProjection,
+    /** Realtime agent activity for this chat, keyed by the turn it belongs to. */
+    activities: readonly DeepReadonly<AgentActivityState>[] = [],
+    /** The owner's ticking clock, so the running turn's elapsed time advances. */
+    now = 0,
 ): WorkspaceEntry[] {
     const result: WorkspaceEntry[] = [];
+    const activityByTurn = new Map(activities.map((activity) => [activity.turnId, activity]));
     let previousDay = "";
     for (const item of items) {
         const message = item.message;
@@ -505,16 +588,16 @@ export function entriesProject(
             continue;
         }
         // A turn reads top to bottom as the agent worked: what it wrote first,
-        // then the steps it took, then the answer it settled on.
+        // then the steps it took, then the answer it settled on — and, while it
+        // is still working, one status line under all of it.
         const projected = messageEntry(item);
-        const turn = turnEntries(projected, traces);
-        result.push(...turn.entries, {
-            ...projected,
-            body: turn.body,
-            // An expanded turn already carries its control on the line that
-            // opened it, so the answer closing that turn adds no second one.
-            ...(turn.entries.length > 0 ? { agentTrace: undefined } : {}),
-        });
+        result.push(...turnEntries(projected, traces));
+        const status = turnStatusEntry(
+            projected,
+            projected.agentTrace ? activityByTurn.get(projected.agentTrace.turnId) : undefined,
+            now,
+        );
+        if (status) result.push(status);
     }
     return result;
 }

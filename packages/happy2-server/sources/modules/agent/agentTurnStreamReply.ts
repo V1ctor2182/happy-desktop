@@ -40,6 +40,8 @@ export async function agentTurnStreamReply(
         expectedEventId?: string;
         sessionId: string;
         streamCommittedText: string;
+        /** Offset in `text` where the reply's final committed text block starts. */
+        finalTextOffset: number;
         userMessageId: string;
         text: string;
         traceUpdates: readonly AgentTurnTraceUpdate[];
@@ -58,6 +60,7 @@ export async function agentTurnStreamReply(
             .set({
                 lastSessionEventId: input.eventId,
                 streamCommittedText: input.streamCommittedText,
+                traceFinalTextOffset: boundedOffset(input.finalTextOffset, input.text.length),
                 updatedAt: sql`CURRENT_TIMESTAMP`,
             })
             .where(
@@ -412,6 +415,15 @@ function boundedIdentifier(value: string, prefix: string, maximum: number): stri
 function boundedText(value: string | undefined, maximum: number): string | undefined {
     const text = value?.trim().slice(-maximum);
     return text || undefined;
+}
+
+/**
+ * Keeps the final-block offset inside the reply it indexes, so a stale or
+ * malformed offset degrades to "the whole reply is the final block" instead of
+ * slicing a collapsed turn down to nothing.
+ */
+function boundedOffset(value: number, length: number): number {
+    return Number.isSafeInteger(value) && value > 0 && value < length ? value : 0;
 }
 
 function boundedTimestamp(value: number): number {

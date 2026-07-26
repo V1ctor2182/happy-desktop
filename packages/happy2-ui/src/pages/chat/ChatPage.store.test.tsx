@@ -1247,7 +1247,11 @@ it("streams a turn's steps inline and folds them behind View traces when it ends
     const steps = view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]');
     expect(steps).toHaveLength(2);
     const firstStep = steps[0]!;
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBeNull();
+    // A running turn offers no "View traces" control — its steps are already
+    // listed — but it does keep one live status line under them.
+    const status = view.container.querySelector<HTMLElement>('[data-happy2-ui="agent-trace-row"]')!;
+    expect(status.dataset.status).toBe("running");
+    expect(status.textContent).toContain("Reasoning");
     const messageRoot = view.container.querySelectorAll('[data-happy2-ui="message"]')[2]!;
     expect(messageRoot.textContent).toContain("");
 
@@ -1341,7 +1345,7 @@ it("streams a turn's steps inline and folds them behind View traces when it ends
     expect(chatSubscriptions()).toBe(0);
 });
 
-it("projects live subagents and terminals into the strip with stable row identity", async () => {
+it("reports a running turn's fan-out on the transcript's status line", async () => {
     const sidebar = sidebarStoreFixtureCreate();
     const directory = directoryStoreFixtureCreate();
     const chatSurface = chatStoreFixtureCreate(chat.id);
@@ -1359,7 +1363,12 @@ it("projects live subagents and terminals into the strip with stable row identit
         chats: [{ chat, id: chat.id, displayName: chat.name!, participants: [] }],
         sync: { protocolVersion: 1, generation: "test", sequence: "0" },
     });
-    chatSurface.input({ type: "chatLoaded", chat, messages: [], hasMoreMessages: false });
+    chatSurface.input({
+        type: "chatLoaded",
+        chat,
+        messages: [messageItem("message-1", "Please inspect"), assistantItem(traceSummary())],
+        hasMoreMessages: false,
+    });
     const view = createRenderer();
     view.render(
         () => (
@@ -1379,161 +1388,89 @@ it("projects live subagents and terminals into the strip with stable row identit
         { width: 1200, height: 800 },
     );
     await view.ready();
+    // Nothing floats above the composer: the dock is the transcript's own
+    // bottom edge whether or not an agent is working.
     expect(view.container.querySelector('[data-happy2-ui="agent-activity-strip"]')).toBeNull();
     const messageList = view.container.querySelector<HTMLElement>(
         '[data-happy2-ui="message-list"]',
     )!;
-    const initialComposerCard = view.container.querySelector<HTMLElement>(
-        '[data-happy2-ui="composer"]',
-    )!;
+    const composerCard = view.container.querySelector<HTMLElement>('[data-happy2-ui="composer"]')!;
     expect(
-        initialComposerCard.getBoundingClientRect().top -
-            messageList.getBoundingClientRect().bottom,
+        composerCard.getBoundingClientRect().top - messageList.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 1);
 
-    // The composer keeps its DOM node, focus, value, and selection across
-    // strip mount, live updates, and unmount.
+    // The composer keeps its DOM node, focus, value, and selection across every
+    // live activity update behind it.
     composer.getState().textUpdate("draft while the agent works");
     await nextFrame();
     const textarea = view.container.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.focus();
     textarea.setSelectionRange(6, 11);
 
-    const activity = (latestText: string, totalTokens: number) => ({
+    const activity = (subagents: number, terminals: number, totalTokens: number) => ({
         chatId: chat.id,
         agentUserId: "agent-1",
         turnId: "message-1",
         phase: "thinking" as const,
         tokenCount: totalTokens,
         startedAt: Date.now() - 65_000,
-        subagents: [
-            {
-                id: "subagent-1",
-                depth: 1,
-                description: "Review server tests",
-                status: "running" as const,
-                latestText,
-                startedAt: Date.now() - 5_000,
-                totalTokens,
-            },
-        ],
-        backgroundTerminals: [
-            {
-                id: "7",
-                command: "pnpm test --watch",
-                cwd: "/workspace",
-                startedAt: Date.now() - 3_000,
-            },
-        ],
-        expiresAt: Date.now() + 15_000,
-    });
-    chatSurface.input({
-        type: "agentActivityReconciled",
-        agentActivity: [activity("Reading the gym harness", 64)],
-    });
-    await nextFrame();
-    const strip = view.container.querySelector('[data-happy2-ui="agent-activity-strip"]')!;
-    expect(strip).not.toBeNull();
-    const subagentRow = strip.querySelector('[data-happy2-ui="agent-activity-strip-subagent"]')!;
-    const terminalRow = strip.querySelector('[data-happy2-ui="agent-activity-strip-terminal"]')!;
-    expect(subagentRow.textContent).toContain("Review server tests");
-    expect(subagentRow.textContent).toContain("Reading the gym harness");
-    expect(terminalRow.textContent).toContain("pnpm test --watch");
-
-    expect(document.activeElement).toBe(textarea);
-
-    chatSurface.input({
-        type: "agentActivityReconciled",
-        agentActivity: [activity("No issues found", 80)],
-    });
-    await nextFrame();
-    expect(strip.querySelector('[data-happy2-ui="agent-activity-strip-subagent"]')).toBe(
-        subagentRow,
-    );
-    expect(strip.querySelector('[data-happy2-ui="agent-activity-strip-terminal"]')).toBe(
-        terminalRow,
-    );
-    expect(subagentRow.textContent).toContain("No issues found");
-    expect(view.container.querySelector("textarea")).toBe(textarea);
-    expect(document.activeElement).toBe(textarea);
-    expect(textarea.value).toBe("draft while the agent works");
-    expect(textarea.selectionStart).toBe(6);
-    expect(textarea.selectionEnd).toBe(11);
-
-    // A maximum valid payload (32 subagents + 32 terminals) keeps the strip at
-    // its 144px cap, scrolls internally, and never displaces the composer.
-    const maxActivity = (latestText: string) => ({
-        ...activity(latestText, 64),
-        subagents: Array.from({ length: 32 }, (_, index) => ({
+        subagents: Array.from({ length: subagents }, (_, index) => ({
             id: `subagent-${index}`,
             depth: 1,
             description: `Subagent task ${index}`,
             status: "running" as const,
-            latestText,
             startedAt: Date.now() - 5_000,
-            totalTokens: index * 10,
+            totalTokens,
         })),
-        backgroundTerminals: Array.from({ length: 32 }, (_, index) => ({
+        backgroundTerminals: Array.from({ length: terminals }, (_, index) => ({
             id: `${index}`,
             command: `pnpm run job-${index}`,
             cwd: `/workspace/job-${index}`,
             startedAt: Date.now() - 3_000,
         })),
+        expiresAt: Date.now() + 15_000,
     });
     chatSurface.input({
         type: "agentActivityReconciled",
-        agentActivity: [maxActivity("starting")],
+        agentActivity: [activity(2, 1, 12_400)],
     });
     await nextFrame();
-    const maxStrip = view.container.querySelector<HTMLElement>(
-        '[data-happy2-ui="agent-activity-strip"]',
+    const statusRow = view.container.querySelector<HTMLElement>(
+        '[data-happy2-ui="agent-trace-row"]',
     )!;
-    expect(maxStrip.getBoundingClientRect().height).toBe(144);
-    const surfaceRect = maxStrip.closest("[data-gym-surface]")!.getBoundingClientRect();
-    const composerRect = textarea.getBoundingClientRect();
-    expect(composerRect.bottom).toBeLessThanOrEqual(surfaceRect.bottom);
-    expect(composerRect.height).toBeGreaterThan(0);
+    const stats = statusRow.querySelector('[data-happy2-ui="agent-trace-row-stats"]')!;
+    expect(stats.textContent).toContain("2 agents");
+    expect(stats.textContent).toContain("1 process");
+    expect(stats.textContent).toContain("12k tokens");
     expect(document.activeElement).toBe(textarea);
 
-    // The production footer column owns the sibling spacing: the capped strip
-    // and the composer keep the declared 8px gap, and no per-agent typing pill
-    // row precedes the strip (that signal lives in the composer hint and the
-    // in-message trace row).
-    expect(view.container.querySelector('[data-happy2-ui="agent-activity"]')).toBeNull();
-    const composerCard = view.container.querySelector<HTMLElement>('[data-happy2-ui="composer"]')!;
-    expect(
-        composerCard.getBoundingClientRect().top - maxStrip.getBoundingClientRect().bottom,
-    ).toBeCloseTo(8, 1);
-    expect(surfaceRect.bottom - composerCard.getBoundingClientRect().bottom).toBeCloseTo(24, 1);
-
-    // Scrolling the strip and then receiving a live update keeps the scroll
-    // offset and the row DOM identity.
-    const port = maxStrip.querySelector<HTMLElement>(
-        '[data-happy2-ui="agent-activity-strip-scrollport"]',
-    )!;
-    expect(port.scrollHeight).toBeGreaterThan(port.clientHeight);
-    port.scrollTop = 200;
-    const firstMaxRow = maxStrip.querySelector('[data-happy2-ui="agent-activity-strip-subagent"]')!;
+    // A live update rewrites the counts in place: same row, same composer.
     chatSurface.input({
         type: "agentActivityReconciled",
-        agentActivity: [maxActivity("still working")],
+        agentActivity: [activity(1, 0, 80_000)],
     });
     await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-activity-strip-subagent"]')).toBe(
-        firstMaxRow,
-    );
-    expect(firstMaxRow.textContent).toContain("still working");
-    expect(port.scrollTop).toBe(200);
-    expect(document.activeElement).toBe(textarea);
-
-    chatSurface.input({ type: "agentActivityReconciled", agentActivity: [] });
-    await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-activity-strip"]')).toBeNull();
+    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBe(statusRow);
+    expect(statusRow.textContent).toContain("1 agent");
+    expect(statusRow.textContent).not.toContain("process");
+    expect(statusRow.textContent).toContain("80k tokens");
     expect(view.container.querySelector("textarea")).toBe(textarea);
     expect(document.activeElement).toBe(textarea);
     expect(textarea.value).toBe("draft while the agent works");
     expect(textarea.selectionStart).toBe(6);
     expect(textarea.selectionEnd).toBe(11);
+
+    // The line belongs to the working turn: completing it takes the line away
+    // and leaves the "View traces" link on the settled reply.
+    chatSurface.input({
+        type: "messageUpserted",
+        item: assistantItem(traceSummary({ status: "complete", entryCount: 2 }), "All done."),
+    });
+    chatSurface.input({ type: "agentActivityReconciled", agentActivity: [] });
+    await nextFrame();
+    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row-stats"]')).toBeNull();
+    expect(view.container.querySelector("textarea")).toBe(textarea);
+    expect(document.activeElement).toBe(textarea);
 });
 
 function sharedResourceLink(uri: string, title?: string) {

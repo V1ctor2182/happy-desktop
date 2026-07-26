@@ -490,6 +490,9 @@ export const agentTurns = sqliteTable(
         traceLatestDetail: text("trace_latest_detail"),
         traceLatestAt: integer("trace_latest_at"),
         traceEntryCount: integer("trace_entry_count").notNull().default(0),
+        // Where the reply's final committed text block starts, so a collapsed
+        // turn can show that block alone without loading the whole trace.
+        traceFinalTextOffset: integer("trace_final_text_offset").notNull().default(0),
         traceSubagentsJson: text("trace_subagents_json").notNull().default("[]"),
         traceBackgroundTerminalsJson: text("trace_background_terminals_json")
             .notNull()

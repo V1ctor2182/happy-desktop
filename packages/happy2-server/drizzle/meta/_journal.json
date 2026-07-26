@@ -379,6 +379,13 @@
             "when": 1786406400000,
             "tag": "0053_agent_turns_can_be_steered",
             "breakpoints": true
+        },
+        {
+            "idx": 54,
+            "version": "6",
+            "when": 1786492800000,
+            "tag": "0054_agent_turn_final_text_block",
+            "breakpoints": true
         }
     ]
 }

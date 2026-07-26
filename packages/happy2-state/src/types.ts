@@ -169,6 +169,13 @@ export interface AgentTurnTraceSummary {
     readonly completedAt?: string;
     readonly latest?: AgentTurnTraceLatest;
     readonly entryCount: number;
+    /**
+     * Offset in the reply where its final committed text block starts. A
+     * collapsed cloud turn renders that block alone, matching a local session
+     * that keeps only a finished turn's last message; producers that already
+     * emit one entry per block (the local Rig projection) omit it.
+     */
+    readonly finalTextOffset?: number;
     /** Tool invocations in the turn, when the producer can count them separately from steps. */
     readonly toolCallCount?: number;
     /** Total tokens attributed to the turn, when the producer reports them. */

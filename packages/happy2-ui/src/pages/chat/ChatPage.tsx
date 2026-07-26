@@ -417,6 +417,8 @@ export function ChatPage(props: ChatPageProps) {
     const [terminalHeight, setTerminalHeight] = useState(280);
     const draft = () => composerSnapshot()?.text ?? "";
     const pendingAttachments = () => composerSnapshot()?.attachments ?? [];
+    const activeAgentActivity = (): readonly DeepReadonly<AgentActivityState>[] =>
+        chatSnapshot()?.agentActivity ?? [];
     // Turn steps come from the same chat snapshot as the messages they belong
     // to, so a streaming turn's tools, reasoning, and answer render together.
     const traceProjection = (): ChatTraceProjection | undefined => {
@@ -428,7 +430,12 @@ export function ChatPage(props: ChatPageProps) {
               }
             : undefined;
     };
-    const entries = entriesProject(chatSnapshot()?.messages ?? [], traceProjection());
+    const entries = entriesProject(
+        chatSnapshot()?.messages ?? [],
+        traceProjection(),
+        activeAgentActivity(),
+        activityNow,
+    );
     const avatarFor = createAvatarProjection({
         user,
         sidebarSnapshot,
@@ -738,9 +745,6 @@ export function ChatPage(props: ChatPageProps) {
         const person = actor && directoryUsers().find((candidate) => candidate.id === actor.userId);
         return person ? "Typing…" : (statusHint ?? "Enter to send");
     };
-    const activeAgentActivity = (): readonly DeepReadonly<AgentActivityState>[] =>
-        chatSnapshot()?.agentActivity ?? [];
-
     const pluginRequestEntries = (): ReactNode[] => {
         const snapshot = chatSnapshot();
         const requests = snapshot?.pluginRequests;
@@ -1217,8 +1221,6 @@ export function ChatPage(props: ChatPageProps) {
                     (props.workspaceOverride ?? (
                         <ChatConversation
                             activeConversationId={activeConversationId()}
-                            activities={activeAgentActivity()}
-                            activityNow={activityNow}
                             busy={busy()}
                             composerAudience={
                                 audienceRoutingActive() ? composerSnapshot()?.audience : undefined

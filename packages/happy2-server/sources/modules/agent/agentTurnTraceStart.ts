@@ -93,6 +93,9 @@ export async function agentTurnTraceStart(
                 // The opening "Starting turn" marker is bookkeeping, not a step a
                 // reader opens, so the turn still reports no trace to show.
                 traceEntryCount: 0,
+                // Nothing has been written yet, so the whole reply is its final
+                // text block until the turn commits a second one.
+                traceFinalTextOffset: 0,
                 updatedAt: sql`CURRENT_TIMESTAMP`,
             })
             .where(

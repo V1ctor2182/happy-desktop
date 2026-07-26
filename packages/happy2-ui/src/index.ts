@@ -2,13 +2,6 @@ import "./styles.css";
 
 export { happyLogoUrl } from "./assets";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
-export {
-    AgentActivityStrip,
-    type AgentActivityStripProps,
-    type AgentActivityStripSubagent,
-    type AgentActivityStripSubagentStatus,
-    type AgentActivityStripTerminal,
-} from "./AgentActivityStrip";
 export { AgentDesk, type AgentDeskProps, type DeskListItem, type DeskRun } from "./AgentDesk";
 export {
     AgentTracePanel,

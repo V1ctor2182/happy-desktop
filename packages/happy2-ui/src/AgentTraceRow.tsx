@@ -23,6 +23,12 @@ export interface AgentTraceRowProps {
     readonly toolCallCount?: number;
     /** Turn token total when the producer reports it. */
     readonly totalTokens?: number;
+    /** Subagents working under this turn right now. */
+    readonly subagentCount?: number;
+    /** Background terminals this turn currently has running. */
+    readonly terminalCount?: number;
+    /** How long the turn has been running, from the owner's clock. */
+    readonly elapsedMs?: number;
     /** The trace panel is currently showing this turn. */
     readonly open?: boolean;
     readonly onOpen?: () => void;
@@ -62,6 +68,35 @@ function formatTokenCount(value: number): string {
     return String(value);
 }
 
+/** m:ss for a running turn; anything past an hour keeps counting in minutes. */
+function formatElapsed(elapsedMs: number): string {
+    const total = Math.max(0, Math.floor(elapsedMs / 1_000));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/**
+ * What a running turn reports beside its latest step: the work it has fanned out
+ * (subagents, background terminals), what it has spent, and how long it has been
+ * at it. Each part appears only once the turn actually has it, so a plain turn
+ * stays a plain line.
+ */
+function runningStats(props: {
+    subagentCount?: number;
+    terminalCount?: number;
+    totalTokens?: number;
+    elapsedMs?: number;
+}): string | undefined {
+    const parts: string[] = [];
+    const agents = props.subagentCount ?? 0;
+    const terminals = props.terminalCount ?? 0;
+    if (agents > 0) parts.push(`${agents} ${agents === 1 ? "agent" : "agents"}`);
+    if (terminals > 0) parts.push(`${terminals} ${terminals === 1 ? "process" : "processes"}`);
+    if (props.totalTokens !== undefined && props.totalTokens > 0)
+        parts.push(`${formatTokenCount(props.totalTokens)} tokens`);
+    if (props.elapsedMs !== undefined) parts.push(formatElapsed(props.elapsedMs));
+    return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
 function metaStats(toolCallCount?: number, totalTokens?: number): string | undefined {
     const parts: string[] = [];
     if (toolCallCount !== undefined && toolCallCount > 0)
@@ -93,6 +128,9 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
         "entryCount",
         "toolCallCount",
         "totalTokens",
+        "subagentCount",
+        "terminalCount",
+        "elapsedMs",
         "open",
         "onOpen",
         "toggles",
@@ -102,6 +140,13 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
     const running = () => local.status === "running";
     const meta = () => local.variant === "meta";
     const stats = () => metaStats(local.toolCallCount, local.totalTokens);
+    const live = () =>
+        runningStats({
+            subagentCount: local.subagentCount,
+            terminalCount: local.terminalCount,
+            totalTokens: local.totalTokens,
+            elapsedMs: local.elapsedMs,
+        });
     const linkLabel = () => (local.toggles && local.open ? "Hide traces" : "View traces");
     return (
         <button
@@ -156,6 +201,14 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
                     data-happy2-ui="agent-trace-row-detail"
                 >
                     {local.detail}
+                </span>
+            ) : null}
+            {!meta() && running() && live() ? (
+                <span
+                    className="happy2-agent-trace-row__stats"
+                    data-happy2-ui="agent-trace-row-stats"
+                >
+                    {live()}
                 </span>
             ) : null}
             {!meta() && !running() ? (

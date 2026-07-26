@@ -133,6 +133,7 @@ function traceEqual(
         left.turnId === right.turnId &&
         left.status === right.status &&
         left.entryCount === right.entryCount &&
+        left.finalTextOffset === right.finalTextOffset &&
         left.toolCallCount === right.toolCallCount &&
         left.totalTokens === right.totalTokens &&
         left.latest?.kind === right.latest?.kind &&

@@ -216,6 +216,14 @@ interface ActiveAgentActivity {
     phase: AgentActivityPhase;
     startedAt: number;
     subagents: Map<string, AgentTurnSubagentSummary>;
+    /**
+     * Which text blocks the agent has finished writing since its last committed
+     * message, and how many messages it has committed. A rig reuses partial ids
+     * across inference iterations, so the epoch — not the id — is what keeps one
+     * iteration's text block from overwriting the previous one's trace entry.
+     */
+    textEpoch: number;
+    tracedText: Set<number>;
     timer: ReturnType<typeof setInterval>;
     tokenCounts: Map<string, number>;
     toolNames: Map<string, string>;
@@ -2300,6 +2308,7 @@ export class AgentService {
                     actorUserId: input.actorUserId,
                     eventId: update.eventId,
                     expectedEventId: update.expectedEventId,
+                    finalTextOffset: update.finalTextOffset,
                     sessionId: input.sessionId,
                     streamCommittedText: update.streamCommittedText,
                     text: update.text,
@@ -2359,6 +2368,10 @@ export class AgentService {
     ): Promise<void> {
         let committedText = input.streamCommittedText;
         let partialText = "";
+        // Where the reply's last text block starts. A resumed turn cannot know
+        // where its earlier blocks ended, so it treats what it inherited as one
+        // block until the run commits the next one.
+        let finalTextOffset = 0;
         let runId = submission.runId;
         let after = submission.lastSessionEventId;
         while (!signal.aborted && !this.shutdown.signal.aborted) {
@@ -2398,6 +2411,8 @@ export class AgentService {
                             } else if (event.type === "agent_message") {
                                 const completed = messageText(event.data.message);
                                 if (completed) {
+                                    finalTextOffset =
+                                        committedText.length === 0 ? 0 : committedText.length + 2;
                                     committedText = appendAgentText(committedText, completed);
                                     partialText = "";
                                     shouldPersist = true;
@@ -2407,6 +2422,7 @@ export class AgentService {
                                 const activity = this.agentActivities.get(input.userMessageId);
                                 output.add({
                                     eventId: event.id,
+                                    finalTextOffset,
                                     streamCommittedText: committedText,
                                     text: appendAgentText(committedText, partialText),
                                     traceUpdates,
@@ -2424,6 +2440,7 @@ export class AgentService {
                         if (shouldPersist)
                             output.add({
                                 eventId: event.id,
+                                finalTextOffset,
                                 streamCommittedText: committedText,
                                 text: appendAgentText(committedText, partialText),
                                 traceUpdates: [],
@@ -2579,9 +2596,11 @@ export class AgentService {
                         return [summary.id, summary];
                     }),
             ),
+            textEpoch: 0,
             timer,
             tokenCounts: new Map(),
             toolNames: new Map(),
+            tracedText: new Set(),
             userMessageId: input.userMessageId,
         };
         this.agentActivities.set(input.userMessageId, activity);
@@ -2753,6 +2772,7 @@ class AgentReplyStreamOutput {
     private flushTimer?: ReturnType<typeof setTimeout>;
     private pending?: {
         eventId: string;
+        finalTextOffset: number;
         streamCommittedText: string;
         text: string;
         traceUpdates: AgentTurnTraceUpdate[];
@@ -2765,6 +2785,7 @@ class AgentReplyStreamOutput {
         private readonly persist: (update: {
             eventId: string;
             expectedEventId?: string;
+            finalTextOffset: number;
             streamCommittedText: string;
             text: string;
             traceUpdates: readonly AgentTurnTraceUpdate[];
@@ -2778,6 +2799,7 @@ class AgentReplyStreamOutput {
     }
     add(update: {
         eventId: string;
+        finalTextOffset: number;
         streamCommittedText: string;
         text: string;
         traceUpdates: readonly AgentTurnTraceUpdate[];
@@ -3063,11 +3085,19 @@ function agentTurnTraceUpdates(
             },
         ];
     if (event.type === "agent_message") {
+        // A committed message closes the epoch its text blocks belong to. The
+        // blocks that already ended on the stream are traced where they were
+        // written — before the tools the same iteration went on to call — so a
+        // message only records text the rig never announced ending.
+        const traced = activity.tracedText.size > 0;
+        const epoch = activity.textEpoch;
+        activity.tracedText.clear();
+        activity.textEpoch += 1;
         const detail = messageText(event.data.message);
-        return detail
+        return detail && !traced
             ? [
                   {
-                      traceKey: `response:${event.data.message?.id ?? "active"}`,
+                      traceKey: `response:${epoch}:message`,
                       sessionEventId: event.id,
                       kind: "response",
                       title: "Response completed",
@@ -3097,13 +3127,31 @@ function agentTurnTraceUpdates(
             },
         ];
     }
-    // Draft text is deliberately not traced. The partial already streams into the
-    // reply message the reader is watching, and a rig that reuses one partial id
-    // across inference iterations collided on this trace key, overwriting the
-    // first text block's entry with a later block's words while it kept the
-    // original timestamp. Every committed block is recorded by `agent_message`
-    // above, keyed by its own message id, so the response entries stay one per
-    // block and in the order the turn produced them.
+    // A finished text block is traced where the agent wrote it, keyed by the
+    // epoch and content index rather than the partial id a rig reuses across
+    // inference iterations. Waiting for `agent_message` timestamped a block
+    // after the tools that same iteration called, so a turn that wrote, worked,
+    // then answered rendered its opening words below its tool rows.
+    if (type === "text_end") {
+        const detail = agentLoopContent(loop, "text");
+        if (!detail) return [];
+        const index = boundedInteger(loop.contentIndex ?? 0, 0);
+        activity.tracedText.add(index);
+        return [
+            {
+                traceKey: `response:${activity.textEpoch}:${index}`,
+                sessionEventId: event.id,
+                kind: "response",
+                title: "Response completed",
+                detail: traceDetail(detail),
+                status: "complete",
+                occurredAt,
+                completedAt: occurredAt,
+            },
+        ];
+    }
+    // Draft text is not traced: the partial already streams into the reply
+    // message the reader is watching.
     if (type.startsWith("text_")) return [];
     if (type === "toolcall_end" && loop.toolCall?.id) {
         const toolCallId = boundedIdentifier(loop.toolCall.id, "tool");

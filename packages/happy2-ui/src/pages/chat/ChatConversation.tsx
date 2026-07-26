@@ -35,8 +35,6 @@ export interface ChatConversationProps {
      */
     estimateRowSize?: (index: number, width: number) => number | undefined;
     messageListScrollPosition?: MessageListScrollPosition;
-    activities: readonly DeepReadonly<AgentActivityState>[];
-    activityNow: number;
     contextItems: ContextItem[];
     composerAudience?: AudienceValue;
     composerCompactHint: string;
@@ -160,8 +158,6 @@ export function ChatConversation(props: ChatConversationProps) {
                 {props.messageEntries}
             </MessageList>
             <ComposerDock
-                activities={props.activities}
-                activityNow={props.activityNow}
                 composerAudience={props.composerAudience}
                 composerCompactHint={props.composerCompactHint}
                 composerContributions={props.composerContributions}

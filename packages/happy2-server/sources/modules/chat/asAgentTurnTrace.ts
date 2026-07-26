@@ -16,6 +16,7 @@ export interface AgentTurnTraceRow {
     traceLatestDetail: string | null;
     traceLatestAt: number | null;
     traceEntryCount: number;
+    traceFinalTextOffset: number;
     traceSubagentsJson: string;
     traceBackgroundTerminalsJson: string;
 }
@@ -39,6 +40,7 @@ export function asAgentTurnTrace(row: AgentTurnTraceRow): AgentTurnTraceSummary 
         ...(row.completedAt ? { completedAt: row.completedAt } : {}),
         ...(latest ? { latest } : {}),
         entryCount: Math.max(0, row.traceEntryCount),
+        finalTextOffset: Math.max(0, row.traceFinalTextOffset),
         subagents: subagents(row.traceSubagentsJson),
         backgroundTerminals: backgroundTerminals(row.traceBackgroundTerminalsJson),
     };

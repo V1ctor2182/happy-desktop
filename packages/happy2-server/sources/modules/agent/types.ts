@@ -65,6 +65,12 @@ export interface AgentTurnTraceSummary {
     completedAt?: string;
     latest?: Omit<AgentTurnTraceEntrySummary, "id" | "status" | "completedAt">;
     entryCount: number;
+    /**
+     * Character offset in the reply where its final committed text block starts.
+     * A collapsed turn renders that block alone, the way a local session keeps
+     * only a finished turn's last message, without fetching the turn's steps.
+     */
+    finalTextOffset: number;
     subagents: AgentTurnSubagentSummary[];
     backgroundTerminals: AgentTurnBackgroundTerminalSummary[];
 }

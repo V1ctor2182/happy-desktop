@@ -2,7 +2,6 @@ import { Fragment, useLayoutEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "../src/index";
 import "./workbench.css";
-import { AgentActivityStripPage } from "./pages/AgentActivityStripPage";
 import { AgentDeskPage } from "./pages/AgentDeskPage";
 import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
 import { AgentTraceRowPage } from "./pages/AgentTraceRowPage";
@@ -392,12 +391,6 @@ const components: BlueprintPage[] = [
         label: "Development token modal",
         number: "C-071",
         page: DevelopmentTokenModalPage,
-    },
-    {
-        id: "agent-activity-strip",
-        label: "Agent activity strip",
-        number: "C-072",
-        page: AgentActivityStripPage,
     },
     {
         id: "agent-trace-row",
