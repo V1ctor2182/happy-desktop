@@ -15,6 +15,8 @@ export type TabItem = {
     label: string;
     icon?: IconName;
     badge?: number;
+    /** An italic, replaceable document preview rather than a permanent tab. */
+    preview?: boolean;
     /**
      * Whether the work behind this tab is running. It takes the leading slot and
      * spins there, so a busy tab reads as busy at a glance instead of wearing a
@@ -30,6 +32,8 @@ export type TabsProps = {
     style?: CSSProperties;
     activeId: string;
     onSelect: (id: string) => void;
+    /** Reports a tab activated with a double click, such as pinning a preview. */
+    onDoubleClick?: (id: string) => void;
     tabs: TabItem[];
     size?: TabsSize;
     /**
@@ -132,6 +136,7 @@ export function Tabs(props: TabsProps) {
         "style",
         "activeId",
         "onClose",
+        "onDoubleClick",
         "onReorder",
         "onSelect",
         "tabs",
@@ -227,6 +232,7 @@ export function Tabs(props: TabsProps) {
                         data-active={active() ? "" : undefined}
                         data-dragged={dragged() ? "" : undefined}
                         data-happy2-ui="tab"
+                        data-preview={tab.preview ? "" : undefined}
                         data-reorderable={local.onReorder ? "" : undefined}
                         data-tab-id={tab.id}
                         onClick={() => {
@@ -236,6 +242,7 @@ export function Tabs(props: TabsProps) {
                             }
                             local.onSelect(tab.id);
                         }}
+                        onDoubleClick={() => local.onDoubleClick?.(tab.id)}
                         onPointerCancel={dragEnd}
                         onPointerDown={(event) => dragStart(event, index)}
                         onPointerMove={dragMove}

@@ -82,6 +82,12 @@
     flex: none;
 }
 
+/* Preview documents are intentionally provisional: italic title text
+   distinguishes the one tab the next preview may replace. */
+.happy2-tabs__tab[data-preview] .happy2-tabs__tab-label {
+    font-style: italic;
+}
+
 .happy2-tabs__tab-badge {
     flex: none;
 }

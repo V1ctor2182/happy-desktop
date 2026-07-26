@@ -272,6 +272,7 @@ function fileTabItem(tab: RigChangedFileTabSnapshot): TabItem {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
         icon: "doc",
+        preview: tab.preview,
     };
 }
 
@@ -432,6 +433,9 @@ export function AppRigView(props: AppRigViewProps) {
                         expanded={workspace.fileTreeExpanded}
                         layout={workspace.fileLayout}
                         onFileSelect={(path) => {
+                            if (openGroup) props.workspace.filePreview(openGroup.id, path);
+                        }}
+                        onFileOpen={(path) => {
                             if (openGroup) props.workspace.fileOpen(openGroup.id, path);
                         }}
                         onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
@@ -718,11 +722,10 @@ export function AppRigView(props: AppRigViewProps) {
                                     aria-label="Create a session in this project"
                                     icon="plus"
                                     iconOnly
-                                    // Opens the same dialog the sidebar does,
-                                    // already pointed at this project: the
-                                    // question of where is answered, and the
-                                    // rest of it still has to be asked.
-                                    onClick={() => props.workspace.createOpen(openGroup.id)}
+                                    // A tab is a session, so adding one creates
+                                    // it directly in the addressed project or
+                                    // worktree instead of opening the task form.
+                                    onClick={() => groupConversationCreate(openGroup)}
                                     size="small"
                                     variant="ghost"
                                 />
@@ -751,6 +754,10 @@ export function AppRigView(props: AppRigViewProps) {
                                 void props.workspace
                                     .conversationArchive(tabId as RigSessionId)
                                     .catch(() => undefined);
+                            }}
+                            onDoubleClick={(tabId) => {
+                                const file = groupFileTabs.find((tab) => tab.id === tabId);
+                                if (file) props.workspace.fileOpen(file.groupId, file.path);
                             }}
                             {...(groupFileTabs.length === 0
                                 ? {
@@ -1249,6 +1256,7 @@ function RigPanelBody(props: {
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
     layout: RigFileLayout;
+    onFileOpen: (path: string) => void;
     onFileSelect: (path: string) => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onScopeChange: (scope: RigFileScope) => void;
@@ -1326,6 +1334,7 @@ function RigPanelBody(props: {
                                 ? { note: "Showing the first 20,000 files." }
                                 : {})}
                             onSelect={props.onFileSelect}
+                            onOpen={props.onFileOpen}
                             onToggle={props.onToggle}
                             selectedId={props.selectedPath}
                             subtitle={`${String(count)} ${count === 1 ? "file" : "files"}`}

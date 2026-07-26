@@ -124,6 +124,11 @@ export interface RigChangedFileTabSnapshot {
     readonly id: string;
     readonly groupId: RigGroupId;
     readonly path: string;
+    /**
+     * A single-click preview may be replaced by the next file previewed in this
+     * group. Opening it permanently or editing it clears this flag.
+     */
+    readonly preview: boolean;
     readonly revision: string;
     readonly document: Loadable<RigChangedFileDocument>;
     readonly loading: boolean;
@@ -341,7 +346,12 @@ export interface RigWorkspaceStore {
         afterId: RigWorktreeId | null,
     ): Promise<void>;
 
-    /** Opens or selects one changed file in the main-content tab strip. */
+    /**
+     * Previews one changed file in the main-content tab strip. A new preview
+     * replaces this group's previous preview without disturbing permanent tabs.
+     */
+    filePreview(groupId: RigGroupId, path: string): void;
+    /** Opens one changed file permanently, promoting its preview when present. */
     fileOpen(groupId: RigGroupId, path: string): void;
     /** Selects one open file tab, or clears file selection when a session is selected. */
     fileSelect(tabId: string | undefined): void;
@@ -715,6 +725,13 @@ export function rigWorkspaceStoreCreate(
         return undefined;
     };
 
+    /** Stops pending work for a file tab that is being closed or replaced. */
+    const fileTabRelease = (tabId: string): void => {
+        fileLoadGenerations.delete(tabId);
+        fileLoadControllers.get(tabId)?.abort();
+        fileLoadControllers.delete(tabId);
+    };
+
     const fileLoad = (tabId: string, revision: string): void => {
         const before = fileTabs.find((tab) => tab.id === tabId);
         if (!before) return;
@@ -778,6 +795,51 @@ export function rigWorkspaceStoreCreate(
                 recompute();
             },
         );
+    };
+
+    /**
+     * Opens a file with preview or permanent lifetime. Each group has at most
+     * one preview; permanent tabs and previews in other groups keep their place.
+     */
+    const fileTabOpen = (groupId: RigGroupId, path: string, preview: boolean): void => {
+        const id = `${groupId}\u0000${path}`;
+        const existing = fileTabs.find((tab) => tab.id === id);
+        activeFileTabId = id;
+        if (existing) {
+            if (!preview && existing.preview)
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === id ? { ...tab, preview: false } : tab,
+                );
+            const change = fileChangeFind(groupId, path);
+            if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
+            else recompute();
+            return;
+        }
+
+        const revision = fileChangeFind(groupId, path)?.revision ?? "";
+        const tab: RigChangedFileTabSnapshot = {
+            id,
+            groupId,
+            path,
+            preview,
+            revision,
+            saving: false,
+            document: { type: "loading" },
+            loading: true,
+        };
+        const replacedIndex = preview
+            ? fileTabs.findIndex((candidate) => candidate.groupId === groupId && candidate.preview)
+            : -1;
+        if (replacedIndex >= 0) {
+            fileTabRelease(fileTabs[replacedIndex]!.id);
+            fileTabs = fileTabs.map((candidate, index) =>
+                index === replacedIndex ? tab : candidate,
+            );
+        } else {
+            fileTabs = [...fileTabs, tab];
+        }
+        recompute();
+        fileLoad(id, revision);
     };
 
     const fileTabsReconcile = (): void => {
@@ -1380,32 +1442,8 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        fileOpen(groupId, path) {
-            const id = `${groupId}\u0000${path}`;
-            const existing = fileTabs.find((tab) => tab.id === id);
-            activeFileTabId = id;
-            if (existing) {
-                const change = fileChangeFind(groupId, path);
-                if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
-                else recompute();
-                return;
-            }
-            const revision = fileChangeFind(groupId, path)?.revision ?? "";
-            fileTabs = [
-                ...fileTabs,
-                {
-                    id,
-                    groupId,
-                    path,
-                    revision,
-                    saving: false,
-                    document: { type: "loading" },
-                    loading: true,
-                },
-            ];
-            recompute();
-            fileLoad(id, revision);
-        },
+        filePreview: (groupId, path) => fileTabOpen(groupId, path, true),
+        fileOpen: (groupId, path) => fileTabOpen(groupId, path, false),
         fileSelect(tabId) {
             activeFileTabId =
                 tabId !== undefined && fileTabs.some((tab) => tab.id === tabId) ? tabId : undefined;
@@ -1414,9 +1452,7 @@ export function rigWorkspaceStoreCreate(
         fileClose(tabId) {
             const index = fileTabs.findIndex((tab) => tab.id === tabId);
             if (index < 0) return;
-            fileLoadGenerations.delete(tabId);
-            fileLoadControllers.get(tabId)?.abort();
-            fileLoadControllers.delete(tabId);
+            fileTabRelease(tabId);
             fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
             if (activeFileTabId === tabId)
                 activeFileTabId = fileTabs[Math.min(index, fileTabs.length - 1)]?.id;
@@ -1454,7 +1490,7 @@ export function rigWorkspaceStoreCreate(
         },
         fileDraftUpdate(tabId, draft) {
             fileTabs = fileTabs.map((tab) =>
-                tab.id === tabId && !tab.saving ? { ...tab, draft } : tab,
+                tab.id === tabId && !tab.saving ? { ...tab, draft, preview: false } : tab,
             );
             recompute();
         },

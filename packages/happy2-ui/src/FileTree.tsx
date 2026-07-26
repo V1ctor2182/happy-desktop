@@ -37,6 +37,8 @@ export type FileTreeProps = {
     /** Currently selected entry id, if any. */
     selectedId?: string;
     onSelect?: (id: string) => void;
+    /** File activated with a double click; directories continue to toggle. */
+    onOpen?: (id: string) => void;
     /** Directory expand/collapse request. */
     onToggle?: (id: string) => void;
     /** Directory paging request (the "Show more" affordance). */
@@ -202,6 +204,7 @@ function FileTreeRow(props: {
     indent: number;
     selectedId?: string;
     onSelect?: (id: string) => void;
+    onOpen?: (id: string) => void;
     onToggle?: (id: string) => void;
     onLoadMore?: (id: string) => void;
     moreLabel: string;
@@ -248,7 +251,9 @@ function FileTreeRow(props: {
                     className="happy2-file-tree__entry"
                     data-happy2-ui="file-tree-entry"
                     onClick={() => props.onSelect?.(node().id)}
-                    onDoubleClick={() => directory() && props.onToggle?.(node().id)}
+                    onDoubleClick={() =>
+                        directory() ? props.onToggle?.(node().id) : props.onOpen?.(node().id)
+                    }
                     type="button"
                 >
                     <span className="happy2-file-tree__icon" data-happy2-ui="file-tree-icon">
@@ -291,6 +296,7 @@ function FileTreeRow(props: {
                                 moreLabel={props.moreLabel}
                                 node={child}
                                 onLoadMore={props.onLoadMore}
+                                onOpen={props.onOpen}
                                 onSelect={props.onSelect}
                                 onToggle={props.onToggle}
                                 selectedId={props.selectedId}
@@ -331,6 +337,7 @@ export function FileTree(props: FileTreeProps) {
         "nodes",
         "selectedId",
         "onSelect",
+        "onOpen",
         "onToggle",
         "onLoadMore",
         "indent",
@@ -358,6 +365,7 @@ export function FileTree(props: FileTreeProps) {
                             moreLabel={local.moreLabel ?? "Show more…"}
                             node={node}
                             onLoadMore={local.onLoadMore}
+                            onOpen={local.onOpen}
                             onSelect={local.onSelect}
                             onToggle={local.onToggle}
                             selectedId={local.selectedId}

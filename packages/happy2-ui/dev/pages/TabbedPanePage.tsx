@@ -7,7 +7,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const sessionTabs: TabItem[] = [
     { id: "one", label: "Refactor the router" },
     { id: "two", label: "Fix the flaky upload test", busy: true },
-    { id: "three", label: "Untitled session" },
+    { id: "three", label: "workspace.ts", icon: "doc", preview: true },
 ];
 
 const longTabs: TabItem[] = [
@@ -113,13 +113,13 @@ export function TabbedPanePage() {
                 </Specimen>
                 <Specimen
                     detail="close shows on the active tab and on hover of any other"
-                    label="Closable tabs"
+                    label="Closable and preview tabs"
                     number="T-04"
                     stage="app"
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="two" tabs={sessionTabs} withAction withClose />
-                        <DimensionRule label="close 16 × 16 · reserved box · opacity only" />
+                        <DimensionRule label="preview title italic · close 16 × 16" />
                     </div>
                 </Specimen>
                 <Specimen

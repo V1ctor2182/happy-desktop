@@ -18,6 +18,7 @@ export type FilePanelProps = {
     nodes: FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
     onSelect?: FileTreeProps["onSelect"];
+    onOpen?: FileTreeProps["onOpen"];
     onToggle?: FileTreeProps["onToggle"];
     onLoadMore?: FileTreeProps["onLoadMore"];
     loading?: boolean;
@@ -45,6 +46,7 @@ export function FilePanel(props: FilePanelProps) {
         "nodes",
         "selectedId",
         "onSelect",
+        "onOpen",
         "onToggle",
         "onLoadMore",
         "loading",
@@ -94,6 +96,7 @@ export function FilePanel(props: FilePanelProps) {
                         loadingLabel={local.loadingLabel}
                         nodes={local.nodes}
                         onLoadMore={local.onLoadMore}
+                        onOpen={local.onOpen}
                         onSelect={local.onSelect}
                         onToggle={local.onToggle}
                         selectedId={local.selectedId}
