@@ -264,10 +264,18 @@ export type ComposerProps = {
     /** Optional controlled model-selection control, rendered in the composer toolbar. */
     modelControl?: ReactNode;
     onSend: () => unknown;
+    /**
+     * Ends the agent's current inference. With `running`, it takes over the send
+     * control while the draft is empty; typing gives the control back to sending,
+     * because a message written during a run steers it rather than stopping it.
+     */
+    onStop?: () => void;
     onValueChange: (value: string) => void;
     placeholder?: string;
     /** Keeps the composer geometry stable while the current send is being acknowledged. */
     pending?: boolean;
+    /** True while the agent is producing a reply, which is what `onStop` ends. */
+    running?: boolean;
     /** Emoji available to the composer's searchable picker. */
     emoji?: EmojiItem[];
     /** Emoji ids rendered in the picker's recent section. */
@@ -307,6 +315,14 @@ export function Composer(props: ComposerProps) {
         return list[Math.min(activeIndex, list.length - 1)];
     };
     const canSend = () => !busy && (props.sendEnabled ?? props.value.trim().length > 0);
+    /*
+     * One control, two acts. While the agent is running an empty draft has
+     * nothing to send, so that same circle stops the run; the moment there is
+     * something to say it returns to sending, and what it sends steers the run
+     * already under way.
+     */
+    const stopShown = () =>
+        Boolean(props.running && props.onStop) && props.value.trim().length === 0;
     const emoji = () => props.emoji ?? [];
     const filteredEmoji = () => {
         const needle = emojiQuery.trim().toLowerCase();
@@ -651,16 +667,29 @@ export function Composer(props: ComposerProps) {
                                 {props.modelControl}
                             </div>
                         ) : null}
-                        <Button
-                            aria-label="Send message"
-                            className="happy2-composer__send"
-                            disabled={!canSend()}
-                            icon="arrow-up"
-                            iconOnly
-                            onClick={send}
-                            size="small"
-                            variant="primary"
-                        />
+                        {stopShown() ? (
+                            <Button
+                                aria-label="Stop the agent"
+                                className="happy2-composer__send happy2-composer__stop"
+                                data-action="stop"
+                                icon="stop"
+                                iconOnly
+                                onClick={() => props.onStop?.()}
+                                size="small"
+                                variant="primary"
+                            />
+                        ) : (
+                            <Button
+                                aria-label="Send message"
+                                className="happy2-composer__send"
+                                disabled={!canSend()}
+                                icon="arrow-up"
+                                iconOnly
+                                onClick={send}
+                                size="small"
+                                variant="primary"
+                            />
+                        )}
                     </div>
                 </div>
                 {mentionOpen() ? (

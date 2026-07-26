@@ -9,6 +9,7 @@ import { agentTurnRenewLease } from "../agent/agentTurnRenewLease.js";
 import { agentTurnReleaseLeases } from "../agent/agentTurnReleaseLeases.js";
 import { agentTurnHasRunnable } from "../agent/agentTurnHasRunnable.js";
 import { agentTurnGetRunning } from "../agent/agentTurnGetRunning.js";
+import { agentTurnAbort } from "../agent/agentTurnAbort.js";
 import { agentTurnFail } from "../agent/agentTurnFail.js";
 import { agentTurnComplete } from "../agent/agentTurnComplete.js";
 import { agentTurnCheckpoint } from "../agent/agentTurnCheckpoint.js";
@@ -85,6 +86,7 @@ import { realtimeTopics, type AgentActivityPhase, type PubSub } from "../realtim
 import {
     isRetryableRigError,
     RigDaemonClient,
+    RigHttpError,
     type RigEvent,
     type RigBackgroundProcess,
     type RigGlobalEvent,
@@ -167,6 +169,12 @@ const AGENT_CONTAINER_SECURITY = {
     ],
 } as const;
 type AgentTurnWork = NonNullable<Awaited<ReturnType<typeof agentTurnTakeNext>>>;
+/**
+ * The three ids every turn-scoped realtime publication needs. A reader-initiated
+ * stop knows them without holding the turn's worker lease, so the typing and
+ * activity publications take this rather than the full claimed work item.
+ */
+type AgentTurnIdentity = Pick<AgentTurnWork, "agentUserId" | "chatId" | "userMessageId">;
 interface AgentSecretCreateInput {
     actorUserId: string;
     description: string;
@@ -655,7 +663,7 @@ export class AgentService {
         chatId: string;
         terminalId: string;
     }): Promise<Duplex> {
-        const sessionId = await this.authorizedTerminalSession(input);
+        const sessionId = await this.authorizedAgentSession(input);
         return this.daemon.attachRemoteTerminal(sessionId, input.terminalId);
     }
     async stopTerminal(input: {
@@ -664,7 +672,7 @@ export class AgentService {
         chatId: string;
         terminalId: string;
     }): Promise<{ terminal: RemoteTerminalSummary }> {
-        const sessionId = await this.authorizedTerminalSession(input);
+        const sessionId = await this.authorizedAgentSession(input);
         return {
             terminal: await this.daemon.stopRemoteTerminal(
                 sessionId,
@@ -673,7 +681,48 @@ export class AgentService {
             ),
         };
     }
-    private async authorizedTerminalSession(input: {
+    /**
+     * Stops the agent's in-flight run in this chat for a reader who can see it.
+     * The durable stop lands first, so the worker still streaming the turn loses
+     * its lease and unwinds even when it lives in another server instance; Rig is
+     * then told to end the run so the model stops producing tokens.
+     */
+    async stopRun(input: {
+        actorUserId: string;
+        agentUserId: string;
+        chatId: string;
+    }): Promise<{ stopped: boolean }> {
+        await this.authorizedAgentSession(input);
+        const stopped = await agentTurnAbort(this.executor, {
+            agentUserId: input.agentUserId,
+            chatId: input.chatId,
+        });
+        if (!stopped) return { stopped: false };
+        const stream = this.turnStreams.get(stopped.userMessageId);
+        if (stream) {
+            stream.controller.abort();
+            await stream.task;
+        }
+        const identity: AgentTurnIdentity = {
+            agentUserId: input.agentUserId,
+            chatId: input.chatId,
+            userMessageId: stopped.userMessageId,
+        };
+        await this.stopAgentActivity(identity);
+        await this.stopTyping(identity);
+        await this.publishAgentReplyHint(input.chatId, stopped.hint);
+        try {
+            await this.daemon.abortRun(stopped.sessionId, stopped.runId, this.shutdown.signal);
+        } catch (error) {
+            // Rig answers 409 when the run retired between the durable stop and
+            // this call. The turn is already finished either way, so only an
+            // unexpected failure is worth surfacing.
+            if (!(error instanceof RigHttpError && error.status === 409)) throw error;
+        }
+        this.startDrain(input.chatId);
+        return { stopped: true };
+    }
+    private async authorizedAgentSession(input: {
         actorUserId: string;
         agentUserId: string;
         chatId: string;
@@ -685,7 +734,7 @@ export class AgentService {
             input.agentUserId,
         );
         if (!context?.binding)
-            throw new CollaborationError("not_found", "Agent terminal session was not found");
+            throw new CollaborationError("not_found", "Agent conversation was not found");
         return context.binding.sessionId;
     }
     startTurn(chatId: string): void {
@@ -2498,7 +2547,7 @@ export class AgentService {
         }
         return traceUpdates;
     }
-    private async stopAgentActivity(input: AgentTurnWork): Promise<void> {
+    private async stopAgentActivity(input: AgentTurnIdentity): Promise<void> {
         const activity = this.agentActivities.get(input.userMessageId);
         this.clearAgentActivity(input.userMessageId);
         if (!activity) return;
@@ -2514,7 +2563,7 @@ export class AgentService {
         this.agentActivities.delete(userMessageId);
     }
     private publishAgentActivity(
-        input: AgentTurnWork,
+        input: AgentTurnIdentity,
         activity: ActiveAgentActivity,
         active: boolean,
     ): Promise<void> {
@@ -2588,7 +2637,7 @@ export class AgentService {
         this.typingRenewals.set(input.chatId, renewal);
         return controller.signal;
     }
-    private async stopTyping(input: AgentTurnWork): Promise<void> {
+    private async stopTyping(input: AgentTurnIdentity): Promise<void> {
         this.clearTypingRenewal(input.chatId, input.userMessageId);
         try {
             await this.publishTyping(input, false);
@@ -2605,7 +2654,7 @@ export class AgentService {
         }
         this.typingRenewals.delete(chatId);
     }
-    private publishTyping(input: AgentTurnWork, active: boolean): Promise<void> {
+    private publishTyping(input: AgentTurnIdentity, active: boolean): Promise<void> {
         const occurredAt = Date.now();
         return this.pubsub.publish(realtimeTopics.chat(input.chatId), {
             type: "typing",

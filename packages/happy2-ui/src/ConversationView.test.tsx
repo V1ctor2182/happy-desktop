@@ -125,14 +125,17 @@ it("holds the conversation surface geometry, live status, and composer dock", as
         "Also update the changelog",
     );
 
-    // The dock owns the composer and the Stop control while running.
+    // The dock owns the composer, whose one trailing control stops the run or
+    // sends. This draft has something to say, so it stays a send control and
+    // what it sends steers the run already under way.
     const dock = view.$('[data-happy2-ui="conversation-dock"]');
     expect(dock.computedStyle("display")).toBe("flex");
-    // The label part only: the button content also carries the icon-font glyph.
+    expect(view.container.querySelectorAll('[data-action="stop"]').length).toBe(0);
     expect(
-        view.$('[data-testid="conversation"] [data-action="abort"] [data-happy2-ui="button-label"]')
-            .element.textContent,
-    ).toBe("Stop");
+        view
+            .$('[data-testid="conversation"] .happy2-composer__send')
+            .element.getAttribute("aria-label"),
+    ).toBe("Send message");
     // The draft comes from the composer snapshot, never from local view state.
     expect((view.$("textarea").element as HTMLTextAreaElement).value).toBe("ship it");
     // The dock sits at the bottom of the surface, below the entry list.

@@ -236,6 +236,8 @@ export interface ChatPageActions {
     agentCreate(input: import("happy2-state").CreateAgentInput): Promise<void>;
     agentConversationCreate(agentUserId: string): Promise<string>;
     agentEffortChange(chatId: string, agentUserId: string, effort: string): Promise<void>;
+    /** Stops one agent's running turn in a chat, ending its inference. */
+    agentRunStop(chatId: string, agentUserId: string): Promise<void>;
     directMessageCreate(userId: string): Promise<void>;
     messageSend(chatId: string, text: string): void;
     /**
@@ -890,6 +892,17 @@ export function ChatPage(props: ChatPageProps) {
         sentTyping.current = active;
         props.actions.typingSet(chatId, active);
     }
+    /*
+     * Stops every agent still producing a reply here. A conversation can hold
+     * more than one working agent, and the one control in the composer speaks
+     * for the conversation, not for a single turn.
+     */
+    function stopAgentRun() {
+        const chatId = activeConversationId();
+        if (!chatId) return;
+        for (const activity of activeAgentActivity())
+            void props.actions.agentRunStop(chatId, activity.agentUserId).catch(showError);
+    }
     function sendMessage() {
         if (!draft().trim() && pendingAttachments().length === 0) return;
         if (activeChat()?.kind === "public_channel" && !activeChat()?.membershipRole)
@@ -1217,6 +1230,7 @@ export function ChatPage(props: ChatPageProps) {
                             composerPending={
                                 composerSnapshot()?.submission.status === "pending" || busy()
                             }
+                            composerRunning={activeAgentActivity().length > 0}
                             composerContributions={props.composerContributions}
                             composerModelControl={composerModelControl()}
                             composerSendEnabled={
@@ -1284,6 +1298,7 @@ export function ChatPage(props: ChatPageProps) {
                             onPortShareDisable={portShareDisable}
                             onPortShareOpen={portShareOpen}
                             onSend={sendMessage}
+                            onStop={stopAgentRun}
                             onStarToggle={channelModel.starToggle}
                             onValueChange={updateDraft}
                             onWorkspaceToggle={toggleFilesPanel}

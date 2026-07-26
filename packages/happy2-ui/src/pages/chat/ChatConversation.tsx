@@ -44,6 +44,8 @@ export interface ChatConversationProps {
     composerHint: string;
     composerMentions: Mentionable[];
     composerPending: boolean;
+    /** True while an agent in this conversation is producing a reply. */
+    composerRunning?: boolean;
     composerSendEnabled: boolean;
     composerValue: string;
     onAudienceChange?(audience: AudienceValue): void;
@@ -55,6 +57,8 @@ export interface ChatConversationProps {
     onMenuSelect(id: string): void;
     onMessageListScrollPositionChange?(position: MessageListScrollPosition): void;
     onSend(): void;
+    /** Ends the running agent's inference; absent when nobody may stop it. */
+    onStop?(): void;
     onStarToggle(): void;
     onValueChange(value: string): void;
     onWorkspaceToggle(): void;
@@ -166,6 +170,7 @@ export function ChatConversation(props: ChatConversationProps) {
                 composerHint={props.composerHint}
                 composerMentions={props.composerMentions}
                 composerPending={props.composerPending}
+                composerRunning={props.composerRunning}
                 composerSendEnabled={props.composerSendEnabled}
                 composerValue={props.composerValue}
                 contextItems={props.contextItems}
@@ -175,6 +180,7 @@ export function ChatConversation(props: ChatConversationProps) {
                 onFilesSelected={props.onFilesSelected}
                 onMentionSelect={props.onMentionSelect}
                 onSend={props.onSend}
+                onStop={props.onStop}
                 onValueChange={props.onValueChange}
                 placeholder={props.conversation.composerPlaceholder}
             />

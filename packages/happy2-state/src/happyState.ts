@@ -263,6 +263,7 @@ import { agentCreate } from "./modules/chat-actions/chatActionsState.js";
 import { chatModelChange } from "./modules/chat-actions/chatActionsState.js";
 import { agentEffortChange } from "./modules/chat-actions/chatActionsState.js";
 import { agentEffortLoad } from "./modules/chat-actions/chatActionsState.js";
+import { agentRunStop } from "./modules/chat-actions/chatActionsState.js";
 import type { ChatActionContext } from "./modules/chat-actions/chatActionsState.js";
 import { channelCreate } from "./modules/chat-actions/chatActionsState.js";
 import { projectCreate } from "./modules/chat-actions/chatActionsState.js";
@@ -1104,6 +1105,10 @@ export class HappyState implements AsyncDisposable, Disposable {
 
     async agentEffortChange(chatId: string, agentUserId: string, effort: string): Promise<void> {
         await agentEffortChange(this.chatActionContext(), chatId, agentUserId, effort);
+    }
+
+    async agentRunStop(chatId: string, agentUserId: string): Promise<void> {
+        await agentRunStop(this.chatActionContext(), chatId, agentUserId);
     }
 
     async directMessageCreate(userId: string): Promise<void> {

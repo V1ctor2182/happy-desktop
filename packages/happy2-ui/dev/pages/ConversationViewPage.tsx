@@ -38,14 +38,14 @@ export function ConversationViewPage() {
             title="ConversationView"
         >
             <Specimen
-                detail="running conversation with queued steering"
+                detail="running conversation · empty draft, so the send control stops the run"
                 label="Primary"
                 number="01"
                 stage="app"
             >
                 <div style={{ width: "980px", height: "660px", display: "flex" }}>
                     <ConversationView
-                        composer={composer({ text: "Now run the migration" })}
+                        composer={composer({ text: "" })}
                         elapsedMs={92_000}
                         composerControls={
                             <>

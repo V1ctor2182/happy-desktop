@@ -72,6 +72,18 @@ export function registerAgentRoutes(
         }),
     );
 
+    app.post(
+        "/v0/chats/:chatId/agents/:agentUserId/stopRun",
+        authenticated(auth, async (request, _reply, actorUserId) => {
+            emptyBody(request);
+            return agents.stopRun({
+                actorUserId,
+                agentUserId: pathId(request, "agentUserId"),
+                chatId: pathId(request, "chatId"),
+            });
+        }),
+    );
+
     app.get(
         "/v0/chats/:chatId/agents/:agentUserId/effort",
         authenticated(auth, async (request, _reply, actorUserId) => {

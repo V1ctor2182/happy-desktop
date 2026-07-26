@@ -23,6 +23,7 @@ const MAX_TRACE_SUMMARY_CHARACTERS = 500;
 /**
  * Finalizes an active agent's agentTurns and message output, including terminal chat and search projections produced by the run.
  * The users.active and worker-owned transaction prevents deactivated sessions from publishing and prevents a completed lease from becoming visible before its final answer is durable.
+ * `workerId` is omitted only by a reader-initiated stop, which finishes a turn no worker of this process may own; `traceTitle` then names that outcome in the trace instead of the run's own result.
  */
 export async function finishAgentTurn(
     executor: DrizzleExecutor,
@@ -34,8 +35,9 @@ export async function finishAgentTurn(
         sessionId: string;
         status: "complete" | "failed";
         text: string;
+        traceTitle?: string;
         userMessageId: string;
-        workerId: string;
+        workerId?: string;
     },
 ): Promise<
     | {
@@ -60,7 +62,8 @@ export async function finishAgentTurn(
             Number.MAX_SAFE_INTEGER,
             Math.max(Date.now(), Number(lastTrace?.occurredAt ?? 0) + 1),
         );
-        const traceTitle = input.status === "complete" ? "Turn completed" : "Turn failed";
+        const traceTitle =
+            input.traceTitle ?? (input.status === "complete" ? "Turn completed" : "Turn failed");
         const errorDetail = boundedTraceDetail(input.lastError);
         const [turn] = await tx
             .update(agentTurns)
@@ -83,7 +86,9 @@ export async function finishAgentTurn(
                     eq(agentTurns.userMessageId, input.userMessageId),
                     eq(agentTurns.agentUserId, input.agentUserId),
                     eq(agentTurns.sessionId, input.sessionId),
-                    eq(agentTurns.workerId, input.workerId),
+                    ...(input.workerId === undefined
+                        ? []
+                        : [eq(agentTurns.workerId, input.workerId)]),
                     eq(agentTurns.status, "running"),
                     agentActiveExists(tx, input.agentUserId),
                 ),

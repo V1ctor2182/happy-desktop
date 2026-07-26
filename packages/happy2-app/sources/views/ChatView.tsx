@@ -219,6 +219,7 @@ export function ChatView(props: ChatViewProps) {
         },
         agentEffortChange: (chatId, agentUserId, effort) =>
             state.agentEffortChange(chatId, agentUserId, effort),
+        agentRunStop: (chatId, agentUserId) => state.agentRunStop(chatId, agentUserId),
         directMessageCreate: (userId) => state.directMessageCreate(userId),
         messageSend: (chatId, text) => state.messageSend(chatId, { text }),
         sharedLinkOpen: (uri) => openExternalLink(uri),

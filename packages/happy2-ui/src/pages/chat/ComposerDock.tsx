@@ -22,6 +22,8 @@ export interface ComposerDockProps {
     composerHint: string;
     composerMentions: Mentionable[];
     composerPending: boolean;
+    /** True while an agent in this conversation is producing a reply. */
+    composerRunning?: boolean;
     composerSendEnabled: boolean;
     composerValue: string;
     contextItems: ContextItem[];
@@ -32,6 +34,8 @@ export interface ComposerDockProps {
     onFilesSelected(files: FileList | null): void;
     onMentionSelect?(mention: Mentionable): void;
     onSend(): void;
+    /** Ends the running agent's inference; absent when nobody may stop it. */
+    onStop?(): void;
     onValueChange(value: string): void;
 }
 /**
@@ -90,9 +94,11 @@ export function ComposerDock(props: ComposerDockProps) {
                     onContextRemove={props.onContextRemove}
                     onFocusChange={props.onComposerFocusChange}
                     onSend={props.onSend}
+                    onStop={props.onStop}
                     onValueChange={props.onValueChange}
                     pending={props.composerPending}
                     placeholder={props.placeholder}
+                    running={props.composerRunning}
                     sendEnabled={props.composerSendEnabled}
                     value={props.composerValue}
                 />

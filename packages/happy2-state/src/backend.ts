@@ -300,6 +300,7 @@ export const backendOperations = {
 
     getAgentEffort: get("/v0/chats/:chatId/agents/:agentUserId/effort"),
     changeAgentEffort: post("/v0/chats/:chatId/agents/:agentUserId/changeEffort"),
+    stopAgentRun: post("/v0/chats/:chatId/agents/:agentUserId/stopRun"),
     createTerminal: post("/v0/chats/:chatId/agents/:agentUserId/terminals/createTerminal"),
     stopTerminal: post("/v0/chats/:chatId/agents/:agentUserId/terminals/:terminalId/stopTerminal"),
     getAgentImages: get("/v0/admin/agentImages"),
@@ -768,6 +769,7 @@ export interface KnownBackendInputs {
         readonly agentUserId: string;
         readonly effort: string;
     };
+    stopAgentRun: { readonly chatId: string; readonly agentUserId: string };
     createTerminal: {
         readonly chatId: string;
         readonly agentUserId: string;
@@ -1224,6 +1226,7 @@ export interface KnownBackendResults {
         readonly options: readonly string[];
         readonly sync?: unknown;
     };
+    stopAgentRun: { readonly stopped: boolean };
     createTerminal: { readonly terminal: TerminalSummary };
     stopTerminal: { readonly terminal: TerminalSummary };
     getAgentImages: {

@@ -303,6 +303,39 @@ export function ComposerPage() {
                     </div>
                 </Specimen>
                 <Specimen
+                    detail="agent running · empty draft stops the run, a written one steers it"
+                    label="Running"
+                    number="CP-11"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            width: "640px",
+                            padding: "24px 20px",
+                            display: "grid",
+                            gap: "16px",
+                        }}
+                    >
+                        <Composer
+                            hint="Enter to send"
+                            onSend={noop}
+                            onStop={noop}
+                            onValueChange={noop}
+                            placeholder="Message the agent…"
+                            running
+                            value=""
+                        />
+                        <Composer
+                            hint="Enter to send"
+                            onSend={noop}
+                            onStop={noop}
+                            onValueChange={noop}
+                            running
+                            value="Also check the retry budget"
+                        />
+                    </div>
+                </Specimen>
+                <Specimen
                     detail="context row 8px inset above the draft · removable 24px chips"
                     label="With context"
                     number="CP-03"

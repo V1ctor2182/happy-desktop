@@ -27,6 +27,7 @@ export type IconName =
     | "braces"
     | "image"
     | "play"
+    | "stop"
     | "pause"
     | "at"
     | "hash"
@@ -117,6 +118,8 @@ const glyphs: Record<IconName, IconGlyph> = {
     braces: { set: "octicons", name: "code" },
     image: { set: "ionicons", name: "image-outline" },
     play: { set: "ionicons", name: "play-outline" },
+    // A filled square: the universal "end what is running now".
+    stop: { set: "ionicons", name: "square" },
     pause: { set: "ionicons", name: "pause-outline" },
     at: { set: "ionicons", name: "at-outline" },
     hash: { set: "octicons", name: "hash" },

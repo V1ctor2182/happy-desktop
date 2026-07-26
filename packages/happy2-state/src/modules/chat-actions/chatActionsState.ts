@@ -67,6 +67,19 @@ export async function agentEffortChange(
     }
 }
 
+/**
+ * Stops the agent's running turn in one chat. The server finishes the turn durably and
+ * publishes the result, so this action reconciles nothing locally: the stopped reply and
+ * the cleared activity arrive through the same difference stream as every other turn end.
+ */
+export async function agentRunStop(
+    context: ChatActionContext,
+    chatId: string,
+    agentUserId: string,
+): Promise<void> {
+    await context.runtime.operation("stopAgentRun", { chatId, agentUserId });
+}
+
 /** Loads effort controls only for an already retained chat and requested agent. */
 export async function agentEffortLoad(
     context: ChatActionContext,

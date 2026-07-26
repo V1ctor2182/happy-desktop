@@ -5,7 +5,6 @@ import type {
     ConversationRequestSubmission,
 } from "happy2-state";
 import { Banner } from "./Banner";
-import { Button } from "./Button";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type Mentionable } from "./Composer";
 import { ConversationEntryView } from "./ConversationEntryView";
@@ -66,7 +65,7 @@ export type ConversationViewProps = {
     onComposerSend: () => void;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
-    /** Stops the current run; the control appears only while running. */
+    /** Stops the current run; the composer's send control becomes this while running. */
     onAbort?: () => void;
     onRewind?: (messageId: string) => void;
     onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
@@ -276,18 +275,6 @@ export function ConversationView(props: ConversationViewProps) {
                     </div>
                 ) : null}
                 <div className="happy2-conversation__dock-inner">
-                    {props.running && props.onAbort ? (
-                        <Button
-                            className="happy2-conversation__abort"
-                            data-action="abort"
-                            icon="close"
-                            onClick={props.onAbort}
-                            size="small"
-                            variant="secondary"
-                        >
-                            Stop
-                        </Button>
-                    ) : null}
                     <Composer
                         hint={
                             composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"
@@ -296,9 +283,11 @@ export function ConversationView(props: ConversationViewProps) {
                         modelControl={props.composerControls}
                         onFocusChange={props.onComposerFocusChange}
                         onSend={props.onComposerSend}
+                        onStop={props.onAbort}
                         onValueChange={props.onComposerValueChange}
                         pending={composer.submission.status === "pending"}
                         placeholder={props.composerPlaceholder ?? "Message the agent…"}
+                        running={props.running}
                         sendEnabled={sendEnabled}
                         value={composer.text}
                     />

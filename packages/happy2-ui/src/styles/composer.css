@@ -216,6 +216,15 @@
     font-size: 16px !important;
 }
 
+/* The stop square is solid ink, not an outline, so the same 16px box would read
+ * far heavier than the send arrow it replaces in that one circle. 11px keeps the
+ * two states equal in weight and leaves the control's geometry untouched. */
+.happy2-composer__stop .happy2-button__icon .happy2-icon {
+    width: 11px !important;
+    height: 11px !important;
+    font-size: 11px !important;
+}
+
 .happy2-composer__trailing > .happy2-button:not(.happy2-composer__send) .happy2-icon {
     width: 16px !important;
     height: 16px !important;

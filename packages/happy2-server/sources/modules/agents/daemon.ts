@@ -14,6 +14,7 @@ import {
 import { managedPrivateDirectoryPrepare } from "./impl/managedPrivateDirectoryPrepare.js";
 
 import type {
+    AbortRunResponse,
     AttachSecretRequest,
     ChangeEffortRequest,
     ChangePermissionModeRequest,
@@ -540,6 +541,25 @@ export class RigDaemonClient {
             "POST",
             `/sessions/${encodeURIComponent(sessionId)}/messages`,
             { text, externalTools, skills } satisfies SubmitMessageRequest,
+            signal,
+        );
+    }
+
+    /**
+     * Stops the session's in-flight run. `expectedRunId` keeps a stop that was
+     * decided against one run from cancelling the next one, and Rig answers 409
+     * when the intended run has already retired.
+     */
+    async abortRun(
+        sessionId: string,
+        expectedRunId: string | undefined,
+        signal?: AbortSignal,
+    ): Promise<AbortRunResponse> {
+        const query = expectedRunId ? `?expectedRunId=${encodeURIComponent(expectedRunId)}` : "";
+        return this.connectedRequest<AbortRunResponse>(
+            "POST",
+            `/sessions/${encodeURIComponent(sessionId)}/abort${query}`,
+            undefined,
             signal,
         );
     }

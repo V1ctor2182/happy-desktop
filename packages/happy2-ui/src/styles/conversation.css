@@ -157,10 +157,6 @@
     width: 100%;
 }
 
-.happy2-conversation__abort {
-    align-self: flex-start;
-}
-
 /* The `/` palette sits directly above the composer inside the dock flow. */
 .happy2-conversation__palette {
     display: flex;

@@ -95,6 +95,7 @@ const passiveActions: ChatPageActions = {
     agentCreate: async () => undefined,
     agentConversationCreate: async () => "chat-1",
     agentEffortChange: async () => undefined,
+    agentRunStop: async () => undefined,
     directMessageCreate: async () => undefined,
     messageSend: () => undefined,
     sharedLinkOpen: () => undefined,
