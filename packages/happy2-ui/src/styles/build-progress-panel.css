@@ -1,10 +1,16 @@
 /*
  * C-062 BuildProgressPanel — onboarding-sized live agent base-image build view.
  *
- * A single flex column (16px gap) on the app surface: header (title + phase
- * badge), a deterministic progress track/fill, the phase + percent line, the
- * latest single log line, a retained scrollable log block, and a failure block
- * with a Retry action. Border-box everywhere, integer px on the 4px grid.
+ * A single flex column (16px gap) laid directly on the app surface: header
+ * (title + phase badge), a deterministic progress track/fill, the phase +
+ * percent line, the latest single log line, a retained scrollable log block, and
+ * a failure block with a Retry action.
+ *
+ * The panel is deliberately frameless — no border, no fill, no inset padding. It
+ * is the whole subject of the screen that shows it, so a box around it would only
+ * draw a second, smaller rectangle inside the first; the log block is the one
+ * part that keeps a fill, because monospace machine output genuinely is a
+ * different material. Border-box everywhere, integer px on the 4px grid.
  */
 
 .happy2-build-progress,
@@ -19,10 +25,6 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    padding: 20px;
-    background: var(--surface);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
@@ -34,14 +36,20 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
 }
 
 .happy2-build-progress__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
     color: var(--text);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 600;
-    line-height: 20px;
+    line-height: 24px;
     letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .happy2-build-progress__badge {
@@ -52,7 +60,7 @@
 
 .happy2-build-progress__track {
     width: 100%;
-    height: 8px;
+    height: 6px;
     background: var(--groupped-background);
     border-radius: var(--happy2-radius-pill);
     overflow: hidden;
@@ -84,14 +92,25 @@
     gap: 12px;
 }
 
+/*
+ * The phase is a short human sentence and the percent is pinned opposite it, so
+ * the line stays exactly one line: a long machine string is ellipsized here
+ * rather than wrapping under the percent and breaking the row's alignment.
+ */
 .happy2-build-progress__status-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;
     line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .happy2-build-progress__percent {
+    flex: none;
     margin-left: auto;
     color: var(--text-secondary);
     font-family: var(--happy2-font-mono);
@@ -147,7 +166,7 @@
 /* Scrollport: edge-to-edge, no padding; the inner <code> carries the inset. */
 .happy2-build-progress__log {
     margin: 0;
-    max-height: 160px;
+    max-height: 200px;
     overflow: auto;
     background: var(--diff-context-bg);
     border-radius: var(--happy2-radius-sm);

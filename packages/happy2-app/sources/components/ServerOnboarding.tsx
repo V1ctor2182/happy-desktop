@@ -256,7 +256,7 @@ function ServerOnboardingBody(props: {
                         data-testid="default-agent-submit"
                         disabled={agentSubmitting() || (agentDraft.attempted && agentInvalid())}
                         form={defaultAgentFormId}
-                        fullWidth
+                        size="large"
                         type="submit"
                     >
                         {agentSubmitting() ? "Creating agent…" : "Create agent"}
@@ -278,7 +278,7 @@ function ServerOnboardingBody(props: {
             ) : null}
             {providerNote
                 ? ((note) => (
-                      <Banner data-testid="provider-note" icon="shield" tone="info">
+                      <Banner data-testid="provider-note" icon="shield" tone="neutral">
                           {note}
                       </Banner>
                   ))(providerNote)
@@ -533,7 +533,7 @@ function BuildStep(props: { snapshot: SetupSnapshot; store: SetupStore }) {
                     progress={selected.buildProgress}
                     retrying={props.snapshot.pending.retryingBuild}
                     status={selected.status}
-                    statusLabel={buildStatusLabel(selected.status, selected.lastBuildLogLine)}
+                    statusLabel={buildStatusLabel(selected.status)}
                     title={selected.name}
                 />
             </>
@@ -659,12 +659,17 @@ function builtinDescription(key: "daycare-full" | "daycare-minimal"): string {
         ? "A lean sandbox with the core agent toolchain."
         : "A complete sandbox with the full Daycare toolchain.";
 }
-function buildStatusLabel(status: string, logLine?: string): string {
+/*
+ * The phase, not the log. The live docker line is already shown verbatim on the
+ * panel's own current-line row, so repeating it here only produced two copies of
+ * the same 70-character sha and pushed the percent out of the row.
+ */
+function buildStatusLabel(status: string): string {
     switch (status) {
         case "pending":
             return "Queued to build";
         case "building":
-            return logLine ?? "Building the image";
+            return "Building the image";
         case "ready":
             return "Build complete";
         case "failed":

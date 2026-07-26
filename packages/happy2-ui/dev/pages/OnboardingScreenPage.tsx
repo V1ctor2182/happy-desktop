@@ -33,12 +33,12 @@ export function OnboardingScreenPage() {
     return (
         <ComponentPage
             number="C-061"
-            summary="Calm desktop onboarding frame — fixed 600px card above the 648px height threshold, 48px total vertical safe gutter below it, one full-bleed scrolling body, and an optional pinned footer aligned to the body’s 8px focus gutter."
+            summary="Full-window desktop onboarding surface — no card, no overlay. One 800px measure (640 at width=medium) with a 40px gutter aligns the brand mark, step rail, title and footer action on a single left edge; the body scrolls between a fixed mast and an optional pinned footer."
             title="Onboarding screen"
         >
             <Specimen
-                detail="five-step server wizard · width=large · footer and body share the same horizontal gutter"
-                label="Five-step 640 wizard"
+                detail="five-step server wizard · width=large · mast, body and footer share one measure column"
+                label="Five-step 800 measure"
                 number="01"
                 stage="chrome"
             >
@@ -48,7 +48,7 @@ export function OnboardingScreenPage() {
                         brand={{ name: "Happy Place" }}
                         copy="Agent code runs inside the selected sandbox provider, isolated from the Happy server process."
                         footer={
-                            <Button fullWidth type="button">
+                            <Button size="large" type="button">
                                 Continue with Docker
                             </Button>
                         }
@@ -77,7 +77,7 @@ export function OnboardingScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="same 640×600 card rect for a short loading row and the resolved form body"
+                detail="the same measure column holds a short loading row and a resolved form body"
                 label="Loading / form parity"
                 number="02"
                 stage="chrome"
@@ -118,7 +118,7 @@ export function OnboardingScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="body content deliberately exceeds the fixed frame; the footer stays pinned while the body scrolls"
+                detail="body content deliberately exceeds the window; the footer stays pinned on its hairline while the body scrolls"
                 label="Overflowing build choices"
                 number="03"
                 stage="chrome"
@@ -129,7 +129,7 @@ export function OnboardingScreenPage() {
                         brand={{ name: "Happy Place" }}
                         copy="Choose one image or provide a Dockerfile. Every option remains reachable inside the body scrollport."
                         footer={
-                            <Button fullWidth type="button">
+                            <Button size="large" type="button">
                                 Build selected image
                             </Button>
                         }
@@ -170,7 +170,7 @@ export function OnboardingScreenPage() {
                         brand={{ name: "Happy Place" }}
                         copy="Create the built-in agent that runs your workspace before you finish setup."
                         footer={
-                            <Button form={agentFormId} fullWidth type="submit">
+                            <Button form={agentFormId} size="large" type="submit">
                                 Create agent
                             </Button>
                         }
@@ -194,7 +194,7 @@ export function OnboardingScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="Electron minimum-height case · card resolves to 432px (100% − 48px) and the body remains scrollable"
+                detail="Electron minimum-height case · the body scrolls from the top and the pinned action stays legible over it"
                 label="720 × 480 short window"
                 number="05"
                 stage="chrome"
@@ -205,7 +205,7 @@ export function OnboardingScreenPage() {
                         brand={{ name: "Happy Place" }}
                         copy="Decide whether other people can create an account now."
                         footer={
-                            <Button fullWidth type="button">
+                            <Button size="large" type="button">
                                 Keep registration closed
                             </Button>
                         }

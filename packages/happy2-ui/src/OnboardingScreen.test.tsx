@@ -94,7 +94,17 @@ async function paintsUnclipped(part: RenderedElement<Element>, name: string) {
     return vis;
 }
 
-it("holds OnboardingScreen centered card, step rail, typography, and painted brand glyph", async () => {
+/*
+ * The measure column at the reference window: `medium` is 640px wide, centered
+ * in 1024px, with a 40px gutter inside it. Every band (brand mast, step rail,
+ * headline, body children, footer action) must resolve to this same left edge —
+ * that shared edge is what replaced the card as the thing holding the screen
+ * together, so it is asserted rather than inferred.
+ */
+const MEASURE_MEDIUM = 640;
+const MEASURE_LEFT_1024 = (1024 - MEASURE_MEDIUM) / 2 + 40;
+
+it("holds the full-window onboarding surface, its measure column, step rail, and typography", async () => {
     const view = createRenderer();
 
     view.render(
@@ -117,12 +127,13 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
     );
     await view.ready();
 
-    /* ---- Root: full-window dark shell ---------------------------------- */
+    /* ---- Root: the window itself, not a card on top of one -------------- */
 
     const root = view.$('[data-testid="onboarding"]');
     expect(root.element.tagName).toBe("DIV");
     expect(root.bounds()).toMatchObject({ x: 0, y: 0, width: 1024, height: 704 });
     expect(root.element.getAttribute("data-state")).toBe("form");
+    expect(root.element.getAttribute("data-width")).toBe("medium");
     expect(
         root.computedStyles([
             "align-items",
@@ -130,74 +141,43 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
             "box-sizing",
             "color",
             "display",
+            "flex-direction",
             "font-family",
-            "justify-content",
             "overflow-x",
             "overflow-y",
         ]),
     ).toEqual({
-        "align-items": "center",
+        "align-items": "stretch",
         "background-color": "rgb(255, 255, 255)",
         "box-sizing": "border-box",
         color: "rgb(0, 0, 0)",
         display: "flex",
+        "flex-direction": "column",
         "font-family": fontFamily(),
-        "justify-content": "center",
         "overflow-x": "hidden",
         "overflow-y": "hidden",
     });
 
-    /* ---- The screen paints the workspace surface, flat and image-free --- */
-
+    /* There is no card, dialog, or overlay layer left in the tree, and the
+     * screen paints the flat workspace surface with no image behind it. */
+    expect(
+        view.container.querySelector('[data-happy2-ui="onboarding-card"]'),
+        "no card frame",
+    ).toBeNull();
     const screen = view.$('[data-happy2-ui="onboarding-screen"]');
     expect(screen.computedStyle("background-image")).toBe("none");
-    expect(screen.computedStyle("background-color")).toBe(
-        view.$('[data-happy2-ui="onboarding-card"]').computedStyle("background-color"),
-    );
-
-    /* ---- Card: centered on both axes, 480×600 -------------------------- */
-
-    const card = view.$('[data-happy2-ui="onboarding-card"]');
-    const cb = card.bounds();
-    expect(cb.width).toBe(480);
-    expect(cb.height).toBe(600);
-    expect(card.element.getAttribute("data-width")).toBe("medium");
-    expect(Math.abs(cb.x + cb.width / 2 - 512), "card horizontal center").toBeLessThanOrEqual(0.6);
-    expect(Math.abs(cb.y + cb.height / 2 - 352), "card vertical center").toBeLessThanOrEqual(0.6);
-    expect(
-        card.computedStyles([
-            "background-color",
-            "border-radius",
-            "box-sizing",
-            "display",
-            "flex-direction",
-            "padding-bottom",
-            "padding-left",
-            "padding-right",
-            "padding-top",
-        ]),
-    ).toEqual({
-        "background-color": "rgb(255, 255, 255)",
-        "border-radius": "14px",
-        "box-sizing": "border-box",
-        display: "flex",
-        "flex-direction": "column",
-        "padding-bottom": "40px",
-        "padding-left": "40px",
-        "padding-right": "40px",
-        "padding-top": "40px",
-    });
-    /* At every supported height >=648px the frame is exactly 600px tall. */
-    expect(card.computedStyle("height")).toBe("600px");
-    expect(card.computedStyle("max-height")).toBe("none");
+    expect(screen.computedStyle("border-top-width")).toBe("0px");
 
     /* ---- Brand mast ---------------------------------------------------- */
 
     const brand = view.$('[data-happy2-ui="onboarding-brand"]');
     const mark = view.$('[data-happy2-ui="onboarding-mark"]');
     const brandName = view.$('[data-happy2-ui="onboarding-brand-name"]');
-    expect(brand.offsets()).toMatchObject({ left: 41, top: 41 }); /* 1px border + 40 padding */
-    expect(brand.height()).toBe(28);
+    /* The mast is the top band; its inner box is the measure column, so the
+     * mark lands on the shared left edge and 32px below the window top. */
+    expect(brand.bounds()).toMatchObject({ width: MEASURE_MEDIUM, height: 28 });
+    expect(mark.bounds().x).toBe(MEASURE_LEFT_1024);
+    expect(mark.bounds().y).toBe(32);
     expect(mark.bounds()).toMatchObject({ width: 28, height: 28 });
     expect(
         mark.computedStyles([
@@ -217,7 +197,8 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
         "justify-content": "center",
     });
     expect(mark.computedStyle("background-color")).toBe("rgb(0, 0, 0)");
-    expect(brandName.offsets().left).toBe(40); /* 28 mark + 12 gap, relative to brand */
+    /* 40 gutter + 28 mark + 12 gap, relative to the measure column's border box */
+    expect(brandName.offsets().left).toBe(80);
     expect(brandName.computedStyle("color")).toBe("rgb(0, 0, 0)");
     const nameMetrics = brandName.textMetrics();
     expect(nameMetrics.text).toBe("Relay");
@@ -246,39 +227,44 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
     const rail = view.$('[data-happy2-ui="onboarding-steps"]');
     const stepEls = rail.element.querySelectorAll('[data-happy2-ui="onboarding-step"]');
     expect(stepEls.length).toBe(3);
+    /* The rail starts on the measure's left edge and spans it, gutter to gutter. */
+    expect(rail.bounds().x).toBe(MEASURE_LEFT_1024);
+    expect(rail.bounds().width).toBe(MEASURE_MEDIUM - 80);
 
-    const completeDot = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="complete"] [data-happy2-ui="onboarding-step-dot"]',
-    );
-    const currentDot = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="current"] [data-happy2-ui="onboarding-step-dot"]',
-    );
-    const upcomingDot = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="upcoming"] [data-happy2-ui="onboarding-step-dot"]',
-    );
-    expect(completeDot.computedStyle("background-color")).toBe("rgb(52, 199, 89)");
-    expect(currentDot.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
-    expect(upcomingDot.computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
-    expect(upcomingDot.computedStyle("border-top-color")).toBe("rgb(234, 234, 234)");
+    const bar = (state: string) =>
+        view.$(
+            `[data-happy2-ui="onboarding-step"][data-state="${state}"] [data-happy2-ui="onboarding-step-bar"]`,
+        );
+    const completeBar = bar("complete");
+    const currentBar = bar("current");
+    const upcomingBar = bar("upcoming");
+    /* Segments are equal shares of the measure, so the labels keep one rhythm
+     * regardless of their own text width. */
+    expect(completeBar.bounds().width).toBeCloseTo(currentBar.bounds().width, 0);
+    expect(currentBar.bounds().width).toBeCloseTo(upcomingBar.bounds().width, 0);
+    expect(completeBar.bounds().height).toBe(3);
+    /* The fill runs continuously from the first step through the current one. */
+    expect(completeBar.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
+    expect(currentBar.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
+    expect(upcomingBar.computedStyle("background-color")).toBe("rgb(234, 234, 234)");
 
-    const completeLabel = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="complete"] [data-happy2-ui="onboarding-step-label"]',
-    );
-    const currentLabel = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="current"] [data-happy2-ui="onboarding-step-label"]',
-    );
-    const upcomingLabel = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="upcoming"] [data-happy2-ui="onboarding-step-label"]',
-    );
+    const label = (state: string) =>
+        view.$(
+            `[data-happy2-ui="onboarding-step"][data-state="${state}"] [data-happy2-ui="onboarding-step-label"]`,
+        );
+    const completeLabel = label("complete");
+    const currentLabel = label("current");
+    const upcomingLabel = label("upcoming");
     expect(completeLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(currentLabel.computedStyle("color")).toBe("rgb(0, 0, 0)");
     expect(upcomingLabel.computedStyle("color")).toBe("rgb(73, 69, 79)");
-
-    /* The complete step paints its check glyph unclipped inside the dot. */
-    const completeCheck = view.$(
-        '[data-happy2-ui="onboarding-step"][data-state="complete"] [data-happy2-ui="onboarding-step-dot"] [data-happy2-ui="icon"]',
-    );
-    await paintsUnclipped(completeCheck, "complete check glyph");
+    /* Only the current step is emphasized; the bar carries the progress. */
+    expect(currentLabel.computedStyle("font-weight")).toBe("600");
+    expect(upcomingLabel.computedStyle("font-weight")).toBe("500");
+    /* Label sits 10px under its own segment and shares its left edge. */
+    expect(currentLabel.bounds().y - (currentBar.bounds().y + currentBar.bounds().height)).toBe(10);
+    expect(completeLabel.bounds().x).toBeCloseTo(completeBar.bounds().x, 0);
+    await paints(currentLabel, "current step label");
 
     /* ---- Content block ------------------------------------------------- */
 
@@ -297,46 +283,50 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
         ]),
     ).toEqual({
         color: "rgb(43, 172, 204)",
-        "font-size": "12px",
+        "font-size": "11px",
         "font-weight": "700",
-        "letter-spacing": "0.96px",
-        "line-height": "16px",
+        "letter-spacing": "1.1px",
+        "line-height": "14px",
         "text-transform": "uppercase",
     });
     await paints(kicker, "kicker");
 
     expect(title.element.tagName).toBe("H1");
-    expect(title.height()).toBe(30);
+    expect(title.height()).toBe(38);
     expect(title.computedStyle("color")).toBe("rgb(0, 0, 0)");
     const titleMetrics = title.textMetrics();
     expect(titleMetrics.text).toBe("Connect your server");
     expect(titleMetrics.font).toMatchObject({
         family: "happy2 Figtree, system-ui, sans-serif",
-        letterSpacing: -0.48,
-        lineHeight: 30,
-        size: 24,
+        letterSpacing: -0.96,
+        lineHeight: 38,
+        size: 32,
         weight: "700",
     });
     expect(titleMetrics.baseline.fromElementTop).toBeGreaterThan(0);
-    expect(titleMetrics.baseline.fromElementTop).toBeLessThan(30);
+    expect(titleMetrics.baseline.fromElementTop).toBeLessThan(38);
     await paints(title, "title");
 
     expect(copy.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
         color: "rgb(73, 69, 79)",
-        "font-size": "15px",
+        "font-size": "16px",
         "font-weight": "400",
-        "line-height": "22px",
+        "line-height": "24px",
     });
     await paints(copy, "copy");
 
-    /* Content vertical rhythm: kicker→title 12px, title→copy 14px. */
-    expect(title.offsets().top - (kicker.offsets().top + kicker.height())).toBe(12);
-    expect(copy.offsets().top - (title.offsets().top + title.height())).toBe(14);
+    /* Content vertical rhythm: rail→kicker 48px, kicker→title 14px,
+     * title→copy 16px, all on one left edge. */
+    expect(kicker.bounds().y - (rail.bounds().y + rail.bounds().height)).toBe(48);
+    expect(title.offsets().top - (kicker.offsets().top + kicker.height())).toBe(14);
+    expect(copy.offsets().top - (title.offsets().top + title.height())).toBe(16);
+    expect(title.bounds().x).toBe(MEASURE_LEFT_1024);
 
-    /* ---- Body slot: full-bleed scrollport + inner content wrapper ------- */
+    /* ---- Body scrollport + measure column + step slot ------------------- */
 
     const body = view.$('[data-happy2-ui="onboarding-body"]');
     const bodyContent = view.$('[data-happy2-ui="onboarding-body-content"]');
+    const slot = view.$('[data-happy2-ui="onboarding-slot"]');
     const bodyChild = view.$('[data-testid="onboarding-body-child"]');
     expect(bodyChild.height()).toBe(44);
 
@@ -365,17 +355,16 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
         "padding-left": "0px",
         "overflow-y": "auto",
     });
-    /* The scrollport spans the full card content-box width (480 − 2×1 border −
-     * 2×40 padding) with no extra inset of its own on either side. */
-    expect(body.bounds().width).toBe(398);
-    expect(body.offsets()).toMatchObject({ left: 41, right: 41 });
+    /* Full bleed: the scrollport runs to both window edges. */
+    expect(body.bounds().width).toBe(1024);
+    expect(body.bounds().x).toBe(0);
 
-    /* Spacing, gap, and the focus-safe gutter live on the inner wrapper. */
+    /* Measure, spacing, and the focus-safe gutter live on the inner wrapper. */
     expect(
         bodyContent.computedStyles([
             "display",
             "flex-direction",
-            "gap",
+            "max-width",
             "padding-top",
             "padding-right",
             "padding-bottom",
@@ -384,48 +373,55 @@ it("holds OnboardingScreen centered card, step rail, typography, and painted bra
     ).toEqual({
         display: "flex",
         "flex-direction": "column",
-        gap: "12px",
-        "padding-top": "28px",
-        "padding-right": "8px",
-        "padding-bottom": "8px",
-        "padding-left": "8px",
+        "max-width": `${MEASURE_MEDIUM}px`,
+        "padding-top": "40px",
+        "padding-right": "40px",
+        "padding-bottom": "40px",
+        "padding-left": "40px",
     });
-    /* The 28px content→body separation is preserved by the wrapper's top gutter. */
-    expect(bodyChild.offsets().top).toBe(28);
+    expect(bodyContent.bounds().width).toBe(MEASURE_MEDIUM);
+
+    /* One 12px gap flow for everything the app hands over, 32px below the copy
+     * and on the same left edge as the headline. */
+    expect(slot.computedStyles(["display", "flex-direction", "gap"])).toEqual({
+        display: "flex",
+        "flex-direction": "column",
+        gap: "12px",
+    });
+    expect(bodyChild.bounds().y - (copy.bounds().y + copy.height())).toBe(32);
+    expect(bodyChild.bounds().x).toBe(MEASURE_LEFT_1024);
 
     /* ---- Footer -------------------------------------------------------- */
 
     const footer = view.$('[data-happy2-ui="onboarding-footer"]');
+    const footerContent = view.$('[data-happy2-ui="onboarding-footer-content"]');
     expect(
         footer.computedStyles([
-            "color",
-            "font-size",
-            "line-height",
-            "margin-top",
-            "margin-right",
-            "margin-bottom",
-            "margin-left",
+            "background-color",
+            "border-top-color",
+            "border-top-width",
+            "padding-top",
+            "padding-bottom",
         ]),
     ).toEqual({
-        color: "rgb(73, 69, 79)",
-        "font-size": "13px",
-        "line-height": "18px",
-        "margin-top": "20px",
-        "margin-right": "8px",
-        "margin-bottom": "0px",
-        "margin-left": "8px",
+        "background-color": "rgb(255, 255, 255)",
+        "border-top-color": "rgb(234, 234, 234)",
+        "border-top-width": "1px",
+        "padding-top": "24px",
+        "padding-bottom": "24px",
     });
-    /* The footer is pinned to the card content-box bottom and its horizontal
-     * edges align with body children inside the shared 8px gutter. */
-    expect(footer.offsets().bottom).toBe(41);
-    expect(footer.bounds().x).toBe(bodyChild.bounds().x);
-    expect(footer.bounds().width).toBe(bodyChild.bounds().width);
-    await paints(footer, "footer");
+    /* Pinned to the window bottom, spanning it, with its content on the same
+     * measure edge as everything above it. */
+    expect(footer.offsets().bottom).toBe(0);
+    expect(footer.bounds().width).toBe(1024);
+    expect(footerContent.bounds().width).toBe(MEASURE_MEDIUM);
+    expect(view.$('[data-testid="onboarding-foot"]').bounds().x).toBe(MEASURE_LEFT_1024);
+    await paints(footerContent, "footer");
 
     await view.screenshot("OnboardingScreen.test");
 }, 120_000);
 
-it("keeps loading and form card rects identical while holding width variants", async () => {
+it("keeps loading and form layout identical while holding width variants", async () => {
     const view = createRenderer();
 
     view.render(
@@ -560,18 +556,34 @@ it("keeps loading and form card rects identical while holding width variants", a
     expect(loadingLabel.textMetrics().text).toBe("Provisioning workspace…");
     await paints(loadingLabel, "loading label");
 
-    /* Probe resolution changes body content without moving or resizing the card. */
-    const loadingCard = view.$('[data-testid="loading"] [data-happy2-ui="onboarding-card"]');
-    const resolvedCard = view.$('[data-testid="resolved"] [data-happy2-ui="onboarding-card"]');
-    expect(loadingCard.bounds()).toMatchObject({ width: 480, height: 600 });
-    expect(resolvedCard.bounds()).toMatchObject({ width: 480, height: 600 });
-    expect(loadingCard.offsets()).toEqual(resolvedCard.offsets());
+    /* Probe resolution changes the step slot without moving the mast, the
+     * measure column, or the headline that frame it. */
+    const loadingMark = view.$('[data-testid="loading"] [data-happy2-ui="onboarding-mark"]');
+    const resolvedMark = view.$('[data-testid="resolved"] [data-happy2-ui="onboarding-mark"]');
+    const loadingTitle = view.$('[data-testid="loading"] [data-happy2-ui="onboarding-title"]');
+    const resolvedTitle = view.$('[data-testid="resolved"] [data-happy2-ui="onboarding-title"]');
+    expect(loadingMark.offsets()).toEqual(resolvedMark.offsets());
+    expect(loadingTitle.offsets()).toEqual(resolvedTitle.offsets());
+    expect(
+        view.$('[data-testid="loading"] [data-happy2-ui="onboarding-body-content"]').bounds().width,
+    ).toBe(MEASURE_MEDIUM);
+    expect(
+        view.$('[data-testid="resolved"] [data-happy2-ui="onboarding-body-content"]').bounds()
+            .width,
+    ).toBe(MEASURE_MEDIUM);
 
-    /* ---- Large width variant: 640px card, custom mark ------------------- */
+    /* ---- Large width variant: 800px measure, display title, custom mark -- */
 
-    const largeCard = view.$('[data-testid="large"] [data-happy2-ui="onboarding-card"]');
-    expect(largeCard.bounds()).toMatchObject({ width: 640, height: 600 });
-    expect(largeCard.element.getAttribute("data-width")).toBe("large");
+    const largeRoot = view.$('[data-testid="large"]');
+    expect(largeRoot.element.getAttribute("data-width")).toBe("large");
+    expect(
+        view.$('[data-testid="large"] [data-happy2-ui="onboarding-body-content"]').bounds().width,
+    ).toBe(800);
+    const largeTitle = view.$('[data-testid="large"] [data-happy2-ui="onboarding-title"]');
+    expect(largeTitle.computedStyles(["font-size", "line-height"])).toEqual({
+        "font-size": "40px",
+        "line-height": "46px",
+    });
 
     const customMark = view.$('[data-testid="large"] [data-happy2-ui="onboarding-mark"]');
     expect(customMark.bounds()).toMatchObject({ width: 28, height: 28 });
@@ -606,8 +618,14 @@ it("keeps loading and form card rects identical while holding width variants", a
     expect(minimalTitle.textMetrics().text).toBe("Enter your invite code");
     await paints(minimalTitle, "minimal title");
     expect(
-        view.$('[data-testid="minimal"] [data-happy2-ui="onboarding-card"]').bounds().width,
-    ).toBe(480);
+        view.$('[data-testid="minimal"] [data-happy2-ui="onboarding-body-content"]').bounds().width,
+    ).toBe(MEASURE_MEDIUM);
+    /* Without a rail the headline is the top of the column, with no orphan gap. */
+    expect(
+        view
+            .$('[data-testid="minimal"] [data-happy2-ui="onboarding-content"]')
+            .computedStyle("margin-top"),
+    ).toBe("0px");
 
     await view.screenshot("OnboardingScreen.variants.test");
 }, 120_000);
@@ -652,20 +670,14 @@ it("keeps short-window overflow reachable without clipping a focused trailing fi
     );
     await view.ready();
 
-    /* ---- The scrollport fills the card's content-box region exactly ------ */
+    /* ---- The scrollport fills the window below the mast ----------------- */
 
-    const card = view.$('[data-testid="scroll"] [data-happy2-ui="onboarding-card"]');
     const body = view.$('[data-testid="scroll"] [data-happy2-ui="onboarding-body"]');
     const bodyEl = body.element as HTMLElement;
-    /* The card uses the 24px top/bottom safe gutter at the minimum 480px
-     * window height: 480 − 48 = 432. */
-    expect(card.bounds()).toMatchObject({ x: 40, y: 24, width: 640, height: 432 });
-    expect(card.computedStyle("height")).toBe("432px");
-    /* Full bleed: the scrollport spans the card's whole content box (the large
-     * card is 640 − 2×1 border − 2×40 padding = 558) and, as the last card
-     * child here, runs to the content-box edge on the sides and the bottom. */
-    expect(body.bounds().width, "scrollport width == card content width").toBe(558);
-    expect(body.offsets()).toMatchObject({ left: 41, right: 41, bottom: 41 });
+    /* Full bleed at the Electron minimum window: the scrollport runs to both
+     * window edges and down to the bottom, since this fixture has no footer. */
+    expect(body.bounds()).toMatchObject({ x: 0, width: 720 });
+    expect(body.offsets()).toMatchObject({ left: 0, right: 0, bottom: 0 });
     expect(
         body.computedStyles([
             "margin-top",
@@ -700,12 +712,19 @@ it("keeps short-window overflow reachable without clipping a focused trailing fi
         body.bounds(),
         firstOption.bounds(),
         OPTION_RING_EXTENT,
-        ["top"],
+        [],
         "first option",
     );
-    /* The 28px content→body separation lives in the wrapper's top gutter. */
-    expect(firstOption.offsets().top, "first child rests at the 28px gutter").toBe(28);
     await paintsUnclipped(firstOption, "first option card");
+
+    /* `safe center` centers a short step but must never push the head of an
+     * overflowing one above the scroll origin: at scrollTop 0 the very first
+     * thing in the column is fully inside the scrollport. */
+    const scrollKicker = view.$('[data-testid="scroll"] [data-happy2-ui="onboarding-kicker"]');
+    expect(
+        scrollKicker.bounds().y - body.bounds().y,
+        "head of an overflowing column is reachable at scrollTop 0",
+    ).toBe(40);
 
     /* A TextField near the top edge is likewise clear on its sides. */
     const midControl = view.$('[data-testid="field-mid"] [data-happy2-ui="text-field-control"]');
@@ -807,17 +826,21 @@ it("keeps the declared body gap whether an optional leading banner is present or
     const note = view.$('[data-testid="note"]');
     const wbFirst = view.$('[data-testid="wb-first"]');
     const wbSecond = view.$('[data-testid="wb-second"]');
-    /* The banner is the first flow child: it rests at the wrapper's top gutter,
-     * never touching the content block, with no external margin of its own. */
-    expect(note.offsets().top, "banner at top gutter").toBe(28);
+    /* The banner is the first flow child of the step slot: it rests at the
+     * slot's own top edge, never touching the headline, with no external margin
+     * of its own. */
+    expect(note.offsets().top, "banner at slot top").toBe(0);
     expect(gapBetween(note, wbFirst), "banner → first card gap").toBe(12);
     expect(gapBetween(wbFirst, wbSecond), "card → card gap (with banner)").toBe(12);
+    /* The slot itself keeps its 32px separation from the headline above it. */
+    const wbTitle = view.$('[data-testid="with-banner"] [data-happy2-ui="onboarding-title"]');
+    expect(note.bounds().y - (wbTitle.bounds().y + wbTitle.height())).toBe(32);
 
     /* ---- Absent: the first card takes the banner's place, gaps unchanged -- */
 
     const nbFirst = view.$('[data-testid="nb-first"]');
     const nbSecond = view.$('[data-testid="nb-second"]');
-    expect(nbFirst.offsets().top, "first card at top gutter").toBe(28);
+    expect(nbFirst.offsets().top, "first card at slot top").toBe(0);
     expect(gapBetween(nbFirst, nbSecond), "card → card gap (no banner)").toBe(12);
 
     await view.screenshot("OnboardingScreen.gaps.test");
@@ -846,7 +869,7 @@ it("preserves the body DOM for one lifetime and remounts only it when bodyKey ch
 
     view.render(Fixture, { width: 720, height: 480, padding: 0 });
     await view.ready();
-    const card = view.container.querySelector('[data-happy2-ui="onboarding-card"]')!;
+    const root = view.container.querySelector('[data-happy2-ui="onboarding-screen"]')!;
     const firstBody = view.container.querySelector<HTMLElement>(
         '[data-happy2-ui="onboarding-body"]',
     )!;
@@ -859,7 +882,7 @@ it("preserves the body DOM for one lifetime and remounts only it when bodyKey ch
     )!;
     expect(sameBody).toBe(firstBody);
     expect(sameBody.scrollTop).toBeGreaterThan(0);
-    expect(view.container.querySelector('[data-happy2-ui="onboarding-card"]')).toBe(card);
+    expect(view.container.querySelector('[data-happy2-ui="onboarding-screen"]')).toBe(root);
 
     flushSync(() => setFixture({ bodyKey: "base-image", revision: 2 }));
     const nextBody = view.container.querySelector<HTMLElement>(
@@ -867,5 +890,5 @@ it("preserves the body DOM for one lifetime and remounts only it when bodyKey ch
     )!;
     expect(nextBody).not.toBe(firstBody);
     expect(nextBody.scrollTop).toBe(0);
-    expect(view.container.querySelector('[data-happy2-ui="onboarding-card"]')).toBe(card);
+    expect(view.container.querySelector('[data-happy2-ui="onboarding-screen"]')).toBe(root);
 }, 120_000);

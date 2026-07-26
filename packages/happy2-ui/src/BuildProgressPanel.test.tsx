@@ -138,15 +138,14 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
     );
     await view.ready();
 
-    /* ---- Root: flex column card on the app surface --------------------- */
+    /* ---- Root: frameless flex column directly on the app surface -------- */
 
     const root = view.$('[data-testid="bp-building"]');
     expect(root.element.tagName).toBe("DIV");
     expect(root.element.getAttribute("data-status")).toBe("building");
     expect(
         root.computedStyles([
-            "background-color",
-            "border-top-left-radius",
+            "border-top-width",
             "box-sizing",
             "color",
             "display",
@@ -158,8 +157,7 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
             "padding-top",
         ]),
     ).toEqual({
-        "background-color": "rgb(255, 255, 255)",
-        "border-top-left-radius": "10px",
+        "border-top-width": "0px",
         "box-sizing": "border-box",
         color: "rgb(0, 0, 0)",
         display: "flex",
@@ -168,10 +166,10 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
             server.browser === "webkit"
                 ? "happy2 Figtree, system-ui, sans-serif"
                 : '"happy2 Figtree", system-ui, sans-serif',
-        "padding-bottom": "20px",
-        "padding-left": "20px",
-        "padding-right": "20px",
-        "padding-top": "20px",
+        "padding-bottom": "0px",
+        "padding-left": "0px",
+        "padding-right": "0px",
+        "padding-top": "0px",
     });
 
     /* ---- Header: title typography + phase badge ------------------------ */
@@ -180,9 +178,9 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
     expect(title.textMetrics().text).toBe("Daycare Minimal");
     expect(title.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
         color: "rgb(0, 0, 0)",
-        "font-size": "15px",
+        "font-size": "17px",
         "font-weight": "600",
-        "line-height": "20px",
+        "line-height": "24px",
     });
     await paints(title, "title");
 
@@ -205,10 +203,9 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
 
     const track = view.$('[data-testid="bp-building"] [data-happy2-ui="build-progress-track"]');
     const fill = view.$('[data-testid="bp-building"] [data-happy2-ui="build-progress-fill"]');
-    expect(track.height()).toBe(8);
-    /* Track spans the full 358px content measure (400 − 2×1 border − 2×20 pad). */
-    const rootInner = root.bounds().width - 2 - 40;
-    expect(Math.abs(track.width() - rootInner)).toBeLessThanOrEqual(0.5);
+    expect(track.height()).toBe(6);
+    /* Frameless: the track spans the panel's whole width, edge to edge. */
+    expect(Math.abs(track.width() - root.bounds().width)).toBeLessThanOrEqual(0.5);
     expect(track.computedStyle("border-top-left-radius")).toBe("999px");
     expect(track.computedStyle("overflow-x")).toBe("hidden");
     /* Fill width is exactly 45% of the track within 1px, accent-colored. */
@@ -294,7 +291,7 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
     ).toEqual({
         "background-color": "rgb(246, 248, 250)",
         "font-family": monoFamily(),
-        "max-height": "160px",
+        "max-height": "200px",
         "overflow-x": "auto",
         "overflow-y": "auto",
     });

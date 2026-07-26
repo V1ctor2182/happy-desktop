@@ -29,10 +29,9 @@ it("renders the two-mode cloud chooser inside a full-bleed Retina scrollport", a
         width: 720,
         height: 720,
     });
-    expect(view.$('[data-happy2-ui="onboarding-card"]').bounds()).toMatchObject({
-        width: 640,
-        height: 600,
-    });
+    /* The screen is the window: one measure column, no card. The 800px `large`
+     * measure clamps to the 720px window here. */
+    expect(view.$('[data-happy2-ui="onboarding-body-content"]').bounds().width).toBe(720);
     expect(
         view
             .$('[data-happy2-ui="onboarding-body"]')
@@ -42,7 +41,7 @@ it("renders the two-mode cloud chooser inside a full-bleed Retina scrollport", a
         margin: "0px",
         "overflow-y": "auto",
         padding: "0px",
-        width: "558px",
+        width: "720px",
     });
     expect(view.container.textContent).toContain("Where should Happy run?");
     expect(view.container.textContent).toContain("Local on this machine");
@@ -97,7 +96,7 @@ it("keeps local mode fieldless and starting/error states in one stable card", as
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="onboarding-card"]').bounds().width).toBe(640);
+    expect(view.$('[data-happy2-ui="onboarding-body-content"]').bounds().width).toBe(720);
     expect(view.container.textContent).toContain("Happy couldn't start.");
     expect(view.container.textContent).toContain(
         "The local Happy server stopped before it was ready.",
