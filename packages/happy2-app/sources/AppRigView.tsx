@@ -95,7 +95,6 @@ export interface AppRigViewProps {
 interface OpenGroup {
     readonly id: RigGroupId;
     readonly name: string;
-    readonly displayPath: string;
     /**
      * The catch-all project for sessions started outside any repository. It is
      * addressed as a place rather than as a path, so the surface names it by its
@@ -236,7 +235,7 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     return group.conversations.map((summary) => ({
         id: summary.id,
         label: summary.title,
-        ...(summary.activity === "running" ? { icon: "dot" as const } : {}),
+        ...(summary.activity === "running" ? { busy: true } : {}),
     }));
 }
 
@@ -259,7 +258,6 @@ function openGroupFind(
             return {
                 id: project.id,
                 name: project.name,
-                displayPath: project.displayPath,
                 home: project.kind === "home",
                 conversations: project.conversations,
                 changes: project.changes ?? [],
@@ -270,7 +268,6 @@ function openGroupFind(
                 return {
                     id: worktree.id,
                     name: worktree.name,
-                    displayPath: worktree.displayPath,
                     home: false,
                     conversations: worktree.conversations,
                     changes: worktree.changes ?? [],

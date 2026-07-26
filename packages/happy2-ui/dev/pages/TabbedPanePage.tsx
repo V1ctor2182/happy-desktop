@@ -6,7 +6,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 const sessionTabs: TabItem[] = [
     { id: "one", label: "Refactor the router" },
-    { id: "two", label: "Fix the flaky upload test", icon: "dot" },
+    { id: "two", label: "Fix the flaky upload test", busy: true },
     { id: "three", label: "Untitled session" },
 ];
 

@@ -8,12 +8,21 @@ import {
 import { CountBadge } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
+import { Spinner } from "./Spinner";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
     id: string;
     label: string;
     icon?: IconName;
     badge?: number;
+    /**
+     * Whether the work behind this tab is running. It takes the leading slot and
+     * spins there, so a busy tab reads as busy at a glance instead of wearing a
+     * static mark that says only "something about this one is different". It
+     * takes precedence over `icon`: both want the same lane, and while work is
+     * running that is the thing worth showing.
+     */
+    busy?: boolean;
 };
 export type TabsProps = {
     className?: string;
@@ -241,13 +250,21 @@ export function Tabs(props: TabsProps) {
                         }
                         type="button"
                     >
-                        {tab.icon
-                            ? ((name) => (
-                                  <span className="happy2-tabs__tab-icon" data-happy2-ui="tab-icon">
-                                      <Icon name={name} size={iconSizes[size()]} />
-                                  </span>
-                              ))(tab.icon)
-                            : null}
+                        {tab.busy ? (
+                            <span className="happy2-tabs__tab-icon" data-happy2-ui="tab-icon">
+                                <Spinner
+                                    label={`${tab.label} is working`}
+                                    size={iconSizes[size()]}
+                                    tone="muted"
+                                />
+                            </span>
+                        ) : tab.icon ? (
+                            ((name) => (
+                                <span className="happy2-tabs__tab-icon" data-happy2-ui="tab-icon">
+                                    <Icon name={name} size={iconSizes[size()]} />
+                                </span>
+                            ))(tab.icon)
+                        ) : null}
                         <span className="happy2-tabs__tab-label" data-happy2-ui="tab-label">
                             {tab.label}
                         </span>
