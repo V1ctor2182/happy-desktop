@@ -109,6 +109,7 @@
 @import "./styles/rig-install.css";
 @import "./styles/rig-client.css";
 @import "./styles/rig-chat.css";
+@import "./styles/rig-connection-status.css";
 @import "./styles/agent-activity-row.css";
 @import "./styles/context-gauge.css";
 @import "./styles/conversation.css";

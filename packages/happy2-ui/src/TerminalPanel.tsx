@@ -4,6 +4,7 @@ import {
     useRef,
     useState,
     type CSSProperties,
+    type ClipboardEvent,
     type KeyboardEvent,
 } from "react";
 import type { TerminalCellSnapshot, TerminalGridSnapshot } from "happy2-state";
@@ -193,6 +194,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     data-focused={focused ? "" : undefined}
                     data-happy2-ui="terminal-screen"
                     onClick={screenFocus}
+                    onCopy={terminalSelectionCopy}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") screenFocus();
                     }}
@@ -206,7 +208,9 @@ export function TerminalPanel(props: TerminalPanelProps) {
                                 {layoutRow(row.cells).map(({ cell, gap }, index) => (
                                     <span
                                         className="happy2-terminal-panel__cell"
+                                        data-column={cell.x}
                                         data-inverse={cell.inverse ? "" : undefined}
+                                        data-width={cell.width}
                                         key={`${cell.x}:${index}`}
                                         style={cellStyle(cell, gap)}
                                     >
@@ -251,6 +255,57 @@ export function TerminalPanel(props: TerminalPanelProps) {
             )}
         </section>
     );
+}
+
+function terminalSelectionCopy(event: ClipboardEvent<HTMLDivElement>): void {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const rows = [
+        ...event.currentTarget.querySelectorAll<HTMLElement>(".happy2-terminal-panel__row"),
+    ]
+        .filter((row) => range.intersectsNode(row))
+        .map((row) => terminalRowSelectionText(row, range));
+    if (rows.length === 0) return;
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", rows.join("\n"));
+}
+
+function terminalRowSelectionText(row: HTMLElement, range: Range): string {
+    let previousEnd: number | undefined;
+    let text = "";
+    for (const cell of row.querySelectorAll<HTMLElement>(".happy2-terminal-panel__cell")) {
+        if (!range.intersectsNode(cell)) continue;
+        const selectedText = terminalCellSelectionText(cell, range);
+        if (!selectedText) continue;
+        const column = Number(cell.dataset.column);
+        const width = Number(cell.dataset.width);
+        if (previousEnd !== undefined && column > previousEnd) {
+            text += " ".repeat(column - previousEnd);
+        }
+        text += selectedText;
+        previousEnd = column + width;
+    }
+    return text;
+}
+
+function terminalCellSelectionText(cell: HTMLElement, range: Range): string {
+    const text = cell.textContent ?? "";
+    let start = 0;
+    let end = text.length;
+    if (cell.contains(range.startContainer)) {
+        const prefix = document.createRange();
+        prefix.selectNodeContents(cell);
+        prefix.setEnd(range.startContainer, range.startOffset);
+        start = prefix.toString().length;
+    }
+    if (cell.contains(range.endContainer)) {
+        const prefix = document.createRange();
+        prefix.selectNodeContents(cell);
+        prefix.setEnd(range.endContainer, range.endOffset);
+        end = prefix.toString().length;
+    }
+    return text.slice(start, end);
 }
 
 /**

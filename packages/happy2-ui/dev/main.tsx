@@ -496,6 +496,10 @@ const fullScreens: BlueprintPage[] = [
         page: () => <ProductStorePage kind="agent-secrets" />,
     },
 ];
+const pageNumberCompare = (left: BlueprintPage, right: BlueprintPage) =>
+    left.number.localeCompare(right.number, undefined, { numeric: true });
+const componentOptions = [...components].sort(pageNumberCompare);
+const fullScreenOptions = [...fullScreens].sort(pageNumberCompare);
 const pages = [...components, ...fullScreens];
 function componentFromHash(): string {
     const id = window.location.hash.slice(1).toLowerCase();
@@ -533,15 +537,15 @@ function Workbench() {
                         onInput={(event) => selectComponent(event.currentTarget.value)}
                     >
                         <optgroup label="Components">
-                            {components.map((component) => (
+                            {componentOptions.map((component) => (
                                 <option key={component.id} value={component.id}>
                                     {component.number} · {component.label}
                                 </option>
                             ))}
                         </optgroup>
-                        {fullScreens.length > 0 ? (
+                        {fullScreenOptions.length > 0 ? (
                             <optgroup label="Full screens">
-                                {fullScreens.map((screen) => (
+                                {fullScreenOptions.map((screen) => (
                                     <option key={screen.id} value={screen.id}>
                                         {screen.number} · {screen.label}
                                     </option>

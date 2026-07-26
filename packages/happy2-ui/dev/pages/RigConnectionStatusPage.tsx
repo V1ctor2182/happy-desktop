@@ -8,11 +8,11 @@ export function RigConnectionStatusPage() {
     return (
         <ComponentPage
             number="C-147"
-            summary="Desktop status surface for the HTTP connection to a local Rig daemon. Reports transport reachability and daemon health as a single onboarding card, with a manual retry while disconnected or after a daemon error."
+            summary="Minimal desktop status surface for the local Rig daemon: one muted ASCII loader, a neutral status, and concise progress."
             title="Rig connection status"
         >
             <Specimen
-                detail="Initial probe in flight — deterministic static loader"
+                detail="Centered muted ASCII loader · neutral status and progress"
                 label="Connecting"
                 number="01"
                 stage="app"

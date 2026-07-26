@@ -1,7 +1,6 @@
 import { type CSSProperties } from "react";
-import { Banner } from "./Banner";
 import { Button } from "./Button";
-import { OnboardingScreen } from "./OnboardingScreen";
+import { Spinner } from "./Spinner";
 import { WindowDragRegion } from "./TitleBar";
 
 export type RigConnectionState = "connecting" | "connected" | "disconnected";
@@ -26,142 +25,106 @@ export interface RigConnectionStatusProps {
 
 interface StatusModel {
     readonly loading: boolean;
-    readonly kicker: string;
-    readonly title: string;
-    readonly copy?: string;
-    readonly loadingLabel: string;
-    readonly bodyKey: string;
+    readonly status: string;
+    readonly progress: string;
 }
 
 function statusModel(props: RigConnectionStatusProps): StatusModel {
     if (props.connection === "connecting")
         return {
             loading: true,
-            kicker: "Rig connection",
-            title: "Connecting to Rig.",
-            loadingLabel: "Reaching your local Rig daemon…",
-            bodyKey: "connecting",
+            status: "Connecting to Rig",
+            progress: "Checking the local service…",
         };
     if (props.connection === "disconnected")
         return {
-            loading: false,
-            kicker: "Rig connection",
-            title: "Rig is unreachable.",
-            copy: "Happy lost contact with your local Rig daemon and is retrying automatically.",
-            loadingLabel: "Reconnecting…",
-            bodyKey: "disconnected",
+            loading: true,
+            status: "Reconnecting to Rig",
+            progress:
+                props.attempt > 1
+                    ? `Waiting for the local service · attempt ${props.attempt}`
+                    : "Waiting for the local service…",
         };
     // connection === "connected": the transport is live; the daemon reports health.
     if (props.daemon === "starting")
         return {
             loading: true,
-            kicker: "Rig daemon",
-            title: "Starting Rig.",
-            loadingLabel: "Waiting for the Rig daemon to become ready…",
-            bodyKey: "starting",
+            status: "Starting Rig",
+            progress: "Waiting for the daemon to become ready…",
         };
     if (props.daemon === "error")
         return {
             loading: false,
-            kicker: "Rig daemon",
-            title: "Rig could not start.",
-            copy: "The Rig daemon is reachable but reported an error.",
-            loadingLabel: "Rig daemon error",
-            bodyKey: "error",
+            status: "Rig needs attention",
+            progress: props.message ?? "The local daemon reported an error.",
         };
     return {
         loading: false,
-        kicker: "Rig",
-        title: "Rig is ready.",
-        copy: "Your local Rig workspace is connected.",
-        loadingLabel: "Rig is ready",
-        bodyKey: "ready",
+        status: "Rig is ready",
+        progress: props.version ? `Local daemon ${props.version}` : "Local daemon connected",
     };
-}
-
-function reconnectingCopy(attempt: number): string {
-    return attempt > 1
-        ? `Reconnecting… (attempt ${attempt})`
-        : "Reconnecting to your local Rig daemon…";
 }
 
 /**
  * C-147 RigConnectionStatus — the desktop status surface for the HTTP connection
- * to a local Rig daemon. It renders the whole window as a single onboarding card
- * that reports connection reachability and daemon health, offering a manual retry
- * while disconnected or after a daemon error. Content components are intentionally
- * absent here: this surface only communicates connection state. Props-only,
- * desktop-only; the owner supplies the snapshot fields and the retry handler.
+ * to a local Rig daemon. One centered, muted ASCII loader and two neutral lines
+ * report connection reachability and daemon progress without presenting startup
+ * as an onboarding or warning flow. A quiet retry action appears only when the
+ * owner can intervene. Props-only and desktop-only.
  */
 export function RigConnectionStatus(props: RigConnectionStatusProps) {
     const model = statusModel(props);
+    const canRetry =
+        props.connection === "disconnected" ||
+        (props.connection === "connected" && props.daemon === "error");
     return (
         <>
             <WindowDragRegion />
-            <OnboardingScreen
-                bodyKey={model.bodyKey}
-                brand={{ name: "Happy Place" }}
-                className={props.className}
-                copy={model.copy}
+            <section
+                className={["happy2-rig-connection-status", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
                 data-testid={props["data-testid"] ?? "rig-connection-status"}
-                kicker={model.kicker}
-                loadingLabel={model.loadingLabel}
-                state={model.loading ? "loading" : "form"}
+                data-happy2-ui="rig-connection-status"
+                data-state={props.connection === "connected" ? props.daemon : props.connection}
                 style={props.style}
-                title={model.title}
-                width="large"
             >
-                {props.connection === "disconnected" ? (
-                    <div
-                        className="happy2-rig-connection-status"
-                        data-happy2-ui="rig-connection-status-body"
-                        style={bodyStyle}
+                <div
+                    aria-live="polite"
+                    className="happy2-rig-connection-status__content"
+                    data-happy2-ui="rig-connection-status-body"
+                >
+                    <span
+                        className="happy2-rig-connection-status__loader"
+                        data-happy2-ui="rig-connection-status-loader"
                     >
-                        <Banner
-                            action={{ label: "Retry now", onClick: props.onRetry }}
-                            icon="shield"
-                            title={reconnectingCopy(props.attempt)}
-                            tone="warning"
-                        >
-                            {props.message ?? "The Rig daemon did not respond."}
-                        </Banner>
-                    </div>
-                ) : props.connection === "connected" && props.daemon === "error" ? (
-                    <div
-                        className="happy2-rig-connection-status"
-                        data-happy2-ui="rig-connection-status-body"
-                        style={bodyStyle}
+                        {model.loading ? (
+                            <Spinner label={model.status} size={20} tone="muted" variant="line" />
+                        ) : (
+                            <span aria-hidden className="happy2-rig-connection-status__marker">
+                                ·
+                            </span>
+                        )}
+                    </span>
+                    <strong
+                        className="happy2-rig-connection-status__status"
+                        data-happy2-ui="rig-connection-status-label"
                     >
-                        <Banner icon="shield" title="Rig daemon error" tone="danger">
-                            {props.message ?? "The Rig daemon reported an error."}
-                        </Banner>
-                        <Button onClick={props.onRetry} type="button">
-                            Try again
+                        {model.status}
+                    </strong>
+                    <span
+                        className="happy2-rig-connection-status__progress"
+                        data-happy2-ui="rig-connection-status-progress"
+                    >
+                        {model.progress}
+                    </span>
+                    {canRetry ? (
+                        <Button onClick={props.onRetry} size="small" type="button" variant="ghost">
+                            Retry now
                         </Button>
-                    </div>
-                ) : props.connection === "connected" && props.daemon === "ready" ? (
-                    <div
-                        className="happy2-rig-connection-status"
-                        data-happy2-ui="rig-connection-status-body"
-                        style={bodyStyle}
-                    >
-                        <Banner icon="check-circle" tone="success">
-                            {props.version
-                                ? `Connected to Rig ${props.version}.`
-                                : "Connected to Rig."}
-                        </Banner>
-                    </div>
-                ) : null}
-            </OnboardingScreen>
+                    ) : null}
+                </div>
+            </section>
         </>
     );
 }
-
-// Vertical stack of the status banner and its optional retry control. The
-// onboarding body owns the outer scrollport; this inner column owns sibling gap.
-const bodyStyle: CSSProperties = {
-    alignItems: "stretch",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-};
