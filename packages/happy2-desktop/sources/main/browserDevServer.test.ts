@@ -68,6 +68,7 @@ function connectionWith(health: () => Promise<unknown>, close = vi.fn()): LocalR
 function middlewareOf(plugin: ReturnType<typeof browserLocalRigPlugin>): Middleware {
     let middleware: Middleware | undefined;
     const server = {
+        config: { server: { host: "127.0.0.1", port: 5174 } },
         middlewares: {
             use: (handler: Middleware) => {
                 middleware = handler;

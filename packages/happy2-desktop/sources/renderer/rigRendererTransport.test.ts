@@ -14,10 +14,34 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     delete (globalThis as { EventSource?: unknown }).EventSource;
 });
 
 describe("rigRendererTransport", () => {
+    it("carries the loopback capability into terminal WebSocket authentication", () => {
+        const sockets: { protocols: string[] }[] = [];
+        vi.stubGlobal(
+            "WebSocket",
+            class {
+                static OPEN = 1;
+                binaryType = "";
+                readyState = 0;
+                constructor(_url: string, protocols: string[]) {
+                    sockets.push({ protocols });
+                }
+                addEventListener() {}
+                close() {}
+            },
+        );
+        const transport = rigRendererTransportCreate(`${BASE}/opaque-capability`);
+        transport.terminalConnect("session-1" as RigSessionId, "terminal-1" as never);
+        expect(sockets[0]?.protocols).toEqual([
+            "happy2-terminal.v1",
+            "happy2-capability.opaque-capability",
+        ]);
+    });
+
     it("reads the model catalog from GET /models", async () => {
         const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
             jsonResponse({

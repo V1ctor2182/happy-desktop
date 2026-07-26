@@ -1,4 +1,6 @@
 import { BrowserTerminalConnection, TERMINAL_PROTOCOL, terminalSocketUrl } from "happy2-app";
+
+const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
 import type {
     RigEventId,
     RigEventObserver,
@@ -35,6 +37,7 @@ import type {
  */
 export function rigRendererTransportCreate(baseUrl: string): RigTransport {
     const base = baseUrl.replace(/\/$/, "");
+    const capability = new URL(base).pathname.split("/").filter(Boolean).at(-1);
 
     const url = (path: string, params?: Record<string, string | undefined>): string => {
         const query = new URLSearchParams();
@@ -183,7 +186,10 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                         terminalId,
                     )}/attach`,
                 ),
-                [TERMINAL_PROTOCOL],
+                [
+                    TERMINAL_PROTOCOL,
+                    ...(capability ? [`${TERMINAL_CAPABILITY_PROTOCOL_PREFIX}${capability}`] : []),
+                ],
             ),
 
         changeModel: (sessionId, input: RigModelSelection) =>

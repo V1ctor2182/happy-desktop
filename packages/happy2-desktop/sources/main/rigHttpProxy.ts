@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { HealthResponse } from "@slopus/rig/types";
 import type { RigDaemonHealth } from "happy2-state";
@@ -53,12 +54,27 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * answers, so any other upgrade attempt is refused rather than left hanging.
  */
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
+    const capability = randomBytes(32).toString("base64url");
+    const capabilityPrefix = `/${capability}`;
+    let expectedHost: string | undefined;
     const server = createServer((request, response) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
         // Exact-match only: an echoed arbitrary origin would hand the whole daemon
         // surface to any page the user happens to have open.
         const crossOrigin =
             options.allowedOrigin !== undefined && request.headers.origin === options.allowedOrigin;
+        if (
+            request.headers.host !== expectedHost ||
+            (request.headers.origin !== undefined &&
+                request.headers.origin !== "null" &&
+                !request.headers.origin.startsWith("file:") &&
+                !crossOrigin) ||
+            (url.pathname !== capabilityPrefix && !url.pathname.startsWith(`${capabilityPrefix}/`))
+        ) {
+            response.writeHead(403);
+            response.end();
+            return;
+        }
         if (crossOrigin) {
             response.setHeader("access-control-allow-origin", options.allowedOrigin!);
             response.setHeader("vary", "origin");
@@ -78,10 +94,19 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             response.end();
             return;
         }
+        if (
+            request.method === "POST" &&
+            request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !==
+                "application/json"
+        ) {
+            response.writeHead(415, { "content-type": "application/json" });
+            response.end(JSON.stringify({ error: "JSON content type required." }));
+            return;
+        }
         void rigProxyHandle({
             client: options.client,
             method: request.method ?? "GET",
-            path: url.pathname,
+            path: url.pathname.slice(capabilityPrefix.length) || "/",
             query: url.searchParams,
             request,
             response,
@@ -107,6 +132,9 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
     });
     const terminals = rigTerminalBridgeCreate({
         client: () => Promise.resolve(options.client),
+        capability,
+        prefix: capabilityPrefix,
+        expectedHost: () => expectedHost,
         ...(options.allowedOrigin === undefined ? {} : { allowedOrigin: options.allowedOrigin }),
     });
     server.on("upgrade", (request, socket, head) => {
@@ -123,8 +151,9 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
                 reject(new Error("The Rig HTTP proxy did not bind a loopback port."));
                 return;
             }
+            expectedHost = `127.0.0.1:${address.port}`;
             resolvePromise({
-                url: `http://127.0.0.1:${address.port}`,
+                url: `http://${expectedHost}${capabilityPrefix}`,
                 close: () => {
                     terminals.close();
                     server.close();

@@ -9,6 +9,7 @@ import { RIG_TERMINAL_MAX_WIRE_BYTES, type RigDaemonClient } from "./rigDaemonCl
  * addresses either stack.
  */
 export const RIG_TERMINAL_PROTOCOL = "happy2-terminal.v1";
+export const RIG_TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
 
 /** The subset of the daemon client a terminal attachment needs. */
 export type RigTerminalClient = Pick<RigDaemonClient, "attachTerminal">;
@@ -16,6 +17,10 @@ export type RigTerminalClient = Pick<RigDaemonClient, "attachTerminal">;
 export interface RigTerminalBridgeOptions {
     /** Resolves the daemon client to attach through, per upgrade. */
     readonly client: () => Promise<RigTerminalClient>;
+    /** Opaque authority advertised only to the trusted renderer. */
+    readonly capability?: string;
+    /** Exact HTTP Host accepted by the separately-bound packaged proxy. */
+    readonly expectedHost?: () => string | undefined;
     /**
      * Path prefix the renderer addresses this bridge under, matching the prefix
      * its HTTP routes are served at (`""` for the packaged app's own loopback
@@ -73,17 +78,24 @@ export function rigTerminalBridgeCreate(options: RigTerminalBridgeOptions): RigT
         upgrade(request, socket, head) {
             const route = terminalRoute(prefix, request.url);
             if (!route) return false;
+            const protocols = protocolsOf(request.headers["sec-websocket-protocol"]);
             if (
-                !originAllowed(request.headers.origin, request.headers.host, options.allowedOrigin)
+                (options.expectedHost !== undefined &&
+                    request.headers.host !== options.expectedHost()) ||
+                !originAllowed(
+                    request.headers.origin,
+                    options.allowedOrigin,
+                    options.capability !== undefined,
+                ) ||
+                (options.capability !== undefined &&
+                    !protocols.includes(
+                        `${RIG_TERMINAL_CAPABILITY_PROTOCOL_PREFIX}${options.capability}`,
+                    ))
             ) {
                 upgradeReject(socket, 403, "Forbidden");
                 return true;
             }
-            if (
-                !protocolsOf(request.headers["sec-websocket-protocol"]).includes(
-                    RIG_TERMINAL_PROTOCOL,
-                )
-            ) {
+            if (!protocols.includes(RIG_TERMINAL_PROTOCOL)) {
                 upgradeReject(socket, 400, "Bad Request");
                 return true;
             }
@@ -159,12 +171,11 @@ function terminalRoute(prefix: string, requestUrl: string | undefined): Terminal
  */
 function originAllowed(
     origin: string | undefined,
-    host: string | undefined,
     allowed: string | undefined,
+    allowOpaqueOrigin: boolean,
 ): boolean {
-    if (origin === undefined || origin === "null" || origin.startsWith("file:")) return true;
-    if (host !== undefined && (origin === `http://${host}` || origin === `https://${host}`))
-        return true;
+    if (origin === undefined || origin === "null" || origin.startsWith("file:"))
+        return allowOpaqueOrigin;
     return allowed !== undefined && origin === allowed;
 }
 

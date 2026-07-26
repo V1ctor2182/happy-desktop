@@ -75,11 +75,20 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             ];
         },
         configureServer(server) {
+            const configuredHost =
+                typeof server.config.server.host === "string"
+                    ? server.config.server.host
+                    : "127.0.0.1";
+            const configuredPort = server.config.server.port ?? 5173;
+            const expectedHost = `${configuredHost}:${configuredPort}`;
+            const rendererOrigin = `http://${expectedHost}`;
             // A terminal's bytes cannot ride the middleware stack, so the dev
             // bridge claims the one upgrade path it owns and leaves every other
             // upgrade — Vite's own HMR socket above all — to Vite's listeners.
             const terminals = rigTerminalBridgeCreate({
+                allowedOrigin: rendererOrigin,
                 client: () => runtime().then(({ connection }) => connection.client),
+                expectedHost: () => expectedHost,
                 prefix: endpoint,
             });
             server.httpServer?.on("upgrade", (request, socket, head) => {
