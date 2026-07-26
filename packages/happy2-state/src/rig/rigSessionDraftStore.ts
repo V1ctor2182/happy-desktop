@@ -91,6 +91,90 @@ export function rigSessionSelectionDefault(catalog: RigModelCatalog): RigSelecti
 }
 
 /**
+ * Selects a model within a selection. Which provider offers a model is the
+ * catalog's to answer, not the caller's; effort follows the new model's own
+ * default rather than carrying over a level it may not support, and a service
+ * tier the new provider does not offer is dropped for the same reason.
+ *
+ * Pure, so the pre-session draft and a live session's pending picker state apply
+ * the identical rule without either store reaching into the other.
+ */
+export function rigSelectionModelUpdate(
+    catalog: RigModelCatalog,
+    current: RigSelection,
+    input: RigModelSelection,
+): RigSelection {
+    const providerId =
+        input.providerId ??
+        catalog.providers.find((provider) =>
+            provider.models.some((model) => model.id === input.modelId),
+        )?.id ??
+        current.providerId;
+    const provider = catalog.providers.find((candidate) => candidate.id === providerId);
+    const model = provider?.models.find((candidate) => candidate.id === input.modelId);
+    const effort = input.effort ?? model?.defaultThinkingLevel;
+    const tierSupported =
+        current.serviceTier === undefined ||
+        (provider?.serviceTiers.includes(current.serviceTier) ?? false);
+    return {
+        providerId,
+        modelId: input.modelId,
+        ...(effort !== undefined ? { effort } : {}),
+        permissionMode: current.permissionMode,
+        ...(tierSupported && current.serviceTier !== undefined
+            ? { serviceTier: current.serviceTier }
+            : {}),
+    };
+}
+
+/** Sets the thinking level, or clears it back to the model's own default. */
+export function rigSelectionEffortUpdate(
+    current: RigSelection,
+    effort?: RigThinkingLevel,
+): RigSelection {
+    return {
+        providerId: current.providerId,
+        modelId: current.modelId,
+        ...(effort !== undefined ? { effort } : {}),
+        permissionMode: current.permissionMode,
+        ...(current.serviceTier !== undefined ? { serviceTier: current.serviceTier } : {}),
+    };
+}
+
+/** Sets the access mode a session's tools run under. */
+export function rigSelectionPermissionModeUpdate(
+    current: RigSelection,
+    permissionMode: RigPermissionMode,
+): RigSelection {
+    return { ...current, permissionMode };
+}
+
+/** Sets the service tier, or clears it back to the provider's standard one. */
+export function rigSelectionServiceTierUpdate(
+    current: RigSelection,
+    serviceTier?: RigServiceTier,
+): RigSelection {
+    return {
+        providerId: current.providerId,
+        modelId: current.modelId,
+        ...(current.effort !== undefined ? { effort: current.effort } : {}),
+        permissionMode: current.permissionMode,
+        ...(serviceTier !== undefined ? { serviceTier } : {}),
+    };
+}
+
+/** Whether two selections name the same configuration. */
+export function rigSelectionEqual(left: RigSelection, right: RigSelection): boolean {
+    return (
+        left.providerId === right.providerId &&
+        left.modelId === right.modelId &&
+        left.effort === right.effort &&
+        left.permissionMode === right.permissionMode &&
+        left.serviceTier === right.serviceTier
+    );
+}
+
+/**
  * Holds one pending session configuration. The catalog arrives already resolved,
  * so the constructor opens no transport work and the same concrete store backs
  * the empty-project composer, the create dialog, Blueprint, and tests.
@@ -116,58 +200,15 @@ export function rigSessionDraftStoreCreate(options: RigSessionDraftOptions): Rig
         get: () => store.getState(),
         subscribe: (listener) => store.subscribe(listener),
 
-        modelUpdate(input) {
-            const current = store.getState().selection;
-            // A model names its provider only when the caller knows it; the
-            // catalog is the authority on which provider actually offers it.
-            const providerId =
-                input.providerId ??
-                catalog.providers.find((provider) =>
-                    provider.models.some((model) => model.id === input.modelId),
-                )?.id ??
-                current.providerId;
-            const provider = catalog.providers.find((candidate) => candidate.id === providerId);
-            const model = provider?.models.find((candidate) => candidate.id === input.modelId);
-            const effort = input.effort ?? model?.defaultThinkingLevel;
-            const tierSupported =
-                current.serviceTier === undefined ||
-                (provider?.serviceTiers.includes(current.serviceTier) ?? false);
-            selectionSet({
-                providerId,
-                modelId: input.modelId,
-                ...(effort !== undefined ? { effort } : {}),
-                permissionMode: current.permissionMode,
-                ...(tierSupported && current.serviceTier !== undefined
-                    ? { serviceTier: current.serviceTier }
-                    : {}),
-            });
-        },
-
-        effortUpdate(effort) {
-            const current = store.getState().selection;
-            selectionSet({
-                providerId: current.providerId,
-                modelId: current.modelId,
-                ...(effort !== undefined ? { effort } : {}),
-                permissionMode: current.permissionMode,
-                ...(current.serviceTier !== undefined ? { serviceTier: current.serviceTier } : {}),
-            });
-        },
-
-        permissionModeUpdate(permissionMode) {
-            const current = store.getState().selection;
-            selectionSet({ ...current, permissionMode });
-        },
-
-        serviceTierUpdate(serviceTier) {
-            const current = store.getState().selection;
-            selectionSet({
-                providerId: current.providerId,
-                modelId: current.modelId,
-                ...(current.effort !== undefined ? { effort: current.effort } : {}),
-                permissionMode: current.permissionMode,
-                ...(serviceTier !== undefined ? { serviceTier } : {}),
-            });
-        },
+        modelUpdate: (input) =>
+            selectionSet(rigSelectionModelUpdate(catalog, store.getState().selection, input)),
+        effortUpdate: (effort) =>
+            selectionSet(rigSelectionEffortUpdate(store.getState().selection, effort)),
+        permissionModeUpdate: (permissionMode) =>
+            selectionSet(
+                rigSelectionPermissionModeUpdate(store.getState().selection, permissionMode),
+            ),
+        serviceTierUpdate: (serviceTier) =>
+            selectionSet(rigSelectionServiceTierUpdate(store.getState().selection, serviceTier)),
     };
 }

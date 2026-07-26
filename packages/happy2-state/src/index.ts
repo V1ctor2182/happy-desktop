@@ -310,6 +310,11 @@ export {
     type RigPanelTabSnapshot,
 } from "./rig/rigPanelStore.js";
 export {
+    rigSelectionEffortUpdate,
+    rigSelectionEqual,
+    rigSelectionModelUpdate,
+    rigSelectionPermissionModeUpdate,
+    rigSelectionServiceTierUpdate,
     rigSessionDraftStoreCreate,
     rigSessionSelectionDefault,
     type RigSessionDraftOptions,

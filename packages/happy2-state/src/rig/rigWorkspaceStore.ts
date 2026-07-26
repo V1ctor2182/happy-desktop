@@ -102,6 +102,12 @@ export interface RigConversationSnapshot {
     /** The transcript image opened full size, if any. */
     readonly openImage?: RigOpenImage;
     readonly menus?: RigMenusSnapshot;
+    /**
+     * Whether the model can still be changed. The daemon refuses one while a run
+     * is active or work is queued behind it, so the picker says so rather than
+     * letting a choice be made that the next message would fail to apply.
+     */
+    readonly modelLocked: boolean;
 }
 
 /** One read-only changed file opened as a main-content document tab. */
@@ -244,24 +250,23 @@ export interface RigWorkspaceStore {
     composerAttachmentRemove(attachmentId: string): void;
 
     /*
-     * Configuration of the addressed group's first conversation, before one
-     * exists. These are local: they change what the session will be created
-     * with, so nothing is sent anywhere until the first message is. Each also
-     * becomes the workspace's most recent selection, which the next new session
-     * inherits wherever it is started.
+     * How the next turn will be configured. Picking states an intent and sending
+     * is what applies it, whether or not a session exists yet: for an addressed
+     * group with nothing in it the choice configures the session the first
+     * message creates, and for an open conversation it is applied to that
+     * session just before the message it was chosen for. One act, one meaning,
+     * either side of a session's existence.
+     *
+     * They are local and synchronous, so choosing is instant and cannot fail.
      */
-    groupSessionModelUpdate(input: RigModelSelection): void;
-    groupSessionEffortUpdate(effort?: RigThinkingLevel): void;
-    groupSessionPermissionModeUpdate(permissionMode: RigPermissionMode): void;
-    groupSessionServiceTierUpdate(serviceTier?: RigServiceTier): void;
+    sessionModelUpdate(input: RigModelSelection): void;
+    sessionEffortUpdate(effort?: RigThinkingLevel): void;
+    sessionPermissionModeUpdate(permissionMode: RigPermissionMode): void;
+    sessionServiceTierUpdate(serviceTier?: RigServiceTier): void;
 
     // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
-    modelChange(input: RigModelSelection): Promise<void>;
-    effortChange(effort?: RigThinkingLevel): Promise<void>;
-    permissionModeChange(permissionMode: RigPermissionMode): Promise<void>;
-    serviceTierChange(serviceTier?: RigServiceTier): Promise<void>;
     compact(): Promise<void>;
     rewind(messageId: string): Promise<void>;
     conversationReset(): Promise<void>;
@@ -429,6 +434,7 @@ export function rigWorkspaceStoreCreate(
             settingsOpen: chat.settingsOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : {}),
+            modelLocked: chat.modelLocked,
         };
     };
 
@@ -1094,19 +1100,25 @@ export function rigWorkspaceStoreCreate(
         composerAttachmentRemove: (attachmentId) =>
             (groupComposer ?? composer)?.getState().attachmentRemove(attachmentId),
 
-        groupSessionModelUpdate: (input) => groupDraft?.modelUpdate(input),
-        groupSessionEffortUpdate: (effort) => groupDraft?.effortUpdate(effort),
-        groupSessionPermissionModeUpdate: (mode) => groupDraft?.permissionModeUpdate(mode),
-        groupSessionServiceTierUpdate: (tier) => groupDraft?.serviceTierUpdate(tier),
+        sessionModelUpdate(input) {
+            if (groupDraft) groupDraft.modelUpdate(input);
+            else chatStore?.modelUpdate(input);
+        },
+        sessionEffortUpdate(effort) {
+            if (groupDraft) groupDraft.effortUpdate(effort);
+            else chatStore?.effortUpdate(effort);
+        },
+        sessionPermissionModeUpdate(permissionMode) {
+            if (groupDraft) groupDraft.permissionModeUpdate(permissionMode);
+            else chatStore?.permissionModeUpdate(permissionMode);
+        },
+        sessionServiceTierUpdate(serviceTier) {
+            if (groupDraft) groupDraft.serviceTierUpdate(serviceTier);
+            else chatStore?.serviceTierUpdate(serviceTier);
+        },
 
         runAbort: () => withChat((store) => store.runAbort()),
         answerInput: (input) => withChat((store) => store.answerInput(input)),
-        modelChange: (input) => withChat((store) => store.modelChange(input)),
-        effortChange: (effort) => withChat((store) => store.effortChange(effort)),
-        permissionModeChange: (permissionMode) =>
-            withChat((store) => store.permissionModeChange(permissionMode)),
-        serviceTierChange: (serviceTier) =>
-            withChat((store) => store.serviceTierChange(serviceTier)),
         compact: () => withChat((store) => store.compact()),
         rewind: (messageId) => withChat((store) => store.rewind(messageId)),
         conversationReset: () => withChat((store) => store.sessionReset()),
@@ -1190,6 +1202,7 @@ function conversationAcquiring(
         usageLoading: false,
         activityPanelOpen: false,
         settingsOpen: false,
+        modelLocked: false,
     };
 }
 

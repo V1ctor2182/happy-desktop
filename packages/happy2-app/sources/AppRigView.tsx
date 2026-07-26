@@ -535,7 +535,6 @@ export function AppRigView(props: AppRigViewProps) {
                         }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
-                        {...(openGroup.home ? {} : { topic: openGroup.displayPath })}
                     />
                     {openGroup.conversations.length === 0 && workspace.groupComposer ? (
                         // A group with nothing in it gets no tab strip — an empty
@@ -561,13 +560,9 @@ export function AppRigView(props: AppRigViewProps) {
                                             workspace.groupSessionDraft.menus,
                                             {
                                                 onEffortChange: (effort?: RigThinkingLevel) =>
-                                                    props.workspace.groupSessionEffortUpdate(
-                                                        effort,
-                                                    ),
+                                                    props.workspace.sessionEffortUpdate(effort),
                                                 onModelChange: (selection: RigModelSelection) =>
-                                                    props.workspace.groupSessionModelUpdate(
-                                                        selection,
-                                                    ),
+                                                    props.workspace.sessionModelUpdate(selection),
                                             },
                                         )}
                                     />
@@ -580,16 +575,16 @@ export function AppRigView(props: AppRigViewProps) {
                                         menuPlacement="above"
                                         menus={workspace.groupSessionDraft.menus}
                                         onEffortChange={(effort?: RigThinkingLevel) =>
-                                            props.workspace.groupSessionEffortUpdate(effort)
+                                            props.workspace.sessionEffortUpdate(effort)
                                         }
                                         onModelChange={(selection: RigModelSelection) =>
-                                            props.workspace.groupSessionModelUpdate(selection)
+                                            props.workspace.sessionModelUpdate(selection)
                                         }
                                         onPermissionModeChange={(mode: RigPermissionMode) =>
-                                            props.workspace.groupSessionPermissionModeUpdate(mode)
+                                            props.workspace.sessionPermissionModeUpdate(mode)
                                         }
                                         onServiceTierChange={(tier?: RigServiceTier) =>
-                                            props.workspace.groupSessionServiceTierUpdate(tier)
+                                            props.workspace.sessionServiceTierUpdate(tier)
                                         }
                                     />
                                 ) : undefined
@@ -842,10 +837,15 @@ function RigConversationSurface(props: {
                     {conversation.menus ? (
                         <ComposerModelControl
                             {...rigComposerModelControlProps(conversation.menus, {
+                                // The daemon refuses a model change while a run
+                                // is active or queued behind it, so the control
+                                // says so rather than accepting a choice the
+                                // next message could not apply.
+                                disabled: conversation.modelLocked,
                                 onEffortChange: (effort?: RigThinkingLevel) =>
-                                    swallow(workspace.effortChange(effort)),
+                                    workspace.sessionEffortUpdate(effort),
                                 onModelChange: (selection: RigModelSelection) =>
-                                    swallow(workspace.modelChange(selection)),
+                                    workspace.sessionModelUpdate(selection),
                             })}
                         />
                     ) : null}
@@ -858,16 +858,16 @@ function RigConversationSurface(props: {
                         menuPlacement="above"
                         menus={conversation.menus}
                         onEffortChange={(effort?: RigThinkingLevel) =>
-                            swallow(workspace.effortChange(effort))
+                            workspace.sessionEffortUpdate(effort)
                         }
                         onModelChange={(selection: RigModelSelection) =>
-                            swallow(workspace.modelChange(selection))
+                            workspace.sessionModelUpdate(selection)
                         }
                         onPermissionModeChange={(mode: RigPermissionMode) =>
-                            swallow(workspace.permissionModeChange(mode))
+                            workspace.sessionPermissionModeUpdate(mode)
                         }
                         onServiceTierChange={(tier?: RigServiceTier) =>
-                            swallow(workspace.serviceTierChange(tier))
+                            workspace.sessionServiceTierUpdate(tier)
                         }
                     />
                 ) : undefined
@@ -925,16 +925,16 @@ function RigConversationSurface(props: {
                                     fields={["permission", "tier"]}
                                     menus={conversation.menus}
                                     onEffortChange={(effort?: RigThinkingLevel) =>
-                                        swallow(workspace.effortChange(effort))
+                                        workspace.sessionEffortUpdate(effort)
                                     }
                                     onModelChange={(selection: RigModelSelection) =>
-                                        swallow(workspace.modelChange(selection))
+                                        workspace.sessionModelUpdate(selection)
                                     }
                                     onPermissionModeChange={(mode: RigPermissionMode) =>
-                                        swallow(workspace.permissionModeChange(mode))
+                                        workspace.sessionPermissionModeUpdate(mode)
                                     }
                                     onServiceTierChange={(tier?: RigServiceTier) =>
-                                        swallow(workspace.serviceTierChange(tier))
+                                        workspace.sessionServiceTierUpdate(tier)
                                     }
                                 />
                             ) : undefined

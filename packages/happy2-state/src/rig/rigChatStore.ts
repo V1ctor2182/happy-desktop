@@ -15,6 +15,13 @@ import {
 } from "./rigConversationProject.js";
 import { rigConversationAttachTurnTraces } from "./rigConversationTurnTrace.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
+import {
+    rigSelectionEffortUpdate,
+    rigSelectionEqual,
+    rigSelectionModelUpdate,
+    rigSelectionPermissionModeUpdate,
+    rigSelectionServiceTierUpdate,
+} from "./rigSessionDraftStore.js";
 import { deepEqual, rigUserError } from "./rigSupport.js";
 import type {
     RigAgentEvent,
@@ -68,6 +75,11 @@ export interface RigChatSnapshot {
     readonly goal?: RigGoal;
     readonly subagents: readonly RigSubagentSummary[];
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
+    /**
+     * True while the daemon will refuse a model change: a run is active or work
+     * is queued behind it. Effort, access mode, and tier stay changeable.
+     */
+    readonly modelLocked: boolean;
     /** View state: whether thinking blocks are shown (hidden by default). */
     readonly showReasoning: boolean;
     /** Finished turns the reader opened; their intermediate entries are listed. */
@@ -125,10 +137,20 @@ export interface RigChatStore {
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
-    modelChange(input: RigModelSelection): Promise<void>;
-    effortChange(effort?: RigThinkingLevel): Promise<void>;
-    permissionModeChange(permissionMode: RigPermissionMode): Promise<void>;
-    serviceTierChange(serviceTier?: RigServiceTier): Promise<void>;
+    /*
+     * Picking a model, effort, access mode, or tier states an intent; sending is
+     * what applies it. These are local and synchronous — nothing reaches the
+     * daemon here, so choosing is instant and cannot fail, and the same act
+     * configures a session that does not exist yet and one that does.
+     *
+     * The daemon refuses a model change while a run is active or queued, which
+     * is why the choice cannot simply be applied on the spot: the reader would
+     * be told to wait rather than have their next turn honoured.
+     */
+    modelUpdate(input: RigModelSelection): void;
+    effortUpdate(effort?: RigThinkingLevel): void;
+    permissionModeUpdate(permissionMode: RigPermissionMode): void;
+    serviceTierUpdate(serviceTier?: RigServiceTier): void;
     compact(): Promise<void>;
     rewind(messageId: string): Promise<void>;
     sessionReset(): Promise<void>;
@@ -300,6 +322,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const retiredRunOrder: string[] = [];
     const RETIRED_RUN_LIMIT = 128;
     let ephemeral: ConversationEntry[] = [];
+    /**
+     * What the reader has picked but not yet sent. Absent means the pickers show
+     * the session's own configuration; present means they show the choice, which
+     * the next message applies. It is never seeded from the session — deriving
+     * from `selectionIntent ?? selectionOf(session)` keeps one authority instead
+     * of a copy that has to be kept in step with it.
+     */
+    let selectionIntent: RigSelection | undefined;
     let runStatus: "idle" | "running" = "idle";
     let runId: string | undefined;
     let runStartedAt: number | undefined;
@@ -336,6 +366,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const store = createStore<RigChatSnapshot>()(() => ({
         sessionId,
         session: { type: "loading" },
+        modelLocked: false,
         entries: [],
         runStatus: "idle",
         pendingUserInputs: [],
@@ -406,7 +437,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             activityPanelOpen,
             settingsOpen,
             openImage,
-            menus: session ? rigMenusDerive(deps.catalog, selectionOf(session)) : undefined,
+            modelLocked: session?.modelLocked ?? false,
+            // The pickers show the pending choice when there is one, so what the
+            // reader selected stays selected until the message that applies it.
+            menus: session
+                ? rigMenusDerive(deps.catalog, selectionIntent ?? selectionOf(session))
+                : undefined,
         };
         if (deepEqual(previous, next)) return;
         store.setState(next, true);
@@ -808,6 +844,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             loaded.lastEventId === undefined && session?.lastEventId !== undefined
                 ? { ...loaded, lastEventId: session.lastEventId }
                 : loaded;
+        // The session already is what was pending — applied here, or changed to
+        // it elsewhere — so there is nothing left to apply and the pickers go
+        // back to reading the session directly.
+        if (selectionIntent && rigSelectionEqual(selectionOf(loaded), selectionIntent))
+            selectionIntent = undefined;
         const pendingRequestIds = new Set(
             loaded.pendingUserInputs.map((request) => request.requestId),
         );
@@ -940,6 +981,66 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         sessionAuthoritativeWrite(loaded);
     };
 
+    /**
+     * Records a picker choice. It reduces from whatever the pickers currently
+     * show — the pending choice if there is one, otherwise the session's own
+     * configuration — so successive picks compose. A choice that lands back on
+     * what the session already is clears the intent rather than storing a
+     * no-op, which keeps the next send from issuing pointless requests.
+     */
+    const selectionIntentSet = (reduce: (current: RigSelection) => RigSelection): void => {
+        const loaded = session;
+        if (!loaded) return;
+        const base = selectionIntent ?? selectionOf(loaded);
+        const next = reduce(base);
+        selectionIntent = rigSelectionEqual(next, selectionOf(loaded)) ? undefined : next;
+        commit();
+    };
+
+    /**
+     * Applies the pending choice to the session, in an order the daemon accepts:
+     * the model carries its effort, so changing both is one request rather than
+     * two, and a separate effort request follows only when the model is
+     * unchanged.
+     *
+     * It fails closed. If any part cannot be applied the intent is kept and the
+     * error is raised, so the caller does not send a message under a
+     * configuration that was asked for but never took effect. The intent is
+     * cleared only once the session the daemon returns actually reports it.
+     */
+    const selectionIntentApply = async (): Promise<void> => {
+        const intent = selectionIntent;
+        const loaded = session;
+        if (!intent || !loaded) return;
+        const current = selectionOf(loaded);
+        if (rigSelectionEqual(intent, current)) {
+            selectionIntent = undefined;
+            return;
+        }
+        const modelChanged =
+            intent.providerId !== current.providerId || intent.modelId !== current.modelId;
+        if (modelChanged) {
+            sessionReplace(
+                await deps.transport.changeModel(sessionId, {
+                    providerId: intent.providerId,
+                    modelId: intent.modelId,
+                    ...(intent.effort !== undefined ? { effort: intent.effort } : {}),
+                }),
+            );
+        } else if (intent.effort !== current.effort) {
+            sessionReplace(await deps.transport.changeEffort(sessionId, intent.effort));
+        }
+        if (intent.serviceTier !== current.serviceTier)
+            sessionReplace(await deps.transport.changeServiceTier(sessionId, intent.serviceTier));
+        if (intent.permissionMode !== current.permissionMode)
+            sessionReplace(
+                await deps.transport.changePermissionMode(sessionId, intent.permissionMode),
+            );
+        // Confirmed by the session the daemon returned, never by having asked.
+        if (session && rigSelectionEqual(selectionOf(session), intent)) selectionIntent = undefined;
+        commit();
+    };
+
     // One usage fetch. The generation captured at call time guards against a stale
     // response (panel closed or reopened, or the store stopped) overwriting state.
     const usageLoad = (): void => {
@@ -990,6 +1091,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             rejecting(async () => {
                 const key = createId();
                 const steered = runStatus === "running";
+                // The pending choice is applied before the turn it was chosen
+                // for, and only for a fresh turn: a steer joins the run already
+                // in progress, which the daemon will not re-model mid-flight.
+                // This throws if it fails, so the message is not sent under a
+                // configuration the reader did not ask for.
+                if (!steered) await selectionIntentApply();
                 // A fresh turn starts the working clock at request send — when the
                 // connection is made, before the first token — not when the first
                 // stream event arrives.
@@ -1043,24 +1150,16 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             requestSubmissionPromises.set(input.requestId, operation);
             return operation;
         },
-        modelChange: (input) =>
-            rejecting(async () => {
-                sessionReplace(await deps.transport.changeModel(sessionId, input));
-            }),
-        effortChange: (effort) =>
-            rejecting(async () => {
-                sessionReplace(await deps.transport.changeEffort(sessionId, effort));
-            }),
-        permissionModeChange: (permissionMode) =>
-            rejecting(async () => {
-                sessionReplace(
-                    await deps.transport.changePermissionMode(sessionId, permissionMode),
-                );
-            }),
-        serviceTierChange: (serviceTier) =>
-            rejecting(async () => {
-                sessionReplace(await deps.transport.changeServiceTier(sessionId, serviceTier));
-            }),
+        modelUpdate: (input) =>
+            selectionIntentSet((current) => rigSelectionModelUpdate(deps.catalog, current, input)),
+        effortUpdate: (effort) =>
+            selectionIntentSet((current) => rigSelectionEffortUpdate(current, effort)),
+        permissionModeUpdate: (permissionMode) =>
+            selectionIntentSet((current) =>
+                rigSelectionPermissionModeUpdate(current, permissionMode),
+            ),
+        serviceTierUpdate: (serviceTier) =>
+            selectionIntentSet((current) => rigSelectionServiceTierUpdate(current, serviceTier)),
         compact: () =>
             rejecting(async () => {
                 await deps.transport.compact(sessionId);
