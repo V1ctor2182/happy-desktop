@@ -46,10 +46,7 @@ export function asChat(row: Record<string, unknown>): ChatSummary {
             optionalText(row.membership_epoch) ?? (kind === "public_channel" ? "public" : ""),
         membershipRole: optionalText(row.membership_role) as ChatRole | undefined,
         starred,
-        starOrder:
-            !starred || row.sort_order === null || row.sort_order === undefined
-                ? undefined
-                : number(row.sort_order),
+        orderKey: optionalText(row.order_key),
         lastReadSequence: text(row.last_read_sequence, "0"),
         unreadCount: number(row.unread_count, 0),
         mentionCount: number(row.mention_count, 0),

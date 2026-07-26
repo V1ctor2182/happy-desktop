@@ -1819,7 +1819,7 @@ export const userChatPreferences = sqliteTable("user_chat_preferences", {
     userId: text("user_id").notNull(),
     chatId: text("chat_id").notNull(),
     starred: integer("starred").notNull().default(0),
-    sortOrder: integer("sort_order").notNull().default(0),
+    orderKey: text("order_key"),
     syncSequence: integer("sync_sequence").notNull().default(0),
     createdAt: text("created_at").notNull().default(sql.raw("CURRENT_TIMESTAMP")),
     updatedAt: text("updated_at").notNull().default(sql.raw("CURRENT_TIMESTAMP")),

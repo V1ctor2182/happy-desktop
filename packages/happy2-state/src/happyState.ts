@@ -103,6 +103,7 @@ import { filesStoreCreate, type FilesOutput, type FilesStore } from "./modules/f
 import { StateRuntime, type StateRuntimeOptions } from "./modules/runtime/runtimeState.js";
 import { sidebarStoreCreate } from "./modules/sidebar/sidebarState.js";
 import { sidebarProjectsLoad } from "./modules/sidebar/sidebarState.js";
+import { sidebarPreferencesReconcile } from "./modules/sidebar/sidebarState.js";
 import type { SidebarStore } from "./modules/sidebar/sidebarState.js";
 import { SidebarChatsProjector } from "./modules/sidebar/sidebarState.js";
 import { SettingsCoordinator } from "./modules/settings/settingsState.js";
@@ -273,6 +274,7 @@ import { channelUpdate, type ChannelUpdateInput } from "./modules/chat-actions/c
 import { chatJoin } from "./modules/chat-actions/chatActionsState.js";
 import { chatLeave } from "./modules/chat-actions/chatActionsState.js";
 import { chatReadMark } from "./modules/chat-actions/chatActionsState.js";
+import { chatReorder } from "./modules/chat-actions/chatActionsState.js";
 import { chatStarSet } from "./modules/chat-actions/chatActionsState.js";
 import { directMessageCreate } from "./modules/chat-actions/chatActionsState.js";
 import { groupDirectMessageCreate } from "./modules/chat-actions/chatActionsState.js";
@@ -1054,6 +1056,10 @@ export class HappyState implements AsyncDisposable, Disposable {
 
     async chatStarSet(chatId: string, starred: boolean): Promise<void> {
         await chatStarSet(this.chatActionContext(), chatId, starred);
+    }
+
+    async chatReorder(chatId: string, afterChatId?: string): Promise<void> {
+        await chatReorder(this.chatActionContext(), chatId, afterChatId);
     }
 
     async chatLeave(chatId: string): Promise<void> {
@@ -1973,6 +1979,14 @@ export class HappyState implements AsyncDisposable, Disposable {
                         sidebarProjectsLoad({
                             runtime: this.runtime,
                             sidebar: this.sidebarBinding,
+                        }),
+                    ),
+                preferencesReconcile: () =>
+                    this.runtime.background(
+                        sidebarPreferencesReconcile({
+                            runtime: this.runtime,
+                            sidebar: this.sidebarBinding,
+                            sidebarChats: this.sidebarChats,
                         }),
                     ),
                 unknownArea: this.unknownSyncArea,

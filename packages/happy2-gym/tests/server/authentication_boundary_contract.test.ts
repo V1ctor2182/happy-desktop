@@ -49,7 +49,7 @@ describe("HTTP authentication boundary", () => {
             "/v0/chats/createChannel",
             "/v0/chats/createDirectMessage",
             "/v0/chats/createGroupDirectMessage",
-            "/v0/chats/reorderStarred",
+            "/v0/chats/not-a-chat/reorder",
             "/v0/chats/not-a-chat/join",
             "/v0/chats/not-a-chat/leave",
             "/v0/chats/not-a-chat/sendMessage",

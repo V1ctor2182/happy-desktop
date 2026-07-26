@@ -8,6 +8,9 @@ import {
 import { type ChatStore } from "../chat/chatState.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 import { type SidebarChatProjection, type SidebarStore } from "../sidebar/sidebarState.js";
+import { chatOrderCompare } from "../sidebar/chatOrder.js";
+import { orderKeyAfter } from "../../utils/orderKeyAfter.js";
+import { orderKeySequence } from "../../utils/orderKeySequence.js";
 
 /** Creates an agent conversation idempotently and publishes its authoritative summary. */
 export async function agentCreate(
@@ -201,6 +204,36 @@ export async function chatJoin(context: ChatActionContext, chatId: string): Prom
     const result = await context.runtime.operation("joinChat", { chatId });
     await chatResultApply(context, result.chat);
     await context.directoryReconcile().catch(() => undefined);
+}
+
+/**
+ * Moves a chat directly after another in this user's sidebar and states that one
+ * move durably. A null `afterChatId` moves it to the front.
+ *
+ * The key is minted locally first, exactly the way the server mints it from the
+ * same list, so the dropped row stays where it landed instead of jumping once
+ * the reconcile answers. The first move materializes the order for every chat
+ * the user can see, which is why this assigns a map rather than one key.
+ */
+export async function chatReorder(
+    context: ChatActionContext,
+    chatId: string,
+    afterChatId: string | undefined,
+): Promise<void> {
+    const ordered = [...context.sidebar.getState().chats].sort((left, right) =>
+        chatOrderCompare(left.chat, right.chat),
+    );
+    const keys = ordered.some((projection) => projection.chat.orderKey === undefined)
+        ? orderKeySequence(ordered.length)
+        : ordered.map((projection) => projection.chat.orderKey!);
+    const materialized = ordered.map((projection, index) => ({
+        id: projection.id,
+        orderKey: keys[index]!,
+    }));
+    const orderKeys = new Map(materialized.map((item) => [item.id, item.orderKey]));
+    orderKeys.set(chatId, orderKeyAfter(materialized, chatId, afterChatId ?? null));
+    context.sidebar.getState().sidebarInput({ type: "chatOrderKeysAssigned", orderKeys });
+    await context.runtime.operation("reorderChat", { chatId, afterChatId });
 }
 
 /** Leaves a chat durably and removes its sidebar projection without constructing another store. */

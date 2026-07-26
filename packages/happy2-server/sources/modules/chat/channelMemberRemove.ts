@@ -10,6 +10,7 @@ import { syncSequenceNext } from "../sync/syncSequenceNext.js";
 import { chatRequireManager } from "./chatRequireManager.js";
 import { chatDescendantMembershipSync } from "./impl/chatDescendantMembershipSync.js";
 import { chatDescendantIds } from "./impl/chatDescendantIds.js";
+import { chatOrderKeyClearDb } from "./impl/chatOrderKeyClearDb.js";
 import { areaHint } from "./areaHint.js";
 import { createChannelServiceMessageDb } from "./impl/createChannelServiceMessageDb.js";
 
@@ -183,6 +184,7 @@ export async function channelMemberRemove(
                     isNull(chatMembers.removedByUserId),
                 ),
             );
+        await chatOrderKeyClearDb(tx, input.userId, input.chatId, sequence);
         const documentsChanged = await chatDescendantMembershipSync(tx, {
             ancestorChatId: input.chatId,
             userId: input.userId,

@@ -89,6 +89,8 @@ export type {
     SidebarStatus,
     SidebarStore,
 } from "./modules/sidebar/sidebarState.js";
+export { chatOrderCompare } from "./modules/sidebar/chatOrder.js";
+export type { ChatOrderPosition } from "./modules/sidebar/chatOrder.js";
 export type {
     WorkspaceHandle,
     WorkspaceSnapshot,

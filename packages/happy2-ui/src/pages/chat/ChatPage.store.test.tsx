@@ -120,6 +120,7 @@ function chatPageActionsCreate(overrides: Partial<ChatPageActions> = {}): ChatPa
         chatJoin: async () => undefined,
         chatLeave: async () => undefined,
         chatStarSet: async () => undefined,
+        chatReorder: async () => undefined,
         channelCreate: async () => undefined,
         projectCreate: async () => undefined,
         channelCreateChild: async () => undefined,

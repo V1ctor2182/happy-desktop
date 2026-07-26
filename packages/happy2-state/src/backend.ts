@@ -225,7 +225,7 @@ export const backendOperations = {
     setChatStar: post("/v0/chats/:chatId/setStar"),
     markChatRead: post("/v0/chats/:chatId/markRead"),
     updateChatNotificationPreferences: post("/v0/chats/:chatId/updateNotificationPreferences"),
-    reorderStarredChats: post("/v0/chats/reorderStarred"),
+    reorderChat: post("/v0/chats/:chatId/reorder"),
     sendMessage: post("/v0/chats/:chatId/sendMessage"),
     updateDraft: post("/v0/chats/:chatId/updateDraft"),
     getDocuments: get("/v0/documents"),
@@ -616,7 +616,7 @@ export interface KnownBackendInputs {
         readonly mutedUntil?: string | null;
         readonly showMessagePreviews?: boolean;
     };
-    reorderStarredChats: { readonly chatIds: readonly string[] };
+    reorderChat: { readonly chatId: string; readonly afterChatId?: string };
     sendMessage: {
         readonly chatId: string;
         readonly text?: string;

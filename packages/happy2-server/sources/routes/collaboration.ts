@@ -33,7 +33,7 @@ import { customEmojiDelete } from "../modules/emoji/customEmojiDelete.js";
 import { customEmojiCreate } from "../modules/emoji/customEmojiCreate.js";
 import { contactList } from "../modules/user/contactList.js";
 import { chatStarSet } from "../modules/chat/chatStarSet.js";
-import { chatStarReorder } from "../modules/chat/chatStarReorder.js";
+import { chatReorder } from "../modules/chat/chatReorder.js";
 import { chatPinList } from "../modules/chat/chatPinList.js";
 import { chatNotificationPreferenceSet } from "../modules/notification/chatNotificationPreferenceSet.js";
 import { chatMembershipList } from "../modules/chat/chatMembershipList.js";
@@ -742,13 +742,14 @@ export function registerCollaborationRoutes(
         }),
     );
     app.post(
-        "/v0/chats/reorderStarred",
+        "/v0/chats/:chatId/reorder",
         authenticated(auth, async (request, _reply, userId) => {
-            const body = requestBody(request, ["chatIds"]);
-            const result = await chatStarReorder(
+            const body = requestBody(request, ["afterChatId"]);
+            const result = await chatReorder(
                 executor,
                 userId,
-                idArrayField(body, "chatIds", 1_000, true),
+                pathId(request, "chatId"),
+                optionalIdField(body, "afterChatId"),
             );
             await publishHints(request, pubsub, [result.hint], {
                 userIds: [userId],

@@ -33,6 +33,7 @@ describe("sync module", () => {
             permissionsReconcile: vi.fn(),
             identitiesReconcile: vi.fn(),
             projectsReconcile: vi.fn(),
+            preferencesReconcile: vi.fn(),
             unknownArea: vi.fn(),
         };
         for (const area of [
@@ -55,6 +56,7 @@ describe("sync module", () => {
             "users",
             "profile",
             "projects",
+            "preferences",
             "chat:",
             "unknown",
         ])
@@ -77,6 +79,7 @@ describe("sync module", () => {
         expect(context.permissionsReconcile).toHaveBeenCalledOnce();
         expect(context.identitiesReconcile).toHaveBeenCalledTimes(2);
         expect(context.projectsReconcile).toHaveBeenCalledOnce();
+        expect(context.preferencesReconcile).toHaveBeenCalledOnce();
         expect(context.unknownArea).toHaveBeenCalledTimes(2);
     });
 

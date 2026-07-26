@@ -201,6 +201,8 @@ export function ChatView(props: ChatViewProps) {
         chatJoin: (selectedChatId) => state.chatJoin(selectedChatId),
         chatLeave: (selectedChatId) => state.chatLeave(selectedChatId),
         chatStarSet: (selectedChatId, starred) => state.chatStarSet(selectedChatId, starred),
+        chatReorder: (selectedChatId, afterChatId) =>
+            state.chatReorder(selectedChatId, afterChatId),
         channelCreate: (input) => state.channelCreate(input),
         projectCreate: (input) => state.projectCreate(input),
         channelCreateChild: (input) => state.channelCreateChild(input),

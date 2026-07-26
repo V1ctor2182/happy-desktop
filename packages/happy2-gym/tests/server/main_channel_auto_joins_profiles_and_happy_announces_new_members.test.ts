@@ -102,7 +102,14 @@ describe("main channel onboarding and service messages", () => {
                 isMain: true,
                 slug: "lobby",
             });
-            expect(chatById(await chats(bob.client), teamId).membershipRole).toBeUndefined();
+            // A public channel Bob has not joined is discoverable, not listed:
+            // his sidebar carries only the chats he is actually a member of.
+            expect((await chats(bob.client)).map((chat) => chat.id)).not.toContain(teamId);
+            expect(
+                (await bob.client.get("/v0/directory/channels"))
+                    .json()
+                    .channels.map((channel: { id: string }) => channel.id),
+            ).toContain(teamId);
             expect(
                 await serviceMessageFor(bob.client, welcome.id, bob.id, "user_joined"),
             ).toMatchObject({
@@ -136,7 +143,7 @@ describe("main channel onboarding and service messages", () => {
 
             const caro = await signUp(server, "caro@example.com", "caro", "Caro");
             expect(chatById(await chats(caro.client), autoJoinId).membershipRole).toBe("member");
-            expect(chatById(await chats(caro.client), teamId).membershipRole).toBeUndefined();
+            expect((await chats(caro.client)).map((chat) => chat.id)).not.toContain(teamId);
             expect(await serviceMessageFor(caro.client, autoJoinId, caro.id)).toMatchObject({
                 sender: { id: happy!.id, username: "happy" },
                 service: { type: "user_added", userId: caro.id },
@@ -156,7 +163,9 @@ describe("main channel onboarding and service messages", () => {
             });
             expect(enabledAutoJoin.statusCode).toBe(200);
             expect(enabledAutoJoin.json().chat).toMatchObject({ autoJoin: true, isMain: false });
-            expect(chatById(await chats(caro.client), teamId).membershipRole).toBeUndefined();
+            // Enabling auto-join changes what new members receive; it does not
+            // retroactively place the channel in an existing member's sidebar.
+            expect((await chats(caro.client)).map((chat) => chat.id)).not.toContain(teamId);
 
             const dana = await signUp(server, "dana@example.com", "dana", "Dana");
             for (const channelId of [welcome.id, autoJoinId, teamId])

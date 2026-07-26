@@ -165,6 +165,31 @@ export async function sidebarLoad(context: SidebarLoadContext): Promise<void> {
     }
 }
 
+/**
+ * Reconciles the whole personal chat list after a preferences-area sync hint.
+ * One reorder restamps every chat's position, so the difference reports an area
+ * rather than a list of changed chats; re-reading the directory against the
+ * unchanged cursor is what makes a second device follow the drag.
+ */
+export async function sidebarPreferencesReconcile(
+    context: Pick<SidebarLoadContext, "runtime" | "sidebar" | "sidebarChats">,
+): Promise<void> {
+    const sync = context.sidebar.getState().sync;
+    if (!context.runtime.connected || !sync) return;
+    const result = await context.runtime.operation("getChats");
+    if (!context.runtime.active) return;
+    const present = new Set(result.chats.map((chat) => chat.id));
+    context.sidebar.getState().sidebarInput({
+        type: "chatSummariesReconciled",
+        changedChats: await context.sidebarChats.project(result.chats),
+        removedChatIds: context.sidebar
+            .getState()
+            .chats.filter((chat) => !present.has(chat.id))
+            .map((chat) => chat.id),
+        sync,
+    });
+}
+
 /** Reconciles the visible project directory after a durable projects-area sync hint. */
 export async function sidebarProjectsLoad(
     context: Pick<SidebarLoadContext, "runtime" | "sidebar">,
@@ -235,6 +260,20 @@ export function sidebarStoreCreate(): SidebarStore {
                         const chats = [...snapshot.chats];
                         chats[index] = event.chat;
                         return { ...snapshot, chats };
+                    }
+                    case "chatOrderKeysAssigned": {
+                        let changed = false;
+                        const chats = snapshot.chats.map((projection) => {
+                            const orderKey = event.orderKeys.get(projection.id);
+                            if (orderKey === undefined || orderKey === projection.chat.orderKey)
+                                return projection;
+                            changed = true;
+                            return {
+                                ...projection,
+                                chat: { ...projection.chat, orderKey },
+                            };
+                        });
+                        return changed ? { ...snapshot, chats } : snapshot;
                     }
                     case "chatSummaryRemoved": {
                         const chats = snapshot.chats.filter((chat) => chat.id !== event.chatId);
@@ -310,6 +349,10 @@ export type SidebarInput =
       }
     | { readonly type: "chatSummaryUpserted"; readonly chat: SidebarChatProjection }
     | { readonly type: "chatSummaryRemoved"; readonly chatId: string }
+    | {
+          readonly type: "chatOrderKeysAssigned";
+          readonly orderKeys: ReadonlyMap<string, string>;
+      }
     | { readonly type: "projectSummariesReconciled"; readonly projects: readonly ProjectSummary[] }
     | {
           readonly type: "projectCreated";

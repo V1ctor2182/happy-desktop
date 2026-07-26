@@ -44,7 +44,11 @@ export interface ChatSummary {
     membershipEpoch: string;
     membershipRole?: ChatRole;
     starred: boolean;
-    starOrder?: number;
+    /**
+     * Opaque fractional index this user has arranged their sidebar by. Compare
+     * it lexicographically, never parse it; absent until the user first reorders.
+     */
+    orderKey?: string;
     lastReadSequence: string;
     unreadCount: number;
     mentionCount: number;

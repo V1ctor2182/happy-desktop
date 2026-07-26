@@ -460,17 +460,19 @@ describe("collaboration membership, messages, personal organization, and calls",
             (await asMember.post(`/v0/chats/${secondChatId}/setStar`, { starred: true }))
                 .statusCode,
         ).toBe(200);
+        // One move states the whole arrangement: the second channel is placed at
+        // the front, and the listing returns the member's own order from then on.
+        expect((await asMember.post(`/v0/chats/${secondChatId}/reorder`, {})).statusCode).toBe(200);
+        const arranged = (await asMember.get("/v0/chats")).json().chats as Array<{
+            id: string;
+            orderKey?: string;
+        }>;
+        expect(arranged.every((chat) => typeof chat.orderKey === "string")).toBe(true);
         expect(
-            (
-                await asMember.post("/v0/chats/reorderStarred", {
-                    chatIds: [secondChatId, firstChatId],
-                })
-            ).statusCode,
-        ).toBe(200);
-        const starred = (await asMember.get("/v0/chats"))
-            .json()
-            .chats.filter((chat: { starred: boolean }) => chat.starred);
-        expect(starred.map((chat: { id: string }) => chat.id)).toEqual([secondChatId, firstChatId]);
+            arranged
+                .map((chat) => chat.id)
+                .filter((id) => id === firstChatId || id === secondChatId),
+        ).toEqual([secondChatId, firstChatId]);
 
         expect(
             (

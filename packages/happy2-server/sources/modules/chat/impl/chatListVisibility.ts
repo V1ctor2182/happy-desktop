@@ -1,32 +1,19 @@
 import { type DrizzleExecutor } from "../../drizzle.js";
 import { chatMembers, chats } from "../../schema.js";
-import { and, eq, isNull, notExists, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
-/** Builds the shared predicate for chats that belong in one user's sidebar list. */
-export function chatListCondition(executor: DrizzleExecutor, userId: string) {
-    const historicalMember = alias(chatMembers, "historical_chat_member");
-    return and(
-        isNull(chats.deletedAt),
-        or(
-            and(eq(chats.kind, "public_channel"), eq(chats.isListed, 1)),
-            sql`${chatMembers.userId} IS NOT NULL`,
-        ),
-        or(
-            sql`${chatMembers.userId} IS NOT NULL`,
-            notExists(
-                executor
-                    .select({ userId: historicalMember.userId })
-                    .from(historicalMember)
-                    .where(
-                        and(
-                            eq(historicalMember.chatId, chats.id),
-                            eq(historicalMember.userId, userId),
-                        ),
-                    ),
-            ),
-        ),
-    );
+/**
+ * Builds the shared predicate for chats that belong in one user's sidebar list.
+ * Active membership is the only rule: the sidebar shows the conversations a
+ * person is actually in, never one they merely could join, so there is no
+ * read-only row to grey out. Discovering an unjoined channel is the directory's
+ * job, and leaving removes the row outright.
+ *
+ * The caller must have left-joined `chatMembers` restricted to that user's
+ * active membership, which is the join this predicate reads.
+ */
+export function chatListCondition() {
+    return and(isNull(chats.deletedAt), sql`${chatMembers.userId} IS NOT NULL`);
 }
 
 /** Reports whether a chat's current durable state places it in one user's sidebar list. */
@@ -46,7 +33,7 @@ export async function chatAppearsInListDb(
                 isNull(chatMembers.leftAt),
             ),
         )
-        .where(and(eq(chats.id, chatId), chatListCondition(executor, userId)))
+        .where(and(eq(chats.id, chatId), chatListCondition()))
         .limit(1);
     return row !== undefined;
 }

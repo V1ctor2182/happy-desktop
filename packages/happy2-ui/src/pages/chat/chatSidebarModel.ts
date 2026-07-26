@@ -5,6 +5,7 @@ import type {
     SidebarChatProjection,
     SidebarSnapshot,
 } from "happy2-state";
+import { chatOrderCompare } from "happy2-state";
 import type { ChannelDirectoryItem, SidebarItem, SidebarSection } from "./ChatPageComponents.js";
 import { identityInitials, toneFor } from "./chatPageModels.js";
 import type { ChatPageUser } from "./ChatPage.js";
@@ -123,23 +124,37 @@ export function chatSidebarModelCreate(options: ChatSidebarModelOptions) {
         const projections = chats().filter(
             (projection) => !needle || projection.displayName.toLowerCase().includes(needle),
         );
-        const ordered = (values: readonly DeepReadonly<SidebarChatProjection>[]) => [
-            ...values.filter((projection) => projection.chat.starred),
-            ...values.filter((projection) => !projection.chat.starred),
-        ];
+        // Every row sits where this user dragged it. Until they have arranged
+        // anything the server has minted no keys and the same comparator falls
+        // back to recency, which is the order the listing already arrived in.
+        const ordered = (values: readonly DeepReadonly<SidebarChatProjection>[]) =>
+            [...values].sort((left, right) => chatOrderCompare(left.chat, right.chat));
         return [
             // Projects list themselves by name, so a "Projects" caption above them
-            // only repeats what the rows already say.
-            ...options.sidebarSnapshot().projects.map((project) => ({
-                id: `project:${project.id}`,
-                label: project.name,
-                action: { icon: "plus" as const, label: `Add channel to ${project.name}` },
-                empty: {
-                    actionLabel: "Create channel",
-                    description: needle ? "No matching channels." : "No channels are visible here.",
-                },
-                items: channelItems(projections, project.id, ordered),
-            })),
+            // only repeats what the rows already say. A project the user holds no
+            // chat in is discoverable, not a section: it would otherwise stand
+            // here permanently empty. Search narrows the rows, never the sections.
+            ...options
+                .sidebarSnapshot()
+                .projects.filter((project) =>
+                    chats().some(
+                        (projection) =>
+                            projection.chat.kind !== "dm" &&
+                            projection.chat.projectId === project.id,
+                    ),
+                )
+                .map((project) => ({
+                    id: `project:${project.id}`,
+                    label: project.name,
+                    action: { icon: "plus" as const, label: `Add channel to ${project.name}` },
+                    empty: {
+                        actionLabel: "Create channel",
+                        description: needle
+                            ? "No matching channels."
+                            : "No channels are visible here.",
+                    },
+                    items: channelItems(projections, project.id, ordered),
+                })),
             {
                 id: "dms",
                 label: "Humans",

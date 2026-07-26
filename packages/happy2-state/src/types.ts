@@ -52,7 +52,11 @@ export interface ChatSummary {
     readonly membershipEpoch: string;
     readonly membershipRole?: ChatRole;
     readonly starred: boolean;
-    readonly starOrder?: number;
+    /**
+     * Opaque fractional index this user has arranged their sidebar by. Compare
+     * it lexicographically, never parse it; absent until the user first reorders.
+     */
+    readonly orderKey?: string;
     readonly lastReadSequence: string;
     readonly unreadCount: number;
     readonly mentionCount: number;

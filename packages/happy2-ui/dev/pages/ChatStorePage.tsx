@@ -83,6 +83,7 @@ const passiveActions: ChatPageActions = {
     chatJoin: async () => undefined,
     chatLeave: async () => undefined,
     chatStarSet: async () => undefined,
+    chatReorder: async () => undefined,
     channelCreate: async () => undefined,
     projectCreate: async () => undefined,
     channelCreateChild: async () => undefined,

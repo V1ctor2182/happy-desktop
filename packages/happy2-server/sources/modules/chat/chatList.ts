@@ -8,8 +8,8 @@ import { chatSelection } from "./impl/chatSelection.js";
 import { chatListCondition } from "./impl/chatListVisibility.js";
 
 /**
- * Lists live joined chats plus listed public channels, placing starred chats in user order before recently updated conversations.
- * Joining user preferences into the projection gives the sidebar one deterministic ordering without exposing unlisted unjoined chats.
+ * Lists the live chats one user is an active member of, in that user's personal fractional order, falling back to recency for chats they have never arranged.
+ * Joining user preferences into the projection gives every device of that user one deterministic sidebar order, and `chatReorder` mints keys against exactly this order.
  */
 export async function chatList(executor: DrizzleExecutor, userId: string): Promise<ChatSummary[]> {
     const rows = await executor
@@ -27,12 +27,13 @@ export async function chatList(executor: DrizzleExecutor, userId: string): Promi
             userChatPreferences,
             and(eq(userChatPreferences.chatId, chats.id), eq(userChatPreferences.userId, userId)),
         )
-        .where(chatListCondition(executor, userId))
+        .where(chatListCondition())
         .orderBy(
-            desc(sql`coalesce(${userChatPreferences.starred}, 0)`),
-            asc(
-                sql`case when ${userChatPreferences.starred} = 1 then ${userChatPreferences.sortOrder} end`,
-            ),
+            // A user either has arranged their sidebar or has not: the first
+            // reorder mints a key for every row they can see. The null-last
+            // term only decides the order during that one transition.
+            asc(sql`case when ${userChatPreferences.orderKey} is null then 1 else 0 end`),
+            asc(userChatPreferences.orderKey),
             desc(chats.updatedAt),
             asc(chats.id),
         );

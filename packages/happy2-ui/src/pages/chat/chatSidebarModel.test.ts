@@ -195,23 +195,25 @@ it("places the default-agent conversation in the agents section and projects dis
 
 it("groups public and private channels in their project and marks private rows with a lock", () => {
     const shared = projection(
-        chat("shared-channel", "public_channel", { name: "Engineering" }),
+        chat("shared-channel", "public_channel", { name: "Engineering", orderKey: "a0" }),
         "Engineering",
     );
     const sharedChild = projection(
         chat("shared-child", "public_channel", {
             name: "Frontend",
+            orderKey: "a1",
             parentChatId: "shared-channel",
         }),
         "Frontend",
     );
     const privateChannel = projection(
-        chat("private-channel", "private_channel", { name: "Founders" }),
+        chat("private-channel", "private_channel", { name: "Founders", orderKey: "a2" }),
         "Founders",
     );
     const privateChild = projection(
         chat("private-child", "private_channel", {
             name: "Hiring",
+            orderKey: "a3",
             parentChatId: "private-channel",
         }),
         "Hiring",
@@ -355,14 +357,22 @@ it("keeps agent conversations top-level when search omits the main chat", () => 
 });
 
 it("nests child channels under their parent, flags archives, and rescues orphaned children", () => {
-    const parent = projection(chat("parent", "private_channel", { name: "Parent" }), "Parent");
+    const parent = projection(
+        chat("parent", "private_channel", { name: "Parent", orderKey: "a0" }),
+        "Parent",
+    );
     const childActive = projection(
-        chat("child-a", "private_channel", { name: "Child A", parentChatId: "parent" }),
+        chat("child-a", "private_channel", {
+            name: "Child A",
+            orderKey: "a1",
+            parentChatId: "parent",
+        }),
         "Child A",
     );
     const childArchived = projection(
         chat("child-b", "private_channel", {
             name: "Child B",
+            orderKey: "a2",
             parentChatId: "parent",
             archivedAt: "2026-07-01T00:00:00.000Z",
         }),
@@ -371,12 +381,17 @@ it("nests child channels under their parent, flags archives, and rescues orphane
     // Its parent is absent from the projection set (e.g. filtered by search),
     // so it must stay reachable as a top-level row rather than disappearing.
     const orphan = projection(
-        chat("orphan", "private_channel", { name: "Orphan", parentChatId: "missing" }),
+        chat("orphan", "private_channel", {
+            name: "Orphan",
+            orderKey: "a3",
+            parentChatId: "missing",
+        }),
         "Orphan",
     );
     const archivedParent = projection(
         chat("solo", "private_channel", {
             name: "Solo",
+            orderKey: "a4",
             archivedAt: "2026-07-02T00:00:00.000Z",
         }),
         "Solo",

@@ -168,6 +168,29 @@ function blocksOf(items: readonly SidebarItem[]): readonly (readonly number[])[]
     return blocks;
 }
 
+/**
+ * The single move that turns `before` into `after`: the row that travelled and
+ * the row it now follows (null at the front). `onItemReorder` reports a whole
+ * arrangement, but a durable order is stated as one row moving relative to one
+ * neighbour — so the move is recovered by finding the row whose removal makes
+ * the two orders identical. Two rows swapping places yields either of them, and
+ * placing either one produces the arrangement that was dragged.
+ */
+export function sidebarReorderMove(
+    before: readonly string[],
+    after: readonly string[],
+): { readonly id: string; readonly afterId: string | null } | undefined {
+    for (const id of after) {
+        const withoutBefore = before.filter((candidate) => candidate !== id);
+        const withoutAfter = after.filter((candidate) => candidate !== id);
+        if (withoutBefore.every((candidate, index) => candidate === withoutAfter[index])) {
+            const index = after.indexOf(id);
+            return { id, afterId: index === 0 ? null : after[index - 1]! };
+        }
+    }
+    return undefined;
+}
+
 /** Where the dragged block lands: each neighbour it has passed by half that neighbour's height. */
 function dragTargetIndex(drag: SidebarDrag, deltaY: number): number {
     let index = drag.from;

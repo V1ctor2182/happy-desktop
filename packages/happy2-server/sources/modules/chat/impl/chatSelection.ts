@@ -37,7 +37,7 @@ export const chatSelection = {
     unread_count: sql<number>`coalesce(${chatMembers.unreadCount}, 0)`,
     mention_count: sql<number>`coalesce(${chatMembers.mentionCount}, 0)`,
     starred: sql<number>`coalesce(${userChatPreferences.starred}, 0)`,
-    sort_order: userChatPreferences.sortOrder,
+    order_key: userChatPreferences.orderKey,
     notification_level: sql<string>`coalesce(${userChatPreferences.notificationLevel}, 'all')`,
     muted_until: userChatPreferences.mutedUntil,
 };

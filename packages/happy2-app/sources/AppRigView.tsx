@@ -42,6 +42,7 @@ import {
     TerminalPanel,
     WindowDragRegion,
     rigComposerModelControlProps,
+    sidebarReorderMove,
     type SidebarItem,
     type TabItem,
 } from "happy2-ui";
@@ -143,29 +144,6 @@ function sessionTabs(group: OpenGroup): TabItem[] {
         label: summary.title,
         ...(summary.activity === "running" ? { icon: "dot" as const } : {}),
     }));
-}
-
-/**
- * The single move that turns `before` into `after`, as the host records a
- * reorder: the row that travelled and the row it now follows (null at the
- * front). The tab strip reports a whole arrangement, but the host mints one key
- * for one row — so the move is recovered by finding the row whose removal makes
- * the two orders identical. Two rows swapping places yields either of them, and
- * placing either one produces the arrangement that was dragged.
- */
-function reorderMoveOf(
-    before: readonly string[],
-    after: readonly string[],
-): { readonly id: string; readonly afterId: string | null } | undefined {
-    for (const id of after) {
-        const withoutBefore = before.filter((candidate) => candidate !== id);
-        const withoutAfter = after.filter((candidate) => candidate !== id);
-        if (withoutBefore.every((candidate, index) => candidate === withoutAfter[index])) {
-            const index = after.indexOf(id);
-            return { id, afterId: index === 0 ? null : after[index - 1]! };
-        }
-    }
-    return undefined;
 }
 
 /** Resolves an addressed group id against the list, matching projects and worktrees alike. */
@@ -337,7 +315,7 @@ export function AppRigView(props: AppRigViewProps) {
                         props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id)
                     }
                     onItemReorder={(_sectionId, projectIds) => {
-                        const move = reorderMoveOf(
+                        const move = sidebarReorderMove(
                             rows.map((project) => project.id),
                             projectIds,
                         );
@@ -457,7 +435,7 @@ export function AppRigView(props: AppRigViewProps) {
                                     .catch(() => undefined);
                             }}
                             onReorder={(chatIds) => {
-                                const move = reorderMoveOf(
+                                const move = sidebarReorderMove(
                                     openGroup.conversations.map((summary) => summary.id),
                                     chatIds,
                                 );

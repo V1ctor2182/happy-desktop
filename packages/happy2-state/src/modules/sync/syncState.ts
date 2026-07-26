@@ -37,6 +37,8 @@ export interface AreaReconcileContext {
     permissionsReconcile(): void;
     identitiesReconcile(): void;
     projectsReconcile(): void;
+    /** Re-reads the personal chat directory after a change to this user's own chat preferences. */
+    preferencesReconcile(): void;
     unknownArea(area: string): void;
 }
 
@@ -68,6 +70,7 @@ export function areaReconcile(context: AreaReconcileContext, area: string): void
     else if (area === "permissions") context.permissionsReconcile();
     else if (area === "users" || area === "profile") context.identitiesReconcile();
     else if (area === "projects") context.projectsReconcile();
+    else if (area === "preferences") context.preferencesReconcile();
     else context.unknownArea(area);
 }
 

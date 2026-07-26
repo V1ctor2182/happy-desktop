@@ -213,6 +213,10 @@ describe("projects group every public and private channel", () => {
             privateProject.id,
         );
 
+        // A listed public channel is discoverable, not automatically present:
+        // an outsider's sidebar shows only chats they are actually in, so the
+        // channel and its project reach them through the joinable directory and
+        // arrive in the listing only once they join.
         const beforePublicExposure = await syncState(asOutsider);
         const exposedChannel = await asOwner.post("/v0/chats/createChannel", {
             projectId: privateProject.id,
@@ -221,66 +225,50 @@ describe("projects group every public and private channel", () => {
             slug: "published-research",
         });
         expect(exposedChannel.statusCode).toBe(201);
+        const exposedChannelId = exposedChannel.json().chat.id as string;
         const exposedDifference = await asOutsider.post("/v0/sync/getDifference", {
             state: beforePublicExposure,
             limit: 100,
         });
         expect(exposedDifference.statusCode).toBe(200);
-        expect(exposedDifference.json().areas).toContain("projects");
         expect(
             exposedDifference.json().changedChats.map((chat: { id: string }) => chat.id),
-        ).toContain(exposedChannel.json().chat.id);
+        ).not.toContain(exposedChannelId);
+        expect((await chats(asOutsider)).map((chat) => chat.id)).not.toContain(exposedChannelId);
+        // The project becomes discoverable because it now holds a joinable
+        // channel; discovery is the directory's job, not the sidebar listing's.
+        expect((await projects(asOutsider)).map((project) => project.id)).toContain(
+            privateProject.id,
+        );
+        const directory = await asOutsider.get("/v0/directory/channels");
+        expect(directory.statusCode).toBe(200);
+        expect(directory.json().channels.map((channel: { id: string }) => channel.id)).toContain(
+            exposedChannelId,
+        );
+
+        expect((await asOutsider.post(`/v0/chats/${exposedChannelId}/join`)).statusCode).toBe(200);
+        expect((await chats(asOutsider)).map((chat) => chat.id)).toContain(exposedChannelId);
         expect((await projects(asOutsider)).map((project) => project.id)).toContain(
             privateProject.id,
         );
 
-        const exposedChannelId = exposedChannel.json().chat.id as string;
-        const beforeHidingPublicChannel = await syncState(asOutsider);
-        const hiddenChannel = await asOwner.post(`/v0/chats/${exposedChannelId}/updateChannel`, {
-            isListed: false,
-        });
-        expect(hiddenChannel.statusCode).toBe(200);
-        const hiddenDifference = await asOutsider.post("/v0/sync/getDifference", {
-            state: beforeHidingPublicChannel,
+        const beforeLeavingPublicChannel = await syncState(asOutsider);
+        expect((await asOutsider.post(`/v0/chats/${exposedChannelId}/leave`)).statusCode).toBe(200);
+        const leftDifference = await asOutsider.post("/v0/sync/getDifference", {
+            state: beforeLeavingPublicChannel,
             limit: 100,
         });
-        expect(hiddenDifference.statusCode).toBe(200);
-        expect(hiddenDifference.json().areas).toContain("projects");
-        expect(hiddenDifference.json().removedChatIds).toContain(exposedChannelId);
-        expect((await projects(asOutsider)).map((project) => project.id)).not.toContain(
-            privateProject.id,
-        );
+        expect(leftDifference.statusCode).toBe(200);
+        expect(leftDifference.json().removedChatIds).toContain(exposedChannelId);
+        expect((await chats(asOutsider)).map((chat) => chat.id)).not.toContain(exposedChannelId);
 
-        const beforeShowingPublicChannel = await syncState(asOutsider);
-        const shownChannel = await asOwner.post(`/v0/chats/${exposedChannelId}/updateChannel`, {
-            isListed: true,
-        });
-        expect(shownChannel.statusCode).toBe(200);
-        const shownDifference = await asOutsider.post("/v0/sync/getDifference", {
-            state: beforeShowingPublicChannel,
-            limit: 100,
-        });
-        expect(shownDifference.statusCode).toBe(200);
-        expect(shownDifference.json().areas).toContain("projects");
         expect(
-            shownDifference.json().changedChats.map((chat: { id: string }) => chat.id),
-        ).toContain(exposedChannelId);
-
-        const beforePublicChannelDeletion = await syncState(asOutsider);
-        const deletedChannel = await asOwner.post(`/v0/chats/${exposedChannelId}/deleteChannel`, {
-            reason: "Return the project to private work",
-        });
-        expect(deletedChannel.statusCode).toBe(200);
-        const deletedDifference = await asOutsider.post("/v0/sync/getDifference", {
-            state: beforePublicChannelDeletion,
-            limit: 100,
-        });
-        expect(deletedDifference.statusCode).toBe(200);
-        expect(deletedDifference.json().areas).toContain("projects");
-        expect(deletedDifference.json().removedChatIds).toContain(exposedChannelId);
-        expect((await projects(asOutsider)).map((project) => project.id)).not.toContain(
-            privateProject.id,
-        );
+            (
+                await asOwner.post(`/v0/chats/${exposedChannelId}/deleteChannel`, {
+                    reason: "Return the project to private work",
+                })
+            ).statusCode,
+        ).toBe(200);
 
         const ownerProjects = await projects(asOwner);
         const ownerChannels = (await chats(asOwner)).filter(

@@ -9,6 +9,7 @@ import { chatAdvanceWithSequence } from "./chatAdvanceWithSequence.js";
 import { chatGetAccess } from "./chatGetAccess.js";
 import { syncSequenceNext } from "../sync/syncSequenceNext.js";
 import { chatDescendantMembershipSync } from "./impl/chatDescendantMembershipSync.js";
+import { chatOrderKeyClearDb } from "./impl/chatOrderKeyClearDb.js";
 import { areaHint } from "./areaHint.js";
 import { createChannelServiceMessageDb } from "./impl/createChannelServiceMessageDb.js";
 
@@ -82,6 +83,7 @@ export async function channelLeave(
                     isNull(chatMembers.leftAt),
                 ),
             );
+        await chatOrderKeyClearDb(tx, actorUserId, chatId, sequence);
         const documentsChanged = await chatDescendantMembershipSync(tx, {
             ancestorChatId: chatId,
             userId: actorUserId,

@@ -8,6 +8,7 @@ import {
     Lightbox,
     ModalOverlay,
     Sidebar,
+    sidebarReorderMove,
     type ContextItem,
     type ComposerModelChoice,
     type SidebarSection,
@@ -221,6 +222,8 @@ export interface ChatPageActions {
     chatJoin(chatId: string): Promise<void>;
     chatLeave(chatId: string): Promise<void>;
     chatStarSet(chatId: string, starred: boolean): Promise<void>;
+    /** Moves a chat directly after another in this user's sidebar; undefined means the front. */
+    chatReorder(chatId: string, afterChatId?: string): Promise<void>;
     channelCreate(input: import("happy2-state").CreateChannelInput): Promise<void>;
     projectCreate(input: import("happy2-state").CreateProjectInput): Promise<void>;
     channelCreateChild(input: import("happy2-state").CreateChildChannelInput): Promise<void>;
@@ -1011,6 +1014,24 @@ export function ChatPage(props: ChatPageProps) {
                             onItemMenuSelect={(item, actionId) =>
                                 sidebarChannelModel(item.id).menuSelect(actionId)
                             }
+                            onItemReorder={(sectionId, ids) => {
+                                // Only the chat sections carry a personal order;
+                                // workspace navigation and shared links are fixed.
+                                const section = sidebarSections.find(
+                                    (candidate) => candidate.id === sectionId,
+                                );
+                                if (!section) return;
+                                const move = sidebarReorderMove(
+                                    section.items
+                                        .filter((item) => (item.depth ?? 0) === 0)
+                                        .map((item) => item.id),
+                                    ids,
+                                );
+                                if (!move) return;
+                                void props.actions
+                                    .chatReorder(move.id, move.afterId ?? undefined)
+                                    .catch(showError);
+                            }}
                             onSectionAction={(sectionId) => {
                                 if (sectionId === "agents") setAgentCreateOpen(true);
                                 if (sectionId.startsWith("project:"))
