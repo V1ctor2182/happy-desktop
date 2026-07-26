@@ -13,6 +13,7 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigPermissionReview,
+    RigOpenInTarget,
     RigProjectCatalog,
     RigProjectId,
     RigServiceTier,
@@ -268,6 +269,20 @@ export interface RigTransport {
      * that belong to it rather than one tick apart.
      */
     projectsRead(): Promise<RigProjectCatalog>;
+
+    /**
+     * Applications this host can hand a project directory to, in menu order and
+     * already filtered to the ones installed. An empty list means the host
+     * offers none, which is the normal answer off macOS.
+     */
+    openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
+
+    /**
+     * Opens a project or worktree root in one of those applications. The group
+     * is named rather than the directory: the host resolves the path from its
+     * own catalog, so this can only ever open something it already knows about.
+     */
+    openIn(groupId: RigGroupId, targetId: string): Promise<void>;
 
     /** Reads one text file from a project/worktree changed-file list. */
     changedFileRead(

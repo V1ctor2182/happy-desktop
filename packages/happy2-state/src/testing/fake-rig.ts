@@ -35,6 +35,8 @@ export type FakeRigOperation =
     | "modelsRead"
     | "projectsRead"
     | "changedFileRead"
+    | "openInTargetsRead"
+    | "openIn"
     | "sessionsRead"
     | "sessionRead"
     | "subagentsRead"
@@ -368,6 +370,11 @@ class FakeRigTransportModel implements FakeRigTransport {
     readonly transport: RigTransport = {
         modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
+        // No host to open anything in, so the fake offers nothing and opening
+        // is a no-op rather than a failure: a surface under test should render
+        // the same whether or not a shell is there.
+        openInTargetsRead: () => this.perform("openInTargetsRead", {}, () => []),
+        openIn: () => this.perform("openIn", {}, () => undefined),
         changedFileRead: (groupId, path) =>
             this.perform("changedFileRead", {}, () => ({
                 path,

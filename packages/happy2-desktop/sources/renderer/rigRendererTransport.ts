@@ -10,6 +10,7 @@ import type {
     RigModelCatalog,
     RigModelSelection,
     RigPermissionMode,
+    RigOpenInTarget,
     RigProjectCatalog,
     RigServiceTier,
     RigSession,
@@ -118,6 +119,10 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                         : project,
                 ),
             };
+        },
+        openInTargetsRead: () => getJson<readonly RigOpenInTarget[]>("/open-in-targets"),
+        openIn: async (groupId, targetId) => {
+            await postJson<Record<string, never>>("/open-in", { group: groupId, target: targetId });
         },
         changedFileRead: async (groupId, path, signal) => {
             const response = await fetch(url("/changed-file", { group: groupId, path }), {

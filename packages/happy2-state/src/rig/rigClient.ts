@@ -16,6 +16,7 @@ import type { RigTransport } from "./rigTransport.js";
 import type {
     RigChangedFileDocument,
     RigGroupId,
+    RigOpenInTarget,
     RigModelCatalog,
     RigSessionId,
 } from "./rigTypes.js";
@@ -31,6 +32,10 @@ export interface RigClient {
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
     sessionList(): RigSessionListStore;
+    /** Applications this host can open a project or worktree directory in. */
+    openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
+    /** Opens one project or worktree root in one of those applications. */
+    openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: RigGroupId,
@@ -102,6 +107,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         catalogRead: () => catalogEnsure(),
         changedFileRead: (groupId, path, signal) =>
             transport.changedFileRead(groupId, path, signal),
+        openInTargetsRead: () => transport.openInTargetsRead(),
+        openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {
             if (disposed) throw new Error("The Rig client is disposed.");
             if (!sessionListStore) {

@@ -20,13 +20,19 @@ const SERVICE_TIER_OFF = "__rig_service_tier_off__";
 export type RigControlMenuProps = {
     /** Short field caption (e.g. "Model"). */
     label: string;
-    /** Current value shown on the trigger. */
-    value: string;
+    /**
+     * Current value shown on the trigger. A control with no value is an action
+     * rather than a picker — its label alone names what the menu does — and the
+     * trigger renders as one.
+     */
+    value?: string;
     items: MenuItem[];
     onSelect: (id: string) => void;
     menuWidth?: number;
     /** Direction the popover opens from its trigger. Defaults to below. */
     menuPlacement?: "above" | "below";
+    /** Edge of the trigger the popover aligns to. Defaults to its start edge. */
+    menuAlign?: "start" | "end";
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -66,9 +72,11 @@ export function RigControlMenu(props: RigControlMenuProps) {
                 <span className="happy2-rig-control__label" data-happy2-ui="rig-control-label">
                     {props.label}
                 </span>
-                <span className="happy2-rig-control__value" data-happy2-ui="rig-control-value">
-                    {props.value}
-                </span>
+                {props.value === undefined ? null : (
+                    <span className="happy2-rig-control__value" data-happy2-ui="rig-control-value">
+                        {props.value}
+                    </span>
+                )}
                 <span aria-hidden="true" className="happy2-rig-control__chevron">
                     <Icon name="chevron-down" size={12} />
                 </span>
@@ -88,6 +96,7 @@ export function RigControlMenu(props: RigControlMenuProps) {
                     <div
                         className="happy2-rig-control__popover"
                         data-happy2-ui="rig-control-popover"
+                        data-align={props.menuAlign === "end" ? "end" : undefined}
                         data-placement={props.menuPlacement === "above" ? "above" : undefined}
                     >
                         <Menu

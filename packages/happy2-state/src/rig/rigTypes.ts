@@ -645,6 +645,12 @@ export interface RigScrollPosition {
     readonly measurements?: readonly RigScrollMeasurement[];
 }
 
+/** One application a project directory can be opened in. */
+export interface RigOpenInTarget {
+    readonly id: string;
+    readonly label: string;
+}
+
 /** Current model/effort/permission/tier selection used to derive menu options. */
 export interface RigSelection {
     readonly providerId: string;

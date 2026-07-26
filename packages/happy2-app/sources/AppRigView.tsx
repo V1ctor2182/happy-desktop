@@ -40,6 +40,7 @@ import {
     ModalOverlay,
     RigActivityPanel,
     RigConnectionStatus,
+    RigControlMenu,
     RigSessionControls,
     RigUsagePanel,
     PanelHeader,
@@ -544,6 +545,41 @@ export function AppRigView(props: AppRigViewProps) {
                                         }
                                     />
                                 ) : null}
+                                {/* Hands this project's directory to another
+                                    application, or puts its path on the
+                                    clipboard. The path is no longer spelled out
+                                    in the header — it said nothing the project's
+                                    name did not — so copying it is how it is
+                                    still reachable when it is genuinely needed. */}
+                                <RigControlMenu
+                                    items={[
+                                        ...workspace.openInTargets.map((target) => ({
+                                            id: target.id,
+                                            kind: "item" as const,
+                                            label: target.label,
+                                        })),
+                                        ...(workspace.openInTargets.length > 0
+                                            ? [{ kind: "separator" as const }]
+                                            : []),
+                                        {
+                                            id: "copy-path",
+                                            kind: "item" as const,
+                                            label: "Copy path",
+                                            icon: "doc" as const,
+                                        },
+                                    ]}
+                                    label="Open in"
+                                    menuAlign="end"
+                                    onSelect={(id: string) => {
+                                        if (id === "copy-path") {
+                                            void navigator.clipboard?.writeText(
+                                                openGroup.create.cwd,
+                                            );
+                                            return;
+                                        }
+                                        void props.workspace.openIn(openGroup.id, id);
+                                    }}
+                                />
                                 <Button
                                     aria-label={panel.open ? "Hide panel" : "Show panel"}
                                     aria-pressed={panel.open}

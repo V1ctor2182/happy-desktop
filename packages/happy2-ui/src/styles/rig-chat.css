@@ -163,6 +163,13 @@
     z-index: var(--happy2-z-overlay);
 }
 
+/* A control parked at the right edge of a header would push its popover off the
+   window if it opened rightwards, so it hangs from the trigger's right edge. */
+.happy2-rig-control__popover[data-align="end"] {
+    left: auto;
+    right: 0;
+}
+
 .happy2-rig-control__popover[data-placement="above"] {
     top: auto;
     bottom: calc(100% + 4px);

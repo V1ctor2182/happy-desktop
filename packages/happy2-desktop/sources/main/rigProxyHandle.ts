@@ -15,6 +15,7 @@ import {
     type RigDaemonClient,
 } from "./rigDaemonClient";
 import type { EventId, GitChangedFile } from "./rigDaemonTypes";
+import { openInRun, openInTargetsRead } from "./openIn";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
     rigCatalogProject,
@@ -349,6 +350,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 });
                 return true;
             }
+            if (path === "/open-in-targets") {
+                writeJson(response, 200, await openInTargetsRead());
+                return true;
+            }
             if (path === "/changed-file") {
                 writeJson(
                     response,
@@ -458,6 +463,23 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 }
             }
             return false;
+        }
+
+        if (method === "POST" && path === "/open-in") {
+            const body = await bodyReadJson(request);
+            // The group id, not a path. A directory the renderer names is a
+            // directory the renderer chose; resolving it from the catalog here
+            // means the only thing that can be opened is something the daemon
+            // already lists as a project or worktree root.
+            const groupId = String(body.group ?? "");
+            const catalog = await client.listCatalog();
+            const root =
+                catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
+                catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
+            if (!root) throw new Error("That project or workspace is no longer available.");
+            await openInRun(String(body.target ?? ""), root);
+            writeJson(response, 200, {});
+            return true;
         }
 
         if (method === "POST" && segments[0] === "projects" && segments[1]) {

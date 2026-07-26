@@ -35,6 +35,7 @@ import type {
     RigProjectId,
     RigQueuedMessage,
     RigContextGauge,
+    RigOpenInTarget,
     RigScrollPosition,
     RigSelection,
     RigServiceTier,
@@ -151,6 +152,13 @@ export interface RigWorkspaceSnapshot {
      * once the model catalog has been read, so the composer never waits on it.
      */
     readonly groupSessionDraft?: RigSessionDraftSnapshot;
+    /**
+     * Applications the host can open the addressed group's directory in, read
+     * once per workspace and empty until then. Empty is also the honest answer
+     * on a host that offers none, and the surface shows no menu rather than an
+     * empty one.
+     */
+    readonly openInTargets: readonly RigOpenInTarget[];
 }
 
 /**
@@ -289,6 +297,11 @@ export interface RigWorkspaceStore {
     imageOpen(messageId: string, attachmentId: string): void;
     /** Closes the full-size image viewer. */
     imageClose(): void;
+    /**
+     * Opens one project or worktree root in a named application. The group is
+     * named, not the directory: the host resolves the path from its own catalog.
+     */
+    openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /**
@@ -384,6 +397,11 @@ export function rigWorkspaceStoreCreate(
     // An addressed group with nothing in it yet: its composer is live, and the
     // first thing sent into it is what creates the conversation.
     let openGroupId: RigGroupId | undefined;
+    /* Read once, lazily, when a surface first asks. Detecting installed
+       applications costs a process launch or several, and most sessions never
+       open the menu. */
+    let openInTargets: readonly RigOpenInTarget[] = [];
+    let openInTargetsRequested = false;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
     /**
@@ -414,7 +432,12 @@ export function rigWorkspaceStoreCreate(
     let activeFileTabId: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
     const fileLoadControllers = new Map<string, AbortController>();
-    let snapshot: RigWorkspaceSnapshot = { list: list.get(), conversation, fileTabs };
+    let snapshot: RigWorkspaceSnapshot = {
+        list: list.get(),
+        conversation,
+        fileTabs,
+        openInTargets,
+    };
 
     const notify = (): void => {
         for (const listener of listeners) listener();
@@ -482,13 +505,15 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupComposer === groupComposerDraft &&
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
-            snapshot.activeFileTabId === activeFileTabId
+            snapshot.activeFileTabId === activeFileTabId &&
+            snapshot.openInTargets === openInTargets
         )
             return;
         snapshot = {
             list: listSnapshot,
             conversation,
             fileTabs,
+            openInTargets,
             ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -924,6 +949,27 @@ export function rigWorkspaceStoreCreate(
         if (location) output({ type: "conversationOpenRequested", location });
     };
 
+    /**
+     * Reads which applications this host can open a project in, once. Detecting
+     * them costs process launches, and the answer is a property of the machine
+     * rather than of anything being opened, so a failure only clears the flag —
+     * a host that arrives later can still be asked again.
+     */
+    const openInTargetsEnsure = (): void => {
+        if (openInTargetsRequested) return;
+        openInTargetsRequested = true;
+        void client.openInTargetsRead().then(
+            (targets) => {
+                if (disposed) return;
+                openInTargets = targets;
+                recompute();
+            },
+            () => {
+                openInTargetsRequested = false;
+            },
+        );
+    };
+
     const start = (): void => {
         active = true;
         unsubscribeList = list.subscribe(() => {
@@ -935,6 +981,10 @@ export function rigWorkspaceStoreCreate(
         // nothing.
         if (openId) acquireConversation(openId);
         for (const tab of fileTabs) if (tab.loading) fileLoad(tab.id, tab.revision);
+        // Which applications exist is a property of the host, not of anything
+        // being opened, so it is read once the workspace is actually on screen
+        // rather than when it is constructed.
+        openInTargetsEnsure();
         recompute();
     };
 
@@ -955,6 +1005,7 @@ export function rigWorkspaceStoreCreate(
             list: list.get(),
             conversation,
             fileTabs,
+            openInTargets,
             ...(activeFileTabId ? { activeFileTabId } : {}),
         };
     };
@@ -1151,6 +1202,7 @@ export function rigWorkspaceStoreCreate(
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
+        openIn: (groupId, targetId) => client.openIn(groupId, targetId),
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
         conversationScrollUpdate(conversationId, position) {
             // Deliberately no `recompute()`. The transcript is the one thing
