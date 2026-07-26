@@ -25,7 +25,13 @@
     min-height: 160px;
     max-height: 70%;
     overflow: hidden;
-    background: var(--diff-context-bg);
+    /*
+     * The terminal is a surface of the application, not a quoted code block, so
+     * it takes the same `--surface` every other panel and pane takes. The
+     * diff/code tint it used to carry read as a different, bluer material than
+     * the column it sits in.
+     */
+    background: var(--surface);
     border-top: 1px solid var(--divider);
 }
 
@@ -106,12 +112,6 @@
     line-height: 18px;
 }
 
-/* The terminal captures keyboard input in an invisible textarea. Surface its
-   otherwise hidden focus state so the active keyboard target is always clear. */
-.happy2-terminal-panel__screen[data-focused] {
-    box-shadow: inset 0 0 0 2px var(--text-link);
-}
-
 .happy2-terminal-panel__rows {
     position: relative;
     display: flex;
@@ -134,18 +134,51 @@
     white-space: pre;
 }
 
-/* The cursor is an overlay positioned in cell coordinates, outside text flow. */
+/*
+ * The cursor is an overlay positioned in cell coordinates, outside text flow,
+ * and it is the terminal's entire focus indicator: a hollow box when the
+ * terminal does not own the keyboard, a blinking solid block when it does. This
+ * is how a native terminal states the same thing, and it keeps the panel out of
+ * an accent color — the caret is text, so it is drawn in `--text`.
+ *
+ * The ring is an inset shadow rather than an outline or border because the box
+ * is sized in exact cell geometry; anything that occupies layout would push the
+ * caret off the column it is marking.
+ */
 .happy2-terminal-panel__cursor {
     position: absolute;
-    outline: 1px solid var(--text-link);
-    outline-offset: -1px;
+    box-shadow: inset 0 0 0 1px var(--text);
+    opacity: 0.55;
     pointer-events: none;
 }
 
 .happy2-terminal-panel__screen[data-focused] .happy2-terminal-panel__cursor {
-    background: var(--text-link);
-    opacity: 0.65;
-    outline: none;
+    background: var(--text);
+    box-shadow: none;
+    opacity: 1;
+}
+
+/*
+ * A focused caret blinks on a one-second cycle, which is both the convention and
+ * what makes the glyph underneath readable half the time — a permanently solid
+ * block would simply cover it. It starts on, so a caret is never invisible the
+ * moment it appears.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    .happy2-terminal-panel__screen[data-focused] .happy2-terminal-panel__cursor {
+        animation: happy2-terminal-cursor-blink 1s linear infinite;
+    }
+}
+
+@keyframes happy2-terminal-cursor-blink {
+    0%,
+    49.99% {
+        opacity: 1;
+    }
+    50%,
+    100% {
+        opacity: 0;
+    }
 }
 
 .happy2-terminal-panel__input {

@@ -374,6 +374,27 @@ export function AppRigView(props: AppRigViewProps) {
                         beneath it is another session in this one project, so it
                         stays put as they are switched. */}
                     <ChannelHeader
+                        // The panel toggle is the mirror of the sidebar's: the same
+                        // act at the other edge of the window, so it wears the same
+                        // glyph flipped and sits in the header rather than down in
+                        // the tab strip. It only appears once the project has a
+                        // session, because a panel with no conversation behind it has
+                        // nowhere to run a terminal and the control would do nothing.
+                        {...(openGroup.conversations.length > 0
+                            ? {
+                                  actions: (
+                                      <Button
+                                          aria-label={panel.open ? "Hide panel" : "Show panel"}
+                                          aria-pressed={panel.open}
+                                          icon={panel.open ? "panel-collapse" : "panel-expand"}
+                                          iconOnly
+                                          onClick={() => props.workspace.panel.panelToggle()}
+                                          size="small"
+                                          variant="ghost"
+                                      />
+                                  ),
+                              }
+                            : {})}
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
                         {...(openGroup.home ? {} : { topic: openGroup.displayPath })}
@@ -404,29 +425,14 @@ export function AppRigView(props: AppRigViewProps) {
                     ) : (
                         <TabbedPane
                             actions={
-                                <>
-                                    {/* The panel toggle sits with the session tabs
-                                        because that is the row that owns this side of
-                                        the window; opening it with nothing in it yet
-                                        starts a terminal, so one click gets a shell. */}
-                                    <Button
-                                        aria-label={panel.open ? "Hide panel" : "Show panel"}
-                                        aria-pressed={panel.open}
-                                        icon="terminal"
-                                        iconOnly
-                                        onClick={() => props.workspace.panel.panelToggle()}
-                                        size="small"
-                                        variant="ghost"
-                                    />
-                                    <Button
-                                        aria-label="New session in this project"
-                                        icon="plus"
-                                        iconOnly
-                                        onClick={() => groupConversationCreate(openGroup)}
-                                        size="small"
-                                        variant="ghost"
-                                    />
-                                </>
+                                <Button
+                                    aria-label="New session in this project"
+                                    icon="plus"
+                                    iconOnly
+                                    onClick={() => groupConversationCreate(openGroup)}
+                                    size="small"
+                                    variant="ghost"
+                                />
                             }
                             activeId={props.chatId ?? ""}
                             closeLabel="Close session"
@@ -696,9 +702,12 @@ function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) 
                         size="small"
                         variant="ghost"
                     />
+                    {/* The same glyph the header's toggle wears, so hiding the panel
+                        from inside it and from the header read as one act rather than
+                        as a close and a collapse. */}
                     <Button
                         aria-label="Hide panel"
-                        icon="close"
+                        icon="panel-collapse"
                         iconOnly
                         onClick={() => store.panelClose()}
                         size="small"

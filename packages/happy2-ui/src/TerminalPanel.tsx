@@ -41,9 +41,15 @@ const CELL_WIDTH = 8.4;
 const CELL_HEIGHT = 18;
 const ROWS_PADDING_HORIZONTAL = 12;
 const ROWS_PADDING_VERTICAL = 8;
-// The theme default terminal colors, used when an inverse cell has no explicit color.
+/*
+ * What an inverse cell swaps against when it carries no explicit colors: the
+ * screen's own two colors. They have to be this pair — the surface the terminal
+ * is painted on and the text painted on it — or the swap lands on colors the
+ * cell is not actually sitting between and stops being a swap. A fixed dark
+ * terminal background, in particular, is invisible against light text.
+ */
 const DEFAULT_FOREGROUND = "var(--text)";
-const DEFAULT_BACKGROUND = "var(--terminal-background)";
+const DEFAULT_BACKGROUND = "var(--surface)";
 
 export function TerminalPanel(props: TerminalPanelProps) {
     const screen = useRef<HTMLDivElement>(null);

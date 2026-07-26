@@ -53,6 +53,8 @@ export type IconName =
     | "moon"
     | "sidebar-collapse"
     | "sidebar-expand"
+    | "panel-collapse"
+    | "panel-expand"
     | "trash"
     | "dot";
 export type IconProps = {
@@ -77,8 +79,18 @@ export type IconProps = {
  * there is no path data or optical centering to tune here — the font supplies a
  * box-centered glyph. Regenerate the glyphmaps from upstream rather than editing
  * a codepoint here.
+ *
+ * A `mirrored` name renders an upstream glyph flipped across its vertical axis.
+ * It exists for a pair of affordances that are the same act at opposite edges of
+ * the window — collapsing the left sidebar and collapsing the right panel — where
+ * upstream ships only the left-handed glyph. The flip is presentation, not a new
+ * glyph: the same codepoint in the same family is painted, so the two edges read
+ * as one idea instead of borrowing an unrelated symbol for one of them.
  */
-type IconGlyph = { set: "ionicons"; name: IoniconName } | { set: "octicons"; name: OcticonName };
+type IconGlyph = (
+    | { set: "ionicons"; name: IoniconName }
+    | { set: "octicons"; name: OcticonName }
+) & { mirrored?: true };
 const glyphs: Record<IconName, IconGlyph> = {
     home: { set: "ionicons", name: "home-outline" },
     inbox: { set: "ionicons", name: "file-tray-outline" },
@@ -130,6 +142,10 @@ const glyphs: Record<IconName, IconGlyph> = {
     moon: { set: "ionicons", name: "moon-outline" },
     "sidebar-collapse": { set: "octicons", name: "sidebar-collapse" },
     "sidebar-expand": { set: "octicons", name: "sidebar-expand" },
+    // The right panel's edge, so the sidebar's own glyphs flipped: the same act,
+    // pointing the other way.
+    "panel-collapse": { set: "octicons", name: "sidebar-collapse", mirrored: true },
+    "panel-expand": { set: "octicons", name: "sidebar-expand", mirrored: true },
     trash: { set: "ionicons", name: "trash-outline" },
     dot: { set: "ionicons", name: "ellipse" },
 };
@@ -158,6 +174,7 @@ export function Icon(props: IconProps) {
             className={["happy2-icon", local.className].filter(Boolean).join(" ")}
             data-glyph={glyph.name}
             data-happy2-ui="icon"
+            data-mirrored={glyph.mirrored ? "" : undefined}
             data-name={local.name}
             data-set={glyph.set}
             data-testid={local["data-testid"]}

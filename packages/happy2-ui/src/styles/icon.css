@@ -31,3 +31,13 @@
 .happy2-icon[data-set="octicons"] {
     font-family: "happy2 Octicons";
 }
+
+/*
+ * A mirrored name paints its upstream glyph flipped across the vertical axis, for
+ * an affordance that is the same act at the opposite edge of the window. The box
+ * is square and the glyph is box-centered, so the flip changes what is drawn and
+ * nothing about the layout.
+ */
+.happy2-icon[data-mirrored] {
+    transform: scaleX(-1);
+}

@@ -231,9 +231,16 @@ it("forwards focused printable and control-key terminal input", async () => {
     );
     expect(capture).toBeTruthy();
     expect(document.activeElement).toBe(capture);
+    /* Focus shows in the caret and nowhere else: the screen draws no ring, and
+       the caret fills in `--text` instead of sitting hollow. */
     expect(
         view.$('[data-happy2-ui="terminal-screen"]').computedStyles(["box-shadow"])["box-shadow"],
-    ).toContain("inset");
+    ).toBe("none");
+    const caret = view
+        .$('[data-happy2-ui="terminal-cursor"]')
+        .computedStyles(["background-color", "box-shadow"]);
+    expect(caret["background-color"]).toBe("rgb(0, 0, 0)");
+    expect(caret["box-shadow"]).toBe("none");
 
     await userEvent.keyboard("pwd");
     await userEvent.keyboard("{Enter}");
