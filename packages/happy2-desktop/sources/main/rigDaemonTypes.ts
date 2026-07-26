@@ -58,6 +58,8 @@ export interface Project {
     readonly archivedAt?: number;
     readonly git?: GitRepositoryFacts;
     readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 export type ProjectWorkspaceStatus =
@@ -82,6 +84,8 @@ export interface ProjectWorkspace {
     readonly updatedAt: number;
     readonly git?: GitRepositoryFacts;
     readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */

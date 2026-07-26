@@ -8,7 +8,13 @@ const workspaceSections: SidebarSection[] = [
         id: "views",
         items: [
             { badge: 12, icon: "inbox", id: "inbox", kind: "view", label: "Inbox", unread: true },
-            { icon: "tasks", id: "my-issues", kind: "view", label: "My issues", meta: "7" },
+            {
+                changeStats: { added: 128, deleted: 34 },
+                icon: "tasks",
+                id: "my-issues",
+                kind: "view",
+                label: "My issues",
+            },
             { icon: "spark", id: "agent-runs", kind: "view", label: "Agent runs", meta: "3" },
             { icon: "eye", id: "watching", kind: "view", label: "Watching" },
         ],
@@ -25,7 +31,13 @@ const workspaceSections: SidebarSection[] = [
         id: "project-product",
         items: [
             { id: "launch-week", kind: "channel", label: "launch-week" },
-            { depth: 1, id: "launch-week-ios", kind: "channel", label: "ios-rollout" },
+            {
+                depth: 1,
+                id: "launch-week-ios",
+                kind: "workspace",
+                label: "ios-rollout",
+                status: "working",
+            },
             {
                 archived: true,
                 depth: 1,
@@ -157,6 +169,16 @@ const treatmentSections: SidebarSection[] = [
                 label: "Agent — working",
                 status: "working",
                 tone: "mint",
+            },
+            {
+                action: { icon: "plus", label: "New workspace", reveal: "hover" },
+                changeStats: { added: 309, deleted: 324 },
+                id: "kind-project",
+                initials: "R",
+                kind: "project",
+                label: "Project — working",
+                status: "working",
+                tone: "ember",
             },
             {
                 icon: "home",

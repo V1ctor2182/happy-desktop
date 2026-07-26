@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { execFile as execFileCallback } from "node:child_process";
 import { homedir } from "node:os";
+import { promisify } from "node:util";
 import type {
     RigModelSelection,
     RigPermissionMode,
@@ -26,6 +28,39 @@ import {
     rigTerminalProject,
     rigWorktreeProject,
 } from "./rigProjection";
+
+const execFile = promisify(execFileCallback);
+
+interface GitLineStats {
+    readonly addedLines: number;
+    readonly deletedLines: number;
+}
+
+/**
+ * Reads the checkout's aggregate textual diff against HEAD. A failed or
+ * unavailable Git read leaves the stats absent so listing projects remains
+ * available even while a checkout is being initialized or removed.
+ */
+async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined> {
+    try {
+        const { stdout } = await execFile("git", ["diff", "--numstat", "HEAD", "--"], {
+            cwd: path,
+            encoding: "utf8",
+            maxBuffer: 4 * 1024 * 1024,
+            timeout: 5_000,
+        });
+        let addedLines = 0;
+        let deletedLines = 0;
+        for (const line of stdout.split("\n")) {
+            const [added, deleted] = line.split("\t", 2);
+            if (added !== undefined && added !== "-") addedLines += Number(added);
+            if (deleted !== undefined && deleted !== "-") deletedLines += Number(deleted);
+        }
+        return { addedLines, deletedLines };
+    } catch {
+        return undefined;
+    }
+}
 
 /** The subset of the daemon client the projected loopback surface calls. */
 export type RigProxyClient = Pick<
@@ -144,21 +179,27 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         projectChanges.set(event.projectId, event.data.git.changedFiles);
                     else workspaceChanges.set(event.workspaceId, event.data.git.changedFiles);
                 }
+                const [projectStats, workspaceStats] = await Promise.all([
+                    Promise.all(projects.map((project) => gitLineStatsRead(project.path))),
+                    Promise.all(workspaces.map((workspace) => gitLineStatsRead(workspace.path))),
+                ]);
                 writeJson(response, 200, {
-                    projects: projects.map((project) =>
+                    projects: projects.map((project, index) =>
                         rigProjectProject(
                             {
                                 ...project,
                                 changedFiles: projectChanges.get(project.id),
+                                ...projectStats[index],
                             },
                             home,
                         ),
                     ),
-                    worktrees: workspaces.map((workspace) =>
+                    worktrees: workspaces.map((workspace, index) =>
                         rigWorktreeProject(
                             {
                                 ...workspace,
                                 changedFiles: workspaceChanges.get(workspace.id),
+                                ...workspaceStats[index],
                             },
                             home,
                         ),

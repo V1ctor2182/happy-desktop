@@ -31,6 +31,8 @@ export interface RigWorktreeGroup {
     /** Epoch milliseconds of the newest content in any of its sessions. */
     readonly updatedAt: number;
     readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /**
@@ -53,11 +55,13 @@ export interface RigProjectGroup {
     /** Sessions in the project itself, i.e. not in one of its worktrees. */
     readonly conversations: readonly ConversationSummary[];
     readonly worktrees: readonly RigWorktreeGroup[];
-    /** Live marker of the busiest session in the project or any of its worktrees. */
+    /** Live marker of the busiest session directly in the project. */
     readonly activity: "running" | "awaitingInput" | "idle";
     /** Epoch milliseconds of the newest content anywhere under the project. */
     readonly updatedAt: number;
     readonly changedFiles?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /**
@@ -107,6 +111,8 @@ export function rigProjectGroupsProject(
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
             ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
+            ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
+            ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
         });
     }
 
@@ -125,9 +131,6 @@ function projectGroup(
     conversations: readonly ConversationSummary[],
     worktrees: readonly RigWorktreeGroup[],
 ): RigProjectGroup {
-    const running =
-        activityOf(conversations) === "running" ||
-        worktrees.some((worktree) => worktree.activity === "running");
     return {
         id: project.id,
         name: project.name,
@@ -137,7 +140,9 @@ function projectGroup(
         kind: project.kind,
         conversations,
         worktrees,
-        activity: running ? "running" : "idle",
+        // A project and each of its worktrees are independent destinations.
+        // Child activity belongs on the child row rather than bubbling upward.
+        activity: activityOf(conversations),
         updatedAt: Math.max(
             newestOf(conversations),
             ...worktrees.map((worktree) => worktree.updatedAt),
@@ -145,6 +150,8 @@ function projectGroup(
         ),
         ...(project.avatar ? { avatar: project.avatar } : {}),
         ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
+        ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
+        ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),
     };
 }
 

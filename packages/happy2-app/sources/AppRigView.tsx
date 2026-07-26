@@ -113,24 +113,36 @@ interface OpenGroup {
  * more repository, so it wears a house instead.
  */
 function sidebarItems(project: RigProjectGroup): SidebarItem[] {
+    const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
     return [
         {
             id: project.id,
-            kind: "agent",
+            kind: "project",
             label: project.name,
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-            // Adding a worktree is what a project row offers, so the control
-            // stays visible rather than waiting for a hover to reveal it.
-            action: { icon: "plus" as const, label: `New workspace in ${project.name}` },
+            // With changes, the delta occupies the trailing lane until hover
+            // reveals the add-workspace control. A clean project offers + directly.
+            action: {
+                icon: "plus" as const,
+                label: `New workspace in ${project.name}`,
+                ...(projectHasLineChanges ? { reveal: "hover" as const } : {}),
+            },
             // A row only carries a status while one of its sessions is live.
             ...(project.activity === "running" ? { status: "working" as const } : {}),
-            ...(project.changedFiles ? { badge: project.changedFiles } : {}),
+            ...(projectHasLineChanges
+                ? {
+                      changeStats: {
+                          added: project.addedLines ?? 0,
+                          deleted: project.deletedLines ?? 0,
+                      },
+                  }
+                : {}),
         },
         ...project.worktrees.map((worktree) => ({
             id: worktree.id,
-            kind: "channel" as const,
+            kind: "workspace" as const,
             depth: 1,
             label: worktree.name,
             // Archiving throws away a checkout, so it stays out of sight until
@@ -141,7 +153,14 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 reveal: "hover" as const,
             },
             ...(worktree.activity === "running" ? { status: "working" as const } : {}),
-            ...(worktree.changedFiles ? { badge: worktree.changedFiles } : {}),
+            ...((worktree.addedLines ?? 0) > 0 || (worktree.deletedLines ?? 0) > 0
+                ? {
+                      changeStats: {
+                          added: worktree.addedLines ?? 0,
+                          deleted: worktree.deletedLines ?? 0,
+                      },
+                  }
+                : {}),
         })),
     ];
 }

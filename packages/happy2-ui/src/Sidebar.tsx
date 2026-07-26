@@ -17,18 +17,24 @@ import { happyLogoUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
 import { PluginAssetGlyph } from "./PluginAssetGlyph";
 import { Menu, type MenuItem } from "./Menu";
+import { Spinner } from "./Spinner";
 export type SidebarItem = {
     /** Marks a row as archived; the row keeps its position but paints muted. */
     archived?: boolean;
     badge?: number;
+    /** Git line totals painted as a compact green/red diff pair. */
+    changeStats?: {
+        added: number;
+        deleted: number;
+    };
     /** Nesting level. `0`/absent is top level; each level adds `SIDEBAR_ROW_INDENT` of left inset. */
     depth?: number;
-    /** The row's glyph. A `person`/`agent` row paints it inside the avatar tile. */
+    /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
     id: string;
     imageUrl?: string;
     initials?: string;
-    kind: "view" | "channel" | "person" | "agent" | "action" | "app";
+    kind: "view" | "channel" | "workspace" | "project" | "person" | "agent" | "action" | "app";
     label: string;
     /**
      * A same-origin blob URL for an authenticated monochrome asset (e.g. a plugin
@@ -126,6 +132,7 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     title?: string;
 };
 function leadingIcon(item: SidebarItem): IconName {
+    if (item.kind === "workspace") return item.icon ?? "branch";
     if (item.kind === "channel") return item.icon ?? "hash";
     if (item.kind === "action") return item.icon ?? "plus";
     return item.icon ?? "inbox";
@@ -138,7 +145,14 @@ function leadingIcon(item: SidebarItem): IconName {
  */
 function showsLeadingSlot(item: SidebarItem): boolean {
     if ((item.depth ?? 0) === 0) return true;
-    if (item.kind === "person" || item.kind === "agent" || item.kind === "app") return true;
+    if (item.kind === "workspace") return true;
+    if (
+        item.kind === "person" ||
+        item.kind === "agent" ||
+        item.kind === "project" ||
+        item.kind === "app"
+    )
+        return true;
     return item.icon !== undefined;
 }
 /** `true` when no later sibling sits at this row's depth before the group closes. */
@@ -294,6 +308,39 @@ function blockShift(drag: SidebarDrag, index: number): number {
     if (drag.to < drag.from && index >= drag.to && index < drag.from) return height;
     return 0;
 }
+
+function SidebarItemAction(props: {
+    action: NonNullable<SidebarItem["action"]>;
+    onAction: () => void;
+}) {
+    return (
+        /* A `span` because the row itself is the button: nesting one button
+           inside another is invalid, and this control must sit inside the row
+           so it tracks the row's hover. */
+        <span
+            aria-label={props.action.label}
+            className="happy2-sidebar__item-action"
+            data-happy2-ui="sidebar-item-action"
+            data-reveal={props.action.reveal}
+            onClick={(event) => {
+                event.stopPropagation();
+                props.onAction();
+            }}
+            onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                props.onAction();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            role="button"
+            tabIndex={0}
+        >
+            <Icon name={props.action.icon} size={12} />
+        </span>
+    );
+}
+
 function SidebarRow(props: {
     active: boolean;
     /** Renders the ASCII tree connector that ties a nested row to its parent. */
@@ -318,6 +365,10 @@ function SidebarRow(props: {
     const item = () => props.item;
     const unread = () => item().unread === true;
     const mentioned = () => (item().badge ?? 0) > 0;
+    const hasChangeStats = () =>
+        (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
+    const swapsTrailing = () =>
+        hasChangeStats() && item().action?.reveal === "hover" && props.onAction !== undefined;
     const depth = () => Math.max(0, item().depth ?? 0);
     const showStatus = () =>
         item().kind === "agent" && item().status !== undefined && !unread() && !mentioned();
@@ -333,6 +384,7 @@ function SidebarRow(props: {
             data-kind={item().kind}
             data-mentioned={mentioned() ? "" : undefined}
             data-happy2-ui="sidebar-item"
+            data-status={item().status}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
@@ -364,7 +416,12 @@ function SidebarRow(props: {
                     className="happy2-sidebar__item-leading"
                     data-happy2-ui="sidebar-item-leading"
                 >
-                    {item().kind === "person" || item().kind === "agent" ? (
+                    {(item().kind === "workspace" || item().kind === "project") &&
+                    item().status === "working" ? (
+                        <Spinner label={`${item().label} is working`} size={14} tone="muted" />
+                    ) : item().kind === "person" ||
+                      item().kind === "agent" ||
+                      item().kind === "project" ? (
                         <Avatar
                             icon={item().icon}
                             imageUrl={item().imageUrl}
@@ -372,7 +429,11 @@ function SidebarRow(props: {
                             online={item().kind === "person" ? item().online : undefined}
                             size="xs"
                             tone={item().tone}
-                            type={item().kind === "agent" ? "agent" : "human"}
+                            type={
+                                item().kind === "agent" || item().kind === "project"
+                                    ? "agent"
+                                    : "human"
+                            }
                         />
                     ) : item().kind === "app" ? (
                         <PluginAssetGlyph
@@ -398,6 +459,57 @@ function SidebarRow(props: {
             {mentioned() ? (
                 <CountBadge className="happy2-sidebar__item-badge" count={item().badge!} />
             ) : null}
+            {swapsTrailing()
+                ? ((stats) => (
+                      <span
+                          className="happy2-sidebar__item-trailing-swap"
+                          data-happy2-ui="sidebar-item-trailing-swap"
+                      >
+                          <span
+                              aria-label={[
+                                  stats.added > 0
+                                      ? `${String(stats.added)} lines added`
+                                      : undefined,
+                                  stats.deleted > 0
+                                      ? `${String(stats.deleted)} lines deleted`
+                                      : undefined,
+                              ]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              className="happy2-sidebar__item-change-stats"
+                              data-happy2-ui="sidebar-item-change-stats"
+                          >
+                              {stats.added > 0 ? (
+                                  <span data-tone="added">+{stats.added}</span>
+                              ) : null}
+                              {stats.deleted > 0 ? (
+                                  <span data-tone="deleted">−{stats.deleted}</span>
+                              ) : null}
+                          </span>
+                          <SidebarItemAction action={item().action!} onAction={props.onAction!} />
+                      </span>
+                  ))(item().changeStats!)
+                : hasChangeStats()
+                  ? ((stats) => (
+                        <span
+                            aria-label={[
+                                stats.added > 0 ? `${String(stats.added)} lines added` : undefined,
+                                stats.deleted > 0
+                                    ? `${String(stats.deleted)} lines deleted`
+                                    : undefined,
+                            ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            className="happy2-sidebar__item-change-stats"
+                            data-happy2-ui="sidebar-item-change-stats"
+                        >
+                            {stats.added > 0 ? <span data-tone="added">+{stats.added}</span> : null}
+                            {stats.deleted > 0 ? (
+                                <span data-tone="deleted">−{stats.deleted}</span>
+                            ) : null}
+                        </span>
+                    ))(item().changeStats!)
+                  : null}
             {showStatus() ? (
                 <>
                     {item().status === "working" ? (
@@ -421,36 +533,9 @@ function SidebarRow(props: {
                     {item().meta}
                 </span>
             ) : null}
-            {props.onAction
-                ? ((action) =>
-                      action ? (
-                          /* A `span` because the row itself is the button:
-                             nesting one button inside another is invalid, and
-                             this control must sit inside the row so it tracks
-                             the row's hover. */
-                          <span
-                              aria-label={action.label}
-                              className="happy2-sidebar__item-action"
-                              data-happy2-ui="sidebar-item-action"
-                              data-reveal={action.reveal}
-                              onClick={(event) => {
-                                  event.stopPropagation();
-                                  props.onAction?.();
-                              }}
-                              onKeyDown={(event) => {
-                                  if (event.key !== "Enter" && event.key !== " ") return;
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  props.onAction?.();
-                              }}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              role="button"
-                              tabIndex={0}
-                          >
-                              <Icon name={action.icon} size={12} />
-                          </span>
-                      ) : null)(item().action)
-                : null}
+            {props.onAction && item().action && !swapsTrailing() ? (
+                <SidebarItemAction action={item().action!} onAction={props.onAction} />
+            ) : null}
         </button>
     );
 }

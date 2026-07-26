@@ -511,6 +511,53 @@
     flex: none;
 }
 
+.happy2-sidebar__item-change-stats {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--text-secondary);
+    transition: opacity 120ms ease;
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-change-stats [data-tone="added"],
+.happy2-sidebar__item:focus-visible .happy2-sidebar__item-change-stats [data-tone="added"] {
+    color: var(--git-added-text);
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-change-stats [data-tone="deleted"],
+.happy2-sidebar__item:focus-visible .happy2-sidebar__item-change-stats [data-tone="deleted"] {
+    color: var(--git-removed-text);
+}
+
+.happy2-sidebar__item-trailing-swap {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    height: 18px;
+}
+
+/*
+ * Archive and Git stats intentionally occupy one trailing lane: overlaying the
+ * smaller action prevents the workspace name or counters from shifting on hover.
+ */
+.happy2-sidebar__item-trailing-swap .happy2-sidebar__item-action {
+    position: absolute;
+    right: 0;
+}
+
+.happy2-sidebar__item:hover .happy2-sidebar__item-trailing-swap .happy2-sidebar__item-change-stats,
+.happy2-sidebar__item-trailing-swap:focus-within .happy2-sidebar__item-change-stats {
+    opacity: 0;
+}
+
 .happy2-sidebar__item-unread {
     flex: none;
     width: 6px;

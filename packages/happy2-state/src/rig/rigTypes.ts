@@ -392,6 +392,9 @@ export interface RigProject {
     readonly avatar?: RigProjectAvatar;
     /** Current changed-file total for this checkout, omitted until Git state is available. */
     readonly changedFiles?: number;
+    /** Aggregate textual diff against HEAD, omitted until Git state is available. */
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /**
@@ -416,6 +419,9 @@ export interface RigWorktree {
         | "archived";
     /** Current changed-file total for this checkout, omitted until Git state is available. */
     readonly changedFiles?: number;
+    /** Aggregate textual diff against HEAD, omitted until Git state is available. */
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /** Everything the workspace list needs to group sessions: the projects and their worktrees. */
