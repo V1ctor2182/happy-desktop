@@ -20,6 +20,7 @@ import type {
     RigHost,
     RigSessionId,
     RigSessionLocation,
+    RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
 import { AppRigView } from "../AppRigView";
@@ -44,6 +45,12 @@ export interface RigRouterContext {
      * browser development mode renders ordinary web chrome.
      */
     readonly platform?: "desktop" | "web";
+    /**
+     * The window's own chrome state. Full screen takes the native controls away,
+     * so the inset the workspace reserves for them has to follow the window
+     * rather than the platform.
+     */
+    readonly windowState?: RigWindowStore;
 }
 
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
@@ -137,6 +144,7 @@ function RigWorkspaceLayout() {
             groupId={params.groupId}
             host={context.host}
             platform={context.platform}
+            windowState={context.windowState}
             onChatSelect={(groupId, chatId, replace) =>
                 void navigate(
                     groupId === undefined

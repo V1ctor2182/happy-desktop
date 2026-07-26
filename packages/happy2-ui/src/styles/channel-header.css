@@ -32,12 +32,17 @@
 
 /* ---- Left cluster: star · icon · title · dot · topic ----------------- */
 
+/* The name and topic share one truncating lane. It is capped at the heading
+   measure so a long project name and its path stop growing well before the
+   window's edge on a wide or full-screen display, while the meta cluster keeps
+   the right edge for itself. */
 .happy2-channel-header__info {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
     gap: 8px;
     min-width: 0;
+    max-width: var(--happy2-chat-heading-measure);
 }
 
 /* Star toggle — 28px ghost square, amber when the channel is starred. */
@@ -189,6 +194,7 @@
     flex: none;
     align-items: center;
     gap: 8px;
+    margin-left: auto;
 }
 
 /* Member counter — Slack-style pill: users icon + count. */

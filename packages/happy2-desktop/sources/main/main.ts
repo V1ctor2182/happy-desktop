@@ -107,6 +107,17 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     };
     window.webContents.on("render-process-gone", cleanup);
     window.webContents.on("destroyed", cleanup);
+    // macOS full screen hides the traffic lights without changing anything the
+    // renderer can query, so the window tells it directly and the shell drops the
+    // lane it reserves for them.
+    const windowStatePublish = () => {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+        window.webContents.send(desktopIpc.windowStateChanged, {
+            fullScreen: window.isFullScreen(),
+        });
+    };
+    window.on("enter-full-screen", windowStatePublish);
+    window.on("leave-full-screen", windowStatePublish);
     window.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
         if (isMainFrame && !isInPlace) cleanup();
     });
@@ -280,6 +291,9 @@ void app
             rigInstallManager.close(event.sender.id, terminalId);
         });
         ipcMain.handle(desktopIpc.updateInstall, () => updater.install());
+        ipcMain.handle(desktopIpc.windowStateGet, (event) => ({
+            fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
+        }));
         windowSynchronize(runtime.get());
         applicationMenuInstall(runtime.get());
         void updater.check().catch(() => undefined);

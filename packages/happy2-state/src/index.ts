@@ -252,6 +252,11 @@ export {
     type RigDaemonHealth,
 } from "./rig/rigConnection.js";
 export { rigHostNoop, type RigHost } from "./rig/rigHost.js";
+export {
+    rigWindowStoreNoop,
+    type RigWindowSnapshot,
+    type RigWindowStore,
+} from "./rig/rigWindowStore.js";
 export * from "./rig/rigTypes.js";
 export type {
     RigAgentEvent,

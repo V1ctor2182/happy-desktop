@@ -58,6 +58,10 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         rigInstallClose: async () => undefined,
         topologySelect: async () => undefined,
         updateInstall: async () => undefined,
+        // A browser tab has no native window chrome to reserve a lane for, so it
+        // is permanently the windowed arrangement.
+        windowStateGet: async () => ({ fullScreen: false }),
+        windowStateSubscribe: () => () => undefined,
         subscribe(_listener: (snapshot: DesktopRuntimeSnapshot) => void) {
             return () => undefined;
         },

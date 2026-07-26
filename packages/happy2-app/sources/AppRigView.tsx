@@ -25,11 +25,12 @@ import type {
     RigSessionId,
     RigTerminalStore,
     RigThinkingLevel,
+    RigWindowStore,
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
     RigWorktreeId,
 } from "happy2-state";
-import { rigOwnerAuthor } from "happy2-state";
+import { rigOwnerAuthor, rigWindowStoreNoop } from "happy2-state";
 import {
     AppShell,
     Banner,
@@ -88,6 +89,13 @@ export interface AppRigViewProps {
      * development mode keeps the ordinary branded heading.
      */
     platform?: "desktop" | "web";
+    /**
+     * The window's own chrome. Entering macOS full screen takes the traffic
+     * lights away, so the lane reserved for them closes with them and the sidebar
+     * toggle returns to the window's left edge. The browser shell supplies no
+     * such store and stays windowed.
+     */
+    windowState?: RigWindowStore;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -338,6 +346,12 @@ export function AppRigView(props: AppRigViewProps) {
         props.workspace.panel.get,
         props.workspace.panel.get,
     );
+    const windowStateStore = props.windowState ?? rigWindowStoreNoop;
+    const windowState = useSyncExternalStore(
+        windowStateStore.subscribe,
+        windowStateStore.get,
+        windowStateStore.get,
+    );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
@@ -408,6 +422,7 @@ export function AppRigView(props: AppRigViewProps) {
         <AppShell
             sidebarCollapsible
             windowControls={desktop}
+            windowFullScreen={windowState.fullScreen}
             panelResizable
             panel={
                 panel.open ? (

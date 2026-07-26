@@ -9,7 +9,7 @@ import {
     rigRouterCreate,
     type RigRouter,
 } from "happy2-app";
-import { appearanceStoreCreate, type AppearanceStore } from "happy2-state";
+import { appearanceStoreCreate, type AppearanceStore, type RigWindowStore } from "happy2-state";
 import { ThemeScope } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
@@ -17,6 +17,7 @@ import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeSt
 import { rigSessionStoreCreate, type RigSessionStore } from "./rigSessionStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
+import { windowStateStoreCreate } from "./windowStateStore";
 
 function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
@@ -66,6 +67,7 @@ function RigBoundary(props: {
     platform: "desktop" | "web";
     router: RigRouter;
     store: RigSessionStore;
+    windowState: RigWindowStore;
 }) {
     const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     if (!session)
@@ -86,6 +88,7 @@ function RigBoundary(props: {
                 connection: session.connection,
                 host: session.host,
                 platform: props.platform,
+                windowState: props.windowState,
                 workspace: session.workspace,
             }}
             key={session.connectionId}
@@ -102,6 +105,7 @@ function DesktopRenderer(props: {
     rigSession: RigSessionStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
+    windowState: RigWindowStore;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     if (!snapshot)
@@ -188,6 +192,7 @@ function DesktopRenderer(props: {
             platform={props.platform}
             router={props.rigRouter}
             store={props.rigSession}
+            windowState={props.windowState}
         />
     );
 }
@@ -221,6 +226,7 @@ if (bridge) {
                 })}
                 startupValues={startupValuesStoreCreate()}
                 store={runtimeStore}
+                windowState={windowStateStoreCreate(bridge)}
             />
         </DesktopAppearance>,
     );

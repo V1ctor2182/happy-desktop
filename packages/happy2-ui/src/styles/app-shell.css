@@ -81,13 +81,25 @@
     height: 40px;
 }
 
-/* The native controls occupy x=14…68 and the toggle docks at x=84…112, so both
-   gaps in the row — lights to toggle, toggle to heading — are the same 16px. */
+/* Where the sidebar toggle docks, and therefore how much of the row ahead of it
+   is window furniture. The native controls occupy x=14…68, so the toggle sits at
+   x=84…112 and both gaps in the row — lights to toggle, toggle to heading — are
+   the same 16px. Full screen takes the lights away and the toggle takes the
+   window's own left margin instead; everything keyed to this inset follows it. */
+.happy2-app-shell[data-window-controls] {
+    --happy2-app-shell-chrome-inset: 84px;
+}
+
+.happy2-app-shell[data-window-controls][data-window-full-screen] {
+    --happy2-app-shell-chrome-inset: 12px;
+}
+
+/* The heading starts one 28px toggle plus that same 16px gap past the inset. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: 128px;
+    padding-left: calc(var(--happy2-app-shell-chrome-inset) + 44px);
 }
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
@@ -97,7 +109,7 @@
     .happy2-app-shell__workspace
     > .happy2-tabbed-pane:first-child
     .happy2-tabbed-pane__bar {
-    padding-left: 128px;
+    padding-left: calc(var(--happy2-app-shell-chrome-inset) + 44px);
 }
 
 .happy2-app-shell__title-bar {
@@ -218,7 +230,7 @@
 .happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
     top: 6px;
     right: auto;
-    left: 84px;
+    left: var(--happy2-app-shell-chrome-inset);
 }
 
 .happy2-app-shell__sidebar-collapse:hover {
@@ -260,7 +272,7 @@
     position: absolute;
     z-index: 4;
     top: 6px;
-    left: 84px;
+    left: var(--happy2-app-shell-chrome-inset, 84px);
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }

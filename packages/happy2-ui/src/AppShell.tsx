@@ -13,6 +13,13 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Enables native macOS traffic-light spacing and draggable desktop header chrome. */
     windowControls?: boolean;
     /**
+     * The window is in macOS full screen, where the traffic lights are gone. The
+     * chrome inset closes with them — the sidebar toggle returns to the window's
+     * left edge and the headings beside it follow — while the drag lanes stay put.
+     * No CSS media query reports this, so the desktop shell supplies it.
+     */
+    windowFullScreen?: boolean;
+    /**
      * Enables the left sidebar show/hide toggle and pointer/keyboard resize. When
      * omitted the sidebar keeps its fixed `clamp(250px, 30vw, 360px)` contract and
      * renders no interaction chrome, so existing callers are unaffected.
@@ -186,6 +193,7 @@ export function AppShell(props: AppShellProps) {
         "style",
         "titleBar",
         "windowControls",
+        "windowFullScreen",
         "sidebarCollapsible",
         "sidebarDefaultWidth",
         "sidebarMinWidth",
@@ -320,6 +328,7 @@ export function AppShell(props: AppShellProps) {
             data-happy2-ui="app-shell"
             data-sidebar-collapsed={sidebarHidden ? "" : undefined}
             data-window-controls={local.windowControls ? "" : undefined}
+            data-window-full-screen={local.windowFullScreen ? "" : undefined}
             style={local.style}
         >
             {local.windowControls ? (

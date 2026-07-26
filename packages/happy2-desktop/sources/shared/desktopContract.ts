@@ -89,6 +89,15 @@ export type DesktopRuntimeSnapshot =
           update: DesktopUpdateSnapshot;
       };
 
+/**
+ * The window chrome the renderer cannot observe for itself. macOS full screen
+ * hides the traffic lights without changing any CSS display mode, so the shell
+ * would otherwise keep reserving the lane they left behind.
+ */
+export interface DesktopWindowState {
+    readonly fullScreen: boolean;
+}
+
 export interface RigInstallTerminalOpenResponse {
     readonly terminalId: string;
     readonly command: "npm install --global @slopus/rig";
@@ -119,6 +128,8 @@ export interface HappyDesktopBridge {
     rigInstallClose(terminalId: string): Promise<void>;
     topologySelect(topologyId: string): Promise<void>;
     updateInstall(): Promise<void>;
+    windowStateGet(): Promise<DesktopWindowState>;
+    windowStateSubscribe(listener: (state: DesktopWindowState) => void): () => void;
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void;
     rigInstallSubscribe(listener: (event: RigInstallTerminalEvent) => void): () => void;
 }
@@ -139,4 +150,6 @@ export const desktopIpc = {
     rigInstallEvent: "happy2:rig-install:event",
     topologySelect: "happy2:topology:select",
     updateInstall: "happy2:update:install",
+    windowStateChanged: "happy2:window-state:changed",
+    windowStateGet: "happy2:window-state:get",
 } as const;

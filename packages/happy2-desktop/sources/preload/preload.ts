@@ -3,6 +3,7 @@ import {
     desktopIpc,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
+    type DesktopWindowState,
     type HappyDesktopBridge,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
@@ -25,6 +26,13 @@ const bridge: HappyDesktopBridge = {
     rigInstallClose: (terminalId) => ipcRenderer.invoke(desktopIpc.rigInstallClose, terminalId),
     topologySelect: (topologyId) => ipcRenderer.invoke(desktopIpc.topologySelect, topologyId),
     updateInstall: () => ipcRenderer.invoke(desktopIpc.updateInstall),
+    windowStateGet: () => ipcRenderer.invoke(desktopIpc.windowStateGet),
+    windowStateSubscribe(listener: (state: DesktopWindowState) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, state: DesktopWindowState) =>
+            listener(state);
+        ipcRenderer.on(desktopIpc.windowStateChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.windowStateChanged, receive);
+    },
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void) {
         const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopRuntimeSnapshot) =>
             listener(snapshot);
