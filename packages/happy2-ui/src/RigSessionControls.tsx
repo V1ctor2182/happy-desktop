@@ -25,6 +25,8 @@ export type RigControlMenuProps = {
     items: MenuItem[];
     onSelect: (id: string) => void;
     menuWidth?: number;
+    /** Direction the popover opens from its trigger. Defaults to below. */
+    menuPlacement?: "above" | "below";
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -86,6 +88,7 @@ export function RigControlMenu(props: RigControlMenuProps) {
                     <div
                         className="happy2-rig-control__popover"
                         data-happy2-ui="rig-control-popover"
+                        data-placement={props.menuPlacement === "above" ? "above" : undefined}
                     >
                         <Menu
                             items={props.items}
@@ -116,6 +119,8 @@ export type RigSessionControlsProps = {
      * copy of one it already shows.
      */
     fields?: readonly RigSessionControlField[];
+    /** Direction each selected control's menu opens. Defaults to below. */
+    menuPlacement?: "above" | "below";
     onModelChange: (selection: RigModelSelection) => void;
     onEffortChange: (effort?: RigThinkingLevel) => void;
     onPermissionModeChange: (mode: RigPermissionMode) => void;
@@ -193,6 +198,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     items={modelItems}
                     key={field}
                     label="Model"
+                    menuPlacement={props.menuPlacement}
                     menuWidth={240}
                     onSelect={(id) => {
                         const [providerId, modelId] = id.split(MODEL_ID_SEP);
@@ -208,6 +214,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     items={effortItems}
                     key={field}
                     label="Effort"
+                    menuPlacement={props.menuPlacement}
                     onSelect={(id) => props.onEffortChange(id as RigThinkingLevel)}
                     value={currentEffortLabel(menus)}
                 />
@@ -219,6 +226,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     items={permissionItems}
                     key={field}
                     label="Access"
+                    menuPlacement={props.menuPlacement}
                     menuWidth={200}
                     onSelect={(id) => props.onPermissionModeChange(id as RigPermissionMode)}
                     value={PERMISSION_LABELS[menus.currentPermissionMode]}
@@ -230,6 +238,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                 items={serviceTierItems}
                 key={field}
                 label="Speed"
+                menuPlacement={props.menuPlacement}
                 onSelect={(id) =>
                     props.onServiceTierChange(
                         id === SERVICE_TIER_OFF ? undefined : (id as RigServiceTier),

@@ -43,6 +43,8 @@ export type ConversationViewProps = {
      * message being written, so they sit with the input rather than the header.
      */
     composerControls?: ReactNode;
+    /** Controlled accessory below the composer card, aligned with cloud audience routing. */
+    composerFooterControl?: ReactNode;
     /**
      * A modal-class surface (settings dialog, picker) hosted above this one.
      * The owner decides whether it is open; this surface only gives it a place
@@ -306,6 +308,7 @@ export function ConversationView(props: ConversationViewProps) {
                             composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"
                         }
                         mentions={mentionsOf(composer)}
+                        footerControl={props.composerFooterControl}
                         modelControl={props.composerControls}
                         onAttachmentsSelect={props.onComposerAttachmentsSelect}
                         onContextRemove={props.onComposerAttachmentRemove}

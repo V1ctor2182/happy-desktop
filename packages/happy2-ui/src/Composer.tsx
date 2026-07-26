@@ -263,6 +263,8 @@ export type ComposerProps = {
     mentionPickerLabel?: string;
     /** Optional controlled model-selection control, rendered in the composer toolbar. */
     modelControl?: ReactNode;
+    /** Optional controlled accessory rendered below the composer card. */
+    footerControl?: ReactNode;
     onSend: () => unknown;
     /**
      * Ends the agent's current inference. With `running`, it takes over the send
@@ -741,13 +743,19 @@ export function Composer(props: ComposerProps) {
                     />
                 ) : null}
             </div>
-            {audienceEnabled() ? (
-                <div className="happy2-composer__audience" data-happy2-ui="composer-audience">
-                    <AudienceToggle
-                        disabled={busy}
-                        onChange={(value) => props.onAudienceChange?.(value)}
-                        value={props.audience!}
-                    />
+            {audienceEnabled() || props.footerControl ? (
+                <div
+                    className="happy2-composer__footer"
+                    data-happy2-ui={audienceEnabled() ? "composer-audience" : "composer-footer"}
+                >
+                    {audienceEnabled() ? (
+                        <AudienceToggle
+                            disabled={busy}
+                            onChange={(value) => props.onAudienceChange?.(value)}
+                            value={props.audience!}
+                        />
+                    ) : null}
+                    {props.footerControl}
                 </div>
             ) : null}
         </div>

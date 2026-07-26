@@ -163,6 +163,11 @@
     z-index: var(--happy2-z-overlay);
 }
 
+.happy2-rig-control__popover[data-placement="above"] {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
 /* ---- Command palette rows -------------------------------------------------- */
 
 .happy2-rig-command-palette__list {

@@ -695,15 +695,28 @@ function RigConversationSurface(props: {
                             })}
                         />
                     ) : null}
-                    <Button
-                        aria-label="Session settings"
-                        icon="settings"
-                        iconOnly
-                        onClick={() => workspace.settingsOpen()}
-                        size="small"
-                        variant="ghost"
-                    />
                 </>
+            }
+            composerFooterControl={
+                conversation.menus ? (
+                    <RigSessionControls
+                        fields={["permission", "tier"]}
+                        menuPlacement="above"
+                        menus={conversation.menus}
+                        onEffortChange={(effort?: RigThinkingLevel) =>
+                            swallow(workspace.effortChange(effort))
+                        }
+                        onModelChange={(selection: RigModelSelection) =>
+                            swallow(workspace.modelChange(selection))
+                        }
+                        onPermissionModeChange={(mode: RigPermissionMode) =>
+                            swallow(workspace.permissionModeChange(mode))
+                        }
+                        onServiceTierChange={(tier?: RigServiceTier) =>
+                            swallow(workspace.serviceTierChange(tier))
+                        }
+                    />
+                ) : undefined
             }
             onAbort={() => swallow(workspace.runAbort())}
             onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
