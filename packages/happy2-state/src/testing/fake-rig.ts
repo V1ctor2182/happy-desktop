@@ -41,6 +41,7 @@ export type FakeRigOperation =
     | "sessionArchive"
     | "sessionReorder"
     | "projectReorder"
+    | "projectArchive"
     | "worktreeCreate"
     | "worktreeArchive"
     | "worktreeReorder"
@@ -475,6 +476,29 @@ class FakeRigTransportModel implements FakeRigTransport {
                     ...this.projects,
                     projects: this.projects.projects.map((project) =>
                         project.id === projectId ? { ...project, orderKey } : project,
+                    ),
+                };
+                return undefined;
+            }),
+        projectArchive: (projectId) =>
+            this.perform("projectArchive", {}, () => {
+                // As the host does it: the project and its worktrees leave the
+                // catalog, and the sessions filed under either are closed.
+                const worktrees = new Set(
+                    this.projects.worktrees
+                        .filter((worktree) => worktree.projectId === projectId)
+                        .map((worktree) => worktree.id),
+                );
+                for (const session of this.sessions.values())
+                    if (
+                        session.projectId === projectId ||
+                        (session.worktreeId && worktrees.has(session.worktreeId))
+                    )
+                        this.archived.add(session.id);
+                this.projects = {
+                    projects: this.projects.projects.filter((project) => project.id !== projectId),
+                    worktrees: this.projects.worktrees.filter(
+                        (worktree) => worktree.projectId !== projectId,
                     ),
                 };
                 return undefined;

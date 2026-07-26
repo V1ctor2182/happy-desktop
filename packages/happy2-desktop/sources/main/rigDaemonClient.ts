@@ -179,6 +179,25 @@ export class RigDaemonClient {
     }
 
     /**
+     * Archives a whole project: the daemon stamps it archived, archives the chats
+     * in its root, and takes each of its managed worktrees through the worktree
+     * archive above, so their checkouts are removed too. It answers before that
+     * cleanup finishes and reports the rest over the global event queue. Repeating
+     * the request on an already archived project is accepted unchanged.
+     */
+    archiveProject(
+        projectId: string,
+        expectedVersion: number,
+    ): Promise<{ readonly project: Project }> {
+        return this.#requestJson(
+            "POST",
+            `/projects/${encodeURIComponent(projectId)}/archive`,
+            {},
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
+    }
+
+    /**
      * Moves a session directly after `afterId` within its own project or
      * worktree, or to the front of that group when it is null. Sessions carry no
      * version, so the daemon resolves the move against its current order.

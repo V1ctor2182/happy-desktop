@@ -172,6 +172,12 @@ export interface RigWorkspaceStore {
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     /**
+     * Archives a project, taking its conversations and its worktrees' checkouts
+     * with it. The caller addresses somewhere else first when the archived
+     * project holds the open conversation; this store does not navigate.
+     */
+    projectArchive(projectId: RigProjectId): Promise<void>;
+    /**
      * Adds a worktree to the project and opens a first conversation in it once
      * the host has prepared its checkout.
      */
@@ -690,6 +696,7 @@ export function rigWorkspaceStoreCreate(
         conversationReorder: (conversationId, afterId) =>
             list.conversationReorder(conversationId, afterId),
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
+        projectArchive: (projectId) => list.projectArchive(projectId),
         async worktreeCreate(projectId) {
             const worktreeId = await list.worktreeCreate(projectId);
             if (worktreeId === undefined) return;

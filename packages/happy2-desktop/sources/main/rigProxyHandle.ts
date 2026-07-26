@@ -41,6 +41,7 @@ export type RigProxyClient = Pick<
     | "archiveWorkspace"
     | "reorderWorkspace"
     | "reorderProject"
+    | "archiveProject"
     | "reorderSession"
     | "getSession"
     | "listSubagents"
@@ -115,11 +116,20 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             }
             if (path === "/projects") {
                 const catalog = await client.listCatalog();
+                // The daemon keeps archived projects in its catalog read — a
+                // project is only a folder, and it comes back by being used
+                // again — so leaving them out is this projection's job. Their
+                // worktrees fall away with them, since the list is built by
+                // walking projects.
+                const projects = catalog.projects.filter(
+                    (project) => project.archivedAt === undefined,
+                );
+                const listed = new Set(projects.map((project) => project.id));
                 writeJson(response, 200, {
-                    projects: catalog.projects.map((project) => rigProjectProject(project, home)),
-                    worktrees: catalog.workspaces.map((workspace) =>
-                        rigWorktreeProject(workspace, home),
-                    ),
+                    projects: projects.map((project) => rigProjectProject(project, home)),
+                    worktrees: catalog.workspaces
+                        .filter((workspace) => listed.has(workspace.projectId))
+                        .map((workspace) => rigWorktreeProject(workspace, home)),
                 });
                 return true;
             }
@@ -226,7 +236,17 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             const projectId = segments[1];
             if (segments[2] === "reorder" && segments.length === 3) {
                 const body = await bodyReadJson(request);
-                await projectReorder(client, projectId, afterIdOf(body));
+                const afterId = afterIdOf(body);
+                await projectGuarded(client, projectId, (version) =>
+                    client.reorderProject(projectId, afterId, version),
+                );
+                writeJson(response, 200, {});
+                return true;
+            }
+            if (segments[2] === "archive" && segments.length === 3) {
+                await projectGuarded(client, projectId, (version) =>
+                    client.archiveProject(projectId, version),
+                );
                 writeJson(response, 200, {});
                 return true;
             }
@@ -596,21 +616,22 @@ async function worktreeGuarded(
 }
 
 /**
- * Moves a project, supplying the version guard the daemon requires. The version
- * has to be read here rather than sent by the renderer: it is an optimistic
- * concurrency token of the wire protocol, and letting it reach product state
- * would make every project row carry a value only this call can use. A losing
- * race answers 409, which is retried once against the version that won.
+ * Runs one project mutation, supplying the version guard the daemon requires.
+ * The version has to be read here rather than sent by the renderer: it is an
+ * optimistic concurrency token of the wire protocol, and letting it reach
+ * product state would make every project row carry a value only these calls can
+ * use. A losing race answers 409, which is retried once against the version that
+ * won.
  */
-async function projectReorder(
+async function projectGuarded(
     client: RigProxyClient,
     projectId: string,
-    afterId: string | null,
+    run: (version: number) => Promise<unknown>,
 ): Promise<void> {
     for (let attempt = 0; ; attempt += 1) {
         const { project } = await client.getProject(projectId);
         try {
-            await client.reorderProject(projectId, afterId, project.version);
+            await run(project.version);
             return;
         } catch (error) {
             if (attempt >= 1 || !(error instanceof RigDaemonHttpError) || error.statusCode !== 409)

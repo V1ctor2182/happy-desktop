@@ -42,10 +42,16 @@ export interface Project {
     readonly path: string;
     readonly initializationStatus: "initializing" | "ready" | "failed";
     readonly avatar?: ProjectAvatar;
-    /** Optimistic-concurrency token the daemon requires to guard a reorder. */
+    /** Optimistic-concurrency token the daemon requires to guard a reorder or an archive. */
     readonly version: number;
     readonly createdAt: number;
     readonly updatedAt: number;
+    /**
+     * When the project was archived; absent while it is listed. The daemon keeps
+     * archived projects in its catalog reads, so the projection below is what
+     * leaves them out of the workspace list.
+     */
+    readonly archivedAt?: number;
 }
 
 export type ProjectWorkspaceStatus =

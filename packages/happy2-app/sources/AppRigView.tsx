@@ -45,6 +45,7 @@ import {
     WindowDragRegion,
     rigComposerModelControlProps,
     sidebarReorderMove,
+    type MenuItem,
     type SidebarItem,
     type TabItem,
 } from "happy2-ui";
@@ -137,6 +138,42 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             },
             ...(worktree.activity === "running" ? { status: "working" as const } : {}),
         })),
+    ];
+}
+
+/** The row action ids the sidebar's context menu dispatches back to this surface. */
+const ROW_MENU_ARCHIVE = "archive";
+
+/**
+ * The context menu one sidebar row offers. Archiving is the only thing on it,
+ * and it is a menu rather than a visible control because it throws work away:
+ * archiving a project closes its conversations and removes every one of its
+ * worktree checkouts. The home project is left out — it is the machine's default
+ * place rather than a repository the reader adopted, so hiding it would only
+ * bring it straight back the next time a session starts there.
+ */
+function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): MenuItem[] {
+    const owner = rowOwnerFind(projects, item.id);
+    if (!owner) return [];
+    if (owner.worktreeId)
+        return [
+            {
+                kind: "item",
+                id: ROW_MENU_ARCHIVE,
+                label: "Archive workspace",
+                icon: "archive",
+                danger: true,
+            },
+        ];
+    if (owner.project.kind === "home") return [];
+    return [
+        {
+            kind: "item",
+            id: ROW_MENU_ARCHIVE,
+            label: "Archive project",
+            icon: "archive",
+            danger: true,
+        },
     ];
 }
 
@@ -336,7 +373,36 @@ export function AppRigView(props: AppRigViewProps) {
                         />
                     }
                     headerAccessory={listAccessory}
+                    itemMenuItems={(item) => rowMenuItems(rows, item)}
                     onCompose={conversationCreate}
+                    onItemMenuSelect={(item, actionId) => {
+                        if (actionId !== ROW_MENU_ARCHIVE) return;
+                        const owner = rowOwnerFind(rows, item.id);
+                        if (!owner) return;
+                        // The archived row is about to stop existing, so the URL
+                        // stops naming it: addressing the list is this surface's
+                        // job, since the store never navigates. Archiving a
+                        // project takes its worktrees with it, so an open one of
+                        // those has to be left as well.
+                        const closing = owner.worktreeId
+                            ? [owner.worktreeId as string]
+                            : [
+                                  owner.project.id as string,
+                                  ...owner.project.worktrees.map(
+                                      (worktree) => worktree.id as string,
+                                  ),
+                              ];
+                        if (props.groupId !== undefined && closing.includes(props.groupId))
+                            props.onChatSelect(undefined);
+                        void (
+                            owner.worktreeId
+                                ? props.workspace.worktreeArchive(
+                                      owner.project.id,
+                                      owner.worktreeId,
+                                  )
+                                : props.workspace.projectArchive(owner.project.id)
+                        ).catch(() => undefined);
+                    }}
                     // Addressing a group opens its most recent session, so a list
                     // row lands on work rather than on an empty screen.
                     onItemSelect={(id) =>

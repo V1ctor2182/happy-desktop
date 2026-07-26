@@ -86,6 +86,14 @@ export interface RigSessionListStore {
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
 
     /**
+     * Archives a project: it leaves the list with its conversations and
+     * worktrees, and the host removes those worktrees' checkouts. A failure is
+     * recorded in `mutationError` and the following reconcile puts the project
+     * back.
+     */
+    projectArchive(projectId: RigProjectId): Promise<void>;
+
+    /**
      * Reserves a worktree in the project and resolves as soon as it exists, with
      * its id, so the caller can list and address it while the host is still
      * preparing the checkout. Resolves with `undefined` when the reservation
@@ -465,6 +473,26 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 publish();
                 try {
                     await deps.transport.projectReorder(projectId, afterId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        projectArchive: (projectId) =>
+            mutate(async () => {
+                // The whole folder leaves the list before the host confirms —
+                // archiving is deliberate and must feel immediate — and its
+                // worktrees go with it so no orphaned row is left behind. Its
+                // sessions need no filtering: the projection files sessions
+                // under listed projects, so they leave with it.
+                catalog = {
+                    projects: catalog.projects.filter((project) => project.id !== projectId),
+                    worktrees: catalog.worktrees.filter(
+                        (worktree) => worktree.projectId !== projectId,
+                    ),
+                };
+                publish();
+                try {
+                    await deps.transport.projectArchive(projectId);
                 } finally {
                     if (!disposed) await reconcile();
                 }

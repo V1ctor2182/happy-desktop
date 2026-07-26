@@ -271,6 +271,15 @@ export interface RigTransport {
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
 
     /**
+     * Archives a project: it stops being listed by `projectsRead`, its
+     * conversations are closed, and its worktrees are archived with their
+     * checkouts removed by the host. The directory itself stays, and the host
+     * restores the project when work starts in it again — which is why there is
+     * no unarchive here.
+     */
+    projectArchive(projectId: RigProjectId): Promise<void>;
+
+    /**
      * Reserves a worktree in the project and resolves with it while its checkout
      * is still being prepared — `status` says whether it is usable yet, and the
      * host reports the change through the catalog. `idempotencyKey` is stable
