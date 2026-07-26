@@ -471,6 +471,17 @@ export function rigGlobalEventProject(
         };
     }
     if (
+        event.type === "run_started" ||
+        event.type === "run_finished" ||
+        event.type === "run_error"
+    ) {
+        return {
+            cursor: entry.cursor,
+            type: "session_activity_changed",
+            sessionId: event.sessionId as RigSessionId,
+        };
+    }
+    if (
         event.type === "project_created" ||
         event.type === "project_updated" ||
         event.type === "workspace_created" ||

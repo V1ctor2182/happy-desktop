@@ -213,6 +213,11 @@ export type RigGlobalEvent =
           readonly title?: string;
           readonly recap?: string;
       }
+    | {
+          readonly cursor: string;
+          readonly type: "session_activity_changed";
+          readonly sessionId: RigSessionId;
+      }
     /**
      * A project or worktree was created or changed — its name, picture, or
      * initialization state. Payload-free on purpose: the list reconciles the
