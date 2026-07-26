@@ -7,6 +7,7 @@ import {
     chatMembers,
     chats,
     documentChannelAttachments,
+    portShares,
     userChatPreferences,
 } from "../schema.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -102,21 +103,17 @@ export async function channelSetArchived(
                     input.chatId,
                 ),
             );
-        const memberships =
-            input.archived && !access.parentChatId
-                ? await tx
-                      .select({
-                          chatId: chatMembers.chatId,
-                          userId: chatMembers.userId,
-                      })
-                      .from(chatMembers)
-                      .where(
-                          and(
-                              inArray(chatMembers.chatId, affectedChatIds),
-                              isNull(chatMembers.leftAt),
-                          ),
-                      )
-                : [];
+        const memberships = input.archived
+            ? await tx
+                  .select({
+                      chatId: chatMembers.chatId,
+                      userId: chatMembers.userId,
+                  })
+                  .from(chatMembers)
+                  .where(
+                      and(inArray(chatMembers.chatId, affectedChatIds), isNull(chatMembers.leftAt)),
+                  )
+            : [];
         const memberUserIds = [...new Set(memberships.map(({ userId }) => userId))];
         if (memberships.length > 0) {
             await tx
@@ -129,9 +126,6 @@ export async function channelSetArchived(
                 .where(
                     and(inArray(chatMembers.chatId, affectedChatIds), isNull(chatMembers.leftAt)),
                 );
-            await tx
-                .delete(agentRigBindings)
-                .where(inArray(agentRigBindings.chatId, affectedChatIds));
             for (const membership of memberships) {
                 await chatOrderKeyClearDb(tx, membership.userId, membership.chatId, sequence);
                 await syncEventInsert(tx, {
@@ -143,6 +137,19 @@ export async function channelSetArchived(
                     targetUserId: membership.userId,
                 });
             }
+        }
+        // Disable the durable hostname before removing the capability behind it.
+        // The chat mutation below supplies the sync invalidation for both changes.
+        if (input.archived) {
+            await tx
+                .update(portShares)
+                .set({ disabledAt: sql`CURRENT_TIMESTAMP` })
+                .where(
+                    and(inArray(portShares.chatId, affectedChatIds), isNull(portShares.disabledAt)),
+                );
+            await tx
+                .delete(agentRigBindings)
+                .where(inArray(agentRigBindings.chatId, affectedChatIds));
         }
         let servicePts: number | undefined;
         let documentsChanged = false;

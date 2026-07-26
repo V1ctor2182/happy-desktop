@@ -755,9 +755,15 @@ describe("agent port sharing audiences", () => {
                             message.text === "The replacement preview is ready.",
                     );
             }, "replacement agent turn completion");
+            const childResponse = await ownerClient.post(`/v0/chats/${chatId}/createChildChannel`, {
+                name: "Internet preview child",
+                slug: "internet-preview-child",
+            });
+            expect(childResponse.statusCode).toBe(201);
+            const childChatId = childResponse.json().chat.id as string;
             expect(
                 (
-                    await ownerClient.post(`/v0/chats/${chatId}/sendMessage`, {
+                    await ownerClient.post(`/v0/chats/${childChatId}/sendMessage`, {
                         audience: "agents",
                         text: "Expose an internet preview.",
                         clientMutationId: "expose-internet-preview",
@@ -783,7 +789,7 @@ describe("agent port sharing audiences", () => {
             );
             const internetShare = completedOutput(internetCallId, rig).portShare as typeof share;
             expect(internetShare).toMatchObject({
-                chatId,
+                chatId: childChatId,
                 containerPort: 3002,
                 audience: "internet",
             });
@@ -845,11 +851,21 @@ describe("agent port sharing audiences", () => {
                     "http://169.254.169.254/latest/meta-data",
                 ),
             ).toMatchObject({ statusCode: 400 });
+            expect(
+                (await ownerClient.post(`/v0/chats/${childChatId}/archiveChannel`)).statusCode,
+            ).toBe(200);
+            expect((await ownerClient.get(`/v0/chats/${chatId}`)).json().chat.archivedAt).toBe(
+                undefined,
+            );
+            expectPortShareErrorPage(
+                await publicRequest(serverUrl, internetHost, "/archived"),
+                404,
+            );
             await new Promise<void>((resolve) => upstreamWebSockets.close(() => resolve()));
             upstreamWebSocketsClosed = true;
             await new Promise<void>((resolve) => upstream.close(() => resolve()));
             upstreamClosed = true;
-            expectPortShareErrorPage(await publicRequest(serverUrl, internetHost, "/stopped"), 502);
+            expectPortShareErrorPage(await publicRequest(serverUrl, internetHost, "/stopped"), 404);
         } finally {
             for (const socket of hangingUpgradeSockets) socket.destroy();
             for (const socket of streamingRejectionSockets) socket.destroy();

@@ -312,6 +312,16 @@ describe("child channel runtime and lifecycle", () => {
             ).statusCode,
         ).toBe(404);
 
+        expect((await asOwner.post(`/v0/chats/${childChatId}/reorder`, {})).statusCode).toBe(200);
+        expect(
+            (
+                (await asOwner.get("/v0/chats")).json().chats as Array<{
+                    id: string;
+                    orderKey?: string;
+                }>
+            ).find(({ id }) => id === childChatId)?.orderKey,
+        ).toEqual(expect.any(String));
+        const sessionsBeforeChildArchive = rig.createdSessions.length;
         expect((await asOwner.post(`/v0/chats/${childChatId}/archiveChannel`)).statusCode).toBe(
             200,
         );
@@ -321,9 +331,45 @@ describe("child channel runtime and lifecycle", () => {
         expect((await asOwner.get(`/v0/chats/${childChatId}`)).json().chat.archivedAt).toEqual(
             expect.any(String),
         );
+        expect((await asOwner.get(`/v0/chats/${childChatId}/members`)).json().users).toEqual([]);
+        for (const client of [asOwner, asMember])
+            expect((await client.get("/v0/chats")).json().chats).not.toEqual(
+                expect.arrayContaining([expect.objectContaining({ id: childChatId })]),
+            );
         expect((await asOwner.post(`/v0/chats/${childChatId}/unarchiveChannel`)).statusCode).toBe(
             200,
         );
+        expect((await asOwner.post(`/v0/chats/${childChatId}/join`)).statusCode).toBe(200);
+        expect((await asMember.post(`/v0/chats/${childChatId}/join`)).statusCode).toBe(200);
+        const restoredChild = (
+            (await asOwner.get("/v0/chats")).json().chats as Array<{
+                id: string;
+                orderKey?: string;
+            }>
+        ).find(({ id }) => id === childChatId);
+        expect(restoredChild).toMatchObject({ id: childChatId });
+        expect(restoredChild?.orderKey).toBeUndefined();
+        expect(
+            (
+                await asOwner.post(`/v0/chats/${parentChatId}/updateDefaultAgent`, {
+                    agentUserId: parent.defaultAgentUserId,
+                })
+            ).statusCode,
+        ).toBe(200);
+        const messagesBeforeFreshBinding = (
+            await asOwner.get(`/v0/chats/${childChatId}/messages`)
+        ).json().messages.length;
+        expect(
+            (
+                await asOwner.post(`/v0/chats/${childChatId}/sendMessage`, {
+                    text: "Create a fresh binding after direct child archive",
+                    audience: "agents",
+                    agentUserIds: [parent.defaultAgentUserId],
+                })
+            ).statusCode,
+        ).toBe(201);
+        await waitForMessages(asOwner, childChatId, messagesBeforeFreshBinding + 2);
+        expect(rig.createdSessions).toHaveLength(sessionsBeforeChildArchive + 1);
 
         const parentArchived = await asOwner.post(`/v0/chats/${parentChatId}/archiveChannel`);
         expect(parentArchived.statusCode).toBe(200);
@@ -362,7 +408,7 @@ describe("child channel runtime and lifecycle", () => {
         expect((await asOwner.get(`/v0/chats/${childChatId}`)).json().chat.archivedAt).toEqual(
             expect.any(String),
         );
-    });
+    }, 15_000);
 
     it("matches public parent visibility while requiring independent parent-scoped membership", async () => {
         await using rig = await createMockRigDaemon();
