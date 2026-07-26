@@ -287,8 +287,13 @@ export interface RigWorkspaceStore {
 
     // Navigation-applied conversation lifetime. These are not user selection:
     // the router applies them from the addressed URL.
-    /** Materializes the addressed conversation, releasing any previously open one. */
-    conversationOpen(conversationId: RigSessionId): void;
+    /**
+     * Materializes the addressed conversation, releasing any previously open
+     * one. The group comes from the URL when available so group-scoped surfaces
+     * can follow navigation without deriving identity from an asynchronous
+     * conversation read.
+     */
+    conversationOpen(conversationId: RigSessionId, groupId?: RigGroupId): void;
     /**
      * Applies an addressed group that holds no conversation, giving it a composer
      * whose first submission starts one. Releases any open conversation, since
@@ -1296,12 +1301,17 @@ export function rigWorkspaceStoreCreate(
             };
         },
 
-        conversationOpen: (conversationId) => {
+        conversationOpen: (conversationId, groupId) => {
             releaseGroup();
+            if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
             openConversation(undefined);
+            // The file scope belongs to the whole workspace, so "All files"
+            // survives navigation. Apply it to the newly addressed checkout
+            // even when this group already owns the empty-session composer.
+            if (fileScope === "all") workspaceFilesEnsure(groupId);
             if (openGroupId === groupId) return;
             releaseGroup();
             openGroupId = groupId;
@@ -1423,12 +1433,12 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         fileScopeUpdate(groupId, scope) {
-            if (fileScope === scope) return;
-            fileScope = scope;
             // A whole-repository listing costs a Git invocation over a tree that
             // may be enormous, so it is read when it is first wanted rather than
             // kept current against a group nobody is listing files for.
             if (scope === "all") workspaceFilesEnsure(groupId);
+            if (fileScope === scope) return;
+            fileScope = scope;
             recompute();
         },
         fileLayoutUpdate(layout) {

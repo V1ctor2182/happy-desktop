@@ -105,7 +105,8 @@ const groupRoute = createRoute({
 const chatRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
-        context.workspace.conversationOpen(params.chatId as RigSessionId);
+        const groupId = params.groupId as RigGroupId;
+        context.workspace.conversationOpen(params.chatId as RigSessionId, groupId);
     },
     path: "/chats/$groupId/$chatId",
 });
