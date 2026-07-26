@@ -141,37 +141,6 @@
     color: var(--text-secondary);
 }
 
-/*
- * The status line a working turn keeps in the clearance below the cloud
- * transcript. It shares the left inset of the step rows above it so the whole
- * turn holds one measure, and it is not a control: nothing opens from it while
- * its steps are already listed.
- */
-.happy2-chat-turn-status {
-    flex: none;
-    width: auto;
-    margin: 0 96px 18px 30px;
-    cursor: default;
-}
-
-.happy2-chat-turn-status:hover {
-    background: transparent;
-}
-
-/* What a running turn is spending, pinned opposite its latest step so the
- * numbers hold one column while the step text churns beside them. */
-.happy2-agent-trace-row__stats {
-    flex: none;
-    margin-inline-start: auto;
-    padding-inline-start: 8px;
-    font-family: var(--happy2-font-mono);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 16px;
-    font-variant-numeric: lining-nums tabular-nums;
-    color: var(--text-secondary);
-}
-
 .happy2-agent-trace-row__count {
     flex: none;
     margin-inline-start: auto;

@@ -138,9 +138,6 @@ export type ChatTurnStatus = {
     conversationId: string;
     /** The assistant message whose turn is running. */
     messageId: string;
-    stepKind?: AgentTurnTraceEntrySummary["kind"];
-    title: string;
-    detail?: string;
     subagentCount: number;
     terminalCount: number;
     totalTokens: number;
@@ -532,9 +529,6 @@ function turnStatusOf(
         id: `${entry.id} status`,
         conversationId: entry.conversationId,
         messageId: entry.id,
-        ...(trace.latest ? { stepKind: trace.latest.kind } : {}),
-        title: trace.latest?.title ?? "Working",
-        ...(trace.latest?.detail ? { detail: traceStepSubject(trace.latest.detail) } : {}),
         subagentCount: subagents.filter((subagent) => subagent.status === "running").length,
         terminalCount: terminals.length,
         totalTokens: activity?.tokenCount ?? trace.totalTokens ?? 0,

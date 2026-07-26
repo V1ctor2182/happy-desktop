@@ -1248,10 +1248,15 @@ it("streams a turn's steps inline and folds them behind View traces when it ends
     expect(steps).toHaveLength(2);
     const firstStep = steps[0]!;
     // A running turn offers no "View traces" control — its steps are already
-    // listed — but it does keep one live status line under them.
-    const status = view.container.querySelector<HTMLElement>('[data-happy2-ui="agent-trace-row"]')!;
-    expect(status.dataset.status).toBe("running");
-    expect(status.textContent).toContain("Reasoning");
+    // listed — but it does keep one live status line under them. That line
+    // reports the turn, never the step: the steps above it already name the
+    // tool, and a line rewritten on every call reads as noise.
+    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBeNull();
+    const status = view.container.querySelector<HTMLElement>(
+        '[data-happy2-ui="agent-status-line"]',
+    )!;
+    expect(status.textContent).toContain("Working");
+    expect(status.textContent).not.toContain("Reasoning");
     const messageRoot = view.container.querySelectorAll('[data-happy2-ui="message"]')[2]!;
     expect(messageRoot.textContent).toContain("");
 
@@ -1366,7 +1371,15 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     chatSurface.input({
         type: "chatLoaded",
         chat,
-        messages: [messageItem("message-1", "Please inspect"), assistantItem(traceSummary())],
+        // A history long enough to scroll: the line must survive the reader
+        // going back through it.
+        messages: [
+            ...Array.from({ length: 40 }, (_, index) =>
+                messageItem(`filler-${index}`, `Earlier message ${index}`),
+            ),
+            messageItem("message-1", "Please inspect"),
+            assistantItem(traceSummary()),
+        ],
         hasMoreMessages: false,
     });
     const view = createRenderer();
@@ -1436,7 +1449,7 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     });
     await nextFrame();
     const statusRow = view.container.querySelector<HTMLElement>(
-        '[data-happy2-ui="agent-trace-row"]',
+        '[data-happy2-ui="agent-status-line"]',
     )!;
     // It is the message list's footer, sitting in the clearance the transcript
     // already reserves below the last message rather than above the composer.
@@ -1447,11 +1460,21 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     expect(
         composerCard.getBoundingClientRect().top - messageList.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 1);
-    const stats = statusRow.querySelector('[data-happy2-ui="agent-trace-row-stats"]')!;
+    const stats = statusRow.querySelector('[data-happy2-ui="agent-status-line-stats"]')!;
     expect(stats.textContent).toContain("2 agents");
     expect(stats.textContent).toContain("1 process");
-    expect(stats.textContent).toContain("12k tokens");
+    expect(stats.textContent).toContain("12k");
     expect(document.activeElement).toBe(textarea);
+
+    // The line is a readout of what is happening now, so scrolling back through
+    // the history leaves it on the port's bottom edge rather than taking it away.
+    expect(messageList.scrollHeight).toBeGreaterThan(messageList.clientHeight);
+    messageList.scrollTop = 0;
+    await nextFrame();
+    expect(messageList.scrollTop).toBe(0);
+    expect(
+        messageList.getBoundingClientRect().bottom - statusRow.getBoundingClientRect().bottom,
+    ).toBeCloseTo(20, 0);
 
     // A live update rewrites the counts in place: same row, same composer.
     chatSurface.input({
@@ -1459,10 +1482,10 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
         agentActivity: [activity(1, 0, 80_000)],
     });
     await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBe(statusRow);
+    expect(view.container.querySelector('[data-happy2-ui="agent-status-line"]')).toBe(statusRow);
     expect(statusRow.textContent).toContain("1 agent");
     expect(statusRow.textContent).not.toContain("process");
-    expect(statusRow.textContent).toContain("80k tokens");
+    expect(statusRow.textContent).toContain("80k");
     expect(view.container.querySelector("textarea")).toBe(textarea);
     expect(document.activeElement).toBe(textarea);
     expect(textarea.value).toBe("draft while the agent works");

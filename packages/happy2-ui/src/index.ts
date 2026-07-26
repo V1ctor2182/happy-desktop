@@ -2,6 +2,7 @@ import "./styles.css";
 
 export { happyLogoUrl } from "./assets";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
+export { AgentStatusLine, type AgentStatusLineProps } from "./AgentStatusLine";
 export { AgentDesk, type AgentDeskProps, type DeskListItem, type DeskRun } from "./AgentDesk";
 export {
     AgentTracePanel,

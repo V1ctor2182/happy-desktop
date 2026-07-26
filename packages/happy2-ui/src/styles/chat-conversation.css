@@ -26,6 +26,14 @@
  */
 .happy2-chat-conversation .happy2-message-list__content {
     padding-bottom: 64px;
+    /* That whole clearance is the footer's band: the working turn's readout
+       fills it from the bottom and stays on the port's edge as the reader
+       scrolls back, so it is never added to the transcript's height. */
+    --happy2-message-list-footer-height: 64px;
+}
+
+.happy2-chat-conversation .happy2-message-list__footer {
+    padding-bottom: 20px;
 }
 
 /* The dangling avatar is positioned from the row's top edge, so it follows that

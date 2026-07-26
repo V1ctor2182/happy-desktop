@@ -4,6 +4,7 @@ import "../src/index";
 import "./workbench.css";
 import { AgentDeskPage } from "./pages/AgentDeskPage";
 import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
+import { AgentStatusLinePage } from "./pages/AgentStatusLinePage";
 import { AgentTraceRowPage } from "./pages/AgentTraceRowPage";
 import { AgentImageDetailPage } from "./pages/AgentImageDetailPage";
 import { AgentImagePanelPage } from "./pages/AgentImagePanelPage";
@@ -391,6 +392,12 @@ const components: BlueprintPage[] = [
         label: "Development token modal",
         number: "C-071",
         page: DevelopmentTokenModalPage,
+    },
+    {
+        id: "agent-status-line",
+        label: "Agent status line",
+        number: "C-072",
+        page: AgentStatusLinePage,
     },
     {
         id: "agent-trace-row",

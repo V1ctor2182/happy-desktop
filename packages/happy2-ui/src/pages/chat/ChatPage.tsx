@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-    AgentTraceRow,
+    AgentStatusLine,
     AppShell,
     Banner,
     Button,
@@ -1281,18 +1281,12 @@ export function ChatPage(props: ChatPageProps) {
                             ]}
                             messageFooter={((status) =>
                                 status ? (
-                                    <AgentTraceRow
+                                    <AgentStatusLine
+                                        agents={status.subagentCount}
                                         className="happy2-chat-turn-status"
-                                        detail={status.detail}
                                         elapsedMs={status.elapsedMs}
-                                        entryCount={0}
-                                        kind={status.stepKind}
-                                        status="running"
-                                        subagentCount={status.subagentCount}
-                                        terminalCount={status.terminalCount}
-                                        title={status.title}
-                                        totalTokens={status.totalTokens}
-                                        variant="row"
+                                        processes={status.terminalCount}
+                                        tokens={status.totalTokens}
                                     />
                                 ) : undefined)(turnStatus())}
                             messageListScrollPosition={props.messageListScrollPosition}

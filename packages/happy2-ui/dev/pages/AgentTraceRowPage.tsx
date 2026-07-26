@@ -48,40 +48,6 @@ export function AgentTraceRowPage() {
             </Specimen>
 
             <Specimen
-                detail="Live turn cost pinned opposite the step: subagents, background processes, tokens, elapsed"
-                label="Running with fan-out"
-                number="01a"
-                stage="surface"
-            >
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                    <div style={column}>
-                        <AgentTraceRow
-                            detail="pnpm --dir packages/happy2-server test"
-                            elapsedMs={104_000}
-                            entryCount={9}
-                            kind="tool"
-                            status="running"
-                            subagentCount={3}
-                            terminalCount={2}
-                            title="Bash"
-                            totalTokens={101_000}
-                        />
-                        <AgentTraceRow
-                            elapsedMs={7_000}
-                            entryCount={2}
-                            kind="reasoning"
-                            status="running"
-                            subagentCount={1}
-                            terminalCount={0}
-                            title="Thinking"
-                            totalTokens={860}
-                        />
-                    </div>
-                    <DimensionRule label="counts appear only once the turn has them" />
-                </div>
-            </Specimen>
-
-            <Specimen
                 detail="Success and danger dots · accent View trace link · step count"
                 label="Complete, failed, and open"
                 number="02"

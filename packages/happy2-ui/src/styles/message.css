@@ -997,15 +997,22 @@
     padding: 12px 0 8px;
 }
 
-/* The footer lives in the clearance below the last message rather than after
- * it, so a list that reserves that band fills it instead of growing. */
+/*
+ * The footer stays on the port's bottom edge instead of scrolling away with the
+ * history: it is a readout of what is happening now, so it must survive the
+ * reader scrolling back. `--happy2-message-list-footer-height` is the band a
+ * surface reserves for it; declaring it pulls the footer out of the flow, so
+ * the reserved clearance is filled rather than added to.
+ */
 .happy2-message-list__footer {
-    position: absolute;
-    inset-inline: 0;
+    position: sticky;
+    z-index: 1;
     bottom: 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    height: var(--happy2-message-list-footer-height, auto);
+    margin-bottom: calc(-1 * var(--happy2-message-list-footer-height, 0px));
 }
 
 .happy2-message-list__spacer {

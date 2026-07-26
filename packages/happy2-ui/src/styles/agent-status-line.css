@@ -1,0 +1,52 @@
+/* Placed in the chat transcript's reserved clearance, it lines up with the step
+ * rows above it rather than with the pane edge. */
+.happy2-chat-turn-status {
+    padding: 0 20px 0 30px;
+}
+
+/*
+ * C-072 AgentStatusLine — the working turn's readout under the transcript.
+ *
+ * One 24px mono row on the surface, everything aligned left: the state and its
+ * clock, then the counters. Entirely monochrome — no dot, no border, no accent,
+ * no hover — so a turn that is working reads as instrumentation beneath the
+ * conversation rather than as one more thing in it.
+ */
+
+.happy2-agent-status-line,
+.happy2-agent-status-line * {
+    box-sizing: border-box;
+}
+
+.happy2-agent-status-line {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 24px;
+    background: var(--surface);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    font-synthesis: none;
+    line-height: 16px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.happy2-agent-status-line__state {
+    flex: none;
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The counters trail the state on the same left run and truncate before it, so
+ * a narrow pane keeps "Working 12s" and drops the tail. */
+.happy2-agent-status-line__stats {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: lining-nums tabular-nums;
+    color: var(--input-placeholder);
+}
