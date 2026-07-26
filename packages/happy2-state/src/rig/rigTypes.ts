@@ -395,6 +395,7 @@ export interface RigProject {
     /** Aggregate textual diff against HEAD, omitted until Git state is available. */
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: readonly RigGitChangedFile[];
 }
 
 /**
@@ -422,6 +423,25 @@ export interface RigWorktree {
     /** Aggregate textual diff against HEAD, omitted until Git state is available. */
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: readonly RigGitChangedFile[];
+}
+
+/** One current working-tree change, reconciled from Git after each watcher hint. */
+export interface RigGitChangedFile {
+    readonly path: string;
+    /** Original repository path when Git reports a rename or copy. */
+    readonly previousPath?: string;
+    readonly status: "added" | "deleted" | "modified" | "renamed" | "untracked";
+    /** Lightweight disk identity used to reload an open file after a Git watcher hint. */
+    readonly revision: string;
+}
+
+/** HEAD and working-tree text loaded for one changed-file diff tab. */
+export interface RigChangedFileDocument {
+    readonly path: string;
+    readonly oldPath: string;
+    readonly oldContent: string;
+    readonly newContent: string;
 }
 
 /** Everything the workspace list needs to group sessions: the projects and their worktrees. */

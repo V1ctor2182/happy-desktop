@@ -4,6 +4,7 @@ import type {
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
+import { AgentStatusLine } from "./AgentStatusLine";
 import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type ContextItem, type Mentionable } from "./Composer";
@@ -147,7 +148,9 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  * the title, subtitle, and owner-supplied controls; the virtualized shared
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
  * the body; and the shared `Composer` with its `/` command palette and `@`
- * mention candidates.
+ * mention candidates. A running turn keeps one minimal `AgentStatusLine` in the
+ * message list footer — braille spinner and elapsed clock — which scrolls with
+ * the transcript rather than floating over it.
  *
  * Every value comes from props and every draft keystroke goes back out through
  * `onComposerValueChange`, so the composer store — not this component — owns the
@@ -204,6 +207,14 @@ export function ConversationView(props: ConversationViewProps) {
                             width,
                         })
                     }
+                    footer={
+                        props.running ? (
+                            <AgentStatusLine
+                                className="happy2-conversation-turn-status"
+                                elapsedMs={props.elapsedMs}
+                            />
+                        ) : undefined
+                    }
                     virtualize
                 >
                     {props.entries.map((entry, index) => {
@@ -227,7 +238,13 @@ export function ConversationView(props: ConversationViewProps) {
                                         ? conversationMessageGrouped(props.entries, index)
                                         : undefined
                                 }
-                                key={entry.kind === "message" ? entry.message.id : entry.id}
+                                key={
+                                    entry.kind === "message"
+                                        ? entry.message.id
+                                        : entry.kind === "turnStatus"
+                                          ? entry.id
+                                          : entry.id
+                                }
                                 onImageOpen={props.onImageOpen}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onRewind={props.onRewind}

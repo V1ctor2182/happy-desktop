@@ -1,7 +1,8 @@
 import { type CSSProperties } from "react";
 import type { ConversationAttachment, ConversationEntry, UserError } from "happy2-state";
 import { AgentActivityRow } from "./AgentActivityRow";
-import { AgentTraceRow, type AgentTraceRowKind } from "./AgentTraceRow";
+import { AgentStatusLine } from "./AgentStatusLine";
+import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
 import {
     ConversationRequestView,
@@ -45,20 +46,6 @@ export type ConversationEntryViewProps = {
 
 const NOTICE_ICON = { info: "dot", warning: "shield", error: "shield" } as const;
 
-/** The trace row glyph for the kind of activity a turn reported last. */
-function traceRowKind(kind: string | undefined): AgentTraceRowKind | undefined {
-    if (
-        kind === "reasoning" ||
-        kind === "response" ||
-        kind === "tool" ||
-        kind === "subagent" ||
-        kind === "terminal" ||
-        kind === "status"
-    )
-        return kind;
-    return undefined;
-}
-
 /**
  * ConversationEntryView — renders one `ConversationEntry` through the shared
  * chat vocabulary: an authored message is a `Message`, agent activity is one
@@ -66,6 +53,11 @@ function traceRowKind(kind: string | undefined): AgentTraceRowKind | undefined {
  * boundary is a `DayDivider`, and something waiting on the reader is its request
  * prompt. Both stacks render their conversations through this one component, so
  * neither grows a second message list.
+ *
+ * A running turn needs no status row of its own: its steps are listed in the
+ * transcript as it works, and the surface keeps one minimal status line in the
+ * message-list footer. Once the turn ends the steps fold away behind the
+ * compact "View traces" link on the line that opened the turn.
  */
 export function ConversationEntryView(props: ConversationEntryViewProps) {
     const entry = props.entry;
@@ -78,6 +70,20 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 defaultExpanded={props.activityDefaultExpanded}
                 singleLine={entry.activity.kind === "tool"}
                 style={props.style}
+            />
+        );
+    if (entry.kind === "turnStatus")
+        return (
+            <AgentStatusLine
+                className={["happy2-conversation-turn-status", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
+                data-testid={props["data-testid"]}
+                elapsedMs={entry.durationMs}
+                status={entry.status}
+                style={props.style}
+                tokens={entry.tokens}
+                tools={entry.tools}
             />
         );
     if (entry.kind === "notice")
@@ -116,9 +122,14 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     const rewindable = props.onRewind !== undefined && author?.kind !== "agent";
     const images = imagesOf(message.attachments, props.attachmentUrl);
     const trace = message.agentTrace;
-    const traceRunning =
+    /* A running turn lists its steps in the transcript and keeps its live
+       readout on the message-list footer, so the message itself carries no
+       bordered status row. The compact "View traces" link only appears once the
+       turn has settled. */
+    const traceCollapsible =
         trace !== undefined &&
-        (trace.status === "pending" || trace.status === "running") &&
+        trace.status !== "pending" &&
+        trace.status !== "running" &&
         trace.entryCount > 0;
     const traceToggle =
         trace && props.onTraceToggle ? () => props.onTraceToggle?.(trace.turnId) : undefined;
@@ -139,7 +150,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     : undefined
             }
             metaAccessory={
-                trace && !traceRunning && trace.entryCount > 0 ? (
+                traceCollapsible && trace ? (
                     <AgentTraceRow
                         entryCount={trace.entryCount}
                         onOpen={traceToggle}
@@ -162,20 +173,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}
-        >
-            {traceRunning && trace ? (
-                <AgentTraceRow
-                    detail={trace.latest?.detail}
-                    entryCount={trace.entryCount}
-                    kind={traceRowKind(trace.latest?.kind)}
-                    onOpen={traceToggle}
-                    open={props.traceOpen}
-                    status="running"
-                    title={trace.latest?.title}
-                    variant="row"
-                />
-            ) : null}
-        </Message>
+        />
     );
 }
 

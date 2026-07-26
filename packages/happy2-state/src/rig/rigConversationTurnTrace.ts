@@ -5,9 +5,10 @@ import type {
     AgentTurnTraceLatest,
     AgentTurnTraceSummary,
 } from "../types.js";
-import type {
-    ConversationActivityEntry,
-    ConversationEntry,
+import {
+    entrySequence,
+    type ConversationActivityEntry,
+    type ConversationEntry,
 } from "../conversation/conversationEntry.js";
 import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 
@@ -105,17 +106,6 @@ function latestFromActivities(
     };
 }
 
-function turnFailed(activities: readonly ConversationActivityEntry[]): boolean {
-    return activities.some((entry) => {
-        const activity = entry.activity;
-        if (activity.kind === "tool")
-            return activity.tool.failed || activity.tool.status === "failed";
-        if (activity.kind === "shell")
-            return !activity.running && (activity.timedOut || (activity.exitCode ?? 0) !== 0);
-        return false;
-    });
-}
-
 /** The turn's final message, the one line a collapsed turn keeps on screen. */
 function lastMessage(body: readonly ConversationEntry[]): ConversationEntry | undefined {
     for (let index = body.length - 1; index >= 0; index -= 1) {
@@ -139,14 +129,22 @@ function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary):
  * and tool rows back as ordinary sibling entries — the list stays flat, so a
  * long turn still virtualizes one block at a time. Exactly one agent message per
  * turn — the first one shown — carries the summary, so the control appears once.
+ *
+ * Settled duration comes from the owner's run clock (`durations` keyed by the
+ * user-message turn id). Local messages have no timestamps on the wire, so the
+ * store records how long each request took when the run ends.
  */
 export function rigConversationAttachTurnTraces(
     entries: readonly ConversationEntry[],
-    input: { readonly running: boolean; readonly expandedTurnIds: ReadonlySet<string> },
+    input: {
+        readonly running: boolean;
+        readonly expandedTurnIds: ReadonlySet<string>;
+        /** Final duration of finished turns, keyed by the user message that opened them. */
+        readonly durations?: ReadonlyMap<string, number>;
+    },
 ): readonly ConversationEntry[] {
     const result: ConversationEntry[] = [];
     let turnUserId: string | undefined;
-    let turnStartedAt = 0;
     let turnBody: ConversationEntry[] = [];
 
     const flush = (isOpenTurn: boolean): void => {
@@ -159,19 +157,20 @@ export function rigConversationAttachTurnTraces(
             (entry): entry is ConversationActivityEntry => entry.kind === "agentActivity",
         );
         const running = isOpenTurn && input.running;
-        const status: AgentTurnStatus = running
-            ? "running"
-            : turnFailed(activities)
-              ? "failed"
-              : "complete";
+        // A finished turn is complete whenever it produced a final reply. A tool
+        // that failed mid-turn is ordinary agent recovery, not a failed turn —
+        // only the run itself failing without an answer would be different, and
+        // that still lands as idle with whatever text the agent managed.
+        const status: AgentTurnStatus = running ? "running" : "complete";
         const toolCallCount = activities.filter((entry) => entry.activity.kind === "tool").length;
+        const durationMs = !running ? input.durations?.get(turnUserId) : undefined;
         const trace: AgentTurnTraceSummary = {
             turnId: turnUserId,
             agentUserId: rigAgentAuthor.id,
             status,
             entryCount: activities.length,
             ...(toolCallCount > 0 ? { toolCallCount } : {}),
-            latest: latestFromActivities(activities, turnStartedAt),
+            latest: latestFromActivities(activities, 0),
             subagents: [],
             backgroundTerminals: [],
         };
@@ -191,6 +190,20 @@ export function rigConversationAttachTurnTraces(
             traced = withTrace !== entry;
             result.push(withTrace);
         }
+        // Settled turns keep a permanent status row under their last content.
+        // Running turns use the message-list footer so the clock can tick.
+        if (summarizable && !running) {
+            const last = shown[shown.length - 1];
+            const lastSequence = last ? entrySequence(last) : turnUserId;
+            result.push({
+                kind: "turnStatus",
+                id: `turn-status:${turnUserId}`,
+                sequence: `${lastSequence}:status`,
+                status: "complete",
+                ...(durationMs !== undefined ? { durationMs } : {}),
+                ...(toolCallCount > 0 ? { tools: toolCallCount } : {}),
+            });
+        }
         turnBody = [];
         turnUserId = undefined;
     };
@@ -200,7 +213,6 @@ export function rigConversationAttachTurnTraces(
         if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
             flush(false);
             turnUserId = entry.message.id;
-            turnStartedAt = Date.parse(entry.message.createdAt) || index;
             result.push(entry);
             continue;
         }

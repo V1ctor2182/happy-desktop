@@ -998,21 +998,16 @@
 }
 
 /*
- * The footer stays on the port's bottom edge instead of scrolling away with the
- * history: it is a readout of what is happening now, so it must survive the
- * reader scrolling back. `--happy2-message-list-footer-height` is the band a
- * surface reserves for it; declaring it pulls the footer out of the flow, so
- * the reserved clearance is filled rather than added to.
+ * The footer is the last row of the transcript content: it sits under the
+ * newest message and scrolls with the history the same way every other row
+ * does. Surfaces that want a larger clearance under it pad the content, not
+ * the footer itself.
  */
 .happy2-message-list__footer {
-    position: sticky;
-    z-index: 1;
-    bottom: 0;
     display: flex;
+    flex: none;
     flex-direction: column;
-    justify-content: flex-end;
-    height: var(--happy2-message-list-footer-height, auto);
-    margin-bottom: calc(-1 * var(--happy2-message-list-footer-height, 0px));
+    width: 100%;
 }
 
 .happy2-message-list__spacer {

@@ -274,6 +274,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let runId: string | undefined;
     let runStartedAt: number | undefined;
     let turnElapsedMs: number | undefined;
+    /**
+     * Final duration of each finished turn, keyed by the user message that
+     * opened it. Local messages carry no timestamps, so the store records the
+     * request-send clock when a run ends and the turn pass reads it for the
+     * permanent status line.
+     */
+    let turnDurations = new Map<string, number>();
     let showReasoning = false;
     // Finished turns the reader opened from their trace row; a running turn is
     // always open, so this set only grows by explicit intent.
@@ -333,7 +340,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 showReasoning,
                 pendingUserInputs: session?.pendingUserInputs ?? [],
             }),
-            { running: runStatus === "running", expandedTurnIds },
+            {
+                running: runStatus === "running",
+                expandedTurnIds,
+                durations: turnDurations,
+            },
         );
         const visible =
             clearedIds.size === 0
@@ -572,8 +583,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 .map((message) => message.id) ?? [],
         );
         runId = streamRunId;
-        runStartedAt = now();
+        // Prefer the clock set when the user sent the request (before the first
+        // token). Only fall back to "now" when the stream arrives without that.
+        if (runStartedAt === undefined) runStartedAt = now();
         turnElapsedMs = undefined;
+        runStatus = "running";
     };
 
     const runRetire = (completedRunId: string): void => {
@@ -615,6 +629,19 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let unsubscribeSession: (() => void) | undefined;
 
     /**
+     * Records the finished request's duration under the user message that opened
+     * the turn, so the permanent status line keeps "Done in Xm Ys".
+     */
+    const turnDurationRecord = (loaded: RigSession, elapsedMs: number): void => {
+        for (let index = loaded.messages.length - 1; index >= 0; index -= 1) {
+            const message = loaded.messages[index];
+            if (!message || message.internal || message.role !== "user") continue;
+            turnDurations = new Map(turnDurations).set(message.id, elapsedMs);
+            break;
+        }
+    };
+
+    /**
      * Private authoritative-input boundary. Only transport reads/action results
      * enter here; session-event payloads never call it and it emits no output.
      */
@@ -627,6 +654,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                     !message.internal &&
                     !transientStreamingBaseAgentIds.has(message.id),
             );
+        // Drop the live streaming presentation once durable agent text for this
+        // run appears (or the session leaves running). Do not touch the
+        // request-send clock here: mid-turn agent text is common while tools
+        // keep going for minutes, and finalizing duration at that point is what
+        // made a 10-minute run read as "Done in 6s".
         if (
             transientStreamingPresentation &&
             (loadedHasCompletedAgentMessage || loaded.status !== "running")
@@ -634,9 +666,22 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             runRetire(transientStreamingPresentation.runId);
             transientStreamingPresentation = undefined;
             transientStreamingBaseAgentIds = new Set();
-            turnElapsedMs = runStartedAt !== undefined ? now() - runStartedAt : undefined;
-            runId = undefined;
+        }
+        // The working clock spans the whole request: from message send until the
+        // session itself is no longer running. Require that a real run was
+        // observed (stream run id, or the server was already running) so an
+        // optimistic post-send reconcile cannot stamp "Done in 0s" and clear
+        // the clock before work starts.
+        const serverWasRunning = session?.status === "running";
+        if (
+            runStartedAt !== undefined &&
+            loaded.status !== "running" &&
+            (runId !== undefined || serverWasRunning)
+        ) {
+            turnElapsedMs = Math.max(0, now() - runStartedAt);
+            turnDurationRecord(loaded, turnElapsedMs);
             runStartedAt = undefined;
+            runId = undefined;
         }
         session =
             loaded.lastEventId === undefined && session?.lastEventId !== undefined
@@ -649,7 +694,19 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             if (!pendingRequestIds.has(requestId)) requestSubmissions.delete(requestId);
         status = "ready";
         error = undefined;
-        runStatus = loaded.status === "running" ? "running" : "idle";
+        // Keep the UI in the running state for the whole request-send clock, not
+        // only while the server reports "running" — after the first durable
+        // agent text the stream presentation is gone but tools may still run.
+        if (loaded.status === "error" || loaded.status === "aborted") {
+            runStatus = "idle";
+            if (runId === undefined) {
+                runStartedAt = undefined;
+                turnElapsedMs = undefined;
+            }
+        } else {
+            runStatus =
+                loaded.status === "running" || runStartedAt !== undefined ? "running" : "idle";
+        }
         commit();
     };
 
@@ -812,6 +869,15 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             rejecting(async () => {
                 const key = createId();
                 const steered = runStatus === "running";
+                // A fresh turn starts the working clock at request send — when the
+                // connection is made, before the first token — not when the first
+                // stream event arrives.
+                if (!steered) {
+                    runStartedAt = now();
+                    turnElapsedMs = undefined;
+                    runStatus = "running";
+                    commit();
+                }
                 if (steered) {
                     await deps.transport.messageSteer(sessionId, text, key, runId, images);
                 } else {

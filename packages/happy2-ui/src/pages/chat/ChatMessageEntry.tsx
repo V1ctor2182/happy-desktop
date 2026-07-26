@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import type { InfoPanelProfile, MenuItem, MessageImage } from "./ChatPageComponents.js";
 import {
     AgentActivityRow,
+    AgentStatusLine,
     AgentTraceRow,
     DayDivider,
     FileAttachment,
@@ -53,11 +54,24 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
     if (entry.kind === "steering") return <SteeringNotice quote={entry.quote} text={entry.text} />;
     if (entry.kind === "traceStep")
         return <AgentActivityRow activity={entry.activity} className={props.className} />;
+    if (entry.kind === "turnStatus")
+        return (
+            <AgentStatusLine
+                agents={entry.subagentCount}
+                className={["happy2-chat-turn-status", props.className].filter(Boolean).join(" ")}
+                elapsedMs={entry.elapsedMs}
+                processes={entry.terminalCount}
+                status={entry.status}
+                tokens={entry.totalTokens}
+                tools={entry.tools}
+            />
+        );
     /* A running turn needs no status row of its own: its steps are listed in the
        transcript as it works. Once the turn ends they fold away behind the
        compact "View traces" link on the line that opened the turn, which toggles
        the same steps back into place. A turn that did no work anyone can open —
-       it only answered — carries no link at all. */
+       it only answered — carries no link at all. The permanent status line after
+       a settled turn is its own row (`turnStatus`), not part of this message. */
     const trace = entry.agentTrace;
     const traceCollapsible =
         trace !== undefined &&

@@ -18,7 +18,9 @@ import type {
 } from "./rigSessionListStore.js";
 import type {
     RigBackgroundProcess,
+    RigChangedFileDocument,
     RigFileSearchResult,
+    RigGitChangedFile,
     RigGoal,
     RigGroupId,
     RigImageInput,
@@ -96,6 +98,16 @@ export interface RigConversationSnapshot {
     readonly menus?: RigMenusSnapshot;
 }
 
+/** One read-only changed file opened as a main-content document tab. */
+export interface RigChangedFileTabSnapshot {
+    readonly id: string;
+    readonly groupId: RigGroupId;
+    readonly path: string;
+    readonly revision: string;
+    readonly document: Loadable<RigChangedFileDocument>;
+    readonly loading: boolean;
+}
+
 /**
  * Combined, immutable projection of the whole local workspace: the conversation
  * list plus the open conversation. A single subscription fans out both, so a
@@ -106,6 +118,8 @@ export interface RigWorkspaceSnapshot {
     readonly list: RigSessionListSnapshot;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
+    readonly fileTabs: readonly RigChangedFileTabSnapshot[];
+    readonly activeFileTabId?: string;
     /**
      * The composer of an addressed group that holds no conversation yet. Sending
      * into it is what starts the group's first conversation, so a project or a
@@ -194,6 +208,13 @@ export interface RigWorkspaceStore {
         worktreeId: RigWorktreeId,
         afterId: RigWorktreeId | null,
     ): Promise<void>;
+
+    /** Opens or selects one changed file in the main-content tab strip. */
+    fileOpen(groupId: RigGroupId, path: string): void;
+    /** Selects one open file tab, or clears file selection when a session is selected. */
+    fileSelect(tabId: string | undefined): void;
+    fileClose(tabId: string): void;
+    fileRetry(tabId: string): void;
 
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
@@ -311,7 +332,11 @@ export function rigWorkspaceStoreCreate(
     let openGroupId: RigGroupId | undefined;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
-    let snapshot: RigWorkspaceSnapshot = { list: list.get(), conversation };
+    let fileTabs: readonly RigChangedFileTabSnapshot[] = [];
+    let activeFileTabId: string | undefined;
+    const fileLoadGenerations = new Map<string, number>();
+    const fileLoadControllers = new Map<string, AbortController>();
+    let snapshot: RigWorkspaceSnapshot = { list: list.get(), conversation, fileTabs };
 
     const notify = (): void => {
         for (const listener of listeners) listener();
@@ -371,15 +396,103 @@ export function rigWorkspaceStoreCreate(
         if (
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
-            snapshot.groupComposer === groupDraft
+            snapshot.groupComposer === groupDraft &&
+            snapshot.fileTabs === fileTabs &&
+            snapshot.activeFileTabId === activeFileTabId
         )
             return;
         snapshot = {
             list: listSnapshot,
             conversation,
+            fileTabs,
+            ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupDraft ? { groupComposer: groupDraft } : {}),
         };
         notify();
+    };
+
+    const fileChangeFind = (groupId: RigGroupId, path: string): RigGitChangedFile | undefined => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        for (const project of projects.value) {
+            if (project.id === groupId)
+                return project.changes?.find((change) => change.path === path);
+            const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
+            if (worktree) return worktree.changes?.find((change) => change.path === path);
+        }
+        return undefined;
+    };
+
+    const fileLoad = (tabId: string, revision: string): void => {
+        const before = fileTabs.find((tab) => tab.id === tabId);
+        if (!before) return;
+        const generation = (fileLoadGenerations.get(tabId) ?? 0) + 1;
+        fileLoadGenerations.set(tabId, generation);
+        fileLoadControllers.get(tabId)?.abort();
+        const controller = new AbortController();
+        fileLoadControllers.set(tabId, controller);
+        fileTabs = fileTabs.map((tab) =>
+            tab.id === tabId
+                ? {
+                      ...tab,
+                      revision,
+                      loading: true,
+                      ...(tab.document.type === "ready"
+                          ? {}
+                          : { document: { type: "loading" as const } }),
+                  }
+                : tab,
+        );
+        recompute();
+        void client.changedFileRead(before.groupId, before.path, controller.signal).then(
+            (document) => {
+                if (
+                    disposed ||
+                    fileLoadGenerations.get(tabId) !== generation ||
+                    !fileTabs.some((tab) => tab.id === tabId)
+                )
+                    return;
+                fileLoadControllers.delete(tabId);
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === tabId
+                        ? {
+                              ...tab,
+                              document: { type: "ready" as const, value: document },
+                              loading: false,
+                          }
+                        : tab,
+                );
+                recompute();
+            },
+            (error: unknown) => {
+                if (
+                    disposed ||
+                    fileLoadGenerations.get(tabId) !== generation ||
+                    !fileTabs.some((tab) => tab.id === tabId)
+                )
+                    return;
+                fileLoadControllers.delete(tabId);
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === tabId
+                        ? tab.document.type === "ready"
+                            ? { ...tab, loading: false }
+                            : {
+                                  ...tab,
+                                  document: { type: "error" as const, error: rigUserError(error) },
+                                  loading: false,
+                              }
+                        : tab,
+                );
+                recompute();
+            },
+        );
+    };
+
+    const fileTabsReconcile = (): void => {
+        for (const tab of fileTabs) {
+            const change = fileChangeFind(tab.groupId, tab.path);
+            if (change && change.revision !== tab.revision) fileLoad(tab.id, change.revision);
+        }
     };
 
     /**
@@ -678,11 +791,15 @@ export function rigWorkspaceStoreCreate(
 
     const start = (): void => {
         active = true;
-        unsubscribeList = list.subscribe(recompute);
+        unsubscribeList = list.subscribe(() => {
+            fileTabsReconcile();
+            recompute();
+        });
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
         if (openId) acquireConversation(openId);
+        for (const tab of fileTabs) if (tab.loading) fileLoad(tab.id, tab.revision);
         recompute();
     };
 
@@ -692,10 +809,19 @@ export function rigWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        for (const controller of fileLoadControllers.values()) controller.abort();
+        fileLoadControllers.clear();
+        for (const tab of fileTabs)
+            fileLoadGenerations.set(tab.id, (fileLoadGenerations.get(tab.id) ?? 0) + 1);
         releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };
-        snapshot = { list: list.get(), conversation };
+        snapshot = {
+            list: list.get(),
+            conversation,
+            fileTabs,
+            ...(activeFileTabId ? { activeFileTabId } : {}),
+        };
     };
 
     const withChat = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> =>
@@ -767,6 +893,53 @@ export function rigWorkspaceStoreCreate(
         worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
+
+        fileOpen(groupId, path) {
+            const id = `${groupId}\u0000${path}`;
+            const existing = fileTabs.find((tab) => tab.id === id);
+            activeFileTabId = id;
+            if (existing) {
+                const change = fileChangeFind(groupId, path);
+                if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
+                else recompute();
+                return;
+            }
+            const revision = fileChangeFind(groupId, path)?.revision ?? "";
+            fileTabs = [
+                ...fileTabs,
+                {
+                    id,
+                    groupId,
+                    path,
+                    revision,
+                    document: { type: "loading" },
+                    loading: true,
+                },
+            ];
+            recompute();
+            fileLoad(id, revision);
+        },
+        fileSelect(tabId) {
+            activeFileTabId =
+                tabId !== undefined && fileTabs.some((tab) => tab.id === tabId) ? tabId : undefined;
+            recompute();
+        },
+        fileClose(tabId) {
+            const index = fileTabs.findIndex((tab) => tab.id === tabId);
+            if (index < 0) return;
+            fileLoadGenerations.delete(tabId);
+            fileLoadControllers.get(tabId)?.abort();
+            fileLoadControllers.delete(tabId);
+            fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
+            if (activeFileTabId === tabId)
+                activeFileTabId = fileTabs[Math.min(index, fileTabs.length - 1)]?.id;
+            recompute();
+        },
+        fileRetry(tabId) {
+            const tab = fileTabs.find((candidate) => candidate.id === tabId);
+            if (tab)
+                fileLoad(tabId, fileChangeFind(tab.groupId, tab.path)?.revision ?? tab.revision);
+        },
 
         composerTextUpdate: (text) => (groupComposer ?? composer)?.getState().textUpdate(text),
         composerFocusUpdate: (focused) =>

@@ -7,6 +7,7 @@ import type {
     RigProjectCatalog,
     RigProjectId,
     RigSessionSummary,
+    RigWorktree,
     RigWorktreeId,
 } from "./rigTypes.js";
 
@@ -33,6 +34,7 @@ export interface RigWorktreeGroup {
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: RigWorktree["changes"];
 }
 
 /**
@@ -62,6 +64,7 @@ export interface RigProjectGroup {
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: RigProject["changes"];
 }
 
 /**
@@ -113,6 +116,7 @@ export function rigProjectGroupsProject(
             ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
             ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
             ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
+            ...(worktree.changes === undefined ? {} : { changes: worktree.changes }),
         });
     }
 
@@ -152,6 +156,7 @@ function projectGroup(
         ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
         ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),
+        ...(project.changes === undefined ? {} : { changes: project.changes }),
     };
 }
 

@@ -1,5 +1,6 @@
 export { AgentActivityRow } from "../../AgentActivityRow.js";
 export { AgentStatusLine } from "../../AgentStatusLine.js";
+export type { AgentStatusLineStatus } from "../../AgentStatusLine.js";
 export { AgentTraceRow } from "../../AgentTraceRow.js";
 export { AppShell } from "../../AppShell.js";
 export { Banner } from "../../Banner.js";

@@ -1,4 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -266,6 +270,59 @@ describe("rigProxyHandle", () => {
         expect(handled).toBe(true);
         expect(searchFiles).toHaveBeenCalledWith("session-1", "a", 10);
         expect(JSON.parse(captured.body)).toEqual([{ fileName: "a.ts", path: "src/a.ts" }]);
+    });
+
+    it("reads HEAD and working-tree text for a changed-file diff", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-changed-file-"));
+        try {
+            execFileSync("git", ["init", "--quiet"], { cwd: root });
+            await mkdir(join(root, "src"));
+            await writeFile(join(root, "src", "answer.ts"), "export const answer = 42;\n");
+            execFileSync("git", ["add", "src/answer.ts"], { cwd: root });
+            execFileSync(
+                "git",
+                [
+                    "-c",
+                    "user.name=Happy Test",
+                    "-c",
+                    "user.email=happy@example.invalid",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "initial",
+                ],
+                { cwd: root },
+            );
+            await writeFile(
+                join(root, "src", "answer.ts"),
+                "export const answer = 43;\nexport const ready = true;\n",
+            );
+
+            const listCatalog = vi.fn(async () => ({
+                projects: [{ id: "project-1", path: root }],
+                workspaces: [],
+                gitSnapshots: [],
+            }));
+            const captured = fakeResponse();
+            await handle(
+                clientStub({ listCatalog } as unknown as Partial<RigProxyClient>),
+                "GET",
+                "/changed-file",
+                getRequest(),
+                captured,
+                new URLSearchParams({ group: "project-1", path: "src/answer.ts" }),
+            );
+
+            expect(captured.status, captured.body).toBe(200);
+            expect(JSON.parse(captured.body)).toEqual({
+                path: "src/answer.ts",
+                oldPath: "src/answer.ts",
+                oldContent: "export const answer = 42;\n",
+                newContent: "export const answer = 43;\nexport const ready = true;\n",
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 
     it("projects GET /sessions/:id/usage into token/cost totals and quota windows", async () => {

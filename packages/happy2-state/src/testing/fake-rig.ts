@@ -11,7 +11,6 @@ import type {
     RigImageInput,
     RigModelCatalog,
     RigModelSelection,
-    RigGroupId,
     RigPermissionMode,
     RigProject,
     RigProjectCatalog,
@@ -35,6 +34,7 @@ import type {
 export type FakeRigOperation =
     | "modelsRead"
     | "projectsRead"
+    | "changedFileRead"
     | "sessionsRead"
     | "sessionRead"
     | "subagentsRead"
@@ -368,6 +368,13 @@ class FakeRigTransportModel implements FakeRigTransport {
     readonly transport: RigTransport = {
         modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
+        changedFileRead: (groupId, path) =>
+            this.perform("changedFileRead", {}, () => ({
+                path,
+                oldPath: path,
+                oldContent: `Original file in ${groupId}`,
+                newContent: `Changed file in ${groupId}`,
+            })),
         sessionsRead: () =>
             this.perform("sessionsRead", {}, () =>
                 [...this.sessions.values()]

@@ -71,8 +71,6 @@ const MEDIA_MAX_WIDTH = 420;
 const MEDIA_SINGLE_MAX_W = 380;
 const MEDIA_SINGLE_MAX_H = 320;
 const MEDIA_FALLBACK_H = 180;
-/** A running turn's trace row in the attachments slot: 28px plus its 8px margin. */
-const TRACE_ATTACHMENT = 36;
 /** Collapsed `.happy2-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 24, labeled: 24, reasoning: 40 } as const;
 /** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
@@ -207,6 +205,8 @@ export function conversationRowHeight(
     if (!entry) return undefined;
     const width = contentWidth(context.width);
     if (entry.kind === "agentActivity") return conversationActivityHeight(entry.activity.kind);
+    /* 12px margin above the 24px status line — the gap after the last message. */
+    if (entry.kind === "turnStatus") return 36;
     if (entry.kind === "notice") {
         if (entry.variant === "divider") return DIVIDER_HEIGHT;
         const text = entry.title ? `${entry.title}: ${entry.text}` : entry.text;
@@ -219,16 +219,20 @@ export function conversationRowHeight(
     const grouped = conversationMessageGrouped(entries, index);
     const treatment: MessageTreatment = agent ? "agent" : own ? "own" : "incoming";
     const trace = message.agentTrace;
-    const traceRunning =
+    /* A running turn keeps its live readout on the message-list footer, so the
+       message row itself only gains the compact "View traces" accessory once the
+       turn has settled. */
+    const traceCollapsible =
         trace !== undefined &&
-        (trace.status === "pending" || trace.status === "running") &&
+        trace.status !== "pending" &&
+        trace.status !== "running" &&
         trace.entryCount > 0;
     const hasBody = message.text.trim().length > 0;
     let height = messageRowHeight({
         body: message.text,
         bodyVisible: hasBody || message.generationStatus !== undefined,
         grouped,
-        metaAccessory: !own && trace !== undefined && !traceRunning && trace.entryCount > 0,
+        metaAccessory: !own && traceCollapsible,
         surface: context.surface,
         text: message.text,
         time: messageTimeSample(message.createdAt),
@@ -262,7 +266,6 @@ export function conversationRowHeight(
             treatment,
             hasBody,
         );
-    if (traceRunning) height += TRACE_ATTACHMENT;
     return height;
 }
 /**

@@ -2,7 +2,7 @@ import type { ConversationEntry } from "happy2-state";
 
 type MessageEntry = Extract<ConversationEntry, { kind: "message" }>;
 
-/** Preceding message row, skipping inline tool activity between agent text blocks. */
+/** Preceding message row, skipping inline tool activity and settled status rows. */
 function previousMessage(
     entries: readonly ConversationEntry[],
     index: number,
@@ -10,7 +10,7 @@ function previousMessage(
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = entries[cursor];
         if (entry?.kind === "message") return entry;
-        if (entry?.kind === "agentActivity") continue;
+        if (entry?.kind === "agentActivity" || entry?.kind === "turnStatus") continue;
         break;
     }
     return undefined;

@@ -28,7 +28,7 @@ export interface ChatConversationProps {
     composerContributions?: ReactNode;
     composerModelControl?: ReactNode;
     messageEntries: ReactNode;
-    /** The live line a working turn keeps in the clearance below the transcript. */
+    /** The live line a working turn keeps under the transcript, scrolling with it. */
     messageFooter?: ReactNode;
     /**
      * Height of transcript row `index` at the list's content width, computed

@@ -13,7 +13,12 @@ import {
     type RigSessionListStore,
 } from "./rigSessionListStore.js";
 import type { RigTransport } from "./rigTransport.js";
-import type { RigModelCatalog, RigSessionId } from "./rigTypes.js";
+import type {
+    RigChangedFileDocument,
+    RigGroupId,
+    RigModelCatalog,
+    RigSessionId,
+} from "./rigTypes.js";
 
 /** A reference-counted, disposable lease on one session's chat store. */
 export interface RigChatHandle {
@@ -26,6 +31,12 @@ export interface RigClient {
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
     sessionList(): RigSessionListStore;
+    /** Reads one changed text file from a project/worktree checkout. */
+    changedFileRead(
+        groupId: RigGroupId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigChangedFileDocument>;
     /**
      * Acquires a chat store for one session. Concurrent acquisitions share one
      * store; the store is disposed (and its subscription torn down) only when the
@@ -89,6 +100,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
 
     return {
         catalogRead: () => catalogEnsure(),
+        changedFileRead: (groupId, path, signal) =>
+            transport.changedFileRead(groupId, path, signal),
         sessionList() {
             if (disposed) throw new Error("The Rig client is disposed.");
             if (!sessionListStore) {

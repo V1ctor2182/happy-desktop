@@ -271,6 +271,21 @@ export interface ConversationRequestEntry {
 }
 
 /**
+ * Permanent readout under a finished turn: how long it took from the request
+ * and how many tools it used. Running turns use the message-list footer instead.
+ */
+export interface ConversationTurnStatusEntry {
+    readonly kind: "turnStatus";
+    readonly id: string;
+    readonly sequence: string;
+    readonly status: "complete" | "failed";
+    /** Final duration from request sent through completion, when known. */
+    readonly durationMs?: number;
+    readonly tools?: number;
+    readonly tokens?: number;
+}
+
+/**
  * Everything a conversation can contain, as one closed union. A cloud chat and a
  * local Rig session both produce exactly these entries; neither stack renders a
  * shape the other cannot express.
@@ -279,7 +294,8 @@ export type ConversationEntry =
     | ConversationMessageEntry
     | ConversationActivityEntry
     | ConversationNoticeEntry
-    | ConversationRequestEntry;
+    | ConversationRequestEntry
+    | ConversationTurnStatusEntry;
 
 /** The stable render identity of an entry; the row key React must keep. */
 export function entryKey(entry: ConversationEntry): string {

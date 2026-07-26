@@ -1283,7 +1283,9 @@ export function ChatPage(props: ChatPageProps) {
                                         className="happy2-chat-turn-status"
                                         elapsedMs={status.elapsedMs}
                                         processes={status.terminalCount}
+                                        status={status.status}
                                         tokens={status.totalTokens}
+                                        tools={status.tools}
                                     />
                                 ) : undefined)(turnStatus())}
                             messageListScrollPosition={props.messageListScrollPosition}

@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { promisify } from "node:util";
+import { isAbsolute, relative, resolve } from "node:path";
 import type {
     RigModelSelection,
     RigPermissionMode,
@@ -13,7 +14,7 @@ import {
     RigDaemonHttpError,
     type RigDaemonClient,
 } from "./rigDaemonClient";
-import type { EventId } from "./rigDaemonTypes";
+import type { EventId, GitChangedFile } from "./rigDaemonTypes";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
     rigCatalogProject,
@@ -29,11 +30,81 @@ import {
     rigWorktreeProject,
 } from "./rigProjection";
 
-const execFile = promisify(execFileCallback);
+interface GitExecOptions {
+    readonly cwd: string;
+    readonly maxBuffer: number;
+    readonly timeout: number;
+}
+
+function gitExecText(args: string[], options: GitExecOptions): Promise<string> {
+    return new Promise((resolvePromise, reject) => {
+        execFileCallback("git", args, { ...options, encoding: "utf8" }, (error, stdout) => {
+            if (error) reject(error);
+            else resolvePromise(stdout);
+        });
+    });
+}
+
+function gitExecBuffer(args: string[], options: GitExecOptions): Promise<Buffer> {
+    return new Promise((resolvePromise, reject) => {
+        execFileCallback("git", args, { ...options, encoding: "buffer" }, (error, stdout) => {
+            if (error) reject(error);
+            else resolvePromise(stdout);
+        });
+    });
+}
 
 interface GitLineStats {
     readonly addedLines: number;
     readonly deletedLines: number;
+    readonly changes: readonly GitChangedFile[];
+}
+
+function gitChangedFilesParse(output: string): readonly Omit<GitChangedFile, "revision">[] {
+    const records = output.split("\0");
+    const changes: Omit<GitChangedFile, "revision">[] = [];
+    for (let index = 0; index < records.length; index += 1) {
+        const record = records[index];
+        if (!record || record.length < 4) continue;
+        const code = record.slice(0, 2);
+        const path = record.slice(3);
+        const status: GitChangedFile["status"] =
+            code === "??"
+                ? "untracked"
+                : code.includes("D")
+                  ? "deleted"
+                  : code.includes("R") || code.includes("C")
+                    ? "renamed"
+                    : code.includes("A")
+                      ? "added"
+                      : "modified";
+        // Porcelain -z writes the original path as the next NUL record for a
+        // rename/copy; the destination above is the path the panel should open.
+        const renamed = code.includes("R") || code.includes("C");
+        const previousPath = renamed ? records[index + 1] : undefined;
+        changes.push({ path, status, ...(previousPath ? { previousPath } : {}) });
+        if (renamed) index += 1;
+    }
+    return changes;
+}
+
+async function gitChangedFilesRevise(
+    root: string,
+    changes: readonly Omit<GitChangedFile, "revision">[],
+): Promise<readonly GitChangedFile[]> {
+    return Promise.all(
+        changes.map(async (change) => {
+            try {
+                const details = await stat(resolve(root, change.path));
+                return {
+                    ...change,
+                    revision: `${String(details.mtimeMs)}:${String(details.size)}`,
+                };
+            } catch {
+                return { ...change, revision: change.status };
+            }
+        }),
+    );
 }
 
 /**
@@ -43,12 +114,18 @@ interface GitLineStats {
  */
 async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined> {
     try {
-        const { stdout } = await execFile("git", ["diff", "--numstat", "HEAD", "--"], {
-            cwd: path,
-            encoding: "utf8",
-            maxBuffer: 4 * 1024 * 1024,
-            timeout: 5_000,
-        });
+        const [stdout, statusOutput] = await Promise.all([
+            gitExecText(["diff", "--numstat", "HEAD", "--"], {
+                cwd: path,
+                maxBuffer: 4 * 1024 * 1024,
+                timeout: 5_000,
+            }),
+            gitExecText(["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+                cwd: path,
+                maxBuffer: 4 * 1024 * 1024,
+                timeout: 5_000,
+            }),
+        ]);
         let addedLines = 0;
         let deletedLines = 0;
         for (const line of stdout.split("\n")) {
@@ -56,10 +133,75 @@ async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined>
             if (added !== undefined && added !== "-") addedLines += Number(added);
             if (deleted !== undefined && deleted !== "-") deletedLines += Number(deleted);
         }
-        return { addedLines, deletedLines };
+        return {
+            addedLines,
+            deletedLines,
+            changes: await gitChangedFilesRevise(path, gitChangedFilesParse(statusOutput)),
+        };
     } catch {
         return undefined;
     }
+}
+
+const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
+
+function changedFileText(bytes: Buffer): string {
+    if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
+        throw new Error("This file is too large to open in the editor.");
+    if (bytes.includes(0)) throw new Error("Binary files cannot be opened in the editor.");
+    return bytes.toString("utf8");
+}
+
+function pathInside(root: string, candidate: string): boolean {
+    const fromRoot = relative(root, candidate);
+    return fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot));
+}
+
+async function changedFileRead(
+    client: RigProxyClient,
+    groupId: string,
+    filePath: string,
+): Promise<{
+    readonly path: string;
+    readonly oldPath: string;
+    readonly oldContent: string;
+    readonly newContent: string;
+}> {
+    if (!filePath || isAbsolute(filePath)) throw new Error("The changed file path is invalid.");
+    const catalog = await client.listCatalog();
+    const project = catalog.projects.find((candidate) => candidate.id === groupId);
+    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
+    const root = project?.path ?? workspace?.path;
+    if (!root) throw new Error("That project or workspace is no longer available.");
+    const git = await gitLineStatsRead(root);
+    const change = git?.changes.find((candidate) => candidate.path === filePath);
+    if (!change) throw new Error("That file is no longer changed.");
+    const target = resolve(root, filePath);
+    if (!pathInside(root, target)) throw new Error("The changed file path leaves its workspace.");
+
+    let newContent = "";
+    if (change.status !== "deleted") {
+        try {
+            const canonical = await realpath(target);
+            if (!pathInside(await realpath(root), canonical))
+                throw new Error("The changed file path leaves its workspace.");
+            newContent = changedFileText(await readFile(canonical));
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+    }
+
+    const oldPath = change.previousPath ?? filePath;
+    let oldContent = "";
+    if (change.status !== "added" && change.status !== "untracked") {
+        const stdout = await gitExecBuffer(["show", `HEAD:${oldPath}`], {
+            cwd: root,
+            maxBuffer: CHANGED_FILE_MAX_BYTES,
+            timeout: 5_000,
+        });
+        oldContent = changedFileText(stdout);
+    }
+    return { path: filePath, oldPath, oldContent, newContent };
 }
 
 /** The subset of the daemon client the projected loopback surface calls. */
@@ -205,6 +347,18 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         ),
                     ),
                 });
+                return true;
+            }
+            if (path === "/changed-file") {
+                writeJson(
+                    response,
+                    200,
+                    await changedFileRead(
+                        client,
+                        query.get("group") ?? "",
+                        query.get("path") ?? "",
+                    ),
+                );
                 return true;
             }
             if (segments[0] === "project-assets" && segments.length === 2) {

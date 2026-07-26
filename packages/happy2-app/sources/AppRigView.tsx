@@ -3,6 +3,7 @@ import type {
     AppearanceStore,
     ConversationEntry,
     RigClockStore,
+    RigChangedFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
     RigHost,
@@ -29,10 +30,12 @@ import {
     Banner,
     Button,
     ChannelHeader,
+    ChangedFileDiff,
     ComposerModelControl,
     ConversationSettingsModal,
     ConversationView,
     EmptyState,
+    FilePanel,
     Lightbox,
     ModalOverlay,
     RigActivityPanel,
@@ -49,6 +52,7 @@ import {
     rigComposerModelControlProps,
     sidebarReorderMove,
     type MenuItem,
+    type FileTreeNode,
     type SidebarItem,
     type TabItem,
 } from "happy2-ui";
@@ -99,6 +103,7 @@ interface OpenGroup {
      */
     readonly home: boolean;
     readonly conversations: RigProjectGroup["conversations"];
+    readonly changes: NonNullable<RigProjectGroup["changes"]>;
     readonly create: RigSessionCreateInput;
 }
 
@@ -235,6 +240,14 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     }));
 }
 
+function fileTabItem(tab: RigChangedFileTabSnapshot): TabItem {
+    return {
+        id: tab.id,
+        label: tab.path.split("/").at(-1) ?? tab.path,
+        icon: "doc",
+    };
+}
+
 /** Resolves an addressed group id against the list, matching projects and worktrees alike. */
 function openGroupFind(
     projects: readonly RigProjectGroup[],
@@ -249,6 +262,7 @@ function openGroupFind(
                 displayPath: project.displayPath,
                 home: project.kind === "home",
                 conversations: project.conversations,
+                changes: project.changes ?? [],
                 create: { cwd: project.path },
             };
         for (const worktree of project.worktrees)
@@ -259,6 +273,7 @@ function openGroupFind(
                     displayPath: worktree.displayPath,
                     home: false,
                     conversations: worktree.conversations,
+                    changes: worktree.changes ?? [],
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                 };
     }
@@ -344,6 +359,10 @@ export function AppRigView(props: AppRigViewProps) {
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
     const openGroup = openGroupFind(rows, props.groupId);
+    const groupFileTabs = openGroup
+        ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
+        : [];
+    const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
     const conversation = workspace.conversation;
     const listAccessory =
         projects.type === "loading" || projects.type === "unloaded" ? (
@@ -375,7 +394,16 @@ export function AppRigView(props: AppRigViewProps) {
             panelResizable
             panel={
                 panel.open ? (
-                    <RigPanelBody panel={panel} store={props.workspace.panel} />
+                    <RigPanelBody
+                        canStartTerminal={props.chatId !== undefined}
+                        changes={openGroup?.changes ?? []}
+                        onFileSelect={(path) => {
+                            if (openGroup) props.workspace.fileOpen(openGroup.id, path);
+                        }}
+                        panel={panel}
+                        selectedPath={activeFile?.path}
+                        store={props.workspace.panel}
+                    />
                 ) : undefined
             }
             sidebar={
@@ -494,21 +522,17 @@ export function AppRigView(props: AppRigViewProps) {
                         // the tab strip. It only appears once the project has a
                         // session, because a panel with no conversation behind it has
                         // nowhere to run a terminal and the control would do nothing.
-                        {...(openGroup.conversations.length > 0
-                            ? {
-                                  actions: (
-                                      <Button
-                                          aria-label={panel.open ? "Hide panel" : "Show panel"}
-                                          aria-pressed={panel.open}
-                                          icon={panel.open ? "panel-collapse" : "panel-expand"}
-                                          iconOnly
-                                          onClick={() => props.workspace.panel.panelToggle()}
-                                          size="small"
-                                          variant="ghost"
-                                      />
-                                  ),
-                              }
-                            : {})}
+                        actions={
+                            <Button
+                                aria-label={panel.open ? "Hide panel" : "Show panel"}
+                                aria-pressed={panel.open}
+                                icon={panel.open ? "panel-collapse" : "panel-expand"}
+                                iconOnly
+                                onClick={() => props.workspace.panel.panelToggle()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
                         {...(openGroup.home ? {} : { topic: openGroup.displayPath })}
@@ -539,7 +563,7 @@ export function AppRigView(props: AppRigViewProps) {
                             }
                         />
                     ) : null}
-                    {openGroup.conversations.length > 0 ? (
+                    {openGroup.conversations.length > 0 || groupFileTabs.length > 0 ? (
                         <TabbedPane
                             actions={
                                 <Button
@@ -551,16 +575,20 @@ export function AppRigView(props: AppRigViewProps) {
                                     variant="ghost"
                                 />
                             }
-                            activeId={props.chatId ?? ""}
-                            closeLabel="Close session"
-                            onClose={(chatId) => {
+                            activeId={activeFile?.id ?? props.chatId ?? ""}
+                            closeLabel="Close tab"
+                            onClose={(tabId) => {
+                                if (groupFileTabs.some((tab) => tab.id === tabId)) {
+                                    props.workspace.fileClose(tabId);
+                                    return;
+                                }
                                 // Closing the addressed session addresses what is left
                                 // first, so the surface never sits on a session that has
                                 // just left the list. The address it replaces is gone,
                                 // so it does not belong in history either.
-                                if (chatId === props.chatId) {
+                                if (tabId === props.chatId) {
                                     const rest = openGroup.conversations.filter(
-                                        (summary) => summary.id !== chatId,
+                                        (summary) => summary.id !== tabId,
                                     );
                                     props.onChatSelect(
                                         rest.length > 0 ? openGroup.id : undefined,
@@ -569,31 +597,50 @@ export function AppRigView(props: AppRigViewProps) {
                                     );
                                 }
                                 void props.workspace
-                                    .conversationArchive(chatId as RigSessionId)
+                                    .conversationArchive(tabId as RigSessionId)
                                     .catch(() => undefined);
                             }}
-                            onReorder={(chatIds) => {
-                                const move = sidebarReorderMove(
-                                    openGroup.conversations.map((summary) => summary.id),
-                                    chatIds,
-                                );
-                                if (!move) return;
-                                void props.workspace
-                                    .conversationReorder(
-                                        move.id as RigSessionId,
-                                        move.afterId as RigSessionId | null,
-                                    )
-                                    .catch(() => undefined);
+                            {...(groupFileTabs.length === 0
+                                ? {
+                                      onReorder: (chatIds: readonly string[]) => {
+                                          const move = sidebarReorderMove(
+                                              openGroup.conversations.map((summary) => summary.id),
+                                              chatIds,
+                                          );
+                                          if (!move) return;
+                                          void props.workspace
+                                              .conversationReorder(
+                                                  move.id as RigSessionId,
+                                                  move.afterId as RigSessionId | null,
+                                              )
+                                              .catch(() => undefined);
+                                      },
+                                  }
+                                : {})}
+                            onSelect={(tabId) => {
+                                if (groupFileTabs.some((tab) => tab.id === tabId)) {
+                                    props.workspace.fileSelect(tabId);
+                                    return;
+                                }
+                                props.workspace.fileSelect(undefined);
+                                props.onChatSelect(openGroup.id, tabId);
                             }}
-                            onSelect={(chatId) => props.onChatSelect(openGroup.id, chatId)}
-                            tabs={sessionTabs(openGroup)}
+                            tabs={[...sessionTabs(openGroup), ...groupFileTabs.map(fileTabItem)]}
                         >
-                            <RigConversationBody
-                                conversation={conversation}
-                                now={now}
-                                onCreate={() => groupConversationCreate(openGroup)}
-                                workspace={props.workspace}
-                            />
+                            {activeFile ? (
+                                <RigChangedFileBody
+                                    appearance={appearance.appearance}
+                                    file={activeFile}
+                                    workspace={props.workspace}
+                                />
+                            ) : (
+                                <RigConversationBody
+                                    conversation={conversation}
+                                    now={now}
+                                    onCreate={() => groupConversationCreate(openGroup)}
+                                    workspace={props.workspace}
+                                />
+                            )}
                         </TabbedPane>
                     ) : null}
                 </>
@@ -614,6 +661,48 @@ export function AppRigView(props: AppRigViewProps) {
                 </>
             )}
         </AppShell>
+    );
+}
+
+function RigChangedFileBody(props: {
+    appearance: "dark" | "light";
+    file: RigChangedFileTabSnapshot;
+    workspace: RigWorkspaceStore;
+}) {
+    const { file, workspace } = props;
+    if (file.document.type === "ready")
+        return (
+            <ChangedFileDiff
+                appearance={props.appearance}
+                key={file.id}
+                loading={file.loading}
+                newContent={file.document.value.newContent}
+                oldContent={file.document.value.oldContent}
+                oldPath={file.document.value.oldPath}
+                path={file.path}
+            />
+        );
+    if (file.document.type === "error")
+        return (
+            <EmptyState
+                action={{
+                    label: "Retry",
+                    icon: "arrow-right",
+                    onClick: () => workspace.fileRetry(file.id),
+                }}
+                description={file.document.error.message}
+                icon="doc"
+                size="panel"
+                title="File unavailable"
+            />
+        );
+    return (
+        <EmptyState
+            description="Reading the changed file from its workspace."
+            icon="doc"
+            size="panel"
+            title="Loading file…"
+        />
     );
 }
 
@@ -818,16 +907,45 @@ function RigConversationSurface(props: {
             queued={conversation.queuedMessages}
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
+            elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             viewerId={rigOwnerAuthor.id}
         />
     );
 }
 
 /**
+ * Live elapsed for the open turn, counted from when the user sent the request
+ * (before the first token). Prefers the store's request-send clock; falls back
+ * to the last user message's createdAt when a reconnect leaves that unset.
+ */
+function rigTurnElapsedMs(
+    conversation: {
+        readonly running: boolean;
+        readonly runStartedAt?: number;
+        readonly turnElapsedMs?: number;
+        readonly entries: readonly ConversationEntry[];
+    },
+    now: number,
+): number | undefined {
+    if (!conversation.running) return conversation.turnElapsedMs;
+    if (conversation.runStartedAt !== undefined)
+        return Math.max(0, now - conversation.runStartedAt);
+    for (let index = conversation.entries.length - 1; index >= 0; index -= 1) {
+        const entry = conversation.entries[index];
+        if (entry?.kind !== "message") continue;
+        if (entry.message.sender?.id !== rigOwnerAuthor.id) continue;
+        const sentAt = Date.parse(entry.message.createdAt);
+        if (Number.isFinite(sentAt)) return Math.max(0, now - sentAt);
+        break;
+    }
+    return undefined;
+}
+
+/**
  * The right panel's header band and its two stacked regions. The upper one is
- * reserved for workspace context (changed files and the like) and holds only a
- * placeholder for now; the lower one is the terminal section. The divider between
- * them is the user's, so a shell can take most of the column or none of it.
+ * the addressed project/worktree's live changed-file list; the lower one is the
+ * terminal section. The divider between them is the user's, so a shell can take
+ * most of the column or none of it.
  *
  * Only the tab strip re-renders from this component's subscription; a terminal's
  * own output lands in `RigTerminalTab`, which subscribes to that terminal alone,
@@ -837,22 +955,43 @@ function RigConversationSurface(props: {
  * same line as the session tabs beside them instead of a header's height higher,
  * and in the desktop window it gives that edge a lane to drag the window by.
  */
-function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
+function RigPanelBody(props: {
+    canStartTerminal: boolean;
+    changes: OpenGroup["changes"];
+    onFileSelect: (path: string) => void;
+    panel: RigPanelSnapshot;
+    selectedPath?: string;
+    store: RigPanelStore;
+}) {
+    const nodes: FileTreeNode[] = props.changes.map((change) => ({
+        id: change.path,
+        name: change.path,
+        kind: "file",
+        gitStatus: change.status,
+    }));
     return (
         <>
             <PanelHeader />
             <SplitColumn
-                bottom={<RigPanelTerminals panel={props.panel} store={props.store} />}
+                bottom={
+                    <RigPanelTerminals
+                        canStart={props.canStartTerminal}
+                        panel={props.panel}
+                        store={props.store}
+                    />
+                }
                 defaultBottomHeight={320}
                 minBottomHeight={160}
                 minTopHeight={120}
                 resizeLabel="Resize terminal section"
                 top={
-                    <EmptyState
-                        description="Changed files and other workspace context will appear here."
-                        icon="files"
-                        size="panel"
-                        title="Nothing here yet"
+                    <FilePanel
+                        emptyLabel="No changed files."
+                        nodes={nodes}
+                        onSelect={props.onFileSelect}
+                        selectedId={props.selectedPath}
+                        subtitle={`${String(nodes.length)} ${nodes.length === 1 ? "file" : "files"}`}
+                        title="Changes"
                     />
                 }
             />
@@ -866,22 +1005,34 @@ function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) 
  * shell on its own — opening the panel is not consent to run a process in the
  * user's working directory.
  */
-function RigPanelTerminals(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
+function RigPanelTerminals(props: {
+    canStart: boolean;
+    panel: RigPanelSnapshot;
+    store: RigPanelStore;
+}) {
     const { panel, store } = props;
     const activeId = panel.activeTabId;
     const active = panel.tabs.find((tab) => tab.id === activeId);
     if (panel.tabs.length === 0)
         return (
             <EmptyState
-                action={{
-                    label: "Start terminal",
-                    icon: "terminal",
-                    onClick: () => store.terminalAdd(),
-                }}
-                description="Run a shell beside the conversation."
+                action={
+                    props.canStart
+                        ? {
+                              label: "Start terminal",
+                              icon: "terminal",
+                              onClick: () => store.terminalAdd(),
+                          }
+                        : undefined
+                }
+                description={
+                    props.canStart
+                        ? "Run a shell beside the conversation."
+                        : "Start a session before opening a terminal."
+                }
                 icon="terminal"
                 size="panel"
-                title="No terminal"
+                title={props.canStart ? "No terminal" : "Terminal unavailable"}
             />
         );
     return (

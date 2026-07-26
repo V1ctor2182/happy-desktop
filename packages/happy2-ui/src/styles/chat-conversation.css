@@ -17,23 +17,12 @@
 
 /*
  * The dock is seamless with the transcript, so the clearance beneath the newest
- * message is what keeps it from reading as part of the composer. It is also the
- * band the turn's live state occupies — what the agent is inferring, who is
- * typing — so it holds a few lines rather than a hairline, and it belongs to the
- * scrollport so the reader can always push the last line clear of the dock. The
- * message list's footer is what fills that band: the working turn's live line,
- * aligned with the step rows above it.
+ * message is what keeps it from reading as part of the composer. The working
+ * turn's live status line lives in the message list footer after that last
+ * message and scrolls with the transcript, aligned with the step rows above it.
  */
 .happy2-chat-conversation .happy2-message-list__content {
-    padding-bottom: 64px;
-    /* That whole clearance is the footer's band: the working turn's readout
-       fills it from the bottom and stays on the port's edge as the reader
-       scrolls back, so it is never added to the transcript's height. */
-    --happy2-message-list-footer-height: 64px;
-}
-
-.happy2-chat-conversation .happy2-message-list__footer {
-    padding-bottom: 20px;
+    padding-bottom: 24px;
 }
 
 /* The dangling avatar is positioned from the row's top edge, so it follows that

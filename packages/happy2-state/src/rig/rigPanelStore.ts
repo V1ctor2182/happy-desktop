@@ -115,7 +115,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const visible = tabs.filter((tab) => tab.conversationId === conversationId);
         const active = conversationId ? activeByConversation.get(conversationId) : undefined;
         return {
-            open: open && conversationId !== undefined,
+            open,
             tabs: visible.map((tab) => ({ id: tab.id, kind: tab.kind, label: tab.label })),
             ...(active === undefined ? {} : { activeTabId: active }),
         };

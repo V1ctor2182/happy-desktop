@@ -1,9 +1,11 @@
 import type { TerminalConnection } from "../transport.js";
 import type {
     RigBackgroundProcess,
+    RigChangedFileDocument,
     RigEventId,
     RigFileSearchResult,
     RigGoal,
+    RigGroupId,
     RigImageInput,
     RigJson,
     RigMessage,
@@ -259,6 +261,13 @@ export interface RigTransport {
      * that belong to it rather than one tick apart.
      */
     projectsRead(): Promise<RigProjectCatalog>;
+
+    /** Reads one text file from a project/worktree changed-file list. */
+    changedFileRead(
+        groupId: RigGroupId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigChangedFileDocument>;
 
     sessionsRead(): Promise<readonly RigSessionSummary[]>;
     sessionRead(sessionId: RigSessionId): Promise<RigSession>;

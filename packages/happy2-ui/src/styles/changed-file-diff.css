@@ -1,0 +1,47 @@
+/*
+ * Working-tree diff viewer — a deliberately quiet, full-pane code surface.
+ * Pierre Diffs renders inside Shadow DOM; inherited custom properties align its
+ * typography and material with Happy without coupling to Pierre's internals.
+ */
+
+.happy2-changed-file-diff {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    scrollbar-color: var(--divider) transparent;
+}
+
+.happy2-changed-file-diff__renderer {
+    display: block;
+    min-width: 0;
+    min-height: 100%;
+    --diffs-font-family: var(--happy2-font-mono);
+    --diffs-header-font-family: var(--happy2-font-ui);
+    --diffs-font-size: 12px;
+    --diffs-line-height: 20px;
+    --diffs-gap-inline: 10px;
+    --diffs-light-bg: var(--surface);
+    --diffs-dark-bg: var(--surface);
+}
+
+.happy2-changed-file-diff__updating {
+    position: sticky;
+    z-index: 4;
+    top: 8px;
+    float: right;
+    margin: 8px 10px -30px 0;
+    padding: 3px 7px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-pill);
+    background: var(--surface-high);
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    pointer-events: none;
+}

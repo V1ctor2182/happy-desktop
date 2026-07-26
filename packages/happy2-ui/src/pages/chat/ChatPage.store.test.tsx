@@ -1466,15 +1466,14 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     expect(stats.textContent).toContain("12k");
     expect(document.activeElement).toBe(textarea);
 
-    // The line is a readout of what is happening now, so scrolling back through
-    // the history leaves it on the port's bottom edge rather than taking it away.
+    // The line is the last row of the transcript content, so scrolling back
+    // through the history takes it with the rest of the messages.
     expect(messageList.scrollHeight).toBeGreaterThan(messageList.clientHeight);
+    const statusTopWhileFollowing = statusRow.getBoundingClientRect().top;
     messageList.scrollTop = 0;
     await nextFrame();
     expect(messageList.scrollTop).toBe(0);
-    expect(
-        messageList.getBoundingClientRect().bottom - statusRow.getBoundingClientRect().bottom,
-    ).toBeCloseTo(20, 0);
+    expect(statusRow.getBoundingClientRect().top).toBeGreaterThan(statusTopWhileFollowing);
 
     // A live update rewrites the counts in place: same row, same composer.
     chatSurface.input({

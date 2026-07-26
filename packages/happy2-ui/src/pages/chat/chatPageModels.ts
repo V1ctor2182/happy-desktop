@@ -127,21 +127,26 @@ export type ChatTraceStep = {
     activity: ConversationActivity;
 };
 /**
- * The live status line a running turn keeps in the clearance below the last
- * message: what it is doing right now plus what that work is costing —
- * subagents, background terminals, tokens, elapsed. It is the transcript's
- * footer rather than an entry, so it fills the band the surface already
- * reserves there instead of scrolling away as one more row.
+ * A turn's status readout. While running it is the transcript footer (braille
+ * spinner + live clock from when the request was sent). Once settled it is a
+ * permanent row under that turn: final duration and tool count, no spinner.
  */
 export type ChatTurnStatus = {
+    kind: "turnStatus";
     id: string;
     conversationId: string;
-    /** The assistant message whose turn is running. */
+    /** The assistant message whose turn this summarizes. */
     messageId: string;
+    status: "running" | "complete" | "failed";
     subagentCount: number;
     terminalCount: number;
     totalTokens: number;
-    /** Undefined until the turn reports when it started. */
+    /** Tool invocations when known. */
+    tools?: number;
+    /**
+     * Live elapsed while running, or final duration once settled. Counted from
+     * when the user sent the request (before the first token).
+     */
     elapsedMs?: number;
 };
 export type WorkspaceEntry =
@@ -149,7 +154,8 @@ export type WorkspaceEntry =
     | LiveChatMessage
     | ChatNotice
     | ChatSteeringNotice
-    | ChatTraceStep;
+    | ChatTraceStep
+    | ChatTurnStatus;
 export function formatBytes(size: number): string {
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
@@ -434,6 +440,8 @@ function turnFinalBlock(entry: LiveChatMessage): string {
 function turnEntries(
     entry: LiveChatMessage,
     projection: ChatTraceProjection | undefined,
+    /** When the user sent the request that opened this turn, for final duration. */
+    requestAt?: number,
 ): WorkspaceEntry[] {
     const loaded = projection?.traces[entry.id];
     if (!traceStepsShown(entry, projection) || loaded?.type !== "ready")
@@ -506,32 +514,93 @@ function turnEntries(
     // is what hangs below that line, not where the reader clicks.
     for (const [index, row] of entries.entries())
         if (row.kind === "message") row.agentTrace = index === 0 ? entry.agentTrace : undefined;
+    // A settled turn keeps a permanent status row under its last content: how
+    // long it took from the request, and how many tools it used. Running turns
+    // use the transcript footer instead so the clock can tick.
+    const settled = turnSettledStatus(entry, requestAt);
+    if (settled) entries.push(settled);
     return entries;
 }
 /**
+ * Epoch millis when the user sent the request that opened this turn. That is
+ * the clock the working line counts from — request sent / connection made,
+ * before the first token — not when the agent first produced activity.
+ */
+function requestSentAt(
+    items: readonly DeepReadonly<ConversationMessageEntry>[],
+    assistantIndex: number,
+): number | undefined {
+    for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+        const entry = messageEntry(items[index]!);
+        if (entry.agent || entry.serverMessage?.kind === "automated") continue;
+        const parsed = Date.parse(entry.serverMessage?.createdAt ?? "");
+        if (Number.isFinite(parsed)) return parsed;
+        return undefined;
+    }
+    return undefined;
+}
+/** Final duration for a settled turn, from request sent through completion. */
+function turnDurationMs(entry: LiveChatMessage, requestAt: number | undefined): number | undefined {
+    const trace = entry.agentTrace;
+    if (!trace) return undefined;
+    const started =
+        requestAt ?? (trace.startedAt !== undefined ? Date.parse(trace.startedAt) : Number.NaN);
+    const completed =
+        trace.completedAt !== undefined
+            ? Date.parse(trace.completedAt)
+            : Date.parse(entry.serverMessage?.createdAt ?? "");
+    if (!Number.isFinite(started) || !Number.isFinite(completed)) return undefined;
+    return Math.max(0, completed - started);
+}
+/** Permanent status row for a finished turn, or nothing while it is still open. */
+function turnSettledStatus(entry: LiveChatMessage, requestAt?: number): ChatTurnStatus | undefined {
+    const trace = entry.agentTrace;
+    if (!trace || !turnTerminal(trace)) return undefined;
+    const duration = turnDurationMs(entry, requestAt);
+    return {
+        kind: "turnStatus",
+        id: `${entry.id} status`,
+        conversationId: entry.conversationId,
+        messageId: entry.id,
+        status: trace.status === "failed" ? "failed" : "complete",
+        subagentCount: 0,
+        terminalCount: 0,
+        totalTokens: trace.totalTokens ?? 0,
+        ...(trace.toolCallCount !== undefined ? { tools: trace.toolCallCount } : {}),
+        ...(duration !== undefined ? { elapsedMs: duration } : {}),
+    };
+}
+/**
  * The live status line for a turn that is still working, or nothing once it has
- * settled. Counts come from the turn's own trace so a reconnected reader sees
- * them immediately; the realtime activity for the same turn overrides them while
- * it is being delivered, because it reports token spend the durable summary does
- * not carry.
+ * settled. Elapsed time counts from when the user sent the request. Counts come
+ * from the turn's own trace so a reconnected reader sees them immediately; the
+ * realtime activity for the same turn overrides them while it is being
+ * delivered, because it reports token spend the durable summary does not carry.
  */
 function turnStatusOf(
     entry: LiveChatMessage,
     activity: DeepReadonly<AgentActivityState> | undefined,
     now: number,
+    requestAt: number | undefined,
 ): ChatTurnStatus | undefined {
     const trace = entry.agentTrace;
     if (!trace || turnTerminal(trace)) return undefined;
-    const startedAt = activity?.startedAt ?? (trace.startedAt ? Date.parse(trace.startedAt) : NaN);
+    // Prefer the request-sent clock; fall back to activity/trace start only when
+    // the preceding user message is missing (legacy rows, steered turns).
+    const startedAt =
+        requestAt ?? activity?.startedAt ?? (trace.startedAt ? Date.parse(trace.startedAt) : NaN);
     const subagents = activity?.subagents ?? trace.subagents;
     const terminals = activity?.backgroundTerminals ?? trace.backgroundTerminals;
     return {
+        kind: "turnStatus",
         id: `${entry.id} status`,
         conversationId: entry.conversationId,
         messageId: entry.id,
+        status: "running",
         subagentCount: subagents.filter((subagent) => subagent.status === "running").length,
         terminalCount: terminals.length,
         totalTokens: activity?.tokenCount ?? trace.totalTokens ?? 0,
+        ...(trace.toolCallCount !== undefined ? { tools: trace.toolCallCount } : {}),
         ...(Number.isFinite(startedAt) ? { elapsedMs: Math.max(0, now - startedAt) } : {}),
     };
 }
@@ -552,7 +621,12 @@ export function turnStatusProject(
         const entry = messageEntry(items[index]!);
         const trace = entry.agentTrace;
         if (!trace) continue;
-        const status = turnStatusOf(entry, activityByTurn.get(trace.turnId), now);
+        const status = turnStatusOf(
+            entry,
+            activityByTurn.get(trace.turnId),
+            now,
+            requestSentAt(items, index),
+        );
         if (status) return status;
     }
     return undefined;
@@ -563,7 +637,8 @@ export function entriesProject(
 ): WorkspaceEntry[] {
     const result: WorkspaceEntry[] = [];
     let previousDay = "";
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += 1) {
+        const item = items[index]!;
         const message = item.message;
         const date = new Date(message.createdAt).toDateString();
         if (date !== previousDay) {
@@ -597,7 +672,7 @@ export function entriesProject(
         }
         // A turn reads top to bottom as the agent worked: what it wrote first,
         // then the steps it took, then the answer it settled on.
-        result.push(...turnEntries(messageEntry(item), traces));
+        result.push(...turnEntries(messageEntry(item), traces, requestSentAt(items, index)));
     }
     return result;
 }

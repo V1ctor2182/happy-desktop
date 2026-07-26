@@ -739,10 +739,9 @@ export type MessageListProps = {
     children: ReactNode;
     className?: string;
     /**
-     * A row pinned to the end of the list's content, below the last message and
-     * inside the clearance the surface reserves there. It is part of the
-     * scrolled content, not an overlay, so it follows the newest message the way
-     * the transcript does and adds no height of its own.
+     * A row at the end of the list's content, below the last message. It is
+     * part of the scrolled content, not an overlay or sticky chrome, so it
+     * scrolls with the transcript the way every other row does.
      */
     footer?: ReactNode;
     /**

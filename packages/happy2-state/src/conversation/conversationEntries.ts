@@ -115,6 +115,13 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
         return activityEqual(left.activity, right.activity);
     if (left.kind === "request" && right.kind === "request")
         return requestEqual(left.request, right.request);
+    if (left.kind === "turnStatus" && right.kind === "turnStatus")
+        return (
+            left.status === right.status &&
+            left.durationMs === right.durationMs &&
+            left.tools === right.tools &&
+            left.tokens === right.tokens
+        );
     return false;
 }
 
@@ -136,6 +143,8 @@ function traceEqual(
         left.finalTextOffset === right.finalTextOffset &&
         left.toolCallCount === right.toolCallCount &&
         left.totalTokens === right.totalTokens &&
+        left.startedAt === right.startedAt &&
+        left.completedAt === right.completedAt &&
         left.latest?.kind === right.latest?.kind &&
         left.latest?.title === right.latest?.title &&
         left.latest?.detail === right.latest?.detail

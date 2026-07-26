@@ -3,6 +3,7 @@ import { BrowserTerminalConnection, TERMINAL_PROTOCOL, terminalSocketUrl } from 
 const TERMINAL_CAPABILITY_PROTOCOL_PREFIX = "happy2-capability.";
 import type {
     RigEventId,
+    RigChangedFileDocument,
     RigEventObserver,
     RigFileSearchResult,
     RigGlobalEvent,
@@ -117,6 +118,12 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                         : project,
                 ),
             };
+        },
+        changedFileRead: async (groupId, path, signal) => {
+            const response = await fetch(url("/changed-file", { group: groupId, path }), {
+                signal,
+            });
+            return readJson<RigChangedFileDocument>(response);
         },
         sessionsRead: () => getJson<readonly RigSessionSummary[]>("/sessions"),
         sessionRead: (sessionId) => getJson<RigSession>(`/sessions/${sessionId}`),

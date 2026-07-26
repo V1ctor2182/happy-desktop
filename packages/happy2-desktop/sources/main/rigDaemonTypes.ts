@@ -60,6 +60,7 @@ export interface Project {
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: readonly GitChangedFile[];
 }
 
 export type ProjectWorkspaceStatus =
@@ -86,6 +87,14 @@ export interface ProjectWorkspace {
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    readonly changes?: readonly GitChangedFile[];
+}
+
+export interface GitChangedFile {
+    readonly path: string;
+    readonly previousPath?: string;
+    readonly status: "added" | "deleted" | "modified" | "renamed" | "untracked";
+    readonly revision: string;
 }
 
 /** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */

@@ -109,6 +109,7 @@ export function rigProjectProject(project: Project, homeDir: string): RigProject
         ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
         ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),
+        ...(project.changes === undefined ? {} : { changes: project.changes }),
         ...(project.avatar
             ? {
                   avatar: {
@@ -134,6 +135,7 @@ export function rigWorktreeProject(workspace: ProjectWorkspace, homeDir: string)
         ...(workspace.changedFiles === undefined ? {} : { changedFiles: workspace.changedFiles }),
         ...(workspace.addedLines === undefined ? {} : { addedLines: workspace.addedLines }),
         ...(workspace.deletedLines === undefined ? {} : { deletedLines: workspace.deletedLines }),
+        ...(workspace.changes === undefined ? {} : { changes: workspace.changes }),
     };
 }
 

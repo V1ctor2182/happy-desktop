@@ -30,6 +30,7 @@
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@mantine/core": "^9.4.1",
         "@mantine/hooks": "^9.4.1",
+        "@pierre/diffs": "^1.2.12",
         "@tanstack/react-virtual": "^3.14.6",
         "happy2-state": "workspace:*",
         "react": "19.2.7",

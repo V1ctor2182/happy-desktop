@@ -11,11 +11,11 @@ export function AgentStatusLinePage() {
     return (
         <ComponentPage
             number="C-072"
-            summary="The one quiet mono line a working agent turn keeps under the transcript: how long it has been working, how far it fanned out, and what it has spent — never which tool it is running."
+            summary="The quiet mono line under a turn: while running a braille spinner and the clock from request send; once settled a permanent Done/Failed row with duration and tool count."
             title="Agent status line"
         >
             <Specimen
-                detail="24px row · left-aligned · state and clock, then counters"
+                detail="24px row · left-aligned · braille spinner, state and clock, then counters"
                 label="Working"
                 number="01"
                 stage="surface"
@@ -36,9 +36,30 @@ export function AgentStatusLinePage() {
             </Specimen>
 
             <Specimen
+                detail="No spinner · final duration · tool count stays under the turn"
+                label="Settled"
+                number="02"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={column}>
+                        <AgentStatusLine
+                            elapsedMs={104_000}
+                            status="complete"
+                            tokens={101_000}
+                            tools={7}
+                        />
+                        <AgentStatusLine elapsedMs={7_000} status="complete" tools={1} />
+                        <AgentStatusLine elapsedMs={41_000} status="failed" tools={3} />
+                    </div>
+                    <DimensionRule label="Done in 1m 44s · 7 tools" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Seconds while a turn is short, then minutes, then hours"
                 label="Clock and singulars"
-                number="02"
+                number="03"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -53,7 +74,7 @@ export function AgentStatusLinePage() {
             <Specimen
                 detail="A narrow pane keeps the state and truncates the counters"
                 label="Narrow truncation"
-                number="03"
+                number="04"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>

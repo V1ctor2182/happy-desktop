@@ -76,6 +76,7 @@ export type {
     ConversationRequestStatus,
     ConversationRequestQuestion,
     ConversationToolCall,
+    ConversationTurnStatusEntry,
 } from "./conversation/conversationEntry.js";
 export { entryKey, entrySequence } from "./conversation/conversationEntry.js";
 export { entriesMerge, entryCompare, entryEquivalent } from "./conversation/conversationEntries.js";
@@ -311,6 +312,7 @@ export {
 export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
+    type RigChangedFileTabSnapshot,
     type RigConversationSnapshot,
     type RigWorkspaceDeps,
     type RigWorkspaceOutput,
