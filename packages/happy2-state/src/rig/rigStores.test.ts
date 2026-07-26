@@ -1054,8 +1054,10 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
+        // The answered turn closes with its stats row. The first turn ran a tool
+        // but never replied, so it has no final message for a row to sit under.
         const kinds = shapesOf(store);
-        expect(kinds).toEqual(["user", "tool", "user", "agentText"]);
+        expect(kinds).toEqual(["user", "tool", "user", "agentText", "turnStatus"]);
         unsubscribe();
     });
 
@@ -1098,16 +1100,16 @@ describe("rigChatStore actions", () => {
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
         // The finished turn collapses to its final message, which carries the
-        // turn summary behind "View trace".
-        expect(shapesOf(store)).toEqual(["user", "agentText"]);
+        // turn summary behind "View trace", and keeps its permanent status row.
+        expect(shapesOf(store)).toEqual(["user", "agentText", "turnStatus"]);
         expect(store.get().expandedTurnIds.has("u1")).toBe(false);
 
         store.turnTraceToggle("u1");
-        expect(shapesOf(store)).toEqual(["user", "agentText", "tool"]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "tool", "turnStatus"]);
         expect(store.get().expandedTurnIds.has("u1")).toBe(true);
 
         store.turnTraceToggle("u1");
-        expect(shapesOf(store)).toEqual(["user", "agentText"]);
+        expect(shapesOf(store)).toEqual(["user", "agentText", "turnStatus"]);
         unsubscribe();
     });
 

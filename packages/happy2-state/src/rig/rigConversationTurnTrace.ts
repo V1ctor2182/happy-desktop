@@ -162,7 +162,12 @@ export function rigConversationAttachTurnTraces(
         // only the run itself failing without an answer would be different, and
         // that still lands as idle with whatever text the agent managed.
         const status: AgentTurnStatus = running ? "running" : "complete";
-        const toolCallCount = activities.filter((entry) => entry.activity.kind === "tool").length;
+        // A shell run is a tool the agent used, so it counts as one. The reader
+        // is being told how much work the turn took, not which internal shape
+        // the daemon happened to deliver each step in.
+        const toolCallCount = activities.filter(
+            (entry) => entry.activity.kind === "tool" || entry.activity.kind === "shell",
+        ).length;
         const durationMs = !running ? input.durations?.get(turnUserId) : undefined;
         const trace: AgentTurnTraceSummary = {
             turnId: turnUserId,
@@ -200,10 +205,18 @@ export function rigConversationAttachTurnTraces(
             traced = withTrace !== entry;
             result.push(withTrace);
         }
-        // Settled turns keep a permanent status row under their last content.
-        // Running turns use the message-list footer so the clock can tick.
-        if (summarizable && !running) {
-            const last = shown[shown.length - 1];
+        // A settled turn that produced an answer keeps a permanent status row
+        // under it, including one answered in a single message: how long a turn
+        // took is worth knowing whether or not it used tools, and a transcript
+        // where only some turns are timed reads as a bug. A turn with no final
+        // message has nothing to sit under and gets no row. Running turns use
+        // the message-list footer instead, so the clock can tick.
+        if (!running && lastMessage(turnBody) !== undefined) {
+            // Ordered from the end of the whole turn, not the end of what is
+            // currently shown: entries sort by sequence, so anchoring it to a
+            // collapsed turn's single message would drop the row in among the
+            // work as soon as the reader expanded the trace.
+            const last = turnBody[turnBody.length - 1];
             const lastSequence = last ? entrySequence(last) : turnUserId;
             result.push({
                 kind: "turnStatus",
