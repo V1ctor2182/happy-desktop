@@ -15,7 +15,7 @@ import {
 } from "./conversationMessageGrouped";
 import { conversationRowHeight } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
-import { MessageList } from "./Message";
+import { MessageList, type MessageListScrollPosition } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 
@@ -36,6 +36,19 @@ export type ConversationViewProps = {
     entries: readonly ConversationEntry[];
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
+    /**
+     * Which conversation these entries belong to. It is the transcript's
+     * lifetime boundary: switching conversations mounts a new list, so one
+     * conversation's reading position is never applied to another's.
+     */
+    conversationId?: string;
+    /**
+     * Where this conversation was last being read, restored on mount. Absent
+     * means the newest content, which is where a conversation opens.
+     */
+    scrollPosition?: MessageListScrollPosition;
+    /** Reports the reading position, including the final one before unmount. */
+    onScrollPositionChange?: (position: MessageListScrollPosition) => void;
     /** Header controls composed by the surface owner. */
     headerActions?: ReactNode;
     /**
@@ -215,6 +228,12 @@ export function ConversationView(props: ConversationViewProps) {
                             />
                         ) : undefined
                     }
+                    initialScrollPosition={props.scrollPosition}
+                    // The conversation is this list's lifetime: switching to
+                    // another one mounts its own list, which is what lets each
+                    // restore its own position instead of inheriting one.
+                    key={props.conversationId}
+                    onScrollPositionChange={props.onScrollPositionChange}
                     virtualize
                 >
                     {props.entries.map((entry, index) => {

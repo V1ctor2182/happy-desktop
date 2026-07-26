@@ -828,7 +828,15 @@ function RigConversationSurface(props: {
         <ConversationView
             composer={conversation.composer}
             composerPlaceholder="Message Happy…"
+            conversationId={conversation.conversationId}
             entries={conversation.entries}
+            scrollPosition={conversation.scrollPosition}
+            onScrollPositionChange={(position) =>
+                workspace.conversationScrollUpdate(
+                    conversation.conversationId as RigSessionId,
+                    position,
+                )
+            }
             composerControls={
                 <>
                     {conversation.menus ? (

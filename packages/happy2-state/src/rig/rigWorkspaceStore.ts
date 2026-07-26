@@ -34,6 +34,7 @@ import type {
     RigPermissionMode,
     RigProjectId,
     RigQueuedMessage,
+    RigScrollPosition,
     RigSelection,
     RigServiceTier,
     RigSession,
@@ -108,6 +109,11 @@ export interface RigConversationSnapshot {
      * letting a choice be made that the next message would fail to apply.
      */
     readonly modelLocked: boolean;
+    /**
+     * Where this conversation was last being read, when it has been read before.
+     * Absent opens at the newest message.
+     */
+    readonly scrollPosition?: RigScrollPosition;
 }
 
 /** One read-only changed file opened as a main-content document tab. */
@@ -288,6 +294,13 @@ export interface RigWorkspaceStore {
     imageClose(): void;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
+    /**
+     * Records where one conversation is being read, so returning to it resumes
+     * there rather than at the newest message. Kept for the workspace's lifetime
+     * and never persisted: a reading position is worth restoring while switching
+     * between sessions, not weeks later on another machine.
+     */
+    conversationScrollUpdate(conversationId: RigSessionId, position: RigScrollPosition): void;
     /** View-only clear of the active conversation's visible entries (TUI `/clear`). */
     viewClear(): void;
 
@@ -393,6 +406,13 @@ export function rigWorkspaceStoreCreate(
      * something, so an untouched workspace uses the catalog's defaults.
      */
     let lastSelection: RigSelection | undefined;
+    /**
+     * Where each conversation was last being read, by conversation id. Switching
+     * sessions disposes the transcript that held the position, so it is kept
+     * here — outside any component's lifetime — and handed back when that
+     * conversation is opened again.
+     */
+    let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
     let fileTabs: readonly RigChangedFileTabSnapshot[] = [];
     let activeFileTabId: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
@@ -435,6 +455,9 @@ export function rigWorkspaceStoreCreate(
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : {}),
             modelLocked: chat.modelLocked,
+            ...(scrollPositions.has(chat.sessionId)
+                ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
+                : {}),
         };
     };
 
@@ -1134,6 +1157,13 @@ export function rigWorkspaceStoreCreate(
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
+        conversationScrollUpdate(conversationId, position) {
+            // Deliberately no `recompute()`. The transcript is the one thing
+            // that already knows this position — it just reported it — and
+            // feeding it back through the snapshot would re-anchor a list the
+            // reader is in the middle of scrolling. It is read once, on mount.
+            scrollPositions = new Map(scrollPositions).set(conversationId, position);
+        },
         viewClear: () => chatStore?.viewClear(),
 
         [Symbol.dispose]() {

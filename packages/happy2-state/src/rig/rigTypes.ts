@@ -600,6 +600,33 @@ export interface RigMenusSnapshot {
     readonly currentServiceTier?: RigServiceTier;
 }
 
+/**
+ * One transcript row's measured geometry, as the reading position needs it. A
+ * restored position is a pixel offset into a list whose rows have wildly
+ * different heights, so the offset only means anything alongside the heights it
+ * was measured against.
+ */
+export interface RigScrollMeasurement {
+    /** A row's render key, which is whatever the transcript keyed that row by. */
+    readonly key: string | number | bigint;
+    readonly index: number;
+    readonly start: number;
+    readonly end: number;
+    readonly size: number;
+    readonly lane: number;
+}
+
+/**
+ * Where a conversation is being read. `following` distinguishes a reader parked
+ * at the newest message — who should stay there as more arrives — from one who
+ * has scrolled up to a fixed point and expects to find it again.
+ */
+export interface RigScrollPosition {
+    readonly scrollTop: number;
+    readonly following: boolean;
+    readonly measurements?: readonly RigScrollMeasurement[];
+}
+
 /** Current model/effort/permission/tier selection used to derive menu options. */
 export interface RigSelection {
     readonly providerId: string;

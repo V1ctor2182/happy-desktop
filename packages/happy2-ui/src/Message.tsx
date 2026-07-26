@@ -814,6 +814,18 @@ export function MessageList(props: MessageListProps) {
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const items = Children.toArray(props.children);
     const virtualized = props.virtualize === true;
+    /**
+     * Total height of every row, asking the caller's estimator for each one and
+     * falling back to the measured average only where it declines to answer.
+     * This is the offset a list opens at when it has no position to restore.
+     */
+    const estimatedContentHeight = () => {
+        const width = list.current?.clientWidth ?? 0;
+        let total = 0;
+        for (let index = 0; index < items.length; index += 1)
+            total += props.estimateRowSize?.(index, width) ?? estimatedSize.current;
+        return total;
+    };
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
     // remains outside compiler memoization while every rendered row stays eligible.
     // eslint-disable-next-line react-hooks/incompatible-library
@@ -835,9 +847,13 @@ export function MessageList(props: MessageListProps) {
             return isValidElement(item) && item.key !== null ? item.key : index;
         },
         getScrollElement: () => list.current,
-        initialOffset: virtualized
-            ? (restore.current?.scrollTop ?? items.length * estimatedSize.current)
-            : 0,
+        /* Opening a conversation lands on its newest content, which means the
+           first offset has to be the height of everything above it. Counting
+           every row at the generic fallback got that badly wrong whenever real
+           rows were taller — the list opened part way up its own history and
+           then had to correct as rows measured — so the caller's own estimator
+           answers for each row, exactly as it does for every later layout. */
+        initialOffset: virtualized ? (restore.current?.scrollTop ?? estimatedContentHeight()) : 0,
         initialMeasurementsCache: restore.current?.measurements
             ? [...restore.current.measurements]
             : [],
