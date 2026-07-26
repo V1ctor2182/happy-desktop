@@ -40,6 +40,7 @@ import {
     PanelHeader,
     Sidebar,
     SidebarFooter,
+    SplitColumn,
     TabbedPane,
     TerminalPanel,
     WindowDragRegion,
@@ -776,71 +777,114 @@ function RigConversationSurface(props: {
 }
 
 /**
- * The right panel's header band, tab strip, and the body of whichever tab is
- * selected. Only the strip re-renders from this component's subscription; a
- * terminal's own output lands in `RigTerminalTab`, which subscribes to that
- * terminal alone, so a busy shell never re-renders its neighbours or the tab bar
- * above it.
+ * The right panel's header band and its two stacked regions. The upper one is
+ * reserved for workspace context (changed files and the like) and holds only a
+ * placeholder for now; the lower one is the terminal section. The divider between
+ * them is the user's, so a shell can take most of the column or none of it.
+ *
+ * Only the tab strip re-renders from this component's subscription; a terminal's
+ * own output lands in `RigTerminalTab`, which subscribes to that terminal alone,
+ * so a busy shell never re-renders its neighbours or the tab bar above it.
  *
  * The band is empty and still earns its place: it puts this column's tabs on the
  * same line as the session tabs beside them instead of a header's height higher,
  * and in the desktop window it gives that edge a lane to drag the window by.
  */
 function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
-    const { panel, store } = props;
-    const activeId = panel.activeTabId;
-    const active = panel.tabs.find((tab) => tab.id === activeId);
     return (
         <>
             <PanelHeader />
-            <TabbedPane
-                // Adding a tab is the only control this strip carries. Hiding the panel
-                // belongs to the header's toggle alone: two controls for it put the same
-                // glyph on screen twice, and the one that showed the panel is the one a
-                // reader goes back to.
-                actions={
-                    <Button
-                        aria-label="New terminal"
-                        icon="plus"
-                        iconOnly
-                        onClick={() => store.terminalAdd()}
-                        size="small"
-                        variant="ghost"
+            <SplitColumn
+                bottom={<RigPanelTerminals panel={props.panel} store={props.store} />}
+                defaultBottomHeight={320}
+                minBottomHeight={160}
+                minTopHeight={120}
+                resizeLabel="Resize terminal section"
+                top={
+                    <EmptyState
+                        description="Changed files and other workspace context will appear here."
+                        icon="files"
+                        size="panel"
+                        title="Nothing here yet"
                     />
                 }
-                activeId={activeId ?? ""}
-                closeLabel="Close tab"
-                onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
-                onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
-                tabs={panelTabs(panel)}
-            >
-                {/* The key is the tab's identity, so selecting another tab mounts its
-                body rather than re-pointing this one at a different terminal — a
-                terminal's scroll position, focus, and grid belong to it alone. */}
-                {active?.kind === "terminal" ? (
-                    <RigTerminalTab key={active.id} store={store} tabId={active.id} />
-                ) : active?.kind === "browser" ? (
-                    <EmptyState
-                        description="A browser tab will render a page here."
-                        icon="globe"
-                        size="panel"
-                        title="Not built yet"
-                    />
-                ) : (
-                    <EmptyState
-                        action={{
-                            label: "New terminal",
-                            icon: "plus",
-                            onClick: () => store.terminalAdd(),
-                        }}
-                        description="Open a terminal to work beside the conversation."
-                        icon="terminal"
-                        size="panel"
-                        title="Nothing open"
-                    />
-                )}
-            </TabbedPane>
+            />
         </>
+    );
+}
+
+/**
+ * The lower half of the panel: the terminal tab strip and the body of whichever
+ * tab is selected. With no tabs it offers to start one rather than starting a
+ * shell on its own — opening the panel is not consent to run a process in the
+ * user's working directory.
+ */
+function RigPanelTerminals(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
+    const { panel, store } = props;
+    const activeId = panel.activeTabId;
+    const active = panel.tabs.find((tab) => tab.id === activeId);
+    if (panel.tabs.length === 0)
+        return (
+            <EmptyState
+                action={{
+                    label: "Start terminal",
+                    icon: "terminal",
+                    onClick: () => store.terminalAdd(),
+                }}
+                description="Run a shell beside the conversation."
+                icon="terminal"
+                size="panel"
+                title="No terminal"
+            />
+        );
+    return (
+        <TabbedPane
+            // Adding a tab is the only control this strip carries. Hiding the panel
+            // belongs to the header's toggle alone: two controls for it put the same
+            // glyph on screen twice, and the one that showed the panel is the one a
+            // reader goes back to.
+            actions={
+                <Button
+                    aria-label="New terminal"
+                    icon="plus"
+                    iconOnly
+                    onClick={() => store.terminalAdd()}
+                    size="small"
+                    variant="ghost"
+                />
+            }
+            activeId={activeId ?? ""}
+            closeLabel="Close tab"
+            onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
+            onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
+            tabs={panelTabs(panel)}
+        >
+            {/* The key is the tab's identity, so selecting another tab mounts its
+            body rather than re-pointing this one at a different terminal — a
+            terminal's scroll position, focus, and grid belong to it alone. */}
+            {active?.kind === "terminal" ? (
+                <RigTerminalTab key={active.id} store={store} tabId={active.id} />
+            ) : active?.kind === "browser" ? (
+                <EmptyState
+                    description="A browser tab will render a page here."
+                    icon="globe"
+                    size="panel"
+                    title="Not built yet"
+                />
+            ) : (
+                <EmptyState
+                    action={{
+                        label: "New terminal",
+                        icon: "plus",
+                        onClick: () => store.terminalAdd(),
+                    }}
+                    description="Open a terminal to work beside the conversation."
+                    icon="terminal"
+                    size="panel"
+                    title="Nothing open"
+                />
+            )}
+        </TabbedPane>
     );
 }
 

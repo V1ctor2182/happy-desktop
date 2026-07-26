@@ -71,6 +71,7 @@ import { ModerationReportCardPage } from "./pages/ModerationReportCardPage";
 import { NotificationListPage } from "./pages/NotificationListPage";
 import { OnboardingScreenPage } from "./pages/OnboardingScreenPage";
 import { SplashScreenPage } from "./pages/SplashScreenPage";
+import { SplitColumnPage } from "./pages/SplitColumnPage";
 import { PolicyControlPage } from "./pages/PolicyControlPage";
 import { ProductStorePage } from "./pages/ProductStorePage";
 import { ProfileCardPage } from "./pages/ProfileCardPage";
@@ -342,6 +343,12 @@ const components: BlueprintPage[] = [
         label: "Splash screen",
         number: "C-161",
         page: SplashScreenPage,
+    },
+    {
+        id: "split-column",
+        label: "Split column",
+        number: "C-163",
+        page: SplitColumnPage,
     },
     {
         id: "setup-option-card",

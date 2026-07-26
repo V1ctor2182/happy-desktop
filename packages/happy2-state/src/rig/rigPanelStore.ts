@@ -40,17 +40,18 @@ export interface RigPanelStore {
     subscribe(listener: () => void): () => void;
 
     /**
-     * Shows or hides the panel. Showing it for a conversation with nothing in it
-     * yet opens a terminal, because an empty panel is a column that took space
-     * and did nothing.
+     * Shows or hides the panel. It never starts anything: a terminal is a process
+     * in the user's working directory, and opening a column is not consent to run
+     * one. The panel shows its own content and offers to start a terminal.
      */
     panelToggle(): void;
     /** Adds a terminal tab to the open conversation and selects it. */
     terminalAdd(): void;
     tabSelect(tabId: RigPanelTabId): void;
     /**
-     * Closes one tab, ending whatever it was running. Closing the last tab closes
-     * the panel too: a tab strip with no tabs is not a state worth showing.
+     * Closes one tab, ending whatever it was running. Closing the last one leaves
+     * the panel showing: the terminal section is only part of the column, and the
+     * rest of it is still worth reading.
      */
     tabClose(tabId: RigPanelTabId): void;
 
@@ -191,12 +192,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         panelToggle() {
             if (disposed) return;
             open = !open;
-            if (
-                open &&
-                conversationId &&
-                !tabs.some((tab) => tab.conversationId === conversationId)
-            )
-                terminalTabAdd(conversationId);
             recompute();
         },
         terminalAdd() {
@@ -217,8 +212,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             const index = tabs.findIndex((candidate) => candidate.id === tabId);
             if (index < 0) return;
             tabDispose(index);
-            if (conversationId && !tabs.some((tab) => tab.conversationId === conversationId))
-                open = false;
             recompute();
         },
 
@@ -227,10 +220,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         conversationApply(next) {
             if (disposed || next === conversationId) return;
             conversationId = next;
-            // Addressing a conversation whose tabs are all gone while the panel is
-            // showing gives it a terminal, so the panel is never an empty column.
-            if (open && next && !tabs.some((tab) => tab.conversationId === next))
-                terminalTabAdd(next);
             recompute();
         },
 
