@@ -25,6 +25,7 @@ function workspaceSpy() {
         subscribe: () => () => undefined,
         conversationOpen: (conversationId: RigSessionId) => applied.push(`open:${conversationId}`),
         conversationClose: () => applied.push("close"),
+        groupOpen: (groupId: string) => applied.push(`group:${groupId}`),
         [Symbol.dispose]: () => undefined,
     } as unknown as RigWorkspaceStore;
     return { applied, store };
@@ -66,7 +67,9 @@ it("addresses a project on its own, with no session open", async () => {
     const result = await resolve("/chats/prj_one");
     expect(result.leaf).toBe("/_workspace/chats/$groupId");
     expect(result.params).toEqual({ groupId: "prj_one" });
-    expect(result.applied).toEqual(["close"]);
+    // Addressing a group opens it rather than merely releasing what was open:
+    // the group gets a composer, and sending into it starts its first session.
+    expect(result.applied).toEqual(["group:prj_one"]);
 });
 
 it("keeps the session list and one session under the same persistent workspace layout", async () => {

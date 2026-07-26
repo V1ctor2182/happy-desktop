@@ -16,6 +16,7 @@ import type {
     AppearanceStore,
     RigClockStore,
     RigConnectionStore,
+    RigGroupId,
     RigHost,
     RigSessionId,
     RigSessionLocation,
@@ -87,8 +88,8 @@ const chatsIndexRoute = createRoute({
  */
 const groupRoute = createRoute({
     getParentRoute: () => workspaceRoute,
-    loader: ({ context }) => {
-        context.workspace.conversationClose();
+    loader: ({ context, params }) => {
+        context.workspace.groupOpen(params.groupId as RigGroupId);
     },
     path: "/chats/$groupId",
 });

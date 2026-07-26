@@ -102,6 +102,12 @@ export interface RigWorkspaceSnapshot {
     readonly list: RigSessionListSnapshot;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
+    /**
+     * The composer of an addressed group that holds no conversation yet. Sending
+     * into it is what starts the group's first conversation, so a project or a
+     * worktree can be opened and typed into before anything exists in it.
+     */
+    readonly groupComposer?: ComposerSnapshot;
 }
 
 /**
@@ -138,6 +144,12 @@ export interface RigWorkspaceStore {
     // the router applies them from the addressed URL.
     /** Materializes the addressed conversation, releasing any previously open one. */
     conversationOpen(conversationId: RigSessionId): void;
+    /**
+     * Applies an addressed group that holds no conversation, giving it a composer
+     * whose first submission starts one. Releases any open conversation, since
+     * the URL now names a group rather than a conversation.
+     */
+    groupOpen(groupId: RigGroupId): void;
     /** Releases the open conversation; the workspace is addressing no conversation. */
     conversationClose(): void;
     /** Retries a failed authoritative conversation-list read. */
@@ -263,6 +275,11 @@ export function rigWorkspaceStoreCreate(
     let mentionGeneration = 0;
 
     let conversation: Loadable<RigConversationSnapshot> = { type: "unloaded" };
+    // An addressed group with nothing in it yet: its composer is live, and the
+    // first thing sent into it is what creates the conversation.
+    let openGroupId: RigGroupId | undefined;
+    let groupComposer: ComposerStore | undefined;
+    let unsubscribeGroupComposer: (() => void) | undefined;
     let snapshot: RigWorkspaceSnapshot = { list: list.get(), conversation };
 
     const notify = (): void => {
@@ -318,8 +335,18 @@ export function rigWorkspaceStoreCreate(
                 conversation = { type: "ready", value: next };
             }
         }
-        if (snapshot.list === listSnapshot && snapshot.conversation === conversation) return;
-        snapshot = { list: listSnapshot, conversation };
+        const groupDraft = groupComposer?.getState();
+        if (
+            snapshot.list === listSnapshot &&
+            snapshot.conversation === conversation &&
+            snapshot.groupComposer === groupDraft
+        )
+            return;
+        snapshot = {
+            list: listSnapshot,
+            conversation,
+            ...(groupDraft ? { groupComposer: groupDraft } : {}),
+        };
         notify();
     };
 
@@ -528,6 +555,59 @@ export function rigWorkspaceStoreCreate(
         acquireConversation(conversationId);
     };
 
+    /** What starting a conversation in an addressed group takes, from the list. */
+    const groupStartFind = (
+        groupId: RigGroupId,
+    ):
+        | { readonly create: RigSessionCreateInput; readonly worktreeId?: RigWorktreeId }
+        | undefined => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        for (const project of projects.value) {
+            if (project.id === groupId) return { create: { cwd: project.path } };
+            for (const worktree of project.worktrees)
+                if (worktree.id === groupId)
+                    return {
+                        create: { cwd: worktree.path, worktreeId: worktree.id },
+                        worktreeId: worktree.id,
+                    };
+        }
+        return undefined;
+    };
+
+    /**
+     * Starts the addressed group's first conversation and sends `text` into it.
+     * A worktree may still be preparing its checkout, so that path waits for the
+     * host to report it usable; a project is ready by definition. The address is
+     * reported before the message is delivered, so the reader lands in the new
+     * conversation while it is being sent rather than after.
+     */
+    const groupSubmit = (groupId: RigGroupId, text: string): Promise<void> => {
+        const start = groupStartFind(groupId);
+        if (!start) return Promise.reject(new Error("That group is no longer listed."));
+        return (
+            start.worktreeId
+                ? list.worktreeSessionStart(start.worktreeId)
+                : list.sessionCreate(start.create)
+        ).then(async (location) => {
+            if (!location) throw new Error("The conversation could not be started.");
+            output({ type: "conversationOpenRequested", location });
+            const acquired = await client.chat(location.sessionId);
+            try {
+                await acquired.store.messageSend(text);
+            } finally {
+                acquired[Symbol.dispose]();
+            }
+        });
+    };
+
+    const releaseGroup = (): void => {
+        unsubscribeGroupComposer?.();
+        unsubscribeGroupComposer = undefined;
+        groupComposer = undefined;
+        openGroupId = undefined;
+    };
+
     /** Reports a newly created conversation so the router can address it. */
     const openRequest = (location: RigSessionLocation | undefined): void => {
         if (location) output({ type: "conversationOpenRequested", location });
@@ -549,6 +629,7 @@ export function rigWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };
         snapshot = { list: list.get(), conversation };
@@ -569,8 +650,29 @@ export function rigWorkspaceStoreCreate(
             };
         },
 
-        conversationOpen: (conversationId) => openConversation(conversationId),
-        conversationClose: () => openConversation(undefined),
+        conversationOpen: (conversationId) => {
+            releaseGroup();
+            openConversation(conversationId);
+        },
+        groupOpen: (groupId) => {
+            openConversation(undefined);
+            if (openGroupId === groupId) return;
+            releaseGroup();
+            openGroupId = groupId;
+            groupComposer = composerStoreCreate(groupId, {
+                capabilities: { shellMode: false, commands: [], mentions: false },
+                output: (event) => {
+                    if (event.type !== "textSubmitted") return;
+                    submitting(event.revision, () => groupSubmit(groupId, event.text));
+                },
+            });
+            unsubscribeGroupComposer = groupComposer.subscribe(recompute);
+            recompute();
+        },
+        conversationClose: () => {
+            releaseGroup();
+            openConversation(undefined);
+        },
         conversationListRetry: () => {
             void list.sessionsRefresh();
         },
@@ -591,19 +693,19 @@ export function rigWorkspaceStoreCreate(
         async worktreeCreate(projectId) {
             const worktreeId = await list.worktreeCreate(projectId);
             if (worktreeId === undefined) return;
-            // Addressed as soon as it exists. The first conversation follows once
-            // the host has the checkout ready, and re-addresses the same group
-            // with that conversation in it.
+            // Addressed as soon as it exists, and left empty: the conversation is
+            // started by the first message sent into it, so adding a worktree to
+            // look around does not leave an empty session behind.
             output({ type: "groupOpenRequested", groupId: worktreeId });
-            openRequest(await list.worktreeSessionStart(worktreeId));
         },
         worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        composerTextUpdate: (text) => composer?.getState().textUpdate(text),
-        composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),
-        composerTextSubmit: () => composer?.getState().textSubmit(),
+        composerTextUpdate: (text) => (groupComposer ?? composer)?.getState().textUpdate(text),
+        composerFocusUpdate: (focused) =>
+            (groupComposer ?? composer)?.getState().focusUpdate(focused),
+        composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
         composerCommandInvoke: (commandId) => composer?.getState().commandInvoke(commandId),
 
         runAbort: () => withChat((store) => store.runAbort()),

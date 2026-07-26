@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
+    ConversationEntry,
     RigClockStore,
     RigConnectionStore,
     RigConversationSnapshot,
@@ -160,6 +161,9 @@ function rowOwnerFind(
     }
     return undefined;
 }
+
+/** A group with no conversation has no transcript; the constant keeps the prop stable. */
+const NO_ENTRIES: readonly ConversationEntry[] = [];
 
 /** One tab per session in the open group, marked while the agent is working. */
 function sessionTabs(group: OpenGroup): TabItem[] {
@@ -427,30 +431,27 @@ export function AppRigView(props: AppRigViewProps) {
                         title={openGroup.name}
                         {...(openGroup.home ? {} : { topic: openGroup.displayPath })}
                     />
-                    {openGroup.conversations.length === 0 ? (
-                        // A project with nothing in it gets no tab strip: an empty
-                        // strip is a control that does nothing but take a row, and
-                        // the one action worth offering is already the button below.
-                        <EmptyState
-                            action={{
-                                label: "New session",
-                                icon: "plus",
-                                onClick: () => groupConversationCreate(openGroup),
-                            }}
-                            description={
-                                openGroup.home
-                                    ? "Start a session to begin working in your home folder."
-                                    : `Start a session to begin working in ${openGroup.displayPath}.`
+                    {openGroup.conversations.length === 0 && workspace.groupComposer ? (
+                        // A group with nothing in it gets no tab strip — an empty
+                        // strip is a control that does nothing but take a row —
+                        // and a live composer rather than a button: the first
+                        // message is what starts the conversation, so opening a
+                        // project or worktree to type into never leaves an empty
+                        // session behind.
+                        <ConversationView
+                            composer={workspace.groupComposer}
+                            composerPlaceholder="Message Happy…"
+                            entries={NO_ENTRIES}
+                            onComposerFocusChange={(focused) =>
+                                props.workspace.composerFocusUpdate(focused)
                             }
-                            icon={openGroup.home ? "home" : "chat"}
-                            size="panel"
-                            title={
-                                openGroup.home
-                                    ? "No sessions in your home folder yet"
-                                    : `No sessions in ${openGroup.name} yet`
+                            onComposerSend={() => props.workspace.composerTextSubmit()}
+                            onComposerValueChange={(value) =>
+                                props.workspace.composerTextUpdate(value)
                             }
                         />
-                    ) : (
+                    ) : null}
+                    {openGroup.conversations.length > 0 ? (
                         <TabbedPane
                             actions={
                                 <Button
@@ -506,7 +507,7 @@ export function AppRigView(props: AppRigViewProps) {
                                 workspace={props.workspace}
                             />
                         </TabbedPane>
-                    )}
+                    ) : null}
                 </>
             ) : (
                 <>
