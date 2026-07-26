@@ -37,7 +37,14 @@ import type {
  */
 export function rigRendererTransportCreate(baseUrl: string): RigTransport {
     const base = baseUrl.replace(/\/$/, "");
-    const capability = new URL(base).pathname.split("/").filter(Boolean).at(-1);
+    // The Electron shell hands over an absolute loopback origin whose last path
+    // segment is the proxy capability; the browser development server hands over
+    // a same-origin path instead, which is why the base is resolved against the
+    // document rather than parsed as an absolute URL on its own.
+    const capability = new URL(base, globalThis.location?.href).pathname
+        .split("/")
+        .filter(Boolean)
+        .at(-1);
 
     const url = (path: string, params?: Record<string, string | undefined>): string => {
         const query = new URLSearchParams();
@@ -133,6 +140,9 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         },
         projectReorder: async (projectId, afterId) => {
             await postJson<Record<string, never>>(`/projects/${projectId}/reorder`, { afterId });
+        },
+        projectArchive: async (projectId) => {
+            await postJson<Record<string, never>>(`/projects/${projectId}/archive`);
         },
         worktreeCreate: (projectId, input) =>
             postJson<RigWorktree>(`/projects/${projectId}/worktrees`, input),
