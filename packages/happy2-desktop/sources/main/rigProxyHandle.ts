@@ -722,7 +722,7 @@ function createRequest(input: RigSessionCreateInput) {
         ...(input.modelId ? { modelId: input.modelId } : {}),
         ...(input.effort ? { effort: input.effort } : {}),
         ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
-        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+        permissionMode: input.permissionMode ?? "auto",
     };
 }
 
