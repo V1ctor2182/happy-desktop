@@ -36,6 +36,10 @@ export type RigProxyClient = Pick<
     | "listCatalog"
     | "getProject"
     | "getProjectAsset"
+    | "listWorkspaces"
+    | "createWorkspace"
+    | "archiveWorkspace"
+    | "reorderWorkspace"
     | "reorderProject"
     | "reorderSession"
     | "getSession"
@@ -218,16 +222,46 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             return false;
         }
 
-        if (
-            method === "POST" &&
-            segments[0] === "projects" &&
-            segments[2] === "reorder" &&
-            segments.length === 3
-        ) {
-            const body = await bodyReadJson(request);
-            await projectReorder(client, segments[1]!, afterIdOf(body));
-            writeJson(response, 200, {});
-            return true;
+        if (method === "POST" && segments[0] === "projects" && segments[1]) {
+            const projectId = segments[1];
+            if (segments[2] === "reorder" && segments.length === 3) {
+                const body = await bodyReadJson(request);
+                await projectReorder(client, projectId, afterIdOf(body));
+                writeJson(response, 200, {});
+                return true;
+            }
+            if (segments[2] === "worktrees" && segments.length === 3) {
+                const body = await bodyReadJson(request);
+                const created = await client.createWorkspace(projectId, {
+                    // `HEAD` is what the reader is looking at: a worktree started
+                    // from the project's current commit, which is what "new
+                    // worktree here" means without asking for a branch first.
+                    baseRef: typeof body.baseRef === "string" ? body.baseRef : "HEAD",
+                    clientRequestId: String(body.idempotencyKey ?? ""),
+                    name: typeof body.name === "string" ? body.name : "Workspace",
+                });
+                writeJson(response, 200, rigWorktreeProject(created.workspace, home));
+                return true;
+            }
+            if (segments[2] === "worktrees" && segments[3] && segments.length === 5) {
+                const worktreeId = segments[3];
+                if (segments[4] === "archive") {
+                    await worktreeGuarded(client, projectId, worktreeId, (version) =>
+                        client.archiveWorkspace(projectId, worktreeId, version),
+                    );
+                    writeJson(response, 200, {});
+                    return true;
+                }
+                if (segments[4] === "reorder") {
+                    const body = await bodyReadJson(request);
+                    const afterId = afterIdOf(body);
+                    await worktreeGuarded(client, projectId, worktreeId, (version) =>
+                        client.reorderWorkspace(projectId, worktreeId, afterId, version),
+                    );
+                    writeJson(response, 200, {});
+                    return true;
+                }
+            }
         }
 
         if (method === "POST" && segments[0] === "sessions") {
@@ -535,6 +569,30 @@ async function streamGlobalEvents(
 /** The `afterId` of a reorder request: a preceding id, or null for the front. */
 function afterIdOf(body: Record<string, unknown>): string | null {
     return typeof body.afterId === "string" ? body.afterId : null;
+}
+
+/**
+ * Runs one version-guarded worktree action, reading the version the same way the
+ * project routes do and retrying once against whichever version won a race.
+ */
+async function worktreeGuarded(
+    client: RigProxyClient,
+    projectId: string,
+    worktreeId: string,
+    run: (version: number) => Promise<unknown>,
+): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+        const { workspaces } = await client.listWorkspaces(projectId);
+        const worktree = workspaces.find((candidate) => candidate.id === worktreeId);
+        if (worktree === undefined) throw new Error("The worktree no longer exists.");
+        try {
+            await run(worktree.version);
+            return;
+        } catch (error) {
+            if (attempt >= 1 || !(error instanceof RigDaemonHttpError) || error.statusCode !== 409)
+                throw error;
+        }
+    }
 }
 
 /**

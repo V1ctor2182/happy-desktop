@@ -17,6 +17,8 @@ import type {
     RigSessionCreateInput,
     RigSessionId,
     RigSessionSummary,
+    RigWorktree,
+    RigWorktreeId,
 } from "./rigTypes.js";
 
 /**
@@ -82,6 +84,26 @@ export interface RigSessionListStore {
 
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
+
+    /**
+     * Adds a worktree to the project and starts a first conversation in it,
+     * resolving with that conversation's address. The host prepares the checkout
+     * asynchronously, so this waits for the worktree to become usable before
+     * starting the session — a session pointed at a checkout that does not exist
+     * yet would fail on its first run. Resolves with `undefined` when either step
+     * failed, with the reason recorded in `mutationError`.
+     */
+    worktreeCreate(projectId: RigProjectId): Promise<RigSessionLocation | undefined>;
+
+    /** Archives a worktree: it leaves the list and the host removes its checkout. */
+    worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
+
+    /** Moves one worktree after `afterId` within its project, or to the front when null. */
+    worktreeReorder(
+        projectId: RigProjectId,
+        worktreeId: RigWorktreeId,
+        afterId: RigWorktreeId | null,
+    ): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -126,6 +148,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
     let catalog: RigProjectCatalog = EMPTY_CATALOG;
+    // Callers waiting for a freshly reserved worktree to finish initializing.
+    // Settled from `publish`, which every reconcile runs through, so the wait is
+    // driven by the host's own catalog rather than by polling it.
+    const worktreeWaiters = new Map<RigWorktreeId, (worktree: RigWorktree) => void>();
 
     const publish = (): void => {
         const previous = store.getState();
@@ -137,8 +163,38 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             previous.projects.type === "ready"
                 ? referencesPreserve(previous.projects.value, projected)
                 : projected;
-        if (previous.projects.type === "ready" && previous.projects.value === projects) return;
-        store.setState({ ...previous, projects: { type: "ready", value: projects } });
+        if (previous.projects.type !== "ready" || previous.projects.value !== projects)
+            store.setState({ ...previous, projects: { type: "ready", value: projects } });
+    };
+
+    /** Settles anyone waiting on a worktree that has stopped initializing. */
+    const worktreesSettle = (): void => {
+        if (worktreeWaiters.size === 0) return;
+        for (const worktree of catalog.worktrees) {
+            if (worktree.status === "initializing") continue;
+            const settle = worktreeWaiters.get(worktree.id);
+            if (settle) {
+                worktreeWaiters.delete(worktree.id);
+                settle(worktree);
+            }
+        }
+    };
+
+    /**
+     * Resolves once the host reports the worktree usable, or rejects when it
+     * failed to prepare. A worktree that never settles leaves this pending; the
+     * caller is a user action, so it is cancelled by disposal rather than by a
+     * timeout that would report a failure the host never had.
+     */
+    const worktreeReady = (worktreeId: RigWorktreeId): Promise<RigWorktree> => {
+        const known = catalog.worktrees.find((candidate) => candidate.id === worktreeId);
+        if (known && known.status !== "initializing") return Promise.resolve(known);
+        return new Promise<RigWorktree>((resolve, reject) => {
+            worktreeWaiters.set(worktreeId, (worktree) => {
+                if (worktree.status === "ready") resolve(worktree);
+                else reject(new Error("The worktree could not be prepared."));
+            });
+        });
     };
 
     const reconcile = async (): Promise<void> => {
@@ -160,6 +216,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             catalog = readCatalog;
             sessions = read;
             publish();
+            worktreesSettle();
         } catch (error) {
             if (disposed || current !== generation) return;
             const previous = store.getState();
@@ -310,6 +367,74 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     if (!disposed) await reconcile();
                 }
             }),
+        worktreeCreate: (projectId) =>
+            mutate(async () => {
+                const reserved = await deps.transport.worktreeCreate(projectId, {
+                    idempotencyKey: createId(),
+                    name: "Workspace",
+                });
+                if (disposed) return undefined;
+                // The row appears while the host is still preparing the checkout,
+                // so the reader sees the worktree they asked for immediately.
+                catalog = { ...catalog, worktrees: [...catalog.worktrees, reserved] };
+                publish();
+                await reconcile();
+                if (disposed) return undefined;
+                const ready = await worktreeReady(reserved.id);
+                if (disposed) return undefined;
+                const session = await deps.transport.sessionCreate({
+                    cwd: ready.path,
+                    worktreeId: ready.id,
+                });
+                if (disposed) return undefined;
+                sessions = [
+                    sessionSummaryOf(session),
+                    ...sessions.filter((existing) => existing.id !== session.id),
+                ];
+                publish();
+                const location = sessionLocationOf(session);
+                output({ type: "sessionCreated", location });
+                await reconcile();
+                return location;
+            }),
+        worktreeArchive: (projectId, worktreeId) =>
+            mutate(async () => {
+                // The worktree leaves the list before the host confirms, because
+                // archiving is a deliberate act and must feel immediate. A failure
+                // is recorded and the reconcile below puts it back.
+                catalog = {
+                    ...catalog,
+                    worktrees: catalog.worktrees.filter((entry) => entry.id !== worktreeId),
+                };
+                publish();
+                try {
+                    await deps.transport.worktreeArchive(projectId, worktreeId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
+        worktreeReorder: (projectId, worktreeId, afterId) =>
+            mutate(async () => {
+                const peers = catalog.worktrees.filter((entry) => entry.projectId === projectId);
+                if (!peers.some((entry) => entry.id === worktreeId)) return;
+                const orderKey = orderKeyAfter(
+                    peers.map((entry) => ({ id: entry.id, orderKey: entry.orderKey })),
+                    worktreeId,
+                    afterId,
+                );
+                catalog = {
+                    ...catalog,
+                    worktrees: catalog.worktrees.map((entry) =>
+                        entry.id === worktreeId ? { ...entry, orderKey } : entry,
+                    ),
+                };
+                publish();
+                try {
+                    await deps.transport.worktreeReorder(projectId, worktreeId, afterId);
+                } finally {
+                    if (!disposed) await reconcile();
+                }
+            }),
         projectReorder: (projectId, afterId) =>
             mutate(async () => {
                 if (!catalog.projects.some((project) => project.id === projectId)) return;
@@ -337,6 +462,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            worktreeWaiters.clear();
             stop();
             storeUnsub();
             listeners.clear();

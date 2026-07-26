@@ -14,6 +14,7 @@ import type {
     ModelCatalog,
     Project,
     ProjectAssetResponse,
+    ProjectWorkspace,
     ProtocolSession,
     RemoteTerminalResponse,
     RunShellCommandResponse,
@@ -101,6 +102,62 @@ export class RigDaemonClient {
 
     getProject(projectId: string): Promise<{ readonly project: Project }> {
         return this.#requestJson("GET", `/projects/${encodeURIComponent(projectId)}`);
+    }
+
+    listWorkspaces(
+        projectId: string,
+    ): Promise<{ readonly workspaces: readonly ProjectWorkspace[] }> {
+        return this.#requestJson("GET", `/projects/${encodeURIComponent(projectId)}/workspaces`);
+    }
+
+    /**
+     * Reserves a git worktree in the project. The daemon answers as soon as the
+     * row exists, with the checkout still initializing, and reports it ready (or
+     * failed) over the global event queue. `clientRequestId` makes a retry of the
+     * same request return the same worktree instead of reserving a second one.
+     */
+    createWorkspace(
+        projectId: string,
+        request: {
+            readonly baseRef: string;
+            readonly clientRequestId: string;
+            readonly name: string;
+        },
+    ): Promise<{ readonly workspace: ProjectWorkspace }> {
+        return this.#requestJson(
+            "POST",
+            `/projects/${encodeURIComponent(projectId)}/workspaces`,
+            request,
+        );
+    }
+
+    /** Archives a worktree, which removes its checkout; guarded by the version it was read at. */
+    archiveWorkspace(
+        projectId: string,
+        workspaceId: string,
+        expectedVersion: number,
+    ): Promise<{ readonly workspace: ProjectWorkspace }> {
+        return this.#requestJson(
+            "POST",
+            `/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+            {},
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
+    }
+
+    /** Moves a worktree after `afterId` within its project, or to the front when null. */
+    reorderWorkspace(
+        projectId: string,
+        workspaceId: string,
+        afterId: string | null,
+        expectedVersion: number,
+    ): Promise<{ readonly workspace: ProjectWorkspace }> {
+        return this.#requestJson(
+            "POST",
+            `/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/reorder`,
+            { afterId },
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
     }
 
     /**

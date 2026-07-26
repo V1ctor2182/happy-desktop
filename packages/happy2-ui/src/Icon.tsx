@@ -56,6 +56,7 @@ export type IconName =
     | "panel-collapse"
     | "panel-expand"
     | "trash"
+    | "archive"
     | "dot";
 export type IconProps = {
     name: IconName;
@@ -147,6 +148,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     "panel-collapse": { set: "octicons", name: "sidebar-collapse", mirrored: true },
     "panel-expand": { set: "octicons", name: "sidebar-expand", mirrored: true },
     trash: { set: "ionicons", name: "trash-outline" },
+    archive: { set: "ionicons", name: "archive-outline" },
     dot: { set: "ionicons", name: "ellipse" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];

@@ -31,6 +31,8 @@ import type {
     RigToolStatus,
     RigUserInputAnswers,
     RigUserInputRequest,
+    RigWorktree,
+    RigWorktreeId,
 } from "./rigTypes.js";
 
 /**
@@ -267,6 +269,31 @@ export interface RigTransport {
 
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
+
+    /**
+     * Reserves a worktree in the project and resolves with it while its checkout
+     * is still being prepared — `status` says whether it is usable yet, and the
+     * host reports the change through the catalog. `idempotencyKey` is stable
+     * across retries of one creation, so a retry returns the same worktree
+     * instead of reserving a second one.
+     */
+    worktreeCreate(
+        projectId: RigProjectId,
+        input: { readonly name: string; readonly idempotencyKey: string },
+    ): Promise<RigWorktree>;
+
+    /**
+     * Archives a worktree: it stops being listed and the host removes its
+     * checkout. The sessions that ran in it are closed by the host.
+     */
+    worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
+
+    /** Moves one worktree after `afterId` within its project, or to the front when null. */
+    worktreeReorder(
+        projectId: RigProjectId,
+        worktreeId: RigWorktreeId,
+        afterId: RigWorktreeId | null,
+    ): Promise<void>;
 
     /** Submits a fresh user turn; `idempotencyKey` is stable across retries of one send. */
     messageSubmit(sessionId: RigSessionId, text: string, idempotencyKey: string): Promise<void>;

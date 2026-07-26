@@ -541,6 +541,46 @@
     transform: translateY(var(--happy2-sidebar-meta-optical-y, 0px));
 }
 
+/* The row's own control, at its trailing edge. It sits inside the row button so
+   it tracks the row's hover, and takes the row's height so the hit target is the
+   full lane rather than the glyph. */
+.happy2-sidebar__item-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    margin-right: -3px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-sidebar__item-action[data-reveal="hover"] {
+    opacity: 0;
+}
+
+.happy2-sidebar__item:hover .happy2-sidebar__item-action[data-reveal="hover"],
+.happy2-sidebar__item-action[data-reveal="hover"]:focus-visible {
+    opacity: 1;
+}
+
+.happy2-sidebar__item-action:hover {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy2-sidebar__item-action:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
 .happy2-sidebar__item-working {
     display: block;
     flex: none;

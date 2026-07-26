@@ -20,6 +20,7 @@ import type {
     RigThinkingLevel,
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
+    RigWorktreeId,
 } from "happy2-state";
 import { rigOwnerAuthor } from "happy2-state";
 import {
@@ -115,6 +116,9 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+            // Adding a worktree is what a project row offers, so the control
+            // stays visible rather than waiting for a hover to reveal it.
+            action: { icon: "plus" as const, label: `New workspace in ${project.name}` },
             // A row only carries a status while one of its sessions is live.
             ...(project.activity === "running" ? { status: "working" as const } : {}),
         },
@@ -123,6 +127,13 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             kind: "channel" as const,
             depth: 1,
             label: worktree.name,
+            // Archiving throws away a checkout, so it stays out of sight until
+            // the reader is actually on the row.
+            action: {
+                icon: "archive" as const,
+                label: `Archive ${worktree.name}`,
+                reveal: "hover" as const,
+            },
             ...(worktree.activity === "running" ? { status: "working" as const } : {}),
         })),
     ];
@@ -135,6 +146,19 @@ function panelTabs(panel: RigPanelSnapshot): TabItem[] {
         label: tab.label,
         icon: tab.kind === "terminal" ? ("terminal" as const) : ("globe" as const),
     }));
+}
+
+/** The project a sidebar row belongs to, and whether the row is one of its worktrees. */
+function rowOwnerFind(
+    projects: readonly RigProjectGroup[],
+    id: string,
+): { readonly project: RigProjectGroup; readonly worktreeId?: RigWorktreeId } | undefined {
+    for (const project of projects) {
+        if (project.id === id) return { project };
+        for (const worktree of project.worktrees)
+            if (worktree.id === id) return { project, worktreeId: worktree.id };
+    }
+    return undefined;
 }
 
 /** One tab per session in the open group, marked while the agent is working. */
@@ -314,18 +338,43 @@ export function AppRigView(props: AppRigViewProps) {
                     onItemSelect={(id) =>
                         props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id)
                     }
-                    onItemReorder={(_sectionId, projectIds) => {
-                        const move = sidebarReorderMove(
-                            rows.map((project) => project.id),
-                            projectIds,
-                        );
+                    onItemAction={(id) => {
+                        const owner = rowOwnerFind(rows, id);
+                        if (!owner) return;
+                        // The plus on a project adds a worktree; the control on a
+                        // worktree archives it.
+                        void (
+                            owner.worktreeId
+                                ? props.workspace.worktreeArchive(
+                                      owner.project.id,
+                                      owner.worktreeId,
+                                  )
+                                : props.workspace.worktreeCreate(owner.project.id)
+                        ).catch(() => undefined);
+                    }}
+                    onItemReorder={(_sectionId, ids, parentId) => {
+                        // A drag inside a project rearranges its worktrees; a drag
+                        // at the top level rearranges the projects themselves.
+                        const parent = parentId
+                            ? rows.find((project) => project.id === parentId)
+                            : undefined;
+                        const before = parent
+                            ? parent.worktrees.map((worktree) => worktree.id)
+                            : rows.map((project) => project.id);
+                        const move = sidebarReorderMove(before, ids);
                         if (!move) return;
-                        void props.workspace
-                            .projectReorder(
-                                move.id as RigProjectId,
-                                move.afterId as RigProjectId | null,
-                            )
-                            .catch(() => undefined);
+                        void (
+                            parent
+                                ? props.workspace.worktreeReorder(
+                                      parent.id,
+                                      move.id as RigWorktreeId,
+                                      move.afterId as RigWorktreeId | null,
+                                  )
+                                : props.workspace.projectReorder(
+                                      move.id as RigProjectId,
+                                      move.afterId as RigProjectId | null,
+                                  )
+                        ).catch(() => undefined);
                     }}
                     sections={[
                         {

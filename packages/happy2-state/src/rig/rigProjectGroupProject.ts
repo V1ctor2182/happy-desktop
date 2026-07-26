@@ -63,7 +63,7 @@ export interface RigProjectGroup {
  * preserving the incoming session order inside each group and ordering the
  * projects by their newest session. A project with no sessions is still listed —
  * it is a place to start one — while a worktree only appears once it has work in
- * it, so an empty branch does not clutter a project it belongs to.
+ * it.
  *
  * Sessions whose project the catalog does not describe are dropped rather than
  * guessed at: the catalog and the session list are read together, so the only way
@@ -86,8 +86,10 @@ export function rigProjectGroupsProject(
     const worktreesByProject = new Map<RigProjectId, RigWorktreeGroup[]>();
     for (const worktree of catalog.worktrees) {
         if (worktree.status === "archived") continue;
+        // A worktree is listed as soon as it exists, before anything has run in
+        // it: it was created deliberately and is where the next session goes, so
+        // an empty one is a destination rather than clutter.
         const conversations = conversationsOf(worktreeSessions.get(worktree.id));
-        if (conversations.length === 0) continue;
         mapAppend(worktreesByProject, worktree.projectId).push({
             id: worktree.id,
             projectId: worktree.projectId,

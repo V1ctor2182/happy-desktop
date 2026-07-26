@@ -22,6 +22,7 @@ import type {
     RigThinkingLevel,
     RigTransport,
     RigUserInputAnswers,
+    RigWorktree,
 } from "happy2-state";
 
 /**
@@ -129,6 +130,19 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         },
         projectReorder: async (projectId, afterId) => {
             await postJson<Record<string, never>>(`/projects/${projectId}/reorder`, { afterId });
+        },
+        worktreeCreate: (projectId, input) =>
+            postJson<RigWorktree>(`/projects/${projectId}/worktrees`, input),
+        worktreeArchive: async (projectId, worktreeId) => {
+            await postJson<Record<string, never>>(
+                `/projects/${projectId}/worktrees/${worktreeId}/archive`,
+            );
+        },
+        worktreeReorder: async (projectId, worktreeId, afterId) => {
+            await postJson<Record<string, never>>(
+                `/projects/${projectId}/worktrees/${worktreeId}/reorder`,
+                { afterId },
+            );
         },
 
         messageSubmit: async (sessionId, text, idempotencyKey) => {

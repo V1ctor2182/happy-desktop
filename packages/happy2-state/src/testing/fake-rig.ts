@@ -16,6 +16,8 @@ import type {
     RigProjectCatalog,
     RigProjectId,
     RigServiceTier,
+    RigWorktree,
+    RigWorktreeId,
     RigSession,
     RigSessionCreateInput,
     RigSessionId,
@@ -39,6 +41,9 @@ export type FakeRigOperation =
     | "sessionArchive"
     | "sessionReorder"
     | "projectReorder"
+    | "worktreeCreate"
+    | "worktreeArchive"
+    | "worktreeReorder"
     | "sessionFork"
     | "sessionReset"
     | "messageSubmit"
@@ -410,6 +415,50 @@ class FakeRigTransportModel implements FakeRigTransport {
                     afterId,
                 );
                 this.sessions.set(sessionId, { ...session, orderKey });
+                return undefined;
+            }),
+        worktreeCreate: (projectId, input) =>
+            this.perform("worktreeCreate", {}, () => {
+                const id = `worktree-${this.nextForkId++}` as RigWorktreeId;
+                const worktree: RigWorktree = {
+                    id,
+                    projectId,
+                    name: input.name,
+                    orderKey: "a0",
+                    path: `/worktrees/${id}`,
+                    displayPath: `/worktrees/${id}`,
+                    status: "ready",
+                };
+                this.projects = {
+                    ...this.projects,
+                    worktrees: [...this.projects.worktrees, worktree],
+                };
+                return worktree;
+            }),
+        worktreeArchive: (_projectId, worktreeId) =>
+            this.perform("worktreeArchive", {}, () => {
+                this.projects = {
+                    ...this.projects,
+                    worktrees: this.projects.worktrees.filter((entry) => entry.id !== worktreeId),
+                };
+                return undefined;
+            }),
+        worktreeReorder: (projectId, worktreeId, afterId) =>
+            this.perform("worktreeReorder", { afterId }, () => {
+                const peers = this.projects.worktrees.filter(
+                    (entry) => entry.projectId === projectId,
+                );
+                const orderKey = orderKeyAfter(
+                    peers.map((entry) => ({ id: entry.id, orderKey: entry.orderKey })),
+                    worktreeId,
+                    afterId,
+                );
+                this.projects = {
+                    ...this.projects,
+                    worktrees: this.projects.worktrees.map((entry) =>
+                        entry.id === worktreeId ? { ...entry, orderKey } : entry,
+                    ),
+                };
                 return undefined;
             }),
         projectReorder: (projectId, afterId) =>

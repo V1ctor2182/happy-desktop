@@ -64,6 +64,8 @@ export interface ProjectWorkspace {
     readonly orderKey: string;
     readonly path: string;
     readonly status: ProjectWorkspaceStatus;
+    /** Optimistic-concurrency token the daemon requires to guard an archive or reorder. */
+    readonly version: number;
     readonly createdAt: number;
     readonly updatedAt: number;
 }

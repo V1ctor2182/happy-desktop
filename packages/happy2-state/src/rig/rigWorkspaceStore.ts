@@ -33,6 +33,7 @@ import type {
     RigTask,
     RigThinkingLevel,
     RigUserInputAnswers,
+    RigWorktreeId,
 } from "./rigTypes.js";
 
 /**
@@ -154,6 +155,19 @@ export interface RigWorkspaceStore {
     conversationReorder(conversationId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
+    /**
+     * Adds a worktree to the project and opens a first conversation in it once
+     * the host has prepared its checkout.
+     */
+    worktreeCreate(projectId: RigProjectId): Promise<void>;
+    /** Archives a worktree, removing it and its checkout. */
+    worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
+    /** Moves one worktree after `afterId` within its project, or to the front when null. */
+    worktreeReorder(
+        projectId: RigProjectId,
+        worktreeId: RigWorktreeId,
+        afterId: RigWorktreeId | null,
+    ): Promise<void>;
 
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
@@ -570,6 +584,10 @@ export function rigWorkspaceStoreCreate(
         conversationReorder: (conversationId, afterId) =>
             list.conversationReorder(conversationId, afterId),
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
+        worktreeCreate: (projectId) => list.worktreeCreate(projectId).then(openRequest),
+        worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
+        worktreeReorder: (projectId, worktreeId, afterId) =>
+            list.worktreeReorder(projectId, worktreeId, afterId),
 
         composerTextUpdate: (text) => composer?.getState().textUpdate(text),
         composerFocusUpdate: (focused) => composer?.getState().focusUpdate(focused),
