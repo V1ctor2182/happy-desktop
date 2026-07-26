@@ -8,7 +8,6 @@ import {
     type MouseEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
-    type TransitionEvent as ReactTransitionEvent,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { haptic } from "./haptics";
@@ -138,6 +137,10 @@ function reducedMotion(): boolean {
     );
 }
 
+/** How long a dropped row takes to travel from where it was to where it now is. */
+const SETTLE_MS = 160;
+const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
 interface SidebarDrag {
     readonly pointerId: number;
     readonly startY: number;
@@ -148,12 +151,6 @@ interface SidebarDrag {
     readonly heights: readonly number[];
     /** False until the pointer passes the threshold, so a click still selects. */
     readonly moved: boolean;
-    /**
-     * Released and travelling to the slot it was dropped into. The move is
-     * reported only once that travel ends, so the list is rearranged under a row
-     * that is already sitting where the new order will put it.
-     */
-    readonly settling: boolean;
 }
 
 /**
@@ -169,17 +166,6 @@ function blocksOf(items: readonly SidebarItem[]): readonly (readonly number[])[]
         else blocks[blocks.length - 1]!.push(index);
     });
     return blocks;
-}
-
-/** How far the dragged block must travel to sit in the slot it was dropped into. */
-function settleOffset(drag: SidebarDrag): number {
-    let offset = 0;
-    if (drag.to > drag.from)
-        for (let index = drag.from + 1; index <= drag.to; index += 1)
-            offset += drag.heights[index] ?? 0;
-    if (drag.to < drag.from)
-        for (let index = drag.to; index < drag.from; index += 1) offset -= drag.heights[index] ?? 0;
-    return offset;
 }
 
 /** Where the dragged block lands: each neighbour it has passed by half that neighbour's height. */
@@ -227,10 +213,9 @@ function SidebarRow(props: {
     onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    /** Registers the live node so a drop can measure and animate this row. */
+    nodeRef?: (node: HTMLButtonElement | null) => void;
     onSelect: (id: string) => void;
-    onTransitionEnd?: (event: ReactTransitionEvent<HTMLButtonElement>) => void;
-    /** Set while a released row is still travelling to the slot it was dropped into. */
-    settling?: boolean;
     shift?: number;
 }) {
     const item = () => props.item;
@@ -253,14 +238,13 @@ function SidebarRow(props: {
             data-happy2-ui="sidebar-item"
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
-            data-settling={props.settling ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
             onPointerDown={props.onPointerDown}
             onPointerMove={props.onPointerMove}
             onPointerCancel={props.onPointerUp}
             onPointerUp={props.onPointerUp}
-            onTransitionEnd={props.onTransitionEnd}
+            ref={props.nodeRef}
             style={{
                 ...(depth() > 0
                     ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
@@ -406,6 +390,11 @@ export function Sidebar(props: SidebarProps) {
     // Reorder drag. The live value is kept in a ref as well as in state because
     // the pointer handlers read it in the same gesture that schedules the paint.
     const dragRef = useRef<{ sectionId: string; drag: SidebarDrag } | undefined>(undefined);
+    // Live row nodes, so a drop can read where each row was before the new order
+    // is applied and animate it from there.
+    const rowNodes = useRef(new Map<string, HTMLButtonElement>());
+    // Row tops captured at the drop, consumed by the layout effect below.
+    const flipRef = useRef<Map<string, number> | undefined>(undefined);
     // Set by a drag that actually moved, so the click the browser fires on
     // release rearranges rather than also opening what was dragged.
     const dragClick = useRef(false);
@@ -459,7 +448,6 @@ export function Sidebar(props: SidebarProps) {
                 heights,
                 moved: false,
                 pointerId: event.pointerId,
-                settling: false,
                 startY: event.clientY,
                 to: blockIndex,
             },
@@ -468,7 +456,7 @@ export function Sidebar(props: SidebarProps) {
 
     const dragMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
         const current = dragRef.current;
-        if (!current || current.drag.settling || event.pointerId !== current.drag.pointerId) return;
+        if (!current || event.pointerId !== current.drag.pointerId) return;
         const deltaY = event.clientY - current.drag.startY;
         if (!current.drag.moved && Math.abs(deltaY) < DRAG_THRESHOLD) return;
         const to = dragTargetIndex(current.drag, deltaY);
@@ -482,11 +470,33 @@ export function Sidebar(props: SidebarProps) {
     };
 
     /** Reports the move, if the drag made one, and clears the drag. */
-    const dragCommit = (
-        drag: SidebarDrag,
+    const dragEnd = (
+        event: ReactPointerEvent<HTMLButtonElement>,
         section: SidebarSection,
         blocks: readonly (readonly number[])[],
     ): void => {
+        const current = dragRef.current;
+        if (!current || event.pointerId !== current.drag.pointerId) return;
+        const { drag } = current;
+        if (!drag.moved) {
+            dragSet(undefined);
+            return;
+        }
+        dragClick.current = true;
+        // Where every row is right now, while the drag still holds them: the
+        // dragged row under the pointer and its neighbours pushed aside. The new
+        // order is applied immediately after, and the rows animate from these
+        // positions to wherever it puts them — so the one commit that moves DOM
+        // nodes happens here, under the pointer, and never once the row is
+        // supposed to be sitting still.
+        if (!reducedMotion() && drag.from !== drag.to) {
+            const firsts = new Map<string, number>();
+            for (const item of section.items) {
+                const node = rowNodes.current.get(item.id);
+                if (node) firsts.set(item.id, node.getBoundingClientRect().top);
+            }
+            flipRef.current = firsts;
+        }
         dragSet(undefined);
         if (drag.from === drag.to) return;
         haptic("impact");
@@ -497,42 +507,43 @@ export function Sidebar(props: SidebarProps) {
         local.onItemReorder?.(section.id, next);
     };
 
-    const dragEnd = (
-        event: ReactPointerEvent<HTMLButtonElement>,
-        section: SidebarSection,
-        blocks: readonly (readonly number[])[],
-    ): void => {
-        const current = dragRef.current;
-        if (!current || current.drag.settling || event.pointerId !== current.drag.pointerId) return;
-        if (!current.drag.moved) {
-            dragSet(undefined);
-            return;
+    /*
+     * FLIP: the rows have already been rearranged by the render this runs after,
+     * so each one is measured again and played back from where the drop left it.
+     * It has to be a layout effect reading real geometry — the distance a row
+     * travels is only known once the browser has laid the new order out — and it
+     * animates through the Web Animations API rather than a CSS transition so
+     * that moving a node between parents, which is what rearranging the list
+     * does, cannot restart or strand it.
+     */
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a drop animation must measure the laid-out result of the render it follows, which no declarative or event-driven boundary exposes
+    useLayoutEffect(() => {
+        const firsts = flipRef.current;
+        if (!firsts) return;
+        const played: Animation[] = [];
+        for (const [id, first] of firsts) {
+            const node = rowNodes.current.get(id);
+            if (!node) continue;
+            const delta = first - node.getBoundingClientRect().top;
+            if (Math.abs(delta) < 0.5) continue;
+            played.push(
+                node.animate(
+                    [
+                        { transform: `translateY(${String(delta)}px)` },
+                        { transform: "translateY(0)" },
+                    ],
+                    { duration: SETTLE_MS, easing: SETTLE_EASING },
+                ),
+            );
         }
-        dragClick.current = true;
-        // The row is released mid-flight, so it travels the rest of the way
-        // before the list is rearranged under it — otherwise the new order lands
-        // in one frame and the row appears to teleport into its slot. When there
-        // is no travel left, or the reader asked for no motion, there is nothing
-        // to wait for and the move is reported now.
-        const offset = settleOffset(current.drag);
-        const still = Math.abs(offset - current.drag.deltaY) < 0.5;
-        if (still || reducedMotion()) {
-            dragCommit(current.drag, section, blocks);
-            return;
-        }
-        dragSet({ ...current, drag: { ...current.drag, deltaY: offset, settling: true } });
-    };
-
-    /** Ends the settle once the released row has actually finished travelling. */
-    const dragSettled = (
-        event: ReactTransitionEvent<HTMLButtonElement>,
-        section: SidebarSection,
-        blocks: readonly (readonly number[])[],
-    ): void => {
-        const current = dragRef.current;
-        if (!current?.drag.settling || event.propertyName !== "transform") return;
-        dragCommit(current.drag, section, blocks);
-    };
+        // Kept until something actually moved: the reorder may reach the list one
+        // render later than the drop, and dropping the capture on the first empty
+        // pass would lose the animation entirely.
+        if (played.length > 0) flipRef.current = undefined;
+        return () => {
+            for (const animation of played) animation.cancel();
+        };
+    });
 
     const openItemMenu = (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => {
         const items = local.itemMenuItems?.(item) ?? [];
@@ -707,7 +718,7 @@ export function Sidebar(props: SidebarProps) {
                                                       (item.depth ?? 0) > 0 &&
                                                       isFirstAtDepth(section.items, index)
                                                   }
-                                                  dragging={held && !drag.settling}
+                                                  dragging={held}
                                                   key={item.id}
                                                   item={item}
                                                   onContextMenu={openItemMenu}
@@ -731,13 +742,10 @@ export function Sidebar(props: SidebarProps) {
                                                                 dragEnd(event, section, blocks)
                                                           : undefined
                                                   }
-                                                  onTransitionEnd={
-                                                      local.onItemReorder && held
-                                                          ? (event) =>
-                                                                dragSettled(event, section, blocks)
-                                                          : undefined
-                                                  }
-                                                  settling={held && drag.settling}
+                                                  nodeRef={(node) => {
+                                                      if (node) rowNodes.current.set(item.id, node);
+                                                      else rowNodes.current.delete(item.id);
+                                                  }}
                                                   onSelect={(id) => {
                                                       if (dragClick.current) {
                                                           dragClick.current = false;

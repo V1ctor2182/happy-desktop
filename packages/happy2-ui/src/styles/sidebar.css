@@ -361,12 +361,6 @@
     transition: none;
 }
 
-/* Released, still travelling to the slot it was dropped into: it takes the
-   transform transition back and keeps riding above the rows it passes. */
-.happy2-sidebar__item[data-settling] {
-    z-index: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
     .happy2-sidebar__section[data-reordering] .happy2-sidebar__item {
         transition:
