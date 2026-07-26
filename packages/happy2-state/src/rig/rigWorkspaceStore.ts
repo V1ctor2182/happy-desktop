@@ -271,6 +271,12 @@ export function rigWorkspaceStoreCreate(
 ): RigWorkspaceStore {
     const list: RigSessionListStore = client.sessionList();
     const output = deps.output ?? (() => undefined);
+    const draftOrigin = `happy2_${Math.random().toString(36).slice(2)}`;
+    let draftUpdatedAt = 0;
+    const nextDraftUpdatedAt = (): number => {
+        draftUpdatedAt = Math.max(Date.now(), draftUpdatedAt + 1);
+        return draftUpdatedAt;
+    };
     const panel: RigPanelStore = rigPanelStoreCreate({
         terminalOpen: (sessionId) => client.terminalOpen(sessionId),
     });
@@ -452,7 +458,15 @@ export function rigWorkspaceStoreCreate(
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
             output: (event) => {
                 switch (event.type) {
+                    case "textUpdated":
+                        void withChatStore((store) =>
+                            store.draftSet(event.text, nextDraftUpdatedAt(), draftOrigin),
+                        ).catch(() => undefined);
+                        return;
                     case "textSubmitted":
+                        void withChatStore((store) =>
+                            store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
+                        ).catch(() => undefined);
                         submitting(event.revision, () =>
                             withChatStore((store) =>
                                 store.messageSend(event.text, rigImageInputsOf(event.attachments)),
@@ -539,7 +553,24 @@ export function rigWorkspaceStoreCreate(
                 acquiringId = undefined;
                 handle = acquired;
                 chatStore = acquired.store;
-                unsubscribeChat = acquired.store.subscribe(recompute);
+                const reconcileDraft = (): void => {
+                    const state = acquired.store.get().session;
+                    const currentComposer = composer;
+                    if (state.type !== "ready" || !currentComposer) return;
+                    const remoteUpdatedAt = state.value.draftUpdatedAt ?? 0;
+                    const localUpdatedAt = currentComposer.getState().lastInteractionAt ?? 0;
+                    if (remoteUpdatedAt < localUpdatedAt) return;
+                    const remote = state.value.draft ?? "";
+                    if (currentComposer.getState().text !== remote)
+                        currentComposer
+                            .getState()
+                            .composerInput({ type: "textReconciled", text: remote });
+                };
+                reconcileDraft();
+                unsubscribeChat = acquired.store.subscribe(() => {
+                    reconcileDraft();
+                    recompute();
+                });
                 recompute();
             },
             (error: unknown) => {

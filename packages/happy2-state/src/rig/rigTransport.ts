@@ -165,6 +165,12 @@ export type RigSessionEvent = {
       }
     | { readonly type: "service_tier_changed"; readonly serviceTier: RigServiceTier | null }
     | { readonly type: "permission_mode_changed"; readonly permissionMode: RigPermissionMode }
+    | {
+          readonly type: "session_draft_changed";
+          readonly draft?: string;
+          readonly origin?: string;
+          readonly updatedAt: number;
+      }
     | { readonly type: "user_input_requested"; readonly request: RigUserInputRequest }
     | {
           readonly type: "user_input_resolved";
@@ -223,7 +229,12 @@ export type RigGlobalEvent =
      * initialization state. Payload-free on purpose: the list reconciles the
      * catalog rather than trusting an event.
      */
-    | { readonly cursor: string; readonly type: "catalog_changed" };
+    | { readonly cursor: string; readonly type: "catalog_changed" }
+    | {
+          readonly type: "git_changed";
+          readonly projectId: RigProjectId;
+          readonly worktreeId?: RigWorktreeId;
+      };
 
 export interface RigEventObserver<Event> {
     event(value: Event): void;
@@ -328,6 +339,13 @@ export interface RigTransport {
         idempotencyKey: string,
         expectedRunId?: string,
         images?: readonly RigImageInput[],
+    ): Promise<void>;
+    /** Stores or clears the session's shared unsent composer draft. */
+    draftSet(
+        sessionId: RigSessionId,
+        draft: string,
+        updatedAt: number,
+        origin: string,
     ): Promise<void>;
     runAbort(sessionId: RigSessionId, expectedRunId?: string): Promise<void>;
     compact(sessionId: RigSessionId): Promise<void>;

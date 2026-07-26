@@ -34,6 +34,7 @@ export type RigProxyClient = Pick<
     | "models"
     | "listSessions"
     | "listCatalog"
+    | "gitWatch"
     | "getProject"
     | "getProjectAsset"
     | "listWorkspaces"
@@ -66,6 +67,7 @@ export type RigProxyClient = Pick<
     | "changeEffort"
     | "changePermissionMode"
     | "changeServiceTier"
+    | "setSessionDraft"
     | "watchSessionEvents"
     | "watchGlobalEvents"
 >;
@@ -125,11 +127,42 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     (project) => project.archivedAt === undefined,
                 );
                 const listed = new Set(projects.map((project) => project.id));
+                const workspaces = catalog.workspaces.filter((workspace) =>
+                    listed.has(workspace.projectId),
+                );
+                const watched = await client.gitWatch([
+                    ...projects.map((project) => ({ projectId: project.id })),
+                    ...workspaces.map((workspace) => ({
+                        projectId: workspace.projectId,
+                        workspaceId: workspace.id,
+                    })),
+                ]);
+                const projectChanges = new Map<string, number>();
+                const workspaceChanges = new Map<string, number>();
+                for (const event of watched.snapshots) {
+                    if (event.type === "project_git_changed")
+                        projectChanges.set(event.projectId, event.data.git.changedFiles);
+                    else workspaceChanges.set(event.workspaceId, event.data.git.changedFiles);
+                }
                 writeJson(response, 200, {
-                    projects: projects.map((project) => rigProjectProject(project, home)),
-                    worktrees: catalog.workspaces
-                        .filter((workspace) => listed.has(workspace.projectId))
-                        .map((workspace) => rigWorktreeProject(workspace, home)),
+                    projects: projects.map((project) =>
+                        rigProjectProject(
+                            {
+                                ...project,
+                                changedFiles: projectChanges.get(project.id),
+                            },
+                            home,
+                        ),
+                    ),
+                    worktrees: workspaces.map((workspace) =>
+                        rigWorktreeProject(
+                            {
+                                ...workspace,
+                                changedFiles: workspaceChanges.get(workspace.id),
+                            },
+                            home,
+                        ),
+                    ),
                 });
                 return true;
             }
@@ -399,6 +432,14 @@ async function handleSessionPost(
                 clientSubmissionId: String(body.idempotencyKey ?? ""),
                 ...(body.expectedRunId ? { expectedRunId: String(body.expectedRunId) } : {}),
                 ...contentOf(body),
+            });
+            writeJson(response, 200, {});
+            return true;
+        case "draft":
+            await client.setSessionDraft(sessionId, {
+                draft: typeof body.draft === "string" && body.draft.length > 0 ? body.draft : null,
+                origin: String(body.origin ?? ""),
+                updatedAt: Number(body.updatedAt),
             });
             writeJson(response, 200, {});
             return true;

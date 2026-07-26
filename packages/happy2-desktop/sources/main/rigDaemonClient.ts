@@ -9,12 +9,14 @@ import type {
     EventId,
     GetSessionUsageResponse,
     GlobalEventQueueEntry,
+    GlobalEventDelivery,
     GlobalStateResponse,
     HealthResponse,
     ModelCatalog,
     Project,
     ProjectAssetResponse,
     ProjectWorkspace,
+    GitWatchResponse,
     ProtocolSession,
     RemoteTerminalResponse,
     RunShellCommandResponse,
@@ -52,7 +54,7 @@ interface WatchSessionEventsOptions {
 interface WatchGlobalEventsOptions {
     readonly after?: string;
     readonly signal?: AbortSignal;
-    readonly onEvent: (entry: GlobalEventQueueEntry) => void | Promise<void>;
+    readonly onEvent: (entry: GlobalEventDelivery) => void | Promise<void>;
 }
 
 interface SessionResponse {
@@ -93,6 +95,12 @@ export class RigDaemonClient {
      */
     listCatalog(): Promise<GlobalStateResponse> {
         return this.#requestJson("GET", "/state");
+    }
+
+    gitWatch(
+        entities: readonly { readonly projectId: string; readonly workspaceId?: string }[],
+    ): Promise<GitWatchResponse> {
+        return this.#requestJson("POST", "/git/watch", { entities });
     }
 
     /** Reads one project avatar's bytes so the loopback proxy can re-serve them. */
@@ -321,18 +329,18 @@ export class RigDaemonClient {
         sessionId: string,
         request: CreateRemoteTerminalRequest,
     ): Promise<RemoteTerminalResponse> {
-        return this.#requestJson(
-            "POST",
-            `/sessions/${encodeURIComponent(sessionId)}/terminals`,
-            request,
+        return this.#terminalScope(sessionId).then((scope) =>
+            this.#requestJson("POST", this.#terminalCollectionPath(scope), request),
         );
     }
 
     /** Ends one terminal, killing its process; the terminal stops being attachable. */
     stopTerminal(sessionId: string, terminalId: string): Promise<RemoteTerminalResponse> {
-        return this.#requestJson(
-            "DELETE",
-            `/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}`,
+        return this.#terminalScope(sessionId).then((scope) =>
+            this.#requestJson(
+                "DELETE",
+                `${this.#terminalCollectionPath(scope)}/${encodeURIComponent(terminalId)}`,
+            ),
         );
     }
 
@@ -343,8 +351,9 @@ export class RigDaemonClient {
      * own socket, so terminal emulation and the protocol state machine stay in the
      * one client that owns them.
      */
-    attachTerminal(sessionId: string, terminalId: string): Promise<Duplex> {
-        const path = `/sessions/${encodeURIComponent(sessionId)}/terminals/${encodeURIComponent(terminalId)}/attach`;
+    async attachTerminal(sessionId: string, terminalId: string): Promise<Duplex> {
+        const scope = await this.#terminalScope(sessionId);
+        const path = `${this.#terminalCollectionPath(scope)}/${encodeURIComponent(terminalId)}/attach`;
         return new Promise((resolvePromise, reject) => {
             const socket = new WebSocket(`ws+unix://${this.socketPath}:${path}`, {
                 handshakeTimeout: 10_000,
@@ -377,6 +386,41 @@ export class RigDaemonClient {
                 resolvePromise(createWebSocketStream(socket, { allowHalfOpen: false }));
             });
         });
+    }
+
+    setSessionDraft(
+        sessionId: string,
+        request: {
+            readonly draft: string | null;
+            readonly origin: string;
+            readonly updatedAt: number;
+        },
+    ): Promise<SessionResponse> {
+        return this.#requestJson(
+            "PUT",
+            `/sessions/${encodeURIComponent(sessionId)}/draft`,
+            request,
+        );
+    }
+
+    async #terminalScope(
+        sessionId: string,
+    ): Promise<{ readonly projectId: string; readonly workspaceId?: string }> {
+        const { session } = await this.getSession(sessionId);
+        return {
+            projectId: session.projectId,
+            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+        };
+    }
+
+    #terminalCollectionPath(scope: {
+        readonly projectId: string;
+        readonly workspaceId?: string;
+    }): string {
+        const project = `/projects/${encodeURIComponent(scope.projectId)}`;
+        return scope.workspaceId
+            ? `${project}/workspaces/${encodeURIComponent(scope.workspaceId)}/terminals`
+            : `${project}/terminals`;
     }
 
     stopBackgroundProcess(sessionId: string, processId: number): Promise<unknown> {
@@ -469,7 +513,7 @@ export class RigDaemonClient {
                             : `/events/stream?after=${encodeURIComponent(after)}`,
                     signal: options.signal,
                     parse: globalEventParse,
-                    cursor: (entry) => entry.cursor,
+                    cursor: (entry) => ("live" in entry ? undefined : entry.cursor),
                     onEvent: options.onEvent,
                 });
             } catch (error) {
@@ -575,7 +619,7 @@ export class RigDaemonClient {
         readonly path: string;
         readonly signal?: AbortSignal;
         readonly parse: (raw: string) => TEvent | undefined;
-        readonly cursor: (event: TEvent) => TCursor;
+        readonly cursor: (event: TEvent) => TCursor | undefined;
         readonly onEvent: (event: TEvent) => void | Promise<void>;
     }): Promise<TCursor | undefined> {
         return new Promise((resolvePromise, reject) => {
@@ -625,7 +669,8 @@ export class RigDaemonClient {
                             if (event === undefined) continue;
                             application = application.then(async () => {
                                 await options.onEvent(event);
-                                cursor = options.cursor(event);
+                                const nextCursor = options.cursor(event);
+                                if (nextCursor !== undefined) cursor = nextCursor;
                             });
                             void application.catch((error) => {
                                 response.destroy();
@@ -719,16 +764,16 @@ function sessionEventParse(raw: string): SessionEvent | undefined {
     return sseDataParse(raw) as SessionEvent | undefined;
 }
 
-function globalEventParse(raw: string): GlobalEventQueueEntry | undefined {
+function globalEventParse(raw: string): GlobalEventDelivery | undefined {
     if (raw.startsWith(":")) return undefined;
     const lines = raw.split("\n");
     const id = lines
         .find((line) => line.startsWith("id:"))
         ?.slice("id:".length)
         .trim();
-    if (!id) return undefined;
     const event = sseDataParse(raw) as GlobalEventQueueEntry["event"] | undefined;
-    return event ? { cursor: id, event } : undefined;
+    if (!event) return undefined;
+    return id ? { cursor: id, event } : { live: true, event: event as never };
 }
 
 function sseDataParse(raw: string): unknown {

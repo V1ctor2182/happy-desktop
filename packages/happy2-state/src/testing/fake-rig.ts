@@ -523,6 +523,7 @@ class FakeRigTransportModel implements FakeRigTransport {
                 { sessionId, text, idempotencyKey, expectedRunId, images },
                 () => undefined,
             ),
+        draftSet: async () => undefined,
         runAbort: (sessionId, expectedRunId) =>
             this.perform("runAbort", { sessionId, expectedRunId }, () => undefined),
         compact: (sessionId) => this.perform("compact", { sessionId }, () => undefined),

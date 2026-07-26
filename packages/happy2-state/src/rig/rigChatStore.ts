@@ -117,6 +117,7 @@ export interface RigChatStore {
      * upload step to reference bytes by id.
      */
     messageSend(text: string, images?: readonly RigImageInput[]): Promise<void>;
+    draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
     modelChange(input: RigModelSelection): Promise<void>;
@@ -818,6 +819,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 }
                 output({ type: "messageSent", sessionId, steered });
             }),
+        draftSet: (draft, updatedAt, origin) =>
+            rejecting(() => deps.transport.draftSet(sessionId, draft, updatedAt, origin)),
         runAbort: () =>
             rejecting(async () => {
                 await deps.transport.runAbort(sessionId, runId);

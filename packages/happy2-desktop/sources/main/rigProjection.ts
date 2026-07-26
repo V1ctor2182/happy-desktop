@@ -106,6 +106,7 @@ export function rigProjectProject(project: Project, homeDir: string): RigProject
         displayPath: rigDisplayCwd(project.path, homeDir),
         kind: project.kind,
         status: project.initializationStatus,
+        ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
         ...(project.avatar
             ? {
                   avatar: {
@@ -128,6 +129,7 @@ export function rigWorktreeProject(workspace: ProjectWorkspace, homeDir: string)
         path: workspace.path,
         displayPath: rigDisplayCwd(workspace.path, homeDir),
         status: workspace.status,
+        ...(workspace.changedFiles === undefined ? {} : { changedFiles: workspace.changedFiles }),
     };
 }
 
@@ -153,6 +155,8 @@ export function rigSessionSummaryProject(
         ...(summary.title ? { title: summary.title } : {}),
         ...(summary.recap ? { recap: summary.recap } : {}),
         ...(summary.lastMessageAt ? { lastMessageAt: summary.lastMessageAt } : {}),
+        ...(summary.draft ? { draft: summary.draft } : {}),
+        ...(summary.draftUpdatedAt === undefined ? {} : { draftUpdatedAt: summary.draftUpdatedAt }),
     };
 }
 
@@ -184,6 +188,8 @@ export function rigSessionProject(session: ProtocolSession, homeDir: string): Ri
         ...(session.serviceTier ? { serviceTier: session.serviceTier } : {}),
         ...(session.title ? { title: session.title } : {}),
         ...(session.recap ? { recap: session.recap } : {}),
+        ...(session.draft ? { draft: session.draft } : {}),
+        ...(session.draftUpdatedAt === undefined ? {} : { draftUpdatedAt: session.draftUpdatedAt }),
         ...(session.goal ? { goal: goalProject(session.goal) } : {}),
         ...(session.lastEventId ? { lastEventId: session.lastEventId as RigEventId } : {}),
     };
@@ -392,6 +398,14 @@ export function rigSessionEventProject(
                 type: "permission_mode_changed",
                 permissionMode: event.data.permissionMode,
             };
+        case "session_draft_changed":
+            return {
+                ...base,
+                type: "session_draft_changed",
+                ...(event.data.draft === undefined ? {} : { draft: event.data.draft }),
+                ...(event.data.origin === undefined ? {} : { origin: event.data.origin }),
+                updatedAt: event.data.updatedAt,
+            };
         case "user_input_requested":
             return {
                 ...base,
@@ -452,10 +466,25 @@ export function rigSessionEventProject(
  * global event as a delivery hint anyway.
  */
 export function rigGlobalEventProject(
-    entry: GlobalEventQueueEntry,
+    entry:
+        | GlobalEventQueueEntry
+        | {
+              readonly live: true;
+              readonly event: import("./rigDaemonTypes").GlobalLiveEvent;
+          },
     homeDir: string,
 ): RigGlobalEvent | undefined {
     const event = entry.event;
+    if ("live" in entry) {
+        const live = entry.event as import("./rigDaemonTypes").GlobalLiveEvent;
+        return {
+            type: "git_changed",
+            projectId: live.projectId as RigProjectId,
+            ...(live.type === "workspace_git_changed"
+                ? { worktreeId: live.workspaceId as RigWorktreeId }
+                : {}),
+        };
+    }
     if (event.type === "session_created") {
         return {
             cursor: entry.cursor,

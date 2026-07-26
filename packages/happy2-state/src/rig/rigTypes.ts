@@ -390,6 +390,8 @@ export interface RigProject {
     /** Whether the daemon has finished deriving the project's name and picture. */
     readonly status: "initializing" | "ready" | "failed";
     readonly avatar?: RigProjectAvatar;
+    /** Current changed-file total for this checkout, omitted until Git state is available. */
+    readonly changedFiles?: number;
 }
 
 /**
@@ -412,6 +414,8 @@ export interface RigWorktree {
         | "archiving"
         | "archive_failed"
         | "archived";
+    /** Current changed-file total for this checkout, omitted until Git state is available. */
+    readonly changedFiles?: number;
 }
 
 /** Everything the workspace list needs to group sessions: the projects and their worktrees. */
@@ -448,6 +452,8 @@ export interface RigSessionSummary {
     readonly createdAt: number;
     readonly updatedAt: number;
     readonly lastMessageAt?: number;
+    readonly draft?: string;
+    readonly draftUpdatedAt?: number;
 }
 
 export interface RigSession {
@@ -468,6 +474,8 @@ export interface RigSession {
     readonly status: RigSessionStatus;
     readonly title?: string;
     readonly recap?: string;
+    readonly draft?: string;
+    readonly draftUpdatedAt?: number;
     readonly messages: readonly RigMessage[];
     /**
      * Steering messages queued to submit after the current tool call. Non-internal

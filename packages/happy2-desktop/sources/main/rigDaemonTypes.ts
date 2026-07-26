@@ -2,7 +2,7 @@ import type {
     CreateRemoteTerminalRequest,
     HealthResponse,
     ModelCatalog,
-    ProtocolSession,
+    ProtocolSession as PublishedProtocolSession,
     RemoteTerminalResponse,
     RemoteTerminalSummary,
     SubagentSummary,
@@ -12,10 +12,14 @@ export type {
     CreateRemoteTerminalRequest,
     HealthResponse,
     ModelCatalog,
-    ProtocolSession,
     RemoteTerminalResponse,
     RemoteTerminalSummary,
     SubagentSummary,
+};
+
+export type ProtocolSession = PublishedProtocolSession & {
+    readonly draft?: string;
+    readonly draftUpdatedAt?: number;
 };
 
 /**
@@ -52,6 +56,8 @@ export interface Project {
      * leaves them out of the workspace list.
      */
     readonly archivedAt?: number;
+    readonly git?: GitRepositoryFacts;
+    readonly changedFiles?: number;
 }
 
 export type ProjectWorkspaceStatus =
@@ -74,12 +80,46 @@ export interface ProjectWorkspace {
     readonly version: number;
     readonly createdAt: number;
     readonly updatedAt: number;
+    readonly git?: GitRepositoryFacts;
+    readonly changedFiles?: number;
 }
 
 /** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */
 export interface GlobalStateResponse {
     readonly projects: readonly Project[];
     readonly workspaces: readonly ProjectWorkspace[];
+    readonly gitSnapshots: readonly GlobalLiveEvent[];
+}
+
+export interface GitRepositoryFacts {
+    readonly ahead: number;
+    readonly behind: number;
+    readonly detached: boolean;
+}
+
+export interface GitChangeSnapshot {
+    readonly changedFiles: number;
+}
+
+export type GlobalLiveEvent =
+    | {
+          readonly type: "project_git_changed";
+          readonly projectId: string;
+          readonly data: { readonly git: GitChangeSnapshot };
+      }
+    | {
+          readonly type: "workspace_git_changed";
+          readonly projectId: string;
+          readonly workspaceId: string;
+          readonly data: { readonly git: GitChangeSnapshot };
+      };
+
+export type GlobalEventDelivery =
+    | GlobalEventQueueEntry
+    | { readonly live: true; readonly event: GlobalLiveEvent };
+
+export interface GitWatchResponse {
+    readonly snapshots: readonly GlobalLiveEvent[];
 }
 
 /** One project avatar's bytes, as the daemon's asset route serves them. */
@@ -124,6 +164,8 @@ export interface SessionSummary {
     readonly recap?: string;
     readonly lastMessageAt?: number;
     readonly titleStatus: ProtocolSession["titleStatus"];
+    readonly draft?: string;
+    readonly draftUpdatedAt?: number;
 }
 
 export interface UsageValue {
@@ -330,6 +372,10 @@ type ProjectedSessionEvent =
     | BaseSessionEvent<
           "permission_mode_changed",
           { readonly permissionMode: ProtocolSession["permissionMode"] }
+      >
+    | BaseSessionEvent<
+          "session_draft_changed",
+          { readonly draft?: string; readonly origin?: string; readonly updatedAt: number }
       >
     | BaseSessionEvent<"user_input_requested", UserInputRequest>
     | BaseSessionEvent<

@@ -126,6 +126,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             action: { icon: "plus" as const, label: `New workspace in ${project.name}` },
             // A row only carries a status while one of its sessions is live.
             ...(project.activity === "running" ? { status: "working" as const } : {}),
+            ...(project.changedFiles ? { badge: project.changedFiles } : {}),
         },
         ...project.worktrees.map((worktree) => ({
             id: worktree.id,
@@ -140,6 +141,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 reveal: "hover" as const,
             },
             ...(worktree.activity === "running" ? { status: "working" as const } : {}),
+            ...(worktree.changedFiles ? { badge: worktree.changedFiles } : {}),
         })),
     ];
 }

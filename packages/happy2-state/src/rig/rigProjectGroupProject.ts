@@ -30,6 +30,7 @@ export interface RigWorktreeGroup {
     readonly activity: "running" | "awaitingInput" | "idle";
     /** Epoch milliseconds of the newest content in any of its sessions. */
     readonly updatedAt: number;
+    readonly changedFiles?: number;
 }
 
 /**
@@ -56,6 +57,7 @@ export interface RigProjectGroup {
     readonly activity: "running" | "awaitingInput" | "idle";
     /** Epoch milliseconds of the newest content anywhere under the project. */
     readonly updatedAt: number;
+    readonly changedFiles?: number;
 }
 
 /**
@@ -104,6 +106,7 @@ export function rigProjectGroupsProject(
             conversations,
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
+            ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
         });
     }
 
@@ -141,6 +144,7 @@ function projectGroup(
             0,
         ),
         ...(project.avatar ? { avatar: project.avatar } : {}),
+        ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
     };
 }
 

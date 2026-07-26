@@ -169,6 +169,9 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 images,
             });
         },
+        draftSet: async (sessionId, draft, updatedAt, origin) => {
+            await postJson(`/sessions/${sessionId}/draft`, { draft, updatedAt, origin });
+        },
         runAbort: async (sessionId, expectedRunId) => {
             await postJson(`/sessions/${sessionId}/abort`, { expectedRunId });
         },
