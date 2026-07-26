@@ -420,7 +420,7 @@ describe("rigChatStore streaming reconciliation", () => {
         unsubscribe();
     });
 
-    it("does not turn a run-finished error payload into durable transcript state", async () => {
+    it("shows a run-finished error as a notice without making it durable state", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1", { lastEventId: "e0" as RigEventId }));
         const { store, unsubscribe } = await chatReady(fake, "s1");
@@ -437,8 +437,29 @@ describe("rigChatStore streaming reconciliation", () => {
         );
         await flush();
 
-        expect(entriesOfShape(store, "notice")).toEqual([]);
+        // Why the run stopped exists only on this event: the durable session
+        // records that it stopped, never the reason. So the text is rendered,
+        // while the event stays a delivery hint — it advances no cursor and
+        // adds nothing to the durable message log.
+        expect(entriesOfShape(store, "notice")).toMatchObject([
+            { level: "error", text: "Provider connection failed." },
+        ]);
         expect(sessionOf(store).lastEventId).toBe("e0");
+        expect(sessionOf(store).messages).toEqual([]);
+
+        // Redelivery of the same failure must not stack a second notice.
+        fake.sessionEmit(
+            "s1" as RigSessionId,
+            event("s1", "e1", 1, {
+                type: "run_finished",
+                runId: "r1",
+                stopReason: "error",
+                modelLocked: false,
+                errorMessage: "Provider connection failed.",
+            }),
+        );
+        await flush();
+        expect(entriesOfShape(store, "notice")).toHaveLength(1);
         unsubscribe();
     });
 

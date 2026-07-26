@@ -120,6 +120,32 @@ export function rigNoticeEntry(
     return { kind: "notice", id, variant: "notice", level, title, text, sequence: "" };
 }
 
+/**
+ * A compaction pass, rendered as one agent activity row that spins while the
+ * agent shrinks its context and settles in place when it is done. It is an
+ * activity rather than a notice because it is a step of the agent's work with a
+ * duration, and because a spinning row is what tells the reader the session is
+ * busy compacting rather than stalled.
+ */
+export function rigCompactionEntry(
+    id: string,
+    status: "running" | "success",
+    subject?: string,
+): ConversationEntry {
+    return {
+        kind: "agentActivity",
+        id,
+        activity: {
+            kind: "labeled",
+            label: status === "running" ? "Compacting context" : "Compacted context",
+            ...(subject !== undefined ? { subject } : {}),
+            status,
+            mono: false,
+        },
+        sequence: "",
+    };
+}
+
 /** A shell-mode run, rendered as agent activity while it runs and after it exits. */
 export function rigShellEntry(
     id: string,

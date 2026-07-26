@@ -7,7 +7,12 @@ import {
     type ConversationEntry,
     type ConversationRequestSubmission,
 } from "../conversation/conversationEntry.js";
-import { rigConversationBuild, rigShellEntry } from "./rigConversationProject.js";
+import {
+    rigCompactionEntry,
+    rigConversationBuild,
+    rigNoticeEntry,
+    rigShellEntry,
+} from "./rigConversationProject.js";
 import { rigConversationAttachTurnTraces } from "./rigConversationTurnTrace.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
 import { deepEqual, rigUserError } from "./rigSupport.js";
@@ -199,6 +204,31 @@ export interface RigChatStore {
      */
     viewClear(): void;
     [Symbol.dispose](): void;
+}
+
+/**
+ * Why a compaction pass happened, in the reader's words rather than the wire's.
+ */
+const COMPACTION_REASON: Record<"context_window" | "manual" | "threshold", string> = {
+    context_window: "context window full",
+    manual: "requested",
+    threshold: "reached threshold",
+};
+
+/** Why an inference attempt is being retried, in the reader's words. */
+const RETRY_REASON: Record<"connection_lost" | "incomplete_response", string> = {
+    connection_lost: "Connection lost",
+    incomplete_response: "Incomplete response",
+};
+
+/**
+ * Token counts as a reader scans them. Compaction figures run to six digits,
+ * where the exact number is noise and the magnitude is the whole point.
+ */
+function tokensFormat(tokens: number): string {
+    if (tokens < 1000) return String(Math.max(0, Math.round(tokens)));
+    const thousands = tokens / 1000;
+    return `${thousands < 100 ? thousands.toFixed(1).replace(/\.0$/, "") : String(Math.round(thousands))}k`;
 }
 
 /**
@@ -427,6 +457,24 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         blocks.push({ kind, text: "" });
         transientStreamSet(blocks);
     };
+    /**
+     * Places an ephemeral entry under its own stable key: a first delivery
+     * appends, a repeat replaces in place. Every ephemeral row a run produces —
+     * shell output, run notices, the compaction row — is keyed rather than
+     * appended blindly, because SSE redelivers events and an append would show
+     * the same failure or the same compaction twice.
+     */
+    const upsertEphemeral = (id: string, entry: ConversationEntry): void => {
+        const index = ephemeral.findIndex((existing) => entryKey(existing) === id);
+        if (index === -1) {
+            ephemeral = [...ephemeral, entry];
+            return;
+        }
+        const next = ephemeral.slice();
+        next[index] = entry;
+        ephemeral = next;
+    };
+
     // Shell-mode action results render as ephemeral transcript entries keyed by
     // commandId so a retried result replaces rather than duplicates its command.
     const upsertShell = (
@@ -440,15 +488,33 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         },
     ): void => {
         const id = `shell:${commandId}`;
-        const entry = rigShellEntry(id, patch);
-        const index = ephemeral.findIndex((existing) => entryKey(existing) === id);
-        if (index === -1) {
-            ephemeral = [...ephemeral, entry];
-        } else {
-            const next = ephemeral.slice();
-            next[index] = entry;
-            ephemeral = next;
-        }
+        upsertEphemeral(id, rigShellEntry(id, patch));
+    };
+
+    /** The compaction row of the run currently streaming, keyed so it settles in place. */
+    const compactionEntryId = (): string => `compaction:${runId ?? "session"}`;
+
+    /**
+     * Marks the open compaction row finished. Compaction ends either by
+     * reporting what it compacted (`context_compacted`) or by simply closing
+     * (`context_compaction_finished`); whichever arrives first settles the row,
+     * so a pass that never reports sizes still stops spinning.
+     */
+    const compactionSettle = (subject?: string): void => {
+        const id = compactionEntryId();
+        const open = ephemeral.find((entry) => entryKey(entry) === id);
+        if (!open && subject === undefined) return;
+        upsertEphemeral(id, rigCompactionEntry(id, "success", subject));
+    };
+
+    /** Run notices are keyed by what produced them so a redelivered event does not stack. */
+    const noticeUpsert = (
+        id: string,
+        level: "info" | "warning" | "error",
+        title: string,
+        text: string,
+    ): void => {
+        upsertEphemeral(id, rigNoticeEntry(id, level, title, text));
     };
 
     const transientAgentEventApply = (event: RigAgentEvent): void => {
@@ -563,9 +629,48 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                     }),
                 );
                 break;
+            case "context_compaction_started":
+                upsertEphemeral(
+                    compactionEntryId(),
+                    rigCompactionEntry(compactionEntryId(), "running"),
+                );
+                break;
             case "context_compacted":
+                // The pass reports what it compacted between. A manual
+                // `/compact` produces this without a start event, so the row is
+                // created here when it does not already exist.
+                compactionSettle(
+                    `${tokensFormat(event.estimatedTokensBefore)} → ${tokensFormat(
+                        event.estimatedTokensAfter,
+                    )} tokens · ${COMPACTION_REASON[event.reason]}`,
+                );
+                break;
+            case "context_compaction_finished":
+                compactionSettle();
+                break;
             case "inference_retry":
+                // Each attempt is its own row: a run that retries four times
+                // should read as four attempts, not one line that rewrites
+                // itself while the reader is looking away from the screen.
+                noticeUpsert(
+                    `retry:${runId ?? "session"}:${String(event.attempt)}`,
+                    "warning",
+                    "Retrying",
+                    `${RETRY_REASON[event.reason]}. Attempt ${String(event.attempt)} of ${String(
+                        event.maxAttempts,
+                    )}.`,
+                );
+                break;
             case "error":
+                // A mid-run failure the agent reported. It is keyed by its text
+                // so a redelivered event does not stack, but two different
+                // failures in one run both stay on screen.
+                noticeUpsert(
+                    `error:${runId ?? "session"}:${event.reason}`,
+                    "error",
+                    "Run failed",
+                    event.reason,
+                );
                 break;
         }
     };
@@ -612,6 +717,22 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 transientStreamingStart(event.runId);
                 if (transientStreamingPresentation?.runId === event.runId)
                     transientAgentEventApply(event.event);
+                break;
+            case "run_error":
+            case "run_finished":
+                // A run that ends badly is the one failure the reader most
+                // needs and the only place its text exists: the durable session
+                // records that the run stopped, never why. A compaction row
+                // still spinning when the run ends is closed with it, so a
+                // failed pass cannot spin forever.
+                compactionSettle();
+                if (event.errorMessage !== undefined)
+                    noticeUpsert(
+                        `run-error:${event.runId}`,
+                        "error",
+                        "Run failed",
+                        event.errorMessage,
+                    );
                 break;
             default:
                 break;

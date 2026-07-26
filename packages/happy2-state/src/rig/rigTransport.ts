@@ -91,6 +91,13 @@ export type RigAgentEvent =
           readonly toolCallId: string;
           readonly review: RigPermissionReview;
       }
+    /**
+     * The bracket around one compaction pass, so the transcript can show that
+     * the agent is busy shrinking its context rather than appearing stalled.
+     * Neither end carries sizes; those arrive as `context_compacted`.
+     */
+    | { readonly type: "context_compaction_started" }
+    | { readonly type: "context_compaction_finished" }
     | {
           readonly type: "context_compacted";
           readonly reason: "context_window" | "manual" | "threshold";

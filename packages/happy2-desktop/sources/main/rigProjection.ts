@@ -693,6 +693,10 @@ function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
             return { type: "done", reason: event.reason };
         case "error":
             return { type: "error", reason: event.error.errorMessage ?? event.reason };
+        case "context_compaction_started":
+            return { type: "context_compaction_started" };
+        case "context_compaction_finished":
+            return { type: "context_compaction_finished" };
         case "context_compacted":
             return {
                 type: "context_compacted",

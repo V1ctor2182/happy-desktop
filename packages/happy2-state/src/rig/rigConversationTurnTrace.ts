@@ -179,7 +179,17 @@ export function rigConversationAttachTurnTraces(
         const summarizable = turnBody.length > 1;
         const expanded = running || input.expandedTurnIds.has(turnUserId);
         const collapsed = summarizable && !expanded ? lastMessage(turnBody) : undefined;
-        const shown = collapsed ? [collapsed] : turnBody;
+        // Collapsing hides the turn's work, but not what went wrong doing it: a
+        // failure or a retry is the reason the answer looks the way it does, and
+        // burying it behind a control the reader has no reason to open would
+        // leave a broken run reading as a successful one. Warning and error
+        // notices therefore stay on screen in turn order alongside the answer.
+        const shown = collapsed
+            ? [
+                  ...turnBody.filter((entry) => entry.kind === "notice" && entry.level !== "info"),
+                  collapsed,
+              ]
+            : turnBody;
         let traced = !summarizable;
         for (const entry of shown) {
             if (traced) {

@@ -303,11 +303,15 @@ export type AgentLoopEvent =
               "display" | "failure" | "isError" | "presentation" | "toolCallId" | "toolName"
           >;
       }
+    /**
+     * The bracket around one compaction pass. Neither end carries a payload:
+     * the sizes it compacted between arrive separately as `context_compacted`,
+     * so these two only report that the pass is under way.
+     */
+    | { readonly type: "context_compaction_started" | "context_compaction_finished" }
     | {
           readonly type:
               | "background_processes_stopped"
-              | "context_compaction_finished"
-              | "context_compaction_started"
               | "inference_iteration_start"
               | "permission_denial_limit_reached"
               | "permission_review"
