@@ -395,6 +395,8 @@ export function Sidebar(props: SidebarProps) {
     const rowNodes = useRef(new Map<string, HTMLButtonElement>());
     // Row tops captured at the drop, consumed by the layout effect below.
     const flipRef = useRef<Map<string, number> | undefined>(undefined);
+    // The row that was just dropped, kept lit until it has finished travelling.
+    const [dropped, setDropped] = useState<string>();
     // Set by a drag that actually moved, so the click the browser fires on
     // release rearranges rather than also opening what was dragged.
     const dragClick = useRef(false);
@@ -489,6 +491,7 @@ export function Sidebar(props: SidebarProps) {
         // positions to wherever it puts them — so the one commit that moves DOM
         // nodes happens here, under the pointer, and never once the row is
         // supposed to be sitting still.
+        const movedId = section.items[blocks[drag.from]?.[0] ?? -1]?.id;
         if (!reducedMotion() && drag.from !== drag.to) {
             const firsts = new Map<string, number>();
             for (const item of section.items) {
@@ -496,6 +499,9 @@ export function Sidebar(props: SidebarProps) {
                 if (node) firsts.set(item.id, node.getBoundingClientRect().top);
             }
             flipRef.current = firsts;
+            // Released lit, not resting: the highlight is handed from the drag to
+            // the travelling row and only let go once it has arrived.
+            setDropped(movedId);
         }
         dragSet(undefined);
         if (drag.from === drag.to) return;
@@ -539,10 +545,20 @@ export function Sidebar(props: SidebarProps) {
         // Kept until something actually moved: the reorder may reach the list one
         // render later than the drop, and dropping the capture on the first empty
         // pass would lose the animation entirely.
-        if (played.length > 0) flipRef.current = undefined;
-        return () => {
-            for (const animation of played) animation.cancel();
-        };
+        if (played.length === 0) return;
+        flipRef.current = undefined;
+        // The row stays lit until it stops moving. Rearranging the list moves its
+        // node, which drops `:hover` until the pointer moves again — so releasing
+        // straight into the resting style would blink the highlight out and let
+        // it fade back in, which is the flicker itself.
+        const last = played[played.length - 1]!;
+        const rest = () => setDropped(undefined);
+        last.addEventListener("finish", rest);
+        // The animations are deliberately not cancelled here. This effect has no
+        // dependency list — it has to run after whichever render applies the new
+        // order — so cancelling on teardown would abort the drop animation on the
+        // next unrelated render, and a live workspace renders constantly.
+        return () => last.removeEventListener("finish", rest);
     });
 
     const openItemMenu = (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => {
@@ -718,7 +734,7 @@ export function Sidebar(props: SidebarProps) {
                                                       (item.depth ?? 0) > 0 &&
                                                       isFirstAtDepth(section.items, index)
                                                   }
-                                                  dragging={held}
+                                                  dragging={held || item.id === dropped}
                                                   key={item.id}
                                                   item={item}
                                                   onContextMenu={openItemMenu}
