@@ -35,6 +35,7 @@ import {
     RigConnectionStatus,
     RigSessionControls,
     RigUsagePanel,
+    PanelHeader,
     Sidebar,
     SidebarFooter,
     TabbedPane,
@@ -681,19 +682,29 @@ function RigConversationSurface(props: {
 }
 
 /**
- * The right panel's tab strip and the body of whichever tab is selected. Only the
- * strip re-renders from this component's subscription; a terminal's own output
- * lands in `RigTerminalTab`, which subscribes to that terminal alone, so a busy
- * shell never re-renders its neighbours or the tab bar above it.
+ * The right panel's header band, tab strip, and the body of whichever tab is
+ * selected. Only the strip re-renders from this component's subscription; a
+ * terminal's own output lands in `RigTerminalTab`, which subscribes to that
+ * terminal alone, so a busy shell never re-renders its neighbours or the tab bar
+ * above it.
+ *
+ * The band is empty and still earns its place: it puts this column's tabs on the
+ * same line as the session tabs beside them instead of a header's height higher,
+ * and in the desktop window it gives that edge a lane to drag the window by.
  */
 function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) {
     const { panel, store } = props;
     const activeId = panel.activeTabId;
     const active = panel.tabs.find((tab) => tab.id === activeId);
     return (
-        <TabbedPane
-            actions={
-                <>
+        <>
+            <PanelHeader />
+            <TabbedPane
+                // Adding a tab is the only control this strip carries. Hiding the panel
+                // belongs to the header's toggle alone: two controls for it put the same
+                // glyph on screen twice, and the one that showed the panel is the one a
+                // reader goes back to.
+                actions={
                     <Button
                         aria-label="New terminal"
                         icon="plus"
@@ -702,51 +713,40 @@ function RigPanelBody(props: { panel: RigPanelSnapshot; store: RigPanelStore }) 
                         size="small"
                         variant="ghost"
                     />
-                    {/* The same glyph the header's toggle wears, so hiding the panel
-                        from inside it and from the header read as one act rather than
-                        as a close and a collapse. */}
-                    <Button
-                        aria-label="Hide panel"
-                        icon="panel-collapse"
-                        iconOnly
-                        onClick={() => store.panelClose()}
-                        size="small"
-                        variant="ghost"
-                    />
-                </>
-            }
-            activeId={activeId ?? ""}
-            closeLabel="Close tab"
-            onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
-            onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
-            tabs={panelTabs(panel)}
-        >
-            {/* The key is the tab's identity, so selecting another tab mounts its
+                }
+                activeId={activeId ?? ""}
+                closeLabel="Close tab"
+                onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
+                onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
+                tabs={panelTabs(panel)}
+            >
+                {/* The key is the tab's identity, so selecting another tab mounts its
                 body rather than re-pointing this one at a different terminal — a
                 terminal's scroll position, focus, and grid belong to it alone. */}
-            {active?.kind === "terminal" ? (
-                <RigTerminalTab key={active.id} store={store} tabId={active.id} />
-            ) : active?.kind === "browser" ? (
-                <EmptyState
-                    description="A browser tab will render a page here."
-                    icon="globe"
-                    size="panel"
-                    title="Not built yet"
-                />
-            ) : (
-                <EmptyState
-                    action={{
-                        label: "New terminal",
-                        icon: "plus",
-                        onClick: () => store.terminalAdd(),
-                    }}
-                    description="Open a terminal to work beside the conversation."
-                    icon="terminal"
-                    size="panel"
-                    title="Nothing open"
-                />
-            )}
-        </TabbedPane>
+                {active?.kind === "terminal" ? (
+                    <RigTerminalTab key={active.id} store={store} tabId={active.id} />
+                ) : active?.kind === "browser" ? (
+                    <EmptyState
+                        description="A browser tab will render a page here."
+                        icon="globe"
+                        size="panel"
+                        title="Not built yet"
+                    />
+                ) : (
+                    <EmptyState
+                        action={{
+                            label: "New terminal",
+                            icon: "plus",
+                            onClick: () => store.terminalAdd(),
+                        }}
+                        description="Open a terminal to work beside the conversation."
+                        icon="terminal"
+                        size="panel"
+                        title="Nothing open"
+                    />
+                )}
+            </TabbedPane>
+        </>
     );
 }
 

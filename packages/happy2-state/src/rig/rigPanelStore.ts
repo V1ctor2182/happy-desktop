@@ -45,7 +45,6 @@ export interface RigPanelStore {
      * and did nothing.
      */
     panelToggle(): void;
-    panelClose(): void;
     /** Adds a terminal tab to the open conversation and selects it. */
     terminalAdd(): void;
     tabSelect(tabId: RigPanelTabId): void;
@@ -198,11 +197,6 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                 !tabs.some((tab) => tab.conversationId === conversationId)
             )
                 terminalTabAdd(conversationId);
-            recompute();
-        },
-        panelClose() {
-            if (disposed || !open) return;
-            open = false;
             recompute();
         },
         terminalAdd() {

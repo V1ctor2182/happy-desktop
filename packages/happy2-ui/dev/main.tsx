@@ -26,6 +26,7 @@ import { BoxPage } from "./pages/BoxPage";
 import { ButtonPage } from "./pages/ButtonPage";
 import { CallPanelPage } from "./pages/CallPanelPage";
 import { ChannelHeaderPage } from "./pages/ChannelHeaderPage";
+import { PanelHeaderPage } from "./pages/PanelHeaderPage";
 import { CheckboxPage } from "./pages/CheckboxPage";
 import { CommandPalettePage } from "./pages/CommandPalettePage";
 import { ChatStorePage } from "./pages/ChatStorePage";
@@ -240,6 +241,7 @@ const components: BlueprintPage[] = [
     },
     { id: "app-shell", label: "App shell", number: "C-010", page: AppShellPage },
     { id: "channel-header", label: "Channel header", number: "C-011", page: ChannelHeaderPage },
+    { id: "panel-header", label: "Panel header", number: "C-162", page: PanelHeaderPage },
     { id: "message", label: "Message", number: "C-012", page: MessagePage },
     { id: "agent-run-card", label: "Agent run card", number: "C-013", page: AgentRunCardPage },
     { id: "approval-card", label: "Approval card", number: "C-014", page: ApprovalCardPage },

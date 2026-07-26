@@ -46,7 +46,6 @@ function panel(): RigPanelStore {
         get: () => PANEL_CLOSED,
         subscribe: () => () => undefined,
         panelToggle: () => undefined,
-        panelClose: () => undefined,
         terminalAdd: () => undefined,
         tabSelect: () => undefined,
         tabClose: () => undefined,

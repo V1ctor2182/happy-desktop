@@ -97,6 +97,7 @@
 @import "./styles/admin-page.css";
 @import "./styles/mcp-app-shell.css";
 @import "./styles/plugin-glyph.css";
+@import "./styles/panel-header.css";
 @import "./styles/plugin-app-view.css";
 @import "./styles/plugin-contribution.css";
 @import "./styles/plugin-settings.css";

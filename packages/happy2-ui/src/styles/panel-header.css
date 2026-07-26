@@ -1,0 +1,27 @@
+/*
+ * PanelHeader — the 56px band across the top of a docked panel column.
+ *
+ * Contract: 56px high, 16px x-padding, transparent, and no hairline of its own —
+ * exactly `ChannelHeader`'s band, because the point is that the two columns'
+ * headers form one band across the window. Whatever sits beneath the band owns
+ * the dividing line, as the tab bar does in both columns.
+ */
+
+.happy2-panel-header,
+.happy2-panel-header * {
+    box-sizing: border-box;
+}
+
+.happy2-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    width: 100%;
+    height: 56px;
+    margin: 0;
+    padding: 0 16px;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+}

@@ -1,0 +1,38 @@
+import { partitionComponentProps } from "./componentProps";
+import { type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
+
+export type PanelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
+    /**
+     * What the band carries. It is optional because the band's first job is
+     * structural: it is what puts the panel's own content on the same baseline as
+     * the surface beside it, whether or not it has anything to say yet.
+     */
+    children?: ReactNode;
+    style?: CSSProperties;
+};
+
+/**
+ * The 56px band across the top of a docked panel column — the `ChannelHeader` of
+ * the panel side, to the pixel and to the same transparent, borderless contract,
+ * so the two columns' headers are one band across the window and whatever each
+ * one holds beneath starts on the same line.
+ *
+ * It is legitimately empty. A panel whose content begins at the very top of the
+ * window sits a header's height above the surface it belongs with, and in the
+ * desktop shell it also leaves that edge of the window with no lane to drag it
+ * by — the header row is the drag surface. Reserving the band answers both, and a
+ * panel that later has a title or controls for this row puts them here.
+ */
+export function PanelHeader(props: PanelHeaderProps) {
+    const [local, rest] = partitionComponentProps(props, ["children", "className", "style"]);
+    return (
+        <header
+            {...rest}
+            className={["happy2-panel-header", local.className].filter(Boolean).join(" ")}
+            data-happy2-ui="panel-header"
+            style={local.style}
+        >
+            {local.children}
+        </header>
+    );
+}

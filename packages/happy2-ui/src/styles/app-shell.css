@@ -55,6 +55,7 @@
    input. Interactive descendants opt out of native dragging explicitly. */
 .happy2-app-shell[data-window-controls] .happy2-sidebar__header,
 .happy2-app-shell[data-window-controls] .happy2-channel-header,
+.happy2-app-shell[data-window-controls] .happy2-panel-header,
 .happy2-app-shell[data-window-controls] .happy2-tabbed-pane__bar,
 .happy2-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
