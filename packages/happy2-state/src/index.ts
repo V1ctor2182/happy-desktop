@@ -310,6 +310,13 @@ export {
     type RigPanelTabSnapshot,
 } from "./rig/rigPanelStore.js";
 export {
+    rigSessionDraftStoreCreate,
+    rigSessionSelectionDefault,
+    type RigSessionDraftOptions,
+    type RigSessionDraftSnapshot,
+    type RigSessionDraftStore,
+} from "./rig/rigSessionDraftStore.js";
+export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
     type RigChangedFileTabSnapshot,

@@ -548,6 +548,52 @@ export function AppRigView(props: AppRigViewProps) {
                             composer={workspace.groupComposer}
                             composerPlaceholder="Message Happy…"
                             entries={NO_ENTRIES}
+                            // The first message is what creates the session, so
+                            // its model, effort, and access mode have to be
+                            // choosable before it is sent rather than corrected
+                            // afterwards. These are the same pickers an open
+                            // conversation carries, over the draft instead of a
+                            // live session.
+                            composerControls={
+                                workspace.groupSessionDraft ? (
+                                    <ComposerModelControl
+                                        {...rigComposerModelControlProps(
+                                            workspace.groupSessionDraft.menus,
+                                            {
+                                                onEffortChange: (effort?: RigThinkingLevel) =>
+                                                    props.workspace.groupSessionEffortUpdate(
+                                                        effort,
+                                                    ),
+                                                onModelChange: (selection: RigModelSelection) =>
+                                                    props.workspace.groupSessionModelUpdate(
+                                                        selection,
+                                                    ),
+                                            },
+                                        )}
+                                    />
+                                ) : undefined
+                            }
+                            composerFooterControl={
+                                workspace.groupSessionDraft ? (
+                                    <RigSessionControls
+                                        fields={["permission", "tier"]}
+                                        menuPlacement="above"
+                                        menus={workspace.groupSessionDraft.menus}
+                                        onEffortChange={(effort?: RigThinkingLevel) =>
+                                            props.workspace.groupSessionEffortUpdate(effort)
+                                        }
+                                        onModelChange={(selection: RigModelSelection) =>
+                                            props.workspace.groupSessionModelUpdate(selection)
+                                        }
+                                        onPermissionModeChange={(mode: RigPermissionMode) =>
+                                            props.workspace.groupSessionPermissionModeUpdate(mode)
+                                        }
+                                        onServiceTierChange={(tier?: RigServiceTier) =>
+                                            props.workspace.groupSessionServiceTierUpdate(tier)
+                                        }
+                                    />
+                                ) : undefined
+                            }
                             onComposerAttachmentRemove={(attachmentId) =>
                                 props.workspace.composerAttachmentRemove(attachmentId)
                             }

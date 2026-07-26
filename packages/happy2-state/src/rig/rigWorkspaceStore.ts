@@ -10,6 +10,11 @@ import type { RigChatHandle, RigClient } from "./rigClient.js";
 import type { RigChatSnapshot, RigChatStore, RigOpenImage } from "./rigChatStore.js";
 import { rigImageAttachmentRead, rigImageInputsOf } from "./rigImageAttachment.js";
 import { rigPanelStoreCreate, type RigPanelStore } from "./rigPanelStore.js";
+import {
+    rigSessionDraftStoreCreate,
+    type RigSessionDraftSnapshot,
+    type RigSessionDraftStore,
+} from "./rigSessionDraftStore.js";
 import { rigUserError } from "./rigSupport.js";
 import type {
     RigSessionListSnapshot,
@@ -29,6 +34,7 @@ import type {
     RigPermissionMode,
     RigProjectId,
     RigQueuedMessage,
+    RigSelection,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -126,6 +132,12 @@ export interface RigWorkspaceSnapshot {
      * worktree can be opened and typed into before anything exists in it.
      */
     readonly groupComposer?: ComposerSnapshot;
+    /**
+     * How that first conversation will be configured — model, effort, access
+     * mode, tier — and the picker options behind those choices. Present only
+     * once the model catalog has been read, so the composer never waits on it.
+     */
+    readonly groupSessionDraft?: RigSessionDraftSnapshot;
 }
 
 /**
@@ -231,6 +243,18 @@ export interface RigWorkspaceStore {
     /** Removes one attachment from the addressed draft. */
     composerAttachmentRemove(attachmentId: string): void;
 
+    /*
+     * Configuration of the addressed group's first conversation, before one
+     * exists. These are local: they change what the session will be created
+     * with, so nothing is sent anywhere until the first message is. Each also
+     * becomes the workspace's most recent selection, which the next new session
+     * inherits wherever it is started.
+     */
+    groupSessionModelUpdate(input: RigModelSelection): void;
+    groupSessionEffortUpdate(effort?: RigThinkingLevel): void;
+    groupSessionPermissionModeUpdate(permissionMode: RigPermissionMode): void;
+    groupSessionServiceTierUpdate(serviceTier?: RigServiceTier): void;
+
     // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
@@ -267,6 +291,21 @@ export interface RigWorkspaceStore {
 
 function noOpenConversation(): Promise<never> {
     return Promise.reject(new Error("No local conversation is open."));
+}
+
+/**
+ * The creation fields one selection names. Absent optionals are left out rather
+ * than sent as undefined, so a create request carries only what was chosen and
+ * the daemon still supplies its own default for the rest.
+ */
+function selectionCreateFields(selection: RigSelection): Partial<RigSessionCreateInput> {
+    return {
+        providerId: selection.providerId,
+        modelId: selection.modelId,
+        ...(selection.effort !== undefined ? { effort: selection.effort } : {}),
+        ...(selection.serviceTier !== undefined ? { serviceTier: selection.serviceTier } : {}),
+        permissionMode: selection.permissionMode,
+    };
 }
 
 /**
@@ -332,6 +371,23 @@ export function rigWorkspaceStoreCreate(
     let openGroupId: RigGroupId | undefined;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
+    /**
+     * How the addressed group's first session will be configured. It needs the
+     * model catalog, which is read once and asynchronously, so an addressed
+     * group may briefly have a composer and no pickers — the composer is what
+     * the reader came to type in, and making it wait on a catalog read would be
+     * the wrong trade.
+     */
+    let groupDraft: RigSessionDraftStore | undefined;
+    let unsubscribeGroupDraft: (() => void) | undefined;
+    let groupDraftGeneration = 0;
+    /**
+     * The configuration the next new session inherits, workspace-wide rather
+     * than per group: "new session" should mean the setup most recently chosen,
+     * whichever directory it is started in. Undefined until the reader picks
+     * something, so an untouched workspace uses the catalog's defaults.
+     */
+    let lastSelection: RigSelection | undefined;
     let fileTabs: readonly RigChangedFileTabSnapshot[] = [];
     let activeFileTabId: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
@@ -392,11 +448,13 @@ export function rigWorkspaceStoreCreate(
                 conversation = { type: "ready", value: next };
             }
         }
-        const groupDraft = groupComposer?.getState();
+        const groupComposerDraft = groupComposer?.getState();
+        const groupSessionDraft = groupDraft?.get();
         if (
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
-            snapshot.groupComposer === groupDraft &&
+            snapshot.groupComposer === groupComposerDraft &&
+            snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId
         )
@@ -406,7 +464,8 @@ export function rigWorkspaceStoreCreate(
             conversation,
             fileTabs,
             ...(activeFileTabId ? { activeFileTabId } : {}),
-            ...(groupDraft ? { groupComposer: groupDraft } : {}),
+            ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
+            ...(groupSessionDraft ? { groupSessionDraft } : {}),
         };
         notify();
     };
@@ -518,9 +577,18 @@ export function rigWorkspaceStoreCreate(
         handle = undefined;
     };
 
-    /** Runs one composer submission and reports its outcome back to the composer. */
-    const submitting = (revision: number, run: () => Promise<void>): void => {
-        const target = composer;
+    /**
+     * Runs one composer submission and reports its outcome back to the composer
+     * that produced it. The target is passed in rather than read from the
+     * current one: the group composer and the conversation composer both submit,
+     * and the group's first message creates and opens a session, so by the time
+     * it settles the composer it came from is no longer the current one.
+     */
+    const submitting = (
+        target: ComposerStore | undefined,
+        revision: number,
+        run: () => Promise<void>,
+    ): void => {
         void run().then(
             () => target?.getState().composerInput({ type: "submissionConfirmed", revision }),
             (error: unknown) =>
@@ -566,8 +634,8 @@ export function rigWorkspaceStoreCreate(
         }
     };
 
-    const composerCreate = (conversationId: RigSessionId): ComposerStore =>
-        composerStoreCreate(conversationId, {
+    const composerCreate = (conversationId: RigSessionId): ComposerStore => {
+        const created: ComposerStore = composerStoreCreate(conversationId, {
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
             output: (event) => {
                 switch (event.type) {
@@ -580,14 +648,14 @@ export function rigWorkspaceStoreCreate(
                         void withChatStore((store) =>
                             store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
-                        submitting(event.revision, () =>
+                        submitting(created, event.revision, () =>
                             withChatStore((store) =>
                                 store.messageSend(event.text, rigImageInputsOf(event.attachments)),
                             ),
                         );
                         return;
                     case "shellCommandSubmitted":
-                        submitting(event.revision, () =>
+                        submitting(created, event.revision, () =>
                             withChatStore((store) => store.shellRun(event.command)),
                         );
                         return;
@@ -625,6 +693,8 @@ export function rigWorkspaceStoreCreate(
                 }
             },
         });
+        return created;
+    };
 
     /**
      * Acquires the chat handle behind an already visible conversation. The
@@ -758,13 +828,17 @@ export function rigWorkspaceStoreCreate(
         groupId: RigGroupId,
         text: string,
         images: readonly RigImageInput[],
+        selection: RigSelection | undefined,
     ): Promise<void> => {
         const start = groupStartFind(groupId);
         if (!start) return Promise.reject(new Error("That group is no longer listed."));
+        const create = selection
+            ? { ...start.create, ...selectionCreateFields(selection) }
+            : start.create;
         return (
             start.worktreeId
-                ? list.worktreeSessionStart(start.worktreeId)
-                : list.sessionCreate(start.create)
+                ? list.worktreeSessionStart(start.worktreeId, create)
+                : list.sessionCreate(create)
         ).then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
             output({ type: "conversationOpenRequested", location });
@@ -781,7 +855,42 @@ export function rigWorkspaceStoreCreate(
         unsubscribeGroupComposer?.();
         unsubscribeGroupComposer = undefined;
         groupComposer = undefined;
+        unsubscribeGroupDraft?.();
+        unsubscribeGroupDraft = undefined;
+        groupDraft = undefined;
+        // Invalidates a catalog read still in flight, so its draft cannot attach
+        // itself to a group that has since been left.
+        groupDraftGeneration += 1;
         openGroupId = undefined;
+    };
+
+    /**
+     * Materializes the addressed group's session draft once the catalog is
+     * available, seeded from the workspace's most recent selection. A read that
+     * resolves after the reader has moved on is discarded rather than applied.
+     */
+    const groupDraftEnsure = (groupId: RigGroupId): void => {
+        const current = ++groupDraftGeneration;
+        void client.catalogRead().then(
+            (catalog) => {
+                if (disposed || groupDraftGeneration !== current || openGroupId !== groupId) return;
+                groupDraft = rigSessionDraftStoreCreate({
+                    catalog,
+                    ...(lastSelection ? { selection: lastSelection } : {}),
+                });
+                unsubscribeGroupDraft = groupDraft.subscribe(() => {
+                    // Choosing here is what makes a selection "last used", so the
+                    // next new session inherits it wherever it is started.
+                    lastSelection = groupDraft?.get().selection;
+                    recompute();
+                });
+                recompute();
+            },
+            // A catalog that cannot be read leaves the pickers absent; the
+            // composer still works and the daemon still applies its own
+            // defaults, which is better than blocking the first message.
+            () => undefined,
+        );
     };
 
     /** Reports a newly created conversation so the router can address it. */
@@ -848,16 +957,27 @@ export function rigWorkspaceStoreCreate(
             if (openGroupId === groupId) return;
             releaseGroup();
             openGroupId = groupId;
-            groupComposer = composerStoreCreate(groupId, {
+            const created: ComposerStore = composerStoreCreate(groupId, {
                 capabilities: { shellMode: false, commands: [], mentions: false },
                 output: (event) => {
                     if (event.type !== "textSubmitted") return;
-                    submitting(event.revision, () =>
-                        groupSubmit(groupId, event.text, rigImageInputsOf(event.attachments)),
+                    // The configuration is read now, not after the session has
+                    // been created: creation navigates, which releases this
+                    // group and its draft with it.
+                    const selection = groupDraft?.get().selection;
+                    submitting(created, event.revision, () =>
+                        groupSubmit(
+                            groupId,
+                            event.text,
+                            rigImageInputsOf(event.attachments),
+                            selection,
+                        ),
                     );
                 },
             });
-            unsubscribeGroupComposer = groupComposer.subscribe(recompute);
+            groupComposer = created;
+            unsubscribeGroupComposer = created.subscribe(recompute);
+            groupDraftEnsure(groupId);
             recompute();
         },
         conversationClose: () => {
@@ -875,7 +995,15 @@ export function rigWorkspaceStoreCreate(
             if (conversation.type === "ready" && conversation.value.session.type === "error")
                 chatStore?.sessionRetry();
         },
-        conversationCreate: (input) => list.sessionCreate(input).then(openRequest),
+        // A caller that names no configuration gets the workspace's most recent
+        // one, so a session started from the sidebar matches the last one
+        // started from a composer. Anything the caller does name wins.
+        conversationCreate: (input) =>
+            list
+                .sessionCreate(
+                    lastSelection ? { ...selectionCreateFields(lastSelection), ...input } : input,
+                )
+                .then(openRequest),
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
         conversationArchive: (conversationId) => list.sessionArchive(conversationId),
         conversationReorder: (conversationId, afterId) =>
@@ -965,6 +1093,11 @@ export function rigWorkspaceStoreCreate(
         },
         composerAttachmentRemove: (attachmentId) =>
             (groupComposer ?? composer)?.getState().attachmentRemove(attachmentId),
+
+        groupSessionModelUpdate: (input) => groupDraft?.modelUpdate(input),
+        groupSessionEffortUpdate: (effort) => groupDraft?.effortUpdate(effort),
+        groupSessionPermissionModeUpdate: (mode) => groupDraft?.permissionModeUpdate(mode),
+        groupSessionServiceTierUpdate: (tier) => groupDraft?.serviceTierUpdate(tier),
 
         runAbort: () => withChat((store) => store.runAbort()),
         answerInput: (input) => withChat((store) => store.answerInput(input)),

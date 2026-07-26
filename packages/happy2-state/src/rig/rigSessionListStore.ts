@@ -107,8 +107,15 @@ export interface RigSessionListStore {
      * `worktreeCreate` so addressing the worktree does not wait on a git
      * checkout — but a session pointed at a checkout that does not exist yet
      * would fail on its first run, so the wait itself is not optional.
+     *
+     * `create` configures that conversation. Its `cwd` and `worktreeId` are
+     * supplied here from the prepared checkout, since only this call knows where
+     * the checkout ended up.
      */
-    worktreeSessionStart(worktreeId: RigWorktreeId): Promise<RigSessionLocation | undefined>;
+    worktreeSessionStart(
+        worktreeId: RigWorktreeId,
+        create?: Omit<RigSessionCreateInput, "cwd" | "worktreeId">,
+    ): Promise<RigSessionLocation | undefined>;
 
     /** Archives a worktree: it leaves the list and the host removes its checkout. */
     worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
@@ -396,11 +403,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 publish();
                 return reserved.id;
             }),
-        worktreeSessionStart: (worktreeId) =>
+        worktreeSessionStart: (worktreeId, create) =>
             mutate(async () => {
                 const ready = await worktreeReady(worktreeId);
                 if (disposed) return undefined;
                 const session = await deps.transport.sessionCreate({
+                    ...create,
                     cwd: ready.path,
                     worktreeId: ready.id,
                 });
