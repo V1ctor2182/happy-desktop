@@ -127,14 +127,13 @@ export type ChatTraceStep = {
     activity: ConversationActivity;
 };
 /**
- * The live status line a running turn keeps at the bottom of the transcript:
- * what it is doing right now plus what that work is costing — subagents,
- * background terminals, tokens, elapsed. It replaces the strip that used to
- * float above the composer, so a working turn reports itself in the one place
- * the reader is already looking.
+ * The live status line a running turn keeps in the clearance below the last
+ * message: what it is doing right now plus what that work is costing —
+ * subagents, background terminals, tokens, elapsed. It is the transcript's
+ * footer rather than an entry, so it fills the band the surface already
+ * reserves there instead of scrolling away as one more row.
  */
 export type ChatTurnStatus = {
-    kind: "turnStatus";
     id: string;
     conversationId: string;
     /** The assistant message whose turn is running. */
@@ -153,8 +152,7 @@ export type WorkspaceEntry =
     | LiveChatMessage
     | ChatNotice
     | ChatSteeringNotice
-    | ChatTraceStep
-    | ChatTurnStatus;
+    | ChatTraceStep;
 export function formatBytes(size: number): string {
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
@@ -520,7 +518,7 @@ function turnEntries(
  * it is being delivered, because it reports token spend the durable summary does
  * not carry.
  */
-function turnStatusEntry(
+function turnStatusOf(
     entry: LiveChatMessage,
     activity: DeepReadonly<AgentActivityState> | undefined,
     now: number,
@@ -531,7 +529,6 @@ function turnStatusEntry(
     const subagents = activity?.subagents ?? trace.subagents;
     const terminals = activity?.backgroundTerminals ?? trace.backgroundTerminals;
     return {
-        kind: "turnStatus",
         id: `${entry.id} status`,
         conversationId: entry.conversationId,
         messageId: entry.id,
@@ -544,16 +541,33 @@ function turnStatusEntry(
         ...(Number.isFinite(startedAt) ? { elapsedMs: Math.max(0, now - startedAt) } : {}),
     };
 }
+/**
+ * The status line for whichever turn in this chat is still working, or nothing
+ * when none is. Only one turn runs at a time per chat, so the transcript keeps
+ * one footer rather than one per message.
+ */
+export function turnStatusProject(
+    items: readonly DeepReadonly<ConversationMessageEntry>[],
+    /** Realtime agent activity for this chat, keyed by the turn it belongs to. */
+    activities: readonly DeepReadonly<AgentActivityState>[],
+    /** The owner's ticking clock, so the running turn's elapsed time advances. */
+    now: number,
+): ChatTurnStatus | undefined {
+    const activityByTurn = new Map(activities.map((activity) => [activity.turnId, activity]));
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+        const entry = messageEntry(items[index]!);
+        const trace = entry.agentTrace;
+        if (!trace) continue;
+        const status = turnStatusOf(entry, activityByTurn.get(trace.turnId), now);
+        if (status) return status;
+    }
+    return undefined;
+}
 export function entriesProject(
     items: readonly DeepReadonly<ConversationMessageEntry>[],
     traces?: ChatTraceProjection,
-    /** Realtime agent activity for this chat, keyed by the turn it belongs to. */
-    activities: readonly DeepReadonly<AgentActivityState>[] = [],
-    /** The owner's ticking clock, so the running turn's elapsed time advances. */
-    now = 0,
 ): WorkspaceEntry[] {
     const result: WorkspaceEntry[] = [];
-    const activityByTurn = new Map(activities.map((activity) => [activity.turnId, activity]));
     let previousDay = "";
     for (const item of items) {
         const message = item.message;
@@ -588,16 +602,8 @@ export function entriesProject(
             continue;
         }
         // A turn reads top to bottom as the agent worked: what it wrote first,
-        // then the steps it took, then the answer it settled on — and, while it
-        // is still working, one status line under all of it.
-        const projected = messageEntry(item);
-        result.push(...turnEntries(projected, traces));
-        const status = turnStatusEntry(
-            projected,
-            projected.agentTrace ? activityByTurn.get(projected.agentTrace.turnId) : undefined,
-            now,
-        );
-        if (status) result.push(status);
+        // then the steps it took, then the answer it settled on.
+        result.push(...turnEntries(messageEntry(item), traces));
     }
     return result;
 }

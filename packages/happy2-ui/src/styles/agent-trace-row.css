@@ -142,15 +142,15 @@
 }
 
 /*
- * The status line a working turn keeps at the end of the cloud transcript. It
- * shares the left inset of the step rows above it so the whole turn holds one
- * measure, and it is not a control: nothing opens from it while its steps are
- * already listed.
+ * The status line a working turn keeps in the clearance below the cloud
+ * transcript. It shares the left inset of the step rows above it so the whole
+ * turn holds one measure, and it is not a control: nothing opens from it while
+ * its steps are already listed.
  */
 .happy2-chat-turn-status {
     flex: none;
-    margin: 4px 96px 4px 30px;
     width: auto;
+    margin: 0 96px 18px 30px;
     cursor: default;
 }
 

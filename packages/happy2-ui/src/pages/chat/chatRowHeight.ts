@@ -49,8 +49,6 @@ const CHAT_AGENT_PADDING = 8;
  */
 /** `.happy2-message--after-trace-steps` reopens 8px above resumed prose. */
 const AFTER_TRACE_PADDING_TOP = 8;
-/** `.happy2-chat-turn-status` — a 28px AgentTraceRow with 4px of clearance. */
-const TURN_STATUS_HEIGHT = 36;
 /** A chat `FileAttachment` card, and the 4px column gap between two of them. */
 const FILE_ATTACHMENT = 64;
 const FILE_ATTACHMENT_GAP = 4;
@@ -71,7 +69,6 @@ export function chatRowHeight(
     if (entry.kind === "notice") return noticeRowHeight(entry.text, width, "center");
     if (entry.kind === "steering") return steeringNoticeRowHeight(entry.text, entry.quote, width);
     if (entry.kind === "traceStep") return conversationActivityHeight(entry.activity.kind);
-    if (entry.kind === "turnStatus") return TURN_STATUS_HEIGHT;
     if (context.hasAppNodes(entry)) return undefined;
     const own = !entry.agent && (entry.own || entry.senderId === context.viewerId);
     const treatment: MessageTreatment = entry.agent ? "agent" : own ? "own" : "incoming";

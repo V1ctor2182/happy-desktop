@@ -739,6 +739,13 @@ export type MessageListProps = {
     children: ReactNode;
     className?: string;
     /**
+     * A row pinned to the end of the list's content, below the last message and
+     * inside the clearance the surface reserves there. It is part of the
+     * scrolled content, not an overlay, so it follows the newest message the way
+     * the transcript does and adds no height of its own.
+     */
+    footer?: ReactNode;
+    /**
      * Height of row `index` at the list's current content width, computed from
      * the caller's own data rather than from the DOM. Every row is still
      * measured once it mounts; this is what sizes the ones nobody has scrolled
@@ -935,6 +942,14 @@ export function MessageList(props: MessageListProps) {
                 ) : (
                     props.children
                 )}
+                {props.footer !== undefined ? (
+                    <div
+                        className="happy2-message-list__footer"
+                        data-happy2-ui="message-list-footer"
+                    >
+                        {props.footer}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
+    AgentTraceRow,
     AppShell,
     Banner,
     Button,
@@ -36,6 +37,7 @@ import {
     composerAudienceHint,
     composerHint,
     entriesProject,
+    turnStatusProject,
     entryLayoutClass,
     formatBytes,
     identityInitials,
@@ -430,12 +432,11 @@ export function ChatPage(props: ChatPageProps) {
               }
             : undefined;
     };
-    const entries = entriesProject(
-        chatSnapshot()?.messages ?? [],
-        traceProjection(),
-        activeAgentActivity(),
-        activityNow,
-    );
+    const entries = entriesProject(chatSnapshot()?.messages ?? [], traceProjection());
+    // The working turn's live line is the transcript's footer, not a row: it
+    // fills the clearance the conversation reserves below the last message.
+    const turnStatus = () =>
+        turnStatusProject(chatSnapshot()?.messages ?? [], activeAgentActivity(), activityNow);
     const avatarFor = createAvatarProjection({
         user,
         sidebarSnapshot,
@@ -1278,6 +1279,22 @@ export function ChatPage(props: ChatPageProps) {
                                 ...pluginRequestEntries(),
                                 ...documentWriteRequestEntries(),
                             ]}
+                            messageFooter={((status) =>
+                                status ? (
+                                    <AgentTraceRow
+                                        className="happy2-chat-turn-status"
+                                        detail={status.detail}
+                                        elapsedMs={status.elapsedMs}
+                                        entryCount={0}
+                                        kind={status.stepKind}
+                                        status="running"
+                                        subagentCount={status.subagentCount}
+                                        terminalCount={status.terminalCount}
+                                        title={status.title}
+                                        totalTokens={status.totalTokens}
+                                        variant="row"
+                                    />
+                                ) : undefined)(turnStatus())}
                             messageListScrollPosition={props.messageListScrollPosition}
                             onAudienceChange={(audience) =>
                                 props.composer?.getState().audienceUpdate(audience)

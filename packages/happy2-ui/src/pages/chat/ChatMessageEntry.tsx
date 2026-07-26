@@ -53,25 +53,6 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
     if (entry.kind === "steering") return <SteeringNotice quote={entry.quote} text={entry.text} />;
     if (entry.kind === "traceStep")
         return <AgentActivityRow activity={entry.activity} className={props.className} />;
-    /* The one line a working turn keeps at the bottom of the transcript: what it
-       is doing plus what that costs. It is not a button — there is nothing to
-       open while the steps are already listed above it. */
-    if (entry.kind === "turnStatus")
-        return (
-            <AgentTraceRow
-                className="happy2-chat-turn-status"
-                detail={entry.detail}
-                elapsedMs={entry.elapsedMs}
-                entryCount={0}
-                kind={entry.stepKind}
-                status="running"
-                subagentCount={entry.subagentCount}
-                terminalCount={entry.terminalCount}
-                title={entry.title}
-                totalTokens={entry.totalTokens}
-                variant="row"
-            />
-        );
     /* A running turn needs no status row of its own: its steps are listed in the
        transcript as it works. Once the turn ends they fold away behind the
        compact "View traces" link on the line that opened the turn, which toggles

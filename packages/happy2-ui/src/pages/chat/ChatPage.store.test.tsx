@@ -1438,6 +1438,15 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     const statusRow = view.container.querySelector<HTMLElement>(
         '[data-happy2-ui="agent-trace-row"]',
     )!;
+    // It is the message list's footer, sitting in the clearance the transcript
+    // already reserves below the last message rather than above the composer.
+    expect(statusRow.closest('[data-happy2-ui="message-list-footer"]')).not.toBeNull();
+    expect(statusRow.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        messageList.getBoundingClientRect().bottom,
+    );
+    expect(
+        composerCard.getBoundingClientRect().top - messageList.getBoundingClientRect().bottom,
+    ).toBeCloseTo(0, 1);
     const stats = statusRow.querySelector('[data-happy2-ui="agent-trace-row-stats"]')!;
     expect(stats.textContent).toContain("2 agents");
     expect(stats.textContent).toContain("1 process");

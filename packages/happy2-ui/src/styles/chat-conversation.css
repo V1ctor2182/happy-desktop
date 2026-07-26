@@ -20,7 +20,9 @@
  * message is what keeps it from reading as part of the composer. It is also the
  * band the turn's live state occupies — what the agent is inferring, who is
  * typing — so it holds a few lines rather than a hairline, and it belongs to the
- * scrollport so the reader can always push the last line clear of the dock.
+ * scrollport so the reader can always push the last line clear of the dock. The
+ * message list's footer is what fills that band: the working turn's live line,
+ * aligned with the step rows above it.
  */
 .happy2-chat-conversation .happy2-message-list__content {
     padding-bottom: 64px;

@@ -990,10 +990,22 @@
    scrollport height so the spacer's `margin-top: auto` still bottom-aligns a
    short thread, and it preserves the virtual container's offset exactly. */
 .happy2-message-list__content {
+    position: relative;
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
     padding: 12px 0 8px;
+}
+
+/* The footer lives in the clearance below the last message rather than after
+ * it, so a list that reserves that band fills it instead of growing. */
+.happy2-message-list__footer {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
 }
 
 .happy2-message-list__spacer {

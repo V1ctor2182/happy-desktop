@@ -28,6 +28,8 @@ export interface ChatConversationProps {
     composerContributions?: ReactNode;
     composerModelControl?: ReactNode;
     messageEntries: ReactNode;
+    /** The live line a working turn keeps in the clearance below the transcript. */
+    messageFooter?: ReactNode;
     /**
      * Height of transcript row `index` at the list's content width, computed
      * from the page's own entries rather than the DOM. It sizes the rows nobody
@@ -150,6 +152,7 @@ export function ChatConversation(props: ChatConversationProps) {
             />
             <MessageList
                 estimateRowSize={props.estimateRowSize}
+                footer={props.messageFooter}
                 initialScrollPosition={props.messageListScrollPosition}
                 key={props.activeConversationId}
                 onScrollPositionChange={props.onMessageListScrollPositionChange}
