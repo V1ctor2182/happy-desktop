@@ -189,6 +189,41 @@ export interface RigWorkspaceSnapshot {
     readonly workspaceFiles?: RigWorkspaceFiles;
     /** True while that listing is being read. */
     readonly workspaceFilesLoading: boolean;
+    /** The create dialog, when it is open. */
+    readonly create?: RigCreateSnapshot;
+}
+
+/**
+ * A session being composed before it exists. Everything a first message needs —
+ * where to run, how it is configured, and what to say — decided in one place
+ * rather than by starting a session and then correcting it.
+ */
+export interface RigCreateSnapshot {
+    /** The group it will start in; the last one used, until changed. */
+    readonly groupId?: RigGroupId;
+    /** Every project and worktree it could start in, in list order. */
+    readonly groups: readonly RigCreateGroupOption[];
+    /** The first message. An empty one is not a task, and cannot be submitted. */
+    readonly text: string;
+    /** Model, effort, access mode, tier, plus the menus behind them. */
+    readonly draft?: RigSessionDraftSnapshot;
+    /**
+     * Whether the dialog stays open after starting a session, cleared and ready
+     * for the next one. Someone filing several tasks at once should not have to
+     * reopen it between them.
+     */
+    readonly keepOpen: boolean;
+    /** True while a session is being started; the dialog stays up and inert. */
+    readonly submitting: boolean;
+    /** A failed start, said in the dialog rather than thrown away. */
+    readonly error?: string;
+}
+
+export interface RigCreateGroupOption {
+    readonly id: RigGroupId;
+    readonly label: string;
+    /** True for a worktree, which is listed under the project it belongs to. */
+    readonly nested: boolean;
 }
 
 /** Which files the panel lists. */
@@ -377,6 +412,26 @@ export interface RigWorkspaceStore {
      * named, not the directory: the host resolves the path from its own catalog.
      */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
+    /**
+     * Opens the create dialog, on the group last created in — or the one given,
+     * when it is being opened from somewhere that already knows where.
+     */
+    createOpen(groupId?: RigGroupId): void;
+    /** Chooses which project or worktree the session will start in. */
+    createGroupUpdate(groupId: RigGroupId): void;
+    /** Edits the first message. */
+    createTextUpdate(text: string): void;
+    /** Chooses how the session will be configured. */
+    createModelUpdate(input: RigModelSelection): void;
+    createEffortUpdate(effort?: RigThinkingLevel): void;
+    createPermissionModeUpdate(permissionMode: RigPermissionMode): void;
+    createServiceTierUpdate(serviceTier?: RigServiceTier): void;
+    /** Chooses whether the dialog stays open for another task. */
+    createKeepOpenUpdate(keepOpen: boolean): void;
+    /** Closes the dialog, discarding what was typed. */
+    createCancel(): void;
+    /** Starts the session and sends the first message. */
+    createSubmit(): Promise<void>;
     /** Starts renaming a project, or one of its worktrees, from its current name. */
     renameOpen(projectId: RigProjectId, worktreeId: RigWorktreeId | undefined): void;
     /** Edits the pending name. */
@@ -493,6 +548,12 @@ export function rigWorkspaceStoreCreate(
     let fileScope: RigFileScope = "changed";
     let fileLayout: RigFileLayout = "flat";
     let fileTreeExpanded: ReadonlySet<string> = new Set();
+    let create: RigCreateSnapshot | undefined;
+    let createDraft: RigSessionDraftStore | undefined;
+    let unsubscribeCreateDraft: (() => void) | undefined;
+    let createDraftGeneration = 0;
+    /** The group the last created session started in, offered as the next default. */
+    let lastCreateGroupId: RigGroupId | undefined;
     let workspaceFiles: RigWorkspaceFiles | undefined;
     let workspaceFilesLoading = false;
     let workspaceFilesGroupId: RigGroupId | undefined;
@@ -613,7 +674,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileLayout === fileLayout &&
             snapshot.fileTreeExpanded === fileTreeExpanded &&
             snapshot.workspaceFiles === workspaceFiles &&
-            snapshot.workspaceFilesLoading === workspaceFilesLoading
+            snapshot.workspaceFilesLoading === workspaceFilesLoading &&
+            snapshot.create === create
         )
             return;
         snapshot = {
@@ -627,6 +689,7 @@ export function rigWorkspaceStoreCreate(
             fileTreeExpanded,
             ...(workspaceFiles ? { workspaceFiles } : {}),
             workspaceFilesLoading,
+            ...(create ? { create } : {}),
             ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -1016,6 +1079,62 @@ export function rigWorkspaceStoreCreate(
         });
     };
 
+    /**
+     * Every project and worktree a session could start in, in the order the
+     * sidebar lists them, with worktrees under the project they belong to.
+     */
+    const createGroupsRead = (): readonly RigCreateGroupOption[] => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return [];
+        const options: RigCreateGroupOption[] = [];
+        for (const project of projects.value) {
+            options.push({ id: project.id, label: project.name, nested: false });
+            for (const worktree of project.worktrees)
+                options.push({ id: worktree.id, label: worktree.name, nested: true });
+        }
+        return options;
+    };
+
+    const createRelease = (): void => {
+        unsubscribeCreateDraft?.();
+        unsubscribeCreateDraft = undefined;
+        createDraft = undefined;
+        // Invalidates a catalog read still in flight, so its draft cannot attach
+        // itself to a dialog that has since been closed.
+        createDraftGeneration += 1;
+    };
+
+    /**
+     * Attaches the model/effort/access draft to the open dialog. The catalog is
+     * read asynchronously, so the dialog is usable before the pickers arrive
+     * rather than waiting on them — the task is the point, and the daemon
+     * applies its own defaults for anything left unchosen.
+     */
+    const createDraftEnsure = (): void => {
+        createRelease();
+        const current = createDraftGeneration;
+        void client.catalogRead().then(
+            (catalog) => {
+                if (disposed || current !== createDraftGeneration || !create) return;
+                const store = rigSessionDraftStoreCreate({
+                    catalog,
+                    // Opens on the workspace's last selection, so a new session
+                    // starts configured the way the last one was.
+                    ...(lastSelection ? { selection: lastSelection } : {}),
+                });
+                createDraft = store;
+                unsubscribeCreateDraft = store.subscribe(() => {
+                    if (!create) return;
+                    create = { ...create, draft: store.get() };
+                    recompute();
+                });
+                create = { ...create, draft: store.get() };
+                recompute();
+            },
+            () => undefined,
+        );
+    };
+
     const releaseGroup = (): void => {
         unsubscribeGroupComposer?.();
         unsubscribeGroupComposer = undefined;
@@ -1157,6 +1276,7 @@ export function rigWorkspaceStoreCreate(
             fileTreeExpanded,
             ...(workspaceFiles ? { workspaceFiles } : {}),
             workspaceFilesLoading,
+            ...(create ? { create } : {}),
             ...(activeFileTabId ? { activeFileTabId } : {}),
         };
     };
@@ -1418,6 +1538,88 @@ export function rigWorkspaceStoreCreate(
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
         openIn: (groupId, targetId) => client.openIn(groupId, targetId),
+        createOpen(groupId) {
+            const groups = createGroupsRead();
+            // The group last created in, then the one currently open, then
+            // whatever is first: opening the dialog should not usually require
+            // answering where, because usually it is where it was last time.
+            const chosen =
+                groupId ??
+                (groups.some((group) => group.id === lastCreateGroupId)
+                    ? lastCreateGroupId
+                    : undefined) ??
+                (groups.some((group) => group.id === openGroupId) ? openGroupId : undefined) ??
+                groups[0]?.id;
+            create = {
+                ...(chosen ? { groupId: chosen } : {}),
+                groups,
+                text: "",
+                keepOpen: false,
+                submitting: false,
+            };
+            createDraftEnsure();
+            recompute();
+        },
+        createGroupUpdate(groupId) {
+            if (!create || create.submitting) return;
+            create = { ...create, groupId };
+            recompute();
+        },
+        createTextUpdate(text) {
+            if (!create || create.submitting) return;
+            create = { ...create, text };
+            recompute();
+        },
+        createModelUpdate: (input) => createDraft?.modelUpdate(input),
+        createEffortUpdate: (effort) => createDraft?.effortUpdate(effort),
+        createPermissionModeUpdate: (mode) => createDraft?.permissionModeUpdate(mode),
+        createServiceTierUpdate: (tier) => createDraft?.serviceTierUpdate(tier),
+        createKeepOpenUpdate(keepOpen) {
+            if (!create) return;
+            create = { ...create, keepOpen };
+            recompute();
+        },
+        createCancel() {
+            if (!create) return;
+            createRelease();
+            create = undefined;
+            recompute();
+        },
+        async createSubmit() {
+            const pending = create;
+            if (!pending || pending.submitting) return;
+            const text = pending.text.trim();
+            const groupId = pending.groupId;
+            // A dialog with nothing to say and nowhere to run is not a session
+            // waiting to be started; it is an unfinished form.
+            if (text.length === 0 || groupId === undefined) return;
+            create = { ...pending, submitting: true, error: undefined };
+            recompute();
+            try {
+                await groupSubmit(groupId, text, [], createDraft?.get().selection);
+                lastCreateGroupId = groupId;
+                if (create?.keepOpen) {
+                    // Cleared rather than reopened: the configuration and the
+                    // group are what someone filing several tasks wants to keep,
+                    // and only the task itself changes between them.
+                    create = { ...create, text: "", submitting: false };
+                } else {
+                    createRelease();
+                    create = undefined;
+                }
+            } catch (error) {
+                // The dialog stays open holding what was typed. It is the only
+                // copy of the task, and a session that failed to start is one
+                // the reader will want to try again rather than retype.
+                if (create)
+                    create = {
+                        ...create,
+                        submitting: false,
+                        error: rigUserError(error).message,
+                    };
+            }
+            recompute();
+        },
         renameOpen(projectId, worktreeId) {
             const projects = list.get().projects;
             if (projects.type !== "ready") return;
@@ -1489,6 +1691,7 @@ export function rigWorkspaceStoreCreate(
             if (disposed) return;
             disposed = true;
             stop();
+            createRelease();
             // Disposing the panel stops every terminal it opened: this connection is
             // going away, and a shell nobody can reach again is an orphan.
             panel[Symbol.dispose]();

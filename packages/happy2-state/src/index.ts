@@ -325,6 +325,8 @@ export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
     type RigChangedFileTabSnapshot,
+    type RigCreateGroupOption,
+    type RigCreateSnapshot,
     type RigFileLayout,
     type RigFileScope,
     type RigFileViewMode,

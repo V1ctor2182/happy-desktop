@@ -6,6 +6,7 @@ import type {
     RigChangedFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
+    RigCreateSnapshot,
     RigFileLayout,
     RigWorkspaceFiles,
     RigFileScope,
@@ -41,6 +42,7 @@ import {
     EmptyState,
     FilePanel,
     Lightbox,
+    Checkbox,
     Modal,
     ModalOverlay,
     RigActivityPanel,
@@ -438,7 +440,7 @@ export function AppRigView(props: AppRigViewProps) {
                     // toggle in this heading, so the product mark stands down and
                     // the row becomes the window's drag lane.
                     brand={!desktop}
-                    composeLabel="New session"
+                    composeLabel="Create"
                     footer={
                         <SidebarFooter
                             appearance={appearance.appearance}
@@ -451,7 +453,8 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     headerAccessory={listAccessory}
                     itemMenuItems={(item) => rowMenuItems(rows, item)}
-                    onCompose={conversationCreate}
+                    onCompose={() => props.workspace.createOpen()}
+                    onSectionAction={() => props.workspace.createOpen()}
                     onItemMenuSelect={(item, actionId) => {
                         const owner = rowOwnerFind(rows, item.id);
                         if (!owner) return;
@@ -527,7 +530,7 @@ export function AppRigView(props: AppRigViewProps) {
                             ...(projects.type === "ready"
                                 ? {
                                       empty: {
-                                          actionLabel: "New session",
+                                          actionLabel: "Create",
                                           description: "Start a session to begin working locally.",
                                           icon: "chat" as const,
                                           title: "No projects yet",
@@ -697,10 +700,14 @@ export function AppRigView(props: AppRigViewProps) {
                         <TabbedPane
                             actions={
                                 <Button
-                                    aria-label="New session in this project"
+                                    aria-label="Create a session in this project"
                                     icon="plus"
                                     iconOnly
-                                    onClick={() => groupConversationCreate(openGroup)}
+                                    // Opens the same dialog the sidebar does,
+                                    // already pointed at this project: the
+                                    // question of where is answered, and the
+                                    // rest of it still has to be asked.
+                                    onClick={() => props.workspace.createOpen(openGroup.id)}
                                     size="small"
                                     variant="ghost"
                                 />
@@ -791,6 +798,9 @@ export function AppRigView(props: AppRigViewProps) {
                     />
                 </>
             )}
+            {workspace.create ? (
+                <RigCreateDialog create={workspace.create} workspace={props.workspace} />
+            ) : null}
             {/* Renaming is a workspace-level act — the row being renamed may not
                 be the project that is open — so its dialog hangs off the shell
                 rather than off any one surface inside it. */}
@@ -1120,6 +1130,105 @@ function rigTurnElapsedMs(
  * same line as the session tabs beside them instead of a header's height higher,
  * and in the desktop window it gives that edge a lane to drag the window by.
  */
+/**
+ * The create dialog: what to do, where to do it, and how the session that does
+ * it is configured — all decided before anything is started, so a task never
+ * has to be filed into a session that was configured wrong and corrected after.
+ */
+function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorkspaceStore }) {
+    const { create, workspace } = props;
+    const submittable = create.text.trim().length > 0 && create.groupId !== undefined;
+    return (
+        <ModalOverlay onDismiss={() => workspace.createCancel()}>
+            <Modal
+                footer={
+                    <>
+                        {/* Filing several tasks at once should not mean
+                            reopening this between each one. */}
+                        <Checkbox
+                            checked={create.keepOpen}
+                            // The footer right-aligns its actions; this is a
+                            // setting rather than an action, so it takes the
+                            // free space and sits at the other end.
+                            className="happy2-rig-create__keep-open"
+                            label="Keep open for the next task"
+                            onChange={(checked) => workspace.createKeepOpenUpdate(checked)}
+                        />
+                        <Button onClick={() => workspace.createCancel()} variant="ghost">
+                            Cancel
+                        </Button>
+                        <Button
+                            disabled={!submittable || create.submitting}
+                            onClick={() => {
+                                void workspace.createSubmit().catch(() => undefined);
+                            }}
+                            variant="primary"
+                        >
+                            Create
+                        </Button>
+                    </>
+                }
+                icon="spark"
+                onClose={() => workspace.createCancel()}
+                title="Create"
+            >
+                <div className="happy2-rig-create">
+                    <TextField
+                        disabled={create.submitting}
+                        fullWidth
+                        label="Task"
+                        multiline
+                        onValueChange={(value) => workspace.createTextUpdate(value)}
+                        placeholder="What should the agent do?"
+                        rows={4}
+                        value={create.text}
+                    />
+                    <div className="happy2-rig-create__row">
+                        <RigControlMenu
+                            items={create.groups.map((group) => ({
+                                id: group.id,
+                                kind: "item" as const,
+                                label: group.label,
+                                // A worktree is named under the project it
+                                // belongs to, so a bare name is never ambiguous.
+                                ...(group.nested ? { icon: "branch" as const } : {}),
+                            }))}
+                            label="Project"
+                            onSelect={(id: string) => workspace.createGroupUpdate(id as RigGroupId)}
+                            value={
+                                create.groups.find((group) => group.id === create.groupId)?.label ??
+                                "Choose a project"
+                            }
+                        />
+                        {create.draft ? (
+                            <RigSessionControls
+                                menus={create.draft.menus}
+                                onEffortChange={(effort?: RigThinkingLevel) =>
+                                    workspace.createEffortUpdate(effort)
+                                }
+                                onModelChange={(selection: RigModelSelection) =>
+                                    workspace.createModelUpdate(selection)
+                                }
+                                onPermissionModeChange={(mode: RigPermissionMode) =>
+                                    workspace.createPermissionModeUpdate(mode)
+                                }
+                                onServiceTierChange={(tier?: RigServiceTier) =>
+                                    workspace.createServiceTierUpdate(tier)
+                                }
+                            />
+                        ) : null}
+                    </div>
+                    {create.error ? (
+                        <p className="happy2-rig-create__error" role="alert">
+                            {create.error}
+                        </p>
+                    ) : null}
+                </div>
+            </Modal>
+        </ModalOverlay>
+    );
+}
+
 function RigPanelBody(props: {
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];

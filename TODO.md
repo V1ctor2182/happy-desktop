@@ -31,7 +31,7 @@ that consumes it, per AGENTS.md "Order of work".
 - [x] 9. Allow renaming projects and workspaces, guarded by the daemon's
       optimistic version like the existing reorder/archive mutations.
 - [x] 10. Drop the redundant workspace path from the project header.
-- [ ] 11. Replace "New session" with "+ Create": a modal with a task input, a
+- [x] 11. Replace "New session" with "+ Create": a modal with a task input, a
       project dropdown defaulting to the last used one, model/effort/access
       pickers, and a "keep open for the next task" option.
 - [x] 12. Remove the unreachable `ConversationSettingsModal` and its store
