@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import type {
     ConversationActivity,
+    ConversationActivityPresentation,
     ConversationActivityReview,
     ConversationActivityStatus,
     ConversationFileDiff,
@@ -8,7 +9,7 @@ import type {
     ConversationToolCall,
 } from "happy2-state";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 
 export type AgentActivityRowProps = {
@@ -88,6 +89,30 @@ function toolVerb(name: string, status: ConversationActivityStatus): string {
     if (/(read|view|cat|open)/.test(lower)) return active ? "Reading" : "Read";
     if (/(write|edit|patch|update|apply)/.test(lower)) return active ? "Editing" : "Edited";
     return active ? "Using" : "Used";
+}
+
+/**
+ * Tool → the glyph saying what kind of work it was, matched on the same
+ * families as `toolVerb` so the icon and the verb never disagree. Every tool
+ * gets one: a row with no glyph in a column of glyphs reads as a rendering
+ * fault rather than as a tool nobody categorized.
+ */
+function toolIcon(name: string, presentation?: ConversationActivityPresentation): IconName {
+    if (presentation?.type === "fileDiff") return "edit";
+    if (
+        presentation?.type === "execCommand" ||
+        presentation?.type === "backgroundTerminalInteraction"
+    )
+        return "terminal";
+    const lower = name.toLowerCase();
+    if (/(bash|exec|shell|command|run)/.test(lower)) return "terminal";
+    if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return "search";
+    if (/(read|view|cat|open)/.test(lower)) return "doc";
+    if (/(write|edit|patch|update|apply)/.test(lower)) return "edit";
+    if (/(fetch|http|web|url|browser)/.test(lower)) return "globe";
+    if (/(task|todo|plan)/.test(lower)) return "tasks";
+    if (/(agent|spawn|subagent|workflow)/.test(lower)) return "agents";
+    return "zap";
 }
 
 /** Status → semantic dot tone: warning while active/awaiting, error on stop/fail. */
@@ -313,6 +338,16 @@ function AgentToolActivity(props: {
                     data-happy2-ui="agent-activity-dot"
                 />
             )}
+            {/* What kind of work this was, told at a glance. It is decoration
+                over the verb beside it, which already says the same thing in
+                words, so it stays out of the accessibility tree. */}
+            <span
+                aria-hidden="true"
+                className="happy2-agent-activity__glyph"
+                data-happy2-ui="agent-activity-glyph"
+            >
+                <Icon name={toolIcon(tool.toolName, presentation)} size={12} />
+            </span>
             <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                 {verb}
             </span>

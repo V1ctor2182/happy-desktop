@@ -98,8 +98,6 @@ export interface RigConversationSnapshot {
     readonly usageLoading: boolean;
     readonly usageError?: string;
     readonly activityPanelOpen: boolean;
-    /** Whether the session settings dialog is open. */
-    readonly settingsOpen: boolean;
     /** The transcript image opened full size, if any. */
     readonly openImage?: RigOpenImage;
     readonly menus?: RigMenusSnapshot;
@@ -283,10 +281,6 @@ export interface RigWorkspaceStore {
     usagePanelOpen(): void;
     usagePanelClose(): void;
     activityPanelToggle(): void;
-    /** Opens the session settings dialog for the open conversation. */
-    settingsOpen(): void;
-    /** Closes the session settings dialog for the open conversation. */
-    settingsClose(): void;
     reasoningToggle(): void;
     /** Opens one transcript image of the open conversation full size. */
     imageOpen(messageId: string, attachmentId: string): void;
@@ -451,7 +445,6 @@ export function rigWorkspaceStoreCreate(
             usageLoading: chat.usageLoading,
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
             activityPanelOpen: chat.activityPanelOpen,
-            settingsOpen: chat.settingsOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : {}),
             modelLocked: chat.modelLocked,
@@ -1151,8 +1144,6 @@ export function rigWorkspaceStoreCreate(
         usagePanelOpen: () => chatStore?.usagePanelOpen(),
         usagePanelClose: () => chatStore?.usagePanelClose(),
         activityPanelToggle: () => chatStore?.activityPanelToggle(),
-        settingsOpen: () => chatStore?.settingsOpen(),
-        settingsClose: () => chatStore?.settingsClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
@@ -1231,7 +1222,6 @@ function conversationAcquiring(
         usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
-        settingsOpen: false,
         modelLocked: false,
     };
 }

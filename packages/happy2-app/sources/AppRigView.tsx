@@ -32,7 +32,6 @@ import {
     ChannelHeader,
     ChangedFileDiff,
     ComposerModelControl,
-    ConversationSettingsModal,
     ConversationView,
     EmptyState,
     FilePanel,
@@ -921,38 +920,6 @@ function RigConversationSurface(props: {
                             onClose={() => workspace.imageClose()}
                         />
                     </ModalOverlay>
-                ) : conversation.settingsOpen ? (
-                    <ConversationSettingsModal
-                        activityOpen={conversation.activityPanelOpen}
-                        controls={
-                            conversation.menus ? (
-                                <RigSessionControls
-                                    fields={["permission", "tier"]}
-                                    menus={conversation.menus}
-                                    onEffortChange={(effort?: RigThinkingLevel) =>
-                                        workspace.sessionEffortUpdate(effort)
-                                    }
-                                    onModelChange={(selection: RigModelSelection) =>
-                                        workspace.sessionModelUpdate(selection)
-                                    }
-                                    onPermissionModeChange={(mode: RigPermissionMode) =>
-                                        workspace.sessionPermissionModeUpdate(mode)
-                                    }
-                                    onServiceTierChange={(tier?: RigServiceTier) =>
-                                        workspace.sessionServiceTierUpdate(tier)
-                                    }
-                                />
-                            ) : undefined
-                        }
-                        onActivityOpenChange={() => workspace.activityPanelToggle()}
-                        onClose={() => workspace.settingsClose()}
-                        onShowReasoningChange={() => workspace.reasoningToggle()}
-                        onUsageOpenChange={(value) =>
-                            value ? workspace.usagePanelOpen() : workspace.usagePanelClose()
-                        }
-                        showReasoning={conversation.showReasoning}
-                        usageOpen={conversation.usagePanelOpen}
-                    />
                 ) : undefined
             }
             queued={conversation.queuedMessages}

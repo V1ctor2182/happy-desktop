@@ -62,6 +62,19 @@
     background: var(--text-secondary);
 }
 
+/* Grey, and quieter than the verb it sits beside: the glyph is a scanning aid
+   down the left of a long transcript, not a second thing competing to be read
+   first. Fixed square so every row's verb starts on the same column. */
+.happy2-agent-activity__glyph {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+}
+
 .happy2-agent-activity__verb {
     flex: none;
     font-weight: 600;

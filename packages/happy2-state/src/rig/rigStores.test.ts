@@ -1332,36 +1332,6 @@ describe("rigChatStore actions", () => {
         store[Symbol.dispose]();
     });
 
-    it("opens and closes the settings dialog without disturbing the panels", async () => {
-        const fake = createFakeRigTransport();
-        fake.sessionSet(fakeRigSession("s1"));
-        const { store, unsubscribe } = await chatReady(fake, "s1");
-
-        expect(store.get().settingsOpen).toBe(false);
-        store.settingsOpen();
-        expect(store.get().settingsOpen).toBe(true);
-
-        // Opening is idempotent: a second call does not emit a new snapshot.
-        const opened = store.get();
-        store.settingsOpen();
-        expect(store.get()).toBe(opened);
-
-        // The dialog is pure view state: it closes no panel and starts no work.
-        store.activityPanelToggle();
-        expect(store.get().activityPanelOpen).toBe(true);
-        expect(store.get().settingsOpen).toBe(true);
-
-        store.settingsClose();
-        expect(store.get().settingsOpen).toBe(false);
-        expect(store.get().activityPanelOpen).toBe(true);
-        const closed = store.get();
-        store.settingsClose();
-        expect(store.get()).toBe(closed);
-
-        unsubscribe();
-        store[Symbol.dispose]();
-    });
-
     it("treats shell lifecycle event payloads as hints rather than transcript state", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));

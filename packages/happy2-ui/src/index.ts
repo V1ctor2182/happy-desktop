@@ -221,10 +221,6 @@ export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnect
 export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export {
-    ConversationSettingsModal,
-    type ConversationSettingsModalProps,
-} from "./ConversationSettingsModal";
-export {
     ConversationStatus,
     ConversationView,
     type ConversationViewProps,

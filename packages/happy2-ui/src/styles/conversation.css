@@ -163,28 +163,3 @@
     justify-content: center;
     width: 100%;
 }
-
-/*
- * ConversationSettingsModal body: labeled groups of session preferences inside
- * the shared modal card.
- */
-.happy2-conversation-settings {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.happy2-conversation-settings__group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.happy2-conversation-settings__label {
-    font-family: var(--happy2-font-ui);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-}

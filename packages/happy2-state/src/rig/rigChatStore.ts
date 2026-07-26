@@ -94,8 +94,6 @@ export interface RigChatSnapshot {
     readonly usageError?: string;
     /** View state: whether the `/goal` + `/tasks` + `/agents` activity panel is open. */
     readonly activityPanelOpen: boolean;
-    /** View state: whether the session settings dialog is open. */
-    readonly settingsOpen: boolean;
     /** The transcript image the reader opened full size, if any. */
     readonly openImage?: RigOpenImage;
     /** Derived pickers for model/effort/permission/service-tier. */
@@ -195,14 +193,6 @@ export interface RigChatStore {
      * than toggle it. Opening it closes the usage panel and stops its poll.
      */
     activityPanelShow(): void;
-    /**
-     * Opens the session settings dialog. The dialog hosts the view toggles and the
-     * access/service-tier pickers that would otherwise crowd the header, so this is
-     * pure local view state: it starts no transport work and closes no panel.
-     */
-    settingsOpen(): void;
-    /** Closes the session settings dialog. */
-    settingsClose(): void;
     /**
      * Opens one transcript image full size. The image is resolved from the named
      * message's attachments here rather than by the surface, so the viewer has a
@@ -354,7 +344,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let usageTimer: unknown;
     let usageGeneration = 0;
     let activityPanelOpen = false;
-    let settingsOpen = false;
     let openImage: RigOpenImage | undefined;
     // Entry ids hidden by a view-only `/clear`; new entries render as usual.
     let clearedIds = new Set<string>();
@@ -380,7 +369,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
-        settingsOpen: false,
     }));
 
     const sessionLoadable = (): Loadable<RigSession> =>
@@ -435,7 +423,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             usageLoading,
             usageError,
             activityPanelOpen,
-            settingsOpen,
             openImage,
             modelLocked: session?.modelLocked ?? false,
             // The pickers show the pending choice when there is one, so what the
@@ -1235,16 +1222,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 usagePollStop();
                 usageLoading = false;
             }
-            commit();
-        },
-        settingsOpen() {
-            if (settingsOpen) return;
-            settingsOpen = true;
-            commit();
-        },
-        settingsClose() {
-            if (!settingsOpen) return;
-            settingsOpen = false;
             commit();
         },
         imageOpen(messageId, attachmentId) {

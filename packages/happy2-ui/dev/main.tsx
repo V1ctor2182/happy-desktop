@@ -104,7 +104,6 @@ import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
 import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
-import { ConversationSettingsModalPage } from "./pages/ConversationSettingsModalPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
 import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
@@ -221,12 +220,6 @@ const components: BlueprintPage[] = [
         label: "Conversation view",
         number: "C-154",
         page: ConversationViewPage,
-    },
-    {
-        id: "conversation-settings-modal",
-        label: "Conversation settings modal",
-        number: "C-159",
-        page: ConversationSettingsModalPage,
     },
     {
         id: "rig-usage-panel",

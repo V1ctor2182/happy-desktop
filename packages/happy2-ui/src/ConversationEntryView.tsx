@@ -4,6 +4,7 @@ import { AgentActivityRow } from "./AgentActivityRow";
 import { AgentStatusLine } from "./AgentStatusLine";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
+import { type MenuItem } from "./Menu";
 import {
     ConversationRequestView,
     type ConversationRequestDecision,
@@ -133,6 +134,25 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         trace.entryCount > 0;
     const traceToggle =
         trace && props.onTraceToggle ? () => props.onTraceToggle?.(trace.turnId) : undefined;
+    /* Any message with text can be copied — an answer is the thing most worth
+       taking out of the transcript, and a streaming one is still incomplete, so
+       it waits until the text has settled. */
+    const copyable = message.generationStatus !== "streaming" && message.text.trim().length > 0;
+    const menuItems: MenuItem[] = [
+        ...(copyable
+            ? [{ id: "copy", kind: "item" as const, label: "Copy message", icon: "doc" as const }]
+            : []),
+        ...(rewindable
+            ? [
+                  {
+                      id: "rewind",
+                      kind: "item" as const,
+                      label: "Rewind to here",
+                      icon: "reply" as const,
+                  },
+              ]
+            : []),
+    ];
     return (
         <Message
             agent={author?.kind === "agent"}
@@ -144,11 +164,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             generationStatus={message.generationStatus}
             grouped={props.grouped}
             initials={initialsOf(author?.displayName)}
-            menuItems={
-                rewindable
-                    ? [{ id: "rewind", kind: "item", label: "Rewind to here", icon: "reply" }]
-                    : undefined
-            }
+            menuItems={menuItems.length > 0 ? menuItems : undefined}
             metaAccessory={
                 traceCollapsible && trace ? (
                     <AgentTraceRow
@@ -163,7 +179,17 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     />
                 ) : undefined
             }
-            onMenuSelect={rewindable ? () => props.onRewind?.(message.id) : undefined}
+            onMenuSelect={
+                menuItems.length > 0
+                    ? (actionId: string) => {
+                          if (actionId === "copy") {
+                              void navigator.clipboard?.writeText(message.text);
+                              return;
+                          }
+                          if (actionId === "rewind") props.onRewind?.(message.id);
+                      }
+                    : undefined
+            }
             images={images.length > 0 ? [...images] : undefined}
             onImageOpen={
                 props.onImageOpen
