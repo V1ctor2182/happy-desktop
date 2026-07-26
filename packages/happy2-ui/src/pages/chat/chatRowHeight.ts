@@ -4,6 +4,7 @@ import {
     messageMediaHeight,
     messageRowHeight,
     noticeRowHeight,
+    steeringNoticeRowHeight,
     DIVIDER_HEIGHT,
     type MessageTreatment,
 } from "../../conversationRowHeight.js";
@@ -66,6 +67,7 @@ export function chatRowHeight(
     const width = contentWidth(context.width);
     if (entry.kind === "divider") return DIVIDER_HEIGHT;
     if (entry.kind === "notice") return noticeRowHeight(entry.text, width, "center");
+    if (entry.kind === "steering") return steeringNoticeRowHeight(entry.text, entry.quote, width);
     if (entry.kind === "traceStep") return conversationActivityHeight(entry.activity.kind);
     if (context.hasAppNodes(entry)) return undefined;
     const own = !entry.agent && (entry.own || entry.senderId === context.viewerId);

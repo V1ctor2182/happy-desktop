@@ -184,6 +184,7 @@ export {
     type MessageProps,
     type MessageReaction,
     type MessageSegment,
+    SteeringNotice,
     SystemNotice,
     type SystemNoticeSegment,
 } from "./Message";

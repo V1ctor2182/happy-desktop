@@ -28,6 +28,7 @@ export {
     DayDivider,
     Message,
     MessageList,
+    SteeringNotice,
     SystemNotice,
     type MessageImage,
 } from "../../Message.js";

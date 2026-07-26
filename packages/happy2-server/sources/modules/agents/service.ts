@@ -10,6 +10,10 @@ import { agentTurnReleaseLeases } from "../agent/agentTurnReleaseLeases.js";
 import { agentTurnHasRunnable } from "../agent/agentTurnHasRunnable.js";
 import { agentTurnGetRunning } from "../agent/agentTurnGetRunning.js";
 import { agentTurnAbort } from "../agent/agentTurnAbort.js";
+import { agentTurnClaimSteerable } from "../agent/agentTurnClaimSteerable.js";
+import { agentTurnMarkSteered } from "../agent/agentTurnMarkSteered.js";
+import { agentTurnReleaseSteering } from "../agent/agentTurnReleaseSteering.js";
+import { agentTurnSteeringApply } from "../agent/agentTurnSteeringApply.js";
 import { agentTurnFail } from "../agent/agentTurnFail.js";
 import { agentTurnComplete } from "../agent/agentTurnComplete.js";
 import { agentTurnCheckpoint } from "../agent/agentTurnCheckpoint.js";
@@ -738,7 +742,54 @@ export class AgentService {
         return context.binding.sessionId;
     }
     startTurn(chatId: string): void {
-        this.startDrain(chatId);
+        // A message that arrives while the agent is already working belongs in
+        // that work, not behind it. Steering is attempted first and the drain
+        // still runs: whatever Rig refuses stays queued and answers as its own
+        // turn, so both paths end with every message delivered exactly once.
+        void this.deliverSteering(chatId)
+            .catch((error) => this.onError(error))
+            .finally(() => this.startDrain(chatId));
+    }
+    /**
+     * Hands every queued message for an already-running agent to Rig as steering
+     * for the run in flight. Each delivery is claimed durably before the request
+     * and confirmed only after Rig accepts it; a refusal releases the claim so
+     * the message runs normally once the current turn ends.
+     */
+    private async deliverSteering(chatId: string): Promise<void> {
+        if (this.stopping) return;
+        const claimed = await agentTurnClaimSteerable(this.executor, {
+            chatId,
+            workerId: this.workerId,
+        });
+        for (const steering of claimed) {
+            try {
+                await this.daemon.steerMessage(
+                    steering.sessionId,
+                    {
+                        clientSubmissionId: steering.steeringUserMessageId,
+                        expectedRunId: steering.runId,
+                        text: steering.text,
+                    },
+                    this.shutdown.signal,
+                );
+            } catch (error) {
+                await agentTurnReleaseSteering(this.executor, {
+                    agentUserId: steering.agentUserId,
+                    userMessageId: steering.steeringUserMessageId,
+                    workerId: this.workerId,
+                });
+                // A run that retired between the claim and the request is the
+                // ordinary race, not a fault: the released turn runs next.
+                if (error instanceof RigHttpError && error.status === 409) continue;
+                throw error;
+            }
+            await agentTurnMarkSteered(this.executor, {
+                agentUserId: steering.agentUserId,
+                userMessageId: steering.steeringUserMessageId,
+                workerId: this.workerId,
+            });
+        }
     }
     async getAgentEffort(input: { actorUserId: string; agentUserId: string; chatId: string }) {
         const context = await agentEffortGetContext(
@@ -2336,6 +2387,8 @@ export class AgentService {
                         ) {
                             const traceUpdates = await this.updateAgentActivity(input, event);
                             if (traceUpdates.length > 0) shouldPersist = true;
+                            if (event.type === "steering_applied")
+                                await this.applySteering(input, event.data.messageIds ?? []);
                             if (event.type === "agent_event") {
                                 const nextPartial = agentLoopText(event);
                                 if (nextPartial !== undefined) {
@@ -2386,6 +2439,24 @@ export class AgentService {
                 if (!isRetryableRigError(error)) throw error;
                 await delay(EVENT_RETRY_INTERVAL_MS, signal);
             }
+        }
+    }
+    /**
+     * Publishes the notice that the running turn took the steering messages Rig
+     * names. Rig identifies them by the ids Happy submitted, so each one maps
+     * straight back to the message someone sent; the notice lands in the chat at
+     * the moment it was applied rather than moving the original message.
+     */
+    private async applySteering(
+        input: AgentTurnWork,
+        steeringUserMessageIds: readonly string[],
+    ): Promise<void> {
+        for (const steeringUserMessageId of steeringUserMessageIds) {
+            const applied = await agentTurnSteeringApply(this.executor, {
+                agentUserId: input.agentUserId,
+                steeringUserMessageId,
+            });
+            if (applied) await this.publishAgentReplyHint(input.chatId, applied.hint);
         }
     }
     private async stopTurnStream(input: AgentTurnWork): Promise<void> {

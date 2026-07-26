@@ -372,6 +372,13 @@
             "when": 1786320000000,
             "tag": "0052_archived_channels_have_no_agent_bindings",
             "breakpoints": true
+        },
+        {
+            "idx": 53,
+            "version": "6",
+            "when": 1786406400000,
+            "tag": "0053_agent_turns_can_be_steered",
+            "breakpoints": true
         }
     ]
 }

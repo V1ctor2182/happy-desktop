@@ -467,6 +467,17 @@ export interface MessageSummary {
               readonly type: "agent_effort_changed";
               readonly agentUserId: string;
               readonly effort: string;
+          }
+        | {
+              /**
+               * A message that reached the agent while it was already working,
+               * announced where it landed. The steering message keeps its own
+               * place in the transcript; this names the moment it was taken.
+               */
+              readonly type: "agent_steered";
+              readonly messageId: string;
+              readonly userId: string;
+              readonly text: string;
           };
     readonly generationStatus?: "streaming" | "complete" | "failed";
     readonly agentTrace?: AgentTurnTraceSummary;

@@ -8,6 +8,8 @@ export function asServiceMessage(value: unknown): MessageSummary["service"] {
                 userId?: unknown;
                 agentUserId?: unknown;
                 effort?: unknown;
+                messageId?: unknown;
+                text?: unknown;
             };
         };
         if (
@@ -31,6 +33,18 @@ export function asServiceMessage(value: unknown): MessageSummary["service"] {
                 type: parsed.service.type,
                 agentUserId: parsed.service.agentUserId,
                 effort: parsed.service.effort,
+            };
+        if (
+            parsed.service?.type === "agent_steered" &&
+            typeof parsed.service.messageId === "string" &&
+            typeof parsed.service.userId === "string" &&
+            typeof parsed.service.text === "string"
+        )
+            return {
+                type: parsed.service.type,
+                messageId: parsed.service.messageId,
+                userId: parsed.service.userId,
+                text: parsed.service.text,
             };
         return undefined;
     } catch {

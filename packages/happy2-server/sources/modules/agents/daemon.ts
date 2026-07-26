@@ -34,6 +34,7 @@ import type {
     ResolveExternalToolCallRequest,
     ResolveExternalToolCallResponse,
     SecretSummary,
+    SteerMessageRequest,
     SubmitMessageRequest,
     SubmitMessageResponse,
     TrimGlobalEventsRequest,
@@ -134,6 +135,7 @@ export interface RigEvent {
         event?: RigAgentLoopEvent;
         call?: ExternalToolCall;
         message?: RigMessage;
+        messageIds?: readonly string[];
         runId?: string;
         title?: string;
         subagent?: RigSubagentSummary;
@@ -541,6 +543,29 @@ export class RigDaemonClient {
             "POST",
             `/sessions/${encodeURIComponent(sessionId)}/messages`,
             { text, externalTools, skills } satisfies SubmitMessageRequest,
+            signal,
+        );
+    }
+
+    /**
+     * Folds one message into the run already in flight instead of queueing a new
+     * one. `clientSubmissionId` becomes the message's id inside Rig, which is how
+     * the applied-steering event names the message Happy sent; `expectedRunId`
+     * makes Rig answer 409 rather than steering a run that has since retired.
+     */
+    async steerMessage(
+        sessionId: string,
+        input: { clientSubmissionId: string; expectedRunId: string; text: string },
+        signal?: AbortSignal,
+    ): Promise<SubmitMessageResponse> {
+        return this.connectedRequest<SubmitMessageResponse>(
+            "POST",
+            `/sessions/${encodeURIComponent(sessionId)}/steer`,
+            {
+                clientSubmissionId: input.clientSubmissionId,
+                expectedRunId: input.expectedRunId,
+                text: input.text,
+            } satisfies SteerMessageRequest,
             signal,
         );
     }

@@ -45,6 +45,9 @@ export function asAgentTurnTrace(row: AgentTurnTraceRow): AgentTurnTraceSummary 
 }
 
 function traceStatus(value: string): AgentTurnTraceSummary["status"] {
+    // A steered turn produced no run of its own and never will: it reads as a
+    // finished turn so nothing waits on steps that are not coming.
+    if (value === "steered") return "complete";
     return value === "running" || value === "complete" || value === "failed" ? value : "pending";
 }
 

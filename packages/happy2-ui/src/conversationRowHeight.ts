@@ -81,6 +81,13 @@ export const DIVIDER_HEIGHT = 60;
 const NOTICE_CHROME = 8;
 const NOTICE_CHROME_CENTER = 32;
 const NOTICE_INSET = 50;
+/* A steering notice keeps the notice row's 16px lead but closes to 4px above the
+   quote it introduces; the quote itself wraps at 560px, inset 20px per side, and
+   closes the row with the notice's usual 16px. */
+const STEERING_LINE_CHROME = 20;
+const STEERING_QUOTE_MEASURE = 560;
+const STEERING_QUOTE_INSET = 40;
+const STEERING_QUOTE_MARGIN = 16;
 
 /** The list's content measure, after the shared readable maximum. */
 export function contentWidth(width: number): number {
@@ -141,6 +148,15 @@ export function conversationActivityHeight(kind: string): number | undefined {
 export function noticeRowHeight(text: string, width: number, align: "center" | "start"): number {
     const chrome = align === "start" ? NOTICE_CHROME : NOTICE_CHROME_CENTER;
     return chrome + noticeTextHeight(text, width - NOTICE_INSET);
+}
+/** Height of a steering notice: its service line above the message it quotes. */
+export function steeringNoticeRowHeight(text: string, quote: string, width: number): number {
+    return (
+        STEERING_LINE_CHROME +
+        noticeTextHeight(text, width - NOTICE_INSET) +
+        noticeTextHeight(quote, Math.min(STEERING_QUOTE_MEASURE, width) - STEERING_QUOTE_INSET) +
+        STEERING_QUOTE_MARGIN
+    );
 }
 /** Height of a message's image grid at the measure its treatment leaves it. */
 export function messageMediaHeight(

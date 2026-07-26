@@ -100,6 +100,19 @@ type ChatNotice = {
     icon: IconName;
     text: string;
 };
+/**
+ * The line announcing that the agent took a message while it was already
+ * working. It quotes that message rather than moving it, so the transcript
+ * gains the moment the steering landed without anything above it shifting.
+ */
+type ChatSteeringNotice = {
+    kind: "steering";
+    id: string;
+    conversationId: string;
+    /** The steering message's own text, quoted under the line. */
+    quote: string;
+    text: string;
+};
 /** One step of an agent turn, listed above the message that turn is producing. */
 export type ChatTraceStep = {
     kind: "traceStep";
@@ -112,7 +125,12 @@ export type ChatTraceStep = {
     /** Projected for the shared activity row, so both stacks render one component. */
     activity: ConversationActivity;
 };
-export type WorkspaceEntry = ChatDivider | LiveChatMessage | ChatNotice | ChatTraceStep;
+export type WorkspaceEntry =
+    | ChatDivider
+    | LiveChatMessage
+    | ChatNotice
+    | ChatSteeringNotice
+    | ChatTraceStep;
 export function formatBytes(size: number): string {
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
@@ -465,6 +483,16 @@ export function entriesProject(
                 label: dayLabel(message.createdAt),
             });
             previousDay = date;
+        }
+        if (message.service?.type === "agent_steered") {
+            result.push({
+                kind: "steering",
+                id: message.id,
+                conversationId: message.chatId,
+                quote: message.service.text,
+                text: message.text,
+            });
+            continue;
         }
         if (message.service) {
             result.push({

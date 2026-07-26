@@ -155,7 +155,14 @@ export interface MessageSummary {
               type: "user_added" | "user_joined" | "user_left" | "user_kicked" | "channel_archived";
               userId: string;
           }
-        | { type: "agent_effort_changed"; agentUserId: string; effort: string };
+        | { type: "agent_effort_changed"; agentUserId: string; effort: string }
+        | {
+              /** A message that reached the agent mid-run, named where it landed. */
+              type: "agent_steered";
+              messageId: string;
+              userId: string;
+              text: string;
+          };
     generationStatus?: "streaming" | "complete" | "failed";
     agentTrace?: AgentTurnTraceSummary;
     mcpApps?: PluginMcpAppSummary[];

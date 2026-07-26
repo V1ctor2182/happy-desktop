@@ -6,6 +6,7 @@ import {
     DayDivider,
     FileAttachment,
     Message,
+    SteeringNotice,
     SystemNotice,
 } from "./ChatPageComponents.js";
 import { emojiItems, type LiveChatMessage, type WorkspaceEntry } from "./chatPageModels.js";
@@ -49,6 +50,7 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
     const entry = props.entry;
     if (entry.kind === "divider") return <DayDivider label={entry.label} />;
     if (entry.kind === "notice") return <SystemNotice icon={entry.icon} text={entry.text} />;
+    if (entry.kind === "steering") return <SteeringNotice quote={entry.quote} text={entry.text} />;
     if (entry.kind === "traceStep")
         return <AgentActivityRow activity={entry.activity} className={props.className} />;
     /* A running turn needs no status row of its own: its steps are listed in the
