@@ -288,6 +288,7 @@ export type ComposerProps = {
 const LINE_HEIGHT = 22;
 const MIN_LINES = 1;
 const MAX_LINES = 8;
+const TEXTAREA_VERTICAL_PADDING = 44;
 /**
  * Message composer: focus-within surface card with a one-line resting textarea
  * that grows through eight lines, context chips, capability-driven file/mention/emoji actions,
@@ -343,9 +344,10 @@ export function Composer(props: ComposerProps) {
         void props.value;
         const el = textareaEl.current;
         if (!el) return;
-        const minHeight = LINE_HEIGHT * MIN_LINES;
+        const minHeight = LINE_HEIGHT * MIN_LINES + TEXTAREA_VERTICAL_PADDING;
+        const maxHeight = LINE_HEIGHT * MAX_LINES + TEXTAREA_VERTICAL_PADDING;
         el.style.height = `${minHeight}px`;
-        el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), LINE_HEIGHT * MAX_LINES)}px`;
+        el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
     }, [props.value]);
     const closeMention = () => {
         setMentionStart(null);
@@ -561,14 +563,11 @@ export function Composer(props: ComposerProps) {
      */
     const focusTextareaFromSurface = (event: ReactPointerEvent<HTMLDivElement>) => {
         const target = event.target;
-        if (
-            !(target instanceof Element) ||
-            target.closest(
-                '[data-happy2-ui="composer-popover"], button, input, textarea, select, a, [contenteditable], [tabindex], [role="button"], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]',
-            )
-        ) {
-            return;
-        }
+        if (!(target instanceof Element)) return;
+        const interactive = target.closest(
+            '[data-happy2-ui="composer-popover"], button, input, textarea, select, a, [contenteditable], [tabindex], [role="button"], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]',
+        );
+        if (interactive && event.currentTarget.contains(interactive)) return;
         const textarea = textareaEl.current;
         if (!textarea || textarea.disabled) return;
         textarea.focus();
