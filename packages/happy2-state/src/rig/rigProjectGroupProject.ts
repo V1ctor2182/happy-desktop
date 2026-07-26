@@ -85,7 +85,11 @@ export function rigProjectGroupsProject(
 
     const worktreesByProject = new Map<RigProjectId, RigWorktreeGroup[]>();
     for (const worktree of catalog.worktrees) {
-        if (worktree.status === "archived") continue;
+        // A worktree being torn down is already gone as far as the reader is
+        // concerned: they asked for it. Listing it again between "archiving" and
+        // "archived" would take the row away, put it back, and take it away
+        // again. A failed archive stays listed — it still exists.
+        if (worktree.status === "archived" || worktree.status === "archiving") continue;
         // A worktree is listed as soon as it exists, before anything has run in
         // it: it was created deliberately and is where the next session goes, so
         // an empty one is a destination rather than clutter.

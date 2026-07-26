@@ -42,6 +42,8 @@ export interface RigSessionDeps {
      * never selects a conversation itself; the URL does.
      */
     readonly conversationOpen: (location: RigSessionLocation) => void;
+    /** Navigates to a group that holds no conversation yet, such as a new worktree. */
+    readonly groupOpen: (groupId: string) => void;
 }
 
 function healthProbe(rigHttpUrl: string): () => Promise<RigDaemonHealth> {
@@ -121,7 +123,11 @@ export function rigSessionStoreCreate(
             host: hostCreate(bridge),
             client,
             workspace: rigWorkspaceStoreCreate(client, {
-                output: (event) => deps.conversationOpen(event.location),
+                output: (event) => {
+                    if (event.type === "conversationOpenRequested")
+                        deps.conversationOpen(event.location);
+                    else deps.groupOpen(event.groupId);
+                },
             }),
             clock: rigClockStoreCreate(),
         };

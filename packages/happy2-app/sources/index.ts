@@ -6,6 +6,7 @@ export { appMemoryHistoryCreate, appRouterCreate, type AppRouter } from "./navig
 export {
     rigMemoryHistoryCreate,
     rigRouterConversationOpen,
+    rigRouterGroupOpen,
     rigRouterCreate,
     type RigRouter,
     type RigRouterContext,

@@ -114,7 +114,10 @@ describe("rigWorkspaceStore", () => {
         const requested: string[] = [];
         const client = rigClientCreate({ transport: fake.transport });
         const workspace = rigWorkspaceStoreCreate(client, {
-            output: (event) => requested.push(event.location.sessionId),
+            output: (event) => {
+                if (event.type === "conversationOpenRequested")
+                    requested.push(event.location.sessionId);
+            },
         });
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();

@@ -86,14 +86,21 @@ export interface RigSessionListStore {
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
 
     /**
-     * Adds a worktree to the project and starts a first conversation in it,
-     * resolving with that conversation's address. The host prepares the checkout
-     * asynchronously, so this waits for the worktree to become usable before
-     * starting the session — a session pointed at a checkout that does not exist
-     * yet would fail on its first run. Resolves with `undefined` when either step
+     * Reserves a worktree in the project and resolves as soon as it exists, with
+     * its id, so the caller can list and address it while the host is still
+     * preparing the checkout. Resolves with `undefined` when the reservation
      * failed, with the reason recorded in `mutationError`.
      */
-    worktreeCreate(projectId: RigProjectId): Promise<RigSessionLocation | undefined>;
+    worktreeCreate(projectId: RigProjectId): Promise<RigWorktreeId | undefined>;
+
+    /**
+     * Starts the first conversation in a worktree once the host reports its
+     * checkout usable, resolving with that conversation's address. Split from
+     * `worktreeCreate` so addressing the worktree does not wait on a git
+     * checkout — but a session pointed at a checkout that does not exist yet
+     * would fail on its first run, so the wait itself is not optional.
+     */
+    worktreeSessionStart(worktreeId: RigWorktreeId): Promise<RigSessionLocation | undefined>;
 
     /** Archives a worktree: it leaves the list and the host removes its checkout. */
     worktreeArchive(projectId: RigProjectId, worktreeId: RigWorktreeId): Promise<void>;
@@ -374,13 +381,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     name: "Workspace",
                 });
                 if (disposed) return undefined;
-                // The row appears while the host is still preparing the checkout,
-                // so the reader sees the worktree they asked for immediately.
+                // Listed the moment it exists, before its checkout is prepared:
+                // the reader asked for this worktree, so it appears and can be
+                // addressed now rather than after a git checkout finishes.
                 catalog = { ...catalog, worktrees: [...catalog.worktrees, reserved] };
                 publish();
-                await reconcile();
-                if (disposed) return undefined;
-                const ready = await worktreeReady(reserved.id);
+                return reserved.id;
+            }),
+        worktreeSessionStart: (worktreeId) =>
+            mutate(async () => {
+                const ready = await worktreeReady(worktreeId);
                 if (disposed) return undefined;
                 const session = await deps.transport.sessionCreate({
                     cwd: ready.path,

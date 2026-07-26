@@ -5,6 +5,7 @@ import {
     App,
     DesktopStartupScreen,
     rigRouterConversationOpen,
+    rigRouterGroupOpen,
     rigRouterCreate,
     type RigRouter,
 } from "happy2-app";
@@ -216,6 +217,7 @@ if (bridge) {
                 rigRouter={rigRouter}
                 rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
                     conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),
+                    groupOpen: (groupId) => rigRouterGroupOpen(rigRouter, groupId),
                 })}
                 startupValues={startupValuesStoreCreate()}
                 store={runtimeStore}

@@ -19,6 +19,7 @@ import type {
     RigBackgroundProcess,
     RigFileSearchResult,
     RigGoal,
+    RigGroupId,
     RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
@@ -109,10 +110,13 @@ export interface RigWorkspaceSnapshot {
  * (through the compose action or `/fork`) is the one to address next, and the
  * router turns that into a URL.
  */
-export type RigWorkspaceOutput = {
-    readonly type: "conversationOpenRequested";
-    readonly location: RigSessionLocation;
-};
+export type RigWorkspaceOutput =
+    | {
+          readonly type: "conversationOpenRequested";
+          readonly location: RigSessionLocation;
+      }
+    /** A group to address before it holds a conversation, such as a new worktree. */
+    | { readonly type: "groupOpenRequested"; readonly groupId: RigGroupId };
 
 export interface RigWorkspaceDeps {
     readonly output?: (event: RigWorkspaceOutput) => void;
@@ -584,7 +588,15 @@ export function rigWorkspaceStoreCreate(
         conversationReorder: (conversationId, afterId) =>
             list.conversationReorder(conversationId, afterId),
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
-        worktreeCreate: (projectId) => list.worktreeCreate(projectId).then(openRequest),
+        async worktreeCreate(projectId) {
+            const worktreeId = await list.worktreeCreate(projectId);
+            if (worktreeId === undefined) return;
+            // Addressed as soon as it exists. The first conversation follows once
+            // the host has the checkout ready, and re-addresses the same group
+            // with that conversation in it.
+            output({ type: "groupOpenRequested", groupId: worktreeId });
+            openRequest(await list.worktreeSessionStart(worktreeId));
+        },
         worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),

@@ -195,6 +195,20 @@ export function rigRouterConversationOpen(router: RigRouter, location: RigSessio
     });
 }
 
+/**
+ * Addresses a group that holds no conversation yet, such as a worktree the
+ * reader has just added. The conversation started in it re-addresses the same
+ * group through `rigRouterConversationOpen` once it exists.
+ */
+export function rigRouterGroupOpen(router: RigRouter, groupId: string): void {
+    void (
+        router.navigate as unknown as (options: {
+            params: Record<string, string>;
+            to: string;
+        }) => Promise<void>
+    )({ params: { groupId }, to: "/chats/$groupId" });
+}
+
 /** Creates deterministic local-router history for application and navigation tests. */
 export function rigMemoryHistoryCreate(initialEntry = "/chats"): RouterHistory {
     return createMemoryHistory({ initialEntries: [initialEntry] });
