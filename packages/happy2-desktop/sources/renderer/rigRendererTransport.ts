@@ -120,6 +120,13 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 ),
             };
         },
+        changedFileWrite: async (groupId, path, content) => {
+            await postJson<Record<string, never>>("/changed-file", {
+                group: groupId,
+                path,
+                content,
+            });
+        },
         openInTargetsRead: () => getJson<readonly RigOpenInTarget[]>("/open-in-targets"),
         openIn: async (groupId, targetId) => {
             await postJson<Record<string, never>>("/open-in", { group: groupId, target: targetId });

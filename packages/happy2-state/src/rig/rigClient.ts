@@ -32,6 +32,8 @@ export interface RigClient {
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
     sessionList(): RigSessionListStore;
+    /** Writes one changed text file back to its checkout. */
+    changedFileWrite(groupId: RigGroupId, path: string, content: string): Promise<void>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
     /** Opens one project or worktree root in one of those applications. */
@@ -107,6 +109,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         catalogRead: () => catalogEnsure(),
         changedFileRead: (groupId, path, signal) =>
             transport.changedFileRead(groupId, path, signal),
+        changedFileWrite: (groupId, path, content) =>
+            transport.changedFileWrite(groupId, path, content),
         openInTargetsRead: () => transport.openInTargetsRead(),
         openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {

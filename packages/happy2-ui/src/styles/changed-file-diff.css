@@ -1,17 +1,42 @@
 /*
  * Working-tree diff viewer — a deliberately quiet, full-pane code surface.
  * Pierre Diffs renders inside Shadow DOM; inherited custom properties align its
- * typography and material with Happy without coupling to Pierre's internals.
+ * typography, material, and colors with Happy without coupling to Pierre's
+ * internals.
  */
 
 .happy2-changed-file-diff {
-    position: relative;
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
     min-height: 0;
-    overflow: auto;
     background: var(--surface);
     color: var(--text);
+}
+
+/* The mode switch sits above the code and stays put while it scrolls. */
+.happy2-changed-file-diff__bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--divider);
+    background: var(--surface);
+}
+
+.happy2-changed-file-diff__bar-end {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-changed-file-diff__body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
     scrollbar-color: var(--divider) transparent;
 }
 
@@ -26,14 +51,47 @@
     --diffs-gap-inline: 10px;
     --diffs-light-bg: var(--surface);
     --diffs-dark-bg: var(--surface);
+
+    /* Pierre mixes one accent per side into the page background to build every
+       addition and deletion surface it draws. Setting those two accents is
+       therefore the whole of the color integration: row fills, gutter tints,
+       and word-level emphasis all follow from them. They are the same tokens
+       `DiffSnippet` paints inline diffs with, so a hunk in the transcript and
+       the same hunk in this pane are finally the same green and red.
+
+       One declaration serves both appearances: these are the theme-neutral
+       fallbacks Pierre consults inside both branches of its `light-dark()`, and
+       the tokens themselves already switch with the theme. */
+    --diffs-addition-color: var(--diff-added-border);
+    --diffs-deletion-color: var(--diff-removed-border);
+}
+
+/* A plain monospace field over the same surface: editing a file should not look
+   like a different application from reading it. */
+.happy2-changed-file-diff__editor {
+    display: block;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    tab-size: 4;
+    white-space: pre;
+}
+
+.happy2-changed-file-diff__editor:read-only {
+    color: var(--text-secondary);
 }
 
 .happy2-changed-file-diff__updating {
-    position: sticky;
-    z-index: 4;
-    top: 8px;
-    float: right;
-    margin: 8px 10px -30px 0;
+    flex: none;
     padding: 3px 7px;
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-pill);

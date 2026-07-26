@@ -126,6 +126,14 @@ export interface RigChangedFileTabSnapshot {
     readonly revision: string;
     readonly document: Loadable<RigChangedFileDocument>;
     readonly loading: boolean;
+    /**
+     * Unsaved edit to this file's working-tree text. Present only once it has
+     * been typed in, so an untouched tab shows what was read rather than a copy
+     * of it that reloading would silently discard.
+     */
+    readonly draft?: string;
+    /** True while this tab's edit is being written back. */
+    readonly saving: boolean;
 }
 
 /**
@@ -161,7 +169,16 @@ export interface RigWorkspaceSnapshot {
     readonly openInTargets: readonly RigOpenInTarget[];
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: RigRenameSnapshot;
+    /**
+     * How changed files are being read. One preference for the workspace rather
+     * than one per tab: it is how this reader likes to look at diffs, and
+     * having it reset on every file they open would make it not a preference.
+     */
+    readonly fileViewMode: RigFileViewMode;
 }
+
+/** How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`. */
+export type RigFileViewMode = "preview" | "unified" | "split" | "edit";
 
 /**
  * A rename the reader has opened but not committed. The draft lives here rather
@@ -266,6 +283,12 @@ export interface RigWorkspaceStore {
     fileSelect(tabId: string | undefined): void;
     fileClose(tabId: string): void;
     fileRetry(tabId: string): void;
+    /** Chooses how changed files are displayed, for every tab. */
+    fileViewModeUpdate(mode: RigFileViewMode): void;
+    /** Records an unsaved edit to one file's working-tree text. */
+    fileDraftUpdate(tabId: string, draft: string): void;
+    /** Writes one file's pending edit back to the checkout. */
+    fileDraftSave(tabId: string): Promise<void>;
 
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
@@ -429,6 +452,7 @@ export function rigWorkspaceStoreCreate(
     let openInTargets: readonly RigOpenInTarget[] = [];
     let openInTargetsRequested = false;
     let rename: RigRenameSnapshot | undefined;
+    let fileViewMode: RigFileViewMode = "unified";
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
     /**
@@ -464,6 +488,7 @@ export function rigWorkspaceStoreCreate(
         conversation,
         fileTabs,
         openInTargets,
+        fileViewMode,
     };
 
     const notify = (): void => {
@@ -534,7 +559,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId &&
             snapshot.openInTargets === openInTargets &&
-            snapshot.rename === rename
+            snapshot.rename === rename &&
+            snapshot.fileViewMode === fileViewMode
         )
             return;
         snapshot = {
@@ -542,6 +568,7 @@ export function rigWorkspaceStoreCreate(
             conversation,
             fileTabs,
             openInTargets,
+            fileViewMode,
             ...(activeFileTabId ? { activeFileTabId } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -1035,6 +1062,7 @@ export function rigWorkspaceStoreCreate(
             conversation,
             fileTabs,
             openInTargets,
+            fileViewMode,
             ...(activeFileTabId ? { activeFileTabId } : {}),
         };
     };
@@ -1146,6 +1174,7 @@ export function rigWorkspaceStoreCreate(
                     groupId,
                     path,
                     revision,
+                    saving: false,
                     document: { type: "loading" },
                     loading: true,
                 },
@@ -1173,6 +1202,49 @@ export function rigWorkspaceStoreCreate(
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (tab)
                 fileLoad(tabId, fileChangeFind(tab.groupId, tab.path)?.revision ?? tab.revision);
+        },
+        fileViewModeUpdate(mode) {
+            if (fileViewMode === mode) return;
+            fileViewMode = mode;
+            recompute();
+        },
+        fileDraftUpdate(tabId, draft) {
+            fileTabs = fileTabs.map((tab) =>
+                tab.id === tabId && !tab.saving ? { ...tab, draft } : tab,
+            );
+            recompute();
+        },
+        async fileDraftSave(tabId) {
+            const tab = fileTabs.find((candidate) => candidate.id === tabId);
+            if (!tab || tab.saving || tab.draft === undefined) return;
+            const draft = tab.draft;
+            fileTabs = fileTabs.map((candidate) =>
+                candidate.id === tabId ? { ...candidate, saving: true } : candidate,
+            );
+            recompute();
+            try {
+                await client.changedFileWrite(tab.groupId, tab.path, draft);
+                // The draft is dropped on success, not kept as the new content:
+                // what the file now says is the checkout's answer, and the
+                // reload below is what asks for it. Keeping the draft would
+                // leave the tab showing text nothing had confirmed.
+                fileTabs = fileTabs.map((candidate) =>
+                    candidate.id === tabId
+                        ? { ...candidate, draft: undefined, saving: false }
+                        : candidate,
+                );
+                recompute();
+                fileLoad(tabId, fileChangeFind(tab.groupId, tab.path)?.revision ?? tab.revision);
+            } catch (error) {
+                // The draft survives a failed write. It is the only copy of what
+                // was typed, and throwing it away to report an error would cost
+                // more than the error is worth.
+                fileTabs = fileTabs.map((candidate) =>
+                    candidate.id === tabId ? { ...candidate, saving: false } : candidate,
+                );
+                recompute();
+                throw error;
+            }
         },
 
         composerTextUpdate: (text) => (groupComposer ?? composer)?.getState().textUpdate(text),

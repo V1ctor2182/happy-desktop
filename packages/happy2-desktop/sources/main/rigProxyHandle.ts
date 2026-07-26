@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
@@ -145,6 +145,38 @@ async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined>
 }
 
 const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Writes one changed file back to the checkout it came from.
+ *
+ * Validated exactly as reading it is, and for the same reason: the path is
+ * relative, resolved against a root this process looks up from the daemon's
+ * catalog, and the resolved real path must still be inside that root. A write
+ * is the more consequential direction, so it additionally refuses a path that
+ * does not already exist — this edits a file the reader was shown, and it is
+ * not a way to create one.
+ */
+async function changedFileWrite(
+    client: RigProxyClient,
+    groupId: string,
+    filePath: string,
+    content: string,
+): Promise<void> {
+    if (!filePath || isAbsolute(filePath)) throw new Error("The changed file path is invalid.");
+    if (content.length > CHANGED_FILE_MAX_BYTES)
+        throw new Error("This file is too large to save from the editor.");
+    const catalog = await client.listCatalog();
+    const project = catalog.projects.find((candidate) => candidate.id === groupId);
+    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
+    const root = project?.path ?? workspace?.path;
+    if (!root) throw new Error("That project or workspace is no longer available.");
+    const target = resolve(root, filePath);
+    if (!pathInside(root, target)) throw new Error("The changed file path leaves its workspace.");
+    const canonical = await realpath(target);
+    if (!pathInside(await realpath(root), canonical))
+        throw new Error("The changed file path leaves its workspace.");
+    await writeFile(canonical, content, "utf8");
+}
 
 function changedFileText(bytes: Buffer): string {
     if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
@@ -465,6 +497,18 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 }
             }
             return false;
+        }
+
+        if (method === "POST" && path === "/changed-file") {
+            const body = await bodyReadJson(request);
+            await changedFileWrite(
+                client,
+                String(body.group ?? ""),
+                String(body.path ?? ""),
+                typeof body.content === "string" ? body.content : "",
+            );
+            writeJson(response, 200, {});
+            return true;
         }
 
         if (method === "POST" && path === "/open-in") {

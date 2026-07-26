@@ -284,6 +284,9 @@ export interface RigTransport {
      */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
 
+    /** Writes one changed text file back to its checkout. */
+    changedFileWrite(groupId: RigGroupId, path: string, content: string): Promise<void>;
+
     /** Reads one text file from a project/worktree changed-file list. */
     changedFileRead(
         groupId: RigGroupId,

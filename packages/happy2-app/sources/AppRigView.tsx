@@ -6,6 +6,7 @@ import type {
     RigChangedFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
+    RigFileViewMode,
     RigHost,
     RigGroupId,
     RigModelSelection,
@@ -743,6 +744,7 @@ export function AppRigView(props: AppRigViewProps) {
                                 <RigChangedFileBody
                                     appearance={appearance.appearance}
                                     file={activeFile}
+                                    mode={workspace.fileViewMode}
                                     workspace={props.workspace}
                                 />
                             ) : (
@@ -821,6 +823,7 @@ export function AppRigView(props: AppRigViewProps) {
 function RigChangedFileBody(props: {
     appearance: "dark" | "light";
     file: RigChangedFileTabSnapshot;
+    mode: RigFileViewMode;
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
@@ -830,10 +833,20 @@ function RigChangedFileBody(props: {
                 appearance={props.appearance}
                 key={file.id}
                 loading={file.loading}
-                newContent={file.document.value.newContent}
+                mode={props.mode}
+                // An untouched tab shows what was read; once edited it shows
+                // what was typed, which is the only copy of it there is.
+                newContent={file.draft ?? file.document.value.newContent}
                 oldContent={file.document.value.oldContent}
                 oldPath={file.document.value.oldPath}
+                dirty={file.draft !== undefined && file.draft !== file.document.value.newContent}
+                onContentChange={(content) => workspace.fileDraftUpdate(file.id, content)}
+                onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
+                onSave={() => {
+                    void workspace.fileDraftSave(file.id).catch(() => undefined);
+                }}
                 path={file.path}
+                saving={file.saving}
             />
         );
     if (file.document.type === "error")

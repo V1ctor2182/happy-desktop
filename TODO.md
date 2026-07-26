@@ -6,13 +6,13 @@ Each numbered item is one atomic change, committed on its own. Server/daemon
 work (`happy2-desktop` projection, proxy, daemon client) lands before the UI
 that consumes it, per AGENTS.md "Order of work".
 
-- [ ] 1. Surface run errors, compaction notices, and compaction progress in the
+- [x] 1. Surface run errors, compaction notices, and compaction progress in the
       local transcript. `rigChatStore.transientAgentEventApply` currently drops
       `error`, `context_compacted`, and `inference_retry`; `rigProjection` drops
       `context_compaction_started`/`finished` entirely. Project both, carry them
       through `RigAgentEvent`, and render them as `rigNoticeEntry` notices with
       a live progress marker while compaction runs.
-- [ ] 2. Offer the model, effort, and access pickers before a group's first
+- [x] 2. Offer the model, effort, and access pickers before a group's first
       message. Derive a pre-session menu snapshot from the model catalog and
       feed the chosen values into both `groupSubmit` and `conversationCreate`.
 - [ ] 3. Align diff colors with the theme and add preview/unified/split/edit
@@ -20,33 +20,33 @@ that consumes it, per AGENTS.md "Order of work".
       full-file view and the inline `DiffSnippet`.
 - [ ] 4. Give the changed-file panel "Changed"/"All files" tabs plus tree and
       flat modes. Needs a workspace file-listing read in the desktop proxy.
-- [ ] 5. Match the TUI's end-of-turn footer: elapsed turn duration plus tool
+- [x] 5. Match the TUI's end-of-turn footer: elapsed turn duration plus tool
       count under the final message, for every turn (including single-message
       answers), with shell activity counted; keep the live timer while running.
-- [ ] 6. Give every tool call a grey icon in the transcript.
-- [ ] 7. Add a copy control to the final agent message of a turn.
-- [ ] 8. Add an "Open in" control to the project header: open the folder in a
+- [x] 6. Give every tool call a grey icon in the transcript.
+- [x] 7. Add a copy control to the final agent message of a turn.
+- [x] 8. Add an "Open in" control to the project header: open the folder in a
       detected editor or Finder, or copy its path. Needs `RigHost` and desktop
       IPC.
-- [ ] 9. Allow renaming projects and workspaces, guarded by the daemon's
+- [x] 9. Allow renaming projects and workspaces, guarded by the daemon's
       optimistic version like the existing reorder/archive mutations.
-- [ ] 10. Drop the redundant workspace path from the project header.
+- [x] 10. Drop the redundant workspace path from the project header.
 - [ ] 11. Replace "New session" with "+ Create": a modal with a task input, a
       project dropdown defaulting to the last used one, model/effort/access
       pickers, and a "keep open for the next task" option.
-- [ ] 12. Remove the unreachable `ConversationSettingsModal` and its store
+- [x] 12. Remove the unreachable `ConversationSettingsModal` and its store
       state. The other requested removals (chime, unread-on-turn-end, code
       font/ligature parameters, local secret management, project
       expand/collapse, global default-model modal) do not exist in local mode;
       confirm and record that rather than deleting shared cloud capabilities.
-- [ ] 13. Replace the static `dot` marker on a working session tab with the
+- [x] 13. Replace the static `dot` marker on a working session tab with the
       real activity spinner.
-- [ ] 14. Add a context gauge showing how much context is left, from
+- [x] 14. Add a context gauge showing how much context is left, from
       `RigUsageContext.totalTokens` against the selected model's
       `contextWindow`.
-- [ ] 15. Open a chat at its latest message. A transcript currently lands part
+- [x] 15. Open a chat at its latest message. A transcript currently lands part
       way up rather than at the end, so the newest work is off screen.
-- [ ] 16. Keep each chat's scroll position across switching between chats, so
+- [x] 16. Keep each chat's scroll position across switching between chats, so
       returning to a session restores where the reader left it.
 
 ## Done: prevent clipped focus paint and broken flow spacing
