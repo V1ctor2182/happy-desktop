@@ -30,6 +30,7 @@ import {
     Banner,
     Button,
     ChannelHeader,
+    ContextGauge,
     ChangedFileDiff,
     ComposerModelControl,
     ConversationView,
@@ -519,15 +520,40 @@ export function AppRigView(props: AppRigViewProps) {
                         // session, because a panel with no conversation behind it has
                         // nowhere to run a terminal and the control would do nothing.
                         actions={
-                            <Button
-                                aria-label={panel.open ? "Hide panel" : "Show panel"}
-                                aria-pressed={panel.open}
-                                icon={panel.open ? "panel-collapse" : "panel-expand"}
-                                iconOnly
-                                onClick={() => props.workspace.panel.panelToggle()}
-                                size="small"
-                                variant="ghost"
-                            />
+                            <>
+                                {/* How much room the open session has left.
+                                    It belongs on screen rather than inside the
+                                    usage panel: it is the thing that decides
+                                    whether the next message still fits. */}
+                                {workspace.conversation.type === "ready" &&
+                                workspace.conversation.value.contextGauge ? (
+                                    <ContextGauge
+                                        approximate={
+                                            workspace.conversation.value.contextGauge.approximate
+                                        }
+                                        remainingFraction={
+                                            workspace.conversation.value.contextGauge
+                                                .remainingFraction
+                                        }
+                                        remainingTokens={
+                                            workspace.conversation.value.contextGauge
+                                                .remainingTokens
+                                        }
+                                        totalTokens={
+                                            workspace.conversation.value.contextGauge.totalTokens
+                                        }
+                                    />
+                                ) : null}
+                                <Button
+                                    aria-label={panel.open ? "Hide panel" : "Show panel"}
+                                    aria-pressed={panel.open}
+                                    icon={panel.open ? "panel-collapse" : "panel-expand"}
+                                    iconOnly
+                                    onClick={() => props.workspace.panel.panelToggle()}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            </>
                         }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}

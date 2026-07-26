@@ -1242,7 +1242,12 @@ describe("rigChatStore actions", () => {
         await flush();
 
         expect(store.get().usagePanelOpen).toBe(false);
-        expect(store.get().usage).toBeUndefined();
+        // Usage is read once on start even with the panel closed, because the
+        // context gauge is on screen either way. That background read installs
+        // no timer and claims no loading state.
+        expect(store.get().usage).toEqual(usageOf(100));
+        expect(store.get().usageLoading).toBe(false);
+        expect(tick).toBeUndefined();
 
         // Opening loads immediately and installs the poll timer.
         store.usagePanelOpen();

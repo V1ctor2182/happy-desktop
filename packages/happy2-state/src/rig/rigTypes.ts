@@ -304,6 +304,24 @@ export interface RigUsageContext {
     readonly approximate: boolean;
 }
 
+/**
+ * How much room is left in the model's context window. Phrased as remaining
+ * rather than consumed because the question being asked is "how much longer can
+ * this conversation go", and a total answers that only after arithmetic.
+ *
+ * Only exists when the model declares a window; a model that does not is not
+ * reported as full, or as empty, but not reported at all.
+ */
+export interface RigContextGauge {
+    readonly usedTokens: number;
+    readonly remainingTokens: number;
+    readonly totalTokens: number;
+    /** Remaining share of the window, 0–1. */
+    readonly remainingFraction: number;
+    /** True when the underlying token count is estimated, not provider-reported. */
+    readonly approximate: boolean;
+}
+
 /** One provider rate-limit window (five-hour or weekly) with reset timing. */
 export interface RigUsageQuotaWindow {
     readonly kind: "fiveHour" | "weekly";

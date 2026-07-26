@@ -35,6 +35,7 @@ import type {
     RigGoal,
     RigImageInput,
     RigMenusSnapshot,
+    RigContextGauge,
     RigModelCatalog,
     RigModelSelection,
     RigPermissionMode,
@@ -44,6 +45,7 @@ import type {
     RigSession,
     RigSessionId,
     RigSessionUsage,
+    RigUsageContext,
     RigStreamingBlock,
     RigStreamingMessage,
     RigSubagentSummary,
@@ -92,6 +94,12 @@ export interface RigChatSnapshot {
     readonly usageLoading: boolean;
     /** Displayable message from the most recent failed usage load, if any. */
     readonly usageError?: string;
+    /**
+     * Room left in the context window, when both a token count and a declared
+     * window are known. Unlike `usage`, this is meant to be on screen all the
+     * time, so it is derived here rather than left to each surface.
+     */
+    readonly contextGauge?: RigContextGauge;
     /** View state: whether the `/goal` + `/tasks` + `/agents` activity panel is open. */
     readonly activityPanelOpen: boolean;
     /** The transcript image the reader opened full size, if any. */
@@ -241,6 +249,38 @@ function tokensFormat(tokens: number): string {
     if (tokens < 1000) return String(Math.max(0, Math.round(tokens)));
     const thousands = tokens / 1000;
     return `${thousands < 100 ? thousands.toFixed(1).replace(/\.0$/, "") : String(Math.round(thousands))}k`;
+}
+
+/**
+ * Room left in the window the reported tokens were counted against. The window
+ * comes from the catalog entry for the model the usage names — not the model
+ * currently selected, which may have been switched since — so the fraction is
+ * always tokens and window agreeing about the same model.
+ *
+ * Nothing is reported when either half is missing or the window is zero: a
+ * gauge with a made-up denominator is worse than no gauge.
+ */
+function contextGaugeDerive(
+    catalog: RigModelCatalog,
+    context: RigUsageContext | undefined,
+): RigContextGauge | undefined {
+    if (!context) return undefined;
+    const total = catalog.providers
+        .find((provider) => provider.id === context.providerId)
+        ?.models.find((model) => model.id === context.modelId)?.contextWindow;
+    if (total === undefined || total <= 0) return undefined;
+    // Usage can exceed a declared window — an estimate can overshoot, and a
+    // provider can count differently than it documents. Clamp rather than
+    // render a negative remainder.
+    const usedTokens = Math.max(0, Math.min(context.totalTokens, total));
+    const remainingTokens = total - usedTokens;
+    return {
+        usedTokens,
+        remainingTokens,
+        totalTokens: total,
+        remainingFraction: remainingTokens / total,
+        approximate: context.approximate,
+    };
 }
 
 /**
@@ -422,6 +462,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             usage,
             usageLoading,
             usageError,
+            ...(() => {
+                const gauge = contextGaugeDerive(deps.catalog, usage?.context);
+                return gauge ? { contextGauge: gauge } : {};
+            })(),
             activityPanelOpen,
             openImage,
             modelLocked: session?.modelLocked ?? false,
@@ -756,6 +800,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         "Run failed",
                         event.errorMessage,
                     );
+                // The context gauge is on screen whether or not the usage panel
+                // is, and a finished run is the only thing that moves it, so
+                // refresh here rather than by polling a number that cannot
+                // change between turns.
+                if (!usagePanelOpen) usageLoad(true);
                 break;
             default:
                 break;
@@ -937,6 +986,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         if (usagePanelOpen && usageTimer === undefined && !disposed) {
             usageLoad();
             usageTimer = startInterval(usageLoad, usagePollMs);
+        } else if (!disposed) {
+            // Opening a session shows its context gauge immediately, without
+            // waiting for a turn to finish to learn where the window stands.
+            usageLoad(true);
         }
     };
 
@@ -1030,20 +1083,32 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
 
     // One usage fetch. The generation captured at call time guards against a stale
     // response (panel closed or reopened, or the store stopped) overwriting state.
-    const usageLoad = (): void => {
+    /**
+     * Reads usage. A `background` read feeds the always-visible context gauge
+     * rather than the panel, so it neither claims the panel's loading state nor
+     * leaves an error behind: nobody asked for this number, and reporting a
+     * failure to fetch it would be a banner about a request the reader never
+     * made. It just leaves the gauge showing what it last knew.
+     */
+    const usageLoad = (background = false): void => {
         const current = usageGeneration;
-        usageLoading = true;
-        commit();
+        if (!background) {
+            usageLoading = true;
+            commit();
+        }
         void deps.transport.usageGet(sessionId).then(
             (loaded) => {
                 if (current !== usageGeneration) return;
                 usage = loaded;
-                usageError = undefined;
-                usageLoading = false;
+                if (!background) {
+                    usageError = undefined;
+                    usageLoading = false;
+                }
                 commit();
             },
             (caught) => {
                 if (current !== usageGeneration) return;
+                if (background) return;
                 usageError = rigUserError(caught).message;
                 usageLoading = false;
                 commit();

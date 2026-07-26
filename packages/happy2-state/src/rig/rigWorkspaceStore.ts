@@ -34,6 +34,7 @@ import type {
     RigPermissionMode,
     RigProjectId,
     RigQueuedMessage,
+    RigContextGauge,
     RigScrollPosition,
     RigSelection,
     RigServiceTier,
@@ -97,6 +98,8 @@ export interface RigConversationSnapshot {
     readonly usage?: RigSessionUsage;
     readonly usageLoading: boolean;
     readonly usageError?: string;
+    /** Room left in the context window, when the model declares one. */
+    readonly contextGauge?: RigContextGauge;
     readonly activityPanelOpen: boolean;
     /** The transcript image opened full size, if any. */
     readonly openImage?: RigOpenImage;
@@ -444,6 +447,7 @@ export function rigWorkspaceStoreCreate(
             ...(chat.usage ? { usage: chat.usage } : {}),
             usageLoading: chat.usageLoading,
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
+            ...(chat.contextGauge ? { contextGauge: chat.contextGauge } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : {}),

@@ -220,6 +220,7 @@ export {
 export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
 export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
+export { ContextGauge, type ContextGaugeProps } from "./ContextGauge";
 export {
     ConversationStatus,
     ConversationView,

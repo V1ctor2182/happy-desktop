@@ -1,0 +1,49 @@
+/*
+ * ContextGauge — a ring that empties as the context window fills, with the
+ * remaining percentage beside it. Sized to sit in a 56px header row next to the
+ * other inline controls without changing its height.
+ */
+.happy2-context-gauge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+/*
+ * The remaining arc is drawn from the top, clockwise, with the spent part left
+ * as the track. A radial mask punches out the middle, which is what makes it a
+ * ring rather than a pie — the ring reads as a gauge at 14px, the pie does not.
+ */
+.happy2-context-gauge__ring {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--happy2-radius-pill);
+    background: conic-gradient(
+        currentColor 0 var(--happy2-context-gauge-turn, 1turn),
+        var(--border-subtle) var(--happy2-context-gauge-turn, 1turn) 1turn
+    );
+    mask: radial-gradient(circle, transparent 0 4px, #000 4.5px);
+    -webkit-mask: radial-gradient(circle, transparent 0 4px, #000 4.5px);
+}
+
+/* Ample context is unremarkable and stays quiet; the warnings earn their color. */
+.happy2-context-gauge[data-tone="ample"] {
+    color: var(--text-secondary);
+}
+
+.happy2-context-gauge[data-tone="low"] {
+    color: var(--box-warning-text);
+}
+
+.happy2-context-gauge[data-tone="critical"] {
+    color: var(--status-error);
+}
+
+.happy2-context-gauge__value {
+    flex: none;
+}
