@@ -158,7 +158,14 @@ function transcriptEphemeralProject(
     session: SessionState,
     legacy: readonly ConversationEntry[],
 ): readonly ConversationEntry[] {
-    const entries = new Map(legacy.map((entry) => [entryKey(entry), entry]));
+    // rig-connect already owns compaction elements. Keep the legacy row only
+    // for the legacy transcript fallback; merging it here renders the same
+    // compaction twice under two unrelated element ids.
+    const entries = new Map(
+        legacy
+            .filter((entry) => !entryKey(entry).startsWith("compaction:"))
+            .map((entry) => [entryKey(entry), entry]),
+    );
     for (const command of session.shellCommands) {
         const id = `shell:${command.commandId}`;
         entries.set(
