@@ -72,6 +72,14 @@
     app-region: no-drag;
 }
 
+/* A tab bar is draggable between its controls, but its trailing action lane is
+   one stable interactive target. Carve out the whole lane so native hit testing
+   cannot reclaim the button's padded surround while tabs scroll or reflow. */
+.happy2-app-shell[data-window-controls] .happy2-tabbed-pane__actions {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
 /* The window chrome row is the native title bar's own 40px, so the traffic
    lights, the sidebar toggle, and the heading beside them read as one band of
    window furniture rather than a 56px product header the lights float inside.

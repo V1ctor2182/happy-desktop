@@ -435,7 +435,7 @@ describe("rigShellResultProject", () => {
 });
 
 describe("rigGlobalEventProject", () => {
-    it("projects session_created using the envelope time and drops other entries", () => {
+    it("projects session and title updates used by the workspace list", () => {
         const created: GlobalEventQueueEntry = {
             cursor: "3",
             event: envelope("session_created", { session: session() }),
@@ -449,6 +449,12 @@ describe("rigGlobalEventProject", () => {
             cursor: "4",
             event: envelope("session_title_changed", { status: "ready", title: "t" }),
         };
-        expect(rigGlobalEventProject(titled, HOME)).toBeUndefined();
+        expect(rigGlobalEventProject(titled, HOME)).toEqual({
+            cursor: "4",
+            type: "session_title_changed",
+            sessionId: "session-1",
+            status: "ready",
+            title: "t",
+        });
     });
 });

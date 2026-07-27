@@ -512,6 +512,16 @@ export function rigGlobalEventProject(
             session: summaryFromSession(event.data.session, event.createdAt, homeDir),
         };
     }
+    if (event.type === "session_title_changed") {
+        return {
+            cursor: entry.cursor,
+            type: "session_title_changed",
+            sessionId: event.sessionId as RigSessionId,
+            status: event.data.status,
+            ...(event.data.title ? { title: event.data.title } : {}),
+            ...(event.data.recap ? { recap: event.data.recap } : {}),
+        };
+    }
     if (
         event.type === "run_started" ||
         event.type === "run_finished" ||

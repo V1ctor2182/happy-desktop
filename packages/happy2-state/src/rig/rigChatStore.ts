@@ -651,25 +651,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             case "done":
                 break;
             case "toolcall_start":
-                transientToolUpdate(
-                    event.toolCallId,
-                    (entry) => entry,
-                    () => ({
-                        toolCallId: event.toolCallId,
-                        toolName: event.toolName,
-                        arguments: null,
-                        status: "running",
-                        failed: false,
-                    }),
-                );
-                break;
             case "toolcall_delta":
-                break;
             case "toolcall_end":
-                transientToolUpdate(event.toolCallId, (entry) => ({
-                    ...entry,
-                    arguments: event.arguments,
-                }));
+                /*
+                 * Provider inference events contain only the raw tool call.
+                 * The first user-visible row arrives at execution start, when
+                 * Rig has applied the tool-owned call presentation. Rendering
+                 * this earlier would briefly flash a generic tool-name row.
+                 */
                 break;
             case "tool_execution_start":
                 transientToolUpdate(

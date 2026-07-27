@@ -22,7 +22,6 @@ import type {
     RigSessionCreateInput,
     RigShellCommandResult,
     RigSessionId,
-    RigSessionStatus,
     RigSessionSummary,
     RigSessionUsage,
     RigStopReason,
@@ -117,6 +116,8 @@ export type RigAgentEvent =
     | { readonly type: "done"; readonly reason: RigStopReason }
     | { readonly type: "error"; readonly reason: string };
 
+export type RigSessionTitleStatus = "idle" | "generating" | "ready" | "error";
+
 /**
  * Per-session realtime event. Mirrors the chat-relevant members of Rig's
  * `SessionEvent` union (B7/B8) using this package's own projections. Realtime
@@ -167,7 +168,7 @@ export type RigSessionEvent = {
       }
     | {
           readonly type: "session_title_changed";
-          readonly status: "idle" | "generating" | "ready" | "error";
+          readonly status: RigSessionTitleStatus;
           readonly title?: string;
           readonly recap?: string;
       }
@@ -234,7 +235,7 @@ export type RigGlobalEvent =
           readonly cursor: string;
           readonly type: "session_title_changed";
           readonly sessionId: RigSessionId;
-          readonly status: RigSessionStatus;
+          readonly status: RigSessionTitleStatus;
           readonly title?: string;
           readonly recap?: string;
       }
