@@ -587,6 +587,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         if (transcriptSessionBusy(connectedSession)) {
             runStatus = "running";
             const connectedRunId = connectedSession.activity.runId;
+            // A queued run may become active without an intervening idle
+            // snapshot. Keep one clock across tool iterations of the same run,
+            // but never let the preceding run's start leak into its successor.
+            if (connectedRunId !== undefined && runId !== undefined && connectedRunId !== runId) {
+                runStartedAt = undefined;
+            }
             if (connectedRunId !== undefined) runId = connectedRunId;
             if (runStartedAt === undefined) {
                 const turnStartedAt = elements
