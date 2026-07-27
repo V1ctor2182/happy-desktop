@@ -215,8 +215,8 @@ importers:
         specifier: 0.0.73
         version: 0.0.73(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       '@slopus/rig-connect':
-        specifier: 0.0.1
-        version: 0.0.1
+        specifier: 0.0.2
+        version: 0.0.2
       '@tanstack/react-router':
         specifier: ^1.170.18
         version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -821,8 +821,8 @@ importers:
   packages/happy2-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.0.1
-        version: 0.0.1
+        specifier: 0.0.2
+        version: 0.0.2
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2764,8 +2764,8 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/rig-connect@0.0.1':
-    resolution: {integrity: sha512-6obtE32/HM8BqvlZWTVIbpvhTE5ra6fR6jLopC8/HsifCYVZTpDhBWcklfPLKtT1K+G/lh/Ko5C5lx2liLDA9w==}
+  '@slopus/rig-connect@0.0.2':
+    resolution: {integrity: sha512-oidDDH1ShSFfwRlq5Q0+bvzSoQTTkQXmvFIbyXHQiO3y4Z6E5PFPJ1Qmtsku5hG86CLmVJ2SXEUy1t1yPAZY0A==}
     engines: {node: '>=20'}
 
   '@slopus/rig@0.0.73':
@@ -8841,7 +8841,7 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/rig-connect@0.0.1': {}
+  '@slopus/rig-connect@0.0.2': {}
 
   '@slopus/rig@0.0.73(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
     dependencies:
