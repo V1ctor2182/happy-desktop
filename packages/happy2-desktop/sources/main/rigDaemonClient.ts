@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { request as httpRequest } from "node:http";
+import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Duplex } from "node:stream";
@@ -61,6 +61,12 @@ interface SessionResponse {
     readonly session: ProtocolSession;
 }
 
+export interface RigDaemonRawResponse {
+    readonly statusCode: number;
+    readonly headers: IncomingHttpHeaders;
+    readonly body: IncomingMessage;
+}
+
 /**
  * Narrow client for the local Rig daemon routes consumed by Happy's main-process
  * projection. Rig intentionally exposes these routes over an authenticated Unix
@@ -81,6 +87,48 @@ export class RigDaemonClient {
 
     models(): Promise<{ readonly catalog: ModelCatalog }> {
         return this.#requestJson("GET", "/models");
+    }
+
+    /**
+     * Opens one authenticated daemon GET without parsing its body.
+     *
+     * This is reserved for the capability-scoped `rig-connect` bridge, whose
+     * browser-neutral stream parser must see the daemon's SSE frames unchanged.
+     */
+    rawGet(path: string, signal?: AbortSignal): Promise<RigDaemonRawResponse> {
+        return new Promise((resolvePromise, reject) => {
+            if (signal?.aborted) {
+                reject(new Error("The Rig daemon request was aborted."));
+                return;
+            }
+            const request = httpRequest(
+                {
+                    headers: {
+                        accept: path.split("?", 1)[0]?.endsWith("/transcript")
+                            ? "application/json"
+                            : "text/event-stream",
+                        authorization: `Bearer ${this.#token}`,
+                    },
+                    method: "GET",
+                    path,
+                    socketPath: this.socketPath,
+                },
+                (response) => {
+                    response.once("close", cleanup);
+                    resolvePromise({
+                        statusCode: response.statusCode ?? 500,
+                        headers: response.headers,
+                        body: response,
+                    });
+                },
+            );
+            const abort = () => request.destroy();
+            const cleanup = () => signal?.removeEventListener("abort", abort);
+            signal?.addEventListener("abort", abort, { once: true });
+            request.once("close", cleanup);
+            request.once("error", reject);
+            request.end();
+        });
     }
 
     listSessions(): Promise<{ readonly sessions: readonly SessionSummary[] }> {

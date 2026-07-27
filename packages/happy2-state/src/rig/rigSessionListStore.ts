@@ -135,8 +135,26 @@ export interface RigSessionListStore {
 
 export interface RigSessionListDeps {
     readonly transport: RigTransport;
+    /**
+     * A stream-owned catalog authority, when the host can provide one.
+     *
+     * Mutations still travel through `transport`; this source replaces only the
+     * project/workspace/session reads and their delivery-hint subscription.
+     */
+    readonly catalogSource?: RigSessionCatalogSource;
     readonly output?: (event: RigSessionListOutput) => void;
     readonly createId?: () => string;
+}
+
+export interface RigSessionCatalogSnapshot {
+    readonly catalog: RigProjectCatalog;
+    readonly sessions: readonly RigSessionSummary[];
+}
+
+export interface RigSessionCatalogSource {
+    read(): Promise<RigSessionCatalogSnapshot>;
+    subscribe(listener: () => void, onError: (error: unknown) => void): () => void;
+    [Symbol.dispose](): void;
 }
 
 /**
@@ -234,13 +252,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // Read together so a project and the sessions filed under it are
             // never one tick apart: a session whose project the catalog does not
             // yet describe would otherwise vanish from the list for a moment.
-            const [readCatalog, read] = await Promise.all([
-                deps.transport.projectsRead(),
-                deps.transport.sessionsRead(),
-            ]);
+            const snapshot = deps.catalogSource
+                ? await deps.catalogSource.read()
+                : await Promise.all([
+                      deps.transport.projectsRead(),
+                      deps.transport.sessionsRead(),
+                  ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
             if (disposed || current !== generation) return;
-            catalog = readCatalog;
-            sessions = read;
+            catalog = snapshot.catalog;
+            sessions = snapshot.sessions;
             publish();
             worktreesSettle();
         } catch (error) {
@@ -274,7 +294,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const start = (): void => {
         active = true;
-        unsubscribeGlobal = deps.transport.globalEventsSubscribe(observer);
+        unsubscribeGlobal = deps.catalogSource
+            ? deps.catalogSource.subscribe(
+                  () => {
+                      if (!disposed && active) void reconcile();
+                  },
+                  () => {
+                      if (!disposed && active) void reconcile();
+                  },
+              )
+            : deps.transport.globalEventsSubscribe(observer);
         void reconcile();
     };
 

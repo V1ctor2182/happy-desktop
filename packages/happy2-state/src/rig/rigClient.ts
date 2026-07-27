@@ -6,9 +6,11 @@ import {
     type RigChatDeps,
     type RigChatOutput,
     type RigChatStore,
+    type RigChatTranscriptConnect,
 } from "./rigChatStore.js";
 import {
     rigSessionListStoreCreate,
+    type RigSessionCatalogSource,
     type RigSessionListOutput,
     type RigSessionListStore,
 } from "./rigSessionListStore.js";
@@ -70,6 +72,10 @@ export interface RigClient {
 
 export interface RigClientDeps {
     readonly transport: RigTransport;
+    /** Stream-owned read authority for the project/workspace/session catalog. */
+    readonly catalogSource?: RigSessionCatalogSource;
+    /** Opens rig-connect's core transcript stream for one materialized chat. */
+    readonly transcriptConnect?: RigChatTranscriptConnect;
     readonly createId?: () => string;
     readonly now?: () => number;
     readonly sessionListOutput?: (event: RigSessionListOutput) => void;
@@ -120,6 +126,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!sessionListStore) {
                 sessionListStore = rigSessionListStoreCreate({
                     transport,
+                    catalogSource: deps.catalogSource,
                     output: deps.sessionListOutput,
                     createId: deps.createId,
                 });
@@ -134,6 +141,9 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     const chatDeps: RigChatDeps = {
                         transport,
                         catalog,
+                        ...(deps.transcriptConnect
+                            ? { transcriptConnect: deps.transcriptConnect }
+                            : {}),
                         selectionUsed: (selection) => models.selectionUsed(selection),
                         createId: deps.createId,
                         now: deps.now,
@@ -213,6 +223,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             disposed = true;
             sessionListStore?.[Symbol.dispose]();
             sessionListStore = undefined;
+            deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();
                 binding.store?.[Symbol.dispose]();

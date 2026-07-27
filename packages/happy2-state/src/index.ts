@@ -273,6 +273,8 @@ export {
 } from "./rig/rigMenusStore.js";
 export {
     rigSessionListStoreCreate,
+    type RigSessionCatalogSnapshot,
+    type RigSessionCatalogSource,
     type RigSessionListDeps,
     type RigSessionListOutput,
     type RigSessionListSnapshot,
@@ -291,6 +293,8 @@ export {
     type RigChatOutput,
     type RigChatSnapshot,
     type RigChatStore,
+    type RigChatTranscriptConnect,
+    type RigChatTranscriptConnection,
 } from "./rig/rigChatStore.js";
 export {
     rigClientCreate,

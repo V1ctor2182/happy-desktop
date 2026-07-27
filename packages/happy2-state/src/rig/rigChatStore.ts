@@ -14,6 +14,8 @@ import {
     rigShellEntry,
 } from "./rigConversationProject.js";
 import { rigConversationAttachTurnTraces } from "./rigConversationTurnTrace.js";
+import { rigConnectConversationProject } from "./rigConnectConversationProject.js";
+import type { ChatElement, SessionState } from "@slopus/rig-connect";
 import { rigMenusDerive } from "./rigMenusStore.js";
 import {
     rigSelectionEffortUpdate,
@@ -64,6 +66,113 @@ function latestUserMessageId(messages: readonly RigMessage[]): string | undefine
         if (message && !message.internal && message.role === "user") return message.id;
     }
     return undefined;
+}
+
+function transcriptSessionBusy(session: SessionState): boolean {
+    return (
+        session.activity.kind !== "idle" &&
+        session.activity.kind !== "stopped" &&
+        session.activity.kind !== "error"
+    );
+}
+
+function transcriptPendingUserInputsProject(session: SessionState): readonly RigUserInputRequest[] {
+    return session.pendingUserInputs.map((request) => ({
+        requestId: request.requestId,
+        questions: request.questions.map((question) => ({
+            id: question.id,
+            header: question.header,
+            question: question.question,
+            multiSelect: question.multiSelect,
+            required: question.required ?? false,
+            options: question.options,
+        })),
+    }));
+}
+
+function transcriptQueuedMessagesProject(session: SessionState): readonly RigQueuedMessage[] {
+    return session.pendingSteeringMessages.map((pending) => ({
+        id: pending.message.id,
+        text: pending.message.blocks
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("\n"),
+    }));
+}
+
+function transcriptTasksProject(session: SessionState): readonly RigTask[] {
+    return session.tasks.map((task) => ({
+        id: task.id,
+        subject: task.subject,
+        description: task.description,
+        status: task.status,
+        ...(task.activeForm === undefined ? {} : { activeForm: task.activeForm }),
+        ...(task.owner === undefined ? {} : { owner: task.owner }),
+        blockedBy: task.blockedBy,
+        blocks: task.blocks,
+    }));
+}
+
+function transcriptGoalProject(session: SessionState): RigGoal | undefined {
+    const goal = session.goal;
+    return goal === undefined
+        ? undefined
+        : {
+              objective: goal.objective,
+              status: goal.status,
+              createdAt: goal.createdAt,
+              updatedAt: goal.updatedAt,
+          };
+}
+
+function transcriptSubagentsProject(session: SessionState): readonly RigSubagentSummary[] {
+    return session.subagents.map((subagent) => ({
+        id: subagent.id as RigSessionId,
+        parentSessionId: subagent.parentSessionId as RigSessionId,
+        description: subagent.description,
+        ...(subagent.taskName === undefined ? {} : { taskName: subagent.taskName }),
+        modelId: subagent.modelId,
+        status: subagent.status,
+        depth: subagent.depth,
+        createdAt: subagent.createdAt,
+        updatedAt: subagent.updatedAt,
+        ...(subagent.activeSince === undefined ? {} : { activeSince: subagent.activeSince }),
+        ...(subagent.elapsedMs === undefined ? {} : { elapsedMs: subagent.elapsedMs }),
+        ...(subagent.latestText === undefined ? {} : { latestText: subagent.latestText }),
+        ...(subagent.totalTokens === undefined ? {} : { totalTokens: subagent.totalTokens }),
+    }));
+}
+
+function transcriptBackgroundProcessesProject(
+    session: SessionState,
+): readonly RigBackgroundProcess[] {
+    return session.backgroundProcesses.map((process) => ({
+        id: process.sessionId,
+        command: process.command,
+        cwd: process.cwd,
+        status: process.status,
+    }));
+}
+
+function transcriptEphemeralProject(
+    session: SessionState,
+    legacy: readonly ConversationEntry[],
+): readonly ConversationEntry[] {
+    const entries = new Map(legacy.map((entry) => [entryKey(entry), entry]));
+    for (const command of session.shellCommands) {
+        const id = `shell:${command.commandId}`;
+        entries.set(
+            id,
+            rigShellEntry(id, {
+                command: command.command,
+                output: command.output ?? command.errorMessage ?? "",
+                exitCode: command.exitCode ?? null,
+                running: command.status === "running",
+                timedOut: command.timedOut ?? false,
+            }),
+        );
+    }
+    return [...entries.values()];
 }
 
 export interface RigChatSnapshot {
@@ -334,14 +443,30 @@ export interface RigChatDeps {
     readonly setInterval?: (handler: () => void, milliseconds: number) => unknown;
     /** Injectable timer clear for the usage poll; defaults to the global `clearInterval`. */
     readonly clearInterval?: (handle: unknown) => void;
+    /** Opens rig-connect's core transcript stream when this store becomes observed. */
+    readonly transcriptConnect?: RigChatTranscriptConnect;
 }
+
+export interface RigChatTranscriptConnection {
+    close(): void;
+}
+
+export type RigChatTranscriptConnect = (options: {
+    readonly sessionId: RigSessionId;
+    readonly onChange: (elements: readonly ChatElement[], session: SessionState) => void;
+    readonly onError: (error: unknown) => void;
+}) => RigChatTranscriptConnection;
 
 /**
  * The chat surface store for one session. The constructor opens nothing; the
- * first subscriber hydrates the durable session (`sessionRead`) and opens the
- * per-session realtime subscription, and the last unsubscribe tears both down.
- * Every `SessionEvent` is a delivery hint that schedules a coalesced
- * `sessionRead`; SSE payloads never write durable session state or its cursor.
+ * first subscriber hydrates the supplemental durable session (`sessionRead`)
+ * and opens the per-session realtime subscriptions, and the last unsubscribe
+ * tears them down. When supplied, rig-connect owns the bounded core transcript
+ * and its live application state. The existing reader remains temporarily for
+ * mutations, usage, menu configuration, and the richer actionable permission
+ * review shape Happy already renders. Every legacy `SessionEvent` remains a
+ * delivery hint that schedules a coalesced `sessionRead`; its SSE payloads never
+ * write durable session state or cursor.
  * The HTTP event-history difference read supplies message timestamps and
  * per-message run outcomes because Rig's durable message objects omit them.
  * Agent deltas alone feed explicitly transient streaming presentation, which a
@@ -381,6 +506,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const retiredRunOrder: string[] = [];
     const RETIRED_RUN_LIMIT = 128;
     let ephemeral: ConversationEntry[] = [];
+    let transcriptElements: readonly ChatElement[] | undefined;
+    let transcriptSession: SessionState | undefined;
+    let transcriptConnection: RigChatTranscriptConnection | undefined;
     /**
      * What the reader has picked but not yet sent. Absent means the pickers show
      * the session's own configuration; present means they show the choice, which
@@ -452,30 +580,96 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
               ? { type: "error", error }
               : { type: "loading" };
 
+    const transcriptActivityApply = (
+        elements: readonly ChatElement[],
+        connectedSession: SessionState,
+    ): void => {
+        if (transcriptSessionBusy(connectedSession)) {
+            runStatus = "running";
+            const connectedRunId = connectedSession.activity.runId;
+            if (connectedRunId !== undefined) runId = connectedRunId;
+            if (runStartedAt === undefined) {
+                const turnStartedAt = elements
+                    .filter(
+                        (element) =>
+                            connectedRunId === undefined || element.turnId === connectedRunId,
+                    )
+                    .reduce(
+                        (earliest, element) => Math.min(earliest, element.createdAt),
+                        Number.POSITIVE_INFINITY,
+                    );
+                runStartedAt = Number.isFinite(turnStartedAt)
+                    ? turnStartedAt
+                    : connectedSession.activity.since;
+            }
+            turnElapsedMs = undefined;
+            return;
+        }
+
+        if (runStatus === "running" && runStartedAt !== undefined) {
+            let completed: Extract<ChatElement, { kind: "turn_end" }> | undefined;
+            for (let index = elements.length - 1; index >= 0; index -= 1) {
+                const element = elements[index];
+                if (
+                    element?.kind === "turn_end" &&
+                    (runId === undefined || element.turnId === runId)
+                ) {
+                    completed = element;
+                    break;
+                }
+            }
+            turnElapsedMs =
+                completed?.elapsedMs ?? Math.max(0, connectedSession.activity.since - runStartedAt);
+        }
+        runStatus = "idle";
+        runStartedAt = undefined;
+        runId = undefined;
+    };
+
     const commit = (): void => {
         const previous = store.getState();
-        const built = rigConversationAttachTurnTraces(
-            rigConversationBuild({
-                sessionId,
-                session,
-                // Streaming belongs to a turn only after the authoritative
-                // session identifies that turn. Showing it earlier would append
-                // it to whichever completed turn happened to be last.
-                streaming: activeTurnId === undefined ? undefined : transientStreamingPresentation,
-                ephemeral,
-                showReasoning,
-                pendingUserInputs: session?.pendingUserInputs ?? [],
-                messageCreatedAt,
-                messageGenerationStatus,
-                toolCallCreatedAt,
-            }),
-            {
-                activeTurnId,
-                expandedTurnIds,
-                steeringMessageIds,
-                durations: turnDurations,
-            },
-        );
+        const pendingUserInputs =
+            transcriptSession === undefined
+                ? (session?.pendingUserInputs ?? [])
+                : transcriptPendingUserInputsProject(transcriptSession);
+        const projectedEphemeral =
+            transcriptSession === undefined
+                ? ephemeral
+                : transcriptEphemeralProject(transcriptSession, ephemeral);
+        const built =
+            transcriptElements === undefined
+                ? rigConversationAttachTurnTraces(
+                      rigConversationBuild({
+                          sessionId,
+                          session,
+                          // Streaming belongs to a turn only after the authoritative
+                          // session identifies that turn. Showing it earlier would append
+                          // it to whichever completed turn happened to be last.
+                          streaming:
+                              activeTurnId === undefined
+                                  ? undefined
+                                  : transientStreamingPresentation,
+                          ephemeral: projectedEphemeral,
+                          showReasoning,
+                          pendingUserInputs,
+                          messageCreatedAt,
+                          messageGenerationStatus,
+                          toolCallCreatedAt,
+                      }),
+                      {
+                          activeTurnId,
+                          expandedTurnIds,
+                          steeringMessageIds,
+                          durations: turnDurations,
+                      },
+                  )
+                : rigConnectConversationProject({
+                      elements: transcriptElements,
+                      sessionId,
+                      showReasoning,
+                      ephemeral: projectedEphemeral,
+                      pendingUserInputs,
+                  });
         const visible =
             clearedIds.size === 0
                 ? built
@@ -491,13 +685,28 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             runId,
             runStartedAt,
             turnElapsedMs,
-            pendingUserInputs: session?.pendingUserInputs ?? [],
+            pendingUserInputs,
             requestSubmissions: [...requestSubmissions.values()],
-            queuedMessages: session?.queuedMessages ?? [],
-            tasks: session?.tasks ?? [],
-            goal: session?.goal,
-            subagents: session?.subagents ?? [],
-            backgroundProcesses: session?.backgroundProcesses ?? [],
+            queuedMessages:
+                transcriptSession === undefined
+                    ? (session?.queuedMessages ?? [])
+                    : transcriptQueuedMessagesProject(transcriptSession),
+            tasks:
+                transcriptSession === undefined
+                    ? (session?.tasks ?? [])
+                    : transcriptTasksProject(transcriptSession),
+            goal:
+                transcriptSession === undefined
+                    ? session?.goal
+                    : transcriptGoalProject(transcriptSession),
+            subagents:
+                transcriptSession === undefined
+                    ? (session?.subagents ?? [])
+                    : transcriptSubagentsProject(transcriptSession),
+            backgroundProcesses:
+                transcriptSession === undefined
+                    ? (session?.backgroundProcesses ?? [])
+                    : transcriptBackgroundProcessesProject(transcriptSession),
             showReasoning,
             expandedTurnIds,
             usagePanelOpen,
@@ -510,7 +719,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             })(),
             activityPanelOpen,
             openImage,
-            modelLocked: session?.modelLocked ?? false,
+            modelLocked: transcriptSession?.modelLocked ?? session?.modelLocked ?? false,
             // The pickers show the pending choice when there is one, so what the
             // reader selected stays selected until the message that applies it.
             menus: session
@@ -982,15 +1191,17 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         // Keep the UI in the running state for the whole request-send clock, not
         // only while the server reports "running" — after the first durable
         // agent text the stream presentation is gone but tools may still run.
-        if (loaded.status === "error" || loaded.status === "aborted") {
-            runStatus = "idle";
-            if (runId === undefined) {
-                runStartedAt = undefined;
-                turnElapsedMs = undefined;
+        if (transcriptSession === undefined) {
+            if (loaded.status === "error" || loaded.status === "aborted") {
+                runStatus = "idle";
+                if (runId === undefined) {
+                    runStartedAt = undefined;
+                    turnElapsedMs = undefined;
+                }
+            } else {
+                runStatus =
+                    loaded.status === "running" || runStartedAt !== undefined ? "running" : "idle";
             }
-        } else {
-            runStatus =
-                loaded.status === "running" || runStartedAt !== undefined ? "running" : "idle";
         }
         commit();
     };
@@ -1189,6 +1400,26 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const start = (): void => {
         active = true;
         generation += 1;
+        transcriptConnection = deps.transcriptConnect?.({
+            sessionId,
+            onChange: (elements, connectedSession) => {
+                if (!active || disposed) return;
+                transcriptElements = elements;
+                transcriptSession = connectedSession;
+                transcriptActivityApply(elements, connectedSession);
+                commit();
+            },
+            onError: () => {
+                if (!active || disposed) return;
+                transcriptElements = undefined;
+                transcriptSession = undefined;
+                runStatus =
+                    session?.status === "running" || session?.status === "queued"
+                        ? "running"
+                        : "idle";
+                commit();
+            },
+        });
         openStream();
         void reconcile();
         // Resume the usage poll if the panel was left open across a no-subscriber gap.
@@ -1208,6 +1439,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         reconcileAgain = false;
         unsubscribeSession?.();
         unsubscribeSession = undefined;
+        transcriptConnection?.close();
+        transcriptConnection = undefined;
+        transcriptElements = undefined;
+        transcriptSession = undefined;
         // Suspend polling while nothing observes this store; the open flag persists
         // so a re-subscription resumes it. No background work without subscribers.
         usagePollStop();
@@ -1383,7 +1618,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                     if (!steered) {
                         pendingFreshTurn = undefined;
                         runStartedAt = undefined;
-                        runStatus = session?.status === "running" ? "running" : "idle";
+                        runStatus =
+                            transcriptSession !== undefined
+                                ? transcriptSessionBusy(transcriptSession)
+                                    ? "running"
+                                    : "idle"
+                                : session?.status === "running"
+                                  ? "running"
+                                  : "idle";
                         commit();
                     }
                     throw caught;
@@ -1541,6 +1783,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            transcriptConnection?.close();
+            transcriptConnection = undefined;
             stop();
             storeUnsub();
             listeners.clear();

@@ -37,6 +37,7 @@ function snapshot(overrides: Partial<AgentSnapshot> = {}): AgentSnapshot {
 function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
     return {
         id: "session-1",
+        activity: { kind: "idle", label: "Idle", since: 0 },
         agentId: "agent-1",
         archived: false,
         projectId: "project-1",

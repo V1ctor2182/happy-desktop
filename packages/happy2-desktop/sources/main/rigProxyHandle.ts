@@ -3,6 +3,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
+import { pipeline } from "node:stream/promises";
 import type {
     RigModelSelection,
     RigPermissionMode,
@@ -286,6 +287,7 @@ async function changedFileRead(
 export type RigProxyClient = Pick<
     RigDaemonClient,
     | "health"
+    | "rawGet"
     | "models"
     | "listSessions"
     | "listCatalog"
@@ -352,11 +354,11 @@ export interface RigProxyHandleOptions {
 /**
  * The single request handler behind the loopback Rig proxy, shared by the packaged
  * Electron `node:http` server and the Vite dev-server middleware. It maps the
- * renderer transport's JSON/SSE routes onto the authenticated `ProtocolHttpClient`
- * and returns only already-projected `happy2-state` shapes, so no `@slopus` wire
- * type ever crosses to the renderer. Returns `true` when it owned the request; a
- * `false` result lets the caller fall through (404 for the Node server, `next()`
- * for the Vite middleware).
+ * renderer transport's JSON/SSE routes onto the authenticated `ProtocolHttpClient`.
+ * Ordinary routes return projected `happy2-state` shapes; the explicit read-only
+ * `rig-connect` routes preserve raw stream/transcript frames for the vendored
+ * state client. Returns `true` when it owned the request; a `false` result lets
+ * the caller fall through (404 for the Node server, `next()` for Vite middleware).
  */
 export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<boolean> {
     const { client, method, path, query, request, response } = options;
@@ -365,6 +367,17 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
 
     try {
         if (method === "GET") {
+            const rigConnectPath = rigConnectDaemonPath(segments, query);
+            if (rigConnectPath !== undefined) {
+                await rigConnectRead(
+                    client,
+                    request,
+                    response,
+                    rigConnectPath,
+                    options.onConnectionError,
+                );
+                return true;
+            }
             if (path === "/health") {
                 await handleHealth(client, response, options.onConnectionError);
                 return true;
@@ -683,6 +696,78 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             response.end();
         }
         return true;
+    }
+}
+
+function rigConnectDaemonPath(
+    segments: readonly string[],
+    query: URLSearchParams,
+): string | undefined {
+    let path: string;
+    let allowed: readonly string[];
+    if (
+        segments.length === 3 &&
+        segments[0] === "rig-connect" &&
+        segments[1] === "events" &&
+        segments[2] === "stream"
+    ) {
+        path = "/events/stream";
+        allowed = ["after"];
+    } else if (
+        segments.length === 4 &&
+        segments[0] === "rig-connect" &&
+        segments[1] === "sessions" &&
+        segments[3] === "stream"
+    ) {
+        path = `/sessions/${segments[2]!}/stream`;
+        allowed = ["after", "turns"];
+    } else if (
+        segments.length === 4 &&
+        segments[0] === "rig-connect" &&
+        segments[1] === "sessions" &&
+        segments[3] === "transcript"
+    ) {
+        path = `/sessions/${segments[2]!}/transcript`;
+        allowed = ["before"];
+    } else {
+        return undefined;
+    }
+    const forwarded = new URLSearchParams();
+    for (const name of allowed) {
+        const value = query.get(name);
+        if (value !== null) forwarded.set(name, value);
+    }
+    const suffix = forwarded.toString();
+    return `${path}${suffix.length > 0 ? `?${suffix}` : ""}`;
+}
+
+async function rigConnectRead(
+    client: RigProxyClient,
+    request: IncomingMessage,
+    response: ServerResponse,
+    path: string,
+    onConnectionError?: (error: unknown) => void,
+): Promise<void> {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.once("aborted", abort);
+    response.once("close", abort);
+    try {
+        const upstream = await client.rawGet(path, controller.signal);
+        const headers: Record<string, string> = {};
+        const contentType = upstream.headers["content-type"];
+        const cacheControl = upstream.headers["cache-control"];
+        if (typeof contentType === "string") headers["content-type"] = contentType;
+        if (typeof cacheControl === "string") headers["cache-control"] = cacheControl;
+        response.writeHead(upstream.statusCode, headers);
+        await pipeline(upstream.body, response);
+    } catch (error) {
+        if (controller.signal.aborted) return;
+        if (rigDaemonConnectionUnavailable(error)) onConnectionError?.(error);
+        throw error;
+    } finally {
+        request.off("aborted", abort);
+        response.off("close", abort);
     }
 }
 

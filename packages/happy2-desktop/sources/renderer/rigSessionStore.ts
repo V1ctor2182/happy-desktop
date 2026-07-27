@@ -7,12 +7,16 @@ import {
     type RigClockStore,
     type RigConnectionStore,
     type RigDaemonHealth,
+    type RigGlobalEvent,
     type RigHost,
     type RigModelStore,
+    type RigSessionCatalogSnapshot,
     type RigSessionLocation,
     type RigWorkspaceStore,
 } from "happy2-state";
 import { terminalDriverCreate } from "happy2-app";
+import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
+import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
@@ -132,8 +136,26 @@ export function rigSessionStoreCreate(
             return;
         dispose();
         const current = generation;
+        const transport = rigRendererTransportCreate(target.rigHttpUrl);
+        const catalogSource = rigConnectCatalogSourceCreate(target.rigHttpUrl, {
+            read: async (): Promise<RigSessionCatalogSnapshot> => {
+                const [catalog, sessions] = await Promise.all([
+                    transport.projectsRead(),
+                    transport.sessionsRead(),
+                ]);
+                return { catalog, sessions };
+            },
+            subscribe: (listener, onError) =>
+                transport.globalEventsSubscribe({
+                    event: (_event: RigGlobalEvent) => listener(),
+                    error: onError,
+                    end: () => undefined,
+                }),
+        });
         const client = rigClientCreate({
-            transport: rigRendererTransportCreate(target.rigHttpUrl),
+            transport,
+            catalogSource,
+            transcriptConnect: rigConnectTranscriptConnectCreate(target.rigHttpUrl),
             // The Ghostty emulator and the terminal protocol client live in the app
             // layer, so the client is handed the factory rather than reaching for
             // them itself.
