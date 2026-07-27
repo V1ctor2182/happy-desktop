@@ -8,6 +8,8 @@ export type PanelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * the surface beside it, whether or not it has anything to say yet.
      */
     children?: ReactNode;
+    /** Uses the 12px chrome inset when the band carries an edge-docked control. */
+    edgeControl?: boolean;
     style?: CSSProperties;
 };
 
@@ -24,11 +26,17 @@ export type PanelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
  * panel that later has a title or controls for this row puts them here.
  */
 export function PanelHeader(props: PanelHeaderProps) {
-    const [local, rest] = partitionComponentProps(props, ["children", "className", "style"]);
+    const [local, rest] = partitionComponentProps(props, [
+        "children",
+        "className",
+        "edgeControl",
+        "style",
+    ]);
     return (
         <header
             {...rest}
             className={["happy2-panel-header", local.className].filter(Boolean).join(" ")}
+            data-edge-control={local.edgeControl ? "" : undefined}
             data-happy2-ui="panel-header"
             style={local.style}
         >

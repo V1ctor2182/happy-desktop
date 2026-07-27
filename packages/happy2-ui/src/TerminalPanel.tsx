@@ -7,7 +7,7 @@ import {
     type ClipboardEvent,
     type KeyboardEvent,
 } from "react";
-import type { TerminalCellSnapshot, TerminalGridSnapshot } from "happy2-state";
+import type { TerminalCellSnapshot, TerminalGridSnapshot, TerminalRowSnapshot } from "happy2-state";
 import { Button } from "./Button";
 
 export interface TerminalPanelProps {
@@ -57,6 +57,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const input = useRef<HTMLTextAreaElement>(null);
     const drag = useRef<{ startHeight: number; startY: number } | undefined>(undefined);
     const [focused, focusedSet] = useState(false);
+    // Whether new output should keep scrolling the screen into view. A terminal
+    // follows its own output, but the moment the reader scrolls up into history
+    // it must stay where they put it — otherwise the next line of output yanks
+    // what they are reading off the screen.
+    const following = useRef(true);
     const resize = useEffectEvent((cols: number, rows: number) => props.onResize(cols, rows));
     // With nothing to show, a dead session collapses to its header line so it
     // does not push the conversation around; once output exists it stays
@@ -67,9 +72,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
     // Terminal autofocus is a mount/visibility concern, never a response to an
     // unrelated ChatPage render. Otherwise a freshly allocated callback prop
     // would steal the composer's focus whenever its draft changes.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- move real keyboard focus to the capture field on mount
     useLayoutEffect(() => {
         if (!collapsed) input.current?.focus({ preventScroll: true });
     }, [collapsed]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- observe the live screen box to size the PTY in cells
     useLayoutEffect(() => {
         const element = screen.current;
         if (!element) return;
@@ -91,6 +98,23 @@ export function TerminalPanel(props: TerminalPanelProps) {
         observer.observe(element);
         return () => observer.disconnect();
     }, [collapsed]);
+    // Scroll position is the browser's, not React's, so following the output has
+    // to be re-applied imperatively after each frame commits its new rows. There
+    // is no dependency list because any render may have grown the transcript.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- scroll offset is live DOM state React cannot render
+    useLayoutEffect(() => {
+        const element = screen.current;
+        if (element && following.current) element.scrollTop = element.scrollHeight;
+    });
+    function screenScroll() {
+        const element = screen.current;
+        if (!element) return;
+        // A scroll that lands within one row of the end is still "at the bottom",
+        // so fractional layout and a trackpad's last pixel do not silently stop
+        // the terminal from following its output.
+        following.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight <= CELL_HEIGHT;
+    }
     function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
         const sequences: Partial<Record<string, string>> = {
             Enter: "\r",
@@ -129,6 +153,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
         event.currentTarget.setPointerCapture(event.pointerId);
     }
     const cursor = props.grid?.cursor;
+    const scrollback = props.grid?.scrollback ?? [];
+    const lines = props.grid?.lines ?? [];
     return (
         <section
             className="happy2-terminal-panel"
@@ -198,27 +224,17 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") screenFocus();
                     }}
+                    onScroll={screenScroll}
                     ref={screen}
                     role="application"
                     tabIndex={-1}
                 >
                     <div className="happy2-terminal-panel__rows" data-happy2-ui="terminal-rows">
-                        {props.grid?.lines.map((row, rowIndex) => (
-                            <div className="happy2-terminal-panel__row" key={rowIndex}>
-                                {layoutRow(row.cells).map(({ cell, gap }, index) => (
-                                    <span
-                                        className="happy2-terminal-panel__cell"
-                                        data-column={cell.x}
-                                        data-inverse={cell.inverse ? "" : undefined}
-                                        data-width={cell.width}
-                                        key={`${cell.x}:${index}`}
-                                        style={cellStyle(cell, gap)}
-                                    >
-                                        {cell.text || " "}
-                                    </span>
-                                ))}
-                            </div>
-                        ))}
+                        {/* History is keyed from its oldest line, so a line
+                            scrolling off the screen appends one row instead of
+                            renumbering every row above it. */}
+                        {scrollback.map((row, rowIndex) => terminalRow(row, `history:${rowIndex}`))}
+                        {lines.map((row, rowIndex) => terminalRow(row, `screen:${rowIndex}`))}
                         {cursor?.visible ? (
                             <div
                                 aria-hidden
@@ -226,9 +242,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
                                 data-happy2-ui="terminal-cursor"
                                 style={{
                                     // Offset by the rows wrapper padding so cell
-                                    // coordinates align with painted glyphs.
+                                    // coordinates align with painted glyphs, and
+                                    // past history, which the cursor's own
+                                    // screen-relative row does not count.
                                     left: `calc(${ROWS_PADDING_HORIZONTAL}px + ${cursor.x}ch)`,
-                                    top: `${ROWS_PADDING_VERTICAL + cursor.y * CELL_HEIGHT}px`,
+                                    top: `${
+                                        ROWS_PADDING_VERTICAL +
+                                        (scrollback.length + cursor.y) * CELL_HEIGHT
+                                    }px`,
                                     width: "1ch",
                                     height: `${CELL_HEIGHT}px`,
                                 }}
@@ -254,6 +275,26 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 </div>
             )}
         </section>
+    );
+}
+
+/** One transcript line, painted identically whether it is history or the screen. */
+function terminalRow(row: TerminalRowSnapshot, key: string) {
+    return (
+        <div className="happy2-terminal-panel__row" key={key}>
+            {layoutRow(row.cells).map(({ cell, gap }, index) => (
+                <span
+                    className="happy2-terminal-panel__cell"
+                    data-column={cell.x}
+                    data-inverse={cell.inverse ? "" : undefined}
+                    data-width={cell.width}
+                    key={`${cell.x}:${index}`}
+                    style={cellStyle(cell, gap)}
+                >
+                    {cell.text || " "}
+                </span>
+            ))}
+        </div>
     );
 }
 

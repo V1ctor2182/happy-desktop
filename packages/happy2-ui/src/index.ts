@@ -152,6 +152,7 @@ export {
     type DiffLineKind,
     type DiffSnippetProps,
 } from "./DiffSnippet";
+export { ToolCallPreview, type ToolCallPreviewProps } from "./ToolCallPreview";
 export type { Dimension } from "./dimensions";
 export { EventCard, type EventCardProps } from "./EventCard";
 export { Fade, type FadeProps } from "./Fade";

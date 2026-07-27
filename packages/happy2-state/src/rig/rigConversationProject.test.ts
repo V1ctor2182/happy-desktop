@@ -42,7 +42,11 @@ describe("rig conversation projection", () => {
                     },
                 ],
             }),
-            streaming: { runId: "r1", blocks: [{ kind: "text", text: "Wor" }] },
+            streaming: {
+                runId: "r1",
+                messageId: "m1",
+                blocks: [{ kind: "text", text: "Wor" }],
+            },
             ephemeral: [],
             showReasoning: false,
             pendingUserInputs: [

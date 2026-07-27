@@ -43,6 +43,7 @@ function fakeEmulator(): TerminalEmulator {
                         ],
                     },
                 ],
+                scrollback: [],
             };
         },
         dispose() {
@@ -503,6 +504,7 @@ function sentinelEmulator(text: string): TerminalEmulator {
                     ],
                 },
             ],
+            scrollback: [],
         }),
         dispose: () => undefined,
     };

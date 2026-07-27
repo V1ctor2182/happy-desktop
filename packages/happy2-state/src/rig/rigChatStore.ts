@@ -375,7 +375,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let toolCallCreatedAt = new Map<string, readonly number[]>();
     let messageTimestampCursor: RigEventId | undefined;
     let transientStreamingPresentation: RigStreamingMessage | undefined;
-    let transientStreamingBaseAgentIds = new Set<string>();
     // Run ids retired by durable completion. The bounded session-lifetime set
     // rejects delayed events from more than merely the most recent run.
     const retiredRunIds = new Set<string>();
@@ -527,7 +526,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         transientStreamingPresentation ? [...transientStreamingPresentation.blocks] : [];
     const transientStreamSet = (blocks: RigStreamingBlock[]): void => {
         transientStreamingPresentation = transientStreamingPresentation
-            ? { runId: transientStreamingPresentation.runId, blocks }
+            ? {
+                  runId: transientStreamingPresentation.runId,
+                  messageId: transientStreamingPresentation.messageId,
+                  blocks,
+              }
             : transientStreamingPresentation;
     };
     const transientToolUpdate = (
@@ -629,6 +632,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
 
     const transientAgentEventApply = (event: RigAgentEvent): void => {
         switch (event.type) {
+            case "inference_iteration_start":
+                break;
             case "text_start":
                 transientBlockStart("text");
                 break;
@@ -707,7 +712,15 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         display: event.display,
                         failed: event.failed,
                         failure: event.failure,
-                        ...(event.presentation ? { presentation: event.presentation } : {}),
+                        /*
+                         * Exploration is authoritative call classification.
+                         * Other call presentations are previews: a successful
+                         * result enriches them, while a failed result has no
+                         * presentation and leaves the preview intact.
+                         */
+                        ...(entry.presentation?.type !== "exploration" && event.presentation
+                            ? { presentation: event.presentation }
+                            : {}),
                         status: event.failed ? "failed" : "success",
                         permissionReview: undefined,
                     }),
@@ -787,24 +800,39 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         }
     };
 
-    const transientStreamingStart = (streamRunId: string): void => {
-        if (retiredRunIds.has(streamRunId)) return;
-        if (transientStreamingPresentation?.runId === streamRunId) return;
+    const transientRunStart = (streamRunId: string): boolean => {
+        if (retiredRunIds.has(streamRunId)) return false;
         // A delayed or reordered event for a different run must never replace
         // the stream whose id currently guards steering and abort operations.
-        if (transientStreamingPresentation !== undefined) return;
-        transientStreamingPresentation = { runId: streamRunId, blocks: [] };
-        transientStreamingBaseAgentIds = new Set(
-            session?.messages
-                .filter((message) => message.role === "agent" && !message.internal)
-                .map((message) => message.id) ?? [],
-        );
+        if (
+            transientStreamingPresentation !== undefined &&
+            transientStreamingPresentation.runId !== streamRunId
+        )
+            return false;
         runId = streamRunId;
         // Prefer the clock set when the user sent the request (before the first
         // token). Only fall back to "now" when the stream arrives without that.
         if (runStartedAt === undefined) runStartedAt = now();
         turnElapsedMs = undefined;
         runStatus = "running";
+        return true;
+    };
+
+    const transientStreamingStart = (streamRunId: string, messageId: string): void => {
+        if (!transientRunStart(streamRunId)) return;
+        if (
+            session?.messages.some(
+                (message) =>
+                    message.role === "agent" && !message.internal && message.id === messageId,
+            )
+        )
+            return;
+        if (
+            transientStreamingPresentation?.runId === streamRunId &&
+            transientStreamingPresentation.messageId === messageId
+        )
+            return;
+        transientStreamingPresentation = { runId: streamRunId, messageId, blocks: [] };
     };
 
     const runRetire = (completedRunId: string): void => {
@@ -823,11 +851,19 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const transientStreamingHintApply = (event: RigSessionEvent): void => {
         switch (event.type) {
             case "run_started":
-                transientStreamingStart(event.runId);
+                transientRunStart(event.runId);
                 break;
             case "agent_event":
-                transientStreamingStart(event.runId);
-                if (transientStreamingPresentation?.runId === event.runId)
+                if (event.event.type === "inference_iteration_start")
+                    transientStreamingStart(event.runId, event.event.messageId);
+                else if (event.messageId !== undefined)
+                    transientStreamingStart(event.runId, event.messageId);
+                else transientRunStart(event.runId);
+                if (
+                    transientStreamingPresentation?.runId === event.runId &&
+                    (event.messageId === undefined ||
+                        transientStreamingPresentation.messageId === event.messageId)
+                )
                     transientAgentEventApply(event.event);
                 break;
             case "run_error":
@@ -850,6 +886,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 // refresh here rather than by polling a number that cannot
                 // change between turns.
                 if (!usagePanelOpen) usageLoad(true);
+                runRetire(event.runId);
                 break;
             default:
                 break;
@@ -885,13 +922,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
      * enter here; session-event payloads never call it and it emits no output.
      */
     const sessionAuthoritativeWrite = (loaded: RigSession): void => {
-        const loadedHasCompletedAgentMessage =
+        const loadedHasStreamingMessage =
             transientStreamingPresentation !== undefined &&
             loaded.messages.some(
                 (message) =>
                     message.role === "agent" &&
                     !message.internal &&
-                    !transientStreamingBaseAgentIds.has(message.id),
+                    message.id === transientStreamingPresentation?.messageId,
             );
         // Drop the live streaming presentation once durable agent text for this
         // run appears (or the session leaves running). Do not touch the
@@ -900,11 +937,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         // made a 10-minute run read as "Done in 6s".
         if (
             transientStreamingPresentation &&
-            (loadedHasCompletedAgentMessage || loaded.status !== "running")
+            (loadedHasStreamingMessage || loaded.status !== "running")
         ) {
-            runRetire(transientStreamingPresentation.runId);
+            if (loaded.status !== "running") runRetire(transientStreamingPresentation.runId);
             transientStreamingPresentation = undefined;
-            transientStreamingBaseAgentIds = new Set();
         }
         // The working clock spans the whole request: from message send until the
         // session itself is no longer running. Require that a real run was
@@ -1037,6 +1073,19 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         nextMessageIdsByRun.set(event.runId, messageIds);
                         nextStatuses.set(
                             event.message.id,
+                            nextRunStatuses.get(event.runId) ?? "streaming",
+                        );
+                        continue;
+                    }
+                    if (
+                        event.type === "agent_event" &&
+                        event.event.type === "inference_iteration_start"
+                    ) {
+                        const messageIds = new Set(nextMessageIdsByRun.get(event.runId) ?? []);
+                        messageIds.add(event.event.messageId);
+                        nextMessageIdsByRun.set(event.runId, messageIds);
+                        nextStatuses.set(
+                            event.event.messageId,
                             nextRunStatuses.get(event.runId) ?? "streaming",
                         );
                         continue;
@@ -1412,7 +1461,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             rejecting(async () => {
                 if (transientStreamingPresentation) runRetire(transientStreamingPresentation.runId);
                 transientStreamingPresentation = undefined;
-                transientStreamingBaseAgentIds = new Set();
                 ephemeral = [];
                 sessionReplace(await deps.transport.sessionReset(sessionId));
             }),

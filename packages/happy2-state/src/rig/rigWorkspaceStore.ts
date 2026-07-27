@@ -1420,7 +1420,10 @@ export function rigWorkspaceStoreCreate(
                 .then(openRequest);
         },
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
-        conversationArchive: (conversationId) => list.sessionArchive(conversationId),
+        conversationArchive: async (conversationId) => {
+            await list.sessionArchive(conversationId);
+            client.chatArchive(conversationId);
+        },
         conversationReorder: (conversationId, afterId) =>
             list.conversationReorder(conversationId, afterId),
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),

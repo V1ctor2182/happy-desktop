@@ -46,6 +46,7 @@ import type {
  * the fuller Rig `AgentLoopEvent` union collapses here to what the chat renders.
  */
 export type RigAgentEvent =
+    | { readonly type: "inference_iteration_start"; readonly messageId: string }
     | { readonly type: "text_start" }
     | { readonly type: "text_delta"; readonly text: string }
     | { readonly type: "text_end" }
@@ -137,7 +138,13 @@ export type RigSessionEvent = {
           readonly delivery?: "run" | "steer";
       }
     | { readonly type: "run_started"; readonly runId: string }
-    | { readonly type: "agent_event"; readonly runId: string; readonly event: RigAgentEvent }
+    | {
+          readonly type: "agent_event";
+          readonly runId: string;
+          /** Durable assistant-message identity embedded by inference stream events. */
+          readonly messageId?: string;
+          readonly event: RigAgentEvent;
+      }
     | { readonly type: "agent_message"; readonly runId: string; readonly message: RigMessage }
     | {
           readonly type: "run_finished";

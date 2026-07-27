@@ -34,6 +34,8 @@ export type ConversationEntryViewProps = {
     attachmentUrl?: (fileId: string) => string;
     /** Opens an attached image full size. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
+    /** Opens this entry's tool call in an owner-provided preview surface. */
+    onToolSelect?: (entryId: string) => void;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -73,6 +75,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 activity={entry.activity}
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
+                onToolSelect={
+                    entry.activity.kind === "tool"
+                        ? () => props.onToolSelect?.(entry.id)
+                        : undefined
+                }
                 singleLine={entry.activity.kind === "tool"}
                 time={props.activityAuthor ? undefined : time}
             />

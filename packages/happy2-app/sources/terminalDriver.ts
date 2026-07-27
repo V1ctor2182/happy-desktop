@@ -359,6 +359,9 @@ function gridStateToSnapshot(state: RemoteTerminalGridState): TerminalGridSnapsh
                 };
             }),
         })),
+        // A recovery frame restates the current screen only; the daemon keeps no
+        // history for it, so a reattached terminal starts its scrollback over.
+        scrollback: [],
     };
 }
 

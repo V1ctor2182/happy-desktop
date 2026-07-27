@@ -1,0 +1,185 @@
+/*
+ * ToolCallPreview — the right-panel body for a selected tool call.
+ *
+ * The heading is fixed; one edge-to-edge scrollport owns the rest. Its inner
+ * column carries the 12px reading inset and keeps terminal output, diffs, and
+ * generic JSON in the same restrained inspector vocabulary.
+ */
+
+.happy2-tool-call-preview {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+.happy2-tool-call-preview__heading {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy2-tool-call-preview__icon {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy2-tool-call-preview__heading-copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy2-tool-call-preview__heading-copy strong,
+.happy2-tool-call-preview__heading-copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-tool-call-preview__heading-copy strong {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 16px;
+}
+
+.happy2-tool-call-preview__heading-copy span {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+}
+
+.happy2-tool-call-preview__status {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy2-tool-call-preview__status[data-failed] {
+    color: var(--status-error);
+}
+
+/* Full-bleed scrollport; the child owns the readable inset. */
+.happy2-tool-call-preview__scroll {
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.happy2-tool-call-preview__content {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+}
+
+/*
+ * Terminal previews own the remaining panel height so their transcript is the
+ * scrollport. Other preview kinds remain content-sized and use the outer
+ * full-bleed scrollport for the whole document.
+ */
+.happy2-tool-call-preview[data-kind="execCommand"] .happy2-tool-call-preview__content,
+.happy2-tool-call-preview[data-kind="backgroundTerminalInteraction"]
+    .happy2-tool-call-preview__content {
+    flex: 1 1 0%;
+    min-height: 100%;
+}
+
+.happy2-tool-call-preview__section,
+.happy2-tool-call-preview__operations {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy2-tool-call-preview__label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.happy2-tool-call-preview__command,
+.happy2-tool-call-preview__terminal-content,
+.happy2-tool-call-preview__arguments,
+.happy2-tool-call-preview__result {
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-sm);
+    background: var(--diff-context-bg);
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy2-tool-call-preview__terminal {
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 160px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.happy2-tool-call-preview__terminal-content {
+    flex: 1 1 auto;
+    width: 100%;
+    background: var(--surface);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy2-tool-call-preview__result[data-failed] {
+    color: var(--status-error);
+}
+
+.happy2-tool-call-preview__operation {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--divider);
+}
+
+.happy2-tool-call-preview__operation span {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 14px;
+}
+
+.happy2-tool-call-preview__operation code {
+    overflow-wrap: anywhere;
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+}

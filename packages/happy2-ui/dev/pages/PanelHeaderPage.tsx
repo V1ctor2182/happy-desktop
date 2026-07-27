@@ -122,6 +122,27 @@ export function PanelHeaderPage() {
                     <DimensionRule label="children are centered on the 56 px band" />
                 </div>
             </Specimen>
+            <Specimen
+                detail="edge-docked chrome uses the shared 12px panel inset"
+                label="With edge control"
+                number="04"
+                stage="app"
+            >
+                <div style={column}>
+                    <div style={{ width: "300px", border: "1px solid var(--divider)" }}>
+                        <PanelHeader edgeControl>
+                            <Button
+                                aria-label="Hide panel"
+                                icon="panel-collapse"
+                                iconOnly
+                                size="small"
+                                variant="ghost"
+                            />
+                        </PanelHeader>
+                    </div>
+                    <DimensionRule label="control at x = 12 px · 28 px square" />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

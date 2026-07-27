@@ -41,6 +41,7 @@ function gridOf(lines: TerminalCellSnapshot[][], cursorX = 2): TerminalGridSnaps
         title: "workspace",
         cursor: { x: cursorX, y: 1, visible: true },
         lines: lines.map((cells) => ({ cells })),
+        scrollback: [],
     };
 }
 

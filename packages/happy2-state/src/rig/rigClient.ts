@@ -23,7 +23,7 @@ import type {
 } from "./rigTypes.js";
 import { rigModelStoreCreate, type RigModelStore } from "./rigModelStore.js";
 
-/** A reference-counted, disposable lease on one session's chat store. */
+/** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
     readonly store: RigChatStore;
     [Symbol.dispose](): void;
@@ -51,11 +51,13 @@ export interface RigClient {
         signal?: AbortSignal,
     ): Promise<RigChangedFileDocument>;
     /**
-     * Acquires a chat store for one session. Concurrent acquisitions share one
-     * store; the store is disposed (and its subscription torn down) only when the
-     * last lease is released.
+     * Acquires a retained chat store for one session. Concurrent and later
+     * acquisitions share its messages and model state; releasing a view lease
+     * never evicts it or stops its client-owned background synchronization.
      */
     chat(sessionId: RigSessionId): Promise<RigChatHandle>;
+    /** Stops background synchronization for an archived chat without evicting its memory. */
+    chatArchive(sessionId: RigSessionId): void;
     /**
      * Opens one interactive terminal in a session's working directory. Unlike a
      * chat store these are not shared or reference-counted: two terminals in the
@@ -86,14 +88,15 @@ interface ChatBinding {
     count: number;
     readonly storePromise: Promise<RigChatStore>;
     store?: RigChatStore;
+    backgroundUnsubscribe?: () => void;
+    archived: boolean;
 }
 
 /**
  * Composition root for a direct Rig client: it owns the injected transport, the
- * lazily loaded model catalog, the session-list store, and a reference-counted
- * factory of per-session chat stores. Intended to be constructed once by the app
- * layer. The constructor opens no transport work; catalog and stores materialize
- * on demand.
+ * daemon-global model store, session list, and retained per-session chat stores.
+ * Once opened, a non-archived chat stays synchronized for this client's lifetime;
+ * archiving suspends its transport but leaves messages and model state in memory.
  */
 export function rigClientCreate(deps: RigClientDeps): RigClient {
     const transport = deps.transport;
@@ -140,10 +143,22 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     };
                     const store = rigChatStoreCreate(sessionId, chatDeps);
                     const current = chats.get(sessionId);
-                    if (current) current.store = store;
+                    if (current) {
+                        current.store = store;
+                        if (!current.archived) {
+                            current.backgroundUnsubscribe = store.subscribe(() => {
+                                const session = store.get().session;
+                                if (session.type !== "ready" || session.value.status !== "archived")
+                                    return;
+                                current.archived = true;
+                                current.backgroundUnsubscribe?.();
+                                current.backgroundUnsubscribe = undefined;
+                            });
+                        }
+                    }
                     return store;
                 });
-                binding = { count: 0, storePromise };
+                binding = { count: 0, storePromise, archived: false };
                 chats.set(sessionId, binding);
             }
             binding.count += 1;
@@ -152,10 +167,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 store = await binding.storePromise;
             } catch (error) {
                 const current = chats.get(sessionId);
-                if (current === binding) {
-                    current.count -= 1;
-                    if (current.count <= 0) chats.delete(sessionId);
-                }
+                if (current === binding) chats.delete(sessionId);
                 throw error;
             }
             let released = false;
@@ -168,11 +180,21 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     if (!current) return;
                     current.count -= 1;
                     if (current.count <= 0) {
-                        chats.delete(sessionId);
-                        current.store?.[Symbol.dispose]();
+                        current.count = 0;
+                        // A retained background subscriber keeps durable chat
+                        // synchronization alive, but usage polling belongs only
+                        // to a visible view lease.
+                        current.store?.usagePanelClose();
                     }
                 },
             };
+        },
+        chatArchive(sessionId) {
+            const binding = chats.get(sessionId);
+            if (!binding) return;
+            binding.archived = true;
+            binding.backgroundUnsubscribe?.();
+            binding.backgroundUnsubscribe = undefined;
         },
         terminalOpen(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -191,7 +213,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             disposed = true;
             sessionListStore?.[Symbol.dispose]();
             sessionListStore = undefined;
-            for (const binding of chats.values()) binding.store?.[Symbol.dispose]();
+            for (const binding of chats.values()) {
+                binding.backgroundUnsubscribe?.();
+                binding.store?.[Symbol.dispose]();
+            }
             chats.clear();
         },
     };

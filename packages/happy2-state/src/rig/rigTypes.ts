@@ -584,9 +584,10 @@ export type RigStreamingBlock =
     | { readonly kind: "thinking"; readonly text: string }
     | { readonly kind: "tool"; readonly tool: RigToolEntry };
 
-/** The in-flight agent message for the current run, assembled from `agent_event` deltas. */
+/** One in-flight durable agent message, assembled from its `agent_event` deltas. */
 export interface RigStreamingMessage {
     readonly runId: string;
+    readonly messageId: string;
     readonly blocks: readonly RigStreamingBlock[];
 }
 

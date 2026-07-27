@@ -25,3 +25,10 @@
     color: var(--text);
     font-family: var(--happy2-font-ui);
 }
+
+/* Chrome controls dock 12px from a panel edge, matching AppShell's sidebar
+   collapse control. Ordinary titles and content retain the standard 16px inset. */
+.happy2-panel-header[data-edge-control] {
+    padding-right: 12px;
+    padding-left: 12px;
+}

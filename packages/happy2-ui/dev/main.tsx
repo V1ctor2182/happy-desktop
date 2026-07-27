@@ -112,6 +112,7 @@ import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
 import { RigCommandPalettePage } from "./pages/RigCommandPalettePage";
 import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
 import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
+import { ToolCallPreviewPage } from "./pages/ToolCallPreviewPage";
 type BlueprintPage = {
     id: string;
     label: string;
@@ -192,6 +193,12 @@ const components: BlueprintPage[] = [
         label: "Agent activity row",
         number: "C-148",
         page: AgentActivityRowPage,
+    },
+    {
+        id: "tool-call-preview",
+        label: "Tool call preview",
+        number: "C-165",
+        page: ToolCallPreviewPage,
     },
     {
         id: "conversation-entry",

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
     ConversationEntry,
+    ConversationToolCall,
     RigClockStore,
     RigChangedFileTabSnapshot,
     RigConnectionStore,
@@ -58,10 +59,10 @@ import {
     PanelHeader,
     Sidebar,
     SidebarFooter,
-    SplitColumn,
     TabbedPane,
     TextField,
     TerminalPanel,
+    ToolCallPreview,
     WindowDragRegion,
     rigComposerModelControlProps,
     sidebarReorderMove,
@@ -236,6 +237,7 @@ function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): 
 /** One tab per tool open in the right panel, iconed by what it holds. */
 function panelTabs(panel: RigPanelSnapshot): TabItem[] {
     return panel.tabs.map((tab) => ({
+        closable: true,
         id: tab.id,
         label: tab.label,
         icon: tab.kind === "terminal" ? ("terminal" as const) : ("globe" as const),
@@ -257,6 +259,20 @@ function rowOwnerFind(
 
 /** A group with no conversation has no transcript; the constant keeps the prop stable. */
 const NO_ENTRIES: readonly ConversationEntry[] = [];
+
+/** Resolves the selected preview against the current immutable conversation snapshot. */
+function previewToolFind(
+    conversation: RigWorkspaceSnapshot["conversation"],
+    entryId: string | undefined,
+): ConversationToolCall | undefined {
+    if (entryId === undefined || conversation.type !== "ready") return undefined;
+    const entry = conversation.value.entries.find(
+        (candidate) => candidate.kind === "agentActivity" && candidate.id === entryId,
+    );
+    return entry?.kind === "agentActivity" && entry.activity.kind === "tool"
+        ? entry.activity.tool
+        : undefined;
+}
 
 /** One tab per session in the open group, marked while the agent is working. */
 function sessionTabs(group: OpenGroup): TabItem[] {
@@ -396,6 +412,7 @@ export function AppRigView(props: AppRigViewProps) {
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
     const conversation = workspace.conversation;
+    const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const listAccessory =
         projects.type === "loading" || projects.type === "unloaded" ? (
             <Banner tone="neutral">Loading sessions…</Banner>
@@ -439,11 +456,13 @@ export function AppRigView(props: AppRigViewProps) {
                             if (openGroup) props.workspace.fileOpen(openGroup.id, path);
                         }}
                         onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
+                        onPanelClose={() => props.workspace.panel.panelToggle()}
                         onScopeChange={(scope) => {
                             if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
                         }}
                         onToggle={(path) => props.workspace.fileTreeToggle(path)}
                         panel={panel}
+                        previewTool={previewTool}
                         scope={workspace.fileScope}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
@@ -633,15 +652,17 @@ export function AppRigView(props: AppRigViewProps) {
                                         void props.workspace.openIn(openGroup.id, id);
                                     }}
                                 />
-                                <Button
-                                    aria-label={panel.open ? "Hide panel" : "Show panel"}
-                                    aria-pressed={panel.open}
-                                    icon={panel.open ? "panel-collapse" : "panel-expand"}
-                                    iconOnly
-                                    onClick={() => props.workspace.panel.panelToggle()}
-                                    size="small"
-                                    variant="ghost"
-                                />
+                                {!panel.open ? (
+                                    <Button
+                                        aria-label="Show panel"
+                                        aria-pressed={false}
+                                        icon="panel-expand"
+                                        iconOnly
+                                        onClick={() => props.workspace.panel.panelToggle()}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                ) : null}
                             </>
                         }
                         icon={openGroup.home ? "home" : "inbox"}
@@ -1066,6 +1087,7 @@ function RigConversationSurface(props: {
             onComposerSend={() => workspace.composerTextSubmit()}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
             onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
+            onToolSelect={(entryId) => workspace.panel.previewOpen(entryId)}
             onRequestAnswer={(requestId, answers) =>
                 swallow(workspace.answerInput({ requestId, answers }))
             }
@@ -1265,9 +1287,11 @@ function RigPanelBody(props: {
     onFileOpen: (path: string) => void;
     onFileSelect: (path: string) => void;
     onLayoutChange: (layout: RigFileLayout) => void;
+    onPanelClose: () => void;
     onScopeChange: (scope: RigFileScope) => void;
     onToggle: (path: string) => void;
     panel: RigPanelSnapshot;
+    previewTool?: ConversationToolCall;
     scope: RigFileScope;
     selectedPath?: string;
     store: RigPanelStore;
@@ -1289,23 +1313,71 @@ function RigPanelBody(props: {
         props.layout === "tree" ? fileTreeBuild(entries, props.expanded) : fileTreeFlatten(entries);
     const loading = all && props.workspaceFilesLoading;
     const count = entries.length;
+    const activeToolTab = props.panel.tabs.find((tab) => tab.id === props.panel.activeViewId);
+    const tabs: TabItem[] = [
+        { closable: false, icon: "files", id: "files", label: "Files" },
+        ...(props.panel.previewEntryId
+            ? [
+                  {
+                      closable: true,
+                      icon:
+                          props.previewTool?.presentation?.type === "fileDiff"
+                              ? ("doc" as const)
+                              : props.previewTool?.presentation?.type === "execCommand" ||
+                                  props.previewTool?.presentation?.type ===
+                                      "backgroundTerminalInteraction"
+                                ? ("terminal" as const)
+                                : ("zap" as const),
+                      id: "preview",
+                      label: "Preview",
+                      preview: true,
+                  },
+              ]
+            : []),
+        ...panelTabs(props.panel),
+    ];
     return (
         <>
-            <PanelHeader />
-            <SplitColumn
-                bottom={
-                    <RigPanelTerminals
-                        canStart={props.canStartTerminal}
-                        panel={props.panel}
-                        store={props.store}
-                    />
+            <PanelHeader edgeControl>
+                <Button
+                    aria-label="Hide panel"
+                    aria-pressed
+                    icon="panel-collapse"
+                    iconOnly
+                    onClick={props.onPanelClose}
+                    size="small"
+                    variant="ghost"
+                />
+            </PanelHeader>
+            <TabbedPane
+                actions={
+                    props.canStartTerminal ? (
+                        <Button
+                            aria-label="New terminal"
+                            icon="plus"
+                            iconOnly
+                            onClick={() => props.store.terminalAdd()}
+                            size="small"
+                            variant="ghost"
+                        />
+                    ) : undefined
                 }
-                defaultBottomHeight={320}
-                minBottomHeight={160}
-                minTopHeight={120}
-                resizeLabel="Resize terminal section"
-                top={
-                    <>
+                activeId={props.panel.activeViewId}
+                closeLabel="Close tab"
+                onClose={(tabId) => {
+                    if (tabId === "preview") props.store.previewClose();
+                    else props.store.tabClose(tabId as RigPanelTabId);
+                }}
+                onSelect={(tabId) => {
+                    if (tabId === "files") props.store.filesSelect();
+                    else if (tabId === "preview" && props.panel.previewEntryId)
+                        props.store.previewOpen(props.panel.previewEntryId);
+                    else props.store.tabSelect(tabId as RigPanelTabId);
+                }}
+                tabs={tabs}
+            >
+                {props.panel.activeViewId === "files" ? (
+                    <div className="happy2-rig-panel-files">
                         <div className="happy2-rig-file-controls">
                             <SegmentedControl
                                 onChange={(value: string) =>
@@ -1346,97 +1418,41 @@ function RigPanelBody(props: {
                             subtitle={`${String(count)} ${count === 1 ? "file" : "files"}`}
                             title={all ? "Files" : "Changes"}
                         />
-                    </>
-                }
-            />
+                    </div>
+                ) : props.panel.activeViewId === "preview" ? (
+                    props.previewTool ? (
+                        <ToolCallPreview tool={props.previewTool} />
+                    ) : (
+                        <EmptyState
+                            description="The selected call is no longer in this conversation view."
+                            icon="zap"
+                            size="panel"
+                            title="Preview unavailable"
+                        />
+                    )
+                ) : activeToolTab?.kind === "terminal" ? (
+                    <RigTerminalTab
+                        key={activeToolTab.id}
+                        store={props.store}
+                        tabId={activeToolTab.id}
+                    />
+                ) : activeToolTab?.kind === "browser" ? (
+                    <EmptyState
+                        description="A browser tab will render a page here."
+                        icon="globe"
+                        size="panel"
+                        title="Not built yet"
+                    />
+                ) : (
+                    <EmptyState
+                        description="Select Files, a preview, or a live tool tab."
+                        icon="files"
+                        size="panel"
+                        title="Nothing selected"
+                    />
+                )}
+            </TabbedPane>
         </>
-    );
-}
-
-/**
- * The lower half of the panel: the terminal tab strip and the body of whichever
- * tab is selected. With no tabs it offers to start one rather than starting a
- * shell on its own — opening the panel is not consent to run a process in the
- * user's working directory.
- */
-function RigPanelTerminals(props: {
-    canStart: boolean;
-    panel: RigPanelSnapshot;
-    store: RigPanelStore;
-}) {
-    const { panel, store } = props;
-    const activeId = panel.activeTabId;
-    const active = panel.tabs.find((tab) => tab.id === activeId);
-    if (panel.tabs.length === 0)
-        return (
-            <EmptyState
-                action={
-                    props.canStart
-                        ? {
-                              label: "Start terminal",
-                              icon: "terminal",
-                              onClick: () => store.terminalAdd(),
-                          }
-                        : undefined
-                }
-                description={
-                    props.canStart
-                        ? "Run a shell beside the conversation."
-                        : "Start a session before opening a terminal."
-                }
-                icon="terminal"
-                size="panel"
-                title={props.canStart ? "No terminal" : "Terminal unavailable"}
-            />
-        );
-    return (
-        <TabbedPane
-            // Adding a tab is the only control this strip carries. Hiding the panel
-            // belongs to the header's toggle alone: two controls for it put the same
-            // glyph on screen twice, and the one that showed the panel is the one a
-            // reader goes back to.
-            actions={
-                <Button
-                    aria-label="New terminal"
-                    icon="plus"
-                    iconOnly
-                    onClick={() => store.terminalAdd()}
-                    size="small"
-                    variant="ghost"
-                />
-            }
-            activeId={activeId ?? ""}
-            closeLabel="Close tab"
-            onClose={(tabId) => store.tabClose(tabId as RigPanelTabId)}
-            onSelect={(tabId) => store.tabSelect(tabId as RigPanelTabId)}
-            tabs={panelTabs(panel)}
-        >
-            {/* The key is the tab's identity, so selecting another tab mounts its
-            body rather than re-pointing this one at a different terminal — a
-            terminal's scroll position, focus, and grid belong to it alone. */}
-            {active?.kind === "terminal" ? (
-                <RigTerminalTab key={active.id} store={store} tabId={active.id} />
-            ) : active?.kind === "browser" ? (
-                <EmptyState
-                    description="A browser tab will render a page here."
-                    icon="globe"
-                    size="panel"
-                    title="Not built yet"
-                />
-            ) : (
-                <EmptyState
-                    action={{
-                        label: "New terminal",
-                        icon: "plus",
-                        onClick: () => store.terminalAdd(),
-                    }}
-                    description="Open a terminal to work beside the conversation."
-                    icon="terminal"
-                    size="panel"
-                    title="Nothing open"
-                />
-            )}
-        </TabbedPane>
     );
 }
 

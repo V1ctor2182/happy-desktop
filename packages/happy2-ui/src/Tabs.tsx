@@ -15,6 +15,8 @@ export type TabItem = {
     label: string;
     icon?: IconName;
     badge?: number;
+    /** False keeps a permanent tab visible when sibling tabs can be closed. */
+    closable?: boolean;
     /** An italic, replaceable document preview rather than a permanent tab. */
     preview?: boolean;
     /**
@@ -282,7 +284,7 @@ export function Tabs(props: TabsProps) {
                                 tone={active() ? "accent" : "neutral"}
                             />
                         ) : null}
-                        {local.onClose
+                        {local.onClose && tab.closable !== false
                             ? ((close) => (
                                   /* A `span` because the tab itself is the
                                      button: nesting one button inside another is

@@ -148,10 +148,11 @@ const glyphs: Record<IconName, IconGlyph> = {
     moon: { set: "ionicons", name: "moon-outline" },
     "sidebar-collapse": { set: "octicons", name: "sidebar-collapse" },
     "sidebar-expand": { set: "octicons", name: "sidebar-expand" },
-    // The right panel's edge, so the sidebar's own glyphs flipped: the same act,
-    // pointing the other way.
-    "panel-collapse": { set: "octicons", name: "sidebar-collapse", mirrored: true },
-    "panel-expand": { set: "octicons", name: "sidebar-expand", mirrored: true },
+    // Octicons draw these with the rail on the right. AppShell mirrors the same
+    // upstream glyphs for its left sidebar; the panel names stay unmirrored so
+    // the two window edges point in opposite directions.
+    "panel-collapse": { set: "octicons", name: "sidebar-collapse" },
+    "panel-expand": { set: "octicons", name: "sidebar-expand" },
     trash: { set: "ionicons", name: "trash-outline" },
     archive: { set: "ionicons", name: "archive-outline" },
     dot: { set: "ionicons", name: "ellipse" },

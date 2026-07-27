@@ -97,6 +97,8 @@ export type ConversationViewProps = {
     onComposerAttachmentRemove?: (attachmentId: string) => void;
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
+    /** Opens one tool entry in the workspace's replaceable Preview tab. */
+    onToolSelect?: (entryId: string) => void;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -298,6 +300,7 @@ export function ConversationView(props: ConversationViewProps) {
                                 }
                                 onImageOpen={props.onImageOpen}
                                 onRequestAnswer={props.onRequestAnswer}
+                                onToolSelect={props.onToolSelect}
                                 onTraceToggle={props.onTraceToggle}
                                 traceOpen={
                                     entry.kind === "message" &&

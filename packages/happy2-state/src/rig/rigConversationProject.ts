@@ -14,6 +14,7 @@ import type {
     RigSessionSummary,
     RigStreamingMessage,
     RigToolEntry,
+    RigToolPresentation,
     RigToolStatus,
     RigUserInputRequest,
 } from "./rigTypes.js";
@@ -204,6 +205,14 @@ function userEntry(sessionId: string, message: RigMessage, createdAt?: number): 
 
 type RigToolResultBlock = Extract<RigMessage["blocks"][number], { type: "toolResult" }>;
 
+function toolPresentationMerge(
+    call: RigToolPresentation | undefined,
+    result: RigToolPresentation | undefined,
+): RigToolPresentation | undefined {
+    if (call?.type === "exploration") return call;
+    return result ?? call;
+}
+
 /**
  * Pairs every durable tool call with its result, keyed by the call's positional
  * entry id rather than by tool call id. The daemon delivers a call and its result
@@ -281,7 +290,10 @@ function appendAgentEntries(
                         display: result?.display,
                         failed: result?.failed ?? false,
                         failure: result?.failure,
-                        presentation: block.presentation ?? result?.presentation,
+                        presentation: toolPresentationMerge(
+                            block.presentation,
+                            result?.presentation,
+                        ),
                     }),
                 },
             });
@@ -438,7 +450,9 @@ export function rigConversationBuild(
     const streaming = input.streaming;
     if (streaming)
         streaming.blocks.forEach((block, index) => {
-            const id = `${streaming.runId}:stream:${index}`;
+            // Streaming and durable projection share the daemon-owned message
+            // identity, so settlement updates these rows instead of re-keying them.
+            const id = `${streaming.messageId}:${index}`;
             if (block.kind === "text")
                 entries.push(
                     messageEntry({

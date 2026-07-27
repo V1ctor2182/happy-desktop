@@ -49,6 +49,14 @@ export interface TerminalGridSnapshot {
     readonly cursor: TerminalCursorSnapshot | null;
     /** The visible lines, top to bottom; each line lists its non-empty cells. */
     readonly lines: readonly TerminalRowSnapshot[];
+    /**
+     * Lines that have scrolled off the top of the visible grid, oldest first, so
+     * history stays readable above the screen. It is bounded by the emulator's
+     * retention limit, and is empty for a semantic recovery frame, which carries
+     * only the current screen. Cursor coordinates stay relative to `lines`, so
+     * arriving scrollback never moves what the cursor points at.
+     */
+    readonly scrollback: readonly TerminalRowSnapshot[];
 }
 
 /** The live connection state a driver reports to the store. */

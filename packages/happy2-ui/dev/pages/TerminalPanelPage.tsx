@@ -51,6 +51,12 @@ const grid: TerminalGridSnapshot = {
         },
         { cells: run(0, "$ ") },
     ],
+    // Enough history that the specimen actually scrolls. Without it the
+    // blueprint only ever shows a screen that fits, which is exactly the case
+    // where the transcript's scrolling cannot be seen.
+    scrollback: Array.from({ length: 60 }, (_, index) => ({
+        cells: run(0, `happy@rig:/workspace$ echo line ${String(index + 1)}`),
+    })),
 };
 
 function noop(): void {

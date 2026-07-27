@@ -332,7 +332,13 @@ export function rigSessionEventProject(
             }
             const projected = agentEventProject(inner);
             return projected
-                ? { ...base, type: "agent_event", runId: event.data.runId, event: projected }
+                ? {
+                      ...base,
+                      type: "agent_event",
+                      runId: event.data.runId,
+                      ...("messageId" in inner ? { messageId: inner.messageId } : {}),
+                      event: projected,
+                  }
                 : undefined;
         }
         case "agent_message":
@@ -622,6 +628,13 @@ function failureProject(failure: NonNullable<ToolResultBlock["failure"]>): RigTo
 }
 
 function callPresentationProject(presentation: ToolCallPresentation): RigToolPresentation {
+    if (presentation.type === "exec_command") {
+        return {
+            type: "execCommand",
+            command: presentation.command,
+            output: "",
+        };
+    }
     return {
         type: "exploration",
         operations: presentation.operations.map((operation) => ({ ...operation })),
@@ -664,9 +677,11 @@ function fileDiffProject(diff: FileDiff): RigFileDiff {
 
 /**
  * Projects one streaming `AgentLoopEvent` to the chat's `RigAgentEvent`, or
- * `undefined` for loop events the chat surface does not render (iteration start,
- * steering applied, batch rejected, ephemeral status labels, background-process
- * changes — the last is lifted to a session-level event by the caller).
+ * `undefined` for loop events the chat surface does not render (steering
+ * applied, batch rejected, ephemeral status labels, background-process changes
+ * — the last is lifted to a session-level event by the caller). Iteration start
+ * is retained because it introduces the durable message id for every later
+ * streaming block in that inference.
  */
 function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
     switch (event.type) {
@@ -722,6 +737,8 @@ function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
                 maxAttempts: event.maxAttempts,
                 reason: event.reason,
             };
+        case "inference_iteration_start":
+            return { type: "inference_iteration_start", messageId: event.messageId };
         case "tool_execution_start":
             return {
                 type: "tool_execution_start",

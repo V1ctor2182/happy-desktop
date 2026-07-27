@@ -32,7 +32,10 @@ export interface RigPanelTabSnapshot {
 export interface RigPanelSnapshot {
     readonly open: boolean;
     readonly tabs: readonly RigPanelTabSnapshot[];
-    readonly activeTabId?: RigPanelTabId;
+    /** The permanent files view, transient tool preview, or one live tool tab. */
+    readonly activeViewId: "files" | "preview" | RigPanelTabId;
+    /** Conversation entry selected into the replaceable Preview tab. */
+    readonly previewEntryId?: string;
 }
 
 export interface RigPanelStore {
@@ -45,6 +48,12 @@ export interface RigPanelStore {
      * one. The panel shows its own content and offers to start a terminal.
      */
     panelToggle(): void;
+    /** Selects the permanent workspace-files tab and opens the panel. */
+    filesSelect(): void;
+    /** Opens or replaces the transient Preview tab with one conversation tool entry. */
+    previewOpen(entryId: string): void;
+    /** Closes the transient Preview tab and returns to Files. */
+    previewClose(): void;
     /** Adds a terminal tab to the open conversation and selects it. */
     terminalAdd(): void;
     tabSelect(tabId: RigPanelTabId): void;
@@ -103,21 +112,24 @@ const NO_TABS: readonly RigPanelTabSnapshot[] = [];
 export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     const listeners = new Set<() => void>();
     const tabs: Tab[] = [];
-    /** Which tab each conversation had selected, so returning to it lands there. */
+    /** Which live tool tab each conversation had selected, so returning to it lands there. */
     const activeByConversation = new Map<RigSessionId, RigPanelTabId>();
     let conversationId: RigSessionId | undefined;
     let open = false;
+    let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
+    let previewEntryId: string | undefined;
+    let previewConversationId: RigSessionId | undefined;
     let nextTabNumber = 1;
     let disposed = false;
-    let snapshot: RigPanelSnapshot = { open: false, tabs: NO_TABS };
+    let snapshot: RigPanelSnapshot = { activeViewId: "files", open: false, tabs: NO_TABS };
 
     const project = (): RigPanelSnapshot => {
         const visible = tabs.filter((tab) => tab.conversationId === conversationId);
-        const active = conversationId ? activeByConversation.get(conversationId) : undefined;
         return {
+            activeViewId,
             open,
             tabs: visible.map((tab) => ({ id: tab.id, kind: tab.kind, label: tab.label })),
-            ...(active === undefined ? {} : { activeTabId: active }),
+            ...(previewEntryId === undefined ? {} : { previewEntryId }),
         };
     };
 
@@ -125,7 +137,8 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const next = project();
         if (
             next.open === snapshot.open &&
-            next.activeTabId === snapshot.activeTabId &&
+            next.activeViewId === snapshot.activeViewId &&
+            next.previewEntryId === snapshot.previewEntryId &&
             next.tabs.length === snapshot.tabs.length &&
             next.tabs.every((tab, index) => {
                 const before = snapshot.tabs[index];
@@ -141,6 +154,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         // Unchanged rows keep their identity so a tab strip re-renders only the
         // tab that actually changed.
         snapshot = {
+            activeViewId: next.activeViewId,
             open: next.open,
             tabs: next.tabs.map((tab, index) => {
                 const before = snapshot.tabs[index];
@@ -151,7 +165,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                     ? before
                     : tab;
             }),
-            ...(next.activeTabId === undefined ? {} : { activeTabId: next.activeTabId }),
+            ...(next.previewEntryId === undefined ? {} : { previewEntryId: next.previewEntryId }),
         };
         for (const listener of listeners) listener();
     };
@@ -170,6 +184,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             terminal: deps.terminalOpen(session),
         });
         activeByConversation.set(session, id);
+        activeViewId = id;
     };
 
     const tabDispose = (index: number): void => {
@@ -178,8 +193,13 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         if (!removed) return;
         if (activeByConversation.get(removed.conversationId) !== removed.id) return;
         const sibling = tabs.find((tab) => tab.conversationId === removed.conversationId);
-        if (sibling) activeByConversation.set(removed.conversationId, sibling.id);
-        else activeByConversation.delete(removed.conversationId);
+        if (sibling) {
+            activeByConversation.set(removed.conversationId, sibling.id);
+            activeViewId = sibling.id;
+        } else {
+            activeByConversation.delete(removed.conversationId);
+            activeViewId = "files";
+        }
     };
 
     return {
@@ -194,6 +214,27 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open = !open;
             recompute();
         },
+        filesSelect() {
+            if (disposed) return;
+            activeViewId = "files";
+            open = true;
+            recompute();
+        },
+        previewOpen(entryId) {
+            if (disposed || !conversationId) return;
+            previewEntryId = entryId;
+            previewConversationId = conversationId;
+            activeViewId = "preview";
+            open = true;
+            recompute();
+        },
+        previewClose() {
+            if (disposed) return;
+            previewEntryId = undefined;
+            previewConversationId = undefined;
+            activeViewId = "files";
+            recompute();
+        },
         terminalAdd() {
             if (disposed || !conversationId) return;
             terminalTabAdd(conversationId);
@@ -205,6 +246,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             const tab = tabs.find((candidate) => candidate.id === tabId);
             if (!tab) return;
             activeByConversation.set(tab.conversationId, tab.id);
+            activeViewId = tab.id;
             recompute();
         },
         tabClose(tabId) {
@@ -220,6 +262,12 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         conversationApply(next) {
             if (disposed || next === conversationId) return;
             conversationId = next;
+            if (previewConversationId !== next) {
+                previewEntryId = undefined;
+                previewConversationId = undefined;
+            }
+            activeViewId =
+                (next === undefined ? undefined : activeByConversation.get(next)) ?? "files";
             recompute();
         },
 

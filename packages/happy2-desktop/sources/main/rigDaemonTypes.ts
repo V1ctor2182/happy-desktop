@@ -264,20 +264,29 @@ export interface AssistantMessage {
 type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
 
 export type AgentLoopEvent =
-    | { readonly type: "text_start" | "text_end" | "thinking_start" | "thinking_end" }
-    | { readonly type: "text_delta" | "thinking_delta"; readonly delta: string }
+    | {
+          readonly type: "text_start" | "text_end" | "thinking_start" | "thinking_end";
+          readonly messageId: string;
+      }
+    | {
+          readonly type: "text_delta" | "thinking_delta";
+          readonly delta: string;
+          readonly messageId: string;
+      }
     | {
           readonly type: "toolcall_start" | "toolcall_delta";
           readonly partial: AssistantMessage;
           readonly contentIndex: number;
           readonly delta: string;
+          readonly messageId: string;
       }
-    | { readonly type: "toolcall_end"; readonly toolCall: ToolCall }
-    | { readonly type: "done"; readonly reason: StopReason }
+    | { readonly type: "toolcall_end"; readonly toolCall: ToolCall; readonly messageId: string }
+    | { readonly type: "done"; readonly reason: StopReason; readonly messageId: string }
     | {
           readonly type: "error";
           readonly reason: string;
           readonly error: { readonly errorMessage?: string };
+          readonly messageId: string;
       }
     | {
           readonly type: "context_compacted";
@@ -316,12 +325,16 @@ export type AgentLoopEvent =
     | {
           readonly type:
               | "background_processes_stopped"
-              | "inference_iteration_start"
               | "permission_denial_limit_reached"
               | "permission_review"
               | "steering_applied"
               | "tool_batch_rejected"
               | "tool_execution_status";
+      }
+    | {
+          readonly type: "inference_iteration_start";
+          readonly iteration: number;
+          readonly messageId: string;
       }
     | {
           readonly type: "background_processes_changed";

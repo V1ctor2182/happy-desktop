@@ -15,6 +15,8 @@ import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
 export type AgentActivityRowProps = {
     activity: ConversationActivity;
+    /** Opens a tool's complete body in an owner-provided detail surface. */
+    onToolSelect?: (tool: ConversationToolCall) => void;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
     /**
@@ -314,6 +316,7 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
 function AgentToolActivity(props: {
     tool: ConversationToolCall;
     defaultExpanded?: boolean;
+    onSelect?: (tool: ConversationToolCall) => void;
     singleLine?: boolean;
     time?: string;
 }) {
@@ -475,7 +478,16 @@ function AgentToolActivity(props: {
             data-expanded={expanded ? "" : undefined}
             data-happy2-ui="agent-activity-call"
         >
-            {singleLine ? (
+            {singleLine && props.onSelect ? (
+                <button
+                    className="happy2-agent-activity__header"
+                    data-happy2-ui="agent-activity-header"
+                    onClick={() => props.onSelect?.(tool)}
+                    type="button"
+                >
+                    {header}
+                </button>
+            ) : singleLine ? (
                 <div
                     className="happy2-agent-activity__header"
                     data-happy2-ui="agent-activity-header"
@@ -797,6 +809,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
             {activity.kind === "tool" ? (
                 <AgentToolActivity
                     defaultExpanded={props.defaultExpanded}
+                    onSelect={props.onToolSelect}
                     singleLine={props.singleLine}
                     time={props.time}
                     tool={activity.tool}

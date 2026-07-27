@@ -77,15 +77,14 @@
    window furniture rather than a 56px product header the lights float inside.
    The 28px toggle centres on the lights' axis at y=6. */
 .happy2-app-shell[data-window-controls] .happy2-sidebar__header,
-.happy2-app-shell[data-window-controls] .happy2-channel-header {
+.happy2-app-shell[data-window-controls] .happy2-channel-header,
+.happy2-app-shell[data-window-controls] .happy2-panel-header {
     height: 40px;
 }
 
-/* Where the sidebar toggle docks, and therefore how much of the row ahead of it
-   is window furniture. The native controls occupy x=14…68, so the toggle sits at
-   x=84…112 and both gaps in the row — lights to toggle, toggle to heading — are
-   the same 16px. Full screen takes the lights away and the toggle takes the
-   window's own left margin instead; everything keyed to this inset follows it. */
+/* The native controls occupy x=14…68, so sidebar content begins after their
+   16px trailing clearance. In full screen the controls disappear and content
+   returns to the window's ordinary 12px inset. */
 .happy2-app-shell[data-window-controls] {
     --happy2-app-shell-chrome-inset: 84px;
 }
@@ -94,12 +93,13 @@
     --happy2-app-shell-chrome-inset: 12px;
 }
 
-/* The heading starts one 28px toggle plus that same 16px gap past the inset. */
+/* Keep sidebar headings clear of the native traffic lights. The collapse
+   control is independently docked to the sidebar's right edge. */
 .happy2-app-shell[data-window-controls]
     .happy2-app-shell__sidebar
     > .happy2-sidebar
     > .happy2-sidebar__header {
-    padding-left: calc(var(--happy2-app-shell-chrome-inset) + 44px);
+    padding-left: var(--happy2-app-shell-chrome-inset);
 }
 
 /* Same reservation on whichever strip heads the workspace once the sidebar is
@@ -225,12 +225,11 @@
     cursor: pointer;
 }
 
-/* On desktop the toggle docks beside the traffic lights instead, so hiding and
-   showing the sidebar never moves it. */
+/* The expanded control belongs at the sidebar's inner/right edge. Its collapsed
+   counterpart still moves beside the traffic lights because the sidebar edge no
+   longer exists while hidden. */
 .happy2-app-shell[data-window-controls] .happy2-app-shell__sidebar-collapse {
     top: 6px;
-    right: auto;
-    left: var(--happy2-app-shell-chrome-inset);
 }
 
 .happy2-app-shell__sidebar-collapse:hover {

@@ -46,21 +46,6 @@ body {
 }
 
 /*
- * The changed-file panel's two switches: which files are listed, and whether
- * they nest. They sit above the panel's own header so the header keeps naming
- * what is below it rather than competing with the controls that choose it.
- */
-.happy2-rig-file-controls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--divider);
-}
-
-/*
  * The create dialog body: the task, then where and how it runs. The task gets
  * the room because it is the thing being decided; the rest is one row of
  * pickers under it.
