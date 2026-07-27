@@ -259,10 +259,6 @@ export function Message(props: MessageProps) {
     const segments = (): MessageSegment[] =>
         typeof local.body === "string" ? [{ kind: "text", text: local.body }] : local.body;
     const isMarkdownBody = () => typeof local.body === "string";
-    /* A string body renders as Markdown; recompiles only when the streamed text
-       changes, so an in-place stream tick reuses the surrounding row and swaps
-       just the body nodes. Generation status stays outside the Markdown output. */
-    const markdownBody = typeof local.body === "string" ? renderMessageMarkdown(local.body) : null;
     const hasAttachments = () => hasRenderableChild(attachments);
     const grouped = () => local.grouped || local.compact;
     const showIncomingIdentity = () => !local.own && !grouped();
@@ -393,13 +389,9 @@ export function Message(props: MessageProps) {
                 ref={body}
             >
                 {ownAutomatedLine}
-                {markdownBody}
-                {inlineIncomingHoverMeta ? (
-                    <>
-                        {"\u00a0"}
-                        {inlineIncomingHoverMeta}
-                    </>
-                ) : null}
+                {typeof local.body === "string"
+                    ? renderMessageMarkdown(local.body, inlineIncomingHoverMeta ?? undefined)
+                    : null}
                 {/* An empty generated reply keeps a non-breaking-space line box
                     so generation-state changes cannot collapse the message row. */}
                 {!local.body && local.generationStatus !== undefined ? (
@@ -579,10 +571,13 @@ export type MessageListProps = {
     className?: string;
     /**
      * A row at the end of the list's content, below the last message. It is
-     * part of the scrolled content, not an overlay or sticky chrome, so it
-     * scrolls with the transcript the way every other row does.
+     * part of the virtualized row collection with a reserved stable key, not an
+     * overlay or sticky chrome, so it scrolls and reconciles like every other
+     * transcript row.
      */
     footer?: ReactNode;
+    /** Fixed height supplied to the virtualizer for the stable footer row. */
+    footerHeight?: number;
     /**
      * Height of row `index` at the list's current content width, computed from
      * the caller's own data rather than from the DOM. Every row is still
@@ -612,8 +607,13 @@ export interface MessageListScrollPosition {
 }
 /** A reader this close to the bottom (px) still follows appended content. */
 const FOLLOW_BOTTOM_THRESHOLD = 8;
+/** Transcript clearances represented inside the virtualizer's coordinate space. */
+const MESSAGE_LIST_PADDING_START = 12;
+const MESSAGE_LIST_PADDING_END = 8;
 /** Row height assumed before anything has ever been measured. */
 const ROW_SIZE_FALLBACK = 72;
+/** Reserved stable entity key for the optional final footer row. */
+const MESSAGE_LIST_FOOTER_KEY = "__happy2_message_list_footer__";
 /**
  * Mean height of the rows a previous lifetime actually measured. Every mounted
  * row is measured for real, so this estimate only ever sizes rows the reader has
@@ -650,9 +650,31 @@ export function MessageList(props: MessageListProps) {
     const measurements = useRef(restore.current?.measurements);
     const positionChange = useRef(props.onScrollPositionChange);
     positionChange.current = props.onScrollPositionChange;
+    const interactiveResize = useRef(false);
+    const interactiveResizeIndex = useRef<number | undefined>(undefined);
+    const scrollPositionSync = useRef<() => void>(() => undefined);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
-    const items = Children.toArray(props.children);
+    const entryItems = Children.toArray(props.children);
+    const footerIndex = props.footer === undefined ? undefined : entryItems.length;
+    const items =
+        footerIndex === undefined
+            ? entryItems
+            : [
+                  ...entryItems,
+                  <div
+                      className="happy2-message-list__footer"
+                      data-happy2-ui="message-list-footer"
+                      data-item-id="working-status"
+                      key={MESSAGE_LIST_FOOTER_KEY}
+                  >
+                      {props.footer}
+                  </div>,
+              ];
     const virtualized = props.virtualize === true;
+    const estimateItemSize = (index: number, width: number) =>
+        index === footerIndex
+            ? (props.footerHeight ?? estimatedSize.current)
+            : (props.estimateRowSize?.(index, width) ?? estimatedSize.current);
     /**
      * Total height of every row, asking the caller's estimator for each one and
      * falling back to the measured average only where it declines to answer.
@@ -660,26 +682,21 @@ export function MessageList(props: MessageListProps) {
      */
     const estimatedContentHeight = () => {
         const width = list.current?.clientWidth ?? 0;
-        let total = 0;
+        let total = MESSAGE_LIST_PADDING_START + MESSAGE_LIST_PADDING_END;
         for (let index = 0; index < items.length; index += 1)
-            total += props.estimateRowSize?.(index, width) ?? estimatedSize.current;
+            total += estimateItemSize(index, width);
         return total;
     };
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
     // remains outside compiler memoization while every rendered row stays eligible.
     // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
-        /* Chat anchoring is the virtualizer's job, not the DOM's. `end` keeps the
-           row under the reader pinned when a row above it settles to its real
-           height — a bubble's Markdown, code block, or image resolving after
-           mount no longer shoves the text they are reading. `followOnAppend`
-           re-pins the bottom on a new message, but only for a reader who was
-           already there. Both replace hand-written `scrollTop` writes, which ran
-           after the virtualizer's own offset compensation and cancelled it. */
-        anchorTo: "end",
+        /* Automatic growth uses the end anchor so a following reader stays at
+           the newest content. An explicitly toggled row temporarily uses its
+           start edge instead: its header stays put and its body opens downward. */
+        anchorTo: interactiveResize.current ? "start" : "end",
         count: virtualized ? items.length : 0,
-        estimateSize: (index) =>
-            props.estimateRowSize?.(index, list.current?.clientWidth ?? 0) ?? estimatedSize.current,
+        estimateSize: (index) => estimateItemSize(index, list.current?.clientWidth ?? 0),
         followOnAppend: true,
         getItemKey: (index) => {
             const item = items[index];
@@ -697,12 +714,48 @@ export function MessageList(props: MessageListProps) {
             ? [...restore.current.measurements]
             : [],
         overscan: 12,
+        /*
+         * These are the same visual clearances the non-virtual list owns in CSS.
+         * Keeping them here makes row starts, total size, scrollTop, anchoring,
+         * and restored measurements use one coordinate system.
+         */
+        paddingEnd: MESSAGE_LIST_PADDING_END,
+        paddingStart: MESSAGE_LIST_PADDING_START,
         /* Same "still following" tolerance the scroll listener applies, so a
            reader parked one subpixel off the bottom is treated identically by
            the virtualizer's append-follow and by this component's reporting. */
         scrollEndThreshold: FOLLOW_BOTTOM_THRESHOLD,
         useFlushSync: false,
     });
+    const beginInteractiveResize: HTMLAttributes<HTMLDivElement>["onClickCapture"] = (event) => {
+        const target = event.target instanceof Element ? event.target : undefined;
+        const toggle = target?.closest<HTMLElement>("button[aria-expanded]");
+        const row = toggle?.closest<HTMLElement>(".happy2-message-list__virtual-row");
+        const index = Number(row?.dataset.index);
+        if (!toggle || !row || !list.current?.contains(toggle) || !Number.isInteger(index)) return;
+
+        interactiveResize.current = true;
+        interactiveResizeIndex.current = index;
+        /*
+         * A child-owned expansion can commit without re-rendering MessageList
+         * first. Change the live instance synchronously in capture phase so its
+         * ResizeObserver sees the interaction anchor, then restore the normal
+         * automatic-growth policy after layout has settled.
+         */
+        virtualizer.options.anchorTo = "start";
+        virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+            item.index !== interactiveResizeIndex.current &&
+            item.start < (list.current?.scrollTop ?? 0);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                interactiveResize.current = false;
+                interactiveResizeIndex.current = undefined;
+                virtualizer.options.anchorTo = "end";
+                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+            });
+        });
+    };
+    const virtualContentSize = virtualized ? virtualizer.getTotalSize() : 0;
     const scrollToBottom = () => {
         const element = list.current;
         if (element) element.scrollTop = element.scrollHeight - element.clientHeight;
@@ -731,13 +784,21 @@ export function MessageList(props: MessageListProps) {
                 measurements: measurements.current,
             });
         };
+        let viewportHeight = element.clientHeight;
+        let bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - viewportHeight);
         const onScroll = () => {
-            following.current =
-                element.scrollHeight - element.scrollTop - element.clientHeight <=
-                FOLLOW_BOTTOM_THRESHOLD;
+            /*
+             * A growing viewport can clamp scrollTop before ResizeObserver runs.
+             * Ignore that transient scroll event so it cannot replace the bottom
+             * offset captured against the previous viewport height.
+             */
+            if (element.clientHeight !== viewportHeight) return;
+            bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - viewportHeight);
+            following.current = bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
+        scrollPositionSync.current = onScroll;
         /* Only the unmeasured path needs a DOM watcher to stay pinned. A
            virtualized list learns about the same growth as a measurement and
            compensates the offset itself; re-writing `scrollTop` on every
@@ -749,27 +810,62 @@ export function MessageList(props: MessageListProps) {
                   if (following.current) scrollToBottom();
               });
         observer?.observe(element, { characterData: true, childList: true, subtree: true });
+        /*
+         * The composer is a flex sibling of this scrollport. As its textarea
+         * grows or shrinks, preserve the reader's exact distance from the
+         * transcript bottom by restoring the offset captured before the resize.
+         * Computing the final target avoids double-adjusting when the browser
+         * has already clamped scrollTop as a growing viewport collapses the
+         * composer. This applies equally to a following reader and someone
+         * parked higher in history.
+         */
+        const viewportObserver = new ResizeObserver(() => {
+            const nextHeight = element.clientHeight;
+            if (nextHeight === viewportHeight) return;
+            viewportHeight = nextHeight;
+            element.scrollTop = Math.max(0, element.scrollHeight - nextHeight - bottomOffset);
+            bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - nextHeight);
+            positionReport();
+        });
+        viewportObserver.observe(element);
         return () => {
             if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
             observer?.disconnect();
+            viewportObserver.disconnect();
+            scrollPositionSync.current = () => undefined;
             element.removeEventListener("scroll", onScroll);
         };
     }, [virtualized, virtualizer]);
     useLayoutEffect(() => {
-        // A virtualized list follows appended rows through `followOnAppend`,
-        // which anchors on the measured last row instead of an estimated one.
-        if (virtualized || !following.current) return;
+        /*
+         * A resized virtual row updates the virtualizer before React commits the
+         * sizer's new height. Re-pin a following reader after that commit, when
+         * the browser can accept the final scroll offset without clamping it to
+         * the old maximum. Parked readers stay under the virtualizer's own
+         * item-size compensation and are never moved here.
+         */
+        void virtualContentSize;
+        if (interactiveResize.current) {
+            scrollPositionSync.current();
+            return;
+        }
+        if (!following.current) return;
         scrollToBottom();
-    }, [items.length, virtualized]);
+    }, [items.length, virtualContentSize]);
     return (
         <div
             className={["happy2-message-list", props.className].filter(Boolean).join(" ")}
             data-happy2-ui="message-list"
+            onClickCapture={beginInteractiveResize}
             ref={list}
             style={props.style}
         >
-            <div className="happy2-message-list__content" data-happy2-ui="message-list-content">
+            <div
+                className="happy2-message-list__content"
+                data-happy2-ui="message-list-content"
+                data-virtualized={virtualized ? "" : undefined}
+            >
                 <div
                     aria-hidden="true"
                     className="happy2-message-list__spacer"
@@ -785,6 +881,9 @@ export function MessageList(props: MessageListProps) {
                             <div
                                 className="happy2-message-list__virtual-row"
                                 data-index={virtualItem.index}
+                                data-item-id={
+                                    virtualItem.index === footerIndex ? "working-status" : undefined
+                                }
                                 key={virtualItem.key}
                                 ref={virtualizer.measureElement}
                                 style={{ transform: `translateY(${virtualItem.start}px)` }}
@@ -794,16 +893,8 @@ export function MessageList(props: MessageListProps) {
                         ))}
                     </div>
                 ) : (
-                    props.children
+                    items
                 )}
-                {props.footer !== undefined ? (
-                    <div
-                        className="happy2-message-list__footer"
-                        data-happy2-ui="message-list-footer"
-                    >
-                        {props.footer}
-                    </div>
-                ) : null}
             </div>
         </div>
     );

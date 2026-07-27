@@ -349,6 +349,13 @@ export {
 } from "./rig/rigConversationProject.js";
 export { rigConversationAttachTurnTraces } from "./rig/rigConversationTurnTrace.js";
 export {
+    rigModelStoreCreate,
+    type RigModelStore,
+    type RigModelStoreOptions,
+    type RigModelStoreReadySnapshot,
+    type RigModelStoreSnapshot,
+} from "./rig/rigModelStore.js";
+export {
     rigClockStoreCreate,
     type RigClockStore,
     type RigClockStoreOptions,

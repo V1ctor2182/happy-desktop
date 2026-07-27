@@ -32,7 +32,7 @@ export function TurnSummary(props: TurnSummaryProps) {
         "style",
     ]);
     const [copied, setCopied] = useState(false);
-    const copiedTimer = useRef<ReturnType<typeof setTimeout>>();
+    const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const failed = local.status === "failed";
     const steered = local.status === "steered";
     const label =

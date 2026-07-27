@@ -3,6 +3,8 @@ import { partitionComponentProps } from "./componentProps";
 import { Spinner } from "./Spinner";
 
 export interface AgentWorkingStatusProps {
+    /** Paints the status without changing its stable layout slot or DOM identity. */
+    readonly active?: boolean;
     readonly agents?: number;
     readonly backgroundTasks?: number;
     readonly className?: string;
@@ -11,6 +13,9 @@ export interface AgentWorkingStatusProps {
     readonly elapsedMs?: number;
     readonly style?: CSSProperties;
 }
+
+/** Fixed virtualized row height, including the status's 4px leading clearance. */
+export const AGENT_WORKING_STATUS_ROW_HEIGHT = 36;
 
 /** Formats an active turn duration without allowing its units to split across lines. */
 function elapsedFormat(elapsedMs: number): string {
@@ -24,6 +29,7 @@ function elapsedFormat(elapsedMs: number): string {
 /** Live footer for one active agent turn: clock, running agents, and background work. */
 export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
     const [local] = partitionComponentProps(props, [
+        "active",
         "agents",
         "backgroundTasks",
         "className",
@@ -40,8 +46,10 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         );
     return (
         <div
-            aria-live="polite"
+            aria-hidden={local.active === false ? "true" : undefined}
+            aria-live={local.active === false ? undefined : "polite"}
             className={["happy2-agent-working-status", local.className].filter(Boolean).join(" ")}
+            data-active={local.active === false ? undefined : ""}
             data-happy2-ui="agent-working-status"
             data-testid={local["data-testid"]}
             style={local.style}

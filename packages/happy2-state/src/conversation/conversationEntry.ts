@@ -91,6 +91,19 @@ export interface ConversationFileDiff {
 /** The rich body an activity expands into, when the producer knows its shape. */
 export type ConversationActivityPresentation =
     | {
+          readonly type: "exploration";
+          readonly operations: readonly (
+              | { readonly kind: "list"; readonly target: string }
+              | { readonly kind: "read"; readonly name: string }
+              | {
+                    readonly kind: "search";
+                    readonly command: string;
+                    readonly path?: string;
+                    readonly query?: string;
+                }
+          )[];
+      }
+    | {
           readonly type: "fileDiff";
           readonly files: readonly ConversationFileDiff[];
           readonly omittedFiles?: number;

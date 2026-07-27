@@ -75,6 +75,11 @@
     color: var(--text-secondary);
 }
 
+.happy2-agent-activity[data-failed] .happy2-agent-activity__glyph,
+.happy2-agent-activity[data-presentation="shell"][data-tone="error"] .happy2-agent-activity__glyph {
+    color: var(--status-error);
+}
+
 .happy2-agent-activity__verb {
     flex: none;
     font-weight: 600;
@@ -90,6 +95,20 @@
     font-family: var(--happy2-font-mono);
     font-size: 13px;
     color: var(--text);
+}
+
+.happy2-agent-activity__file-summary {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.happy2-agent-activity__file-summary .happy2-agent-activity__text {
+    flex: 0 1 auto;
+    font-weight: 600;
 }
 
 .happy2-agent-activity__stats {
@@ -264,11 +283,12 @@
     padding-bottom: 6px;
 }
 
-/* The last action in a contiguous trace block closes with message-sized
- * clearance before prose or a turn footer resumes. */
-.happy2-agent-activity-row--trace-end[data-kind="tool"],
-.happy2-agent-activity-row--trace-end[data-kind="labeled"] {
-    padding-bottom: 14px;
+/* A tool-first turn puts its first row inside the Message that owns the agent
+ * identity line. Message already supplies the transcript inset, so applying
+ * the activity inset again would double-indent the tool. */
+.happy2-message--activity-lead .happy2-agent-activity-row {
+    padding-right: 0;
+    padding-left: 0;
 }
 
 .happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity,
@@ -308,11 +328,10 @@
     font-size: 13px;
 }
 
-.happy2-agent-activity[data-single-line] .happy2-agent-activity__stats {
-    color: var(--warning);
-}
-
-.happy2-agent-activity[data-single-line] .happy2-agent-activity__added,
-.happy2-agent-activity[data-single-line] .happy2-agent-activity__deleted {
-    color: var(--warning);
+.happy2-agent-activity[data-single-line][data-presentation="fileDiff"]
+    .happy2-agent-activity__file-summary
+    .happy2-agent-activity__text {
+    flex: 0 1 auto;
+    font-weight: 600;
+    color: var(--text-secondary);
 }

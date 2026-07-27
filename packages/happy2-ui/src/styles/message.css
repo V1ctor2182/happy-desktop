@@ -44,6 +44,21 @@
     padding-bottom: 4px;
 }
 
+/* A tool-first agent group uses Message only for its identity line. Compact the
+ * attachment slot that carries that first activity and let the trace block own
+ * the space beneath it. */
+.happy2-message--activity-lead {
+    padding-bottom: 0;
+}
+
+.happy2-message--activity-lead .happy2-message__meta {
+    margin-bottom: 0;
+}
+
+.happy2-message.happy2-message--activity-lead:not([data-has-body]) .happy2-message__attachments {
+    margin-top: 0;
+}
+
 /* Sending changes paint only: author, avatar, body, attachments, and reactions
  * keep their exact geometry while the optimistic row waits for confirmation. */
 .happy2-message__gutter,
@@ -505,10 +520,6 @@
     margin-top: 8px;
 }
 
-.happy2-message__body--markdown > .happy2-message__hover-meta {
-    margin-top: 0;
-}
-
 /* Body type ramp adopted from the original Happy Markdown view: 16px/24px
    paragraphs, headings that peak at h2, underlined body-color links, and
    unfilled inline code. */
@@ -517,10 +528,8 @@
     line-height: 24px;
 }
 
-/* A trailing hover-metadata cluster is inline with a final paragraph so its
-   timestamp follows the last glyph instead of the message column's far edge. */
-.happy2-message__body--markdown > p:nth-last-child(2):has(+ .happy2-message__hover-meta) {
-    display: inline;
+.happy2-message__trailing-inline {
+    white-space: nowrap;
 }
 
 .happy2-message__body--markdown h1,
@@ -900,16 +909,23 @@
     background: transparent;
 }
 
-/* The inner content wrapper keeps 12px above the history and a compact 8px
-   clearance beneath its newest message before the composer. It fills the
-   scrollport height so the spacer's `margin-top: auto` still bottom-aligns a
-   short thread, and it preserves the virtual container's offset exactly. */
+/* The non-virtual inner content wrapper keeps 12px above the history and a
+   compact 8px clearance beneath its newest message before the composer. It
+   fills the scrollport height so the spacer's `margin-top: auto` still
+   bottom-aligns a short thread. */
 .happy2-message-list__content {
     position: relative;
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
     padding: 12px 0 8px;
+}
+
+/* A virtual list represents the same clearances as `paddingStart`/`paddingEnd`
+ * so its item offsets and the scrollport's scrollTop share one coordinate
+ * system instead of hiding 12px of layout outside TanStack's geometry. */
+.happy2-message-list__content[data-virtualized] {
+    padding: 0;
 }
 
 /*

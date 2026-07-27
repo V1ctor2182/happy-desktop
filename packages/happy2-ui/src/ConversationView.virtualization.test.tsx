@@ -10,10 +10,10 @@ const settle = async () => {
     for (let index = 0; index < 8; index += 1) await nextFrame();
 };
 
-function composer(): ComposerSnapshot {
+function composer(text = ""): ComposerSnapshot {
     return {
         scopeId: "conversation-1",
-        text: "",
+        text,
         attachments: [],
         revision: 0,
         submission: { status: "idle" },
@@ -138,6 +138,10 @@ function view(entries: readonly ConversationEntry[], width = 900, height = 520) 
     return renderer;
 }
 
+function bottomDistance(element: HTMLElement): number {
+    return element.scrollHeight - element.scrollTop - element.clientHeight;
+}
+
 it("expanding a tool row must not overlap its neighbours", async () => {
     const renderer = view(history(60));
     await renderer.ready();
@@ -148,9 +152,18 @@ it("expanding a tool row must not overlap its neighbours", async () => {
 
     const header = list.querySelector<HTMLElement>('[data-happy2-ui="agent-activity-header"]');
     expect(header, "an expandable activity row is mounted").not.toBeNull();
+    const beforeTop = header!.getBoundingClientRect().top;
+    const beforeScrollTop = list.scrollTop;
     header!.click();
     await settle();
+    expect(header!.getBoundingClientRect().top, "the toggled header stays put").toBe(beforeTop);
+    expect(list.scrollTop, "expansion grows downward").toBe(beforeScrollTop);
     expect(overlaps(list), "after expanding an activity row").toEqual([]);
+
+    header!.click();
+    await settle();
+    expect(header!.getBoundingClientRect().top, "the collapsed header stays put").toBe(beforeTop);
+    expect(list.scrollTop, "collapse keeps the same anchor").toBe(beforeScrollTop);
 });
 
 it("scrolling a mixed virtualized history must not overlap rows", async () => {
@@ -182,6 +195,114 @@ it("narrowing the surface must not overlap rows that reflow taller", async () =>
     surface.style.width = "360px";
     await settle();
     expect(overlaps(list), "after narrowing").toEqual([]);
+});
+
+it("keeps a following reader pinned when a streaming virtual row grows", async () => {
+    const base = history(72);
+    let entries: readonly ConversationEntry[] = [
+        ...base,
+        messageEntry("streaming-reply", "Starting the response.", true),
+    ];
+    let rerender!: () => void;
+    const renderer = createRenderer();
+    function Surface() {
+        const [, bump] = useState(0);
+        rerender = () => bump((value) => value + 1);
+        return (
+            <ConversationView
+                composer={composer()}
+                data-testid="repro"
+                entries={entries}
+                onComposerSend={() => undefined}
+                onComposerValueChange={() => undefined}
+                title="Repro"
+                viewerId="rig:owner"
+            />
+        );
+    }
+    renderer.render(Surface, { width: 900, height: 520 });
+    await renderer.ready();
+    await settle();
+    const list = renderer.$('[data-testid="repro"] [data-happy2-ui="message-list"]')
+        .element as HTMLElement;
+    const before = list.querySelector<HTMLElement>(
+        '[data-happy2-ui="message-list-virtual"] > [data-index="72"]',
+    );
+    expect(before, "streaming row is mounted").not.toBeNull();
+    const beforeHeight = before!.getBoundingClientRect().height;
+    expect(bottomDistance(list), "starts at the bottom").toBeLessThanOrEqual(1);
+
+    entries = [
+        ...base,
+        messageEntry(
+            "streaming-reply",
+            `Starting the response. ${"More streamed text wraps onto another line. ".repeat(36)}`,
+            true,
+        ),
+    ];
+    rerender();
+    await settle();
+
+    const after = list.querySelector<HTMLElement>(
+        '[data-happy2-ui="message-list-virtual"] > [data-index="72"]',
+    );
+    expect(after, "grown streaming row remains mounted").not.toBeNull();
+    expect(after!.textContent, "streamed text reaches the existing row").toContain(
+        "More streamed text wraps onto another line.",
+    );
+    expect(after!.getBoundingClientRect().height, "streaming row grows").toBeGreaterThan(
+        beforeHeight,
+    );
+    expect(bottomDistance(list), "remains pinned after streamed growth").toBeLessThanOrEqual(1);
+    expect(overlaps(list), "resized rows do not overlap").toEqual([]);
+});
+
+it("preserves bottom distance through composer growth and collapse", async () => {
+    const entries = history(72);
+    let composerText = "";
+    let rerender!: () => void;
+    const renderer = createRenderer();
+    function Surface() {
+        const [, bump] = useState(0);
+        rerender = () => bump((value) => value + 1);
+        return (
+            <ConversationView
+                composer={composer(composerText)}
+                data-testid="repro"
+                entries={entries}
+                onComposerSend={() => undefined}
+                onComposerValueChange={() => undefined}
+                title="Repro"
+                viewerId="rig:owner"
+            />
+        );
+    }
+    renderer.render(Surface, { width: 900, height: 520 });
+    await renderer.ready();
+    await settle();
+    const list = renderer.$('[data-testid="repro"] [data-happy2-ui="message-list"]')
+        .element as HTMLElement;
+    list.scrollTop = Math.max(0, list.scrollHeight - list.clientHeight - 120);
+    list.dispatchEvent(new Event("scroll"));
+    await settle();
+    const parkedDistance = bottomDistance(list);
+    expect(parkedDistance, "reader is parked away from the follow threshold").toBeGreaterThan(8);
+
+    composerText = Array.from({ length: 6 }, (_, index) => `Draft line ${index + 1}`).join("\n");
+    rerender();
+    await settle();
+    expect(
+        Math.abs(bottomDistance(list) - parkedDistance),
+        "distance after expansion",
+    ).toBeLessThanOrEqual(1);
+
+    composerText = "";
+    rerender();
+    await settle();
+    expect(
+        Math.abs(bottomDistance(list) - parkedDistance),
+        "distance after collapse",
+    ).toBeLessThanOrEqual(1);
 });
 
 it("settling a streaming run must not overlap rows when keys change", async () => {

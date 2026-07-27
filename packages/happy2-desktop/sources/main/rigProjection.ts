@@ -20,6 +20,7 @@ import type {
     SessionTask,
     SubagentSummary,
     ToolCall,
+    ToolCallPresentation,
     ToolResultBlock,
     ToolResultPresentation,
     UserInputRequest,
@@ -595,6 +596,9 @@ function blockProject(block: AgentBlock): RigBlock {
                 id: block.id,
                 name: block.name,
                 arguments: jsonProject(block.arguments),
+                ...(block.presentation
+                    ? { presentation: callPresentationProject(block.presentation) }
+                    : {}),
             };
         case "tool_result":
             return toolResultProject(block);
@@ -615,6 +619,13 @@ function toolResultProject(block: ToolResultBlock): RigBlock {
 
 function failureProject(failure: NonNullable<ToolResultBlock["failure"]>): RigToolFailure {
     return { kind: failure.kind, ...(failure.message ? { message: failure.message } : {}) };
+}
+
+function callPresentationProject(presentation: ToolCallPresentation): RigToolPresentation {
+    return {
+        type: "exploration",
+        operations: presentation.operations.map((operation) => ({ ...operation })),
+    };
 }
 
 function presentationProject(presentation: ToolResultPresentation): RigToolPresentation {
@@ -717,6 +728,9 @@ function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
                 toolCallId: event.toolCall.id,
                 toolName: event.toolCall.name,
                 arguments: jsonProject(event.toolCall.arguments),
+                ...(event.toolCall.presentation
+                    ? { presentation: callPresentationProject(event.toolCall.presentation) }
+                    : {}),
             };
         case "tool_execution_progress":
             return {

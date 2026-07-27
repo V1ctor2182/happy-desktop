@@ -5,7 +5,7 @@ import type {
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
-import { AgentWorkingStatus } from "./AgentWorkingStatus";
+import { AGENT_WORKING_STATUS_ROW_HEIGHT, AgentWorkingStatus } from "./AgentWorkingStatus";
 import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type ContextItem, type Mentionable } from "./Composer";
@@ -14,12 +14,14 @@ import {
     conversationAgentActivityStartsGroup,
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
+    conversationTurnStatusAfterActivity,
 } from "./conversationMessageGrouped";
 import { conversationRowHeight } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { MessageList, type MessageListScrollPosition } from "./Message";
 import { RigCommandPalette } from "./RigCommandPalette";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import { Spinner } from "./Spinner";
 
 export type ConversationViewProps = {
     /**
@@ -33,6 +35,8 @@ export type ConversationViewProps = {
     subtitle?: string;
     /** True while the agent is working; drives the live activity line. */
     running?: boolean;
+    /** True while the addressed conversation is hydrating its transcript. */
+    loading?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
     elapsedMs?: number;
     /** Subagents currently running under the active turn. */
@@ -109,16 +113,6 @@ function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60) return `${seconds}s`;
     return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
-}
-
-function turnStatusAfterActivity(entries: readonly ConversationEntry[], index: number): boolean {
-    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-        const entry = entries[cursor];
-        if (entry?.kind === "agentActivity") return true;
-        if (entry?.kind === "turnStatus") return false;
-        if (entry?.kind === "message" && entry.message.sender?.kind !== "agent") return false;
-    }
-    return false;
 }
 
 /** The draft's attachments as composer chips; an image chip carries its size. */
@@ -219,6 +213,13 @@ export function ConversationView(props: ConversationViewProps) {
                 <div className="happy2-conversation__panel" data-happy2-ui="conversation-panel">
                     {props.panel}
                 </div>
+            ) : props.loading ? (
+                <div
+                    className="happy2-conversation__empty happy2-conversation__loading"
+                    data-happy2-ui="conversation-loading"
+                >
+                    <Spinner label="Loading conversation" size={20} tone="muted" variant="line" />
+                </div>
             ) : props.entries.length === 0 ? (
                 <div className="happy2-conversation__empty" data-happy2-ui="conversation-empty">
                     <EmptyState
@@ -238,15 +239,15 @@ export function ConversationView(props: ConversationViewProps) {
                         })
                     }
                     footer={
-                        props.running ? (
-                            <AgentWorkingStatus
-                                agents={props.runningAgents}
-                                backgroundTasks={props.backgroundTasks}
-                                className="happy2-conversation-turn-status"
-                                elapsedMs={props.elapsedMs}
-                            />
-                        ) : undefined
+                        <AgentWorkingStatus
+                            active={props.running === true}
+                            agents={props.runningAgents}
+                            backgroundTasks={props.backgroundTasks}
+                            className="happy2-conversation-turn-status"
+                            elapsedMs={props.elapsedMs}
+                        />
                     }
+                    footerHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}
                     initialScrollPosition={props.scrollPosition}
                     // The conversation is this list's lifetime: switching to
                     // another one mounts its own list, which is what lets each
@@ -272,18 +273,15 @@ export function ConversationView(props: ConversationViewProps) {
                                         : undefined
                                 }
                                 className={
-                                    entry.kind === "agentActivity" &&
-                                    props.entries[index + 1]?.kind !== "agentActivity"
-                                        ? "happy2-agent-activity-row--trace-end"
-                                        : entry.kind === "turnStatus" &&
-                                            turnStatusAfterActivity(props.entries, index)
-                                          ? "happy2-turn-status--after-trace"
-                                          : conversationEntryResumesAfterActivity(
-                                                  props.entries,
-                                                  index,
-                                              )
-                                            ? "happy2-conversation__resumed"
-                                            : undefined
+                                    entry.kind === "turnStatus" &&
+                                    conversationTurnStatusAfterActivity(props.entries, index)
+                                        ? "happy2-turn-status--after-trace"
+                                        : conversationEntryResumesAfterActivity(
+                                                props.entries,
+                                                index,
+                                            )
+                                          ? "happy2-conversation__resumed"
+                                          : undefined
                                 }
                                 entry={entry}
                                 grouped={

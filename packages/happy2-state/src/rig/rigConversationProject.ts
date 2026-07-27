@@ -281,7 +281,7 @@ function appendAgentEntries(
                         display: result?.display,
                         failed: result?.failed ?? false,
                         failure: result?.failure,
-                        presentation: result?.presentation,
+                        presentation: block.presentation ?? result?.presentation,
                     }),
                 },
             });
@@ -297,6 +297,76 @@ function sequenced(entries: readonly ConversationEntry[]): readonly Conversation
             return { ...entry, message: { ...entry.message, sequence, changePts: sequence } };
         return { ...entry, sequence };
     });
+}
+
+function explorationEntry(
+    entry: ConversationEntry | undefined,
+): Extract<ConversationEntry, { kind: "agentActivity" }> | undefined {
+    return entry?.kind === "agentActivity" &&
+        entry.activity.kind === "tool" &&
+        entry.activity.tool.presentation?.type === "exploration"
+        ? entry
+        : undefined;
+}
+
+function explorationStatusMerge(
+    left: ConversationActivityStatus,
+    right: ConversationActivityStatus,
+): ConversationActivityStatus {
+    if (left === "failed" || right === "failed") return "failed";
+    if (left === "awaitingApproval" || right === "awaitingApproval") return "awaitingApproval";
+    if (left === "running" || right === "running") return "running";
+    if (left === "stopped" || right === "stopped") return "stopped";
+    return "success";
+}
+
+/**
+ * Collapses each consecutive run of explicitly presented exploration calls
+ * under its first stable entry id. Name-only tool heuristics never participate:
+ * Rig's call presentation is the authority for grouping and operation details.
+ */
+function explorationEntriesCollapse(entries: readonly ConversationEntry[]): ConversationEntry[] {
+    const collapsed: ConversationEntry[] = [];
+    for (const entry of entries) {
+        const exploration = explorationEntry(entry);
+        const previous = explorationEntry(collapsed[collapsed.length - 1]!);
+        if (!exploration || !previous) {
+            collapsed.push(entry);
+            continue;
+        }
+        if (exploration.activity.kind !== "tool" || previous.activity.kind !== "tool") {
+            collapsed.push(entry);
+            continue;
+        }
+        const left = previous.activity.tool;
+        const right = exploration.activity.tool;
+        const leftPresentation = left.presentation;
+        const rightPresentation = right.presentation;
+        if (leftPresentation?.type !== "exploration" || rightPresentation?.type !== "exploration") {
+            collapsed.push(entry);
+            continue;
+        }
+        collapsed[collapsed.length - 1] = {
+            ...previous,
+            activity: {
+                kind: "tool",
+                tool: {
+                    ...left,
+                    status: explorationStatusMerge(left.status, right.status),
+                    failed: left.failed || right.failed,
+                    ...(right.failure ? { failure: right.failure } : {}),
+                    presentation: {
+                        type: "exploration",
+                        operations: [
+                            ...leftPresentation.operations,
+                            ...rightPresentation.operations,
+                        ],
+                    },
+                },
+            },
+        };
+    }
+    return collapsed;
 }
 
 export interface RigConversationBuildInput {
@@ -408,7 +478,7 @@ export function rigConversationBuild(
             },
         });
 
-    return sequenced(entries);
+    return sequenced(explorationEntriesCollapse(entries));
 }
 
 /** Falls back through title, recap, and id so a row always names its session. */

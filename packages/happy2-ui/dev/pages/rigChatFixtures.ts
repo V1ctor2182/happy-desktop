@@ -135,6 +135,22 @@ export const rigRunningTool: ConversationToolCall = {
     display: "Searching…",
 };
 
+export const rigExplorationTool: ConversationToolCall = {
+    toolCallId: "tool-exploration",
+    toolName: "exploration",
+    arguments: null,
+    status: "success",
+    failed: false,
+    presentation: {
+        type: "exploration",
+        operations: [
+            { kind: "read", name: "AgentActivityRow.tsx" },
+            { kind: "read", name: "rigConversationProject.ts" },
+            { kind: "search", command: "ToolCallPresentation", query: "ToolCallPresentation" },
+        ],
+    },
+};
+
 export const rigAwaitingTool: ConversationToolCall = {
     toolCallId: "tool-await",
     toolName: "write",

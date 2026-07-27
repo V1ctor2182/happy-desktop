@@ -8,6 +8,7 @@ import {
     type RigConnectionStore,
     type RigDaemonHealth,
     type RigHost,
+    type RigModelStore,
     type RigSessionLocation,
     type RigWorkspaceStore,
 } from "happy2-state";
@@ -20,6 +21,8 @@ export interface RigSession {
     readonly connectionId: number;
     readonly connection: RigConnectionStore;
     readonly host: RigHost;
+    /** Daemon-global model capabilities/defaults and last-used selection. */
+    readonly models: RigModelStore;
     /** The joined session-list + active-chat workspace store for this connection. */
     readonly workspace: RigWorkspaceStore;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
@@ -77,12 +80,26 @@ export function rigSessionStoreCreate(
     deps: RigSessionDeps,
 ): RigSessionStore {
     let session: RigSessionInternal | undefined;
+    let pending:
+        | {
+              readonly connectionId: number;
+              readonly client: RigClient;
+              retry?: ReturnType<typeof setTimeout>;
+          }
+        | undefined;
+    let generation = 0;
     let runtimeUnsubscribe: (() => void) | undefined;
     const listeners = new Set<() => void>();
     const notify = () => {
         for (const listener of listeners) listener();
     };
     const dispose = () => {
+        generation += 1;
+        if (pending) {
+            if (pending.retry) clearTimeout(pending.retry);
+            pending.client[Symbol.dispose]();
+            pending = undefined;
+        }
         if (!session) return;
         // Dispose the workspace (releasing chat leases) before the client that
         // owns those stores, then the connection loader and clock.
@@ -102,14 +119,19 @@ export function rigSessionStoreCreate(
                   }
                 : undefined;
         if (!target) {
-            if (session) {
+            if (session || pending) {
                 dispose();
                 notify();
             }
             return;
         }
-        if (session && session.connectionId === target.connectionId) return;
+        if (
+            session?.connectionId === target.connectionId ||
+            pending?.connectionId === target.connectionId
+        )
+            return;
         dispose();
+        const current = generation;
         const client = rigClientCreate({
             transport: rigRendererTransportCreate(target.rigHttpUrl),
             // The Ghostty emulator and the terminal protocol client live in the app
@@ -117,21 +139,41 @@ export function rigSessionStoreCreate(
             // them itself.
             terminalDriverCreate,
         });
-        session = {
+        pending = {
             connectionId: target.connectionId,
-            connection: rigConnectionLoaderCreate({ probe: healthProbe(target.rigHttpUrl) }),
-            host: hostCreate(bridge),
             client,
-            workspace: rigWorkspaceStoreCreate(client, {
-                output: (event) => {
-                    if (event.type === "conversationOpenRequested")
-                        deps.conversationOpen(event.location);
-                    else deps.groupOpen(event.groupId);
-                },
-            }),
-            clock: rigClockStoreCreate(),
         };
-        notify();
+        const modelsLoad = (): void => {
+            void client.models.load().then(
+                () => {
+                    if (current !== generation || pending?.client !== client) return;
+                    pending = undefined;
+                    session = {
+                        connectionId: target.connectionId,
+                        connection: rigConnectionLoaderCreate({
+                            probe: healthProbe(target.rigHttpUrl),
+                        }),
+                        host: hostCreate(bridge),
+                        client,
+                        models: client.models,
+                        workspace: rigWorkspaceStoreCreate(client, {
+                            output: (event) => {
+                                if (event.type === "conversationOpenRequested")
+                                    deps.conversationOpen(event.location);
+                                else deps.groupOpen(event.groupId);
+                            },
+                        }),
+                        clock: rigClockStoreCreate(),
+                    };
+                    notify();
+                },
+                () => {
+                    if (current !== generation || pending?.client !== client) return;
+                    pending.retry = setTimeout(modelsLoad, 1_000);
+                },
+            );
+        };
+        modelsLoad();
     };
     return {
         get: () => session,

@@ -131,6 +131,11 @@
     font-size: 12px;
 }
 
+.happy2-rig-control__trigger:disabled {
+    cursor: default;
+    opacity: 0.62;
+}
+
 .happy2-rig-control__label {
     color: var(--text-secondary);
 }

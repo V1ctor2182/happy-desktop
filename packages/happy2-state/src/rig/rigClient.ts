@@ -21,6 +21,7 @@ import type {
     RigModelCatalog,
     RigSessionId,
 } from "./rigTypes.js";
+import { rigModelStoreCreate, type RigModelStore } from "./rigModelStore.js";
 
 /** A reference-counted, disposable lease on one session's chat store. */
 export interface RigChatHandle {
@@ -29,6 +30,8 @@ export interface RigChatHandle {
 }
 
 export interface RigClient {
+    /** One model/capability/default/last-used authority for this daemon connection. */
+    readonly models: RigModelStore;
     /** Loads (once) and returns the model catalog; cached for the client's lifetime. */
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
@@ -94,22 +97,14 @@ interface ChatBinding {
  */
 export function rigClientCreate(deps: RigClientDeps): RigClient {
     const transport = deps.transport;
-    let catalogPromise: Promise<RigModelCatalog> | undefined;
+    const models = rigModelStoreCreate({ catalogRead: () => transport.modelsRead() });
     let sessionListStore: RigSessionListStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
-    const catalogEnsure = (): Promise<RigModelCatalog> => {
-        if (!catalogPromise)
-            catalogPromise = transport.modelsRead().catch((error: unknown) => {
-                catalogPromise = undefined;
-                throw error;
-            });
-        return catalogPromise;
-    };
-
     return {
-        catalogRead: () => catalogEnsure(),
+        models,
+        catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (groupId, path, signal) =>
             transport.changedFileRead(groupId, path, signal),
         workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
@@ -132,10 +127,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (disposed) throw new Error("The Rig client is disposed.");
             let binding = chats.get(sessionId);
             if (!binding) {
-                const storePromise = catalogEnsure().then((catalog) => {
+                const storePromise = models.load().then(({ catalog }) => {
                     const chatDeps: RigChatDeps = {
                         transport,
                         catalog,
+                        selectionUsed: (selection) => models.selectionUsed(selection),
                         createId: deps.createId,
                         now: deps.now,
                         output: deps.chatOutput

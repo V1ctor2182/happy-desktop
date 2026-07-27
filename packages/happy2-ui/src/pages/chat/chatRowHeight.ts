@@ -9,7 +9,12 @@ import {
     type MessageTreatment,
 } from "../../conversationRowHeight.js";
 import type { MessageImage } from "./ChatPageComponents.js";
-import { afterToolSteps, messagesGrouped, type WorkspaceEntry } from "./chatPageModels.js";
+import {
+    afterToolSteps,
+    messagesGrouped,
+    turnStatusAfterTrace,
+    type WorkspaceEntry,
+} from "./chatPageModels.js";
 
 /**
  * Height of one chat transcript row, computed from the entry and the list's
@@ -70,12 +75,10 @@ export function chatRowHeight(
     if (entry.kind === "steering") return steeringNoticeRowHeight(entry.text, entry.quote, width);
     if (entry.kind === "traceStep") {
         const height = conversationActivityHeight(entry.activity.kind);
-        return height === undefined
-            ? undefined
-            : height + (entries[index + 1]?.kind === "traceStep" ? 0 : 8);
+        return height;
     }
-    /* Message-sized settled footer with no extra vertical separation. */
-    if (entry.kind === "turnStatus") return 32;
+    /* A settled footer owns the clearance above it when prior trace rows exist. */
+    if (entry.kind === "turnStatus") return turnStatusAfterTrace(entries, index) ? 40 : 32;
     if (context.hasAppNodes(entry)) return undefined;
     const own = !entry.agent && (entry.own || entry.senderId === context.viewerId);
     const treatment: MessageTreatment = entry.agent ? "agent" : own ? "own" : "incoming";

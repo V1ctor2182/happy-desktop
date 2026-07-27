@@ -184,7 +184,17 @@ it("aligns named agent header metadata to one browser-laid-out baseline", async 
 }, 120000);
 
 it("keeps an inline timestamp attached to the final message text with a non-breaking space", async () => {
-    const view = createRenderer().render(
+    const view = createRenderer();
+    const messageText = "Alpha beta gamma delta epsilon zeta eta finalword\n\n";
+    view.render(
+        () =>
+            stage(
+                "inline-time-wrap-reference",
+                <Message agent author="Rig" body={messageText} compact />,
+            ),
+        { width: 480, height: 120 },
+    );
+    view.render(
         () =>
             stage(
                 "inline-time-wrap",
@@ -192,44 +202,70 @@ it("keeps an inline timestamp attached to the final message text with a non-brea
                     <style>
                         {`[data-testid="inline-time-wrap"] [data-happy2-ui="message-hover-meta"] { opacity: 1; }`}
                     </style>
-                    <Message
-                        agent
-                        author="Rig"
-                        body="Alpha beta gamma delta epsilon zeta eta finalword"
-                        compact
-                        time="4:02 PM"
-                    />
+                    <Message agent author="Rig" body={messageText} compact time="4:02 PM" />
                 </>,
             ),
-        { width: 420, height: 120 },
+        { width: 480, height: 120 },
     );
     await view.ready();
 
-    const body = view.$('[data-happy2-ui="message-body"]');
-    const hoverMeta = view.$('[data-happy2-ui="message-hover-meta"]');
+    const paragraph = (testid: string) =>
+        view.$(`[data-testid="${testid}"] [data-happy2-ui="message-body"] p`).element;
+    const wordRect = (testid: string, word: string) => {
+        const walker = document.createTreeWalker(paragraph(testid), NodeFilter.SHOW_TEXT);
+        let text: Text | undefined;
+        for (let node = walker.nextNode(); node; node = walker.nextNode())
+            if (node.textContent?.includes(word)) text = node as Text;
+        expect(text, `${testid} contains a text node for ${word}`).toBeDefined();
+        const start = text!.textContent!.lastIndexOf(word);
+        expect(start, `${testid} contains ${word}`).toBeGreaterThanOrEqual(0);
+        const range = document.createRange();
+        range.setStart(text!, start);
+        range.setEnd(text!, start + word.length);
+        return range.getBoundingClientRect();
+    };
+    const lineOverlap = (a: DOMRect, b: DOMRect) =>
+        Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+
+    const referenceEta = wordRect("inline-time-wrap-reference", "eta");
+    const referenceFinalWord = wordRect("inline-time-wrap-reference", "finalword");
+    expect(
+        lineOverlap(referenceEta, referenceFinalWord),
+        "without metadata the final word fits on the first line",
+    ).toBeGreaterThan(0);
+
+    const targetParagraph = paragraph("inline-time-wrap");
+    const trailingInline = view.$(
+        '[data-testid="inline-time-wrap"] [data-happy2-ui="message-trailing-inline"]',
+    );
+    expect(trailingInline.element.parentElement, "trailing run is inside the final paragraph").toBe(
+        targetParagraph,
+    );
+    const hoverMeta = view.$(
+        '[data-testid="inline-time-wrap"] [data-happy2-ui="message-hover-meta"]',
+    );
+    expect(hoverMeta.element.parentElement, "timestamp is inside the trailing run").toBe(
+        trailingInline.element,
+    );
     const boundary = hoverMeta.element.previousSibling;
     expect(boundary?.nodeType, "timestamp boundary is a text node").toBe(Node.TEXT_NODE);
     expect(boundary?.textContent, "timestamp boundary is non-breaking").toBe("\u00a0");
 
-    const paragraph = body.element.querySelector("p");
-    expect(paragraph).not.toBeNull();
-    const text = paragraph!.firstChild;
-    expect(text?.nodeType).toBe(Node.TEXT_NODE);
-    const finalWordStart = text!.textContent!.lastIndexOf("finalword");
-    expect(finalWordStart).toBeGreaterThanOrEqual(0);
-    const finalWord = document.createRange();
-    finalWord.setStart(text!, finalWordStart);
-    finalWord.setEnd(text!, text!.textContent!.length);
-    const finalWordRect = finalWord.getBoundingClientRect();
+    const targetEta = wordRect("inline-time-wrap", "eta");
+    const targetFinalWord = wordRect("inline-time-wrap", "finalword");
+    expect(
+        lineOverlap(targetEta, targetFinalWord),
+        "metadata pulls the final word onto the next line",
+    ).toBeLessThanOrEqual(0);
     const timeRect = view
-        .$('[data-happy2-ui="message-time-label"]')
+        .$('[data-testid="inline-time-wrap"] [data-happy2-ui="message-time-label"]')
         .element.getBoundingClientRect();
 
     expect(
-        Math.min(finalWordRect.bottom, timeRect.bottom) - Math.max(finalWordRect.top, timeRect.top),
+        lineOverlap(targetFinalWord, timeRect),
         "final word and timestamp share one rendered line",
     ).toBeGreaterThan(0);
-    expect(timeRect.x, "timestamp follows the final word").toBeGreaterThan(finalWordRect.right);
+    expect(timeRect.x, "timestamp follows the final word").toBeGreaterThan(targetFinalWord.right);
     await view.screenshot("Message.inline-time-wrap.test");
 }, 120000);
 
@@ -646,16 +682,13 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
     ).toBe(
         133,
     ); /* 16 pad + 20 meta + 5 meta margin + 24 markdown line + 8 gap + 44 attach + 16 pad */
-    /* Grouped human rows wrap the single body line in a bubble (4px group
-       padding + 10px bubble padding + one text line ≈ 50px); guard with a
-       little headroom rather than an exact value, since the rich segments
-       (code/mention pills) could push an engine to a second line, and this
-       assertion's real purpose is proving no phantom attachment wrapper adds
-       its own 8px gap + card. */
+    /* A grouped row may wrap once when its compact hover time joins the final
+       inline run. It still stays far below the height a phantom attachment gap
+       and card would add. */
     expect(
         view.$('[data-testid="m3"] [data-happy2-ui="message"]').bounds().height,
         "grouped message height without phantom attachments",
-    ).toBeLessThan(52);
+    ).toBeLessThan(80);
     expect(
         view.container.querySelector('[data-testid="m4"] [data-happy2-ui="message-attachments"]'),
         "no attachment wrapper for conditional child placeholders",
@@ -663,7 +696,7 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
     expect(
         view.$('[data-testid="m4"] [data-happy2-ui="message"]').bounds().height,
         "conditional child placeholders do not add attachment spacing",
-    ).toBe(52); /* 4+4 group pad + 20 bubble pad + one 24px markdown line (fits the 76% cap) */
+    ).toBe(76); /* 4+4 group pad + 20 bubble pad + two 24px markdown lines */
     /* ---- Author row ---------------------------------------------------- */
     const author = view.$('[data-testid="m1"] [data-happy2-ui="message-author"]');
     const authorMetrics = author.textMetrics();
@@ -1768,36 +1801,13 @@ it("renders string bodies as safe streaming Markdown", async () => {
     expect(streamBody.element.querySelector("h2")?.textContent).toBe("Result");
     const streamCode = streamBody.element.querySelector("pre code");
     expect(streamCode?.textContent).toContain("const answer = 42");
-    const caret = view.$('[data-testid="md-stream"] [data-happy2-ui="message-stream-caret"]');
-    expect(caret.bounds().width).toBe(0);
-    expect(caret.bounds().height).toBe(16);
-    /* The marker itself paints nothing (width:0, no background) — its
-       `::after` pseudo-element is the actual painted caret bar
-       (`.happy2-message__generation-marker[data-generation-marker="streaming"]::after`
-       in message.css), so read the pseudo-element's computed style directly;
-       the shared `computedStyle()` helper only reads the real element. */
-    expect(getComputedStyle(caret.element, "::after").backgroundColor).toBe("rgb(0, 122, 255)");
+    expect(
+        streamBody.element.querySelector('[data-happy2-ui="message-stream-caret"]'),
+        "streaming is conveyed by turn status rather than a typing marker",
+    ).toBeNull();
     /* Streamed content is never dimmed — that treatment is reserved for delivery. */
     const streamContent = view.$('[data-testid="md-stream"] [data-happy2-ui="message-content"]');
     expect(streamContent.computedStyle("opacity")).toBe("1");
-    /* The caret is excluded from the 8px block stack, so it lands directly after
-       the trailing content (not dropped a block-gap below it) and stays visible
-       inside the body row rather than clipped past its bottom. */
-    const streamBlocks = [...streamBody.element.children].filter(
-        (node): node is HTMLElement =>
-            node instanceof HTMLElement &&
-            !node.classList.contains("happy2-message__generation-marker"),
-    );
-    const lastStreamBlock = streamBlocks[streamBlocks.length - 1]!.getBoundingClientRect();
-    const caretRect = caret.element.getBoundingClientRect();
-    const streamBodyRect = streamBody.element.getBoundingClientRect();
-    expect(
-        caretRect.top - lastStreamBlock.bottom,
-        "caret follows content without a block gap",
-    ).toBeLessThan(8);
-    expect(caretRect.bottom, "caret stays within the body row").toBeLessThanOrEqual(
-        streamBodyRect.bottom + 0.75,
-    );
     /* ---- Final malformed Markdown stays visible ------------------------ */
     const malformedRoot = view.$('[data-testid="md-malformed"] [data-happy2-ui="message"]');
     expect(malformedRoot.element.getAttribute("aria-busy")).toBeNull();
@@ -1866,7 +1876,8 @@ it("preserves Message DOM identity while a streamed Markdown body advances", asy
     const row = view.$('[data-testid="stream-identity"] [data-happy2-ui="message"]').element;
     const body = view.$('[data-testid="stream-identity"] [data-happy2-ui="message-body"]').element;
     expect(body.querySelector("strong")?.textContent).toBe("compiler");
-    expect(body.querySelector('[data-happy2-ui="message-stream-caret"]')).not.toBeNull();
+    expect(row.getAttribute("data-generation-status")).toBe("streaming");
+    expect(body.querySelector('[data-happy2-ui="message-stream-caret"]')).toBeNull();
 
     flushSync(() => streamUpdate({ body: "The **compiler** is ready.", status: "complete" }));
     await nextFrame();
@@ -1923,7 +1934,7 @@ it("keeps Message geometry fixed across non-content state changes", async () => 
     expect(content().bounds()).toEqual(baseline.content);
     expect(body().bounds()).toEqual(baseline.body);
 });
-it("pins the zero-width streaming cursor to the final rendered character", async () => {
+it("keeps streaming prose free of an inline typing marker", async () => {
     const view = createRenderer().render(
         () =>
             stage(
@@ -1942,19 +1953,8 @@ it("pins the zero-width streaming cursor to the final rendered character", async
     );
     await view.ready();
     const body = view.$('[data-testid="cursor-position"] [data-happy2-ui="message-body"]');
-    const text = body.element.querySelector("p")?.firstChild;
-    expect(text).toBeInstanceOf(Text);
-    const range = document.createRange();
-    range.setStart(text!, text!.textContent!.length - 1);
-    range.setEnd(text!, text!.textContent!.length);
-    const finalGlyph = range.getClientRects().item(range.getClientRects().length - 1)!;
-    const cursor = view.$(
-        '[data-testid="cursor-position"] [data-happy2-ui="message-stream-caret"]',
-    );
-    expect(cursor.bounds().width).toBe(0);
-    const cursorRect = cursor.element.getBoundingClientRect();
-    expect(Math.abs(cursorRect.x - finalGlyph.right)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(cursorRect.y - finalGlyph.top)).toBeLessThanOrEqual(0.5);
+    expect(body.element.textContent).toContain("Waiting for the final response");
+    expect(body.element.querySelector('[data-happy2-ui="message-stream-caret"]')).toBeNull();
 });
 it("keeps an empty generated reply stable while its visible cursor settles", async () => {
     let generationStatus: (status: "complete" | "streaming") => void = () => {};
@@ -1981,10 +1981,8 @@ it("keeps an empty generated reply stable while its visible cursor settles", asy
     await view.ready();
     const root = () => view.$('[data-testid="empty-generation"] [data-happy2-ui="message"]');
     const body = () => view.$('[data-testid="empty-generation"] [data-happy2-ui="message-body"]');
-    const cursor = () =>
-        view.$('[data-testid="empty-generation"] [data-happy2-ui="message-stream-caret"]');
     const baseline = { root: root().bounds(), body: body().bounds() };
-    expect(cursor().bounds()).toMatchObject({ width: 8, height: 16 });
+    expect(body().element.querySelector('[data-happy2-ui="message-stream-caret"]')).toBeNull();
     expect(body().element.textContent).toBe("\u00a0");
 
     flushSync(() => generationStatus("complete"));

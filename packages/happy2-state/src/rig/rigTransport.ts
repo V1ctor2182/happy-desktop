@@ -68,6 +68,7 @@ export type RigAgentEvent =
           readonly toolCallId: string;
           readonly toolName: string;
           readonly arguments: RigJson;
+          readonly presentation?: RigToolPresentation;
       }
     | {
           readonly type: "tool_execution_progress";

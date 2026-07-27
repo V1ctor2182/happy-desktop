@@ -33,6 +33,7 @@ export type RigControlMenuProps = {
     menuPlacement?: "above" | "below";
     /** Edge of the trigger the popover aligns to. Defaults to its start edge. */
     menuAlign?: "start" | "end";
+    disabled?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -46,12 +47,13 @@ export type RigControlMenuProps = {
  */
 export function RigControlMenu(props: RigControlMenuProps) {
     const [open, setOpen] = useState(false);
+    const expanded = open && !props.disabled;
 
     return (
         <div
             className={["happy2-rig-control", props.className].filter(Boolean).join(" ")}
             data-happy2-ui="rig-control"
-            data-open={open ? "" : undefined}
+            data-open={expanded ? "" : undefined}
             data-testid={props["data-testid"]}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && open) {
@@ -62,10 +64,11 @@ export function RigControlMenu(props: RigControlMenuProps) {
             style={props.style}
         >
             <button
-                aria-expanded={open ? "true" : "false"}
+                aria-expanded={expanded ? "true" : "false"}
                 aria-haspopup="menu"
                 className="happy2-rig-control__trigger"
                 data-happy2-ui="rig-control-trigger"
+                disabled={props.disabled}
                 onClick={() => setOpen((value) => !value)}
                 type="button"
             >
@@ -81,7 +84,7 @@ export function RigControlMenu(props: RigControlMenuProps) {
                     <Icon name="chevron-down" size={12} />
                 </span>
             </button>
-            {open ? (
+            {expanded ? (
                 <>
                     {/* Transparent full-window backdrop closes the popover on an
                         outside pointer-down without an imperative document listener. */}
@@ -120,7 +123,8 @@ export type RigSessionControlField = "model" | "effort" | "permission" | "tier";
 const ALL_FIELDS: readonly RigSessionControlField[] = ["model", "effort", "permission", "tier"];
 
 export type RigSessionControlsProps = {
-    menus: RigMenusSnapshot;
+    /** Absent while a session is loading; controls remain mounted but inert. */
+    menus?: RigMenusSnapshot;
     /**
      * Which controls to render, in this order. Defaults to all four. A surface
      * that has already placed the model picker elsewhere (the composer toolbar)
@@ -166,7 +170,7 @@ function currentEffortLabel(menus: RigMenusSnapshot): string {
 export function RigSessionControls(props: RigSessionControlsProps) {
     const { menus } = props;
 
-    const modelItems: MenuItem[] = menus.modelOptions.map((option) => ({
+    const modelItems: MenuItem[] = (menus?.modelOptions ?? []).map((option) => ({
         kind: "item",
         id: `${option.providerId}${MODEL_ID_SEP}${option.modelId}`,
         label: option.name,
@@ -174,21 +178,21 @@ export function RigSessionControls(props: RigSessionControlsProps) {
         icon: option.current ? "check" : undefined,
     }));
 
-    const effortItems: MenuItem[] = menus.effortOptions.map((option) => ({
+    const effortItems: MenuItem[] = (menus?.effortOptions ?? []).map((option) => ({
         kind: "item",
         id: option.level,
         label: option.isDefault ? `${option.label} (default)` : option.label,
         icon: option.current ? "check" : undefined,
     }));
 
-    const permissionItems: MenuItem[] = menus.permissionModeOptions.map((option) => ({
+    const permissionItems: MenuItem[] = (menus?.permissionModeOptions ?? []).map((option) => ({
         kind: "item",
         id: option.mode,
         label: option.label,
         icon: option.current ? "check" : undefined,
     }));
 
-    const serviceTierItems: MenuItem[] = menus.serviceTierOptions.map((option) => ({
+    const serviceTierItems: MenuItem[] = (menus?.serviceTierOptions ?? []).map((option) => ({
         kind: "item",
         id: option.tier ?? SERVICE_TIER_OFF,
         label: option.label,
@@ -196,14 +200,15 @@ export function RigSessionControls(props: RigSessionControlsProps) {
     }));
 
     const currentTierLabel =
-        menus.serviceTierOptions.find((option) => option.current)?.label ??
-        (menus.currentServiceTier ? "Fast" : "Standard");
+        menus?.serviceTierOptions.find((option) => option.current)?.label ??
+        (menus ? (menus.currentServiceTier ? "Fast" : "Standard") : "…");
 
     const control = (field: RigSessionControlField) => {
         if (field === "model")
             return (
                 <RigControlMenu
                     data-testid="rig-control-model"
+                    disabled={!menus}
                     items={modelItems}
                     key={field}
                     label="Model"
@@ -213,37 +218,40 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                         const [providerId, modelId] = id.split(MODEL_ID_SEP);
                         if (modelId) props.onModelChange({ providerId, modelId });
                     }}
-                    value={currentModelName(menus)}
+                    value={menus ? currentModelName(menus) : "…"}
                 />
             );
         if (field === "effort")
             return (
                 <RigControlMenu
                     data-testid="rig-control-effort"
+                    disabled={!menus}
                     items={effortItems}
                     key={field}
                     label="Effort"
                     menuPlacement={props.menuPlacement}
                     onSelect={(id) => props.onEffortChange(id as RigThinkingLevel)}
-                    value={currentEffortLabel(menus)}
+                    value={menus ? currentEffortLabel(menus) : "…"}
                 />
             );
         if (field === "permission")
             return (
                 <RigControlMenu
                     data-testid="rig-control-permission"
+                    disabled={!menus}
                     items={permissionItems}
                     key={field}
                     label="Access"
                     menuPlacement={props.menuPlacement}
                     menuWidth={200}
                     onSelect={(id) => props.onPermissionModeChange(id as RigPermissionMode)}
-                    value={PERMISSION_LABELS[menus.currentPermissionMode]}
+                    value={menus ? PERMISSION_LABELS[menus.currentPermissionMode] : "…"}
                 />
             );
         return (
             <RigControlMenu
                 data-testid="rig-control-tier"
+                disabled={!menus}
                 items={serviceTierItems}
                 key={field}
                 label="Speed"

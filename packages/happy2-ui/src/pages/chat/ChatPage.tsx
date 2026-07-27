@@ -1,5 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
+    AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
     AppShell,
     Banner,
@@ -839,11 +840,12 @@ export function ChatPage(props: ChatPageProps) {
         void props.actions.chatReadMark(snapshot!.chatId, latest.message.id).catch(showError);
     });
     const activityCount = chatState?.agentActivity.length ?? 0;
+    const activeTurnRunning = turnStatus()?.status === "running";
     useLayoutEffect(() => {
-        if (activityCount === 0) return;
+        if (activityCount === 0 && !activeTurnRunning) return;
         const timer = setInterval(() => setActivityNow(Date.now()), 1000);
         return () => clearInterval(timer);
-    }, [activityCount]);
+    }, [activityCount, activeTurnRunning]);
     function updateDraft(value: string) {
         props.composer?.getState().textUpdate(value);
         const chatId = activeConversationId();
@@ -1232,15 +1234,16 @@ export function ChatPage(props: ChatPageProps) {
                                 ...pluginRequestEntries(),
                                 ...documentWriteRequestEntries(),
                             ]}
-                            messageFooter={((status) =>
-                                status ? (
-                                    <AgentWorkingStatus
-                                        agents={status.subagentCount}
-                                        backgroundTasks={status.terminalCount}
-                                        className="happy2-chat-turn-status"
-                                        elapsedMs={status.elapsedMs}
-                                    />
-                                ) : undefined)(turnStatus())}
+                            messageFooter={((status) => (
+                                <AgentWorkingStatus
+                                    active={status?.status === "running"}
+                                    agents={status?.subagentCount}
+                                    backgroundTasks={status?.terminalCount}
+                                    className="happy2-chat-turn-status"
+                                    elapsedMs={status?.elapsedMs}
+                                />
+                            ))(turnStatus())}
+                            messageFooterHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}
                             messageListScrollPosition={props.messageListScrollPosition}
                             onAudienceChange={(audience) =>
                                 props.composer?.getState().audienceUpdate(audience)

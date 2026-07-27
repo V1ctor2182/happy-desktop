@@ -1010,6 +1010,7 @@ function RigConversationSurface(props: {
             composerPlaceholder="Message Happy…"
             conversationId={conversation.conversationId}
             entries={conversation.entries}
+            loading={conversation.session.type === "loading"}
             scrollPosition={conversation.scrollPosition}
             onScrollPositionChange={(position) =>
                 workspace.conversationScrollUpdate(
@@ -1037,25 +1038,23 @@ function RigConversationSurface(props: {
                 </>
             }
             composerFooterControl={
-                conversation.menus ? (
-                    <RigSessionControls
-                        fields={["permission", "tier"]}
-                        menuPlacement="above"
-                        menus={conversation.menus}
-                        onEffortChange={(effort?: RigThinkingLevel) =>
-                            workspace.sessionEffortUpdate(effort)
-                        }
-                        onModelChange={(selection: RigModelSelection) =>
-                            workspace.sessionModelUpdate(selection)
-                        }
-                        onPermissionModeChange={(mode: RigPermissionMode) =>
-                            workspace.sessionPermissionModeUpdate(mode)
-                        }
-                        onServiceTierChange={(tier?: RigServiceTier) =>
-                            workspace.sessionServiceTierUpdate(tier)
-                        }
-                    />
-                ) : undefined
+                <RigSessionControls
+                    fields={["permission", "tier"]}
+                    menuPlacement="above"
+                    menus={conversation.menus}
+                    onEffortChange={(effort?: RigThinkingLevel) =>
+                        workspace.sessionEffortUpdate(effort)
+                    }
+                    onModelChange={(selection: RigModelSelection) =>
+                        workspace.sessionModelUpdate(selection)
+                    }
+                    onPermissionModeChange={(mode: RigPermissionMode) =>
+                        workspace.sessionPermissionModeUpdate(mode)
+                    }
+                    onServiceTierChange={(tier?: RigServiceTier) =>
+                        workspace.sessionServiceTierUpdate(tier)
+                    }
+                />
             }
             onAbort={() => swallow(workspace.runAbort())}
             onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
@@ -1133,15 +1132,16 @@ function rigTurnElapsedMs(
     if (!conversation.running) return conversation.turnElapsedMs;
     if (conversation.runStartedAt !== undefined)
         return Math.max(0, now - conversation.runStartedAt);
+    let earliestSentAt: number | undefined;
     for (let index = conversation.entries.length - 1; index >= 0; index -= 1) {
         const entry = conversation.entries[index];
+        if (entry?.kind === "turnStatus" && entry.status !== "steered") break;
         if (entry?.kind !== "message") continue;
         if (entry.message.sender?.id !== rigOwnerAuthor.id) continue;
         const sentAt = Date.parse(entry.message.createdAt);
-        if (Number.isFinite(sentAt)) return Math.max(0, now - sentAt);
-        break;
+        if (Number.isFinite(sentAt)) earliestSentAt = sentAt;
     }
-    return undefined;
+    return earliestSentAt === undefined ? undefined : Math.max(0, now - earliestSentAt);
 }
 
 /**

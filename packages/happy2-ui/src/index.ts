@@ -4,7 +4,11 @@ export { happyLogoUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
 export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
-export { AgentWorkingStatus, type AgentWorkingStatusProps } from "./AgentWorkingStatus";
+export {
+    AGENT_WORKING_STATUS_ROW_HEIGHT,
+    AgentWorkingStatus,
+    type AgentWorkingStatusProps,
+} from "./AgentWorkingStatus";
 export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";
 export { AgentDesk, type AgentDeskProps, type DeskListItem, type DeskRun } from "./AgentDesk";
 export {

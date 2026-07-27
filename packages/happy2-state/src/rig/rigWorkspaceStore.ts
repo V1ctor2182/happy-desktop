@@ -575,23 +575,10 @@ export function rigWorkspaceStoreCreate(
     let workspaceFilesGeneration = 0;
     let groupComposer: ComposerStore | undefined;
     let unsubscribeGroupComposer: (() => void) | undefined;
-    /**
-     * How the addressed group's first session will be configured. It needs the
-     * model catalog, which is read once and asynchronously, so an addressed
-     * group may briefly have a composer and no pickers — the composer is what
-     * the reader came to type in, and making it wait on a catalog read would be
-     * the wrong trade.
-     */
+    /** How the addressed group's first session will be configured. */
     let groupDraft: RigSessionDraftStore | undefined;
     let unsubscribeGroupDraft: (() => void) | undefined;
     let groupDraftGeneration = 0;
-    /**
-     * The configuration the next new session inherits, workspace-wide rather
-     * than per group: "new session" should mean the setup most recently chosen,
-     * whichever directory it is started in. Undefined until the reader picks
-     * something, so an untouched workspace uses the catalog's defaults.
-     */
-    let lastSelection: RigSelection | undefined;
     /**
      * Where each conversation was last being read, by conversation id. Switching
      * sessions disposes the transcript that held the position, so it is kept
@@ -624,6 +611,7 @@ export function rigWorkspaceStoreCreate(
         draft: ComposerSnapshot,
     ): RigConversationSnapshot => {
         const session = chat.session.type === "ready" ? chat.session.value : undefined;
+        const models = client.models.get();
         return {
             conversationId: chat.sessionId,
             session: chat.session,
@@ -649,7 +637,11 @@ export function rigWorkspaceStoreCreate(
             ...(chat.contextGauge ? { contextGauge: chat.contextGauge } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
-            ...(chat.menus ? { menus: chat.menus } : {}),
+            ...(chat.menus
+                ? { menus: chat.menus }
+                : models.type === "ready"
+                  ? { menus: models.menus }
+                  : {}),
             modelLocked: chat.modelLocked,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
@@ -666,9 +658,15 @@ export function rigWorkspaceStoreCreate(
         // A failed acquisition stays failed until something retries it; the
         // composer must not paint over the error the reader has to act on.
         if (draft && openId && conversation.type !== "error") {
+            const models = client.models.get();
             const next = chat
                 ? conversationProject(chat, draft)
-                : conversationAcquiring(openId, draft, listSnapshot);
+                : conversationAcquiring(
+                      openId,
+                      draft,
+                      listSnapshot,
+                      models.type === "ready" ? models.menus : undefined,
+                  );
             if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
                 conversation = { type: "ready", value: next };
             }
@@ -1017,6 +1015,10 @@ export function rigWorkspaceStoreCreate(
         // resolved with the store rather than the handle so a submission never
         // has to know whether acquisition is still in flight.
         chatArrival = acquisition.then((acquired) => acquired.store);
+        // The transcript may fail to acquire before anything has tried to send
+        // through this promise. Mark that rejection handled here while keeping
+        // the rejected promise for a later submission to observe.
+        void chatArrival.catch(() => undefined);
         void acquisition.then(
             (acquired) => {
                 if (
@@ -1172,26 +1174,23 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
-     * Attaches the model/effort/access draft to the open dialog. The catalog is
-     * read asynchronously, so the dialog is usable before the pickers arrive
-     * rather than waiting on them — the task is the point, and the daemon
-     * applies its own defaults for anything left unchosen.
+     * Attaches the model/effort/access draft to the open dialog from the one
+     * daemon-lifetime model store.
      */
     const createDraftEnsure = (): void => {
         createRelease();
         const current = createDraftGeneration;
-        void client.catalogRead().then(
-            (catalog) => {
+        void client.models.load().then(
+            ({ catalog, lastUsedSelection }) => {
                 if (disposed || current !== createDraftGeneration || !create) return;
                 const store = rigSessionDraftStoreCreate({
                     catalog,
-                    // Opens on the workspace's last selection, so a new session
-                    // starts configured the way the last one was.
-                    ...(lastSelection ? { selection: lastSelection } : {}),
+                    selection: lastUsedSelection,
                 });
                 createDraft = store;
                 unsubscribeCreateDraft = store.subscribe(() => {
                     if (!create) return;
+                    client.models.selectionUsed(store.get().selection);
                     create = { ...create, draft: store.get() };
                     recompute();
                 });
@@ -1216,30 +1215,25 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
-     * Materializes the addressed group's session draft once the catalog is
-     * available, seeded from the workspace's most recent selection. A read that
-     * resolves after the reader has moved on is discarded rather than applied.
+     * Materializes the addressed group's session draft from the global model
+     * store, seeded from the daemon connection's most recent selection.
      */
     const groupDraftEnsure = (groupId: RigGroupId): void => {
         const current = ++groupDraftGeneration;
-        void client.catalogRead().then(
-            (catalog) => {
+        void client.models.load().then(
+            ({ catalog, lastUsedSelection }) => {
                 if (disposed || groupDraftGeneration !== current || openGroupId !== groupId) return;
                 groupDraft = rigSessionDraftStoreCreate({
                     catalog,
-                    ...(lastSelection ? { selection: lastSelection } : {}),
+                    selection: lastUsedSelection,
                 });
                 unsubscribeGroupDraft = groupDraft.subscribe(() => {
-                    // Choosing here is what makes a selection "last used", so the
-                    // next new session inherits it wherever it is started.
-                    lastSelection = groupDraft?.get().selection;
+                    const selection = groupDraft?.get().selection;
+                    if (selection) client.models.selectionUsed(selection);
                     recompute();
                 });
                 recompute();
             },
-            // A catalog that cannot be read leaves the pickers absent; the
-            // composer still works and the daemon still applies its own
-            // defaults, which is better than blocking the first message.
             () => undefined,
         );
     };
@@ -1415,15 +1409,16 @@ export function rigWorkspaceStoreCreate(
             if (conversation.type === "ready" && conversation.value.session.type === "error")
                 chatStore?.sessionRetry();
         },
-        // A caller that names no configuration gets the workspace's most recent
-        // one, so a session started from the sidebar matches the last one
-        // started from a composer. Anything the caller does name wins.
-        conversationCreate: (input) =>
-            list
+        // Anything the caller names wins over the connection's last selection.
+        conversationCreate: (input) => {
+            const models = client.models.get();
+            const selection = models.type === "ready" ? models.lastUsedSelection : undefined;
+            return list
                 .sessionCreate(
-                    lastSelection ? { ...selectionCreateFields(lastSelection), ...input } : input,
+                    selection ? { ...selectionCreateFields(selection), ...input } : input,
                 )
-                .then(openRequest),
+                .then(openRequest);
+        },
         conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
         conversationArchive: (conversationId) => list.sessionArchive(conversationId),
         conversationReorder: (conversationId, afterId) =>
@@ -1771,6 +1766,7 @@ function conversationAcquiring(
     conversationId: RigSessionId,
     composer: ComposerSnapshot,
     list: RigSessionListSnapshot,
+    menus?: RigMenusSnapshot,
 ): RigConversationSnapshot {
     const summary =
         list.projects.type === "ready"
@@ -1799,6 +1795,7 @@ function conversationAcquiring(
         usagePanelOpen: false,
         usageLoading: false,
         activityPanelOpen: false,
+        ...(menus ? { menus } : {}),
         modelLocked: false,
     };
 }

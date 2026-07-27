@@ -142,7 +142,21 @@ export interface RigFileDiff {
     readonly omittedLines?: number;
 }
 
+export type RigExplorationOperation =
+    | { readonly kind: "list"; readonly target: string }
+    | { readonly kind: "read"; readonly name: string }
+    | {
+          readonly kind: "search";
+          readonly command: string;
+          readonly path?: string;
+          readonly query?: string;
+      };
+
 export type RigToolPresentation =
+    | {
+          readonly type: "exploration";
+          readonly operations: readonly RigExplorationOperation[];
+      }
     | {
           readonly type: "fileDiff";
           readonly files: readonly RigFileDiff[];
@@ -183,6 +197,7 @@ export type RigBlock =
           readonly id: string;
           readonly name: string;
           readonly arguments: RigJson;
+          readonly presentation?: RigToolPresentation;
       }
     | {
           readonly type: "toolResult";

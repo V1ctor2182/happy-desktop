@@ -11,6 +11,7 @@ import type {
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
+import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
 export type AgentActivityRowProps = {
     activity: ConversationActivity;
@@ -88,13 +89,22 @@ function humanizeToolName(name: string): string {
 }
 
 /** Active/done verb for a tool by name + status (A2/A3). */
-function toolVerb(name: string, status: ConversationActivityStatus): string {
+function toolVerb(
+    name: string,
+    status: ConversationActivityStatus,
+    presentation?: ConversationActivityPresentation,
+): string {
     if (status === "awaitingApproval") return "Awaiting approval";
     if (status === "stopped") return "Stopped";
-    if (status === "failed") return "Failed";
     const active = status === "running";
     const lower = name.toLowerCase();
-    if (/(bash|exec|shell|command|run)/.test(lower)) return active ? "Running" : "Ran";
+    if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
+    if (
+        presentation?.type === "execCommand" ||
+        presentation?.type === "backgroundTerminalInteraction" ||
+        /(bash|exec|shell|command|run)/.test(lower)
+    )
+        return "Bash";
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return active ? "Exploring" : "Explored";
     if (/(read|view|cat|open)/.test(lower)) return active ? "Reading" : "Read";
     if (/(write|edit|patch|update|apply)/.test(lower)) return active ? "Editing" : "Edited";
@@ -102,27 +112,70 @@ function toolVerb(name: string, status: ConversationActivityStatus): string {
 }
 
 /**
- * Tool → the glyph saying what kind of work it was, matched on the same
- * families as `toolVerb` so the icon and the verb never disagree. Every tool
- * gets one: a row with no glyph in a column of glyphs reads as a rendering
- * fault rather than as a tool nobody categorized.
+ * Tool → the glyph saying what kind of work it was. Commands use Octicons
+ * `code`, failed tools use Octicons `alert`, and file edits use Ionicons
+ * `document-outline`; the remaining tool families use the curated vocabulary.
  */
-function toolIcon(name: string, presentation?: ConversationActivityPresentation): IconName {
-    if (presentation?.type === "fileDiff") return "edit";
+type ToolGlyph =
+    | { set: "house"; name: IconName }
+    | { set: "ionicons"; name: "document-outline" }
+    | { set: "octicons"; name: "alert" | "code" };
+
+function toolGlyph(
+    name: string,
+    presentation: ConversationActivityPresentation | undefined,
+    failed: boolean,
+): ToolGlyph {
+    if (failed) return { set: "octicons", name: "alert" };
+    if (presentation?.type === "exploration") return { set: "house", name: "search" };
+    if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
     if (
         presentation?.type === "execCommand" ||
         presentation?.type === "backgroundTerminalInteraction"
     )
-        return "terminal";
+        return { set: "octicons", name: "code" };
     const lower = name.toLowerCase();
-    if (/(bash|exec|shell|command|run)/.test(lower)) return "terminal";
-    if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return "search";
-    if (/(read|view|cat|open)/.test(lower)) return "doc";
-    if (/(write|edit|patch|update|apply)/.test(lower)) return "edit";
-    if (/(fetch|http|web|url|browser)/.test(lower)) return "globe";
-    if (/(task|todo|plan)/.test(lower)) return "tasks";
-    if (/(agent|spawn|subagent|workflow)/.test(lower)) return "agents";
-    return "zap";
+    if (/(bash|exec|shell|command|run)/.test(lower)) return { set: "octicons", name: "code" };
+    if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return { set: "house", name: "search" };
+    if (/(read|view|cat|open)/.test(lower)) return { set: "house", name: "doc" };
+    if (/(write|edit|patch|update|apply)/.test(lower))
+        return { set: "ionicons", name: "document-outline" };
+    if (/(fetch|http|web|url|browser)/.test(lower)) return { set: "house", name: "globe" };
+    if (/(task|todo|plan)/.test(lower)) return { set: "house", name: "tasks" };
+    if (/(agent|spawn|subagent|workflow)/.test(lower)) return { set: "house", name: "agents" };
+    return { set: "house", name: "zap" };
+}
+
+function ToolIcon(props: { glyph: ToolGlyph }) {
+    if (props.glyph.set === "ionicons") return <Ionicon name={props.glyph.name} size={12} />;
+    if (props.glyph.set === "octicons") return <Octicon name={props.glyph.name} size={12} />;
+    return <Icon name={props.glyph.name} size={12} />;
+}
+
+function explorationSummary(
+    presentation: Extract<ConversationActivityPresentation, { type: "exploration" }>,
+): string {
+    const operations = presentation.operations;
+    if (operations.every((operation) => operation.kind === "read")) {
+        return [
+            ...new Set(
+                operations.flatMap((operation) =>
+                    operation.kind === "read" ? [operation.name] : [],
+                ),
+            ),
+        ].join(", ");
+    }
+    return operations
+        .map((operation) => {
+            if (operation.kind === "list") return `List ${operation.target}`;
+            if (operation.kind === "read") return `Read ${operation.name}`;
+            const detail =
+                operation.query !== undefined && operation.path !== undefined
+                    ? `${operation.query} in ${operation.path}`
+                    : (operation.query ?? operation.path ?? operation.command);
+            return `Search ${detail}`;
+        })
+        .join(" · ");
 }
 
 /** Status → semantic dot tone: warning while active/awaiting, error on stop/fail. */
@@ -135,7 +188,12 @@ function statusTone(status: ConversationActivityStatus): "success" | "warning" |
 function diffVerb(kind: ConversationFileDiff["kind"]): string {
     if (kind === "add") return "Added";
     if (kind === "delete") return "Deleted";
-    return "Edited";
+    return "Edit";
+}
+
+function fileName(path: string): string {
+    const normalized = path.replaceAll("\\", "/");
+    return normalized.slice(normalized.lastIndexOf("/") + 1) || path;
 }
 
 function diffCounts(file: ConversationFileDiff): { added: number; deleted: number } {
@@ -275,12 +333,15 @@ function AgentToolActivity(props: {
     let stats: { added: number; deleted: number } | undefined;
     let verb: string;
     if (mcp) {
-        verb = toolVerb(tool.toolName, tool.status);
+        verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = `${mcp.server} · ${mcp.tool}`;
+    } else if (presentation?.type === "exploration") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = explorationSummary(presentation);
     } else if (presentation?.type === "fileDiff") {
         const first = presentation.files[0];
-        verb = first ? diffVerb(first.kind) : toolVerb(tool.toolName, tool.status);
-        primaryText = first ? first.path : humanizeToolName(tool.toolName);
+        verb = first ? diffVerb(first.kind) : toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = first ? fileName(first.path) : humanizeToolName(tool.toolName);
         stats = presentation.files.reduce(
             (total, file) => {
                 const counts = diffCounts(file);
@@ -292,13 +353,13 @@ function AgentToolActivity(props: {
             { added: 0, deleted: 0 },
         );
     } else if (presentation?.type === "execCommand") {
-        verb = toolVerb(tool.toolName, tool.status);
+        verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.command;
     } else if (presentation?.type === "backgroundTerminalInteraction") {
-        verb = "Interacted with";
+        verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = presentation.command;
     } else {
-        verb = toolVerb(tool.toolName, tool.status);
+        verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = humanizeToolName(tool.toolName);
     }
 
@@ -357,23 +418,43 @@ function AgentToolActivity(props: {
                 className="happy2-agent-activity__glyph"
                 data-happy2-ui="agent-activity-glyph"
             >
-                <Icon name={toolIcon(tool.toolName, presentation)} size={12} />
+                <ToolIcon
+                    glyph={toolGlyph(
+                        tool.toolName,
+                        presentation,
+                        tool.failed || tool.status === "failed",
+                    )}
+                />
             </span>
             <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                 {verb}
             </span>
-            <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
-                {primaryText}
-            </span>
             {stats ? (
                 <span
-                    className="happy2-agent-activity__stats"
-                    data-happy2-ui="agent-activity-stats"
+                    className="happy2-agent-activity__file-summary"
+                    data-happy2-ui="agent-activity-file-summary"
                 >
-                    <span className="happy2-agent-activity__added">+{stats.added}</span>
-                    <span className="happy2-agent-activity__deleted">&minus;{stats.deleted}</span>
+                    <span
+                        className="happy2-agent-activity__text"
+                        data-happy2-ui="agent-activity-text"
+                    >
+                        {primaryText}
+                    </span>
+                    <span
+                        className="happy2-agent-activity__stats"
+                        data-happy2-ui="agent-activity-stats"
+                    >
+                        <span className="happy2-agent-activity__added">+{stats.added}</span>
+                        <span className="happy2-agent-activity__deleted">
+                            &minus;{stats.deleted}
+                        </span>
+                    </span>
                 </span>
-            ) : null}
+            ) : (
+                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                    {primaryText}
+                </span>
+            )}
             {hasBody ? (
                 <span aria-hidden="true" className="happy2-agent-activity__chevron">
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
@@ -387,6 +468,7 @@ function AgentToolActivity(props: {
         <div
             className="happy2-agent-activity"
             data-status={tool.status}
+            data-failed={tool.failed || tool.status === "failed" ? "" : undefined}
             data-tone={tone}
             data-presentation={presentation?.type ?? "generic"}
             data-single-line={singleLine ? "" : undefined}
@@ -610,8 +692,19 @@ function AgentShellActivity(props: {
                     data-tone={props.running ? "warning" : failed ? "error" : "success"}
                     data-happy2-ui="agent-activity-dot"
                 />
+                <span
+                    aria-hidden="true"
+                    className="happy2-agent-activity__glyph"
+                    data-happy2-ui="agent-activity-glyph"
+                >
+                    {failed ? (
+                        <Octicon name="alert" size={12} />
+                    ) : (
+                        <Octicon name="code" size={12} />
+                    )}
+                </span>
                 <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
-                    {props.running ? "Running" : "Ran"}
+                    Bash
                 </span>
                 <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
                     {props.command}

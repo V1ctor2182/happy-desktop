@@ -196,8 +196,8 @@ export function afterToolSteps(list: readonly WorkspaceEntry[], index: number): 
     return list[index]?.kind === "message" && previous?.kind === "traceStep" && previous.tool;
 }
 
-/** Whether this settled footer closes a turn whose trace is currently expanded. */
-function turnStatusAfterTrace(list: readonly WorkspaceEntry[], index: number): boolean {
+/** Whether this settled footer follows trace activity already shown above it. */
+export function turnStatusAfterTrace(list: readonly WorkspaceEntry[], index: number): boolean {
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = list[cursor];
         if (entry?.kind === "traceStep") return true;
@@ -218,8 +218,6 @@ export function entryLayoutClass(
     const entry = list[index];
     if (entry?.kind === "message" && entry.turnBlock && entry.body.length === 0)
         return "happy2-message--turn-header";
-    if (entry?.kind === "traceStep" && list[index + 1]?.kind !== "traceStep")
-        return "happy2-agent-activity-row--trace-end";
     if (entry?.kind === "turnStatus" && turnStatusAfterTrace(list, index))
         return "happy2-turn-status--after-trace";
     return afterToolSteps(list, index) ? "happy2-message--after-trace-steps" : undefined;
@@ -605,8 +603,10 @@ function turnStatusOf(
     if (!trace || turnTerminal(trace)) return undefined;
     // Prefer the request-sent clock; fall back to activity/trace start only when
     // the preceding user message is missing (legacy rows, steered turns).
-    const startedAt =
-        requestAt ?? activity?.startedAt ?? (trace.startedAt ? Date.parse(trace.startedAt) : NaN);
+    const traceStartedAt = trace.startedAt ? Date.parse(trace.startedAt) : NaN;
+    const startedAt = [requestAt, activity?.startedAt, traceStartedAt]
+        .filter((value): value is number => value !== undefined && Number.isFinite(value))
+        .reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY);
     const subagents = activity?.subagents ?? trace.subagents;
     const terminals = activity?.backgroundTerminals ?? trace.backgroundTerminals;
     return {
@@ -646,6 +646,36 @@ export function turnStatusProject(
             requestSentAt(items, index),
         );
         if (status) return status;
+    }
+    // Activity can precede the first durable assistant message. Render the
+    // working footer from that detected turn immediately instead of waiting for
+    // a message/trace row to exist.
+    const activity = activities.reduce<DeepReadonly<AgentActivityState> | undefined>(
+        (latest, candidate) =>
+            latest === undefined || candidate.startedAt > latest.startedAt ? candidate : latest,
+        undefined,
+    );
+    if (activity) {
+        let requestAt: number | undefined;
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+            const entry = messageEntry(items[index]!);
+            if (entry.agent || entry.serverMessage?.kind === "automated") continue;
+            const parsed = Date.parse(entry.serverMessage?.createdAt ?? "");
+            if (Number.isFinite(parsed)) requestAt = parsed;
+            break;
+        }
+        return {
+            kind: "turnStatus",
+            id: `${activity.turnId} status`,
+            conversationId: activity.chatId,
+            messageId: activity.turnId,
+            status: "running",
+            subagentCount: activity.subagents.filter((subagent) => subagent.status === "running")
+                .length,
+            terminalCount: activity.backgroundTerminals.length,
+            totalTokens: activity.tokenCount,
+            elapsedMs: Math.max(0, now - Math.min(requestAt ?? Infinity, activity.startedAt)),
+        };
     }
     return undefined;
 }

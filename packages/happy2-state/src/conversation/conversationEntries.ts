@@ -305,6 +305,25 @@ function presentationEqual(
     if (left === right) return true;
     if (!left || !right) return false;
     if (left.type !== right.type) return false;
+    if (left.type === "exploration" && right.type === "exploration")
+        return (
+            left.operations.length === right.operations.length &&
+            left.operations.every((operation, index) => {
+                const candidate = right.operations[index];
+                if (!candidate || operation.kind !== candidate.kind) return false;
+                if (operation.kind === "list" && candidate.kind === "list")
+                    return operation.target === candidate.target;
+                if (operation.kind === "read" && candidate.kind === "read")
+                    return operation.name === candidate.name;
+                if (operation.kind === "search" && candidate.kind === "search")
+                    return (
+                        operation.command === candidate.command &&
+                        operation.path === candidate.path &&
+                        operation.query === candidate.query
+                    );
+                return false;
+            })
+        );
     if (left.type === "execCommand" && right.type === "execCommand")
         return left.command === right.command && left.output === right.output;
     if (

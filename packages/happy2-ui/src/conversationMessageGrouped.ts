@@ -74,3 +74,18 @@ export function conversationAgentActivityStartsGroup(
     }
     return true;
 }
+
+/** Whether this status follows activity already emitted in the same turn. */
+export function conversationTurnStatusAfterActivity(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    if (entries[index]?.kind !== "turnStatus") return false;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const entry = entries[cursor];
+        if (entry?.kind === "agentActivity") return true;
+        if (entry?.kind === "turnStatus") return false;
+        if (entry?.kind === "message" && entry.message.sender?.kind !== "agent") return false;
+    }
+    return false;
+}

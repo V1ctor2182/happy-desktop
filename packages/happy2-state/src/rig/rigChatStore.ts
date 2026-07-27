@@ -324,6 +324,7 @@ function openImageResolve(
 export interface RigChatDeps {
     readonly transport: RigTransport;
     readonly catalog: RigModelCatalog;
+    readonly selectionUsed?: (selection: RigSelection) => void;
     readonly output?: (event: RigChatOutput) => void;
     readonly createId?: () => string;
     readonly now?: () => number;
@@ -672,12 +673,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         ...entry,
                         toolName: event.toolName,
                         arguments: event.arguments,
+                        ...(event.presentation ? { presentation: event.presentation } : {}),
                         status: "running",
                     }),
                     () => ({
                         toolCallId: event.toolCallId,
                         toolName: event.toolName,
                         arguments: event.arguments,
+                        ...(event.presentation ? { presentation: event.presentation } : {}),
                         status: "running",
                         failed: false,
                     }),
@@ -704,7 +707,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         display: event.display,
                         failed: event.failed,
                         failure: event.failure,
-                        presentation: event.presentation,
+                        ...(event.presentation ? { presentation: event.presentation } : {}),
                         status: event.failed ? "failed" : "success",
                         permissionReview: undefined,
                     }),
@@ -715,7 +718,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                         status: event.failed ? "failed" : "success",
                         failed: event.failed,
                         failure: event.failure,
-                        presentation: event.presentation,
+                        ...(event.presentation ? { presentation: event.presentation } : {}),
                         display: event.display,
                     }),
                 );
@@ -1066,6 +1069,22 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 turnUserIdByRun = nextTurnUserIdByRun;
                 turnFinishedAtByRun = nextTurnFinishedAtByRun;
                 steeringMessageIds = nextSteeringMessageIds;
+                // A reconnect may observe the durable run before any new stream
+                // hint. Recover the original request clock from event history;
+                // steering advances only the segment clock, never this one.
+                if (loaded.status === "running") {
+                    let activeRun: { readonly id: string; readonly startedAt: number } | undefined;
+                    for (const [candidateRunId, startedAt] of nextRunStartedAtByRun) {
+                        if (nextTurnFinishedAtByRun.has(candidateRunId)) continue;
+                        if (activeRun === undefined || startedAt > activeRun.startedAt)
+                            activeRun = { id: candidateRunId, startedAt };
+                    }
+                    if (activeRun !== undefined) {
+                        if (runId === undefined) runId = activeRun.id;
+                        if (runStartedAt === undefined || activeRun.startedAt < runStartedAt)
+                            runStartedAt = activeRun.startedAt;
+                    }
+                }
                 toolCallCreatedAt = nextTools;
                 messageTimestampCursor = timestampEvents[timestampEvents.length - 1]?.eventId;
             }
@@ -1186,6 +1205,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         const base = selectionIntent ?? selectionOf(loaded);
         const next = reduce(base);
         selectionIntent = rigSelectionEqual(next, selectionOf(loaded)) ? undefined : next;
+        deps.selectionUsed?.(next);
         commit();
     };
 

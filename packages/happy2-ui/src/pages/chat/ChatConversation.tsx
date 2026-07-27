@@ -29,7 +29,9 @@ export interface ChatConversationProps {
     composerModelControl?: ReactNode;
     messageEntries: ReactNode;
     /** The live line a working turn keeps under the transcript, scrolling with it. */
-    messageFooter?: ReactNode;
+    messageFooter: ReactNode;
+    /** Fixed height of the stable virtualized footer row. */
+    messageFooterHeight: number;
     /**
      * Height of transcript row `index` at the list's content width, computed
      * from the page's own entries rather than the DOM. It sizes the rows nobody
@@ -153,6 +155,7 @@ export function ChatConversation(props: ChatConversationProps) {
             <MessageList
                 estimateRowSize={props.estimateRowSize}
                 footer={props.messageFooter}
+                footerHeight={props.messageFooterHeight}
                 initialScrollPosition={props.messageListScrollPosition}
                 key={props.activeConversationId}
                 onScrollPositionChange={props.onMessageListScrollPositionChange}

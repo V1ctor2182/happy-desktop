@@ -3,6 +3,7 @@ import { ComponentPage, Specimen } from "../kit";
 import {
     rigAwaitingTool,
     rigExecTool,
+    rigExplorationTool,
     rigFailedTool,
     rigFileDiffTool,
     rigGenericTool,
@@ -46,6 +47,7 @@ export function AgentActivityRowPage() {
                         activity={{ kind: "tool", tool: rigTerminalTool }}
                         defaultExpanded
                     />
+                    <AgentActivityRow activity={{ kind: "tool", tool: rigExplorationTool }} />
                 </div>
             </Specimen>
 

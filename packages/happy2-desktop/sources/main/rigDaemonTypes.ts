@@ -148,6 +148,9 @@ export type AgentMessage = Extract<Message, { readonly role: "agent" }>;
 export type AgentBlock = AgentMessage["blocks"][number];
 export type ToolResultBlock = Extract<AgentBlock, { readonly type: "tool_result" }>;
 export type ToolResultPresentation = NonNullable<ToolResultBlock["presentation"]>;
+export type ToolCallPresentation = NonNullable<
+    Extract<AgentBlock, { readonly type: "tool_call" }>["presentation"]
+>;
 export type FileDiff = Extract<
     ToolResultPresentation,
     { readonly type: "file_diff" }
@@ -248,6 +251,7 @@ export interface ToolCall {
     readonly id: string;
     readonly name: string;
     readonly arguments: unknown;
+    readonly presentation?: ToolCallPresentation;
 }
 
 export interface AssistantMessage {

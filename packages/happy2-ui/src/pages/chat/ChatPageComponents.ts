@@ -1,5 +1,5 @@
 export { AgentActivityRow } from "../../AgentActivityRow.js";
-export { AgentWorkingStatus } from "../../AgentWorkingStatus.js";
+export { AGENT_WORKING_STATUS_ROW_HEIGHT, AgentWorkingStatus } from "../../AgentWorkingStatus.js";
 export { TurnSummary } from "../../TurnSummary.js";
 export { AgentTraceRow } from "../../AgentTraceRow.js";
 export { AppShell } from "../../AppShell.js";

@@ -82,7 +82,9 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 agent
                 author={props.activityAuthor.displayName}
                 body=""
-                className={props.className}
+                className={["happy2-message--activity-lead", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
                 style={props.style}
                 time={time}

@@ -1,4 +1,5 @@
 import {
+    Children,
     createContext,
     createElement,
     useContext,
@@ -36,6 +37,10 @@ function safeHref(value: unknown): string | undefined {
     return NAVIGABLE_SCHEMES.has(scheme[1]!.toLowerCase()) ? trimmed : undefined;
 }
 const MarkdownLinkContext = createContext(false);
+const MarkdownTrailingContext = createContext<{
+    endOffset: number;
+    node: ReactNode;
+} | null>(null);
 type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
 /**
  * A Markdown image is rendered as a safe labelled link, never an `<img>`: an
@@ -89,6 +94,56 @@ const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
         </a>
     );
 };
+function appendTrailingInline(children: ReactNode, trailing: ReactNode): ReactNode {
+    const nodes = Children.toArray(children);
+    const last = nodes.pop();
+    if (typeof last === "string") {
+        const finalWord = /^(.*)(\s+)(\S+)$/.exec(last);
+        if (finalWord)
+            return (
+                <>
+                    {nodes}
+                    {finalWord[1]}
+                    {finalWord[2]}
+                    <span
+                        className="happy2-message__trailing-inline"
+                        data-happy2-ui="message-trailing-inline"
+                    >
+                        {finalWord[3]}
+                        {"\u00a0"}
+                        {trailing}
+                    </span>
+                </>
+            );
+    }
+    return (
+        <>
+            {nodes}
+            <span
+                className="happy2-message__trailing-inline"
+                data-happy2-ui="message-trailing-inline"
+            >
+                {last}
+                {"\u00a0"}
+                {trailing}
+            </span>
+        </>
+    );
+}
+const MarkdownParagraph = ({
+    children,
+    node,
+    ...props
+}: ComponentPropsWithoutRef<"p"> & ExtraProps) => {
+    const trailing = useContext(MarkdownTrailingContext);
+    return (
+        <p {...props}>
+            {trailing !== null && node?.position?.end.offset === trailing.endOffset
+                ? appendTrailingInline(children, trailing.node)
+                : children}
+        </p>
+    );
+};
 /**
  * Headings render with no generated `id`. Chat bodies are untrusted and appear
  * many-to-a-page, so generated heading anchors would collide across messages.
@@ -106,6 +161,7 @@ const headingOverride = (
 const markdownComponents: Components = {
     a: MarkdownLink,
     img: MarkdownImage,
+    p: MarkdownParagraph,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
     h3: headingOverride("h3"),
@@ -116,12 +172,20 @@ const markdownComponents: Components = {
 /**
  * Render untrusted Markdown as React nodes. Raw HTML is never activated because
  * no raw-HTML plugin is present; block nodes are emitted as direct siblings so
- * the message body's spacing rules remain authoritative.
+ * the message body's spacing rules remain authoritative. Optional trailing
+ * content is injected into the final paragraph's inline flow so it cannot wrap
+ * independently at the paragraph boundary.
  */
-export function renderMessageMarkdown(text: string): ReactNode {
+export function renderMessageMarkdown(text: string, trailing?: ReactNode): ReactNode {
     return (
-        <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-            {text}
-        </Markdown>
+        <MarkdownTrailingContext.Provider
+            value={
+                trailing === undefined ? null : { endOffset: text.trimEnd().length, node: trailing }
+            }
+        >
+            <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                {text}
+            </Markdown>
+        </MarkdownTrailingContext.Provider>
     );
 }

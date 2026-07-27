@@ -102,6 +102,11 @@
     overflow: auto;
 }
 
+.happy2-conversation__loading {
+    align-items: center;
+    justify-content: center;
+}
+
 .happy2-conversation__queued {
     display: flex;
     flex-direction: column;

@@ -17,14 +17,14 @@ export interface RigClockStore {
 }
 
 export interface RigClockStoreOptions {
-    /** Tick cadence in milliseconds; each tick republishes `now`. Defaults to 15s. */
+    /** Tick cadence in milliseconds; each tick republishes `now`. Defaults to 1s. */
     readonly intervalMs?: number;
     readonly now?: () => number;
     readonly setInterval?: (handler: () => void, milliseconds: number) => unknown;
     readonly clearInterval?: (handle: unknown) => void;
 }
 
-const DEFAULT_INTERVAL_MS = 15_000;
+const DEFAULT_INTERVAL_MS = 1_000;
 
 /**
  * Creates a clock store. Timing is injectable so tests advance it deterministically
