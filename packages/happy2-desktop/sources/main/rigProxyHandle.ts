@@ -356,7 +356,7 @@ export interface RigProxyHandleOptions {
  * Electron `node:http` server and the Vite dev-server middleware. It maps the
  * renderer transport's JSON/SSE routes onto the authenticated `ProtocolHttpClient`.
  * Ordinary routes return projected `happy2-state` shapes; the explicit read-only
- * `rig-connect` routes preserve raw stream/transcript frames for the vendored
+ * `rig-connect` routes preserve raw stream/transcript frames for the published
  * state client. Returns `true` when it owned the request; a `false` result lets
  * the caller fall through (404 for the Node server, `next()` for Vite middleware).
  */
