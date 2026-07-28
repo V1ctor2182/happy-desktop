@@ -154,7 +154,7 @@ function catalogProject(
 
     for (const group of groups) {
         projects.push(projectProject(group, baseUrl));
-        sessions.push(...group.sessions.map(sessionProject));
+        sessions.push(...group.sessions.filter((session) => !session.archived).map(sessionProject));
         for (const workspace of group.workspaces) {
             worktrees.push({
                 id: workspace.id as RigWorktreeId,
@@ -166,7 +166,9 @@ function catalogProject(
                 status: workspace.status,
                 ...gitProject(workspace.git),
             });
-            sessions.push(...workspace.sessions.map(sessionProject));
+            sessions.push(
+                ...workspace.sessions.filter((session) => !session.archived).map(sessionProject),
+            );
         }
     }
 
