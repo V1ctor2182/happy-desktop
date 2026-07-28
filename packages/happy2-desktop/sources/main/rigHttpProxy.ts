@@ -44,11 +44,11 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * A loopback-only HTTP bridge from the sandboxed renderer to the daemon. The
  * renderer cannot open the daemon's Unix socket, so the main process listens on an
  * ephemeral 127.0.0.1 port and forwards the renderer transport's projected JSON/SSE
- * routes to the authenticated `ProtocolHttpClient` via `rigProxyHandle`. A narrow,
- * read-only `rig-connect` route family additionally preserves the daemon's raw SSE
- * and transcript frames for the vendored application-state client. It binds to
- * loopback only, requires the unguessable URL capability, and 404s every unmatched
- * path. Resolves once the port is bound so the caller can advertise the URL.
+ * routes to the authenticated `ProtocolHttpClient` via `rigProxyHandle`. The
+ * narrow `rig-connect` route family preserves the daemon's raw SSE, paging, and
+ * mutation contract for the application-state client. It binds to loopback only,
+ * requires the unguessable URL capability, and 404s every unmatched path.
+ * Resolves once the port is bound so the caller can advertise the URL.
  *
  * The same port also upgrades one route to a WebSocket: a terminal's byte channel,
  * which cannot be a request/response at all. That is the only upgrade this server
@@ -78,15 +78,17 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         }
         if (crossOrigin) {
             response.setHeader("access-control-allow-origin", options.allowedOrigin!);
+            response.setHeader("access-control-expose-headers", "etag, retry-after");
             response.setHeader("vary", "origin");
         }
         if (request.method === "OPTIONS") {
-            // The transport POSTs `application/json`, which is not a safelisted
-            // content type, so the browser preflights before every mutation.
+            // Connector mutations carry JSON plus version/idempotency headers,
+            // so the development browser preflights them.
             if (crossOrigin) {
                 response.writeHead(204, {
-                    "access-control-allow-headers": "authorization, content-type",
-                    "access-control-allow-methods": "GET, POST, OPTIONS",
+                    "access-control-allow-headers":
+                        "authorization, content-type, if-match, x-rig-mutation-id",
+                    "access-control-allow-methods": "DELETE, GET, PATCH, POST, PUT, OPTIONS",
                     "access-control-max-age": "600",
                 });
             } else {
@@ -95,8 +97,11 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             response.end();
             return;
         }
+        const hasBody =
+            Number(request.headers["content-length"] ?? 0) > 0 ||
+            request.headers["transfer-encoding"] !== undefined;
         if (
-            request.method === "POST" &&
+            hasBody &&
             request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !==
                 "application/json"
         ) {

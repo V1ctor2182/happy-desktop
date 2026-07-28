@@ -90,27 +90,34 @@ export class RigDaemonClient {
     }
 
     /**
-     * Opens one authenticated daemon GET without parsing its body.
+     * Opens one authenticated daemon request without interpreting its response.
      *
      * This is reserved for the capability-scoped `rig-connect` bridge, whose
-     * browser-neutral stream parser must see the daemon's SSE frames unchanged.
+     * browser-neutral client must see statuses, headers, JSON, and SSE unchanged.
      */
-    rawGet(path: string, signal?: AbortSignal): Promise<RigDaemonRawResponse> {
+    rawRequest(options: {
+        readonly method: string;
+        readonly path: string;
+        readonly body?: Buffer;
+        readonly headers?: Readonly<Record<string, string>>;
+        readonly signal?: AbortSignal;
+    }): Promise<RigDaemonRawResponse> {
         return new Promise((resolvePromise, reject) => {
-            if (signal?.aborted) {
+            if (options.signal?.aborted) {
                 reject(new Error("The Rig daemon request was aborted."));
                 return;
             }
+            const headers: Record<string, string | number> = {
+                accept: "application/json",
+                authorization: `Bearer ${this.#token}`,
+                ...options.headers,
+            };
+            if (options.body !== undefined) headers["content-length"] = options.body.byteLength;
             const request = httpRequest(
                 {
-                    headers: {
-                        accept: path.split("?", 1)[0]?.endsWith("/transcript")
-                            ? "application/json"
-                            : "text/event-stream",
-                        authorization: `Bearer ${this.#token}`,
-                    },
-                    method: "GET",
-                    path,
+                    headers,
+                    method: options.method,
+                    path: options.path,
                     socketPath: this.socketPath,
                 },
                 (response) => {
@@ -123,10 +130,11 @@ export class RigDaemonClient {
                 },
             );
             const abort = () => request.destroy();
-            const cleanup = () => signal?.removeEventListener("abort", abort);
-            signal?.addEventListener("abort", abort, { once: true });
+            const cleanup = () => options.signal?.removeEventListener("abort", abort);
+            options.signal?.addEventListener("abort", abort, { once: true });
             request.once("close", cleanup);
             request.once("error", reject);
+            if (options.body !== undefined) request.write(options.body);
             request.end();
         });
     }

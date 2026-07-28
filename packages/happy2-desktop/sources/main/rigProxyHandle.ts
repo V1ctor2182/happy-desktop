@@ -287,7 +287,7 @@ async function changedFileRead(
 export type RigProxyClient = Pick<
     RigDaemonClient,
     | "health"
-    | "rawGet"
+    | "rawRequest"
     | "models"
     | "listSessions"
     | "listCatalog"
@@ -355,10 +355,11 @@ export interface RigProxyHandleOptions {
  * The single request handler behind the loopback Rig proxy, shared by the packaged
  * Electron `node:http` server and the Vite dev-server middleware. It maps the
  * renderer transport's JSON/SSE routes onto the authenticated `ProtocolHttpClient`.
- * Ordinary routes return projected `happy2-state` shapes; the explicit read-only
- * `rig-connect` routes preserve raw stream/transcript frames for the published
- * state client. Returns `true` when it owned the request; a `false` result lets
- * the caller fall through (404 for the Node server, `next()` for Vite middleware).
+ * Ordinary routes return projected `happy2-state` shapes; the explicit
+ * `rig-connect` routes preserve the connector's raw stream, JSON, conditional
+ * request, and response contract. Returns `true` when it owned the request; a
+ * `false` result lets the caller fall through (404 for the Node server, `next()`
+ * for Vite middleware).
  */
 export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<boolean> {
     const { client, method, path, query, request, response } = options;
@@ -366,18 +367,19 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     const segments = path.split("/").filter((segment) => segment.length > 0);
 
     try {
+        const rigConnectPath = rigConnectDaemonPath(method, segments, query);
+        if (rigConnectPath !== undefined) {
+            await rigConnectForward(
+                client,
+                request,
+                response,
+                method,
+                rigConnectPath,
+                options.onConnectionError,
+            );
+            return true;
+        }
         if (method === "GET") {
-            const rigConnectPath = rigConnectDaemonPath(segments, query);
-            if (rigConnectPath !== undefined) {
-                await rigConnectRead(
-                    client,
-                    request,
-                    response,
-                    rigConnectPath,
-                    options.onConnectionError,
-                );
-                return true;
-            }
             if (path === "/health") {
                 await handleHealth(client, response, options.onConnectionError);
                 return true;
@@ -700,40 +702,16 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
 }
 
 function rigConnectDaemonPath(
+    method: string,
     segments: readonly string[],
     query: URLSearchParams,
 ): string | undefined {
-    let path: string;
-    let allowed: readonly string[];
-    if (
-        segments.length === 3 &&
-        segments[0] === "rig-connect" &&
-        segments[1] === "events" &&
-        segments[2] === "stream"
-    ) {
-        path = "/events/stream";
-        allowed = ["after"];
-    } else if (
-        segments.length === 4 &&
-        segments[0] === "rig-connect" &&
-        segments[1] === "sessions" &&
-        segments[3] === "stream"
-    ) {
-        path = `/sessions/${segments[2]!}/stream`;
-        allowed = ["after", "turns"];
-    } else if (
-        segments.length === 4 &&
-        segments[0] === "rig-connect" &&
-        segments[1] === "sessions" &&
-        segments[3] === "transcript"
-    ) {
-        path = `/sessions/${segments[2]!}/transcript`;
-        allowed = ["before"];
-    } else {
-        return undefined;
-    }
+    if (segments[0] !== "rig-connect") return undefined;
+    const route = segments.slice(1);
+    if (!rigConnectRouteAllowed(method, route)) return undefined;
+    const path = `/${route.join("/")}`;
     const forwarded = new URLSearchParams();
-    for (const name of allowed) {
+    for (const name of ["after", "turns", "before", "expectedRunId", "scope", "waitMs"]) {
         const value = query.get(name);
         if (value !== null) forwarded.set(name, value);
     }
@@ -741,10 +719,75 @@ function rigConnectDaemonPath(
     return `${path}${suffix.length > 0 ? `?${suffix}` : ""}`;
 }
 
-async function rigConnectRead(
+function rigConnectRouteAllowed(method: string, route: readonly string[]): boolean {
+    if (method === "GET") {
+        if (route.length === 2 && route[0] === "events" && route[1] === "stream") return true;
+        if (
+            route.length === 3 &&
+            route[0] === "sessions" &&
+            (route[2] === "stream" || route[2] === "transcript")
+        )
+            return true;
+        return route.length === 4 && route[0] === "sessions" && route[2] === "background-processes";
+    }
+    if (method === "PATCH") {
+        if (route[0] === "projects")
+            return route.length === 2 || (route.length === 4 && route[2] === "workspaces");
+        return (
+            route[0] === "sessions" &&
+            (route.length === 2 ||
+                (route.length === 3 &&
+                    ["model", "effort", "service-tier", "permissions", "goal"].includes(route[2]!)))
+        );
+    }
+    if (method === "PUT")
+        return (
+            route[0] === "sessions" &&
+            ((route.length === 3 && route[2] === "draft") ||
+                (route.length === 4 && route[2] === "terminal-connections"))
+        );
+    if (method === "DELETE")
+        return (
+            route[0] === "sessions" &&
+            ((route.length === 3 && route[2] === "goal") ||
+                (route.length === 4 &&
+                    ["secrets", "background-processes", "terminal-connections"].includes(
+                        route[2]!,
+                    )))
+        );
+    if (method !== "POST") return false;
+    if (route.length === 1 && route[0] === "sessions") return true;
+    if (route[0] !== "sessions" || route.length < 3) return false;
+    if (
+        route.length === 3 &&
+        [
+            "fork",
+            "messages",
+            "abort",
+            "goal",
+            "secrets",
+            "compact",
+            "reset",
+            "rewind",
+            "shell",
+            "activity",
+            "archive",
+            "unarchive",
+        ].includes(route[2]!)
+    )
+        return true;
+    return (
+        (route.length === 4 && ["user-input", "external-tool-calls"].includes(route[2]!)) ||
+        (route.length === 4 && route[2] === "background-processes" && route[3] === "stop") ||
+        (route.length === 5 && route[2] === "workflows" && route[4] === "stop")
+    );
+}
+
+async function rigConnectForward(
     client: RigProxyClient,
     request: IncomingMessage,
     response: ServerResponse,
+    method: string,
     path: string,
     onConnectionError?: (error: unknown) => void,
 ): Promise<void> {
@@ -753,12 +796,24 @@ async function rigConnectRead(
     request.once("aborted", abort);
     response.once("close", abort);
     try {
-        const upstream = await client.rawGet(path, controller.signal);
+        const body = method === "GET" ? undefined : await bodyReadBuffer(request, 64 * 1024 * 1024);
+        const forwardedHeaders: Record<string, string> = {};
+        for (const name of ["accept", "content-type", "if-match", "x-rig-mutation-id"]) {
+            const value = request.headers[name];
+            if (typeof value === "string") forwardedHeaders[name] = value;
+        }
+        const upstream = await client.rawRequest({
+            method,
+            path,
+            ...(body ? { body } : {}),
+            ...(Object.keys(forwardedHeaders).length > 0 ? { headers: forwardedHeaders } : {}),
+            signal: controller.signal,
+        });
         const headers: Record<string, string> = {};
-        const contentType = upstream.headers["content-type"];
-        const cacheControl = upstream.headers["cache-control"];
-        if (typeof contentType === "string") headers["content-type"] = contentType;
-        if (typeof cacheControl === "string") headers["cache-control"] = cacheControl;
+        for (const name of ["content-type", "cache-control", "retry-after", "etag"]) {
+            const value = upstream.headers[name];
+            if (typeof value === "string") headers[name] = value;
+        }
         response.writeHead(upstream.statusCode, headers);
         await pipeline(upstream.body, response);
     } catch (error) {
@@ -1184,6 +1239,18 @@ async function bodyReadJson(request: IncomingMessage): Promise<Record<string, un
     }
     if (body.trim().length === 0) return {};
     return JSON.parse(body) as Record<string, unknown>;
+}
+
+async function bodyReadBuffer(request: IncomingMessage, maximumBytes: number): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const chunk of request) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        bytes += buffer.byteLength;
+        if (bytes > maximumBytes) throw new Error("The request body is too large.");
+        chunks.push(buffer);
+    }
+    return Buffer.concat(chunks);
 }
 
 function errorMessage(error: unknown): string {
