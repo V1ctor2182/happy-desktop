@@ -124,9 +124,9 @@ export interface ConversationActivityFailure {
 export interface ConversationActivityReview {
     readonly action: string;
     readonly reason: string;
-    readonly decision: "allow" | "ask";
-    readonly risk: "low" | "medium" | "high";
-    readonly userAuthorization: "low" | "medium" | "high";
+    readonly decision: "allow" | "ask" | "deny";
+    readonly risk: "low" | "medium" | "high" | "critical";
+    readonly userAuthorization: "unknown" | "low" | "medium" | "high";
 }
 
 /** One tool invocation with everything a reader needs at a glance plus on demand. */
@@ -252,7 +252,7 @@ export interface ConversationMessageEntry {
     readonly kind: "message";
     readonly message: ConversationMessageProjection;
     readonly source: "server" | "local";
-    readonly delivery: "sending" | "sent" | "failed";
+    readonly delivery: "sending" | "pending_steering" | "sent" | "failed";
     readonly clientMutationId?: string;
     readonly error?: UserError;
 }

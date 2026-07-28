@@ -1031,14 +1031,16 @@ function RigConversationSurface(props: {
             composerPlaceholder="Message Happy…"
             conversationId={conversation.conversationId}
             entries={conversation.entries}
-            loading={conversation.session.type === "loading"}
+            loading={!conversation.ready}
             scrollPosition={conversation.scrollPosition}
-            onScrollPositionChange={(position) =>
+            onScrollPositionChange={(position) => {
+                if (position.scrollTop <= 64 && !conversation.transcriptComplete)
+                    workspace.historyLoadMore();
                 workspace.conversationScrollUpdate(
                     conversation.conversationId as RigSessionId,
                     position,
-                )
-            }
+                );
+            }}
             composerControls={
                 <>
                     {conversation.menus ? (
@@ -1124,7 +1126,6 @@ function RigConversationSurface(props: {
                     </ModalOverlay>
                 ) : undefined
             }
-            queued={conversation.queuedMessages}
             requestSubmissions={conversation.requestSubmissions}
             running={conversation.running}
             runningAgents={

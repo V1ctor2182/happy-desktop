@@ -79,6 +79,7 @@ const MENTION_LIMIT = 8;
  */
 export interface RigConversationSnapshot {
     readonly conversationId: RigSessionId;
+    readonly ready: boolean;
     readonly session: Loadable<RigSession>;
     readonly title?: string;
     readonly subtitle?: string;
@@ -87,6 +88,9 @@ export interface RigConversationSnapshot {
     readonly running: boolean;
     readonly runStartedAt?: number;
     readonly turnElapsedMs?: number;
+    readonly transcriptComplete: boolean;
+    readonly loadingMore: boolean;
+    readonly loadMoreError?: string;
     readonly queuedMessages: readonly RigQueuedMessage[];
     readonly requestSubmissions: RigChatSnapshot["requestSubmissions"];
     readonly tasks: readonly RigTask[];
@@ -410,6 +414,8 @@ export interface RigWorkspaceStore {
     compact(): Promise<void>;
     rewind(messageId: string): Promise<void>;
     conversationReset(): Promise<void>;
+    /** Loads the next page before the active conversation's current window. */
+    historyLoadMore(): void;
     /** Requests termination of one background terminal in the active session (`/stop`). */
     backgroundProcessStop(processId: number): Promise<void>;
     /** Reads the active session's token/cost usage snapshot for the `/usage` panel. */
@@ -610,18 +616,21 @@ export function rigWorkspaceStoreCreate(
         chat: RigChatSnapshot,
         draft: ComposerSnapshot,
     ): RigConversationSnapshot => {
-        const session = chat.session.type === "ready" ? chat.session.value : undefined;
         const models = client.models.get();
         return {
             conversationId: chat.sessionId,
+            ready: chat.ready,
             session: chat.session,
-            ...(session?.title ? { title: session.title } : {}),
-            ...(session ? { subtitle: session.displayCwd || session.cwd } : {}),
+            ...(chat.title ? { title: chat.title } : {}),
+            ...(chat.cwd ? { subtitle: chat.cwd } : {}),
             entries: chat.entries,
             composer: draft,
             running: chat.runStatus === "running",
             ...(chat.runStartedAt !== undefined ? { runStartedAt: chat.runStartedAt } : {}),
             ...(chat.turnElapsedMs !== undefined ? { turnElapsedMs: chat.turnElapsedMs } : {}),
+            transcriptComplete: chat.transcriptComplete,
+            loadingMore: chat.loadingMore,
+            ...(chat.loadMoreError ? { loadMoreError: chat.loadMoreError } : {}),
             queuedMessages: chat.queuedMessages,
             requestSubmissions: chat.requestSubmissions,
             tasks: chat.tasks,
@@ -1034,13 +1043,13 @@ export function rigWorkspaceStoreCreate(
                 handle = acquired;
                 chatStore = acquired.store;
                 const reconcileDraft = (): void => {
-                    const state = acquired.store.get().session;
+                    const state = acquired.store.get();
                     const currentComposer = composer;
-                    if (state.type !== "ready" || !currentComposer) return;
-                    const remoteUpdatedAt = state.value.draftUpdatedAt ?? 0;
+                    if (!state.ready || !currentComposer) return;
+                    const remoteUpdatedAt = state.draftUpdatedAt ?? 0;
                     const localUpdatedAt = currentComposer.getState().lastInteractionAt ?? 0;
                     if (remoteUpdatedAt < localUpdatedAt) return;
-                    const remote = state.value.draft ?? "";
+                    const remote = state.draft ?? "";
                     if (currentComposer.getState().text !== remote)
                         currentComposer
                             .getState()
@@ -1572,6 +1581,7 @@ export function rigWorkspaceStoreCreate(
         compact: () => withChat((store) => store.compact()),
         rewind: (messageId) => withChat((store) => store.rewind(messageId)),
         conversationReset: () => withChat((store) => store.sessionReset()),
+        historyLoadMore: () => chatStore?.historyLoadMore(),
         backgroundProcessStop: (processId) =>
             withChat((store) => store.backgroundProcessStop(processId)),
         usageGet: () => withChat((store) => store.usageGet()),
@@ -1782,12 +1792,15 @@ function conversationAcquiring(
             : undefined;
     return {
         conversationId,
+        ready: false,
         session: { type: "loading" },
         ...(summary?.title ? { title: summary.title } : {}),
         ...(summary?.subtitle ? { subtitle: summary.subtitle } : {}),
         entries: NO_ENTRIES,
         composer,
         running: false,
+        transcriptComplete: true,
+        loadingMore: false,
         queuedMessages: NO_QUEUED,
         requestSubmissions: NO_SUBMISSIONS,
         tasks: NO_TASKS,

@@ -1,7 +1,5 @@
-import { connectSession } from "@slopus/rig-connect";
+import type { RigConnection } from "@slopus/rig-connect";
 import type { RigChatTranscriptConnect } from "happy2-state";
-
-const LOCAL_PROXY_TOKEN = "happy2-local-capability";
 
 /**
  * Opens rig-connect through Happy's capability-scoped read bridge.
@@ -11,13 +9,10 @@ const LOCAL_PROXY_TOKEN = "happy2-local-capability";
  * existing chat reader remains visible until a complete rig-connect snapshot
  * arrives.
  */
-export function rigConnectTranscriptConnectCreate(baseUrl: string): RigChatTranscriptConnect {
-    const endpoint = `${baseUrl.replace(/\/$/, "")}/rig-connect`;
+export function rigConnectTranscriptConnectCreate(rig: RigConnection): RigChatTranscriptConnect {
     return (options) => {
         let accepted = false;
-        const connection = connectSession({
-            endpoint,
-            token: LOCAL_PROXY_TOKEN,
+        const connection = rig.connectSession({
             sessionId: options.sessionId,
             onChange: (elements, session) => {
                 if (session.connection === "live") accepted = true;
@@ -25,6 +20,9 @@ export function rigConnectTranscriptConnectCreate(baseUrl: string): RigChatTrans
             },
             onError: options.onError,
         });
-        return { close: () => connection.close() };
+        return {
+            close: () => connection.close(),
+            loadMore: (token) => connection.loadMore(token),
+        };
     };
 }

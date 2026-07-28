@@ -280,6 +280,12 @@ function ChildRow(props: { tone?: "muted" | "error"; children: React.ReactNode }
 
 function PermissionReviewRow(props: { review: ConversationActivityReview }) {
     const { review } = props;
+    const title =
+        review.decision === "allow"
+            ? "Approved"
+            : review.decision === "deny"
+              ? "Denied"
+              : "Awaiting approval";
     return (
         <div className="happy2-agent-activity__review" data-happy2-ui="agent-activity-review">
             <span aria-hidden="true" className="happy2-agent-activity__child-marker">
@@ -290,7 +296,7 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
                     className="happy2-agent-activity__review-title"
                     data-happy2-ui="agent-activity-review-title"
                 >
-                    Awaiting approval · {review.action}
+                    {title} · {review.action}
                 </span>
                 <span className="happy2-agent-activity__review-reason">{review.reason}</span>
                 <span

@@ -1,5 +1,6 @@
 import type { TerminalDriverCreate } from "../modules/terminal/terminalState.js";
 import type { UserError } from "../types.js";
+import type { MutationRejectedDelta, RigConnection } from "@slopus/rig-connect";
 import { rigTerminalOpen, type RigTerminalHandle } from "./rigTerminalStore.js";
 import {
     rigChatStoreCreate,
@@ -76,6 +77,11 @@ export interface RigClientDeps {
     readonly catalogSource?: RigSessionCatalogSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
+    /** Shared rig-connect actions for session mutations. */
+    readonly connectActions?: RigConnection;
+    readonly connectMutationSubscribe?: (
+        listener: (rejection: MutationRejectedDelta) => void,
+    ) => () => void;
     readonly createId?: () => string;
     readonly now?: () => number;
     readonly sessionListOutput?: (event: RigSessionListOutput) => void;
@@ -144,6 +150,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                         ...(deps.transcriptConnect
                             ? { transcriptConnect: deps.transcriptConnect }
                             : {}),
+                        ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
+                        ...(deps.connectMutationSubscribe
+                            ? { connectMutationSubscribe: deps.connectMutationSubscribe }
+                            : {}),
                         selectionUsed: (selection) => models.selectionUsed(selection),
                         createId: deps.createId,
                         now: deps.now,
@@ -157,9 +167,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                         current.store = store;
                         if (!current.archived) {
                             current.backgroundUnsubscribe = store.subscribe(() => {
-                                const session = store.get().session;
-                                if (session.type !== "ready" || session.value.status !== "archived")
-                                    return;
+                                if (!store.get().archived) return;
                                 current.archived = true;
                                 current.backgroundUnsubscribe?.();
                                 current.backgroundUnsubscribe = undefined;

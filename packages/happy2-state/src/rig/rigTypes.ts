@@ -561,9 +561,9 @@ export type RigToolStatus = "running" | "awaiting_approval" | "success" | "faile
 export interface RigPermissionReview {
     readonly action: string;
     readonly reason: string;
-    readonly decision: "allow" | "ask";
-    readonly risk: "low" | "medium" | "high";
-    readonly userAuthorization: "low" | "medium" | "high";
+    readonly decision: "allow" | "ask" | "deny";
+    readonly risk: "low" | "medium" | "high" | "critical";
+    readonly userAuthorization: "unknown" | "low" | "medium" | "high";
 }
 
 /** Live state of one tool call, merged from stream deltas and (once known) its result. */

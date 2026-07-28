@@ -83,7 +83,7 @@ export type ConversationViewProps = {
     onTraceToggle?: (turnId: string) => void;
     /** Finished turns currently listing their intermediate entries. */
     expandedTurnIds?: ReadonlySet<string>;
-    /** Steering messages queued to submit after the current tool call (preview only). */
+    /** @deprecated Pending steering now renders as an ordered transcript message. */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** The composer surface snapshot; the draft never lives in this component. */
     composer: ComposerSnapshot;
@@ -318,30 +318,6 @@ export function ConversationView(props: ConversationViewProps) {
                     })}
                 </MessageList>
             )}
-
-            {props.queued && props.queued.length > 0 ? (
-                <div
-                    className="happy2-conversation__queued"
-                    data-happy2-ui="conversation-queued"
-                    role="status"
-                >
-                    <span
-                        className="happy2-conversation__queued-title"
-                        data-happy2-ui="conversation-queued-title"
-                    >
-                        Messages to be submitted after the next tool call
-                    </span>
-                    {props.queued.map((message) => (
-                        <span
-                            className="happy2-conversation__queued-item"
-                            data-happy2-ui="conversation-queued-item"
-                            key={message.id}
-                        >
-                            {message.text}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
 
             <div className="happy2-conversation__dock" data-happy2-ui="conversation-dock">
                 {composer.submission.status === "failed" ? (

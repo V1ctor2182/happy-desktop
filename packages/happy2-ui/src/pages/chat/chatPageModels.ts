@@ -84,7 +84,7 @@ export type LiveChatMessage = ChatMessage & {
     serverMessage?: DeepReadonly<ConversationMessageProjection>;
     senderId?: string;
     photoFileId?: string;
-    delivery?: "sending" | "sent" | "failed";
+    delivery?: "sending" | "pending_steering" | "sent" | "failed";
     agentTrace?: DeepReadonly<AgentTurnTraceSummary>;
     /**
      * An earlier text block of a turn whose steps are shown, split back out of

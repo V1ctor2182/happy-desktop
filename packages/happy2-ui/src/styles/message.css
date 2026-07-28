@@ -73,6 +73,12 @@
     opacity: 0.56;
 }
 
+.happy2-message[data-own][data-delivery-state="pending_steering"] .happy2-message__bubble {
+    border: 1px solid var(--box-warning-border);
+    background: var(--box-warning-background);
+    color: var(--text);
+}
+
 .happy2-message[data-delivery-state="failed"] .happy2-message__content {
     color: var(--text-secondary);
     opacity: 0.78;

@@ -1,8 +1,8 @@
 import {
-    connectGroups,
     type GitChangeSnapshot,
     type GroupSession,
     type ProjectGroup,
+    type RigConnection,
 } from "@slopus/rig-connect";
 import type {
     RigGitChangedFile,
@@ -22,8 +22,6 @@ import type {
     RigWorktreeId,
 } from "happy2-state";
 
-const LOCAL_PROXY_TOKEN = "happy2-local-capability";
-
 export interface RigConnectCatalogFallback {
     read(): Promise<RigSessionCatalogSnapshot>;
     subscribe(listener: () => void, onError: (error: unknown) => void): () => void;
@@ -39,13 +37,13 @@ export interface RigConnectCatalogFallback {
  * connection to `live`, the existing complete reader remains authoritative.
  */
 export function rigConnectCatalogSourceCreate(
+    rig: RigConnection,
     baseUrl: string,
     fallback: RigConnectCatalogFallback,
 ): RigSessionCatalogSource {
     const base = baseUrl.replace(/\/$/, "");
-    const endpoint = `${base}/rig-connect`;
     let snapshot: RigSessionCatalogSnapshot | undefined;
-    let connection: ReturnType<typeof connectGroups> | undefined;
+    let connection: ReturnType<RigConnection["connectGroups"]> | undefined;
     let fallbackUnsubscribe: (() => void) | undefined;
     let fallbackReading: Promise<void> | undefined;
     let live = false;
@@ -72,6 +70,14 @@ export function rigConnectCatalogSourceCreate(
         for (const listener of errorListeners) listener(error);
     };
 
+    const fallbackStart = (): void => {
+        if (disposed || fallbackUnsubscribe) return;
+        connection?.close();
+        connection = undefined;
+        fallbackUnsubscribe = fallback.subscribe(() => void fallbackRead(), fail);
+        void fallbackRead();
+    };
+
     const fallbackRead = (): Promise<void> => {
         fallbackReading ??= fallback
             .read()
@@ -90,11 +96,8 @@ export function rigConnectCatalogSourceCreate(
     };
 
     const start = (): void => {
-        if (disposed || connection) return;
-        fallbackUnsubscribe = fallback.subscribe(() => void fallbackRead(), fail);
-        connection = connectGroups({
-            endpoint,
-            token: LOCAL_PROXY_TOKEN,
+        if (disposed || connection || fallbackUnsubscribe) return;
+        connection = rig.connectGroups({
             onChange: (projects, state) => {
                 if (state.connection !== "live") return;
                 live = true;
@@ -102,9 +105,8 @@ export function rigConnectCatalogSourceCreate(
                 fallbackUnsubscribe = undefined;
                 publish(projects);
             },
-            onError: fail,
+            onError: fallbackStart,
         });
-        void fallbackRead();
     };
 
     return {

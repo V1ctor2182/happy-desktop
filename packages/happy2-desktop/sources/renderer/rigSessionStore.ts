@@ -14,6 +14,11 @@ import {
     type RigSessionLocation,
     type RigWorkspaceStore,
 } from "happy2-state";
+import {
+    connectRig,
+    type MutationRejectedDelta,
+    type RigConnection as RigConnectConnection,
+} from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
@@ -35,6 +40,7 @@ export interface RigSession {
 
 interface RigSessionInternal extends RigSession {
     readonly client: RigClient;
+    readonly rigConnect: RigConnectConnection;
 }
 
 export interface RigSessionStore {
@@ -88,6 +94,7 @@ export function rigSessionStoreCreate(
         | {
               readonly connectionId: number;
               readonly client: RigClient;
+              readonly rigConnect: RigConnectConnection;
               retry?: ReturnType<typeof setTimeout>;
           }
         | undefined;
@@ -102,6 +109,7 @@ export function rigSessionStoreCreate(
         if (pending) {
             if (pending.retry) clearTimeout(pending.retry);
             pending.client[Symbol.dispose]();
+            pending.rigConnect.close();
             pending = undefined;
         }
         if (!session) return;
@@ -109,6 +117,7 @@ export function rigSessionStoreCreate(
         // owns those stores, then the connection loader and clock.
         session.workspace[Symbol.dispose]();
         session.client[Symbol.dispose]();
+        session.rigConnect.close();
         session.connection[Symbol.dispose]();
         session.clock[Symbol.dispose]();
         session = undefined;
@@ -137,7 +146,15 @@ export function rigSessionStoreCreate(
         dispose();
         const current = generation;
         const transport = rigRendererTransportCreate(target.rigHttpUrl);
-        const catalogSource = rigConnectCatalogSourceCreate(target.rigHttpUrl, {
+        const mutationListeners = new Set<(rejection: MutationRejectedDelta) => void>();
+        const rigConnect = connectRig({
+            endpoint: `${target.rigHttpUrl.replace(/\/$/, "")}/rig-connect`,
+            token: "happy2-local-capability",
+            onMutationRejected: (rejection) => {
+                for (const listener of mutationListeners) listener(rejection);
+            },
+        });
+        const catalogSource = rigConnectCatalogSourceCreate(rigConnect, target.rigHttpUrl, {
             read: async (): Promise<RigSessionCatalogSnapshot> => {
                 const [catalog, sessions] = await Promise.all([
                     transport.projectsRead(),
@@ -155,7 +172,12 @@ export function rigSessionStoreCreate(
         const client = rigClientCreate({
             transport,
             catalogSource,
-            transcriptConnect: rigConnectTranscriptConnectCreate(target.rigHttpUrl),
+            transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
+            connectActions: rigConnect,
+            connectMutationSubscribe: (listener) => {
+                mutationListeners.add(listener);
+                return () => mutationListeners.delete(listener);
+            },
             // The Ghostty emulator and the terminal protocol client live in the app
             // layer, so the client is handed the factory rather than reaching for
             // them itself.
@@ -164,6 +186,7 @@ export function rigSessionStoreCreate(
         pending = {
             connectionId: target.connectionId,
             client,
+            rigConnect,
         };
         const modelsLoad = (): void => {
             void client.models.load().then(
@@ -177,6 +200,7 @@ export function rigSessionStoreCreate(
                         }),
                         host: hostCreate(bridge),
                         client,
+                        rigConnect,
                         models: client.models,
                         workspace: rigWorkspaceStoreCreate(client, {
                             output: (event) => {

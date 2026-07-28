@@ -26,8 +26,13 @@ export function rigConnectConversationProject(
     input: RigConnectConversationInput,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
-    const latestAgentText = new Map<string, string>();
-    const toolCounts = new Map<string, number>();
+    const finalAgentTextByTurn = new Map<string, string>();
+    const unsuccessfulTurns = new Set<string>();
+    for (const element of input.elements) {
+        if (element.kind === "agent_text") finalAgentTextByTurn.set(element.turnId, element.id);
+        else if (element.kind === "turn_end" && element.outcome !== "success")
+            unsuccessfulTurns.add(element.turnId);
+    }
 
     for (const element of input.elements) {
         const sequence = sequenceOf(entries.length);
@@ -36,9 +41,9 @@ export function rigConnectConversationProject(
                 entries.push({
                     kind: "message",
                     source: "server",
-                    delivery: "sent",
+                    delivery: element.delivery,
                     message: messageProject({
-                        id: element.id,
+                        id: element.messageId,
                         sessionId: input.sessionId,
                         sequence,
                         text: element.text,
@@ -64,7 +69,6 @@ export function rigConnectConversationProject(
                 });
                 break;
             case "agent_text":
-                latestAgentText.set(element.turnId, element.text);
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -76,7 +80,12 @@ export function rigConnectConversationProject(
                         text: element.text,
                         createdAt: element.createdAt,
                         author: rigAgentAuthor,
-                        generationStatus: element.complete ? "complete" : "streaming",
+                        generationStatus: !element.complete
+                            ? "streaming"
+                            : unsuccessfulTurns.has(element.turnId) &&
+                                finalAgentTextByTurn.get(element.turnId) === element.id
+                              ? "failed"
+                              : "complete",
                     }),
                 });
                 break;
@@ -95,13 +104,23 @@ export function rigConnectConversationProject(
                     });
                 break;
             case "tool_call":
-                toolCounts.set(element.turnId, (toolCounts.get(element.turnId) ?? 0) + 1);
                 entries.push({
                     kind: "agentActivity",
                     id: element.id,
                     occurredAt: element.createdAt,
                     sequence,
                     activity: { kind: "tool", tool: toolProject(element) },
+                });
+                break;
+            case "retry":
+                entries.push({
+                    kind: "notice",
+                    id: element.id,
+                    variant: "notice",
+                    level: "warning",
+                    title: "Retrying",
+                    text: `${element.reason}. Attempt ${String(element.attempt)}.`,
+                    sequence,
                 });
                 break;
             case "compaction":
@@ -142,19 +161,6 @@ export function rigConnectConversationProject(
                         text: element.errorMessage,
                         sequence,
                     });
-                entries.push({
-                    kind: "turnStatus",
-                    id: element.id,
-                    sequence: sequenceOf(entries.length),
-                    status: element.outcome === "success" ? "complete" : "failed",
-                    ...(latestAgentText.has(element.turnId)
-                        ? { copyText: latestAgentText.get(element.turnId) }
-                        : {}),
-                    durationMs: element.elapsedMs,
-                    ...((toolCounts.get(element.turnId) ?? 0) > 0
-                        ? { tools: toolCounts.get(element.turnId) }
-                        : {}),
-                });
                 break;
         }
     }
@@ -225,6 +231,17 @@ function toolProject(element: Extract<ChatElement, { kind: "tool_call" }>): Conv
         failed: element.status === "failed",
         ...(element.presentation
             ? { presentation: presentationProject(element.presentation) }
+            : {}),
+        ...(element.permissionReview
+            ? {
+                  review: {
+                      action: element.permissionReview.action,
+                      reason: element.permissionReview.reason,
+                      decision: element.permissionReview.decision,
+                      risk: element.permissionReview.risk,
+                      userAuthorization: element.permissionReview.userAuthorization,
+                  },
+              }
             : {}),
     };
 }
