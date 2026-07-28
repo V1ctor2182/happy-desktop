@@ -10,6 +10,7 @@ import {
     type ConversationActivityEntry,
     type ConversationEntry,
     type ConversationMessageEntry,
+    type ConversationNoticeEntry,
 } from "../conversation/conversationEntry.js";
 import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 
@@ -107,13 +108,62 @@ function latestFromActivities(
     };
 }
 
-/** The turn's final message, the one line a collapsed turn keeps on screen. */
+/** The section's final message, the one line a collapsed section keeps on screen. */
 function lastMessage(body: readonly ConversationEntry[]): ConversationMessageEntry | undefined {
     for (let index = body.length - 1; index >= 0; index -= 1) {
         const entry = body[index]!;
         if (entry.kind === "message") return entry;
     }
     return undefined;
+}
+
+/**
+ * Stable authored result for a turn that performed work without emitting text.
+ * It remains empty in product state; Message owns the faint “(no text)”
+ * presentation so copying and persistence never fabricate assistant prose.
+ */
+function emptyAgentMessage(
+    sectionId: string,
+    anchor: ConversationMessageEntry,
+    body: readonly ConversationEntry[],
+    sequence: string,
+): ConversationMessageEntry {
+    let occurredAt: number | undefined;
+    for (let index = body.length - 1; index >= 0; index -= 1) {
+        const entry = body[index];
+        if (entry?.kind === "agentActivity" && entry.occurredAt !== undefined) {
+            occurredAt = entry.occurredAt;
+            break;
+        }
+    }
+    return {
+        kind: "message",
+        source: "server",
+        delivery: "sent",
+        message: {
+            id: `${sectionId}:empty-agent-text`,
+            chatId: anchor.message.chatId,
+            sequence,
+            changePts: sequence,
+            sender: rigAgentAuthor,
+            kind: "automated",
+            automated: false,
+            audience: "people",
+            agentUserIds: [],
+            text: "",
+            generationStatus: "complete",
+            revision: 0,
+            mentions: [],
+            attachments: [],
+            reactions: [],
+            receipts: [],
+            expiryMode: "none",
+            createdAt:
+                occurredAt === undefined
+                    ? anchor.message.createdAt
+                    : new Date(occurredAt).toISOString(),
+        },
+    };
 }
 
 /** Attaches the turn summary that turns an agent message meta row into "View trace". */
@@ -123,21 +173,15 @@ function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary):
 }
 
 /**
- * Splits the conversation into turns, summarizes each one, and decides how much
- * of it the transcript shows. A running turn lists its whole body so live output
- * is visible. A finished turn collapses to its final message until the reader
- * opens its "View trace" control, and expanding puts the intermediate messages
- * and tool rows back as ordinary sibling entries — the list stays flat, so a
- * long turn still virtualizes one block at a time. Exactly one agent message per
- * turn — the first one shown — carries the summary, so the control appears once.
+ * Splits a daemon run into the visual sections introduced by steering messages,
+ * summarizes each section, and decides how much of it is visible. A running or
+ * expanded section lists its original rows in order. A collapsed section keeps
+ * its last text response, or a faint empty result when it performed tools
+ * without producing prose.
  *
- * The active turn is addressed by its durable user-message id. A locally
- * pending send has no active id yet, so it cannot accidentally reopen the
- * previous completed turn while waiting for authoritative state.
- *
- * Settled duration comes from the owner's run clock (`durations` keyed by the
- * user-message turn id). Local messages have no timestamps on the wire, so the
- * store records how long each request took when the run ends.
+ * The section identity is the user message that opened it. This deliberately
+ * differs from Rig's run-level turn ID: several steering sections may belong to
+ * one daemon turn while remaining separate reader-visible transcript sections.
  */
 export function rigConversationAttachTurnTraces(
     entries: readonly ConversationEntry[],
@@ -146,27 +190,65 @@ export function rigConversationAttachTurnTraces(
         readonly expandedTurnIds: ReadonlySet<string>;
         /** User messages submitted into an already running turn. */
         readonly steeringMessageIds?: ReadonlySet<string>;
-        /** Final duration of finished turns, keyed by the user message that opened them. */
+        /** Final duration keyed by the user message that opened the section. */
         readonly durations?: ReadonlyMap<string, number>;
     },
 ): readonly ConversationEntry[] {
+    return attachSectionTraces(entries, input);
+}
+
+type TurnTraceInput = Parameters<typeof rigConversationAttachTurnTraces>[1];
+
+/** Projects the daemon run into visual sections separated by steering messages. */
+function attachSectionTraces(
+    entries: readonly ConversationEntry[],
+    input: TurnTraceInput,
+): readonly ConversationEntry[] {
     const result: ConversationEntry[] = [];
     let turnUserId: string | undefined;
+    let turnUserMessage: ConversationMessageEntry | undefined;
     let turnBody: ConversationEntry[] = [];
 
     const flush = (isOpenTurn: boolean, end: "settled" | "steered" = "settled"): void => {
         if (!turnUserId) {
             result.push(...turnBody);
             turnBody = [];
+            turnUserMessage = undefined;
             return;
         }
         const activities = turnBody.filter(
             (entry): entry is ConversationActivityEntry => entry.kind === "agentActivity",
         );
         const running = isOpenTurn && input.activeTurnId === turnUserId;
-        const finalMessage = lastMessage(turnBody);
+        const expanded = running || input.expandedTurnIds.has(turnUserId);
+        const durableFinalMessage = lastMessage(turnBody);
+        const firstErrorIndex = turnBody.findIndex(
+            (entry) => entry.kind === "notice" && entry.level === "error",
+        );
+        const summaryAnchor =
+            turnBody[firstErrorIndex > 0 ? firstErrorIndex - 1 : Math.max(0, turnBody.length - 1)];
+        const summarySequence = `${summaryAnchor ? entrySequence(summaryAnchor) : turnUserId}:0-summary`;
+        const collapsedEmptyMessage =
+            !expanded &&
+            durableFinalMessage === undefined &&
+            activities.length > 0 &&
+            turnUserMessage !== undefined
+                ? emptyAgentMessage(turnUserId, turnUserMessage, turnBody, summarySequence)
+                : undefined;
+        const finalMessage = durableFinalMessage ?? collapsedEmptyMessage;
+        const projectedBody =
+            collapsedEmptyMessage === undefined
+                ? turnBody
+                : firstErrorIndex >= 0
+                  ? [
+                        ...turnBody.slice(0, firstErrorIndex),
+                        collapsedEmptyMessage,
+                        ...turnBody.slice(firstErrorIndex),
+                    ]
+                  : [...turnBody, collapsedEmptyMessage];
         const failed =
-            finalMessage?.kind === "message" && finalMessage.message.generationStatus === "failed";
+            durableFinalMessage?.message.generationStatus === "failed" ||
+            turnBody.some((entry) => entry.kind === "notice" && entry.level === "error");
         // A finished turn is complete whenever it produced a final reply. A tool
         // that failed mid-turn is ordinary agent recovery, not a failed turn —
         // only the run's own terminal outcome marks the final assistant message
@@ -191,20 +273,29 @@ export function rigConversationAttachTurnTraces(
         };
         // A turn with nothing behind its answer has no trace to reveal, so it
         // keeps a plain message with no control.
-        const summarizable = turnBody.length > 1;
-        const expanded = running || input.expandedTurnIds.has(turnUserId);
-        const collapsed = summarizable && !expanded ? lastMessage(turnBody) : undefined;
+        const summarizable =
+            finalMessage !== undefined && (turnBody.length > 1 || activities.length > 0);
+        const collapsed = summarizable && !expanded ? finalMessage : undefined;
         // Collapsing hides the turn's work, but not what went wrong doing it: a
         // failure or a retry is the reason the answer looks the way it does, and
         // burying it behind a control the reader has no reason to open would
         // leave a broken run reading as a successful one. Warning and error
         // notices therefore stay on screen in turn order alongside the answer.
+        const persistentNotices = turnBody.filter(
+            (entry): entry is ConversationNoticeEntry =>
+                entry.kind === "notice" && entry.level !== "info",
+        );
         const shown = collapsed
             ? [
-                  ...turnBody.filter((entry) => entry.kind === "notice" && entry.level !== "info"),
+                  ...persistentNotices.filter((entry) => entry.level !== "error"),
                   collapsed,
+                  // The terminal error explains the settled turn, so it stays
+                  // directly above that turn's neutral completion footer.
+                  ...persistentNotices.filter((entry) => entry.level === "error"),
               ]
-            : turnBody;
+            : expanded
+              ? turnBody
+              : projectedBody;
         let traced = !summarizable;
         for (const entry of shown) {
             if (traced) {
@@ -215,13 +306,11 @@ export function rigConversationAttachTurnTraces(
             traced = withTrace !== entry;
             result.push(withTrace);
         }
-        // A settled turn that produced an answer keeps a permanent status row
-        // under it, including one answered in a single message: how long a turn
-        // took is worth knowing whether or not it used tools, and a transcript
-        // where only some turns are timed reads as a bug. A turn with no final
-        // message has nothing to sit under and gets no row. Running turns use
-        // the message-list footer instead, so the clock can tick.
-        if (!running && finalMessage !== undefined) {
+        // A settled section keeps one permanent status row. A tool-only section
+        // has no copy payload, but it still completed real work and therefore
+        // keeps the same footer beneath its collapsed empty result. Running
+        // sections use the message-list footer so their clock can tick.
+        if (!running && (durableFinalMessage !== undefined || activities.length > 0)) {
             // Ordered from the end of the whole turn, not the end of what is
             // currently shown: entries sort by sequence, so anchoring it to a
             // collapsed turn's single message would drop the row in among the
@@ -233,13 +322,18 @@ export function rigConversationAttachTurnTraces(
                 id: `turn-status:${turnUserId}`,
                 sequence: `${lastSequence}:status`,
                 status: end === "steered" ? "steered" : failed ? "failed" : "complete",
-                ...(end === "steered" ? {} : { copyText: finalMessage.message.text }),
+                ...(end === "steered" ||
+                !durableFinalMessage ||
+                durableFinalMessage.message.text.trim().length === 0
+                    ? {}
+                    : { copyText: durableFinalMessage.message.text }),
                 ...(durationMs !== undefined ? { durationMs } : {}),
                 ...(toolCallCount > 0 ? { tools: toolCallCount } : {}),
             });
         }
         turnBody = [];
         turnUserId = undefined;
+        turnUserMessage = undefined;
     };
 
     for (let index = 0; index < entries.length; index += 1) {
@@ -247,6 +341,7 @@ export function rigConversationAttachTurnTraces(
         if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
             flush(false, input.steeringMessageIds?.has(entry.message.id) ? "steered" : "settled");
             turnUserId = entry.message.id;
+            turnUserMessage = entry;
             result.push(entry);
             continue;
         }

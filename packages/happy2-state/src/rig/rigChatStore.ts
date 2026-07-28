@@ -731,10 +731,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             transcriptSession === undefined
                 ? (session?.pendingUserInputs ?? [])
                 : transcriptPendingUserInputsProject(transcriptSession);
-        const projectedEphemeral =
+        // Shell-mode commands still execute and reconcile, but are temporarily
+        // absent from the transcript. Agent Bash tool calls remain ordinary
+        // durable tool entries and are not affected by this view-only filter.
+        const projectedEphemeral = (
             transcriptSession === undefined
                 ? ephemeral
-                : transcriptEphemeralProject(transcriptSession, ephemeral);
+                : transcriptEphemeralProject(transcriptSession, ephemeral)
+        ).filter((entry) => entry.kind !== "agentActivity" || entry.activity.kind !== "shell");
         const built =
             transcriptElements === undefined
                 ? rigConversationAttachTurnTraces(

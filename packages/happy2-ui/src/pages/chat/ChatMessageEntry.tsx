@@ -51,9 +51,9 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
         return (
             <TurnSummary
                 className={["happy2-chat-turn-status", props.className].filter(Boolean).join(" ")}
-                copyText={entry.copyText ?? ""}
+                copyText={entry.copyText}
                 durationMs={entry.elapsedMs}
-                status={entry.status === "failed" ? "failed" : "complete"}
+                status="complete"
             />
         );
     /* A running turn needs no status row of its own: its steps are listed in the
@@ -78,7 +78,14 @@ export function ChatMessageEntry(props: ChatMessageEntryProps): ReactNode {
             automated={entry.automated}
             body={entry.body}
             deliveryState={entry.delivery ?? (entry.id.startsWith("local:") ? "sending" : "sent")}
-            generationStatus={entry.generationStatus}
+            emptyText={
+                traceCollapsible && props.traceOpen !== true && entry.body.trim().length === 0
+                    ? "(no text)"
+                    : undefined
+            }
+            generationStatus={
+                entry.generationStatus === "failed" ? "complete" : entry.generationStatus
+            }
             grouped={props.grouped}
             gutterTime={entry.gutterTime}
             imageUrl={props.avatarUrl}

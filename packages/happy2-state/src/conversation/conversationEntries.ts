@@ -58,6 +58,11 @@ export function entriesMerge<Entry extends ConversationEntry>(
 export function entryEquivalent(left: ConversationEntry, right: ConversationEntry): boolean {
     if (left === right) return true;
     if (left.kind !== right.kind) return false;
+    // Ordering is part of the projected entry. History pagination can prepend
+    // rows and renumber every later sequence; retaining an otherwise unchanged
+    // object here would also retain its stale key and sort it into the wrong
+    // place.
+    if (entrySequence(left) !== entrySequence(right)) return false;
     if (left.kind === "message" && right.kind === "message") {
         if (
             left.delivery !== right.delivery ||

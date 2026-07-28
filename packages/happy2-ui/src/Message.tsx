@@ -144,6 +144,11 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     compact?: boolean;
     /** Delivery styling that never inserts or removes layout. */
     deliveryState?: MessageDeliveryState;
+    /**
+     * Readable fallback for an intentionally empty message summary. Owners use
+     * this for collapsed tool-only turns; expanded identity headers leave it off.
+     */
+    emptyText?: string;
     /** Agent reply generation lifecycle for a string body. Separate from
      * `deliveryState`: delivery is outgoing, generation is the incoming reply
      * being produced. `streaming` shows a live caret; `failed` a minimal marker. */
@@ -237,6 +242,7 @@ export function Message(props: MessageProps) {
         "className",
         "compact",
         "deliveryState",
+        "emptyText",
         "generationStatus",
         "grouped",
         "gutterTime",
@@ -381,7 +387,9 @@ export function Message(props: MessageProps) {
         ? null
         : renderIncomingHoverMeta("inline");
     const bodyNode =
-        !local.body && local.generationStatus === undefined ? null : isMarkdownBody() ? (
+        !local.body &&
+        local.emptyText === undefined &&
+        local.generationStatus === undefined ? null : isMarkdownBody() ? (
             <div
                 className="happy2-message__body happy2-message__body--markdown"
                 data-markdown=""
@@ -394,7 +402,11 @@ export function Message(props: MessageProps) {
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box
                     so generation-state changes cannot collapse the message row. */}
-                {!local.body && local.generationStatus !== undefined ? (
+                {!local.body && local.emptyText !== undefined ? (
+                    <p className="happy2-message__empty-text" data-happy2-ui="message-empty-text">
+                        {local.emptyText}
+                    </p>
+                ) : !local.body && local.generationStatus !== undefined ? (
                     <p aria-hidden="true" className="happy2-message__generation-anchor">
                         {"\u00a0"}
                     </p>
@@ -482,7 +494,7 @@ export function Message(props: MessageProps) {
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
             data-grouped={grouped() ? "" : undefined}
-            data-has-body={local.body ? "" : undefined}
+            data-has-body={local.body || local.emptyText !== undefined ? "" : undefined}
             data-happy2-ui="message"
             aria-busy={
                 deliveryState() === "sending" ||

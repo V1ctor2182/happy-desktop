@@ -8,7 +8,7 @@ export interface TurnSummaryProps {
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly durationMs?: number;
-    readonly status: "complete" | "failed" | "steered";
+    readonly status: "complete" | "steered";
     readonly style?: CSSProperties;
 }
 
@@ -21,7 +21,7 @@ function durationFormat(durationMs: number): string {
     return `${Math.floor(minutes / 60)}h\u00a0${minutes % 60}m`;
 }
 
-/** Settled footer for one turn, including its outcome and final-message copy action. */
+/** Neutral settled footer for one turn, including duration and final-message copy action. */
 export function TurnSummary(props: TurnSummaryProps) {
     const [local] = partitionComponentProps(props, [
         "className",
@@ -33,20 +33,15 @@ export function TurnSummary(props: TurnSummaryProps) {
     ]);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const failed = local.status === "failed";
     const steered = local.status === "steered";
     const label =
         local.durationMs === undefined
             ? steered
                 ? "Steered"
-                : failed
-                  ? "Failed"
-                  : "Completed"
+                : "Completed"
             : steered
               ? `Steered after\u00a0${durationFormat(local.durationMs)}`
-              : failed
-                ? `Failed after\u00a0${durationFormat(local.durationMs)}`
-                : `Completed in\u00a0${durationFormat(local.durationMs)}`;
+              : `Completed in\u00a0${durationFormat(local.durationMs)}`;
     const copy = async () => {
         try {
             if (local.copyText === undefined) return;

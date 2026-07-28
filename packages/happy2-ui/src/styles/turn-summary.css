@@ -19,10 +19,6 @@
     color: var(--text-secondary);
 }
 
-.happy2-turn-summary[data-status="failed"] {
-    color: var(--text-destructive);
-}
-
 .happy2-turn-summary__label {
     flex: none;
     font-variant-numeric: lining-nums tabular-nums;

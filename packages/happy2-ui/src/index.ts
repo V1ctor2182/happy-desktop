@@ -10,6 +10,7 @@ export {
     type AgentWorkingStatusProps,
 } from "./AgentWorkingStatus";
 export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";
+export { ConversationErrorCard, type ConversationErrorCardProps } from "./ConversationErrorCard";
 export { AgentDesk, type AgentDeskProps, type DeskListItem, type DeskRun } from "./AgentDesk";
 export {
     AgentTracePanel,

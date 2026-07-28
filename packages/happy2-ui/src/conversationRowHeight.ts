@@ -198,7 +198,8 @@ export function messageRowHeight(input: {
 /**
  * Height of one row, or `undefined` when the entry's kind genuinely cannot be
  * resolved without laying it out: a shell activity renders its output expanded,
- * and every request prompt wraps flex options against their own label widths.
+ * an error card owns its own bubble measure, and every request prompt wraps flex
+ * options against their own label widths.
  */
 export function conversationRowHeight(
     entries: readonly ConversationEntry[],
@@ -223,6 +224,7 @@ export function conversationRowHeight(
         return conversationTurnStatusAfterActivity(entries, index) ? 40 : 32;
     if (entry.kind === "notice") {
         if (entry.variant === "divider") return DIVIDER_HEIGHT;
+        if (entry.level === "error") return undefined;
         const text = entry.title ? `${entry.title}: ${entry.text}` : entry.text;
         return noticeRowHeight(text, width, "start");
     }
@@ -244,7 +246,7 @@ export function conversationRowHeight(
     const hasBody = message.text.trim().length > 0;
     let height = messageRowHeight({
         body: message.text,
-        bodyVisible: hasBody || message.generationStatus !== undefined,
+        bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
         grouped,
         metaAccessory: !own && traceCollapsible,
         surface: context.surface,

@@ -6,6 +6,7 @@ import type {
     UserError,
 } from "happy2-state";
 import { AgentActivityRow } from "./AgentActivityRow";
+import { ConversationErrorCard } from "./ConversationErrorCard";
 import { TurnSummary } from "./TurnSummary";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
@@ -51,7 +52,7 @@ export type ConversationEntryViewProps = {
     style?: CSSProperties;
 };
 
-const NOTICE_ICON = { info: "dot", warning: "shield", error: "shield" } as const;
+const NOTICE_ICON = { info: "dot", warning: "shield" } as const;
 
 /**
  * ConversationEntryView — renders one `ConversationEntry` through the shared
@@ -110,16 +111,24 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 className={["happy2-conversation-turn-status", props.className]
                     .filter(Boolean)
                     .join(" ")}
-                copyText={entry.copyText ?? ""}
+                copyText={entry.copyText}
                 data-testid={props["data-testid"]}
                 durationMs={entry.durationMs}
-                status={entry.status}
+                status={entry.status === "steered" ? "steered" : "complete"}
                 style={props.style}
             />
         );
     if (entry.kind === "notice")
         return entry.variant === "divider" ? (
             <DayDivider className={props.className} label={entry.text} />
+        ) : entry.level === "error" ? (
+            <ConversationErrorCard
+                className={props.className}
+                data-testid={props["data-testid"]}
+                reason={entry.text}
+                style={props.style}
+                title={entry.title ?? "Error"}
+            />
         ) : (
             // Mid-turn agent context (system prompts, reasoning preambles, run
             // notices) belongs to the turn that produced it, so it reads as a
@@ -171,7 +180,16 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             className={props.className}
             data-testid={props["data-testid"]}
             deliveryState={entry.delivery}
-            generationStatus={message.generationStatus}
+            emptyText={
+                traceCollapsible && props.traceOpen !== true && message.text.trim().length === 0
+                    ? "(no text)"
+                    : undefined
+            }
+            // The sibling error card owns failed-turn presentation. Rendering
+            // settled text as complete prevents a duplicate red end marker.
+            generationStatus={
+                message.generationStatus === "failed" ? "complete" : message.generationStatus
+            }
             grouped={props.grouped}
             initials={initialsOf(author?.displayName)}
             metaAccessory={

@@ -7,6 +7,7 @@ import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
 import { AgentWorkingStatusPage } from "./pages/AgentWorkingStatusPage";
 import { AgentTraceRowPage } from "./pages/AgentTraceRowPage";
 import { TurnSummaryPage } from "./pages/TurnSummaryPage";
+import { ConversationErrorCardPage } from "./pages/ConversationErrorCardPage";
 import { AgentImageDetailPage } from "./pages/AgentImageDetailPage";
 import { AgentImagePanelPage } from "./pages/AgentImagePanelPage";
 import { AgentRunCardPage } from "./pages/AgentRunCardPage";
@@ -211,6 +212,12 @@ const components: BlueprintPage[] = [
         label: "Turn summary",
         number: "C-164",
         page: TurnSummaryPage,
+    },
+    {
+        id: "conversation-error-card",
+        label: "Conversation error card",
+        number: "C-166",
+        page: ConversationErrorCardPage,
     },
     {
         id: "rig-user-input-prompt",

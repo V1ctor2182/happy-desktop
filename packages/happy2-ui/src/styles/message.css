@@ -726,6 +726,12 @@
     display: block;
 }
 
+.happy2-message__empty-text {
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.64;
+}
+
 .happy2-message__attachments {
     display: flex;
     flex-direction: column;

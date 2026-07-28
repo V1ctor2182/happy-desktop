@@ -13,7 +13,7 @@ export function TurnSummaryPage() {
     return (
         <ComponentPage
             number="C-164"
-            summary="The settled footer for a turn: total duration, a red failure outcome, and a final-message copy confirmation."
+            summary="The neutral settled footer for a turn: total duration, steering boundary, and final-message copy confirmation. Failure detail belongs to ConversationErrorCard above it."
             title="Turn summary"
         >
             <Specimen
@@ -35,8 +35,8 @@ export function TurnSummaryPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="Failure wording and copy action share the destructive treatment"
-                label="Failed"
+                detail="A failed turn uses the same neutral completion wording; its error card carries the outcome"
+                label="After an error"
                 number="02"
                 stage="surface"
             >
@@ -44,9 +44,9 @@ export function TurnSummaryPage() {
                     <TurnSummary
                         copyText="The provider connection failed."
                         durationMs={41_000}
-                        status="failed"
+                        status="complete"
                     />
-                    <TurnSummary copyText="The run failed." status="failed" />
+                    <TurnSummary copyText="The run stopped." status="complete" />
                     <TurnSummary durationMs={18_000} status="steered" />
                 </div>
             </Specimen>

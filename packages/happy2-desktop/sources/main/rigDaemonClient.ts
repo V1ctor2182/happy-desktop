@@ -109,8 +109,8 @@ export class RigDaemonClient {
             }
             const headers: Record<string, string | number> = {
                 accept: "application/json",
-                authorization: `Bearer ${this.#token}`,
                 ...options.headers,
+                authorization: `Bearer ${this.#token}`,
             };
             if (options.body !== undefined) headers["content-length"] = options.body.byteLength;
             const request = httpRequest(

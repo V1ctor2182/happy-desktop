@@ -44,10 +44,11 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * A loopback-only HTTP bridge from the sandboxed renderer to the daemon. The
  * renderer cannot open the daemon's Unix socket, so the main process listens on an
  * ephemeral 127.0.0.1 port and forwards the renderer transport's projected JSON/SSE
- * routes to the authenticated `ProtocolHttpClient` via `rigProxyHandle`. The
- * narrow `rig-connect` route family preserves the daemon's raw SSE, paging, and
- * mutation contract for the application-state client. It binds to loopback only,
- * requires the unguessable URL capability, and 404s every unmatched path.
+ * routes to the authenticated `ProtocolHttpClient` via `rigProxyHandle`. Everything
+ * under `rig-connect` is a transparent protocol bridge for the application-state
+ * client: the proxy strips that prefix and otherwise preserves the daemon request
+ * and response contract. It binds to loopback only, requires the unguessable URL
+ * capability, and 404s every unmatched path.
  * Resolves once the port is bound so the caller can advertise the URL.
  *
  * The same port also upgrades one route to a WebSocket: a terminal's byte channel,
@@ -78,17 +79,23 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         }
         if (crossOrigin) {
             response.setHeader("access-control-allow-origin", options.allowedOrigin!);
-            response.setHeader("access-control-expose-headers", "etag, retry-after");
+            response.setHeader("access-control-expose-headers", "*");
             response.setHeader("vary", "origin");
         }
         if (request.method === "OPTIONS") {
-            // Connector mutations carry JSON plus version/idempotency headers,
-            // so the development browser preflights them.
+            // The exact renderer origin may use the complete connector protocol.
+            // Echoing its requested method and headers keeps this bridge transparent
+            // when rig-connect adds an operation without weakening the origin gate.
             if (crossOrigin) {
+                const requestedMethod = request.headers["access-control-request-method"]?.trim();
+                const requestedHeaders = request.headers["access-control-request-headers"]?.trim();
                 response.writeHead(204, {
                     "access-control-allow-headers":
+                        requestedHeaders ||
                         "authorization, content-type, if-match, x-rig-mutation-id",
-                    "access-control-allow-methods": "DELETE, GET, PATCH, POST, PUT, OPTIONS",
+                    "access-control-allow-methods": requestedMethod
+                        ? `${requestedMethod}, OPTIONS`
+                        : "DELETE, GET, HEAD, PATCH, POST, PUT, OPTIONS",
                     "access-control-max-age": "600",
                 });
             } else {
@@ -97,11 +104,15 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             response.end();
             return;
         }
+        const bridgePath = url.pathname.slice(capabilityPrefix.length) || "/";
+        const rigConnectRequest =
+            bridgePath === "/rig-connect" || bridgePath.startsWith("/rig-connect/");
         const hasBody =
             Number(request.headers["content-length"] ?? 0) > 0 ||
             request.headers["transfer-encoding"] !== undefined;
         if (
             hasBody &&
+            !rigConnectRequest &&
             request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase() !==
                 "application/json"
         ) {
@@ -112,7 +123,7 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         void rigProxyHandle({
             client: options.client,
             method: request.method ?? "GET",
-            path: url.pathname.slice(capabilityPrefix.length) || "/",
+            path: bridgePath,
             query: url.searchParams,
             request,
             response,

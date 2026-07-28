@@ -602,6 +602,25 @@ export function MessagePage() {
                     <DimensionRule label="marker stays visible without hover · manual reply is a separate group" />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="collapsed tool-only summaries preserve a readable row without inventing message content"
+                label="Message — empty summary"
+                number="15"
+                stage="app"
+            >
+                {channelFrame(
+                    <Message
+                        agent
+                        author="Happy"
+                        body=""
+                        emptyText="(no text)"
+                        time="9:14"
+                        tone="mint"
+                    />,
+                )}
+                <DimensionRule label="italic · secondary text · 64% opacity" />
+            </Specimen>
         </ComponentPage>
     );
 }

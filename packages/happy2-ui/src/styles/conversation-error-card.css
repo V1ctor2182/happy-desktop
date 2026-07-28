@@ -1,0 +1,72 @@
+/*
+ * ConversationErrorCard — a failed turn's reason on the assistant text rail.
+ *
+ * The outer row follows Message's 30px left / 64px right measure. The bubble
+ * uses the 10px card radius, a soft semantic fill, and a single compact icon
+ * well so the error is unmistakable without coloring the adjacent prose or
+ * settled duration.
+ */
+
+.happy2-conversation-error-card,
+.happy2-conversation-error-card * {
+    box-sizing: border-box;
+}
+
+.happy2-conversation-error-card {
+    display: flex;
+    width: 100%;
+    padding: 4px 64px 4px 30px;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+.happy2-conversation-error-card__bubble {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: fit-content;
+    max-width: min(640px, 100%);
+    padding: 12px 14px;
+    border: 1px solid var(--box-error-border);
+    border-radius: var(--happy2-radius-md);
+    background: var(--box-error-background);
+}
+
+.happy2-conversation-error-card__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--happy2-radius-sm);
+    background: var(--surface);
+    color: var(--box-error-text);
+}
+
+.happy2-conversation-error-card__content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy2-conversation-error-card__title {
+    display: block;
+    color: var(--box-error-text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-conversation-error-card__reason {
+    display: block;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

@@ -367,7 +367,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     const segments = path.split("/").filter((segment) => segment.length > 0);
 
     try {
-        const rigConnectPath = rigConnectDaemonPath(method, segments, query);
+        const rigConnectPath = rigConnectDaemonPath(path, query);
         if (rigConnectPath !== undefined) {
             await rigConnectForward(
                 client,
@@ -701,86 +701,35 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     }
 }
 
-function rigConnectDaemonPath(
-    method: string,
-    segments: readonly string[],
-    query: URLSearchParams,
-): string | undefined {
-    if (segments[0] !== "rig-connect") return undefined;
-    const route = segments.slice(1);
-    if (!rigConnectRouteAllowed(method, route)) return undefined;
-    const path = `/${route.join("/")}`;
-    const forwarded = new URLSearchParams();
-    for (const name of ["after", "turns", "before", "expectedRunId", "scope", "waitMs"]) {
-        const value = query.get(name);
-        if (value !== null) forwarded.set(name, value);
-    }
-    const suffix = forwarded.toString();
-    return `${path}${suffix.length > 0 ? `?${suffix}` : ""}`;
+function rigConnectDaemonPath(path: string, query: URLSearchParams): string | undefined {
+    const prefix = "/rig-connect";
+    if (path !== prefix && !path.startsWith(`${prefix}/`)) return undefined;
+    const daemonPath = path.slice(prefix.length) || "/";
+    const suffix = query.toString();
+    return `${daemonPath}${suffix.length > 0 ? `?${suffix}` : ""}`;
 }
 
-function rigConnectRouteAllowed(method: string, route: readonly string[]): boolean {
-    if (method === "GET") {
-        if (route.length === 2 && route[0] === "events" && route[1] === "stream") return true;
-        if (
-            route.length === 3 &&
-            route[0] === "sessions" &&
-            (route[2] === "stream" || route[2] === "transcript")
-        )
-            return true;
-        return route.length === 4 && route[0] === "sessions" && route[2] === "background-processes";
+const HOP_BY_HOP_HEADERS = new Set([
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+]);
+
+function omittedHeaderNames(
+    connection: string | string[] | undefined,
+    additional: readonly string[],
+): Set<string> {
+    const omitted = new Set([...HOP_BY_HOP_HEADERS, ...additional]);
+    const values = Array.isArray(connection) ? connection : [connection];
+    for (const value of values) {
+        for (const name of value?.split(",") ?? []) omitted.add(name.trim().toLowerCase());
     }
-    if (method === "PATCH") {
-        if (route[0] === "projects")
-            return route.length === 2 || (route.length === 4 && route[2] === "workspaces");
-        return (
-            route[0] === "sessions" &&
-            (route.length === 2 ||
-                (route.length === 3 &&
-                    ["model", "effort", "service-tier", "permissions", "goal"].includes(route[2]!)))
-        );
-    }
-    if (method === "PUT")
-        return (
-            route[0] === "sessions" &&
-            ((route.length === 3 && route[2] === "draft") ||
-                (route.length === 4 && route[2] === "terminal-connections"))
-        );
-    if (method === "DELETE")
-        return (
-            route[0] === "sessions" &&
-            ((route.length === 3 && route[2] === "goal") ||
-                (route.length === 4 &&
-                    ["secrets", "background-processes", "terminal-connections"].includes(
-                        route[2]!,
-                    )))
-        );
-    if (method !== "POST") return false;
-    if (route.length === 1 && route[0] === "sessions") return true;
-    if (route[0] !== "sessions" || route.length < 3) return false;
-    if (
-        route.length === 3 &&
-        [
-            "fork",
-            "messages",
-            "abort",
-            "goal",
-            "secrets",
-            "compact",
-            "reset",
-            "rewind",
-            "shell",
-            "activity",
-            "archive",
-            "unarchive",
-        ].includes(route[2]!)
-    )
-        return true;
-    return (
-        (route.length === 4 && ["user-input", "external-tool-calls"].includes(route[2]!)) ||
-        (route.length === 4 && route[2] === "background-processes" && route[3] === "stop") ||
-        (route.length === 5 && route[2] === "workflows" && route[4] === "stop")
-    );
+    return omitted;
 }
 
 async function rigConnectForward(
@@ -796,11 +745,22 @@ async function rigConnectForward(
     request.once("aborted", abort);
     response.once("close", abort);
     try {
-        const body = method === "GET" ? undefined : await bodyReadBuffer(request, 64 * 1024 * 1024);
+        const hasBody =
+            Number(request.headers["content-length"] ?? 0) > 0 ||
+            request.headers["transfer-encoding"] !== undefined;
+        const body = hasBody ? await bodyReadBuffer(request, 64 * 1024 * 1024) : undefined;
+        const omittedRequestHeaders = omittedHeaderNames(request.headers.connection, [
+            "authorization",
+            "content-length",
+            "cookie",
+            "host",
+            "origin",
+            "referer",
+        ]);
         const forwardedHeaders: Record<string, string> = {};
-        for (const name of ["accept", "content-type", "if-match", "x-rig-mutation-id"]) {
-            const value = request.headers[name];
-            if (typeof value === "string") forwardedHeaders[name] = value;
+        for (const [name, value] of Object.entries(request.headers)) {
+            if (value === undefined || omittedRequestHeaders.has(name)) continue;
+            forwardedHeaders[name] = Array.isArray(value) ? value.join(", ") : value;
         }
         const upstream = await client.rawRequest({
             method,
@@ -809,12 +769,20 @@ async function rigConnectForward(
             ...(Object.keys(forwardedHeaders).length > 0 ? { headers: forwardedHeaders } : {}),
             signal: controller.signal,
         });
-        const headers: Record<string, string> = {};
-        for (const name of ["content-type", "cache-control", "retry-after", "etag"]) {
-            const value = upstream.headers[name];
-            if (typeof value === "string") headers[name] = value;
+        const omittedResponseHeaders = omittedHeaderNames(upstream.headers.connection, [
+            "access-control-allow-credentials",
+            "access-control-allow-headers",
+            "access-control-allow-methods",
+            "access-control-allow-origin",
+            "access-control-expose-headers",
+            "set-cookie",
+        ]);
+        for (const [name, value] of Object.entries(upstream.headers)) {
+            if (value === undefined || omittedResponseHeaders.has(name)) continue;
+            if (name === "vary" && response.hasHeader(name)) response.appendHeader(name, value);
+            else response.setHeader(name, value);
         }
-        response.writeHead(upstream.statusCode, headers);
+        response.writeHead(upstream.statusCode);
         await pipeline(upstream.body, response);
     } catch (error) {
         if (controller.signal.aborted) return;
