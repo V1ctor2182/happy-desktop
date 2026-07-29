@@ -18,13 +18,20 @@ import type {
     RigConnectionStore,
     RigGroupId,
     RigHost,
+    RigModelStore,
     RigSessionId,
     RigSessionLocation,
+    RigSettingsStore,
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
-import { AppShell, SettingsPage, type BrowserContentRenderer } from "happy2-ui";
+import type { BrowserContentRenderer } from "happy2-ui";
 import { AppRigView, type AppRemoteRigStore, type AppRigUpdate } from "../AppRigView";
+import {
+    AppRigSettingsView,
+    RIG_SETTINGS_DEFAULT_CATEGORY,
+    rigSettingsCategoryExists,
+} from "../views/AppRigSettingsView";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -43,6 +50,10 @@ export interface RigRouterContext {
     readonly workspace: RigWorkspaceStore;
     readonly clock: RigClockStore;
     readonly appearance: AppearanceStore;
+    /** This connection's model catalog, read by the settings window's pickers. */
+    readonly models?: RigModelStore;
+    /** The window's own local preferences: default model, effort, and permissions. */
+    readonly settings: RigSettingsStore;
     /**
      * Which shell hosts this router. The Electron window has no native title bar,
      * so the workspace draws the traffic-light inset and drag lanes itself; the
@@ -63,8 +74,6 @@ export interface RigRouterContext {
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
     component: () => <Outlet />,
 });
-
-const GENERAL_SETTINGS_SECTION = "general";
 
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -125,21 +134,26 @@ const settingsIndexRoute = createRoute({
     path: "/settings",
     beforeLoad: () => {
         throw redirect({
-            params: { section: GENERAL_SETTINGS_SECTION },
+            params: { section: RIG_SETTINGS_DEFAULT_CATEGORY },
             replace: true,
             to: "/settings/$section",
         });
     },
 });
 
+/**
+ * One settings category, addressed the same way a conversation is: the URL names
+ * which category is open, so the window's back/forward and its permanent category
+ * column agree without a second selection living in a store.
+ */
 const settingsSectionRoute = createRoute({
     component: RigSettingsRoute,
     getParentRoute: () => rootRoute,
     path: "/settings/$section",
     beforeLoad: ({ params }) => {
-        if (params.section !== GENERAL_SETTINGS_SECTION)
+        if (!rigSettingsCategoryExists(params.section))
             throw redirect({
-                params: { section: GENERAL_SETTINGS_SECTION },
+                params: { section: RIG_SETTINGS_DEFAULT_CATEGORY },
                 replace: true,
                 to: "/settings/$section",
             });
@@ -202,7 +216,7 @@ function RigWorkspaceLayout() {
             }
             onSettingsOpen={() =>
                 void navigate({
-                    params: { section: GENERAL_SETTINGS_SECTION },
+                    params: { section: RIG_SETTINGS_DEFAULT_CATEGORY },
                     to: "/settings/$section",
                 })
             }
@@ -211,18 +225,32 @@ function RigWorkspaceLayout() {
     );
 }
 
-/** Local route glue; the shared settings page owns its placeholder presentation. */
+/**
+ * Local route glue. Leaving settings addresses the conversation list rather than
+ * popping history, so the way out is the same wherever the window was opened
+ * from — including a cold start straight onto a settings URL.
+ */
 function RigSettingsRoute() {
     const context = useRouteContext({ strict: false }) as unknown as RigRouterContext;
+    const navigate = useNavigate() as unknown as (options: {
+        params?: Record<string, string>;
+        replace?: boolean;
+        to: string;
+    }) => Promise<void>;
+    const params = useParams({ strict: false }) as { section?: string };
     return (
-        <AppShell windowControls={context.platform === "desktop"}>
-            <SettingsPage
-                placeholder={{
-                    category: "General",
-                    description: "General settings will appear here.",
-                }}
-            />
-        </AppShell>
+        <AppRigSettingsView
+            appearance={context.appearance}
+            models={context.models}
+            onCategorySelect={(section) =>
+                void navigate({ params: { section }, to: "/settings/$section" })
+            }
+            onClose={() => void navigate({ to: "/chats" })}
+            platform={context.platform}
+            section={params.section ?? RIG_SETTINGS_DEFAULT_CATEGORY}
+            settings={context.settings}
+            windowState={context.windowState}
+        />
     );
 }
 

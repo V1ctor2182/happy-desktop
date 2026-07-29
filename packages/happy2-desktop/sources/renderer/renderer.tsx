@@ -10,7 +10,13 @@ import {
     type AppRigUpdate,
     type RigRouter,
 } from "happy2-app";
-import { appearanceStoreCreate, type AppearanceStore, type RigWindowStore } from "happy2-state";
+import {
+    appearanceStoreCreate,
+    rigSettingsStoreCreate,
+    type AppearanceStore,
+    type RigSettingsStore,
+    type RigWindowStore,
+} from "happy2-state";
 import { ThemeScope, type BrowserContentRenderer } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
@@ -116,6 +122,7 @@ function RigBoundary(props: {
     platform: "desktop" | "web";
     router: RigRouter;
     remoteRigs: RemoteRigStore;
+    settings: RigSettingsStore;
     store: RigSessionStore;
     update?: WorkspaceUpdate;
     windowState: RigWindowStore;
@@ -150,8 +157,10 @@ function RigBoundary(props: {
                           update: update.snapshot,
                       }
                     : {}),
+                models: session.models,
                 platform: props.platform,
                 remoteRigs: props.remoteRigs,
+                settings: props.settings,
                 windowState: props.windowState,
                 workspace: session.workspace,
             }}
@@ -169,6 +178,7 @@ function DesktopRenderer(props: {
     rigRouter: RigRouter;
     remoteRigs: RemoteRigStore;
     rigSession: RigSessionStore;
+    settings: RigSettingsStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
     localWebUpdate: LocalWebUpdateStore;
@@ -266,6 +276,7 @@ function DesktopRenderer(props: {
             platform={props.platform}
             router={props.rigRouter}
             remoteRigs={props.remoteRigs}
+            settings={props.settings}
             store={props.rigSession}
             update={workspaceUpdate(snapshot.update, hostedUpdate)}
             windowState={props.windowState}
@@ -287,6 +298,9 @@ if (bridge) {
     // Appearance is chosen for the window, not for one connection, so the store is
     // created here beside the router and outlives both.
     const appearance = appearanceStoreCreate();
+    // The workspace's own preferences (default model, effort, permissions) belong
+    // to the window as well: they outlive whichever daemon connection is current.
+    const settings = rigSettingsStoreCreate();
     createRoot(document.getElementById("root")!).render(
         <DesktopAppearance appearance={appearance}>
             <DesktopRenderer
@@ -303,6 +317,7 @@ if (bridge) {
                     groupOpen: (groupId) => rigRouterGroupOpen(rigRouter, groupId),
                 })}
                 localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                settings={settings}
                 startupValues={startupValuesStoreCreate()}
                 store={runtimeStore}
                 windowState={windowStateStoreCreate(bridge)}

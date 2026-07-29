@@ -6,7 +6,7 @@ import type {
     RigSessionId,
     RigWorkspaceStore,
 } from "happy2-state";
-import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
+import { appearanceStoreCreate, rigHostNoop, rigSettingsStoreCreate } from "happy2-state";
 import { rigMemoryHistoryCreate, rigRouterCreate } from "../../sources/navigation/rigRouter";
 import type { RigRouterContext } from "../../sources/navigation/rigRouter";
 
@@ -43,6 +43,7 @@ async function resolve(url: string) {
             subscribe: () => () => undefined,
         } as unknown as RigConnectionStore,
         host: rigHostNoop as RigHost,
+        settings: rigSettingsStoreCreate(),
         workspace: store,
     };
     router.update({ context });

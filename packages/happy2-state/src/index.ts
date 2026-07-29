@@ -380,6 +380,13 @@ export {
     type RigModelStoreSnapshot,
 } from "./rig/rigModelStore.js";
 export {
+    rigModelKey,
+    rigSettingsStoreCreate,
+    type RigModelKey,
+    type RigSettingsSnapshot,
+    type RigSettingsStore,
+} from "./rig/rigSettingsStore.js";
+export {
     rigClockStoreCreate,
     type RigClockStore,
     type RigClockStoreOptions,

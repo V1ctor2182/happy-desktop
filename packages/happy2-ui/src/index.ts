@@ -550,6 +550,25 @@ export {
     type SettingsPlaceholder,
 } from "./pages/settings/SettingsPage";
 export {
+    RigSettingsSection,
+    RigSettingsShell,
+    type RigSettingsCategory,
+    type RigSettingsSectionProps,
+    type RigSettingsShellProps,
+} from "./pages/settings/RigSettingsShell";
+export {
+    RigGeneralSettings,
+    type RigAppearanceChoice,
+    type RigGeneralSettingsProps,
+} from "./pages/settings/RigGeneralSettings";
+export {
+    RigProviderSettings,
+    type RigProviderModelRow,
+    type RigProviderRow,
+    type RigProviderSettingsProps,
+    type RigProviderStatus,
+} from "./pages/settings/RigProviderSettings";
+export {
     type AutomationAction,
     AutomationCard,
     type AutomationCardProps,

@@ -79,6 +79,7 @@ import { ProductStorePage } from "./pages/ProductStorePage";
 import { ProfileCardPage } from "./pages/ProfileCardPage";
 import { RailPage } from "./pages/RailPage";
 import { SearchResultsPage } from "./pages/SearchResultsPage";
+import { RigSettingsBlueprintPage } from "./pages/RigSettingsPage";
 import { SettingsStorePage } from "./pages/SettingsStorePage";
 import { SecretRevealPage } from "./pages/SecretRevealPage";
 import { SegmentedControlPage } from "./pages/SegmentedControlPage";
@@ -469,6 +470,12 @@ const components: BlueprintPage[] = [
 ];
 const fullScreens: BlueprintPage[] = [
     { id: "settings-store", label: "Settings", number: "P-001", page: SettingsStorePage },
+    {
+        id: "rig-settings",
+        label: "Rig settings",
+        number: "P-012",
+        page: RigSettingsBlueprintPage,
+    },
     { id: "chat-store", label: "Chat", number: "P-002", page: ChatStorePage },
     {
         id: "home-store",
