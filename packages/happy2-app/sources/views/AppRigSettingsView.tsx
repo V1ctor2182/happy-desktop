@@ -3,7 +3,6 @@ import type {
     AppearanceStore,
     RigModelCatalog,
     RigModelKey,
-    RigModelStore,
     RigPermissionMode,
     RigSettingsSnapshot,
     RigSettingsStore,
@@ -18,16 +17,20 @@ import {
 } from "happy2-state";
 import {
     RigGeneralSettings,
+    RigMachineSettings,
     RigProviderSettings,
     RigSettingsShell,
+    type RigMachineRow,
     type RigProviderRow,
     type RigSettingsCategory,
 } from "happy2-ui";
 import type { SelectOption } from "happy2-ui";
+import type { AppRigDirectorySnapshot, AppRigDirectoryStore } from "../AppRigView";
 
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "link", id: "machines", label: "Machines" },
     { icon: "globe", id: "providers", label: "Providers" },
 ];
 
@@ -40,6 +43,7 @@ export function rigSettingsCategoryExists(section: string): boolean {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     general: "How this window looks and what a new session starts with",
+    machines: "Every Rig this window works in, here and elsewhere",
     providers: "Every model provider this Rig daemon knows about",
 };
 
@@ -52,8 +56,8 @@ const PERMISSION_MODES: readonly RigPermissionMode[] = [
 
 export interface AppRigSettingsViewProps {
     appearance: AppearanceStore;
-    /** Absent until a daemon connection exists; the pickers then say they are loading. */
-    models?: RigModelStore;
+    /** Every Rig in this window: the Machines category, and whose catalog is read. */
+    rigs: AppRigDirectoryStore;
     onClose(): void;
     onCategorySelect(id: string): void;
     platform?: "desktop" | "web";
@@ -74,10 +78,14 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.appearance.get,
         props.appearance.get,
     );
+    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    // The catalog shown is this machine's: providers are configured in the Rig
+    // the window runs on, and the defaults chosen here are the window's own.
+    const modelStore = directory.rigs.find((rig) => rig.kind === "local")?.session?.models;
     const models = useSyncExternalStore(
-        props.models?.subscribe ?? noSubscribe,
-        props.models?.get ?? modelsUnloaded,
-        props.models?.get ?? modelsUnloaded,
+        modelStore?.subscribe ?? noSubscribe,
+        modelStore?.get ?? modelsUnloaded,
+        modelStore?.get ?? modelsUnloaded,
     );
     const settings = useSyncExternalStore(
         props.settings.subscribe,
@@ -112,7 +120,24 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             windowControls={props.platform === "desktop"}
             windowFullScreen={windowState.fullScreen}
         >
-            {props.section === "providers" ? (
+            {props.section === "machines" ? (
+                <RigMachineSettings
+                    draft={{
+                        endpoint: directory.add.endpoint,
+                        label: directory.add.label,
+                        token: directory.add.token,
+                        ...(directory.add.error ? { error: directory.add.error } : {}),
+                    }}
+                    machines={machineRows(directory)}
+                    onAdd={() => props.rigs.addSubmit()}
+                    onConnect={(id) => props.rigs.rigConnect(id)}
+                    onDisconnect={(id) => props.rigs.rigDisconnect(id)}
+                    onEndpointChange={(value) => props.rigs.endpointUpdate(value)}
+                    onForget={(id) => props.rigs.rigRemove(id)}
+                    onLabelChange={(value) => props.rigs.labelUpdate(value)}
+                    onTokenChange={(value) => props.rigs.tokenUpdate(value)}
+                />
+            ) : props.section === "providers" ? (
                 <RigProviderSettings
                     error={models.type === "error" ? models.error.message : undefined}
                     loading={models.type !== "ready" && models.type !== "error"}
@@ -158,6 +183,21 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             )}
         </RigSettingsShell>
     );
+}
+
+/** Every Rig as one row, this machine first and never offering its own controls. */
+function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow[] {
+    return directory.rigs.map((rig) => ({
+        connected: rig.connected,
+        id: rig.id,
+        label: rig.label,
+        local: rig.kind === "local",
+        projectCount: rig.projects.length,
+        status: rig.status,
+        ...(rig.endpoint ? { endpoint: rig.endpoint } : {}),
+        ...(rig.message ? { message: rig.message } : {}),
+        ...(rig.version ? { version: rig.version } : {}),
+    }));
 }
 
 const noSubscribe = () => () => undefined;

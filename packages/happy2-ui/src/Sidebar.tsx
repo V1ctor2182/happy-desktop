@@ -98,8 +98,19 @@ export interface SidebarReorder {
 }
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     activeItemId: string;
-    /** Renders the product mark ("Happy" + faint "Place") instead of a custom title row. */
-    brand?: boolean;
+    /**
+     * Pinned rows beneath the compose row, for the few acts that belong to the
+     * window rather than to any one row in the list. They are reported through
+     * `onItemSelect` like any other row and are never active.
+     */
+    actions?: SidebarItem[];
+    /**
+     * Renders the product mark instead of a custom title row. `true` is the full
+     * lockup ("Happy" + faint "Place"); `"mark"` is the logo alone, for the
+     * desktop window in full screen, where the mark stands in the lane the
+     * native traffic lights vacated and has no room for the wordmark.
+     */
+    brand?: boolean | "mark";
     composeLabel?: string;
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
@@ -549,6 +560,7 @@ function SidebarRow({
  */
 export function Sidebar(props: SidebarProps) {
     const [local, rest] = partitionComponentProps(props, [
+        "actions",
         "activeItemId",
         "brand",
         "className",
@@ -855,22 +867,25 @@ export function Sidebar(props: SidebarProps) {
                                     aria-hidden="true"
                                     className="happy2-sidebar__brand-logo"
                                     data-happy2-ui="sidebar-brand-logo"
+                                    data-variant={local.brand === "mark" ? "mark" : undefined}
                                     draggable={false}
                                     src={happyLogoUrl}
                                 />
-                                <span
-                                    className="happy2-sidebar__title"
-                                    data-happy2-ui="sidebar-title"
-                                >
-                                    Happy
+                                {local.brand === "mark" ? null : (
                                     <span
-                                        className="happy2-sidebar__title-suffix"
-                                        data-happy2-ui="sidebar-title-suffix"
+                                        className="happy2-sidebar__title"
+                                        data-happy2-ui="sidebar-title"
                                     >
-                                        {" "}
-                                        Place
+                                        Happy
+                                        <span
+                                            className="happy2-sidebar__title-suffix"
+                                            data-happy2-ui="sidebar-title-suffix"
+                                        >
+                                            {" "}
+                                            Place
+                                        </span>
                                     </span>
-                                </span>
+                                )}
                             </span>
                         ) : local.title !== undefined ? (
                             <span className="happy2-sidebar__title-row">
@@ -919,6 +934,15 @@ export function Sidebar(props: SidebarProps) {
                             onSelect={local.onCompose}
                         />
                     ) : null}
+                    {local.actions?.map((action) => (
+                        <SidebarRow
+                            active={false}
+                            className="happy2-sidebar__compose"
+                            item={action}
+                            key={action.id}
+                            onSelect={() => local.onItemSelect(action.id)}
+                        />
+                    ))}
                     {local.sections.map((section) => (
                         <section
                             className="happy2-sidebar__section"

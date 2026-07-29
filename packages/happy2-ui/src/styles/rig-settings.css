@@ -252,3 +252,103 @@
     font-size: 13px;
     line-height: 18px;
 }
+
+/* ---- Machines ---------------------------------------------------------- */
+
+/* One machine reads as the same kind of card a provider does: they are both a
+   thing this window connects to, listed with what it currently offers. */
+.happy2-rig-machine {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+}
+
+.happy2-rig-machine__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy2-rig-machine__identity {
+    display: flex;
+    align-items: center;
+    flex: 1 1 0%;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy2-rig-machine__glyph {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    /* An independent rounded tile inside the 16px card padding, so it parallels
+       no outer curve and carries its own 8px radius. */
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    color: var(--text-secondary);
+}
+
+.happy2-rig-machine[data-status="connected"] .happy2-rig-machine__glyph {
+    color: var(--text);
+}
+
+.happy2-rig-machine__naming {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-rig-machine__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-machine__meta {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-machine__message {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-rig-machine__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-rig-machine__form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy2-rig-machine__form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}

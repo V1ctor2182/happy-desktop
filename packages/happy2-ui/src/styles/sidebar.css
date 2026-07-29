@@ -66,6 +66,14 @@
     user-select: none;
 }
 
+/* The bare mark stands in the 40px window-chrome row rather than beside a 15px
+   wordmark, so it matches that row's other furniture — the 16px glyph inside the
+   28px sidebar toggle — instead of the web heading's larger lockup. */
+.happy2-sidebar__brand-logo[data-variant="mark"] {
+    width: 16px;
+    height: 16px;
+}
+
 .happy2-sidebar__title {
     display: block;
     overflow: hidden;

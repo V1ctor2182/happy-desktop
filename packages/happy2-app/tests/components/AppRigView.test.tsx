@@ -4,6 +4,7 @@ import type {
     RigClockStore,
     RigConnectionStore,
     RigHost,
+    RigModelStore,
     RigPanelStore,
     RigWorkspaceStore,
 } from "happy2-state";
@@ -108,6 +109,19 @@ function workspace(): RigWorkspaceStore {
     } as unknown as RigWorkspaceStore;
 }
 
+/* The catalog is only read by the settings window, so this projection needs
+ * nothing more than a store that never resolves. */
+function modelStore(): RigModelStore {
+    return {
+        get: () => MODELS_LOADING,
+        subscribe: () => () => undefined,
+        load: () => Promise.resolve(),
+        [Symbol.dispose]: () => undefined,
+    } as unknown as RigModelStore;
+}
+
+const MODELS_LOADING = { type: "loading" } as const;
+
 /** One connected local Rig holding the project above; no remote machines. */
 function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][number]["projects"]) {
     const snapshot: AppRigDirectorySnapshot = {
@@ -124,6 +138,7 @@ function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][numb
                     clock: clock(),
                     connection: connection(),
                     host,
+                    models: modelStore(),
                     workspace: workspace(),
                 },
                 status: "connected",
@@ -209,17 +224,18 @@ it("highlights the addressed project and asks to navigate into it when it is pic
 it("lists one row per project and its sessions as tabs", () => {
     const { container } = view({ groupId: "prj_one" });
 
-    // The shared sidebar renders its compose row ("New session") ahead of the
-    // list, so the project rows follow it.
+    // The shared sidebar renders its compose row ("New session") and the pinned
+    // window actions ahead of the list, so the project rows follow them.
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
         "new-chat",
+        "connect-remote",
         "local/prj_one",
     ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[1]?.textContent).toContain("happy2");
-    expect(rows[1]?.textContent).not.toContain("~/happy2");
+    expect(rows[2]?.textContent).toContain("happy2");
+    expect(rows[2]?.textContent).not.toContain("~/happy2");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy2-ui="tab"]')];

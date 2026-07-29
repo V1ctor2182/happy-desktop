@@ -563,6 +563,13 @@ export {
     type RigGeneralSettingsProps,
 } from "./pages/settings/RigGeneralSettings";
 export {
+    RigMachineSettings,
+    type RigMachineDraft,
+    type RigMachineRow,
+    type RigMachineSettingsProps,
+    type RigMachineStatus,
+} from "./pages/settings/RigMachineSettings";
+export {
     RigProviderSettings,
     type RigProviderModelRow,
     type RigProviderRow,

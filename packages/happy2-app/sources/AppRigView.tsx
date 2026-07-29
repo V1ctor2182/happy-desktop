@@ -14,6 +14,7 @@ import type {
     RigFileViewMode,
     RigHost,
     RigGroupId,
+    RigModelStore,
     RigModelSelection,
     RigPanelSnapshot,
     RigPanelStore,
@@ -99,6 +100,8 @@ export interface AppRigEntry {
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
     readonly version?: string;
+    /** The address a remote machine answers on; absent for this machine. */
+    readonly endpoint?: string;
     readonly projects: readonly RigProjectGroup[];
     readonly projectsStatus: "loading" | "ready" | "error";
     /** The live stores for this Rig, present once its connection is up. */
@@ -109,6 +112,8 @@ export interface AppRigSession {
     readonly clock: RigClockStore;
     readonly connection: RigConnectionStore;
     readonly host: RigHost;
+    /** This Rig's own model catalog, read by the settings window's pickers. */
+    readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
 }
 
@@ -424,9 +429,48 @@ function rigItemParse(value: string): { readonly rigId: string; readonly id: str
         : { id: value.slice(boundary + 1), rigId: value.slice(0, boundary) };
 }
 
-/** The status row a remote machine carries, and the control that connects it. */
-const RIG_STATUS_ITEM = "status";
-const RIG_MENU_FORGET = "forget";
+/**
+ * The window's Rigs, each with its own projects, as one sidebar. Every row is
+ * addressed by its Rig and then by the group inside it, so a project on another
+ * machine is selected, renamed, archived, and reordered through exactly the same
+ * controls as one on this machine — against that machine's own workspace store.
+ *
+ * A machine that is not connected contributes only its heading: what it holds is
+ * unknown while it is away, and connecting it is a settings act rather than
+ * something to reach for from a project list.
+ */
+function rigSections(directory: AppRigDirectorySnapshot): SidebarSection[] {
+    return directory.rigs.map((rig) => ({
+        id: `rig:${rig.id}`,
+        label: rig.label,
+        items: rig.projects.flatMap(sidebarItems).map((item) => ({
+            ...item,
+            id: rigItemId(rig.id, item.id),
+        })),
+        ...(rig.projects.length === 0
+            ? {
+                  empty:
+                      rig.status === "connected"
+                          ? {
+                                actionLabel: "Create",
+                                description: "Start a session to begin working here.",
+                                icon: "chat" as const,
+                                title: "No projects yet",
+                            }
+                          : {
+                                actionLabel: "Open settings",
+                                description:
+                                    rig.message ??
+                                    (rig.status === "connecting"
+                                        ? "Connecting to this machine…"
+                                        : "Connect this machine to see its projects."),
+                                icon: "link" as const,
+                                title: rigStatusLabel(rig),
+                            },
+              }
+            : {}),
+    }));
+}
 
 function rigStatusLabel(rig: AppRigEntry): string {
     if (rig.status === "connected") return "Connected";
@@ -434,60 +478,8 @@ function rigStatusLabel(rig: AppRigEntry): string {
     return rig.status === "error" ? "Not reachable" : "Disconnected";
 }
 
-function rigStatusItem(rig: AppRigEntry): SidebarItem {
-    return {
-        id: rigItemId(rig.id, RIG_STATUS_ITEM),
-        kind: "view",
-        label: rigStatusLabel(rig),
-        icon: rig.status === "connected" ? "check" : "link",
-        meta: rig.message ?? (rig.version ? `Rig ${rig.version}` : undefined),
-        online: rig.status === "connected",
-        action: {
-            icon: rig.connected ? "close" : "link",
-            label: rig.connected ? `Disconnect ${rig.label}` : `Connect ${rig.label}`,
-        },
-        ...(rig.status === "error" ? { tone: "rose" as const } : {}),
-    };
-}
-
-/**
- * The window's Rigs, each with its own projects, as one sidebar. Every row is
- * addressed by its Rig and then by the group inside it, so a project on another
- * machine is selected, renamed, archived, and reordered through exactly the same
- * controls as one on this machine — against that machine's own workspace store.
- */
-function rigSections(directory: AppRigDirectorySnapshot): SidebarSection[] {
-    return [
-        ...directory.rigs.map((rig) => ({
-            id: `rig:${rig.id}`,
-            label: rig.label,
-            items: [
-                ...(rig.kind === "remote" ? [rigStatusItem(rig)] : []),
-                ...rig.projects.flatMap(sidebarItems).map((item) => ({
-                    ...item,
-                    id: rigItemId(rig.id, item.id),
-                })),
-            ],
-            ...(rig.kind === "local" && rig.projectsStatus === "ready"
-                ? {
-                      empty: {
-                          actionLabel: "Create",
-                          description: "Start a session to begin working locally.",
-                          icon: "chat" as const,
-                          title: "No projects yet",
-                      },
-                  }
-                : {}),
-        })),
-        {
-            action: { icon: "plus" as const, label: "Add a Rig" },
-            headingOnly: true,
-            id: "add-rig",
-            items: [],
-            label: "Machines",
-        },
-    ];
-}
+/** The pinned row that opens the Machines settings, where a machine is added. */
+const CONNECT_REMOTE_ITEM = "connect-remote";
 
 /**
  * The workspace window. It owns no product state: it subscribes to the directory
@@ -522,19 +514,27 @@ export function AppRigView(props: AppRigViewProps) {
             version={props.update.version}
         />
     ) : undefined;
-    const rigToggle = (rig: AppRigEntry | undefined) => {
-        if (!rig || rig.kind !== "remote") return;
-        if (rig.connected) props.rigs.rigDisconnect(rig.id);
-        else props.rigs.rigConnect(rig.id);
-    };
-
     const sidebar = (
         <Sidebar
+            // Connecting another machine sits under Create because it is the
+            // other way this window gains somewhere to work, and it opens the
+            // Machines settings rather than a dialog of its own: a machine is a
+            // durable part of the setup, not a one-off prompt.
+            actions={[
+                {
+                    icon: "link",
+                    id: CONNECT_REMOTE_ITEM,
+                    kind: "action",
+                    label: "Connect remote",
+                },
+            ]}
             activeItemId={props.groupId ? rigItemId(props.rigId, props.groupId) : ""}
             // The desktop window puts the traffic lights and the sidebar
-            // toggle in this heading, so the product mark stands down and
-            // the row becomes the window's drag lane.
-            brand={!desktop}
+            // toggle in this heading, so the product mark stands down and the
+            // row becomes the window's drag lane. Full screen takes the lights
+            // away, and the bare mark takes the lane they left rather than
+            // leaving the window's top-left corner empty.
+            brand={desktop ? (windowState.fullScreen ? ("mark" as const) : false) : true}
             composeLabel="Create"
             footer={
                 <SidebarFooter
@@ -570,35 +570,20 @@ export function AppRigView(props: AppRigViewProps) {
             itemMenuItems={(item) => {
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
-                if (!rig) return [];
-                if (row.id === RIG_STATUS_ITEM)
-                    return [
-                        {
-                            kind: "item",
-                            id: RIG_MENU_FORGET,
-                            label: `Forget ${rig.label}`,
-                            icon: "trash",
-                            danger: true,
-                        },
-                    ];
-                return rowMenuItems(rig.projects, { ...item, id: row.id });
+                return rig ? rowMenuItems(rig.projects, { ...item, id: row.id }) : [];
             }}
             onCompose={() => active?.session?.workspace.createOpen()}
+            // A section with nothing in it offers the one act that would fill
+            // it: starting work here, or connecting the machine that holds it.
             onSectionAction={(sectionId) => {
-                if (sectionId === "add-rig") {
-                    props.rigs.addOpen();
-                    return;
-                }
-                active?.session?.workspace.createOpen();
+                const rig = rigOf(sectionId.slice("rig:".length));
+                if (rig?.status === "connected") rig.session?.workspace.createOpen();
+                else props.onSettingsOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
-                if (row.id === RIG_STATUS_ITEM) {
-                    if (actionId === RIG_MENU_FORGET) props.rigs.rigRemove(rig.id);
-                    return;
-                }
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
@@ -633,9 +618,13 @@ export function AppRigView(props: AppRigViewProps) {
             // Addressing a group opens its most recent session, so a list
             // row lands on work rather than on an empty screen.
             onItemSelect={(id) => {
+                if (id === CONNECT_REMOTE_ITEM) {
+                    props.onSettingsOpen();
+                    return;
+                }
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
-                if (!rig || row.id === RIG_STATUS_ITEM) return;
+                if (!rig) return;
                 props.onChatSelect(
                     rig.id,
                     row.id,
@@ -646,10 +635,6 @@ export function AppRigView(props: AppRigViewProps) {
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
-                if (row.id === RIG_STATUS_ITEM) {
-                    rigToggle(rig);
-                    return;
-                }
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
@@ -686,123 +671,56 @@ export function AppRigView(props: AppRigViewProps) {
         />
     );
 
+    if (active?.session)
+        return (
+            <RigWorkspaceSurface
+                appearance={props.appearance}
+                browserContent={props.browserContent}
+                chatId={props.chatId}
+                clock={active.session.clock}
+                connection={active.session.connection}
+                groupId={props.groupId}
+                key={active.id}
+                onChatSelect={(groupId, chatId, replace) =>
+                    props.onChatSelect(active.id, groupId, chatId, replace)
+                }
+                platform={props.platform}
+                sidebar={sidebar}
+                windowState={props.windowState}
+                workspace={active.session.workspace}
+            />
+        );
+    // The addressed machine has no live stores yet — it is still connecting, the
+    // reader disconnected it, or it could not be reached. The sidebar stays, so
+    // the other machines' work is one click away; connecting this one is a
+    // settings act, which is where the control points.
     return (
-        <>
-            {active?.session ? (
-                <RigWorkspaceSurface
-                    appearance={props.appearance}
-                    browserContent={props.browserContent}
-                    chatId={props.chatId}
-                    clock={active.session.clock}
-                    connection={active.session.connection}
-                    groupId={props.groupId}
-                    key={active.id}
-                    onChatSelect={(groupId, chatId, replace) =>
-                        props.onChatSelect(active.id, groupId, chatId, replace)
-                    }
-                    platform={props.platform}
-                    sidebar={sidebar}
-                    windowState={props.windowState}
-                    workspace={active.session.workspace}
-                />
-            ) : (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
-                    {desktop ? <WindowDragRegion /> : null}
-                    <EmptyState
-                        {...(active && active.kind === "remote" && !active.connected
-                            ? {
-                                  action: {
-                                      label: "Connect",
-                                      icon: "link" as const,
-                                      onClick: () => rigToggle(active),
-                                  },
-                              }
-                            : {})}
-                        description={
-                            active
-                                ? (active.message ??
-                                  (active.connected
-                                      ? `Opening ${active.label}…`
-                                      : `${active.label} is disconnected.`))
-                                : "Add a Rig to start working."
-                        }
-                        icon={active?.status === "error" ? "shield" : "link"}
-                        size="panel"
-                        title={active ? active.label : "No Rig"}
-                    />
-                </AppShell>
-            )}
-            {directory.add.open ? (
-                <ModalOverlay onDismiss={() => props.rigs.addClose()}>
-                    <Modal
-                        footer={
-                            <>
-                                <Button onClick={() => props.rigs.addClose()} variant="ghost">
-                                    Cancel
-                                </Button>
-                                <Button
-                                    disabled={
-                                        directory.add.endpoint.trim().length === 0 ||
-                                        directory.add.token.trim().length === 0
-                                    }
-                                    onClick={() => props.rigs.addSubmit()}
-                                    variant="primary"
-                                >
-                                    Connect
-                                </Button>
-                            </>
-                        }
-                        onClose={() => props.rigs.addClose()}
-                        size="small"
-                        title="Add a Rig"
-                    >
-                        <div className="happy2-rig-create__fields">
-                            {directory.add.error ? (
-                                <Banner tone="danger">{directory.add.error}</Banner>
-                            ) : null}
-                            <TextField
-                                autoComplete="off"
-                                fullWidth
-                                hint="The address the other machine's Rig answers on."
-                                label="Endpoint"
-                                leadingIcon="link"
-                                onSubmit={() => props.rigs.addSubmit()}
-                                onValueChange={(value) => props.rigs.endpointUpdate(value)}
-                                placeholder="http://desk.local:4711"
-                                value={directory.add.endpoint}
-                            />
-                            <TextField
-                                autoComplete="off"
-                                fullWidth
-                                hint="The token that Rig accepts."
-                                label="Token"
-                                leadingIcon="lock"
-                                onSubmit={() => props.rigs.addSubmit()}
-                                onValueChange={(value) => props.rigs.tokenUpdate(value)}
-                                type="password"
-                                value={directory.add.token}
-                            />
-                            <TextField
-                                autoComplete="off"
-                                fullWidth
-                                hint="What this machine is called in the sidebar."
-                                label="Name"
-                                leadingIcon="inbox"
-                                onSubmit={() => props.rigs.addSubmit()}
-                                onValueChange={(value) => props.rigs.labelUpdate(value)}
-                                placeholder="Optional"
-                                value={directory.add.label}
-                            />
-                        </div>
-                    </Modal>
-                </ModalOverlay>
-            ) : null}
-        </>
+        <AppShell
+            sidebarCollapsible
+            windowControls={desktop}
+            windowFullScreen={windowState.fullScreen}
+            sidebar={sidebar}
+        >
+            {desktop ? <WindowDragRegion /> : null}
+            <EmptyState
+                action={{
+                    label: "Open settings",
+                    icon: "settings",
+                    onClick: props.onSettingsOpen,
+                }}
+                description={
+                    active
+                        ? (active.message ??
+                          (active.connected
+                              ? `Connecting to ${active.label}…`
+                              : `${active.label} is disconnected.`))
+                        : "Connect a machine to start working."
+                }
+                icon={active?.status === "error" ? "shield" : "link"}
+                size="panel"
+                title={active ? active.label : "No machine"}
+            />
+        </AppShell>
     );
 }
 

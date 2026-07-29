@@ -3,6 +3,7 @@ import type {
     RigClockStore,
     RigConnectionStore,
     RigHost,
+    RigModelStore,
     RigSessionId,
     RigWorkspaceStore,
 } from "happy2-state";
@@ -54,6 +55,10 @@ function directory(store: RigWorkspaceStore): AppRigDirectoryStore {
                         subscribe: () => () => undefined,
                     } as unknown as RigConnectionStore,
                     host: rigHostNoop as RigHost,
+                    models: {
+                        get: () => ({ type: "loading" }),
+                        subscribe: () => () => undefined,
+                    } as unknown as RigModelStore,
                     workspace: store,
                 },
                 status: "connected",

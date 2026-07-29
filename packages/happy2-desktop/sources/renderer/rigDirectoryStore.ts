@@ -20,6 +20,8 @@ export interface RigDirectoryEntry {
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
     readonly version?: string;
+    /** The address a remote machine answers on; absent for this machine. */
+    readonly endpoint?: string;
     /** This machine's projects, kept live while the Rig is connected. */
     readonly projects: readonly RigProjectGroup[];
     /** Where that project list is: still arriving, ready, or refused by the daemon. */
@@ -237,6 +239,7 @@ export function rigDirectoryStoreCreate(
             const rig: LiveRig = rigs.get(source.id) ?? {
                 entry: {
                     connected: source.connected,
+                    endpoint: source.endpoint,
                     id: source.id,
                     kind: "remote",
                     label: source.label,
@@ -249,6 +252,7 @@ export function rigDirectoryStoreCreate(
             rig.entry = {
                 ...rig.entry,
                 connected: source.connected,
+                endpoint: source.endpoint,
                 label: source.label,
                 message: source.message,
                 status: source.status,
