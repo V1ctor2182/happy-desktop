@@ -15,15 +15,12 @@
         "test:playwright:artifacts": "VITE_HAPPY2_WRITE_SCREENSHOTS=1 node ../../scripts/run-ui-alignment-tests.mjs --config vitest.playwright.config.ts",
         "pretest:server": "pnpm --dir ../.. plugins:prepare",
         "test:server": "vitest run",
-        "pretest:server:coverage": "pnpm --dir ../.. plugins:prepare",
-        "test:server:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
         "pretest:watch": "pnpm --dir ../.. plugins:prepare",
         "test:watch": "vitest",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",
-        "lint": "oxlint .",
-        "clean": "rm -rf coverage"
+        "lint": "oxlint ."
     },
     "dependencies": {
         "@libsql/client": "^0.17.4",
@@ -43,7 +40,6 @@
         "@types/ws": "^8.18.1",
         "@types/yazl": "^3.3.1",
         "@vitest/browser-playwright": "^4.1.10",
-        "@vitest/coverage-v8": "^4.1.10",
         "oxfmt": "^0.57.0",
         "oxlint": "^1.73.0",
         "playwright": "^1.61.1",
