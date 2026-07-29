@@ -1250,6 +1250,7 @@ export function rigWorkspaceStoreCreate(
                 const store = rigSessionDraftStoreCreate({
                     catalog,
                     selection: lastUsedSelection,
+                    modelSelect: (current, input) => client.models.modelSelect(current, input),
                 });
                 createDraft = store;
                 unsubscribeCreateDraft = store.subscribe(() => {
@@ -1290,6 +1291,7 @@ export function rigWorkspaceStoreCreate(
                 groupDraft = rigSessionDraftStoreCreate({
                     catalog,
                     selection: lastUsedSelection,
+                    modelSelect: (current, input) => client.models.modelSelect(current, input),
                 });
                 unsubscribeGroupDraft = groupDraft.subscribe(() => {
                     const selection = groupDraft?.get().selection;

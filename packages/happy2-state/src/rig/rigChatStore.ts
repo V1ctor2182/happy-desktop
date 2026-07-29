@@ -497,6 +497,10 @@ export interface RigChatDeps {
     readonly transport: RigTransport;
     readonly catalog: RigModelCatalog;
     readonly selectionUsed?: (selection: RigSelection) => void;
+    readonly modelSelect?: (
+        current: RigSelection,
+        input: RigModelSelection,
+    ) => RigSelection;
     readonly output?: (event: RigChatOutput) => void;
     readonly createId?: () => string;
     readonly now?: () => number;
@@ -1898,7 +1902,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                     permissionMode: transcriptSession.permissionMode as RigPermissionMode,
                     serviceTier: transcriptSession.serviceTier as RigServiceTier | undefined,
                 };
-                const next = rigSelectionModelUpdate(deps.catalog, current, input);
+                const next =
+                    deps.modelSelect?.(current, input) ??
+                    rigSelectionModelUpdate(deps.catalog, current, input);
                 deps.selectionUsed?.(next);
                 connectMutationTrack(
                     deps.connectActions.switchModel(sessionId, {
@@ -1908,12 +1914,27 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 );
                 if (next.effort !== current.effort)
                     connectMutationTrack(deps.connectActions.setEffort(sessionId, next.effort));
+                if (next.serviceTier !== current.serviceTier)
+                    connectMutationTrack(
+                        deps.connectActions.setServiceTier(sessionId, next.serviceTier),
+                    );
                 return;
             }
-            selectionIntentSet((current) => rigSelectionModelUpdate(deps.catalog, current, input));
+            selectionIntentSet(
+                (current) =>
+                    deps.modelSelect?.(current, input) ??
+                    rigSelectionModelUpdate(deps.catalog, current, input),
+            );
         },
         effortUpdate(effort) {
             if (deps.connectActions) {
+                if (transcriptSession)
+                    deps.selectionUsed?.(
+                        rigSelectionEffortUpdate(
+                            transcriptSelectionOf(transcriptSession),
+                            effort,
+                        ),
+                    );
                 connectMutationTrack(deps.connectActions.setEffort(sessionId, effort));
                 return;
             }
@@ -1932,6 +1953,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         },
         serviceTierUpdate(serviceTier) {
             if (deps.connectActions) {
+                if (transcriptSession)
+                    deps.selectionUsed?.(
+                        rigSelectionServiceTierUpdate(
+                            transcriptSelectionOf(transcriptSession),
+                            serviceTier,
+                        ),
+                    );
                 connectMutationTrack(deps.connectActions.setServiceTier(sessionId, serviceTier));
                 return;
             }
@@ -2087,6 +2115,16 @@ function selectionOf(session: RigSession): RigSelection {
         effort: session.effort,
         permissionMode: session.permissionMode,
         serviceTier: session.serviceTier,
+    };
+}
+
+function transcriptSelectionOf(session: SessionState): RigSelection {
+    return {
+        providerId: session.providerId,
+        modelId: session.modelId,
+        effort: session.effort as RigThinkingLevel | undefined,
+        permissionMode: session.permissionMode as RigPermissionMode,
+        serviceTier: session.serviceTier as RigServiceTier | undefined,
     };
 }
 

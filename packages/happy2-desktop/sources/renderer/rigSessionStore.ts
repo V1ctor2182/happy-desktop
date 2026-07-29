@@ -9,6 +9,8 @@ import {
     type RigDaemonHealth,
     type RigGlobalEvent,
     type RigHost,
+    type RigModelPreferencePersistence,
+    type RigModelPreferences,
     type RigModelStore,
     type RigSessionCatalogSnapshot,
     type RigSessionLocation,
@@ -25,6 +27,26 @@ import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource"
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
+
+const MODEL_PREFERENCES_KEY = "happy2.rig.model-preferences.v1";
+
+const modelPreferencePersistence: RigModelPreferencePersistence = {
+    read() {
+        try {
+            const value = localStorage.getItem(MODEL_PREFERENCES_KEY);
+            return value ? (JSON.parse(value) as RigModelPreferences) : undefined;
+        } catch {
+            return undefined;
+        }
+    },
+    write(preferences) {
+        try {
+            localStorage.setItem(MODEL_PREFERENCES_KEY, JSON.stringify(preferences));
+        } catch {
+            // A storage-denied renderer still keeps the choices for this client lifetime.
+        }
+    },
+};
 
 export interface RigSession {
     readonly connectionId: number;
@@ -172,6 +194,7 @@ export function rigSessionStoreCreate(
         });
         const client = rigClientCreate({
             transport,
+            modelPreferencePersistence,
             catalogSource,
             transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
             connectActions: rigConnect,

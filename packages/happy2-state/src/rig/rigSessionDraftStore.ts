@@ -44,6 +44,10 @@ export interface RigSessionDraftStore {
 
 export interface RigSessionDraftOptions {
     readonly catalog: RigModelCatalog;
+    readonly modelSelect?: (
+        current: RigSelection,
+        input: RigModelSelection,
+    ) => RigSelection;
     /**
      * What to open the draft on — the workspace's most recent selection, so a
      * new session starts configured the way the last one was. Absent for the
@@ -201,7 +205,10 @@ export function rigSessionDraftStoreCreate(options: RigSessionDraftOptions): Rig
         subscribe: (listener) => store.subscribe(listener),
 
         modelUpdate: (input) =>
-            selectionSet(rigSelectionModelUpdate(catalog, store.getState().selection, input)),
+            selectionSet(
+                options.modelSelect?.(store.getState().selection, input) ??
+                    rigSelectionModelUpdate(catalog, store.getState().selection, input),
+            ),
         effortUpdate: (effort) =>
             selectionSet(rigSelectionEffortUpdate(store.getState().selection, effort)),
         permissionModeUpdate: (permissionMode) =>

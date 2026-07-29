@@ -26,6 +26,7 @@ import type {
     RigSessionId,
 } from "./rigTypes.js";
 import { rigModelStoreCreate, type RigModelStore } from "./rigModelStore.js";
+import type { RigModelPreferencePersistence } from "./rigModelStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -100,6 +101,7 @@ export interface RigClientDeps {
     readonly sessionListOutput?: (event: RigSessionListOutput) => void;
     readonly chatOutput?: (sessionId: RigSessionId, event: RigChatOutput) => void;
     readonly backgroundError?: (error: UserError) => void;
+    readonly modelPreferencePersistence?: RigModelPreferencePersistence;
     /**
      * Builds the driver behind a terminal: the app-layer machinery that owns the
      * terminal protocol client and the VT emulator. Omitting it leaves terminals
@@ -125,7 +127,12 @@ interface ChatBinding {
  */
 export function rigClientCreate(deps: RigClientDeps): RigClient {
     const transport = deps.transport;
-    const models = rigModelStoreCreate({ catalogRead: () => transport.modelsRead() });
+    const models = rigModelStoreCreate({
+        catalogRead: () => transport.modelsRead(),
+        ...(deps.modelPreferencePersistence
+            ? { preferencePersistence: deps.modelPreferencePersistence }
+            : {}),
+    });
     let sessionListStore: RigSessionListStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
@@ -170,6 +177,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                             ? { connectMutationSubscribe: deps.connectMutationSubscribe }
                             : {}),
                         selectionUsed: (selection) => models.selectionUsed(selection),
+                        modelSelect: (current, input) => models.modelSelect(current, input),
                         createId: deps.createId,
                         now: deps.now,
                         output: deps.chatOutput

@@ -372,6 +372,9 @@ export { rigConversationAttachTurnTraces } from "./rig/rigConversationTurnTrace.
 export {
     rigModelStoreCreate,
     type RigModelStore,
+    type RigModelPreference,
+    type RigModelPreferences,
+    type RigModelPreferencePersistence,
     type RigModelStoreOptions,
     type RigModelStoreReadySnapshot,
     type RigModelStoreSnapshot,
