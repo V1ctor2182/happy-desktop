@@ -48,6 +48,7 @@ const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5
 const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
     ? new URL(process.env.VITE_DEV_SERVER_URL).origin
     : undefined;
+const updateCheckIntervalMs = 15 * 60 * 1000;
 const titleBarHeight = 40;
 const macosTrafficLightSize = 14;
 const macosWindowChrome = {
@@ -262,6 +263,10 @@ void app
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
+        ipcMain.handle(desktopIpc.applicationRestart, () => {
+            app.relaunch();
+            app.quit();
+        });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {
@@ -322,7 +327,11 @@ void app
         }));
         windowSynchronize(runtime.get());
         applicationMenuInstall(runtime.get());
-        void updater.check().catch(() => undefined);
+        const updateCheck = () => void updater.check().catch(() => undefined);
+        const updateCheckInterval = setInterval(updateCheck, updateCheckIntervalMs);
+        updateCheckInterval.unref();
+        app.once("will-quit", () => clearInterval(updateCheckInterval));
+        updateCheck();
         app.on("activate", () => {
             if (!windowLifecycle.get()) windowSynchronize(runtime.get());
         });

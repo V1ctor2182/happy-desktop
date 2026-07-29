@@ -7,6 +7,7 @@ import {
     rigRouterConversationOpen,
     rigRouterGroupOpen,
     rigRouterCreate,
+    type AppRigUpdate,
     type RigRouter,
 } from "happy2-app";
 import { appearanceStoreCreate, type AppearanceStore, type RigWindowStore } from "happy2-state";
@@ -17,10 +18,49 @@ import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeSt
 import { rigSessionStoreCreate, type RigSessionStore } from "./rigSessionStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
+import { localWebBuild } from "./localWebBuild";
+import {
+    localWebUpdateStoreCreate,
+    type LocalWebUpdateSnapshot,
+    type LocalWebUpdateStore,
+} from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
 
 function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
+}
+
+interface WorkspaceUpdate {
+    readonly action: "install" | "restart";
+    readonly snapshot: AppRigUpdate;
+}
+
+function workspaceUpdate(
+    native: DesktopUpdateSnapshot,
+    hosted: LocalWebUpdateSnapshot,
+): WorkspaceUpdate | undefined {
+    if (
+        native.status === "available" ||
+        native.status === "downloading" ||
+        native.status === "downloaded"
+    )
+        return {
+            action: "install",
+            snapshot: {
+                ...(native.availableVersion ? { version: native.availableVersion } : {}),
+                ...(native.message ? { detail: native.message } : {}),
+                status: native.status,
+            },
+        };
+    if (hosted.status !== "available") return undefined;
+    const version =
+        hosted.version !== localWebBuild?.version
+            ? hosted.version
+            : `build ${hosted.buildId.slice(0, 7)}`;
+    return {
+        action: "restart",
+        snapshot: { status: "downloaded", version },
+    };
 }
 
 function ChoosingScreen(props: {
@@ -64,12 +104,15 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
 
 function RigBoundary(props: {
     appearance: AppearanceStore;
+    bridge: HappyDesktopBridge;
     platform: "desktop" | "web";
     router: RigRouter;
     store: RigSessionStore;
+    update?: WorkspaceUpdate;
     windowState: RigWindowStore;
 }) {
     const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const update = props.update;
     if (!session)
         return (
             <DesktopStartupScreen
@@ -87,6 +130,17 @@ function RigBoundary(props: {
                 clock: session.clock,
                 connection: session.connection,
                 host: session.host,
+                ...(update
+                    ? {
+                          onUpdateRestart: () =>
+                              desktopAction(
+                                  update.action === "install"
+                                      ? props.bridge.updateInstall()
+                                      : props.bridge.applicationRestart(),
+                              ),
+                          update: update.snapshot,
+                      }
+                    : {}),
                 platform: props.platform,
                 windowState: props.windowState,
                 workspace: session.workspace,
@@ -105,9 +159,15 @@ function DesktopRenderer(props: {
     rigSession: RigSessionStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
+    localWebUpdate: LocalWebUpdateStore;
     windowState: RigWindowStore;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const hostedUpdate = useSyncExternalStore(
+        props.localWebUpdate.subscribe,
+        props.localWebUpdate.get,
+        props.localWebUpdate.get,
+    );
     if (!snapshot)
         return (
             <DesktopStartupScreen
@@ -189,9 +249,11 @@ function DesktopRenderer(props: {
     return (
         <RigBoundary
             appearance={props.appearance}
+            bridge={props.bridge}
             platform={props.platform}
             router={props.rigRouter}
             store={props.rigSession}
+            update={workspaceUpdate(snapshot.update, hostedUpdate)}
             windowState={props.windowState}
         />
     );
@@ -224,6 +286,7 @@ if (bridge) {
                     conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),
                     groupOpen: (groupId) => rigRouterGroupOpen(rigRouter, groupId),
                 })}
+                localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
                 startupValues={startupValuesStoreCreate()}
                 store={runtimeStore}
                 windowState={windowStateStoreCreate(bridge)}

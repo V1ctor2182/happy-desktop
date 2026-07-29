@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { Avatar } from "../../src/Avatar";
 import { Button } from "../../src/Button";
 import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
+import { SidebarFooter } from "../../src/SidebarFooter";
+import { SidebarUpdateAction, type SidebarUpdateActionProps } from "../../src/SidebarUpdateAction";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const workspaceSections: SidebarSection[] = [
     {
@@ -410,6 +412,25 @@ function Frame(props: { children: ReactNode; height: number }) {
         </div>
     );
 }
+
+const UPDATE_STATES: readonly {
+    readonly label: string;
+    readonly update: SidebarUpdateActionProps;
+}[] = [
+    {
+        label: "Available",
+        update: { status: "available", version: "0.0.21" },
+    },
+    {
+        label: "Downloading",
+        update: { detail: "64% downloaded", status: "downloading", version: "0.0.21" },
+    },
+    {
+        label: "Ready",
+        update: { onRestart: () => {}, status: "downloaded", version: "0.0.21" },
+    },
+];
+
 export function SidebarPage() {
     return (
         <ComponentPage
@@ -436,6 +457,40 @@ export function SidebarPage() {
                         />
                     </Frame>
                     <DimensionRule label="288 px wide · 620 px viewport" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="The footer stays quiet while an update arrives, then turns the same compact lane into a versioned restart action."
+                label="Desktop update footer"
+                number="01c"
+                stage="app"
+            >
+                <div style={{ display: "flex", gap: "16px" }}>
+                    {UPDATE_STATES.map(({ label, update }) => (
+                        <div
+                            key={label}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={180}>
+                                <Sidebar
+                                    activeItemId=""
+                                    footer={
+                                        <SidebarFooter
+                                            actions={<SidebarUpdateAction {...update} />}
+                                            appearance="light"
+                                            onAppearanceToggle={() => {}}
+                                            onSettingsOpen={() => {}}
+                                        />
+                                    }
+                                    onItemSelect={() => {}}
+                                    sections={[]}
+                                    title={label}
+                                />
+                            </Frame>
+                            <DimensionRule label={`${label} · footer 56 px`} />
+                        </div>
+                    ))}
                 </div>
             </Specimen>
 

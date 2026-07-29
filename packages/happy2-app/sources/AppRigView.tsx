@@ -59,6 +59,7 @@ import {
     PanelHeader,
     Sidebar,
     SidebarFooter,
+    SidebarUpdateAction,
     TabbedPane,
     TextField,
     TerminalPanel,
@@ -71,6 +72,12 @@ import {
     type SidebarItem,
     type TabItem,
 } from "happy2-ui";
+
+export interface AppRigUpdate {
+    readonly detail?: string;
+    readonly status: "available" | "downloading" | "downloaded";
+    readonly version?: string;
+}
 
 export interface AppRigViewProps {
     /** Host/UI operations for the desktop shell (menus, directory picking). */
@@ -97,6 +104,10 @@ export interface AppRigViewProps {
      * such store and stays windowed.
      */
     windowState?: RigWindowStore;
+    /** Native or hosted-renderer update projected by the desktop host. */
+    update?: AppRigUpdate;
+    /** Restarts into the ready update. Absent in a plain browser surface. */
+    onUpdateRestart?: () => void;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -330,8 +341,9 @@ function openGroupFind(
  * and resizable shell column, and its pinned footer, so the two modes are one
  * component rendered twice rather than a local-only variant — and the same
  * `ConversationView` for the selected conversation. The footer carries only what
- * a machine-owned workspace actually has: the appearance toggle and the
- * application menu, with no account identity, profile, or administration.
+ * a machine-owned workspace actually has: the appearance toggle, the application
+ * menu, and a host-supplied update action when one is ready, with no account
+ * identity, profile, or administration.
  * Local-only affordances (the model and effort pickers beneath the composer, the
  * settings dialog holding the view toggles and access pickers, and the usage and
  * activity panels) are passed into that surface's slots.
@@ -435,6 +447,14 @@ export function AppRigView(props: AppRigViewProps) {
         ) : undefined;
 
     const desktop = props.platform === "desktop";
+    const sidebarUpdate = props.update ? (
+        <SidebarUpdateAction
+            detail={props.update.detail}
+            onRestart={props.update.status === "downloaded" ? props.onUpdateRestart : undefined}
+            status={props.update.status}
+            version={props.update.version}
+        />
+    ) : undefined;
 
     return (
         <AppShell
@@ -481,6 +501,7 @@ export function AppRigView(props: AppRigViewProps) {
                     composeLabel="Create"
                     footer={
                         <SidebarFooter
+                            actions={sidebarUpdate}
                             appearance={appearance.appearance}
                             onAppearanceToggle={() => props.appearance.appearanceToggle()}
                             // Local app-level settings — the instance list and the

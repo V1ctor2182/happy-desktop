@@ -77,6 +77,12 @@ notarizing the native shell.
 Pages after every push to `main`. Pages uses the custom domain
 `local.app.happy.engineering`, which preserves the local shell's unique,
 build-pinned security origin; the DNS record is a CNAME to `slopus.github.io`.
+Each deployment embeds its Git commit and publishes `local-web-version.json`.
+While the Local window is visible, the renderer checks that same-origin
+manifest every 15 seconds and stops when hidden. A changed build appears in the
+sidebar footer as a versioned restart action. Native release checks run every
+15 minutes and use the same footer; a downloaded native update takes precedence
+over a hosted-renderer restart.
 
 ### Signed release build
 

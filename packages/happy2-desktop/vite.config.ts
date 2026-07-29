@@ -2,12 +2,40 @@ import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
-import { defineConfig } from "vite";
+import { createRequire } from "node:module";
+import { defineConfig, type Plugin } from "vite";
 import { appRouterPlugin } from "happy2-app/vite";
 import { browserLocalRigPlugin } from "./sources/main/browserDevServer";
 
+const require = createRequire(import.meta.url);
+const packageJson = require("./package.json") as { readonly version: string };
+const localWebSite = process.env.HAPPY2_LOCAL_WEB_SITE === "1";
+const localWebBuild = localWebSite
+    ? {
+          buildId: process.env.HAPPY2_LOCAL_WEB_BUILD_ID ?? "development",
+          version: packageJson.version,
+      }
+    : undefined;
+
+function localWebVersionPlugin(build: NonNullable<typeof localWebBuild>): Plugin {
+    return {
+        name: "happy2-local-web-version",
+        generateBundle() {
+            this.emitFile({
+                fileName: "local-web-version.json",
+                source: `${JSON.stringify(build)}\n`,
+                type: "asset",
+            });
+        },
+    };
+}
+
 export default defineConfig({
-    base: process.env.HAPPY2_LOCAL_WEB_SITE === "1" ? "/" : "./",
+    base: localWebSite ? "/" : "./",
+    define: {
+        __HAPPY2_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
+        __HAPPY2_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
+    },
     plugins: [
         // The Rig terminal protocol (@slopus/ghostty-web) decodes compressed wire
         // frames with node:zlib and node Buffer; these polyfills make them real in
@@ -24,6 +52,7 @@ export default defineConfig({
         react(),
         babel({ presets: [reactCompilerPreset()] }),
         browserLocalRigPlugin(),
+        ...(localWebBuild ? [localWebVersionPlugin(localWebBuild)] : []),
     ],
     build: {
         outDir: "dist/renderer",

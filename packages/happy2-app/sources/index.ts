@@ -1,7 +1,7 @@
 import "./styles.css";
 
 export { App, type AppDesktopRuntime, type AppProps } from "./App";
-export { AppRigView, type AppRigViewProps } from "./AppRigView";
+export { AppRigView, type AppRigUpdate, type AppRigViewProps } from "./AppRigView";
 export { appMemoryHistoryCreate, appRouterCreate, type AppRouter } from "./navigation/appRouter";
 export {
     rigMemoryHistoryCreate,

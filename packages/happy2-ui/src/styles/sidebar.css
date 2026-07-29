@@ -666,6 +666,57 @@
     border-top: 1px solid var(--divider);
 }
 
+.happy2-sidebar-update-action {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.happy2-sidebar-update-action--status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy2-sidebar-update-action__icon {
+    display: flex;
+    flex: none;
+    color: var(--text-link);
+}
+
+.happy2-sidebar-update-action__label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-sidebar-update-action--ready.happy2-button {
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__content,
+.happy2-sidebar-update-action--ready .happy2-button__label {
+    min-width: 0;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__content {
+    flex: 0 1 auto;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Profile control pinned in the sidebar footer: avatar + name that opens the
    viewer's profile, grows to fill the row beside a trailing control. */
 .happy2-sidebar__profile {

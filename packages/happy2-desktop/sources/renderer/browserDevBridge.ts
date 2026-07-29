@@ -33,6 +33,7 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
         directoryPick: async () => undefined,
         applicationMenuOpen: async () => undefined,
+        applicationRestart: async () => window.location.reload(),
         runtimeGet: async () => {
             const snapshot = await request<DesktopRuntimeSnapshot>("runtimeGet");
             if (snapshot.phase !== "ready" || snapshot.activeTarget.mode !== "local")

@@ -11,6 +11,7 @@ import {
 const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
+    applicationRestart: () => ipcRenderer.invoke(desktopIpc.applicationRestart),
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),
     runtimeReset: () => ipcRenderer.invoke(desktopIpc.runtimeReset),
     runtimeRetry: () => ipcRenderer.invoke(desktopIpc.runtimeRetry),

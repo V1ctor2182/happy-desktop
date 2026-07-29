@@ -205,6 +205,7 @@ export {
     type SidebarSection,
 } from "./Sidebar";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
+export { SidebarUpdateAction, type SidebarUpdateActionProps } from "./SidebarUpdateAction";
 export {
     DesktopStartupScreen,
     type DesktopStartupMode,

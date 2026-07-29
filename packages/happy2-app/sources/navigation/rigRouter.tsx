@@ -23,7 +23,7 @@ import type {
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
-import { AppRigView } from "../AppRigView";
+import { AppRigView, type AppRigUpdate } from "../AppRigView";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -51,6 +51,9 @@ export interface RigRouterContext {
      * rather than the platform.
      */
     readonly windowState?: RigWindowStore;
+    /** Desktop-shell update state; absent when this route tree runs as plain web UI. */
+    readonly update?: AppRigUpdate;
+    readonly onUpdateRestart?: () => void;
 }
 
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
@@ -145,7 +148,9 @@ function RigWorkspaceLayout() {
             groupId={params.groupId}
             host={context.host}
             platform={context.platform}
+            update={context.update}
             windowState={context.windowState}
+            onUpdateRestart={context.onUpdateRestart}
             onChatSelect={(groupId, chatId, replace) =>
                 void navigate(
                     groupId === undefined
