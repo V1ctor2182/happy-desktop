@@ -22,6 +22,10 @@ export interface TerminalCellSnapshot {
     readonly underline: boolean;
     readonly inverse: boolean;
     readonly strikethrough: boolean;
+    /** An OSC 8 hyperlink attached by the terminal, when available. */
+    readonly hyperlink?: string | null;
+    readonly invisible?: boolean;
+    readonly overline?: boolean;
     /** Resolved CSS foreground color, or null to use the default foreground. */
     readonly foreground: string | null;
     /** Resolved CSS background color, or null to use the default background. */
@@ -38,6 +42,12 @@ export interface TerminalCursorSnapshot {
     readonly visible: boolean;
 }
 
+/** Input modes that change the byte sequence produced by browser key events. */
+export interface TerminalInputModesSnapshot {
+    readonly bracketedPaste: boolean;
+    readonly cursorKeysApplication: boolean;
+}
+
 export interface TerminalGridSnapshot {
     /** Visible column count. */
     readonly cols: number;
@@ -47,6 +57,8 @@ export interface TerminalGridSnapshot {
     readonly title: string;
     /** Cursor position within the visible grid, or null when hidden. */
     readonly cursor: TerminalCursorSnapshot | null;
+    /** Live VT input modes; omitted by a semantic recovery frame. */
+    readonly inputModes?: TerminalInputModesSnapshot;
     /** The visible lines, top to bottom; each line lists its non-empty cells. */
     readonly lines: readonly TerminalRowSnapshot[];
     /**

@@ -252,6 +252,7 @@ export type {
     TerminalDriverStatus,
     TerminalGridSnapshot,
     TerminalHandle,
+    TerminalInputModesSnapshot,
     TerminalReplica,
     TerminalRowSnapshot,
     TerminalSnapshot,

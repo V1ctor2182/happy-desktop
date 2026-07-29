@@ -190,8 +190,20 @@
 
 .happy2-terminal-panel__input {
     position: absolute;
+    top: 0;
+    left: -9999px;
+    box-sizing: border-box;
     width: 1px;
     height: 1px;
     overflow: hidden;
+    padding: 0;
+    margin: 0;
     opacity: 0;
+    color: transparent;
+    caret-color: transparent;
+    pointer-events: none;
+    resize: none;
+    background: transparent;
+    border: 0;
+    outline: none;
 }

@@ -54,6 +54,7 @@ export const terminalDriverCreate: TerminalDriverCreate =
 
 class GhosttyTerminalDriver implements TerminalDriver {
     private emulator: TerminalEmulator | undefined;
+    private emulatorPtyWriteUnsubscribe: (() => void) | undefined;
     private protocol: RemoteTerminalProtocolClient | undefined;
     private connection: TerminalConnection | undefined;
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -128,6 +129,8 @@ class GhosttyTerminalDriver implements TerminalDriver {
         this.protocol = undefined;
         this.connection?.destroy();
         this.connection = undefined;
+        this.emulatorPtyWriteUnsubscribe?.();
+        this.emulatorPtyWriteUnsubscribe = undefined;
         this.emulator?.dispose();
         this.emulator = undefined;
     }
@@ -144,6 +147,11 @@ class GhosttyTerminalDriver implements TerminalDriver {
             this.emulator = undefined;
             return;
         }
+        this.emulatorPtyWriteUnsubscribe = this.emulator.onPtyWrite?.((data) => {
+            // Ghostty emits terminal query responses as PTY input, just as WTerm
+            // forwards its WASM bridge responses through `onData`.
+            this.write(new TextDecoder().decode(data));
+        });
         this.attach();
     }
 
@@ -354,6 +362,9 @@ function gridStateToSnapshot(state: RemoteTerminalGridState): TerminalGridSnapsh
                     underline: styleUnderline(style),
                     inverse: styleFlag(style, "inverse"),
                     strikethrough: styleFlag(style, "strikethrough"),
+                    hyperlink: typeof style?.hyperlink === "string" ? style.hyperlink : undefined,
+                    invisible: styleFlag(style, "invisible"),
+                    overline: styleFlag(style, "overline"),
                     foreground: resolveColor(style?.foreground, palette),
                     background: resolveColor(style?.background, palette),
                 };

@@ -15,6 +15,10 @@ const HISTORY_MAX = 1000;
  * runs at most this often.
  */
 const HISTORY_REBUILD_INTERVAL_MS = 250;
+const TERMINAL_MODE_SEQUENCE = new RegExp(
+    `${String.fromCharCode(27)}c|${String.fromCharCode(27)}\\[\\?([0-9;]*)([hl])`,
+    "gu",
+);
 
 /**
  * One live terminal emulator: it parses raw VT byte streams into the normalized
@@ -26,6 +30,8 @@ export interface TerminalEmulator {
     write(data: Uint8Array): void;
     resize(cols: number, rows: number): void;
     snapshot(): TerminalGridSnapshot;
+    /** Subscribes to terminal-generated responses that must be sent to the PTY. */
+    onPtyWrite?(handler: (data: Uint8Array) => void): () => void;
     dispose(): void;
 }
 
@@ -54,10 +60,12 @@ class GhosttyTerminalEmulator implements TerminalEmulator {
     private rebuiltAt = 0;
     /** A reflow invalidates every captured line, so the next snapshot recaptures. */
     private reflowed = false;
+    private readonly inputModes = new TerminalInputModeTracker();
 
     constructor(private readonly terminal: GhosttyTerminal) {}
 
     write(data: Uint8Array): void {
+        this.inputModes.observe(data);
         this.terminal.write(data);
     }
 
@@ -73,7 +81,11 @@ class GhosttyTerminalEmulator implements TerminalEmulator {
         else if (historyEnd > this.capturedEnd) this.historyExtend(historyEnd);
         else if (this.evicting(current)) this.historyRebuild(historyEnd);
         this.topLine = rowText(current.rows[0]);
-        return ghosttySnapshotToGrid(current, this.history);
+        return ghosttySnapshotToGrid(current, this.history, this.inputModes.get());
+    }
+
+    onPtyWrite(handler: (data: Uint8Array) => void): () => void {
+        return this.terminal.onPtyWrite(handler);
     }
 
     dispose(): void {
@@ -120,6 +132,7 @@ function rowText(row: GhosttyRow | undefined): string {
 function ghosttySnapshotToGrid(
     snapshot: GhosttySnapshot,
     scrollback: readonly TerminalRowSnapshot[],
+    inputModes: { bracketedPaste: boolean; cursorKeysApplication: boolean },
 ): TerminalGridSnapshot {
     return {
         cols: snapshot.cols,
@@ -128,6 +141,7 @@ function ghosttySnapshotToGrid(
         cursor: snapshot.cursor
             ? { x: snapshot.cursor.x, y: snapshot.cursor.y, visible: snapshot.cursor.visible }
             : null,
+        inputModes,
         lines: rowsToSnapshots(snapshot.rows, snapshot.palette),
         scrollback,
     };
@@ -150,11 +164,52 @@ function rowsToSnapshots(
                 underline: style.underline !== "none",
                 inverse: style.inverse,
                 strikethrough: style.strikethrough,
+                invisible: style.invisible,
+                overline: style.overline,
                 foreground: resolveColor(style.foreground, palette),
                 background: resolveColor(style.background, palette),
             };
         }),
     }));
+}
+
+/**
+ * Ghostty's browser wrapper exposes the parsed screen but not these two input
+ * modes. Track only the DECSET/DECRST values WTerm consults while converting
+ * browser keys and paste into PTY bytes. A short retained suffix lets a control
+ * sequence cross arbitrary network frame boundaries.
+ */
+class TerminalInputModeTracker {
+    private bracketedPaste = false;
+    private cursorKeysApplication = false;
+    private readonly decoder = new TextDecoder();
+    private suffix = "";
+
+    observe(data: Uint8Array): void {
+        const text = this.suffix + this.decoder.decode(data, { stream: true });
+        for (const match of text.matchAll(TERMINAL_MODE_SEQUENCE)) {
+            if (match[0] === "\x1bc") {
+                this.bracketedPaste = false;
+                this.cursorKeysApplication = false;
+                continue;
+            }
+            const enabled = match[2] === "h";
+            for (const parameter of (match[1] ?? "").split(";")) {
+                if (parameter === "1") this.cursorKeysApplication = enabled;
+                else if (parameter === "2004") this.bracketedPaste = enabled;
+            }
+        }
+        const lastEscape = text.lastIndexOf("\x1b");
+        this.suffix =
+            lastEscape >= 0 && text.length - lastEscape <= 64 ? text.slice(lastEscape) : "";
+    }
+
+    get(): { bracketedPaste: boolean; cursorKeysApplication: boolean } {
+        return {
+            bracketedPaste: this.bracketedPaste,
+            cursorKeysApplication: this.cursorKeysApplication,
+        };
+    }
 }
 
 /** Resolves a Ghostty style color to a CSS color, or null for the theme default. */
