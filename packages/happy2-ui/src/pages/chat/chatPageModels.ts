@@ -12,6 +12,7 @@ import type {
 } from "happy2-state";
 import type { EmojiItem, ToneName } from "./ChatPageComponents.js";
 import type { IconName } from "../../Icon.js";
+import type { AgentWorkingPhase } from "../../AgentWorkingStatus.js";
 /**
  * The active chat port share projected for the header and info panel. A chat has
  * at most one active share, so both surfaces render one `PortShareControl` driven
@@ -129,7 +130,7 @@ export type ChatTraceStep = {
 /**
  * A turn's status readout. While running it is the transcript footer (braille
  * spinner + live clock from when the request was sent). Once settled it is a
- * permanent row under that turn: final duration and tool count, no spinner.
+ * permanent row under that turn: final duration and tool count, no live phase.
  */
 export type ChatTurnStatus = {
     kind: "turnStatus";
@@ -138,6 +139,8 @@ export type ChatTurnStatus = {
     /** The assistant message whose turn this summarizes. */
     messageId: string;
     status: "running" | "complete" | "failed";
+    /** Current reader-facing phase while this turn is running. */
+    workingPhase?: AgentWorkingPhase;
     /** Final assistant text; present only on a settled summary row. */
     copyText?: string;
     subagentCount: number;
@@ -619,6 +622,12 @@ function turnStatusOf(
         conversationId: entry.conversationId,
         messageId: entry.id,
         status: "running",
+        workingPhase:
+            activity?.phase === "thinking"
+                ? "thinking"
+                : activity?.phase === "typing"
+                  ? "texting"
+                  : "working",
         subagentCount: subagents.filter((subagent) => subagent.status === "running").length,
         terminalCount: terminals.length,
         totalTokens: activity?.tokenCount ?? trace.totalTokens ?? 0,
@@ -674,6 +683,7 @@ export function turnStatusProject(
             conversationId: activity.chatId,
             messageId: activity.turnId,
             status: "running",
+            workingPhase: activity.phase === "thinking" ? "thinking" : "texting",
             subagentCount: activity.subagents.filter((subagent) => subagent.status === "running")
                 .length,
             terminalCount: activity.backgroundTerminals.length,

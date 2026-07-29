@@ -56,6 +56,13 @@ function rigConnectGroupProject(
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
     let groupEnd: Extract<ChatElement, { kind: "group_end" }> | undefined;
+    // `inference` only says the model was asked and had not answered yet, so its
+    // spinner is stale the moment the group ends. A turn that ends empty keeps
+    // every row it produced, and without this it would spin forever.
+    const ended = elements.some((element) => element.kind === "group_end");
+    const hasTerminalFailure = elements.some(
+        (element) => element.kind === "failure" && element.outcome === "failed",
+    );
     for (const element of elements) {
         const sequence = sequenceOf(entries.length);
         switch (element.kind) {
@@ -91,6 +98,7 @@ function rigConnectGroupProject(
                 });
                 break;
             case "inference":
+                if (ended) break;
                 entries.push({
                     kind: "agentActivity",
                     id: element.id,
@@ -147,11 +155,11 @@ function rigConnectGroupProject(
                     id: element.id,
                     variant: "notice",
                     level: element.outcome === "retried" ? "warning" : "error",
-                    title: element.outcome === "retried" ? "Retrying" : "Run failed",
-                    text:
-                        element.attempt === undefined
-                            ? element.reason
-                            : `${element.reason}. Attempt ${String(element.attempt)}.`,
+                    ...(element.outcome === "retried"
+                        ? { retry: { attempt: element.attempt } }
+                        : {}),
+                    title: element.outcome === "retried" ? "Retrying" : "Failure",
+                    text: element.reason,
                     sequence,
                 });
                 break;
@@ -184,13 +192,13 @@ function rigConnectGroupProject(
                 break;
             case "group_end":
                 groupEnd = element;
-                if (element.errorMessage)
+                if (element.errorMessage && !hasTerminalFailure)
                     entries.push({
                         kind: "notice",
                         id: `${element.id}:error`,
                         variant: "notice",
                         level: "error",
-                        title: "Run failed",
+                        title: "Failure",
                         text: element.errorMessage,
                         sequence,
                     });

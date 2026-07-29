@@ -1245,6 +1245,7 @@ export function ChatPage(props: ChatPageProps) {
                                     backgroundTasks={status?.terminalCount}
                                     className="happy2-chat-turn-status"
                                     elapsedMs={status?.elapsedMs}
+                                    phase={status?.workingPhase}
                                 />
                             ))(turnStatus())}
                             messageFooterHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}

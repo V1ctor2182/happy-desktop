@@ -274,6 +274,11 @@ export interface ConversationNoticeEntry {
     /** `divider` closes a section (a completed turn); `notice` is a service line. */
     readonly variant: "notice" | "divider";
     readonly level: "info" | "warning" | "error";
+    /** Automatic recovery attempt represented by this notice. */
+    readonly retry?: {
+        readonly attempt?: number;
+        readonly maxAttempts?: number;
+    };
     readonly title?: string;
     readonly text: string;
     readonly sequence: string;

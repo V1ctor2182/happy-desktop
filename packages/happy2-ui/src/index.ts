@@ -7,6 +7,7 @@ export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
+    type AgentWorkingPhase,
     type AgentWorkingStatusProps,
 } from "./AgentWorkingStatus";
 export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";

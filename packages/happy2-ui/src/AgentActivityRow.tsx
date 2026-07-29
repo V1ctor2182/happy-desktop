@@ -155,6 +155,19 @@ function ToolIcon(props: { glyph: ToolGlyph }) {
     return <Icon name={props.glyph.name} size={12} />;
 }
 
+/** Replays the tool-label transition whenever its projected text changes. */
+function AgentActivityChangingText(props: { value: string }) {
+    return (
+        <span
+            key={props.value}
+            className="happy2-changing-text"
+            data-happy2-ui="agent-activity-changing-text"
+        >
+            {props.value}
+        </span>
+    );
+}
+
 function explorationSummary(
     presentation: Extract<ConversationActivityPresentation, { type: "exploration" }>,
 ): string {
@@ -437,7 +450,7 @@ function AgentToolActivity(props: {
                 />
             </span>
             <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
-                {verb}
+                <AgentActivityChangingText value={verb} />
             </span>
             {stats ? (
                 <span
@@ -448,7 +461,7 @@ function AgentToolActivity(props: {
                         className="happy2-agent-activity__text"
                         data-happy2-ui="agent-activity-text"
                     >
-                        {primaryText}
+                        <AgentActivityChangingText value={primaryText} />
                     </span>
                     <span
                         className="happy2-agent-activity__stats"
@@ -462,7 +475,7 @@ function AgentToolActivity(props: {
                 </span>
             ) : (
                 <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
-                    {primaryText}
+                    <AgentActivityChangingText value={primaryText} />
                 </span>
             )}
             {hasBody ? (

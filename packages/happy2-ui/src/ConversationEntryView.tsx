@@ -122,13 +122,20 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     if (entry.kind === "notice")
         return entry.variant === "divider" ? (
             <DayDivider className={props.className} label={entry.text} />
-        ) : entry.level === "error" ? (
+        ) : entry.level === "error" || entry.retry !== undefined ? (
             <ConversationErrorCard
                 className={props.className}
                 data-testid={props["data-testid"]}
                 reason={entry.text}
                 style={props.style}
-                title={entry.title ?? "Error"}
+                title={
+                    entry.retry === undefined
+                        ? (entry.title ?? "Error")
+                        : entry.retry.attempt === undefined || entry.retry.attempt === 1
+                          ? "Connection Error"
+                          : `Connection Error (Attempt ${String(entry.retry.attempt)})`
+                }
+                tone={entry.retry ? "warning" : "error"}
             />
         ) : (
             // Mid-turn agent context (system prompts, reasoning preambles, run

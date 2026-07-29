@@ -64,6 +64,7 @@ import type {
     RigToolEntry,
     RigUserInputAnswers,
     RigUserInputRequest,
+    RigWorkingPhase,
 } from "./rigTypes.js";
 
 function latestUserMessageId(messages: readonly RigMessage[]): string | undefined {
@@ -76,6 +77,32 @@ function latestUserMessageId(messages: readonly RigMessage[]): string | undefine
 
 function transcriptSessionBusy(session: SessionState): boolean {
     return session.activeTurn !== undefined;
+}
+
+/** Projects protocol activity into the small, closed vocabulary the UI renders. */
+function workingPhaseProject(
+    session: SessionState | undefined,
+    streaming: RigStreamingMessage | undefined,
+): RigWorkingPhase {
+    switch (session?.activity.kind) {
+        case "thinking":
+            return "thinking";
+        case "generating_message":
+            return "texting";
+        case "generating_tool_call":
+            return "generatingTools";
+        case "executing_tool_call":
+            return "callingTools";
+    }
+    if (streaming) {
+        for (let index = streaming.blocks.length - 1; index >= 0; index -= 1) {
+            const block = streaming.blocks[index];
+            if (block?.kind === "tool" && block.tool.status === "running") return "callingTools";
+            if (block?.kind === "thinking") return "thinking";
+            if (block?.kind === "text") return "texting";
+        }
+    }
+    return "working";
 }
 
 function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {
@@ -244,6 +271,7 @@ export interface RigChatSnapshot {
     /** In-flight assistant message assembled from streaming deltas, when running. */
     readonly streaming?: RigStreamingMessage;
     readonly runStatus: "idle" | "running";
+    readonly workingPhase: RigWorkingPhase;
     /** Durable user-message id of the one turn currently running. */
     readonly activeTurnId?: string;
     readonly runId?: string;
@@ -651,6 +679,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         archived: false,
         entries: [],
         runStatus: "idle",
+        workingPhase: "working",
         transcriptComplete: true,
         loadingMore: false,
         activeTurnId: undefined,
@@ -791,6 +820,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             entries,
             streaming: transientStreamingPresentation,
             runStatus,
+            workingPhase: workingPhaseProject(transcriptSession, transientStreamingPresentation),
             activeTurnId,
             runId,
             runStartedAt,
@@ -964,8 +994,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         level: "info" | "warning" | "error",
         title: string,
         text: string,
+        retry?: { readonly attempt?: number; readonly maxAttempts?: number },
     ): void => {
-        upsertEphemeral(id, rigNoticeEntry(id, level, title, text));
+        upsertEphemeral(id, rigNoticeEntry(id, level, title, text, retry));
     };
 
     const transientAgentEventApply = (event: RigAgentEvent): void => {
@@ -1108,9 +1139,8 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                     `retry:${runId ?? "session"}:${String(event.attempt)}`,
                     "warning",
                     "Retrying",
-                    `${RETRY_REASON[event.reason]}. Attempt ${String(event.attempt)} of ${String(
-                        event.maxAttempts,
-                    )}.`,
+                    RETRY_REASON[event.reason],
+                    { attempt: event.attempt, maxAttempts: event.maxAttempts },
                 );
                 break;
             case "error":

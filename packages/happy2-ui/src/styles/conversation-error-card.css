@@ -1,10 +1,8 @@
 /*
- * ConversationErrorCard — a failed turn's reason on the assistant text rail.
+ * ConversationErrorCard — a failed turn's reason on the assistant activity rail.
  *
- * The outer row follows Message's 30px left / 64px right measure. The bubble
- * uses the 10px card radius, a soft semantic fill, and a single compact icon
- * well so the error is unmistakable without coloring the adjacent prose or
- * settled duration.
+ * Its 6px vertical inset around one 20px line gives it the same 32px height as
+ * a compact tool call. Icon, label, and reason stay in one scanning row.
  */
 
 .happy2-conversation-error-card,
@@ -15,7 +13,7 @@
 .happy2-conversation-error-card {
     display: flex;
     width: 100%;
-    padding: 4px 64px 4px 30px;
+    padding: 6px 96px 6px 30px;
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
@@ -23,14 +21,10 @@
 
 .happy2-conversation-error-card__bubble {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    width: fit-content;
-    max-width: min(640px, 100%);
-    padding: 12px 14px;
-    border: 1px solid var(--box-error-border);
-    border-radius: var(--happy2-radius-md);
-    background: var(--box-error-background);
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
 }
 
 .happy2-conversation-error-card__icon {
@@ -38,35 +32,41 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: var(--happy2-radius-sm);
-    background: var(--surface);
-    color: var(--box-error-text);
+    width: 14px;
+    height: 20px;
+    color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
 }
 
 .happy2-conversation-error-card__content {
     display: flex;
     flex: 1 1 auto;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
 }
 
 .happy2-conversation-error-card__title {
-    display: block;
-    color: var(--box-error-text);
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
+    flex: none;
+    color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__icon,
+.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__title,
+.happy2-conversation-error-card[data-tone="warning"] .happy2-conversation-error-card__reason {
+    color: color-mix(in srgb, var(--box-warning-text) 38%, var(--text-secondary));
 }
 
 .happy2-conversation-error-card__reason {
-    display: block;
-    color: var(--text);
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
     font-size: 14px;
     font-weight: 400;
     line-height: 20px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
 }

@@ -1348,6 +1348,7 @@ function RigConversationSurface(props: {
             }
             backgroundTasks={conversation.backgroundProcesses.length}
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
+            workingPhase={conversation.workingPhase}
             viewerId={rigOwnerAuthor.id}
         />
     );

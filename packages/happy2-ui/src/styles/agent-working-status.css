@@ -46,18 +46,30 @@
 }
 
 .happy2-agent-working-status__state {
+    display: flex;
     flex: none;
+    align-items: center;
+    gap: 6px;
+    padding-left: 3px;
 }
 
 .happy2-agent-working-status__spinner {
-    position: absolute;
-    /* Same 12px gutter origin as an agent avatar. At 14px wide it ends only
-     * 4px before the 30px text rail, keeping spinner and label one unit. */
-    left: 12px;
+    flex: none;
+    margin-right: 3px;
 }
 
-.happy2-agent-working-status__state {
+.happy2-agent-working-status__timer {
+    flex: none;
+    font-family: var(--happy2-font-mono);
+    font-size: 14px;
+    line-height: 20px;
+    text-align: right;
     font-variant-numeric: lining-nums tabular-nums;
+}
+
+.happy2-agent-working-status__separator {
+    flex: none;
+    color: var(--input-placeholder);
 }
 
 .happy2-agent-working-status__details {

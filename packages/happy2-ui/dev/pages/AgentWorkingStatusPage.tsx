@@ -13,20 +13,22 @@ export function AgentWorkingStatusPage() {
     return (
         <ComponentPage
             number="C-072"
-            summary="The live footer for an active turn: message-sized working time, running agents, and background tasks."
+            summary="The live footer for an active turn: current phase, elapsed time, running agents, and background tasks."
             title="Agent working status"
         >
             <Specimen
-                detail="Message-sized type · live clock · current fan-out"
-                label="Working"
+                detail="Thinking · generating tools · calling tools · texting · fallback working"
+                label="Reactive phases"
                 number="01"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     <div style={column}>
-                        <AgentWorkingStatus agents={3} backgroundTasks={2} elapsedMs={104_000} />
-                        <AgentWorkingStatus agents={1} elapsedMs={7_000} />
-                        <AgentWorkingStatus elapsedMs={0} />
+                        <AgentWorkingStatus elapsedMs={104_000} phase="thinking" />
+                        <AgentWorkingStatus elapsedMs={12_000} phase="generatingTools" />
+                        <AgentWorkingStatus agents={1} elapsedMs={7_000} phase="callingTools" />
+                        <AgentWorkingStatus elapsedMs={4_000} phase="texting" />
+                        <AgentWorkingStatus backgroundTasks={2} elapsedMs={0} phase="working" />
                     </div>
                     <DimensionRule label="640 px wide · 16/24 message type" />
                 </div>

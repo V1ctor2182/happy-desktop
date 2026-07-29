@@ -122,8 +122,18 @@ export function rigNoticeEntry(
     level: "info" | "warning" | "error",
     title: string,
     text: string,
+    retry?: { readonly attempt?: number; readonly maxAttempts?: number },
 ): ConversationEntry {
-    return { kind: "notice", id, variant: "notice", level, title, text, sequence: "" };
+    return {
+        kind: "notice",
+        id,
+        variant: "notice",
+        level,
+        ...(retry ? { retry } : {}),
+        title,
+        text,
+        sequence: "",
+    };
 }
 
 /**

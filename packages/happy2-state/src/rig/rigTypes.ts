@@ -61,6 +61,14 @@ export type RigSessionStatus =
     | "error"
     | "archived";
 
+/** Reader-facing phase of the active turn's current work. */
+export type RigWorkingPhase =
+    | "working"
+    | "thinking"
+    | "generatingTools"
+    | "callingTools"
+    | "texting";
+
 /** Reasoning/effort levels a model may expose, ordered from least to most reasoning. */
 export type RigThinkingLevel =
     | "off"

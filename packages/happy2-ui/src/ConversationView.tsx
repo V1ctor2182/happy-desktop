@@ -5,7 +5,11 @@ import type {
     ConversationEntry,
     ConversationRequestSubmission,
 } from "happy2-state";
-import { AGENT_WORKING_STATUS_ROW_HEIGHT, AgentWorkingStatus } from "./AgentWorkingStatus";
+import {
+    AGENT_WORKING_STATUS_ROW_HEIGHT,
+    AgentWorkingStatus,
+    type AgentWorkingPhase,
+} from "./AgentWorkingStatus";
 import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
 import { Composer, type ContextItem, type Mentionable } from "./Composer";
@@ -39,6 +43,8 @@ export type ConversationViewProps = {
     loading?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
     elapsedMs?: number;
+    /** Current reader-facing phase of the active turn. */
+    workingPhase?: AgentWorkingPhase;
     /** Subagents currently running under the active turn. */
     runningAgents?: number;
     /** Background tasks currently owned by the active turn. */
@@ -175,7 +181,7 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
  * the body; and the shared `Composer` with its `/` command palette and `@`
  * mention candidates. A running turn keeps one minimal `AgentWorkingStatus` in the
- * message list footer — braille spinner and elapsed clock — which scrolls with
+ * message list footer — elapsed clock and current phase — which scrolls with
  * the transcript rather than floating over it.
  *
  * Every value comes from props and every draft keystroke goes back out through
@@ -247,6 +253,7 @@ export function ConversationView(props: ConversationViewProps) {
                             backgroundTasks={props.backgroundTasks}
                             className="happy2-conversation-turn-status"
                             elapsedMs={props.elapsedMs}
+                            phase={props.workingPhase}
                         />
                     }
                     footerHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}

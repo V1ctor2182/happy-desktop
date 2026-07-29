@@ -8,12 +8,13 @@ export interface ConversationErrorCardProps {
     readonly reason: string;
     readonly style?: CSSProperties;
     readonly title: string;
+    readonly tone?: "error" | "warning";
 }
 
 /**
- * A failed turn's readable explanation, aligned to the assistant message rail.
- * The soft error bubble is the one durable failure signal in the transcript:
- * surrounding prose and the settled duration stay visually neutral.
+ * A failed turn's compact explanation, aligned to the assistant activity rail.
+ * It uses the same one-line rhythm as a tool call so failures remain visible
+ * without interrupting the transcript with a full alert panel.
  */
 export function ConversationErrorCard(props: ConversationErrorCardProps) {
     const [local] = partitionComponentProps(props, [
@@ -22,13 +23,16 @@ export function ConversationErrorCard(props: ConversationErrorCardProps) {
         "reason",
         "style",
         "title",
+        "tone",
     ]);
+    const tone = local.tone ?? "error";
     return (
         <div
             className={["happy2-conversation-error-card", local.className]
                 .filter(Boolean)
                 .join(" ")}
             data-happy2-ui="conversation-error-card"
+            data-tone={tone}
             data-testid={local["data-testid"]}
             role="alert"
             style={local.style}
@@ -42,7 +46,7 @@ export function ConversationErrorCard(props: ConversationErrorCardProps) {
                     className="happy2-conversation-error-card__icon"
                     data-happy2-ui="conversation-error-icon"
                 >
-                    <Octicon name="alert-fill" size={16} />
+                    <Octicon name={tone === "warning" ? "alert" : "alert-fill"} size={14} />
                 </span>
                 <span
                     className="happy2-conversation-error-card__content"

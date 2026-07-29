@@ -49,7 +49,7 @@ const failedTurn: readonly ConversationEntry[] = [
         sequence: "2",
         variant: "notice",
         level: "error",
-        title: "Run failed",
+        title: "Failure",
         text: "You've hit your session limit · resets 1:10am (America/Los_Angeles)",
     },
     {
@@ -67,19 +67,24 @@ export function ConversationErrorCardPage() {
     return (
         <ComponentPage
             number="C-166"
-            summary="A bubble-aligned error explanation that carries a failed turn's reason while the surrounding response and completion footer remain neutral."
+            summary="A compact tool-row-sized failure explanation: warning glyph, label, and provider reason in one scanning line."
             title="Conversation error card"
         >
             <Specimen
-                detail="exact provider reason · neutral settled duration immediately below"
+                detail="32px activity rhythm · exact provider reason · neutral settled duration"
                 label="Failed turn"
                 number="01"
                 stage="surface"
             >
                 <div style={transcript}>
                     <ConversationErrorCard
+                        reason="Stream disconnected; reconnecting to the provider."
+                        title="Connection Error (Attempt 2)"
+                        tone="warning"
+                    />
+                    <ConversationErrorCard
                         reason="You've hit your session limit · resets 1:10am (America/Los_Angeles)"
-                        title="Run failed"
+                        title="Failure"
                     />
                     <TurnSummary
                         className="happy2-conversation-turn-status"
@@ -90,7 +95,7 @@ export function ConversationErrorCardPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="long infrastructure reason wraps inside the 640px bubble cap"
+                detail="long infrastructure reason truncates on the single activity line"
                 label="Detailed reason"
                 number="02"
                 stage="surface"
@@ -98,9 +103,9 @@ export function ConversationErrorCardPage() {
                 <div style={transcript}>
                     <ConversationErrorCard
                         reason="The provider connection closed while the response was streaming. Your partial response is preserved above, and you can continue this turn after the connection is available again."
-                        title="Connection interrupted"
+                        title="Failure"
                     />
-                    <DimensionRule label="760 px row · 640 px maximum bubble" />
+                    <DimensionRule label="760 px row · 32 px compact activity height" />
                 </div>
             </Specimen>
             <Specimen

@@ -49,6 +49,7 @@ import type {
     RigTask,
     RigThinkingLevel,
     RigUserInputAnswers,
+    RigWorkingPhase,
     RigWorktreeId,
 } from "./rigTypes.js";
 
@@ -87,6 +88,7 @@ export interface RigConversationSnapshot {
     readonly entries: readonly ConversationEntry[];
     readonly composer: ComposerSnapshot;
     readonly running: boolean;
+    readonly workingPhase: RigWorkingPhase;
     readonly runStartedAt?: number;
     readonly turnElapsedMs?: number;
     readonly transcriptComplete: boolean;
@@ -645,6 +647,7 @@ export function rigWorkspaceStoreCreate(
             entries: chat.entries,
             composer: draft,
             running: chat.runStatus === "running",
+            workingPhase: chat.workingPhase,
             ...(chat.runStartedAt !== undefined ? { runStartedAt: chat.runStartedAt } : {}),
             ...(chat.turnElapsedMs !== undefined ? { turnElapsedMs: chat.turnElapsedMs } : {}),
             transcriptComplete: chat.transcriptComplete,
@@ -1868,6 +1871,7 @@ function conversationAcquiring(
         entries: NO_ENTRIES,
         composer,
         running: false,
+        workingPhase: "working",
         transcriptComplete: true,
         loadingMore: false,
         queuedMessages: NO_QUEUED,

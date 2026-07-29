@@ -2,6 +2,13 @@ import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Spinner } from "./Spinner";
 
+export type AgentWorkingPhase =
+    | "working"
+    | "thinking"
+    | "generatingTools"
+    | "callingTools"
+    | "texting";
+
 export interface AgentWorkingStatusProps {
     /** Paints the status without changing its stable layout slot or DOM identity. */
     readonly active?: boolean;
@@ -11,22 +18,32 @@ export interface AgentWorkingStatusProps {
     readonly "data-testid"?: string;
     /** Elapsed time from request send, supplied by the owning surface clock. */
     readonly elapsedMs?: number;
+    /** Current work projected by the owning product store. */
+    readonly phase?: AgentWorkingPhase;
     readonly style?: CSSProperties;
 }
 
 /** Fixed virtualized row height, including the status's 4px leading clearance. */
 export const AGENT_WORKING_STATUS_ROW_HEIGHT = 36;
 
-/** Formats an active turn duration without allowing its units to split across lines. */
+const PHASE_LABELS: Readonly<Record<AgentWorkingPhase, string>> = {
+    working: "Working",
+    thinking: "Thinking",
+    generatingTools: "Generating tools",
+    callingTools: "Calling tools",
+    texting: "Texting",
+};
+
+/** Formats the active turn clock in the smallest useful human-readable units. */
 function elapsedFormat(elapsedMs: number): string {
-    const total = Math.max(0, Math.floor(elapsedMs / 1_000));
-    if (total < 60) return `${total}s`;
-    const minutes = Math.floor(total / 60);
-    if (minutes < 60) return `${minutes}m\u00a0${total % 60}s`;
-    return `${Math.floor(minutes / 60)}h\u00a0${minutes % 60}m`;
+    const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1_000));
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes}m ${totalSeconds % 60}s`;
+    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
-/** Live footer for one active agent turn: clock, running agents, and background work. */
+/** Live footer for one active agent turn: elapsed clock, phase, and fan-out. */
 export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
     const [local] = partitionComponentProps(props, [
         "active",
@@ -35,8 +52,10 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         "className",
         "data-testid",
         "elapsedMs",
+        "phase",
         "style",
     ]);
+    const label = PHASE_LABELS[local.phase ?? "working"];
     const details: string[] = [];
     if (local.agents !== undefined && local.agents > 0)
         details.push(`${local.agents} ${local.agents === 1 ? "agent" : "agents"} running`);
@@ -54,20 +73,37 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <Spinner
-                className="happy2-agent-working-status__spinner"
-                label="Working"
-                size={14}
-                tone="muted"
-                variant="braille-2"
-            />
             <span
                 className="happy2-agent-working-status__state"
                 data-happy2-ui="agent-working-status-state"
             >
-                {local.elapsedMs === undefined
-                    ? "Working"
-                    : `Working for\u00a0${elapsedFormat(local.elapsedMs)}`}
+                <Spinner
+                    className="happy2-agent-working-status__spinner"
+                    label={label}
+                    size={14}
+                    tone="muted"
+                    variant="braille-2"
+                />
+                {local.elapsedMs === undefined ? null : (
+                    <>
+                        <span
+                            className="happy2-agent-working-status__timer"
+                            data-happy2-ui="agent-working-status-timer"
+                        >
+                            {elapsedFormat(local.elapsedMs)}
+                        </span>
+                        <span aria-hidden="true" className="happy2-agent-working-status__separator">
+                            ·
+                        </span>
+                    </>
+                )}
+                <span
+                    key={local.phase ?? "working"}
+                    className="happy2-changing-text"
+                    data-happy2-ui="agent-working-status-phase"
+                >
+                    {label}
+                </span>
             </span>
             {details.length > 0 ? (
                 <span
