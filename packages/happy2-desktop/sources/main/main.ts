@@ -31,6 +31,7 @@ import { localRigConnectorCreate } from "./localRig";
 import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
+import { RemoteRigManager } from "./remoteRigManager";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
@@ -67,6 +68,7 @@ app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_pro
 
 let runtime: DesktopRuntime;
 let rigInstallManager: RigInstallTerminalManager;
+let remoteRigManager: RemoteRigManager;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
@@ -431,6 +433,15 @@ void app
                 ...(rendererOrigin ? { rendererOrigin } : {}),
             },
         );
+        remoteRigManager = await RemoteRigManager.create(
+            join(desktopRoot, "remote-rigs.json"),
+            rendererOrigin ? { rendererOrigin } : {},
+        );
+        remoteRigManager.subscribe((rigs) => {
+            const window = windowLifecycle.get();
+            if (window && !window.isDestroyed())
+                window.webContents.send(desktopIpc.remoteRigChanged, rigs);
+        });
         rigInstallManager = new RigInstallTerminalManager(connector, {
             verified: () => void runtime.retry().catch(() => undefined),
         });
@@ -457,6 +468,19 @@ void app
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.remoteRigGet, () => remoteRigManager.get());
+        ipcMain.handle(desktopIpc.remoteRigAdd, (_event, destination: unknown) => {
+            if (typeof destination !== "string") throw new Error("The SSH destination is invalid.");
+            return remoteRigManager.add(destination);
+        });
+        ipcMain.handle(desktopIpc.remoteRigRemove, (_event, id: unknown) => {
+            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
+            return remoteRigManager.remove(id);
+        });
+        ipcMain.handle(desktopIpc.remoteRigRetry, (_event, id: unknown) => {
+            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
+            remoteRigManager.retry(id);
+        });
         ipcMain.handle(desktopIpc.browserProxyApply, (_event, sessionId: unknown) => {
             if (typeof sessionId !== "string" || sessionId.length === 0)
                 throw new Error("The Rig browser session identity is invalid.");
@@ -553,7 +577,7 @@ app.on("second-instance", () => {
 app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
-    void runtime.close().finally(() => {
+    void Promise.all([runtime.close(), remoteRigManager?.[Symbol.asyncDispose]()]).finally(() => {
         browserProxy?.close();
         browserProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();

@@ -5,6 +5,7 @@ import {
     type DesktopStartRequest,
     type DesktopWindowState,
     type HappyDesktopBridge,
+    type RemoteRigSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 
@@ -17,6 +18,16 @@ const bridge: HappyDesktopBridge = {
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
+    remoteRigAdd: (destination) => ipcRenderer.invoke(desktopIpc.remoteRigAdd, destination),
+    remoteRigGet: () => ipcRenderer.invoke(desktopIpc.remoteRigGet),
+    remoteRigRemove: (id) => ipcRenderer.invoke(desktopIpc.remoteRigRemove, id),
+    remoteRigRetry: (id) => ipcRenderer.invoke(desktopIpc.remoteRigRetry, id),
+    remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, rigs: readonly RemoteRigSnapshot[]) =>
+            listener(rigs);
+        ipcRenderer.on(desktopIpc.remoteRigChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.remoteRigChanged, receive);
+    },
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),
     runtimeReset: () => ipcRenderer.invoke(desktopIpc.runtimeReset),
     runtimeRetry: () => ipcRenderer.invoke(desktopIpc.runtimeRetry),

@@ -24,7 +24,7 @@ import type {
     RigWorkspaceStore,
 } from "happy2-state";
 import type { BrowserContentRenderer } from "happy2-ui";
-import { AppRigView, type AppRigUpdate } from "../AppRigView";
+import { AppRigView, type AppRemoteRigStore, type AppRigUpdate } from "../AppRigView";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -39,6 +39,7 @@ export interface RigRouterContext {
     readonly browserContent?: BrowserContentRenderer;
     readonly host: RigHost;
     readonly connection: RigConnectionStore;
+    readonly remoteRigs?: AppRemoteRigStore;
     readonly workspace: RigWorkspaceStore;
     readonly clock: RigClockStore;
     readonly appearance: AppearanceStore;
@@ -153,6 +154,7 @@ function RigWorkspaceLayout() {
             host={context.host}
             onUpdateApply={context.onUpdateApply}
             platform={context.platform}
+            remoteRigs={context.remoteRigs}
             update={context.update}
             windowState={context.windowState}
             onChatSelect={(groupId, chatId, replace) =>

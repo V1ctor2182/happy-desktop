@@ -84,6 +84,33 @@ export interface AppRigUpdate {
     readonly version?: string;
 }
 
+export interface AppRemoteRigCatalog {
+    readonly destination: string;
+    readonly id: string;
+    readonly message?: string;
+    readonly projects: readonly RigProjectGroup[];
+    readonly status: "connecting" | "connected" | "disconnected";
+    readonly version?: string;
+}
+
+export interface AppRemoteRigSnapshot {
+    readonly addOpen: boolean;
+    readonly destination: string;
+    readonly error?: string;
+    readonly rigs: readonly AppRemoteRigCatalog[];
+}
+
+export interface AppRemoteRigStore {
+    get(): AppRemoteRigSnapshot;
+    subscribe(listener: () => void): () => void;
+    addOpen(): void;
+    addClose(): void;
+    destinationUpdate(value: string): void;
+    addSubmit(): void;
+    retry(id: string): void;
+    remove(id: string): void;
+}
+
 export interface AppRigViewProps {
     /** Host/UI operations for the desktop shell (menus, directory picking). */
     host: RigHost;
@@ -115,6 +142,8 @@ export interface AppRigViewProps {
     onUpdateApply?: () => void;
     /** Native page renderer supplied only by the packaged Electron host. */
     browserContent?: BrowserContentRenderer;
+    /** Additional SSH-backed Rig catalogs rendered beside this machine's projects. */
+    remoteRigs?: AppRemoteRigStore;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -340,6 +369,14 @@ function openGroupFind(
     return undefined;
 }
 
+const EMPTY_REMOTE_RIGS: AppRemoteRigSnapshot = {
+    addOpen: false,
+    destination: "",
+    rigs: [],
+};
+const noSubscribe = () => () => undefined;
+const emptyRemoteRigs = () => EMPTY_REMOTE_RIGS;
+
 /**
  * The local workspace surface. It subscribes once each to the connection,
  * workspace, clock, and appearance stores (no local React state) and composes
@@ -393,6 +430,12 @@ export function AppRigView(props: AppRigViewProps) {
         props.appearance.subscribe,
         props.appearance.get,
         props.appearance.get,
+    );
+    const remoteRigStore = props.remoteRigs;
+    const remoteRigs = useSyncExternalStore(
+        remoteRigStore?.subscribe ?? noSubscribe,
+        remoteRigStore?.get ?? emptyRemoteRigs,
+        remoteRigStore?.get ?? emptyRemoteRigs,
     );
 
     const ready = status.connection === "connected" && status.daemon === "ready";
@@ -535,7 +578,10 @@ export function AppRigView(props: AppRigViewProps) {
                     headerAccessory={listAccessory}
                     itemMenuItems={(item) => rowMenuItems(rows, item)}
                     onCompose={() => props.workspace.createOpen()}
-                    onSectionAction={() => props.workspace.createOpen()}
+                    onSectionAction={(sectionId) => {
+                        if (sectionId === "add-remote-rig") remoteRigStore?.addOpen();
+                        else props.workspace.createOpen();
+                    }}
                     onItemMenuSelect={(item, actionId) => {
                         const owner = rowOwnerFind(rows, item.id);
                         if (!owner) return;
@@ -570,10 +616,16 @@ export function AppRigView(props: AppRigViewProps) {
                     }}
                     // Addressing a group opens its most recent session, so a list
                     // row lands on work rather than on an empty screen.
-                    onItemSelect={(id) =>
-                        props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id)
-                    }
+                    onItemSelect={(id) => {
+                        if (id.startsWith("remote-rig:") || id.startsWith("remote-rig-status:"))
+                            return;
+                        props.onChatSelect(id, openGroupFind(rows, id)?.conversations[0]?.id);
+                    }}
                     onItemAction={(id) => {
+                        if (id.startsWith("remote-rig-status:")) {
+                            remoteRigStore?.retry(id.slice("remote-rig-status:".length));
+                            return;
+                        }
                         const owner = rowOwnerFind(rows, id);
                         if (!owner) return;
                         // The plus on a project adds a worktree; the control on a
@@ -606,7 +658,7 @@ export function AppRigView(props: AppRigViewProps) {
                     sections={[
                         {
                             id: "projects",
-                            label: "Projects",
+                            label: "This Mac",
                             items: rows.flatMap(sidebarItems),
                             ...(projects.type === "ready"
                                 ? {
@@ -618,6 +670,50 @@ export function AppRigView(props: AppRigViewProps) {
                                       },
                                   }
                                 : {}),
+                        },
+                        ...remoteRigs.rigs.map((rig) => ({
+                            id: `remote-rig:${rig.id}`,
+                            label: rig.destination,
+                            items: [
+                                {
+                                    id: `remote-rig-status:${rig.id}`,
+                                    kind: "view" as const,
+                                    label:
+                                        rig.status === "connected"
+                                            ? "Connected"
+                                            : rig.status === "connecting"
+                                              ? "Connecting…"
+                                              : "Disconnected",
+                                    icon:
+                                        rig.status === "connected"
+                                            ? ("check" as const)
+                                            : ("link" as const),
+                                    meta: rig.version ? `Rig ${rig.version}` : rig.message,
+                                    online: rig.status === "connected",
+                                    ...(rig.status === "disconnected"
+                                        ? {
+                                              action: {
+                                                  icon: "link" as const,
+                                                  label: `Retry ${rig.destination}`,
+                                              },
+                                              tone: "rose" as const,
+                                          }
+                                        : {}),
+                                },
+                                ...rig.projects.flatMap(sidebarItems).map((item) => ({
+                                    ...item,
+                                    id: `remote-rig:${rig.id}:${item.id}`,
+                                    depth: (item.depth ?? 0) + 1,
+                                    action: undefined,
+                                })),
+                            ],
+                        })),
+                        {
+                            action: { icon: "plus" as const, label: "Add remote Rig" },
+                            headingOnly: true,
+                            id: "add-remote-rig",
+                            items: [],
+                            label: "Remote Rigs",
                         },
                     ]}
                 />
@@ -933,6 +1029,46 @@ export function AppRigView(props: AppRigViewProps) {
                             onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
                             value={workspace.rename.draft}
                         />
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
+            {remoteRigs.addOpen && remoteRigStore ? (
+                <ModalOverlay onDismiss={() => remoteRigStore.addClose()}>
+                    <Modal
+                        footer={
+                            <>
+                                <Button onClick={() => remoteRigStore.addClose()} variant="ghost">
+                                    Cancel
+                                </Button>
+                                <Button
+                                    disabled={remoteRigs.destination.trim().length === 0}
+                                    onClick={() => remoteRigStore.addSubmit()}
+                                    variant="primary"
+                                >
+                                    Connect
+                                </Button>
+                            </>
+                        }
+                        onClose={() => remoteRigStore.addClose()}
+                        size="small"
+                        title="Add remote Rig"
+                    >
+                        <div className="happy2-rig-create__fields">
+                            {remoteRigs.error ? (
+                                <Banner tone="danger">{remoteRigs.error}</Banner>
+                            ) : null}
+                            <TextField
+                                autoComplete="off"
+                                fullWidth
+                                hint="Uses your SSH config and key authentication."
+                                label="SSH destination"
+                                leadingIcon="terminal"
+                                onSubmit={() => remoteRigStore.addSubmit()}
+                                onValueChange={(value) => remoteRigStore.destinationUpdate(value)}
+                                placeholder="devbox or user@devbox"
+                                value={remoteRigs.destination}
+                            />
+                        </div>
                     </Modal>
                 </ModalOverlay>
             ) : null}

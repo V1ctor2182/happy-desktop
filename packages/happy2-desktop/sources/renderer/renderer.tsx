@@ -26,6 +26,7 @@ import {
 } from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
+import { remoteRigStoreCreate, type RemoteRigStore } from "./remoteRigStore";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
@@ -114,6 +115,7 @@ function RigBoundary(props: {
     browserContent?: BrowserContentRenderer;
     platform: "desktop" | "web";
     router: RigRouter;
+    remoteRigs: RemoteRigStore;
     store: RigSessionStore;
     update?: WorkspaceUpdate;
     windowState: RigWindowStore;
@@ -149,6 +151,7 @@ function RigBoundary(props: {
                       }
                     : {}),
                 platform: props.platform,
+                remoteRigs: props.remoteRigs,
                 windowState: props.windowState,
                 workspace: session.workspace,
             }}
@@ -164,6 +167,7 @@ function DesktopRenderer(props: {
     bridge: HappyDesktopBridge;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
+    remoteRigs: RemoteRigStore;
     rigSession: RigSessionStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
@@ -261,6 +265,7 @@ function DesktopRenderer(props: {
             browserContent={props.browserContent}
             platform={props.platform}
             router={props.rigRouter}
+            remoteRigs={props.remoteRigs}
             store={props.rigSession}
             update={workspaceUpdate(snapshot.update, hostedUpdate)}
             windowState={props.windowState}
@@ -292,6 +297,7 @@ if (bridge) {
                 // development server renders the same tree with web chrome.
                 platform={browserLocal ? "web" : "desktop"}
                 rigRouter={rigRouter}
+                remoteRigs={remoteRigStoreCreate(bridge)}
                 rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
                     conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),
                     groupOpen: (groupId) => rigRouterGroupOpen(rigRouter, groupId),

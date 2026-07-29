@@ -98,6 +98,15 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+export interface RemoteRigSnapshot {
+    readonly destination: string;
+    readonly id: string;
+    readonly message?: string;
+    readonly rigHttpUrl?: string;
+    readonly status: "connecting" | "connected" | "disconnected";
+    readonly version?: string;
+}
+
 export interface RigInstallTerminalOpenResponse {
     readonly terminalId: string;
     readonly command: "npm install --global @slopus/rig";
@@ -119,6 +128,11 @@ export interface HappyDesktopBridge {
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     directoryPick(): Promise<string | undefined>;
     applicationMenuOpen(): Promise<void>;
+    remoteRigAdd(destination: string): Promise<void>;
+    remoteRigGet(): Promise<readonly RemoteRigSnapshot[]>;
+    remoteRigRemove(id: string): Promise<void>;
+    remoteRigRetry(id: string): Promise<void>;
+    remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void): () => void;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
@@ -141,6 +155,11 @@ export const desktopIpc = {
     browserOpenRequested: "happy2:browser:open-requested",
     directoryPick: "happy2:directory:pick",
     applicationMenuOpen: "happy2:application-menu:open",
+    remoteRigAdd: "happy2:remote-rig:add",
+    remoteRigChanged: "happy2:remote-rig:changed",
+    remoteRigGet: "happy2:remote-rig:get",
+    remoteRigRemove: "happy2:remote-rig:remove",
+    remoteRigRetry: "happy2:remote-rig:retry",
     runtimeChanged: "happy2:runtime:changed",
     runtimeGet: "happy2:runtime:get",
     runtimeReset: "happy2:runtime:reset",
