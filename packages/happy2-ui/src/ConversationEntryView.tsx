@@ -114,7 +114,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 copyText={entry.copyText}
                 data-testid={props["data-testid"]}
                 durationMs={entry.durationMs}
-                status={entry.status === "steered" ? "steered" : "complete"}
+                reason={entry.reason}
+                status={entry.status}
                 style={props.style}
             />
         );

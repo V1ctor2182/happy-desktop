@@ -123,6 +123,7 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
     if (left.kind === "turnStatus" && right.kind === "turnStatus")
         return (
             left.status === right.status &&
+            left.reason === right.reason &&
             left.copyText === right.copyText &&
             left.durationMs === right.durationMs &&
             left.tools === right.tools
@@ -245,6 +246,14 @@ function activityEqual(left: ConversationActivity, right: ConversationActivity):
     if (left.kind !== right.kind) return false;
     if (left.kind === "reasoning" && right.kind === "reasoning")
         return left.text === right.text && left.streaming === right.streaming;
+    if (left.kind === "waiting" && right.kind === "waiting") return left.label === right.label;
+    if (left.kind === "labeled" && right.kind === "labeled")
+        return (
+            left.label === right.label &&
+            left.subject === right.subject &&
+            left.status === right.status &&
+            left.mono === right.mono
+        );
     if (left.kind === "shell" && right.kind === "shell")
         return (
             left.command === right.command &&

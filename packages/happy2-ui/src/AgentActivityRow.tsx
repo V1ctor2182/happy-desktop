@@ -11,6 +11,7 @@ import type {
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
+import { Spinner } from "./Spinner";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
 export type AgentActivityRowProps = {
@@ -794,6 +795,23 @@ function AgentLabeledActivity(props: {
     );
 }
 
+/** Compact live inference marker; the circular spinner replaces a textual status row. */
+function AgentWaitingActivity(props: { label: string }) {
+    return (
+        <div
+            className="happy2-agent-activity"
+            data-happy2-ui="agent-activity-call"
+            data-single-line=""
+            data-status="running"
+            data-tone="neutral"
+        >
+            <div className="happy2-agent-activity__header" data-happy2-ui="agent-activity-header">
+                <Spinner label={props.label} size={16} tone="muted" variant="circle" />
+            </div>
+        </div>
+    );
+}
+
 /**
  * AgentActivityRow — the one glanceable row for everything an agent does inside
  * a conversation: a tool call, a reasoning block, or a shell run. Each variant
@@ -820,6 +838,8 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     time={props.time}
                     tool={activity.tool}
                 />
+            ) : activity.kind === "waiting" ? (
+                <AgentWaitingActivity label={activity.label} />
             ) : activity.kind === "labeled" ? (
                 <AgentLabeledActivity
                     label={activity.label}

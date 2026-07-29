@@ -122,67 +122,6 @@ function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {
     };
 }
 
-function transcriptTurnTracesProject(
-    elements: readonly ChatElement[],
-    entries: readonly ConversationEntry[],
-    session: SessionState,
-    expandedTurnIds: ReadonlySet<string>,
-): readonly ConversationEntry[] {
-    const sentUsersByTurn = new Map<string, Extract<ChatElement, { kind: "user_message" }>[]>();
-    const pendingMessageIds = new Set<string>();
-    const turnEnds = new Map<string, Extract<ChatElement, { kind: "turn_end" }>>();
-    for (const element of elements) {
-        if (element.kind === "user_message") {
-            if (element.delivery === "pending_steering") {
-                pendingMessageIds.add(element.messageId);
-                continue;
-            }
-            const users = sentUsersByTurn.get(element.turnId) ?? [];
-            users.push(element);
-            sentUsersByTurn.set(element.turnId, users);
-        } else if (element.kind === "turn_end") {
-            turnEnds.set(element.turnId, element);
-        }
-    }
-
-    const steeringMessageIds = new Set<string>();
-    const durations = new Map<string, number>();
-    for (const [turnId, users] of sentUsersByTurn) {
-        for (let index = 1; index < users.length; index += 1) {
-            const steering = users[index]!;
-            const precedingUser = users[index - 1]!;
-            steeringMessageIds.add(steering.messageId);
-            if (steering.steeringElapsedMs !== undefined)
-                durations.set(precedingUser.messageId, steering.steeringElapsedMs);
-        }
-        const finalUserId = users[users.length - 1]?.messageId;
-        const end = turnEnds.get(turnId);
-        if (finalUserId && end) durations.set(finalUserId, end.elapsedMs);
-    }
-
-    const activeUsers = session.activeTurn
-        ? sentUsersByTurn.get(session.activeTurn.turnId)
-        : undefined;
-    const activeTurnId = activeUsers?.[activeUsers.length - 1]?.messageId;
-    const pending: ConversationEntry[] = [];
-    const traceEntries = entries.filter((entry) => {
-        if (entry.kind === "message" && pendingMessageIds.has(entry.message.id)) {
-            pending.push(entry);
-            return false;
-        }
-        return true;
-    });
-    return [
-        ...rigConversationAttachTurnTraces(traceEntries, {
-            activeTurnId,
-            expandedTurnIds,
-            steeringMessageIds,
-            durations,
-        }),
-        ...pending,
-    ];
-}
-
 function transcriptPendingUserInputsProject(session: SessionState): readonly RigUserInputRequest[] {
     return session.pendingUserInputs.map((request) => ({
         requestId: request.requestId,
@@ -772,18 +711,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                           durations: turnDurations,
                       },
                   )
-                : transcriptTurnTracesProject(
-                      transcriptElements,
-                      rigConnectConversationProject({
-                          elements: transcriptElements,
-                          sessionId,
-                          showReasoning,
-                          ephemeral: projectedEphemeral,
-                          pendingUserInputs,
-                      }),
-                      transcriptSession!,
-                      expandedTurnIds,
-                  );
+                : rigConnectConversationProject({
+                      elements: transcriptElements,
+                      sessionId,
+                      showReasoning,
+                      ephemeral: projectedEphemeral,
+                      pendingUserInputs,
+                      expandedGroupIds: expandedTurnIds,
+                  });
         const withHistoryState: readonly ConversationEntry[] =
             transcriptSession?.loadingMore === true
                 ? [
@@ -1604,14 +1539,14 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 transcriptSession = connectedSession;
                 runStatus = transcriptSessionBusy(connectedSession) ? "running" : "idle";
                 runStartedAt = connectedSession.activeTurn?.startedAt;
-                runId = connectedSession.activeTurn?.turnId;
+                runId = connectedSession.activeTurn?.runId;
                 if (connectedSession.activeTurn) {
                     turnElapsedMs = undefined;
                 } else {
                     for (let index = elements.length - 1; index >= 0; index -= 1) {
                         const element = elements[index];
-                        if (element?.kind !== "turn_end") continue;
-                        turnElapsedMs = element.elapsedMs;
+                        if (element?.kind !== "group_end") continue;
+                        turnElapsedMs = element.turnElapsedMs;
                         break;
                     }
                 }

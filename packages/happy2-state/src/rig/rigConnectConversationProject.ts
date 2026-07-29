@@ -15,6 +15,7 @@ export interface RigConnectConversationInput {
     readonly showReasoning: boolean;
     readonly ephemeral: readonly ConversationEntry[];
     readonly pendingUserInputs: readonly RigUserInputRequest[];
+    readonly expandedGroupIds: ReadonlySet<string>;
 }
 
 /**
@@ -26,15 +27,36 @@ export function rigConnectConversationProject(
     input: RigConnectConversationInput,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
-    const finalAgentTextByTurn = new Map<string, string>();
-    const unsuccessfulTurns = new Set<string>();
-    for (const element of input.elements) {
-        if (element.kind === "agent_text") finalAgentTextByTurn.set(element.turnId, element.id);
-        else if (element.kind === "turn_end" && element.outcome !== "success")
-            unsuccessfulTurns.add(element.turnId);
+    for (let start = 0; start < input.elements.length; ) {
+        const groupId = input.elements[start]!.groupId;
+        let end = start + 1;
+        while (end < input.elements.length && input.elements[end]!.groupId === groupId) end += 1;
+        entries.push(...rigConnectGroupProject(input.elements.slice(start, end), input));
+        start = end;
     }
 
-    for (const element of input.elements) {
+    for (const entry of input.ephemeral) entries.push(entry);
+    for (const request of input.pendingUserInputs)
+        entries.push({
+            kind: "request",
+            id: `request:${request.requestId}`,
+            sequence: "",
+            request: {
+                kind: "userInput",
+                requestId: request.requestId,
+                questions: request.questions,
+            },
+        });
+    return entries.map(resequence);
+}
+
+function rigConnectGroupProject(
+    elements: readonly ChatElement[],
+    input: RigConnectConversationInput,
+): readonly ConversationEntry[] {
+    const entries: ConversationEntry[] = [];
+    let groupEnd: Extract<ChatElement, { kind: "group_end" }> | undefined;
+    for (const element of elements) {
         const sequence = sequenceOf(entries.length);
         switch (element.kind) {
             case "user_message":
@@ -68,6 +90,18 @@ export function rigConnectConversationProject(
                     sequence,
                 });
                 break;
+            case "inference":
+                entries.push({
+                    kind: "agentActivity",
+                    id: element.id,
+                    occurredAt: element.createdAt,
+                    sequence,
+                    activity: {
+                        kind: "waiting",
+                        label: "Waiting for model",
+                    },
+                });
+                break;
             case "agent_text":
                 entries.push({
                     kind: "message",
@@ -80,12 +114,7 @@ export function rigConnectConversationProject(
                         text: element.text,
                         createdAt: element.createdAt,
                         author: rigAgentAuthor,
-                        generationStatus: !element.complete
-                            ? "streaming"
-                            : unsuccessfulTurns.has(element.turnId) &&
-                                finalAgentTextByTurn.get(element.turnId) === element.id
-                              ? "failed"
-                              : "complete",
+                        generationStatus: element.complete ? "complete" : "streaming",
                     }),
                 });
                 break;
@@ -112,14 +141,17 @@ export function rigConnectConversationProject(
                     activity: { kind: "tool", tool: toolProject(element) },
                 });
                 break;
-            case "retry":
+            case "failure":
                 entries.push({
                     kind: "notice",
                     id: element.id,
                     variant: "notice",
-                    level: "warning",
-                    title: "Retrying",
-                    text: `${element.reason}. Attempt ${String(element.attempt)}.`,
+                    level: element.outcome === "retried" ? "warning" : "error",
+                    title: element.outcome === "retried" ? "Retrying" : "Run failed",
+                    text:
+                        element.attempt === undefined
+                            ? element.reason
+                            : `${element.reason}. Attempt ${String(element.attempt)}.`,
                     sequence,
                 });
                 break;
@@ -150,7 +182,8 @@ export function rigConnectConversationProject(
                     },
                 });
                 break;
-            case "turn_end":
+            case "group_end":
+                groupEnd = element;
                 if (element.errorMessage)
                     entries.push({
                         kind: "notice",
@@ -161,23 +194,77 @@ export function rigConnectConversationProject(
                         text: element.errorMessage,
                         sequence,
                     });
+                entries.push({
+                    kind: "turnStatus",
+                    id: `${element.id}:status`,
+                    sequence: sequenceOf(entries.length),
+                    status:
+                        element.reason === "steering"
+                            ? "steered"
+                            : element.reason === "error" || element.reason === "abort"
+                              ? "failed"
+                              : "complete",
+                    reason: element.reason,
+                    durationMs: element.elapsedMs,
+                    tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
+                });
                 break;
         }
     }
 
-    for (const entry of input.ephemeral) entries.push(resequence(entry, entries.length));
-    for (const request of input.pendingUserInputs)
-        entries.push({
-            kind: "request",
-            id: `request:${request.requestId}`,
-            sequence: sequenceOf(entries.length),
-            request: {
-                kind: "userInput",
-                requestId: request.requestId,
-                questions: request.questions,
+    if (!groupEnd) return entries;
+    let finalAgentIndex = -1;
+    let statusIndex = -1;
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+        const entry = entries[index];
+        if (!entry) continue;
+        if (statusIndex < 0 && entry.kind === "turnStatus") statusIndex = index;
+        if (entry.kind === "message" && entry.message.sender?.kind === "agent") {
+            finalAgentIndex = index;
+            break;
+        }
+    }
+    if (finalAgentIndex < 0) return entries;
+
+    const finalAgent = entries[finalAgentIndex]!;
+    if (finalAgent.kind !== "message") return entries;
+    const status = entries[statusIndex];
+    if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
+        entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
+
+    const visibleCollapsed = entries.filter(
+        (entry, index) =>
+            entry.kind === "turnStatus" ||
+            index === finalAgentIndex ||
+            (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
+            (entry.kind === "notice" && entry.level === "error"),
+    );
+    const hiddenCount = entries.length - visibleCollapsed.length;
+    if (hiddenCount === 0) return entries;
+
+    const tracedFinal: ConversationEntry = {
+        ...finalAgent,
+        message: {
+            ...finalAgent.message,
+            agentTrace: {
+                turnId: groupEnd.groupId,
+                agentUserId: rigAgentAuthor.id,
+                status:
+                    groupEnd.reason === "error" || groupEnd.reason === "abort"
+                        ? "failed"
+                        : "complete",
+                startedAt: new Date(groupEnd.startedAt).toISOString(),
+                completedAt: new Date(groupEnd.endedAt).toISOString(),
+                entryCount: hiddenCount,
+                toolCallCount: elements.filter((element) => element.kind === "tool_call").length,
+                subagents: [],
+                backgroundTerminals: [],
             },
-        });
-    return entries;
+        },
+    };
+    entries[finalAgentIndex] = tracedFinal;
+    if (input.expandedGroupIds.has(groupEnd.groupId)) return entries;
+    return visibleCollapsed.map((entry) => (entry === finalAgent ? tracedFinal : entry));
 }
 
 function messageProject(input: {
@@ -291,8 +378,8 @@ function jsonProject(value: unknown): ConversationJson {
     return null;
 }
 
-function resequence(entry: ConversationEntry, index: number): ConversationEntry {
-    const sequence = sequenceOf(index);
+function resequence(entry: ConversationEntry, index?: number): ConversationEntry {
+    const sequence = sequenceOf(index ?? 0);
     return entry.kind === "message"
         ? { ...entry, message: { ...entry.message, sequence, changePts: sequence } }
         : { ...entry, sequence };

@@ -8,7 +8,8 @@ export interface TurnSummaryProps {
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly durationMs?: number;
-    readonly status: "complete" | "steered";
+    readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
+    readonly status: "complete" | "failed" | "steered";
     readonly style?: CSSProperties;
 }
 
@@ -28,20 +29,27 @@ export function TurnSummary(props: TurnSummaryProps) {
         "copyText",
         "data-testid",
         "durationMs",
+        "reason",
         "status",
         "style",
     ]);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    const steered = local.status === "steered";
+    const reason = local.reason ?? (local.status === "steered" ? "steering" : undefined);
+    const [verb, joiner] =
+        reason === "steering"
+            ? ["Steered", "after"]
+            : reason === "compaction"
+              ? ["Compacted", "after"]
+              : reason === "abort"
+                ? ["Stopped", "after"]
+                : reason === "error" || local.status === "failed"
+                  ? ["Failed", "after"]
+                  : ["Completed", "in"];
     const label =
         local.durationMs === undefined
-            ? steered
-                ? "Steered"
-                : "Completed"
-            : steered
-              ? `Steered after\u00a0${durationFormat(local.durationMs)}`
-              : `Completed in\u00a0${durationFormat(local.durationMs)}`;
+            ? verb
+            : `${verb} ${joiner}\u00a0${durationFormat(local.durationMs)}`;
     const copy = async () => {
         try {
             if (local.copyText === undefined) return;
@@ -67,7 +75,7 @@ export function TurnSummary(props: TurnSummaryProps) {
             <span className="happy2-turn-summary__label" data-happy2-ui="turn-summary-label">
                 {label}
             </span>
-            {!steered && local.copyText !== undefined ? (
+            {local.status === "complete" && local.copyText !== undefined ? (
                 <button
                     aria-label={copied ? "Final message copied" : "Copy final message"}
                     className="happy2-turn-summary__copy"

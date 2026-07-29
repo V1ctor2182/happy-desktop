@@ -149,6 +149,7 @@ export interface ConversationToolCall {
  */
 export type ConversationActivity =
     | { readonly kind: "tool"; readonly tool: ConversationToolCall }
+    | { readonly kind: "waiting"; readonly label: string }
     | { readonly kind: "reasoning"; readonly text: string; readonly streaming: boolean }
     | {
           readonly kind: "shell";
@@ -294,6 +295,7 @@ export interface ConversationTurnStatusEntry {
     readonly id: string;
     readonly sequence: string;
     readonly status: "complete" | "failed" | "steered";
+    readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
     /** Final assistant text copied by the settled footer action. */
     readonly copyText?: string;
     /** Final duration from request sent through completion, when known. */
