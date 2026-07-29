@@ -10,9 +10,8 @@ import {
     AgentWorkingStatus,
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
-import { Banner } from "./Banner";
 import { ChannelHeader } from "./ChannelHeader";
-import { Composer, type ContextItem, type Mentionable } from "./Composer";
+import { ConversationDock } from "./ConversationDock";
 import { ConversationEntryView } from "./ConversationEntryView";
 import {
     conversationAgentActivityStartsGroup,
@@ -23,7 +22,6 @@ import {
 import { conversationRowHeight } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { MessageList, type MessageListScrollPosition } from "./Message";
-import { commandPickerItems } from "./CommandPicker";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 import { Spinner } from "./Spinner";
 
@@ -123,32 +121,6 @@ function elapsedFormat(ms: number): string {
     return `${Math.floor(seconds / 60)}m ${(seconds % 60).toString().padStart(2, "0")}s`;
 }
 
-/** The draft's attachments as composer chips; an image chip carries its size. */
-function contextItemsOf(composer: ComposerSnapshot): ContextItem[] {
-    return composer.attachments.map((attachment) => ({
-        id: attachment.id,
-        kind: "file",
-        label: attachment.name,
-        detail: attachmentSizeFormat(attachment.size),
-    }));
-}
-
-function attachmentSizeFormat(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
-    return composer.mentionCandidates.map((candidate) => ({
-        id: candidate.id,
-        name: candidate.label,
-        initials: candidate.label.slice(0, 1).toUpperCase(),
-        kind: "document",
-        ...(candidate.detail ? { description: candidate.detail } : {}),
-    }));
-}
-
 /**
  * The agent's live run state for the header that names what is open. It sits
  * here rather than inside `ConversationView` because a surface whose heading
@@ -190,21 +162,6 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  */
 export function ConversationView(props: ConversationViewProps) {
     const composer = props.composer;
-    /*
-     * The draft is the query: the store hands over a command query only while the
-     * whole draft is one command word that something still matches, so the list
-     * below is either the commands being chosen between or empty.
-     */
-    const commandItems =
-        composer.commandQuery === undefined || props.onCommandInvoke === undefined
-            ? []
-            : commandPickerItems(composer.capabilities.commands).filter((item) =>
-                  item.slash
-                      .slice(1)
-                      .toLowerCase()
-                      .startsWith(composer.commandQuery!.toLowerCase()),
-              );
-    const sendEnabled = composer.text.trim().length > 0 || composer.attachments.length > 0;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -338,44 +295,20 @@ export function ConversationView(props: ConversationViewProps) {
                 </MessageList>
             )}
 
-            <div className="happy2-conversation__dock" data-happy2-ui="conversation-dock">
-                {composer.submission.status === "failed" ? (
-                    <Banner
-                        action={{ label: "Retry", onClick: props.onComposerSend }}
-                        data-testid="conversation-submission-error"
-                        tone="danger"
-                        title="Message not sent"
-                    >
-                        {composer.submission.error.message}
-                    </Banner>
-                ) : null}
-                <div className="happy2-conversation__dock-inner">
-                    <Composer
-                        attachmentAccept="image/*"
-                        attachmentMultiple
-                        commands={commandItems}
-                        contextItems={contextItemsOf(composer)}
-                        hint={
-                            composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"
-                        }
-                        mentions={mentionsOf(composer)}
-                        footerControl={props.composerFooterControl}
-                        modelControl={props.composerControls}
-                        onAttachmentsSelect={props.onComposerAttachmentsSelect}
-                        onCommandSelect={(commandId) => props.onCommandInvoke?.(commandId)}
-                        onContextRemove={props.onComposerAttachmentRemove}
-                        onFocusChange={props.onComposerFocusChange}
-                        onSend={props.onComposerSend}
-                        onStop={props.onAbort}
-                        onValueChange={props.onComposerValueChange}
-                        pending={composer.submission.status === "pending"}
-                        placeholder={props.composerPlaceholder ?? "Message the agent…"}
-                        running={props.running}
-                        sendEnabled={sendEnabled}
-                        value={composer.text}
-                    />
-                </div>
-            </div>
+            <ConversationDock
+                composer={composer}
+                composerControls={props.composerControls}
+                composerFooterControl={props.composerFooterControl}
+                composerPlaceholder={props.composerPlaceholder}
+                onAbort={props.onAbort}
+                onCommandInvoke={props.onCommandInvoke}
+                onComposerAttachmentRemove={props.onComposerAttachmentRemove}
+                onComposerAttachmentsSelect={props.onComposerAttachmentsSelect}
+                onComposerFocusChange={props.onComposerFocusChange}
+                onComposerSend={props.onComposerSend}
+                onComposerValueChange={props.onComposerValueChange}
+                running={props.running}
+            />
 
             {props.overlay}
         </section>

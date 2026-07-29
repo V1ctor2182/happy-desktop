@@ -2,6 +2,7 @@ import { useSyncExternalStore, type ReactNode } from "react";
 import type {
     AppearanceStore,
     ConversationEntry,
+    ConversationSummary,
     ConversationToolCall,
     RigClockStore,
     RigFileTabSnapshot,
@@ -42,11 +43,14 @@ import {
     ChannelHeader,
     ContextGauge,
     ChangedFileDiff,
+    ComposerFooterBar,
     ComposerModelControl,
+    ConversationDock,
     ConversationView,
     EmptyState,
     FileEditor,
     FilePanel,
+    FloatingConversationDock,
     Lightbox,
     Checkbox,
     Modal,
@@ -825,12 +829,31 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const desktop = props.platform === "desktop";
 
+    // Expanded, the panel covers the workspace column — the tab strip, the
+    // transcript, and with them the composer. The write end of the open session
+    // comes along as a floating dock so reading a diff or watching a terminal at
+    // full width never means losing the ability to answer.
+    const panelComposer =
+        panel.open && panel.maximized && conversation.type === "ready" ? (
+            <RigPanelComposer
+                conversation={conversation.value}
+                onChatSelect={props.onChatSelect}
+                projects={rows}
+                workspace={props.workspace}
+            />
+        ) : undefined;
+
     return (
         <AppShell
             sidebarCollapsible
             windowControls={desktop}
             windowFullScreen={windowState.fullScreen}
             panelResizable
+            panelMaximizable={panel.open}
+            panelMaximized={panel.maximized}
+            onPanelMaximizedChange={() => props.workspace.panel.panelMaximizeToggle()}
+            panelFooter={panelComposer}
+            panelFooterFloating
             panel={
                 panel.open ? (
                     <RigPanelBody
@@ -1476,6 +1499,137 @@ function RigConversationSurface(props: {
             workingPhase={conversation.workingPhase}
             viewerId={rigOwnerAuthor.id}
         />
+    );
+}
+
+/**
+ * Separator between a group and the session inside it in a chat-menu option id.
+ * Both halves are CUID2, so no identifier can contain it.
+ */
+const CHAT_TARGET_SEP = "|";
+
+/** Every session in the workspace as one menu, grouped under the place it runs in. */
+function chatTargetItems(projects: readonly RigProjectGroup[]): MenuItem[] {
+    const items: MenuItem[] = [];
+    const section = (label: string, groupId: string, conversations: ConversationSummary[]) => {
+        if (conversations.length === 0) return;
+        if (items.length > 0) items.push({ kind: "separator" });
+        items.push({ kind: "label", label });
+        for (const summary of conversations)
+            items.push({
+                id: `${groupId}${CHAT_TARGET_SEP}${summary.id}`,
+                kind: "item",
+                label: summary.title,
+            });
+    };
+    for (const project of projects) {
+        section(project.name, project.id, [...project.conversations]);
+        for (const worktree of project.worktrees)
+            section(`${project.name} · ${worktree.name}`, worktree.id, [...worktree.conversations]);
+    }
+    return items;
+}
+
+/** The open session's title, for the trigger that names where a message is going. */
+function chatTargetLabel(
+    projects: readonly RigProjectGroup[],
+    conversationId: string,
+): string | undefined {
+    for (const project of projects) {
+        for (const summary of project.conversations)
+            if (summary.id === conversationId) return summary.title;
+        for (const worktree of project.worktrees)
+            for (const summary of worktree.conversations)
+                if (summary.id === conversationId) return summary.title;
+    }
+    return undefined;
+}
+
+/**
+ * The composer that floats over the expanded panel. It writes into the session
+ * the window already has open — the same draft, the same store actions, so a
+ * half-typed message survives expanding and collapsing the panel — and carries a
+ * picker for sending into a different session instead, which addresses that
+ * session exactly as choosing its tab would.
+ */
+function RigPanelComposer(props: {
+    conversation: RigConversationSnapshot;
+    onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
+    projects: readonly RigProjectGroup[];
+    workspace: RigWorkspaceStore;
+}) {
+    const { conversation, workspace } = props;
+    const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    return (
+        <FloatingConversationDock>
+            <ConversationDock
+                composer={conversation.composer}
+                composerPlaceholder="Message Happy…"
+                composerControls={
+                    conversation.menus ? (
+                        <ComposerModelControl
+                            {...rigComposerModelControlProps(conversation.menus, {
+                                disabled: conversation.modelLocked,
+                                onEffortChange: (effort?: RigThinkingLevel) =>
+                                    workspace.sessionEffortUpdate(effort),
+                                onModelChange: (selection: RigModelSelection) =>
+                                    workspace.sessionModelUpdate(selection),
+                            })}
+                        />
+                    ) : undefined
+                }
+                composerFooterControl={
+                    <ComposerFooterBar
+                        leading={
+                            <RigSessionControls
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                menus={conversation.menus}
+                                onEffortChange={(effort?: RigThinkingLevel) =>
+                                    workspace.sessionEffortUpdate(effort)
+                                }
+                                onModelChange={(selection: RigModelSelection) =>
+                                    workspace.sessionModelUpdate(selection)
+                                }
+                                onPermissionModeChange={(mode: RigPermissionMode) =>
+                                    workspace.sessionPermissionModeUpdate(mode)
+                                }
+                                onServiceTierChange={(tier?: RigServiceTier) =>
+                                    workspace.sessionServiceTierUpdate(tier)
+                                }
+                            />
+                        }
+                        trailing={
+                            <RigControlMenu
+                                items={chatTargetItems(props.projects)}
+                                label="Chat"
+                                menuAlign="end"
+                                menuPlacement="above"
+                                menuWidth={280}
+                                onSelect={(id) => {
+                                    const [groupId, chatId] = id.split(CHAT_TARGET_SEP);
+                                    if (groupId && chatId) props.onChatSelect(groupId, chatId);
+                                }}
+                                value={
+                                    chatTargetLabel(props.projects, conversation.conversationId) ??
+                                    "This session"
+                                }
+                            />
+                        }
+                    />
+                }
+                onAbort={() => swallow(workspace.runAbort())}
+                onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
+                onComposerAttachmentRemove={(attachmentId) =>
+                    workspace.composerAttachmentRemove(attachmentId)
+                }
+                onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
+                onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
+                onComposerSend={() => workspace.composerTextSubmit()}
+                onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+                running={conversation.running}
+            />
+        </FloatingConversationDock>
     );
 }
 

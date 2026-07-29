@@ -419,6 +419,16 @@
     min-height: 0;
 }
 
+/* Floating: the footer is an overlay on the panel body rather than a row under
+   it, so the body keeps its full height while the dock is on screen. */
+.happy2-app-shell__panel-footer[data-floating] {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
 .happy2-app-shell__panel-toggle {
     /* Chrome pinned to the panel's left edge, vertically centered; on the docked
        divider when narrow and just inside the content edge when maximized. */

@@ -60,6 +60,14 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * identity, so the body stays mounted as the footer mounts/unmounts.
      */
     panelFooter?: ReactNode;
+    /**
+     * Lifts `panelFooter` out of the panel column's flow and floats it over the
+     * bottom of the panel body. The body then keeps its full height as the footer
+     * appears and disappears, so a scrolled position, a terminal's last lines, and
+     * any measurement underneath survive it. The footer content owns its own
+     * gradient and pointer-transparent regions.
+     */
+    panelFooterFloating?: boolean;
     panelMaximizeLabel?: string;
     panelRestoreLabel?: string;
     panelResizeLabel?: string;
@@ -211,6 +219,7 @@ export function AppShell(props: AppShellProps) {
         "panelMaximized",
         "onPanelMaximizedChange",
         "panelFooter",
+        "panelFooterFloating",
         "panelMaximizeLabel",
         "panelRestoreLabel",
         "panelResizeLabel",
@@ -440,6 +449,7 @@ export function AppShell(props: AppShellProps) {
                             {local.panelFooter ? (
                                 <div
                                     className="happy2-app-shell__panel-footer"
+                                    data-floating={local.panelFooterFloating ? "" : undefined}
                                     data-happy2-ui="app-shell-panel-footer"
                                 >
                                     {local.panelFooter}

@@ -233,6 +233,14 @@ export {
     type ConversationViewProps,
 } from "./ConversationView";
 export {
+    ComposerFooterBar,
+    ConversationDock,
+    FloatingConversationDock,
+    type ComposerFooterBarProps,
+    type ConversationDockProps,
+    type FloatingConversationDockProps,
+} from "./ConversationDock";
+export {
     RigUserInputPrompt,
     type RigUserInputAnswerMap,
     type RigUserInputPromptProps,

@@ -79,6 +79,7 @@ import { ProductStorePage } from "./pages/ProductStorePage";
 import { ProfileCardPage } from "./pages/ProfileCardPage";
 import { RailPage } from "./pages/RailPage";
 import { SearchResultsPage } from "./pages/SearchResultsPage";
+import { FloatingConversationDockPage } from "./pages/FloatingConversationDockPage";
 import { RigSettingsBlueprintPage } from "./pages/RigSettingsPage";
 import { SettingsStorePage } from "./pages/SettingsStorePage";
 import { SecretRevealPage } from "./pages/SecretRevealPage";
@@ -221,6 +222,12 @@ const components: BlueprintPage[] = [
         label: "Conversation error card",
         number: "C-166",
         page: ConversationErrorCardPage,
+    },
+    {
+        id: "floating-conversation-dock",
+        label: "Floating conversation dock",
+        number: "C-167",
+        page: FloatingConversationDockPage,
     },
     {
         id: "rig-user-input-prompt",

@@ -42,6 +42,11 @@ export interface RigBrowserUpdate {
  */
 export interface RigPanelSnapshot {
     readonly open: boolean;
+    /**
+     * The panel has taken the whole window beside the sidebar. It is a property
+     * of the open panel, so folding the panel away also gives up the expansion.
+     */
+    readonly maximized: boolean;
     readonly tabs: readonly RigPanelTabSnapshot[];
     /** The permanent files view, transient tool preview, or one live tool tab. */
     readonly activeViewId: "files" | "preview" | RigPanelTabId;
@@ -59,6 +64,11 @@ export interface RigPanelStore {
      * one. The panel shows its own content and offers to start a terminal.
      */
     panelToggle(): void;
+    /**
+     * Expands the panel over the workspace column, or returns it to its docked
+     * width. Only meaningful while the panel is showing.
+     */
+    panelMaximizeToggle(): void;
     /** Selects the permanent workspace-files tab and opens the panel. */
     filesSelect(): void;
     /** Opens or replaces the transient Preview tab with one conversation tool entry. */
@@ -133,17 +143,24 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     const activeByConversation = new Map<RigSessionId, RigPanelTabId>();
     let conversationId: RigSessionId | undefined;
     let open = false;
+    let maximized = false;
     let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
     let previewEntryId: string | undefined;
     let previewConversationId: RigSessionId | undefined;
     let nextTabNumber = 1;
     let disposed = false;
-    let snapshot: RigPanelSnapshot = { activeViewId: "files", open: false, tabs: NO_TABS };
+    let snapshot: RigPanelSnapshot = {
+        activeViewId: "files",
+        maximized: false,
+        open: false,
+        tabs: NO_TABS,
+    };
 
     const project = (): RigPanelSnapshot => {
         const visible = tabs.filter((tab) => tab.conversationId === conversationId);
         return {
             activeViewId,
+            maximized,
             open,
             tabs: visible.map(
                 (tab): RigPanelTabSnapshot =>
@@ -164,6 +181,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const next = project();
         if (
             next.open === snapshot.open &&
+            next.maximized === snapshot.maximized &&
             next.activeViewId === snapshot.activeViewId &&
             next.previewEntryId === snapshot.previewEntryId &&
             next.tabs.length === snapshot.tabs.length &&
@@ -184,6 +202,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         // tab that actually changed.
         snapshot = {
             activeViewId: next.activeViewId,
+            maximized: next.maximized,
             open: next.open,
             tabs: next.tabs.map((tab, index) => {
                 const before = snapshot.tabs[index];
@@ -259,6 +278,14 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         panelToggle() {
             if (disposed) return;
             open = !open;
+            // A folded-away panel keeps no expansion: reopening it should give
+            // back the column it was docked at, not swallow the workspace.
+            if (!open) maximized = false;
+            recompute();
+        },
+        panelMaximizeToggle() {
+            if (disposed || !open) return;
+            maximized = !maximized;
             recompute();
         },
         filesSelect() {
