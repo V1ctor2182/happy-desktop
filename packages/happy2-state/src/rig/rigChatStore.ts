@@ -128,7 +128,7 @@ function transcriptTurnTracesProject(
     session: SessionState,
     expandedTurnIds: ReadonlySet<string>,
 ): readonly ConversationEntry[] {
-    const sentUsersByTurn = new Map<string, string[]>();
+    const sentUsersByTurn = new Map<string, Extract<ChatElement, { kind: "user_message" }>[]>();
     const pendingMessageIds = new Set<string>();
     const turnEnds = new Map<string, Extract<ChatElement, { kind: "turn_end" }>>();
     for (const element of elements) {
@@ -138,7 +138,7 @@ function transcriptTurnTracesProject(
                 continue;
             }
             const users = sentUsersByTurn.get(element.turnId) ?? [];
-            users.push(element.messageId);
+            users.push(element);
             sentUsersByTurn.set(element.turnId, users);
         } else if (element.kind === "turn_end") {
             turnEnds.set(element.turnId, element);
@@ -147,17 +147,23 @@ function transcriptTurnTracesProject(
 
     const steeringMessageIds = new Set<string>();
     const durations = new Map<string, number>();
-    for (const [turnId, userIds] of sentUsersByTurn) {
-        for (const userId of userIds.slice(1)) steeringMessageIds.add(userId);
-        const finalUserId = userIds[userIds.length - 1];
+    for (const [turnId, users] of sentUsersByTurn) {
+        for (let index = 1; index < users.length; index += 1) {
+            const steering = users[index]!;
+            const precedingUser = users[index - 1]!;
+            steeringMessageIds.add(steering.messageId);
+            if (steering.steeringElapsedMs !== undefined)
+                durations.set(precedingUser.messageId, steering.steeringElapsedMs);
+        }
+        const finalUserId = users[users.length - 1]?.messageId;
         const end = turnEnds.get(turnId);
         if (finalUserId && end) durations.set(finalUserId, end.elapsedMs);
     }
 
-    const activeUserIds = session.activeTurn
+    const activeUsers = session.activeTurn
         ? sentUsersByTurn.get(session.activeTurn.turnId)
         : undefined;
-    const activeTurnId = activeUserIds?.[activeUserIds.length - 1];
+    const activeTurnId = activeUsers?.[activeUsers.length - 1]?.messageId;
     const pending: ConversationEntry[] = [];
     const traceEntries = entries.filter((entry) => {
         if (entry.kind === "message" && pendingMessageIds.has(entry.message.id)) {
