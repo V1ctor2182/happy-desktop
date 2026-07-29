@@ -1,5 +1,13 @@
 import { RigControlMenu, RigSessionControls } from "../../src/RigSessionControls";
 import { ComponentPage, Specimen } from "../kit";
+
+/* A stand-in for an installed application's artwork: the real one comes from
+   the bundle at runtime, and the blueprint must stay self-contained. */
+const APP_ICON =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2b6cb0"/><path d="M20 22h24v6H20zm0 12h24v6H20z" fill="#fff"/></svg>',
+    );
 import { rigMenus } from "./rigChatFixtures";
 
 export function RigSessionControlsPage() {
@@ -27,9 +35,48 @@ export function RigSessionControlsPage() {
             </Specimen>
 
             <Specimen
+                detail="the quiet composer-footer form: no box, dimmed until pointed at"
+                label="Ghost variant"
+                number="02"
+                stage="surface"
+            >
+                <div style={{ width: "620px", padding: "12px", background: "var(--surface)" }}>
+                    <RigSessionControls
+                        fields={["permission", "tier"]}
+                        menuPlacement="above"
+                        menus={rigMenus}
+                        onEffortChange={() => undefined}
+                        onModelChange={() => undefined}
+                        onPermissionModeChange={() => undefined}
+                        onServiceTierChange={() => undefined}
+                        variant="ghost"
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="a trigger wearing an application's own icon, as Open in does"
+                label="Leading icon"
+                number="03"
+                stage="surface"
+            >
+                <div style={{ width: "320px", padding: "12px", background: "var(--surface)" }}>
+                    <RigControlMenu
+                        items={[
+                            { kind: "item", id: "vscode", label: "VS Code", iconUrl: APP_ICON },
+                            { kind: "item", id: "finder", label: "Finder", iconUrl: APP_ICON },
+                        ]}
+                        label="Open in"
+                        leadingIconUrl={APP_ICON}
+                        onSelect={() => undefined}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="one control opened to its Menu popover"
                 label="Open control menu"
-                number="02"
+                number="04"
                 stage="surface"
             >
                 <div

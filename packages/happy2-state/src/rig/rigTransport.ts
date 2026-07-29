@@ -13,7 +13,7 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigPermissionReview,
-    RigOpenInTarget,
+    RigOpenInTargets,
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigProjectCatalog,
@@ -286,7 +286,7 @@ export interface RigTransport {
      * already filtered to the ones installed. An empty list means the host
      * offers none, which is the normal answer off macOS.
      */
-    openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
+    openInTargetsRead(): Promise<RigOpenInTargets>;
 
     /**
      * Opens a project or worktree root in one of those applications. The group

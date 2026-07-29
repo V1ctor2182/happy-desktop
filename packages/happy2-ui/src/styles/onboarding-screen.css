@@ -21,6 +21,7 @@
 .happy2-onboarding-screen__mast,
 .happy2-onboarding-screen__brand,
 .happy2-onboarding-screen__mark,
+.happy2-onboarding-screen__mark-image,
 .happy2-onboarding-screen__steps,
 .happy2-onboarding-screen__step,
 .happy2-onboarding-screen__step-bar,
@@ -82,6 +83,12 @@
     padding: 0 40px;
 }
 
+/*
+ * The mark is the Happy logo itself sitting directly on the surface, with no
+ * filled chip behind it — the same quiet treatment as the splash screen, so the
+ * launch splash and this onboarding mast read as one continuous screen. A glyph
+ * passed as a custom mark inherits `--text` ink rather than an accent colour.
+ */
 .happy2-onboarding-screen__mark {
     display: flex;
     flex: none;
@@ -91,8 +98,13 @@
     height: 28px;
     overflow: hidden;
     border-radius: 8px;
-    background: var(--button-primary-background);
-    color: var(--button-primary-tint);
+    color: var(--text);
+}
+
+.happy2-onboarding-screen__mark-image {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
 }
 
 .happy2-onboarding-screen__brand-name {
@@ -147,7 +159,8 @@
  * A segmented rail rather than a row of dots: each step owns an equal share of
  * the measure, so the labels sit on a predictable rhythm instead of drifting
  * with their own text width. The fill runs continuously from the first step
- * through the current one, which is what "how far in am I" actually asks.
+ * through the current one, which is what "how far in am I" actually asks. It is
+ * neutral ink on a hairline track — the rail carries progress, not colour.
  */
 .happy2-onboarding-screen__steps {
     display: flex;
@@ -172,7 +185,7 @@
 
 .happy2-onboarding-screen__step-bar[data-state="complete"],
 .happy2-onboarding-screen__step-bar[data-state="current"] {
-    background: var(--text-link);
+    background: var(--text);
 }
 
 .happy2-onboarding-screen__step-label {
@@ -207,7 +220,7 @@
 
 .happy2-onboarding-screen__kicker {
     margin: 0 0 14px;
-    color: var(--text-link);
+    color: var(--text-secondary);
     font-size: 11px;
     font-weight: 700;
     line-height: 14px;
@@ -264,16 +277,17 @@
 }
 
 /*
- * Static progress ring: one accent arc on a strong hairline track. Deliberately
- * un-animated so the fixture and screenshots stay deterministic; a consuming app
- * may add its own rotation outside the measurement surface.
+ * Static progress ring: one ink arc on a strong hairline track. Neutral to match
+ * the splash — no accent colour on the loading chrome. Deliberately un-animated
+ * so the fixture and screenshots stay deterministic; a consuming app may add its
+ * own rotation outside the measurement surface.
  */
 .happy2-onboarding-screen__spinner {
     flex: none;
     width: 20px;
     height: 20px;
     border: 2px solid var(--divider);
-    border-top-color: var(--text-link);
+    border-top-color: var(--text);
     border-radius: var(--happy2-radius-pill);
 }
 

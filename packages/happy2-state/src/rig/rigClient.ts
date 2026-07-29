@@ -19,7 +19,7 @@ import type { RigTransport } from "./rigTransport.js";
 import type {
     RigChangedFileDocument,
     RigGroupId,
-    RigOpenInTarget,
+    RigOpenInTargets,
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigModelCatalog,
@@ -57,7 +57,7 @@ export interface RigClient {
         expectedHash: string | null,
     ): Promise<void>;
     /** Applications this host can open a project or worktree directory in. */
-    openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
+    openInTargetsRead(): Promise<RigOpenInTargets>;
     /** Opens one project or worktree root in one of those applications. */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */

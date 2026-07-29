@@ -186,6 +186,12 @@ export interface RigWorkspaceSnapshot {
      * empty one.
      */
     readonly openInTargets: readonly RigOpenInTarget[];
+    /**
+     * The application this machine opened a project in most recently, so the
+     * control can offer it directly instead of making the reader find it in the
+     * menu again. Undefined until something has been opened.
+     */
+    readonly openInRecentId?: string;
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: RigRenameSnapshot;
     /**
@@ -581,6 +587,7 @@ export function rigWorkspaceStoreCreate(
        applications costs a process launch or several, and most sessions never
        open the menu. */
     let openInTargets: readonly RigOpenInTarget[] = [];
+    let openInRecentId: string | undefined;
     let openInTargetsRequested = false;
     let rename: RigRenameSnapshot | undefined;
     let fileViewMode: RigFileViewMode = "unified";
@@ -712,6 +719,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId &&
             snapshot.openInTargets === openInTargets &&
+            snapshot.openInRecentId === openInRecentId &&
             snapshot.rename === rename &&
             snapshot.fileViewMode === fileViewMode &&
             snapshot.fileScope === fileScope &&
@@ -732,6 +740,7 @@ export function rigWorkspaceStoreCreate(
             fileLayout,
             fileTreeExpanded,
             ...(workspaceFiles ? { workspaceFiles } : {}),
+            ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             ...(create ? { create } : {}),
             ...(activeFileTabId ? { activeFileTabId } : {}),
@@ -1322,9 +1331,10 @@ export function rigWorkspaceStoreCreate(
         if (openInTargetsRequested) return;
         openInTargetsRequested = true;
         void client.openInTargetsRead().then(
-            (targets) => {
+            (result) => {
                 if (disposed) return;
-                openInTargets = targets;
+                openInTargets = result.targets;
+                openInRecentId = openInRecentId ?? result.recentId;
                 recompute();
             },
             () => {
@@ -1405,6 +1415,7 @@ export function rigWorkspaceStoreCreate(
             fileLayout,
             fileTreeExpanded,
             ...(workspaceFiles ? { workspaceFiles } : {}),
+            ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             ...(create ? { create } : {}),
             ...(activeFileTabId ? { activeFileTabId } : {}),
@@ -1663,7 +1674,15 @@ export function rigWorkspaceStoreCreate(
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),
-        openIn: (groupId, targetId) => client.openIn(groupId, targetId),
+        openIn: (groupId, targetId) => {
+            // The choice is the reader's, so the control wears it immediately;
+            // the host records the same thing durably for the next launch.
+            if (openInRecentId !== targetId) {
+                openInRecentId = targetId;
+                recompute();
+            }
+            return client.openIn(groupId, targetId);
+        },
         createOpen(groupId) {
             const groups = createGroupsRead();
             // The group last created in, then the one currently open, then

@@ -150,6 +150,60 @@
     color: var(--text-secondary);
 }
 
+/* An application's own artwork on the trigger: 16px, its own silhouette, no
+   frame of ours around it. */
+.happy2-rig-control__leading {
+    display: block;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+
+/* ---- Ghost variant --------------------------------------------------------
+ *
+ * The composer footer's form of the control: no box, no fill, dimmed until it
+ * is pointed at, so a session setting sits under the message being written
+ * rather than beside it. Same geometry as the audience toggle it shares that
+ * row with, and it opens on hover, so reading the current value costs nothing.
+ */
+
+.happy2-rig-control[data-variant="ghost"] .happy2-rig-control__trigger {
+    height: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    opacity: 0.5;
+    transition:
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-rig-control[data-variant="ghost"] .happy2-rig-control__trigger:hover:not(:disabled),
+.happy2-rig-control[data-variant="ghost"][data-open] .happy2-rig-control__trigger:not(:disabled) {
+    color: var(--text);
+    opacity: 1;
+}
+
+.happy2-rig-control[data-variant="ghost"] .happy2-rig-control__value {
+    font-weight: 500;
+    color: inherit;
+}
+
+.happy2-rig-control[data-variant="ghost"] .happy2-rig-control__label {
+    color: inherit;
+}
+
+/* The chevron is the one piece of chrome the quiet form drops: the value is
+   already the affordance, and pointing at it opens the menu. */
+.happy2-rig-control[data-variant="ghost"] .happy2-rig-control__chevron {
+    display: none;
+}
+
 /* Full-window transparent dismissal layer beneath the popover; leaves flow. */
 .happy2-rig-control__backdrop {
     position: fixed;
@@ -160,12 +214,15 @@
     cursor: default;
 }
 
-/* Popover overlays out of flow directly beneath its trigger. */
+/* Popover overlays out of flow directly beneath its trigger. Its 4px offset is
+   padding rather than a gap so a pointer travelling from the trigger to the menu
+   never leaves the control, which is what keeps the hover form open. */
 .happy2-rig-control__popover {
     position: absolute;
-    top: calc(100% + 4px);
+    top: 100%;
     left: 0;
     z-index: var(--happy2-z-overlay);
+    padding-top: 4px;
 }
 
 /* A control parked at the right edge of a header would push its popover off the
@@ -177,7 +234,9 @@
 
 .happy2-rig-control__popover[data-placement="above"] {
     top: auto;
-    bottom: calc(100% + 4px);
+    bottom: 100%;
+    padding-top: 0;
+    padding-bottom: 4px;
 }
 
 /* ---- Command palette rows -------------------------------------------------- */

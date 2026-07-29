@@ -112,7 +112,7 @@ import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
 import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
-import { RigCommandPalettePage } from "./pages/RigCommandPalettePage";
+import { CommandPickerPage } from "./pages/CommandPickerPage";
 import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
 import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
 import { ToolCallPreviewPage } from "./pages/ToolCallPreviewPage";
@@ -235,10 +235,10 @@ const components: BlueprintPage[] = [
         page: RigSessionControlsPage,
     },
     {
-        id: "rig-command-palette",
-        label: "Rig command palette",
+        id: "command-picker",
+        label: "Command picker",
         number: "C-152",
-        page: RigCommandPalettePage,
+        page: CommandPickerPage,
     },
     {
         id: "conversation-view",

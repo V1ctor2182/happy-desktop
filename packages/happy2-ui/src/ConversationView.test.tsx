@@ -164,10 +164,10 @@ it("opens the command palette for a slash draft and never sends it", async () =>
     );
     await view.ready();
 
-    const palette = view.$('[data-happy2-ui="conversation-palette"]');
+    const palette = view.$('[data-happy2-ui="command-picker"]');
     expect(palette.computedStyle("display")).toBe("flex");
     // Only the matching command is listed.
-    const items = view.container.querySelectorAll('[data-happy2-ui="rig-command-item"]');
+    const items = view.container.querySelectorAll('[data-happy2-ui="command-picker-row"]');
     expect(items).toHaveLength(1);
     expect((items[0] as HTMLElement).dataset.commandId).toBe("compact");
 
@@ -203,7 +203,7 @@ it("shows an empty state and a shell hint without a command palette", async () =
         view.$('[data-happy2-ui="conversation-empty"] [data-happy2-ui="empty-state-title"]').element
             .textContent,
     ).toBe("Nothing here yet");
-    expect(view.container.querySelector('[data-happy2-ui="conversation-palette"]')).toBeNull();
+    expect(view.container.querySelector('[data-happy2-ui="command-picker"]')).toBeNull();
     // A shell draft is sendable: `!ls -la` runs rather than being blocked like
     // an open command draft.
     expect(

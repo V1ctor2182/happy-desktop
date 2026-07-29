@@ -177,7 +177,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and brand glyph",
     expect(title.offsets().left).toBe(0);
     expect(form.offsets().left).toBe(0);
 
-    /* Kicker: uppercase accent eyebrow. */
+    /* Kicker: uppercase neutral eyebrow — quiet secondary ink, not an accent. */
     expect(
         kicker.computedStyles([
             "color",
@@ -188,7 +188,7 @@ it("holds AuthScreen split geometry, panel layout, typography, and brand glyph",
             "text-transform",
         ]),
     ).toEqual({
-        color: "rgb(43, 172, 204)",
+        color: "rgb(73, 69, 79)",
         "font-size": "12px",
         "font-weight": "700",
         "letter-spacing": "0.96px",
@@ -338,7 +338,7 @@ it("holds AuthScreen loading, generated-image hero, custom mark, and minimal for
         ]),
     ).toEqual({
         "border-radius": "999px",
-        "border-top-color": "rgb(43, 172, 204)",
+        "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
         "border-left-color": "rgb(234, 234, 234)",
         "box-sizing": "border-box",

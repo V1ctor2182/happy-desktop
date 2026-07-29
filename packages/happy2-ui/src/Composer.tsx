@@ -11,6 +11,7 @@ import {
     type ReactNode,
 } from "react";
 import { AudienceToggle, type AudienceValue } from "./AudienceToggle";
+import { CommandPicker, type CommandPickerItem } from "./CommandPicker";
 import { Avatar, type ToneName } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
@@ -241,6 +242,14 @@ export type ComposerProps = {
      */
     contributions?: ReactNode;
     contextItems?: ContextItem[];
+    /**
+     * Slash commands offered for the current draft, already filtered by the
+     * owner. Supplying them (with `onCommandSelect`) renders the command
+     * popover and gives the arrow keys, Enter, and Tab to it.
+     */
+    commands?: readonly CommandPickerItem[];
+    /** Chooses a command from the popover; the owner clears the draft. */
+    onCommandSelect?: (id: string) => void;
     "data-testid"?: string;
     disabled?: boolean;
     /** e.g. "Enter to send · @ to hand off to an agent" */
@@ -303,6 +312,13 @@ export function Composer(props: ComposerProps) {
     const [mentionStart, setMentionStart] = useState<number | null>(null);
     const [mentionQuery, setMentionQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
+    /*
+     * Which command Enter would run. It is an index rather than an id because
+     * the offered list narrows as the draft is typed; the index is clamped into
+     * the current list on every read, so a shrinking list moves the highlight
+     * instead of losing it.
+     */
+    const [commandIndex, setCommandIndex] = useState(0);
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [emojiQuery, setEmojiQuery] = useState("");
     const restoreFocusAfterSend = useRef(false);
@@ -316,7 +332,20 @@ export function Composer(props: ComposerProps) {
         if (list.length === 0) return undefined;
         return list[Math.min(activeIndex, list.length - 1)];
     };
-    const canSend = () => !busy && (props.sendEnabled ?? props.value.trim().length > 0);
+    const commands = () => props.commands ?? [];
+    const commandOpen = () => !busy && commands().length > 0 && props.onCommandSelect !== undefined;
+    const activeCommand = () => {
+        const list = commands();
+        if (list.length === 0) return undefined;
+        return list[Math.min(commandIndex, list.length - 1)];
+    };
+    const selectCommand = (id: string) => {
+        setCommandIndex(0);
+        props.onCommandSelect?.(id);
+        textareaEl.current?.focus();
+    };
+    const canSend = () =>
+        !busy && !commandOpen() && (props.sendEnabled ?? props.value.trim().length > 0);
     /*
      * One control, two acts. While the agent is running an empty draft has
      * nothing to send, so that same circle stops the run; the moment there is
@@ -507,6 +536,35 @@ export function Composer(props: ComposerProps) {
             audienceToggle();
             return;
         }
+        if (commandOpen()) {
+            const list = commands();
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setCommandIndex((index) => (Math.min(index, list.length - 1) + 1) % list.length);
+                return;
+            }
+            if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setCommandIndex(
+                    (index) => (Math.min(index, list.length - 1) - 1 + list.length) % list.length,
+                );
+                return;
+            }
+            if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) {
+                event.preventDefault();
+                const command = activeCommand();
+                if (command) selectCommand(command.id);
+                return;
+            }
+            if (event.key === "Escape") {
+                // The whole draft is the command being typed, so dismissing the
+                // popover and clearing what opened it are the same act.
+                event.preventDefault();
+                setCommandIndex(0);
+                props.onValueChange("");
+                return;
+            }
+        }
         if (mentionOpen()) {
             const list = filtered();
             if (event.key === "ArrowDown" && list.length > 0) {
@@ -546,6 +604,8 @@ export function Composer(props: ComposerProps) {
         }
     };
     const onInput = (event: FormEvent<HTMLTextAreaElement>) => {
+        // A new query is a new list; start its highlight at the top.
+        setCommandIndex(0);
         props.onValueChange(event.currentTarget.value);
         rememberSelection();
         detectMention(event.currentTarget);
@@ -701,6 +761,19 @@ export function Composer(props: ComposerProps) {
                         )}
                     </div>
                 </div>
+                {commandOpen() ? (
+                    <div
+                        className="happy2-composer__popover"
+                        data-happy2-ui="composer-popover"
+                        onMouseDown={(event) => event.preventDefault()}
+                    >
+                        <CommandPicker
+                            activeId={activeCommand()?.id}
+                            items={commands()}
+                            onSelect={selectCommand}
+                        />
+                    </div>
+                ) : null}
                 {mentionOpen() ? (
                     <div
                         className="happy2-composer__popover"

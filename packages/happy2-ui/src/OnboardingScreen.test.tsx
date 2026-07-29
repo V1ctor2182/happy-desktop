@@ -192,11 +192,12 @@ it("holds the full-window onboarding surface, its measure column, step rail, and
         "align-items": "center",
         "border-radius": "8px",
         "box-sizing": "border-box",
-        color: "rgb(255, 255, 255)",
+        color: "rgb(0, 0, 0)",
         display: "flex",
         "justify-content": "center",
     });
-    expect(mark.computedStyle("background-color")).toBe("rgb(0, 0, 0)");
+    /* No filled chip: the mark sits directly on the surface like the splash. */
+    expect(mark.computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
     /* 40 gutter + 28 mark + 12 gap, relative to the measure column's border box */
     expect(brandName.offsets().left).toBe(80);
     expect(brandName.computedStyle("color")).toBe("rgb(0, 0, 0)");
@@ -211,16 +212,13 @@ it("holds the full-window onboarding surface, its measure column, step rail, and
     });
     await paints(brandName, "brand name");
 
-    /* Brand mark glyph (default spark): a font glyph the icon font centers in
-     * its own box, so the contract is that it really paints in the 28px chip. */
-    expect(
-        (
-            await view
-                .$('[data-happy2-ui="onboarding-mark"] [data-happy2-ui="icon"]')
-                .visibleMetrics()
-        ).pixelCount,
-        "mark glyph ink",
-    ).toBeGreaterThan(0);
+    /* Default mark: the Happy logo image itself, contained in the 28px box so
+     * the launch splash and this mast show the same mark on the same surface. */
+    const markImage = view.$('[data-happy2-ui="onboarding-mark-image"]');
+    expect(markImage.element.tagName).toBe("IMG");
+    expect(markImage.bounds()).toMatchObject({ width: 28, height: 28 });
+    expect(markImage.computedStyle("object-fit")).toBe("contain");
+    expect(markImage.element.getAttribute("src")).toMatch(/happy-logo/);
 
     /* ---- Step rail ----------------------------------------------------- */
 
@@ -243,9 +241,10 @@ it("holds the full-window onboarding surface, its measure column, step rail, and
     expect(completeBar.bounds().width).toBeCloseTo(currentBar.bounds().width, 0);
     expect(currentBar.bounds().width).toBeCloseTo(upcomingBar.bounds().width, 0);
     expect(completeBar.bounds().height).toBe(3);
-    /* The fill runs continuously from the first step through the current one. */
-    expect(completeBar.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
-    expect(currentBar.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
+    /* The fill runs continuously from the first step through the current one,
+     * in neutral ink on the hairline track. */
+    expect(completeBar.computedStyle("background-color")).toBe("rgb(0, 0, 0)");
+    expect(currentBar.computedStyle("background-color")).toBe("rgb(0, 0, 0)");
     expect(upcomingBar.computedStyle("background-color")).toBe("rgb(234, 234, 234)");
 
     const label = (state: string) =>
@@ -282,7 +281,7 @@ it("holds the full-window onboarding surface, its measure column, step rail, and
             "text-transform",
         ]),
     ).toEqual({
-        color: "rgb(43, 172, 204)",
+        color: "rgb(73, 69, 79)",
         "font-size": "11px",
         "font-weight": "700",
         "letter-spacing": "1.1px",
@@ -518,7 +517,7 @@ it("keeps loading and form layout identical while holding width variants", async
         ]),
     ).toEqual({
         "border-radius": "999px",
-        "border-top-color": "rgb(43, 172, 204)",
+        "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
         "border-left-color": "rgb(234, 234, 234)",
         "box-sizing": "border-box",

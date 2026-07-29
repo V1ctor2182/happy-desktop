@@ -693,6 +693,22 @@ export interface RigWorkspaceFiles {
 export interface RigOpenInTarget {
     readonly id: string;
     readonly label: string;
+    /**
+     * The application's own icon as an image URL supplied by the host — the
+     * picture of the thing being launched, not a glyph from our vocabulary.
+     * Absent when the host has no artwork for it.
+     */
+    readonly iconUrl?: string;
+}
+
+/**
+ * The applications a host offers, with the one opened most recently. The recent
+ * id belongs to the same answer because a control that wears the last-used
+ * application has to know it before it can draw itself.
+ */
+export interface RigOpenInTargets {
+    readonly targets: readonly RigOpenInTarget[];
+    readonly recentId?: string;
 }
 
 /** Current model/effort/permission/tier selection used to derive menu options. */

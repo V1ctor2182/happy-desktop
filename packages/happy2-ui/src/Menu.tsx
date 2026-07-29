@@ -7,6 +7,12 @@ export type MenuItem =
           id: string;
           label: string;
           icon?: IconName;
+          /**
+           * An image to show instead of a house glyph, for a row that stands for
+           * something outside our vocabulary — an installed application, for
+           * instance, which brings its own artwork.
+           */
+          iconUrl?: string;
           danger?: boolean;
           disabled?: boolean;
           shortcut?: string;
@@ -36,7 +42,9 @@ export type MenuProps = {
  */
 export function Menu(props: MenuProps) {
     const { className, items, onSelect, style, width, ...rest } = props;
-    const hasIcons = items.some((item) => item.kind === "item" && item.icon !== undefined);
+    const hasIcons = items.some(
+        (item) => item.kind === "item" && (item.icon !== undefined || item.iconUrl !== undefined),
+    );
     return (
         <div
             {...rest}
@@ -93,7 +101,16 @@ export function Menu(props: MenuProps) {
                                     className="happy2-menu__item-icon"
                                     data-happy2-ui="menu-item-icon"
                                 >
-                                    {item.icon ? <Icon name={item.icon} size={16} /> : null}
+                                    {item.iconUrl ? (
+                                        <img
+                                            alt=""
+                                            className="happy2-menu__item-image"
+                                            data-happy2-ui="menu-item-image"
+                                            src={item.iconUrl}
+                                        />
+                                    ) : item.icon ? (
+                                        <Icon name={item.icon} size={16} />
+                                    ) : null}
                                 </span>
                             ) : null}
                             <span

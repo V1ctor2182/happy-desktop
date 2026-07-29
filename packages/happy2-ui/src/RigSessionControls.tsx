@@ -21,6 +21,11 @@ export type RigControlMenuProps = {
     /** Short field caption (e.g. "Model"). */
     label: string;
     /**
+     * An image shown before the label — an installed application's own icon,
+     * where the control stands for something that brings its own artwork.
+     */
+    leadingIconUrl?: string;
+    /**
      * Current value shown on the trigger. A control with no value is an action
      * rather than a picker — its label alone names what the menu does — and the
      * trigger renders as one.
@@ -33,6 +38,13 @@ export type RigControlMenuProps = {
     menuPlacement?: "above" | "below";
     /** Edge of the trigger the popover aligns to. Defaults to its start edge. */
     menuAlign?: "start" | "end";
+    /**
+     * How loudly the trigger sits on the surface. `outlined` is the chrome
+     * control with a hairline and a fill. `ghost` is the quiet composer-footer
+     * form: dimmed text with no box at all, which also opens on hover, because
+     * a setting that faint has to be reachable without a deliberate click.
+     */
+    variant?: "outlined" | "ghost";
     disabled?: boolean;
     className?: string;
     "data-testid"?: string;
@@ -48,6 +60,7 @@ export type RigControlMenuProps = {
 export function RigControlMenu(props: RigControlMenuProps) {
     const [open, setOpen] = useState(false);
     const expanded = open && !props.disabled;
+    const ghost = props.variant === "ghost";
 
     return (
         <div
@@ -55,12 +68,18 @@ export function RigControlMenu(props: RigControlMenuProps) {
             data-happy2-ui="rig-control"
             data-open={expanded ? "" : undefined}
             data-testid={props["data-testid"]}
+            data-variant={ghost ? "ghost" : undefined}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && open) {
                     event.stopPropagation();
                     setOpen(false);
                 }
             }}
+            // A ghost control is quiet enough that pointing at it is the whole
+            // gesture: the popover follows the pointer in and leaves with it.
+            // The popover's own hover bridge keeps the 4px gap from closing it.
+            onPointerEnter={ghost ? () => setOpen(true) : undefined}
+            onPointerLeave={ghost ? () => setOpen(false) : undefined}
             style={props.style}
         >
             <button
@@ -72,6 +91,14 @@ export function RigControlMenu(props: RigControlMenuProps) {
                 onClick={() => setOpen((value) => !value)}
                 type="button"
             >
+                {props.leadingIconUrl === undefined ? null : (
+                    <img
+                        alt=""
+                        className="happy2-rig-control__leading"
+                        data-happy2-ui="rig-control-leading"
+                        src={props.leadingIconUrl}
+                    />
+                )}
                 <span className="happy2-rig-control__label" data-happy2-ui="rig-control-label">
                     {props.label}
                 </span>
@@ -134,6 +161,12 @@ export type RigSessionControlsProps = {
     fields?: readonly RigSessionControlField[];
     /** Direction each selected control's menu opens. Defaults to below. */
     menuPlacement?: "above" | "below";
+    /**
+     * How loudly the controls sit on the surface. The composer footer asks for
+     * `ghost`: these are settings you glance at, not chrome that competes with
+     * the message you are writing.
+     */
+    variant?: "outlined" | "ghost";
     onModelChange: (selection: RigModelSelection) => void;
     onEffortChange: (effort?: RigThinkingLevel) => void;
     onPermissionModeChange: (mode: RigPermissionMode) => void;
@@ -213,6 +246,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     key={field}
                     label="Model"
                     menuPlacement={props.menuPlacement}
+                    variant={props.variant}
                     menuWidth={240}
                     onSelect={(id) => {
                         const [providerId, modelId] = id.split(MODEL_ID_SEP);
@@ -230,6 +264,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     key={field}
                     label="Effort"
                     menuPlacement={props.menuPlacement}
+                    variant={props.variant}
                     onSelect={(id) => props.onEffortChange(id as RigThinkingLevel)}
                     value={menus ? currentEffortLabel(menus) : "…"}
                 />
@@ -243,6 +278,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     key={field}
                     label="Access"
                     menuPlacement={props.menuPlacement}
+                    variant={props.variant}
                     menuWidth={200}
                     onSelect={(id) => props.onPermissionModeChange(id as RigPermissionMode)}
                     value={menus ? PERMISSION_LABELS[menus.currentPermissionMode] : "…"}
@@ -256,6 +292,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                 key={field}
                 label="Speed"
                 menuPlacement={props.menuPlacement}
+                variant={props.variant}
                 onSelect={(id) =>
                     props.onServiceTierChange(
                         id === SERVICE_TIER_OFF ? undefined : (id as RigServiceTier),

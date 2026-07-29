@@ -387,7 +387,7 @@ class FakeRigTransportModel implements FakeRigTransport {
         // No host to open anything in, so the fake offers nothing and opening
         // is a no-op rather than a failure: a surface under test should render
         // the same whether or not a shell is there.
-        openInTargetsRead: () => this.perform("openInTargetsRead", {}, () => []),
+        openInTargetsRead: () => this.perform("openInTargetsRead", {}, () => ({ targets: [] })),
         openIn: () => this.perform("openIn", {}, () => undefined),
         changedFileRead: (_sessionId, groupId, path) =>
             this.perform("changedFileRead", {}, () => ({

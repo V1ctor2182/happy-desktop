@@ -244,10 +244,11 @@ export {
     type RigSessionControlsProps,
 } from "./RigSessionControls";
 export {
-    RigCommandPalette,
-    type RigCommandId,
-    type RigCommandPaletteProps,
-} from "./RigCommandPalette";
+    CommandPicker,
+    commandPickerItems,
+    type CommandPickerItem,
+    type CommandPickerProps,
+} from "./CommandPicker";
 export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
 export {

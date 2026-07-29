@@ -11,6 +11,7 @@ import type {
     RigModelSelection,
     RigPermissionMode,
     RigOpenInTarget,
+    RigOpenInTargets,
     RigWorkspaceFiles,
     RigWorkspaceFileDocument,
     RigProjectCatalog,
@@ -30,6 +31,30 @@ import type {
     RigUserInputAnswers,
     RigWorktree,
 } from "happy2-state";
+
+/**
+ * Where the application a project was last opened in is remembered. It is a
+ * property of this reader on this machine rather than of the daemon, so it lives
+ * beside the other renderer preferences instead of in the Rig host.
+ */
+const OPEN_IN_RECENT_KEY = "happy2.rig.open-in-recent.v1";
+
+function openInRecentRead(): string | undefined {
+    try {
+        return localStorage.getItem(OPEN_IN_RECENT_KEY) ?? undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function openInRecentWrite(targetId: string): void {
+    try {
+        localStorage.setItem(OPEN_IN_RECENT_KEY, targetId);
+    } catch {
+        // A storage-denied renderer still shows the choice for this session; the
+        // store keeps it in memory the moment the open is requested.
+    }
+}
 
 /**
  * The renderer-side `RigTransport`: a thin fetch + `EventSource` client over the
@@ -138,9 +163,19 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 expectedHash,
             });
         },
-        openInTargetsRead: () => getJson<readonly RigOpenInTarget[]>("/open-in-targets"),
+        openInTargetsRead: async () => {
+            const targets = await getJson<readonly RigOpenInTarget[]>("/open-in-targets");
+            const recentId = openInRecentRead();
+            return {
+                targets,
+                ...(recentId !== undefined && targets.some((target) => target.id === recentId)
+                    ? { recentId }
+                    : {}),
+            };
+        },
         openIn: async (groupId, targetId) => {
             await postJson<Record<string, never>>("/open-in", { group: groupId, target: targetId });
+            openInRecentWrite(targetId);
         },
         changedFileRead: async (sessionId, groupId, path, signal) => {
             const response = await fetch(

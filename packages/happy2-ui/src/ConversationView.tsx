@@ -23,7 +23,7 @@ import {
 import { conversationRowHeight } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { MessageList, type MessageListScrollPosition } from "./Message";
-import { RigCommandPalette } from "./RigCommandPalette";
+import { commandPickerItems } from "./CommandPicker";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 import { Spinner } from "./Spinner";
 
@@ -190,9 +190,21 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  */
 export function ConversationView(props: ConversationViewProps) {
     const composer = props.composer;
-    const paletteOpen = composer.commandQuery !== undefined && props.onCommandInvoke !== undefined;
-    const sendEnabled =
-        !paletteOpen && (composer.text.trim().length > 0 || composer.attachments.length > 0);
+    /*
+     * The draft is the query: the store hands over a command query only while the
+     * whole draft is one command word that something still matches, so the list
+     * below is either the commands being chosen between or empty.
+     */
+    const commandItems =
+        composer.commandQuery === undefined || props.onCommandInvoke === undefined
+            ? []
+            : commandPickerItems(composer.capabilities.commands).filter((item) =>
+                  item.slash
+                      .slice(1)
+                      .toLowerCase()
+                      .startsWith(composer.commandQuery!.toLowerCase()),
+              );
+    const sendEnabled = composer.text.trim().length > 0 || composer.attachments.length > 0;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -337,25 +349,11 @@ export function ConversationView(props: ConversationViewProps) {
                         {composer.submission.error.message}
                     </Banner>
                 ) : null}
-                {paletteOpen ? (
-                    <div
-                        className="happy2-conversation__palette"
-                        data-happy2-ui="conversation-palette"
-                    >
-                        <RigCommandPalette
-                            autoFocus={false}
-                            commands={composer.capabilities.commands}
-                            onClose={() => props.onComposerValueChange("")}
-                            onCommand={(commandId) => props.onCommandInvoke?.(commandId)}
-                            onQueryChange={(value) => props.onComposerValueChange(`/${value}`)}
-                            query={composer.commandQuery ?? ""}
-                        />
-                    </div>
-                ) : null}
                 <div className="happy2-conversation__dock-inner">
                     <Composer
                         attachmentAccept="image/*"
                         attachmentMultiple
+                        commands={commandItems}
                         contextItems={contextItemsOf(composer)}
                         hint={
                             composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"
@@ -364,6 +362,7 @@ export function ConversationView(props: ConversationViewProps) {
                         footerControl={props.composerFooterControl}
                         modelControl={props.composerControls}
                         onAttachmentsSelect={props.onComposerAttachmentsSelect}
+                        onCommandSelect={(commandId) => props.onCommandInvoke?.(commandId)}
                         onContextRemove={props.onComposerAttachmentRemove}
                         onFocusChange={props.onComposerFocusChange}
                         onSend={props.onComposerSend}

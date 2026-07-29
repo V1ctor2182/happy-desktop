@@ -137,10 +137,3 @@
     gap: 8px;
     width: 100%;
 }
-
-/* The `/` palette sits directly above the composer inside the dock flow. */
-.happy2-conversation__palette {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-}

@@ -475,6 +475,9 @@ export function AppRigView(props: AppRigViewProps) {
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
+    const openInRecent = workspace.openInTargets.find(
+        (target) => target.id === workspace.openInRecentId,
+    );
     const conversation = workspace.conversation;
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const listAccessory =
@@ -767,6 +770,7 @@ export function AppRigView(props: AppRigViewProps) {
                                             id: target.id,
                                             kind: "item" as const,
                                             label: target.label,
+                                            ...(target.iconUrl ? { iconUrl: target.iconUrl } : {}),
                                         })),
                                         ...(workspace.openInTargets.length > 0
                                             ? [{ kind: "separator" as const }]
@@ -779,6 +783,10 @@ export function AppRigView(props: AppRigViewProps) {
                                         },
                                     ]}
                                     label="Open in"
+                                    // The control wears whatever was opened last,
+                                    // so the answer to "again, please" is already
+                                    // on screen instead of one menu away.
+                                    leadingIconUrl={openInRecent?.iconUrl}
                                     menuAlign="end"
                                     onSelect={(id: string) => {
                                         if (id === "copy-path") {
@@ -844,6 +852,7 @@ export function AppRigView(props: AppRigViewProps) {
                                     <RigSessionControls
                                         fields={["permission", "tier"]}
                                         menuPlacement="above"
+                                        variant="ghost"
                                         menus={workspace.groupSessionDraft.menus}
                                         onEffortChange={(effort?: RigThinkingLevel) =>
                                             props.workspace.sessionEffortUpdate(effort)
@@ -1279,6 +1288,7 @@ function RigConversationSurface(props: {
                 <RigSessionControls
                     fields={["permission", "tier"]}
                     menuPlacement="above"
+                    variant="ghost"
                     menus={conversation.menus}
                     onEffortChange={(effort?: RigThinkingLevel) =>
                         workspace.sessionEffortUpdate(effort)

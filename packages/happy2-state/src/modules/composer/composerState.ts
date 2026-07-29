@@ -87,8 +87,10 @@ export interface ComposerSnapshot {
     readonly capabilities: ComposerCapabilities;
     /**
      * The active slash-command query (the text after `/`), derived from the
-     * draft. Present only while the command palette applies; submitting a
-     * command draft sends nothing, so an accidental Enter never posts `/model`.
+     * draft. Present only while the whole draft is one leading `/` and a command
+     * word that some offered command still matches, so a pasted path is ordinary
+     * text. While it is present the draft sends nothing, which is what keeps an
+     * accidental Enter from posting `/model`.
      */
     readonly commandQuery?: string;
     /** The active `@`-mention token (the text after `@`), derived from the draft. */
@@ -190,6 +192,33 @@ function mentionTokenOf(text: string): string | undefined {
     return match ? match[1]! : undefined;
 }
 
+/**
+ * The active slash-command query, if this draft is one.
+ *
+ * A draft is a command only while it is nothing but a leading `/` and a single
+ * command word, and only while some offered command still matches it. Anything
+ * else — `/Users/steve/project`, `/ two words`, `/nonsense` — is ordinary text
+ * that must send normally. Treating every leading slash as a command is what
+ * left a pasted path stuck behind a palette that would not close and would not
+ * let the message go.
+ */
+function commandQueryOf(text: string, commands: readonly ComposerCommand[]): string | undefined {
+    if (commands.length === 0) return undefined;
+    const match = /^\/([\w-]*)$/.exec(text);
+    if (!match) return undefined;
+    const query = match[1]!;
+    const needle = query.toLowerCase();
+    return commands.some((command) => commandMatches(command, needle)) ? query : undefined;
+}
+
+/** Whether one offered command answers a typed query, by id or by label. */
+function commandMatches(command: ComposerCommand, needle: string): boolean {
+    if (needle.length === 0) return true;
+    return (
+        command.id.toLowerCase().includes(needle) || command.label.toLowerCase().includes(needle)
+    );
+}
+
 /** The derived command/mention/shell reading of one draft under one capability set. */
 function draftDerive(
     text: string,
@@ -199,8 +228,7 @@ function draftDerive(
     mentionQuery?: string;
     shellCommand?: string;
 } {
-    const commandQuery =
-        capabilities.commands.length > 0 && text.startsWith("/") ? text.slice(1) : undefined;
+    const commandQuery = commandQueryOf(text, capabilities.commands);
     const shellCommand =
         capabilities.shellMode && text.trimStart().startsWith("!")
             ? text.trim().slice(1).trim()

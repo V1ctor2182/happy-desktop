@@ -1,6 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type Key, type ReactNode } from "react";
-import { Icon } from "./Icon";
+import { happyLogoUrl } from "./assets";
 export type OnboardingStepState = "complete" | "current" | "upcoming";
 export type OnboardingStep = {
     readonly label: string;
@@ -97,7 +97,15 @@ export function OnboardingScreen(props: OnboardingScreenProps) {
                                   className="happy2-onboarding-screen__mark"
                                   data-happy2-ui="onboarding-mark"
                               >
-                                  {brand.mark ?? <Icon name="spark" size={16} />}
+                                  {brand.mark ?? (
+                                      <img
+                                          alt=""
+                                          aria-hidden="true"
+                                          className="happy2-onboarding-screen__mark-image"
+                                          data-happy2-ui="onboarding-mark-image"
+                                          src={happyLogoUrl}
+                                      />
+                                  )}
                               </span>
                               <span
                                   className="happy2-onboarding-screen__brand-name"

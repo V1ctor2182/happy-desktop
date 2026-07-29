@@ -102,7 +102,7 @@
 
 .happy2-auth-screen__kicker {
     margin: 0 0 12px;
-    color: var(--text-link);
+    color: var(--text-secondary);
     font-size: 12px;
     font-weight: 700;
     line-height: 16px;
@@ -142,7 +142,8 @@
 }
 
 /*
- * Static progress ring: one accent arc on a strong hairline track. Deliberately
+ * Static progress ring: one ink arc on a strong hairline track. Neutral rather
+ * than accent-coloured so the loading chrome stays quiet. Deliberately
  * un-animated so the fixture and screenshots stay deterministic; a consuming app
  * may add its own rotation outside the measurement surface.
  */
@@ -151,7 +152,7 @@
     width: 20px;
     height: 20px;
     border: 2px solid var(--divider);
-    border-top-color: var(--text-link);
+    border-top-color: var(--text);
     border-radius: var(--happy2-radius-pill);
 }
 

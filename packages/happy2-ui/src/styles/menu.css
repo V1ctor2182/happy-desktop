@@ -110,6 +110,16 @@
     color: var(--text-secondary);
 }
 
+/* An application's own artwork, sized to the same gutter as a house glyph and
+   rounded so it reads as an app tile rather than a loose bitmap. */
+.happy2-menu__item-image {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    object-fit: contain;
+}
+
 .happy2-menu__item[data-danger] .happy2-menu__item-icon {
     color: var(--text-destructive);
 }
