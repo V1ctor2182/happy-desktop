@@ -121,6 +121,7 @@ function view(
             groupId={options.groupId}
             host={options.host ?? rigHostNoop}
             onChatSelect={options.onChatSelect ?? (() => undefined)}
+            onSettingsOpen={() => undefined}
             workspace={workspace()}
         />,
     );

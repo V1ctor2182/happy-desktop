@@ -23,7 +23,7 @@ import type {
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
-import type { BrowserContentRenderer } from "happy2-ui";
+import { AppShell, SettingsPage, type BrowserContentRenderer } from "happy2-ui";
 import { AppRigView, type AppRemoteRigStore, type AppRigUpdate } from "../AppRigView";
 
 /**
@@ -63,6 +63,8 @@ export interface RigRouterContext {
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
     component: () => <Outlet />,
 });
+
+const GENERAL_SETTINGS_SECTION = "general";
 
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -118,9 +120,37 @@ const chatRoute = createRoute({
     path: "/chats/$groupId/$chatId",
 });
 
+const settingsIndexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings",
+    beforeLoad: () => {
+        throw redirect({
+            params: { section: GENERAL_SETTINGS_SECTION },
+            replace: true,
+            to: "/settings/$section",
+        });
+    },
+});
+
+const settingsSectionRoute = createRoute({
+    component: RigSettingsRoute,
+    getParentRoute: () => rootRoute,
+    path: "/settings/$section",
+    beforeLoad: ({ params }) => {
+        if (params.section !== GENERAL_SETTINGS_SECTION)
+            throw redirect({
+                params: { section: GENERAL_SETTINGS_SECTION },
+                replace: true,
+                to: "/settings/$section",
+            });
+    },
+});
+
 const routeTree = rootRoute.addChildren([
     indexRoute,
     workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
+    settingsIndexRoute,
+    settingsSectionRoute,
 ]);
 
 function RigWorkspaceLayout() {
@@ -170,8 +200,29 @@ function RigWorkspaceLayout() {
                           : { params: { groupId }, replace, to: "/chats/$groupId" },
                 )
             }
+            onSettingsOpen={() =>
+                void navigate({
+                    params: { section: GENERAL_SETTINGS_SECTION },
+                    to: "/settings/$section",
+                })
+            }
             workspace={context.workspace}
         />
+    );
+}
+
+/** Local route glue; the shared settings page owns its placeholder presentation. */
+function RigSettingsRoute() {
+    const context = useRouteContext({ strict: false }) as unknown as RigRouterContext;
+    return (
+        <AppShell windowControls={context.platform === "desktop"}>
+            <SettingsPage
+                placeholder={{
+                    category: "General",
+                    description: "General settings will appear here.",
+                }}
+            />
+        </AppShell>
     );
 }
 

@@ -22,7 +22,7 @@ import { StoreSurface } from "../../StoreSurface";
 import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
 type NotificationLevel = "all" | "mentions" | "none";
-export interface SettingsPageProps {
+interface AccountSettingsPageProps {
     store: SettingsStore;
     avatarUrl?: string;
     avatarTone?: ToneName;
@@ -35,6 +35,17 @@ export interface SettingsPageProps {
     /** Lets a host project the changed profile into chrome outside the settings surface. */
     onProfileChange?: (profile: ClientUser) => void;
 }
+export interface SettingsPlaceholder {
+    /** The settings category represented by this otherwise empty surface. */
+    category: string;
+    /** Explains what will eventually be available in the category. */
+    description: string;
+}
+export type SettingsPageProps =
+    | AccountSettingsPageProps
+    | {
+          placeholder: SettingsPlaceholder;
+      };
 const notificationSegments: SegmentedControlSegment[] = [
     { value: "all", label: "All activity" },
     { value: "mentions", label: "Mentions" },
@@ -72,8 +83,54 @@ async function avatarCropRead(file: File): Promise<AvatarCrop> {
     }
 }
 
-/** Complete settings page: one coarse SettingsStore subscription plus typed field actions. */
+/**
+ * Complete settings surface. Account-backed settings use one coarse SettingsStore
+ * subscription; a deployment with no available fields yet can render the same
+ * surface as an explicit category placeholder.
+ */
 export function SettingsPage(props: SettingsPageProps) {
+    return "placeholder" in props ? (
+        <SettingsPlaceholderPage placeholder={props.placeholder} />
+    ) : (
+        <AccountSettingsPage {...props} />
+    );
+}
+
+function SettingsPlaceholderPage(props: { placeholder: SettingsPlaceholder }) {
+    return (
+        <Box
+            style={{
+                boxSizing: "border-box",
+                display: "flex",
+                flex: "1 1 0%",
+                minHeight: "0",
+                overflowY: "auto",
+                width: "100%",
+            }}
+        >
+            <Box
+                style={{
+                    alignItems: "stretch",
+                    boxSizing: "border-box",
+                    display: "flex",
+                    flex: "1 0 auto",
+                    minHeight: "100%",
+                    padding: "24px",
+                    width: "100%",
+                }}
+            >
+                <EmptyState
+                    description={props.placeholder.description}
+                    icon="settings"
+                    title={props.placeholder.category}
+                />
+            </Box>
+        </Box>
+    );
+}
+
+/** Account-backed settings with typed field actions and autosave feedback. */
+function AccountSettingsPage(props: AccountSettingsPageProps) {
     const [handleDraft, setHandleDraft] = useState(props.store.getState().profile.username);
     const [handleDirty, setHandleDirty] = useState(false);
     const [usernameConfirmationOpen, setUsernameConfirmationOpen] = useState(false);

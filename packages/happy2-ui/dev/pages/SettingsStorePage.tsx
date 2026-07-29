@@ -101,6 +101,18 @@ export function SettingsStorePage() {
             >
                 <SettingsPage avatarTone="brand" presence="online" store={fixtures.failed.store} />
             </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A deployment with no editable settings yet still names its reachable category"
+                label="Settings — placeholder"
+                number="04"
+            >
+                <SettingsPage
+                    placeholder={{
+                        category: "General",
+                        description: "General settings will appear here.",
+                    }}
+                />
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }

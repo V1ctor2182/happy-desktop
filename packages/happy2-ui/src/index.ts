@@ -543,7 +543,11 @@ export {
 export { HomePage, type HomePageProps } from "./pages/home/HomePage";
 export { FilesPage, type FilesPageFilter, type FilesPageProps } from "./pages/files/FilesPage";
 export { SearchPage, type SearchPageProps } from "./pages/search/SearchPage";
-export { SettingsPage, type SettingsPageProps } from "./pages/settings/SettingsPage";
+export {
+    SettingsPage,
+    type SettingsPageProps,
+    type SettingsPlaceholder,
+} from "./pages/settings/SettingsPage";
 export {
     type AutomationAction,
     AutomationCard,

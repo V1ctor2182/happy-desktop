@@ -154,6 +154,8 @@ export interface AppRigViewProps {
     chatId?: string;
     /** Addresses a group and optionally one of its sessions; no group means the list. */
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
+    /** Opens the local settings destination from the pinned sidebar footer. */
+    onSettingsOpen(): void;
 }
 
 /**
@@ -385,9 +387,9 @@ const emptyRemoteRigs = () => EMPTY_REMOTE_RIGS;
  * and resizable shell column, and its pinned footer, so the two modes are one
  * component rendered twice rather than a local-only variant — and the same
  * `ConversationView` for the selected conversation. The footer carries only what
- * a machine-owned workspace actually has: the appearance toggle, the application
- * menu, and a host-supplied update action when one is ready, with no account
- * identity, profile, or administration.
+ * a machine-owned workspace actually has: settings, the appearance toggle, and a
+ * host-supplied update action when one is ready, with no account identity,
+ * profile, or administration.
  * Local-only affordances (the model and effort pickers beneath the composer, the
  * settings dialog holding the view toggles and access pickers, and the usage and
  * activity panels) are passed into that surface's slots.
@@ -569,10 +571,7 @@ export function AppRigView(props: AppRigViewProps) {
                             actions={sidebarUpdate}
                             appearance={appearance.appearance}
                             onAppearanceToggle={() => props.appearance.appearanceToggle()}
-                            // Local app-level settings — the instance list and the
-                            // rest of the shell's own commands — live in the native
-                            // application menu, so that is what this opens.
-                            onSettingsOpen={() => props.host.applicationMenuOpen()}
+                            onSettingsOpen={props.onSettingsOpen}
                         />
                     }
                     headerAccessory={listAccessory}
