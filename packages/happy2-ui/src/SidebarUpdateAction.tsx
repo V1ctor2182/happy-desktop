@@ -2,10 +2,12 @@ import { Button } from "./Button";
 import { Icon } from "./Icon";
 
 export interface SidebarUpdateActionProps {
+    /** Operation the host needs for this update source once it is ready. */
+    action: "refresh" | "restart";
     /** Detail shown while the update is arriving, such as download progress. */
     detail?: string;
-    /** Restarts the host once the update is ready. */
-    onRestart?: () => void;
+    /** Applies the ready update through the operation named by `action`. */
+    onAction?: () => void;
     status: "available" | "downloading" | "downloaded";
     /** Human-readable identity of the incoming version or build. */
     version?: string;
@@ -19,22 +21,24 @@ function versionLabel(version: string | undefined): string {
 /**
  * SidebarUpdateAction — a compact update readout for a sidebar footer. Discovery
  * and download states remain passive status text; once ready, the same footprint
- * becomes an explicit restart action carrying the incoming version identity.
+ * becomes an explicit refresh or restart action carrying the incoming version
+ * identity.
  */
 export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
     const version = versionLabel(props.version);
-    if (props.status === "downloaded" && props.onRestart)
+    const actionLabel = props.action === "refresh" ? "Refresh" : "Restart";
+    if (props.status === "downloaded" && props.onAction)
         return (
             <Button
-                aria-label={`Restart Happy to update to ${version}`}
+                aria-label={`${actionLabel} to update to ${version}`}
                 className="happy2-sidebar-update-action happy2-sidebar-update-action--ready"
                 icon="arrow-up"
-                onClick={props.onRestart}
+                onClick={props.onAction}
                 size="small"
                 title={`${version} is ready`}
                 variant="secondary"
             >
-                Restart · {version}
+                {actionLabel} · {version}
             </Button>
         );
 

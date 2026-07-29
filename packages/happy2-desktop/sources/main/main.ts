@@ -263,10 +263,6 @@ void app
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
-        ipcMain.handle(desktopIpc.applicationRestart, () => {
-            app.relaunch();
-            app.quit();
-        });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {

@@ -117,7 +117,6 @@ export type RigInstallTerminalEvent =
 export interface HappyDesktopBridge {
     directoryPick(): Promise<string | undefined>;
     applicationMenuOpen(): Promise<void>;
-    applicationRestart(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
@@ -138,7 +137,6 @@ export interface HappyDesktopBridge {
 export const desktopIpc = {
     directoryPick: "happy2:directory:pick",
     applicationMenuOpen: "happy2:application-menu:open",
-    applicationRestart: "happy2:application:restart",
     runtimeChanged: "happy2:runtime:changed",
     runtimeGet: "happy2:runtime:get",
     runtimeReset: "happy2:runtime:reset",

@@ -31,7 +31,7 @@ function desktopAction(operation: Promise<void>): void {
 }
 
 interface WorkspaceUpdate {
-    readonly action: "install" | "restart";
+    readonly action: "install" | "refresh";
     readonly snapshot: AppRigUpdate;
 }
 
@@ -47,6 +47,7 @@ function workspaceUpdate(
         return {
             action: "install",
             snapshot: {
+                action: "restart",
                 ...(native.availableVersion ? { version: native.availableVersion } : {}),
                 ...(native.message ? { detail: native.message } : {}),
                 status: native.status,
@@ -58,8 +59,8 @@ function workspaceUpdate(
             ? hosted.version
             : `build ${hosted.buildId.slice(0, 7)}`;
     return {
-        action: "restart",
-        snapshot: { status: "downloaded", version },
+        action: "refresh",
+        snapshot: { action: "refresh", status: "downloaded", version },
     };
 }
 
@@ -132,12 +133,11 @@ function RigBoundary(props: {
                 host: session.host,
                 ...(update
                     ? {
-                          onUpdateRestart: () =>
-                              desktopAction(
-                                  update.action === "install"
-                                      ? props.bridge.updateInstall()
-                                      : props.bridge.applicationRestart(),
-                              ),
+                          onUpdateApply: () => {
+                              if (update.action === "install")
+                                  desktopAction(props.bridge.updateInstall());
+                              else window.location.reload();
+                          },
                           update: update.snapshot,
                       }
                     : {}),

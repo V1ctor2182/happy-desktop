@@ -74,6 +74,7 @@ import {
 } from "happy2-ui";
 
 export interface AppRigUpdate {
+    readonly action: "refresh" | "restart";
     readonly detail?: string;
     readonly status: "available" | "downloading" | "downloaded";
     readonly version?: string;
@@ -106,8 +107,8 @@ export interface AppRigViewProps {
     windowState?: RigWindowStore;
     /** Native or hosted-renderer update projected by the desktop host. */
     update?: AppRigUpdate;
-    /** Restarts into the ready update. Absent in a plain browser surface. */
-    onUpdateRestart?: () => void;
+    /** Applies the ready update. Absent in a plain browser surface. */
+    onUpdateApply?: () => void;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -449,8 +450,9 @@ export function AppRigView(props: AppRigViewProps) {
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
+            action={props.update.action}
             detail={props.update.detail}
-            onRestart={props.update.status === "downloaded" ? props.onUpdateRestart : undefined}
+            onAction={props.update.status === "downloaded" ? props.onUpdateApply : undefined}
             status={props.update.status}
             version={props.update.version}
         />

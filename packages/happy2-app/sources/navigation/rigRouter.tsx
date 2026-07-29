@@ -53,7 +53,7 @@ export interface RigRouterContext {
     readonly windowState?: RigWindowStore;
     /** Desktop-shell update state; absent when this route tree runs as plain web UI. */
     readonly update?: AppRigUpdate;
-    readonly onUpdateRestart?: () => void;
+    readonly onUpdateApply?: () => void;
 }
 
 const rootRoute = createRootRouteWithContext<RigRouterContext>()({
@@ -147,10 +147,10 @@ function RigWorkspaceLayout() {
             connection={context.connection}
             groupId={params.groupId}
             host={context.host}
+            onUpdateApply={context.onUpdateApply}
             platform={context.platform}
             update={context.update}
             windowState={context.windowState}
-            onUpdateRestart={context.onUpdateRestart}
             onChatSelect={(groupId, chatId, replace) =>
                 void navigate(
                     groupId === undefined

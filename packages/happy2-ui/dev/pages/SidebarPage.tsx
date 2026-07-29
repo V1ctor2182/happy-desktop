@@ -419,15 +419,34 @@ const UPDATE_STATES: readonly {
 }[] = [
     {
         label: "Available",
-        update: { status: "available", version: "0.0.21" },
+        update: { action: "restart", status: "available", version: "0.0.22" },
     },
     {
         label: "Downloading",
-        update: { detail: "64% downloaded", status: "downloading", version: "0.0.21" },
+        update: {
+            action: "restart",
+            detail: "64% downloaded",
+            status: "downloading",
+            version: "0.0.22",
+        },
     },
     {
-        label: "Ready",
-        update: { onRestart: () => {}, status: "downloaded", version: "0.0.21" },
+        label: "Native ready",
+        update: {
+            action: "restart",
+            onAction: () => {},
+            status: "downloaded",
+            version: "0.0.22",
+        },
+    },
+    {
+        label: "Web ready",
+        update: {
+            action: "refresh",
+            onAction: () => {},
+            status: "downloaded",
+            version: "build 8250610",
+        },
     },
 ];
 
@@ -461,12 +480,12 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="The footer stays quiet while an update arrives, then turns the same compact lane into a versioned restart action."
+                detail="The footer stays quiet while an update arrives. A native package becomes Restart; a hosted renderer deploy becomes Refresh."
                 label="Desktop update footer"
                 number="01c"
                 stage="app"
             >
-                <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     {UPDATE_STATES.map(({ label, update }) => (
                         <div
                             key={label}
