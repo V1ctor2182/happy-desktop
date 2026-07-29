@@ -44,10 +44,7 @@ export interface RigSessionDraftStore {
 
 export interface RigSessionDraftOptions {
     readonly catalog: RigModelCatalog;
-    readonly modelSelect?: (
-        current: RigSelection,
-        input: RigModelSelection,
-    ) => RigSelection;
+    readonly modelSelect?: (current: RigSelection, input: RigModelSelection) => RigSelection;
     /**
      * What to open the draft on — the workspace's most recent selection, so a
      * new session starts configured the way the last one was. Absent for the

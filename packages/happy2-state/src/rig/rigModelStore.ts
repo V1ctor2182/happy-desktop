@@ -1,15 +1,8 @@
 import { UserError } from "../types.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
-import {
-    rigSelectionModelUpdate,
-    rigSessionSelectionDefault,
-} from "./rigSessionDraftStore.js";
+import { rigSelectionModelUpdate, rigSessionSelectionDefault } from "./rigSessionDraftStore.js";
 import type { RigMenusSnapshot, RigModelCatalog, RigSelection } from "./rigTypes.js";
-import type {
-    RigModelSelection,
-    RigServiceTier,
-    RigThinkingLevel,
-} from "./rigTypes.js";
+import type { RigModelSelection, RigServiceTier, RigThinkingLevel } from "./rigTypes.js";
 
 export interface RigModelPreference {
     readonly effort?: RigThinkingLevel | null;

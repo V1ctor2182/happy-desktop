@@ -525,10 +525,7 @@ export interface RigChatDeps {
     readonly transport: RigTransport;
     readonly catalog: RigModelCatalog;
     readonly selectionUsed?: (selection: RigSelection) => void;
-    readonly modelSelect?: (
-        current: RigSelection,
-        input: RigModelSelection,
-    ) => RigSelection;
+    readonly modelSelect?: (current: RigSelection, input: RigModelSelection) => RigSelection;
     readonly output?: (event: RigChatOutput) => void;
     readonly createId?: () => string;
     readonly now?: () => number;
@@ -1960,10 +1957,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             if (deps.connectActions) {
                 if (transcriptSession)
                     deps.selectionUsed?.(
-                        rigSelectionEffortUpdate(
-                            transcriptSelectionOf(transcriptSession),
-                            effort,
-                        ),
+                        rigSelectionEffortUpdate(transcriptSelectionOf(transcriptSession), effort),
                     );
                 connectMutationTrack(deps.connectActions.setEffort(sessionId, effort));
                 return;
