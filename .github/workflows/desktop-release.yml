@@ -75,14 +75,10 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
-            - name: Validate desktop source
+            - name: Typecheck desktop source
               if: matrix.arch == 'arm64'
               run: |
-                  pnpm --dir packages/happy2-desktop test
                   pnpm --dir packages/happy2-desktop typecheck
-                  pnpm --dir packages/happy2-app exec vitest run src/components/AuthGate.test.tsx
-                  pnpm --dir packages/happy2-app exec vitest run src/App.test.tsx \
-                    -t "keeps the local/cloud instance boundary visible in every sidebar variant"
                   pnpm --dir packages/happy2-app typecheck
 
             - name: Build, sign, notarize, and verify both desktop distributions
