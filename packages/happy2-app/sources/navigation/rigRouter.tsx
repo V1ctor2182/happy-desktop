@@ -23,6 +23,7 @@ import type {
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
+import type { BrowserContentRenderer } from "happy2-ui";
 import { AppRigView, type AppRigUpdate } from "../AppRigView";
 
 /**
@@ -34,6 +35,8 @@ import { AppRigView, type AppRigUpdate } from "../AppRigView";
  * before any of these do.
  */
 export interface RigRouterContext {
+    /** Native Chromium guest renderer, present only in packaged Electron. */
+    readonly browserContent?: BrowserContentRenderer;
     readonly host: RigHost;
     readonly connection: RigConnectionStore;
     readonly workspace: RigWorkspaceStore;
@@ -142,6 +145,7 @@ function RigWorkspaceLayout() {
     return (
         <AppRigView
             appearance={context.appearance}
+            browserContent={context.browserContent}
             chatId={params.chatId}
             clock={context.clock}
             connection={context.connection}

@@ -11,7 +11,7 @@ import {
     type RigRouter,
 } from "happy2-app";
 import { appearanceStoreCreate, type AppearanceStore, type RigWindowStore } from "happy2-state";
-import { ThemeScope } from "happy2-ui";
+import { ThemeScope, type BrowserContentRenderer } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
@@ -25,6 +25,11 @@ import {
     type LocalWebUpdateStore,
 } from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
+import { DesktopBrowserView } from "./desktopBrowserView";
+
+const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
+    <DesktopBrowserView {...props} />
+);
 
 function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
@@ -106,6 +111,7 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
 function RigBoundary(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
+    browserContent?: BrowserContentRenderer;
     platform: "desktop" | "web";
     router: RigRouter;
     store: RigSessionStore;
@@ -128,6 +134,7 @@ function RigBoundary(props: {
         <RouterProvider
             context={{
                 appearance: props.appearance,
+                browserContent: props.browserContent,
                 clock: session.clock,
                 connection: session.connection,
                 host: session.host,
@@ -153,6 +160,7 @@ function RigBoundary(props: {
 
 function DesktopRenderer(props: {
     appearance: AppearanceStore;
+    browserContent?: BrowserContentRenderer;
     bridge: HappyDesktopBridge;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
@@ -250,6 +258,7 @@ function DesktopRenderer(props: {
         <RigBoundary
             appearance={props.appearance}
             bridge={props.bridge}
+            browserContent={props.browserContent}
             platform={props.platform}
             router={props.rigRouter}
             store={props.rigSession}
@@ -277,6 +286,7 @@ if (bridge) {
         <DesktopAppearance appearance={appearance}>
             <DesktopRenderer
                 appearance={appearance}
+                browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                 bridge={bridge}
                 // Only the Electron window hides its title bar; the browser
                 // development server renders the same tree with web chrome.

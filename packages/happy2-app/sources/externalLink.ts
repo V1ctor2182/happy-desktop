@@ -3,8 +3,10 @@
  * URLs that originate from untrusted content — an MCP app requesting a link, or a
  * durable shared-link resource projected into the sidebar — so anything but
  * http/https is refused, and the new browsing context is fully severed from Happy
- * with noopener/noreferrer. This is the single safe external-open helper for the
- * desktop app; reusable happy2-ui never calls `window.open` itself.
+ * with noopener/noreferrer. This is the single safe web-open helper for the app:
+ * a normal web host creates an external tab, while Electron intercepts the new
+ * context and routes it into an embedded browser tab. Reusable happy2-ui never
+ * calls `window.open` itself.
  */
 export function openExternalLink(url: string): void {
     let parsed: URL;

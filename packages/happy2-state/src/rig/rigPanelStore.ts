@@ -6,19 +6,30 @@ declare const rigPanelTabIdBrand: unique symbol;
 /** Branded identifier of one tab in the workspace panel, minted by this store. */
 export type RigPanelTabId = string & { readonly [rigPanelTabIdBrand]: true };
 
-/**
- * What a panel tab holds. A terminal tab runs a shell in the session's working
- * directory; a browser tab is declared here because the panel's whole point is
- * hosting more than one kind of tool beside the conversation, but it renders
- * nothing yet.
- */
+/** What a panel tab holds beside the conversation. */
 export type RigPanelTabKind = "terminal" | "browser";
 
-export interface RigPanelTabSnapshot {
+interface RigPanelTabSnapshotBase {
     readonly id: RigPanelTabId;
-    readonly kind: RigPanelTabKind;
     /** Tab strip label. A terminal's is its ordinal, not its shell's window title. */
     readonly label: string;
+}
+
+export type RigPanelTabSnapshot =
+    | (RigPanelTabSnapshotBase & {
+          readonly kind: "terminal";
+      })
+    | (RigPanelTabSnapshotBase & {
+          readonly kind: "browser";
+          /** Last committed main-frame location, restored if the surface remounts. */
+          readonly url: string;
+      });
+
+export interface RigBrowserUpdate {
+    /** Last committed main-frame location. */
+    readonly url?: string;
+    /** Page title reported by Chromium. Empty titles fall back to the host name. */
+    readonly title?: string;
 }
 
 /**
@@ -56,6 +67,10 @@ export interface RigPanelStore {
     previewClose(): void;
     /** Adds a terminal tab to the open conversation and selects it. */
     terminalAdd(): void;
+    /** Adds a browser tab, optionally navigating it to one safe web URL, and selects it. */
+    browserAdd(url?: string): void;
+    /** Reconciles Chromium-owned location/title metadata into one browser tab. */
+    browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
     tabSelect(tabId: RigPanelTabId): void;
     /**
      * Closes one tab, ending whatever it was running. Closing the last one leaves
@@ -91,9 +106,11 @@ export interface RigPanelDeps {
 interface Tab {
     readonly id: RigPanelTabId;
     readonly kind: RigPanelTabKind;
-    readonly label: string;
+    label: string;
     readonly conversationId: RigSessionId;
     readonly terminal?: RigTerminalHandle;
+    title?: string;
+    url?: string;
 }
 
 const NO_TABS: readonly RigPanelTabSnapshot[] = [];
@@ -128,7 +145,17 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         return {
             activeViewId,
             open,
-            tabs: visible.map((tab) => ({ id: tab.id, kind: tab.kind, label: tab.label })),
+            tabs: visible.map(
+                (tab): RigPanelTabSnapshot =>
+                    tab.kind === "browser"
+                        ? {
+                              id: tab.id,
+                              kind: tab.kind,
+                              label: tab.label,
+                              url: tab.url ?? "about:blank",
+                          }
+                        : { id: tab.id, kind: tab.kind, label: tab.label },
+            ),
             ...(previewEntryId === undefined ? {} : { previewEntryId }),
         };
     };
@@ -146,7 +173,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                     before !== undefined &&
                     before.id === tab.id &&
                     before.kind === tab.kind &&
-                    before.label === tab.label
+                    before.label === tab.label &&
+                    (before.kind !== "browser" ||
+                        (tab.kind === "browser" && before.url === tab.url))
                 );
             })
         )
@@ -161,7 +190,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                 return before !== undefined &&
                     before.id === tab.id &&
                     before.kind === tab.kind &&
-                    before.label === tab.label
+                    before.label === tab.label &&
+                    (before.kind !== "browser" ||
+                        (tab.kind === "browser" && before.url === tab.url))
                     ? before
                     : tab;
             }),
@@ -182,6 +213,22 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             label,
             conversationId: session,
             terminal: deps.terminalOpen(session),
+        });
+        activeByConversation.set(session, id);
+        activeViewId = id;
+    };
+
+    const browserTabAdd = (session: RigSessionId, candidate?: string): void => {
+        const url = candidate === undefined ? "about:blank" : browserUrl(candidate);
+        if (!url) return;
+        const id = `tab_${nextTabNumber}` as RigPanelTabId;
+        nextTabNumber += 1;
+        tabs.push({
+            id,
+            kind: "browser",
+            label: browserLabel(url),
+            conversationId: session,
+            url,
         });
         activeByConversation.set(session, id);
         activeViewId = id;
@@ -241,6 +288,27 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open = true;
             recompute();
         },
+        browserAdd(url) {
+            if (disposed || !conversationId) return;
+            browserTabAdd(conversationId, url);
+            open = true;
+            recompute();
+        },
+        browserUpdate(tabId, update) {
+            if (disposed) return;
+            const tab = tabs.find(
+                (candidate) => candidate.id === tabId && candidate.kind === "browser",
+            );
+            if (!tab) return;
+            const nextUrl = update.url === undefined ? undefined : browserUrl(update.url);
+            if (nextUrl && nextUrl !== tab.url) {
+                tab.url = nextUrl;
+                tab.title = undefined;
+            }
+            if (update.title !== undefined) tab.title = update.title.trim() || undefined;
+            tab.label = tab.title ? tab.title.slice(0, 80) : browserLabel(tab.url ?? "about:blank");
+            recompute();
+        },
         tabSelect(tabId) {
             if (disposed) return;
             const tab = tabs.find((candidate) => candidate.id === tabId);
@@ -279,4 +347,26 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             listeners.clear();
         },
     };
+}
+
+/** Accepts only ordinary web locations plus the inert new-tab document we mint ourselves. */
+function browserUrl(candidate: string): string | undefined {
+    if (candidate === "about:blank") return candidate;
+    try {
+        const parsed = new URL(candidate);
+        return parsed.protocol === "http:" || parsed.protocol === "https:"
+            ? parsed.href
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function browserLabel(url: string): string {
+    if (url === "about:blank") return "New Tab";
+    try {
+        return new URL(url).hostname.replace(/^www\./u, "") || "Browser";
+    } catch {
+        return "Browser";
+    }
 }

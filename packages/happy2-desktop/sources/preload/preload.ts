@@ -9,6 +9,12 @@ import {
 } from "../shared/desktopContract";
 
 const bridge: HappyDesktopBridge = {
+    browserProxyApply: (sessionId) => ipcRenderer.invoke(desktopIpc.browserProxyApply, sessionId),
+    browserOpenSubscribe(listener: (url: string) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);
+        ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.browserOpenRequested, receive);
+    },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),

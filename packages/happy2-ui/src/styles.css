@@ -43,6 +43,7 @@
 @import "./styles/tabbed-pane.css";
 @import "./styles/toolbar.css";
 @import "./styles/terminal-panel.css";
+@import "./styles/browser-panel.css";
 @import "./styles/menu.css";
 @import "./styles/modal.css";
 @import "./styles/modal-overlay.css";

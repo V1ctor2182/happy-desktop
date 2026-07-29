@@ -67,6 +67,17 @@ export interface RigDaemonRawResponse {
     readonly body: IncomingMessage;
 }
 
+export interface RigDaemonFileResponse {
+    readonly content: string;
+    readonly hash: string;
+}
+
+export interface RigDaemonFileWriteRequest {
+    readonly content: string;
+    readonly expectedHash: string | null;
+    readonly path: string;
+}
+
 /**
  * Narrow client for the local Rig daemon routes consumed by Happy's main-process
  * projection. Rig intentionally exposes these routes over an authenticated Unix
@@ -320,6 +331,63 @@ export class RigDaemonClient {
             "GET",
             `/sessions/${encodeURIComponent(sessionId)}/files?${parameters.toString()}`,
         );
+    }
+
+    readFile(
+        sessionId: string,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigDaemonFileResponse> {
+        return this.#requestJson(
+            "GET",
+            `/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
+            undefined,
+            undefined,
+            signal,
+        );
+    }
+
+    writeFile(
+        sessionId: string,
+        request: RigDaemonFileWriteRequest,
+    ): Promise<{ readonly hash: string }> {
+        return this.#requestJson("PUT", `/sessions/${encodeURIComponent(sessionId)}/file`, request);
+    }
+
+    openHttpProxy(sessionId: string): Promise<Duplex> {
+        return new Promise((resolvePromise, reject) => {
+            const request = httpRequest({
+                headers: { authorization: `Bearer ${this.#token}` },
+                method: "CONNECT",
+                path: `/sessions/${encodeURIComponent(sessionId)}/proxy`,
+                socketPath: this.socketPath,
+            });
+            request.once("connect", (response, socket, head) => {
+                if (response.statusCode !== 200) {
+                    socket.destroy();
+                    reject(
+                        new RigDaemonHttpError(
+                            response.statusCode ?? 500,
+                            `Rig HTTP proxy returned ${String(response.statusCode ?? 500)}.`,
+                        ),
+                    );
+                    return;
+                }
+                if (head.length > 0) socket.unshift(head);
+                resolvePromise(socket);
+            });
+            request.once("response", (response) => {
+                response.resume();
+                reject(
+                    new RigDaemonHttpError(
+                        response.statusCode ?? 500,
+                        `Rig HTTP proxy returned ${String(response.statusCode ?? 500)}.`,
+                    ),
+                );
+            });
+            request.once("error", reject);
+            request.end();
+        });
     }
 
     getSessionUsage(sessionId: string): Promise<GetSessionUsageResponse> {
@@ -610,6 +678,7 @@ export class RigDaemonClient {
         path: string,
         body?: unknown,
         extraHeaders?: Record<string, string>,
+        signal?: AbortSignal,
     ): Promise<TResult> {
         const payload = body === undefined ? undefined : JSON.stringify(body);
         const headers: Record<string, string | number> = {
@@ -622,6 +691,10 @@ export class RigDaemonClient {
             headers["content-type"] = "application/json; charset=utf-8";
         }
         return new Promise((resolvePromise, reject) => {
+            if (signal?.aborted) {
+                reject(new Error("The Rig daemon request was aborted."));
+                return;
+            }
             const request = httpRequest(
                 { headers, method, path, socketPath: this.socketPath },
                 (response) => {
@@ -649,6 +722,10 @@ export class RigDaemonClient {
                     });
                 },
             );
+            const abort = () => request.destroy(new Error("The Rig daemon request was aborted."));
+            const cleanup = () => signal?.removeEventListener("abort", abort);
+            signal?.addEventListener("abort", abort, { once: true });
+            request.once("close", cleanup);
             request.on("error", reject);
             if (payload !== undefined) request.write(payload);
             request.end();

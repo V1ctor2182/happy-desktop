@@ -12,6 +12,7 @@ import type {
     RigPermissionMode,
     RigOpenInTarget,
     RigWorkspaceFiles,
+    RigWorkspaceFileDocument,
     RigProjectCatalog,
     RigServiceTier,
     RigSession,
@@ -123,21 +124,29 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         },
         workspaceFilesRead: (groupId) =>
             getJson<RigWorkspaceFiles>("/workspace-files", { group: groupId }),
-        changedFileWrite: async (groupId, path, content) => {
-            await postJson<Record<string, never>>("/changed-file", {
-                group: groupId,
+        workspaceFileRead: async (sessionId, path, signal) => {
+            const response = await fetch(url("/workspace-file", { session: sessionId, path }), {
+                signal,
+            });
+            return readJson<RigWorkspaceFileDocument>(response);
+        },
+        workspaceFileWrite: async (sessionId, path, content, expectedHash) => {
+            await postJson<Record<string, never>>("/workspace-file", {
+                session: sessionId,
                 path,
                 content,
+                expectedHash,
             });
         },
         openInTargetsRead: () => getJson<readonly RigOpenInTarget[]>("/open-in-targets"),
         openIn: async (groupId, targetId) => {
             await postJson<Record<string, never>>("/open-in", { group: groupId, target: targetId });
         },
-        changedFileRead: async (groupId, path, signal) => {
-            const response = await fetch(url("/changed-file", { group: groupId, path }), {
-                signal,
-            });
+        changedFileRead: async (sessionId, groupId, path, signal) => {
+            const response = await fetch(
+                url("/changed-file", { session: sessionId, group: groupId, path }),
+                { signal },
+            );
             return readJson<RigChangedFileDocument>(response);
         },
         sessionsRead: () => getJson<readonly RigSessionSummary[]>("/sessions"),

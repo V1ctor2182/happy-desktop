@@ -20,6 +20,7 @@ import type {
     RigChangedFileDocument,
     RigGroupId,
     RigOpenInTarget,
+    RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigModelCatalog,
     RigSessionId,
@@ -41,14 +42,26 @@ export interface RigClient {
     sessionList(): RigSessionListStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
-    /** Writes one changed text file back to its checkout. */
-    changedFileWrite(groupId: RigGroupId, path: string, content: string): Promise<void>;
+    /** Reads one existing text file from a project/worktree checkout. */
+    workspaceFileRead(
+        sessionId: RigSessionId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigWorkspaceFileDocument>;
+    /** Writes one existing text file back to its checkout. */
+    workspaceFileWrite(
+        sessionId: RigSessionId,
+        path: string,
+        content: string,
+        expectedHash: string | null,
+    ): Promise<void>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<readonly RigOpenInTarget[]>;
     /** Opens one project or worktree root in one of those applications. */
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
+        sessionId: RigSessionId,
         groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
@@ -120,11 +133,13 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     return {
         models,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
-        changedFileRead: (groupId, path, signal) =>
-            transport.changedFileRead(groupId, path, signal),
+        changedFileRead: (sessionId, groupId, path, signal) =>
+            transport.changedFileRead(sessionId, groupId, path, signal),
         workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
-        changedFileWrite: (groupId, path, content) =>
-            transport.changedFileWrite(groupId, path, content),
+        workspaceFileRead: (sessionId, path, signal) =>
+            transport.workspaceFileRead(sessionId, path, signal),
+        workspaceFileWrite: (sessionId, path, content, expectedHash) =>
+            transport.workspaceFileWrite(sessionId, path, content, expectedHash),
         openInTargetsRead: () => transport.openInTargetsRead(),
         openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {

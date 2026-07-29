@@ -490,6 +490,13 @@ export { type EmojiItem, EmojiPicker, type EmojiPickerProps } from "./EmojiPicke
 export { StoreSurface, type StoreSurfaceProps } from "./StoreSurface";
 export { TerminalPanel, type TerminalPanelProps } from "./TerminalPanel";
 export {
+    BrowserPanel,
+    type BrowserContentProps,
+    type BrowserContentRenderer,
+    type BrowserController,
+    type BrowserPanelProps,
+} from "./BrowserPanel";
+export {
     ChatPage,
     type ChatPageActions,
     type ChatPageConversationKind,

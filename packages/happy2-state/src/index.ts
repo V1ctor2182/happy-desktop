@@ -326,6 +326,7 @@ export {
 } from "./rig/rigTerminalStore.js";
 export {
     rigPanelStoreCreate,
+    type RigBrowserUpdate,
     type RigPanelDeps,
     type RigPanelSnapshot,
     type RigPanelStore,
@@ -348,7 +349,8 @@ export {
 export {
     rigComposerCommands,
     rigWorkspaceStoreCreate,
-    type RigChangedFileTabSnapshot,
+    type RigFileTabKind,
+    type RigFileTabSnapshot,
     type RigCreateGroupOption,
     type RigCreateSnapshot,
     type RigFileLayout,

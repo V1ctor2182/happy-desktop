@@ -134,6 +134,13 @@
     white-space: pre;
 }
 
+.happy2-terminal-panel__cell[data-terminal-link] {
+    cursor: pointer;
+    text-decoration-line: underline;
+    text-decoration-color: var(--text-link);
+    text-underline-offset: 2px;
+}
+
 /*
  * The cursor is an overlay positioned in cell coordinates, outside text flow,
  * and it is the terminal's entire focus indicator: a hollow box when the

@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeTheme,
+    session as electronSession,
     shell,
     type BrowserWindowConstructorOptions,
     type MenuItemConstructorOptions,
@@ -25,10 +26,11 @@ import { desktopFlavor } from "./desktopFlavor";
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
-import { desktopIpc } from "../shared/desktopContract";
+import { desktopIpc, happyBrowserPartition } from "../shared/desktopContract";
 import { localRigConnectorCreate } from "./localRig";
 import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
+import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
@@ -60,11 +62,195 @@ const macosWindowChrome = {
 } as const;
 
 nativeTheme.themeSource = "system";
+app.commandLine.appendSwitch("disable-quic");
+app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
 
 let runtime: DesktopRuntime;
 let rigInstallManager: RigInstallTerminalManager;
 let quitting = false;
+let happyBrowserUserAgent = "";
+let browserProxy: RigBrowserProxyHandle | undefined;
+let browserProxyConnectionId: number | undefined;
+let browserProxyOperation = Promise.resolve();
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
+const unavailableBrowserProxy = "http://127.0.0.1:9";
+
+function browserSessionGet() {
+    return electronSession.fromPartition(happyBrowserPartition, { cache: true });
+}
+
+async function browserProxyFailClosed(): Promise<void> {
+    browserProxy?.close();
+    browserProxy = undefined;
+    browserProxyConnectionId = undefined;
+    const browserSession = browserSessionGet();
+    await browserSession.setProxy({
+        mode: "fixed_servers",
+        proxyBypassRules: "<-loopback>",
+        proxyRules: unavailableBrowserProxy,
+    });
+    await browserSession.closeAllConnections();
+}
+
+function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
+    const next = browserProxyOperation.then(work, work);
+    browserProxyOperation = next.then(
+        () => undefined,
+        () => undefined,
+    );
+    return next;
+}
+
+function browserProxyApply(sessionId: string): Promise<void> {
+    return browserProxySerial(async () => {
+        const snapshot = runtime.get();
+        if (snapshot.phase !== "ready" || snapshot.mode !== "local")
+            throw new Error("The local Rig daemon is unavailable.");
+        if (
+            browserProxy?.sessionId === sessionId &&
+            browserProxyConnectionId === snapshot.connectionId
+        )
+            return;
+
+        await browserProxyFailClosed();
+        const connectionId = snapshot.connectionId;
+        const candidate = await rigBrowserProxyCreate({
+            sessionId,
+            openHttpProxy: () => runtime.openHttpProxy(sessionId),
+        });
+        const current = runtime.get();
+        if (
+            current.phase !== "ready" ||
+            current.mode !== "local" ||
+            current.connectionId !== connectionId
+        ) {
+            candidate.close();
+            throw new Error("The local Rig connection changed while opening the browser.");
+        }
+        try {
+            const browserSession = browserSessionGet();
+            await browserSession.setProxy({
+                mode: "fixed_servers",
+                proxyBypassRules: "<-loopback>",
+                proxyRules: `http://127.0.0.1:${String(candidate.port)}`,
+            });
+            await browserSession.closeAllConnections();
+            browserProxy = candidate;
+            browserProxyConnectionId = connectionId;
+        } catch (error) {
+            candidate.close();
+            await browserProxyFailClosed();
+            throw error;
+        }
+    });
+}
+
+function browserWebUrl(candidate: string, allowBlank = false): string | undefined {
+    if (allowBlank && candidate === "about:blank") return candidate;
+    try {
+        const parsed = new URL(candidate);
+        return parsed.protocol === "http:" || parsed.protocol === "https:"
+            ? parsed.href
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function browserOpenPublish(window: BrowserWindow, candidate: string): void {
+    const url = browserWebUrl(candidate);
+    if (!url || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.browserOpenRequested, url);
+}
+
+/**
+ * Keeps Chromium's true engine/version while removing the Electron/app tokens
+ * that make sites serve an embedded-shell variant.
+ */
+function browserUserAgent(defaultUserAgent: string): string {
+    return defaultUserAgent
+        .replace(/\sElectron\/\S+/giu, "")
+        .replace(/\sHappy(?:%20|\s)Place(?:%20|\s)Desktop\/\S+/giu, "")
+        .replace(/\s{2,}/gu, " ")
+        .trim();
+}
+
+async function browserSessionConfigure(): Promise<void> {
+    const browserSession = browserSessionGet();
+    happyBrowserUserAgent = browserUserAgent(browserSession.getUserAgent());
+    browserSession.setUserAgent(happyBrowserUserAgent, app.getLocale());
+    await browserProxyFailClosed();
+
+    const permissionLabels = new Map<string, string>([
+        ["clipboard-read", "read the clipboard"],
+        ["display-capture", "share the screen"],
+        ["geolocation", "use your location"],
+        ["media", "use the camera or microphone"],
+        ["midi", "use MIDI devices"],
+        ["notifications", "show notifications"],
+        ["pointerLock", "capture the pointer"],
+    ]);
+    browserSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        const label = permissionLabels.get(permission);
+        const requestingUrl = browserWebUrl(details.requestingUrl || webContents.getURL());
+        if (!label || !requestingUrl) {
+            callback(false);
+            return;
+        }
+        const requestingOrigin = new URL(requestingUrl).origin;
+        const host = webContents.hostWebContents;
+        const owner = host ? BrowserWindow.fromWebContents(host) : undefined;
+        const options = {
+            buttons: ["Don't Allow", "Allow"],
+            cancelId: 0,
+            defaultId: 0,
+            detail: `${requestingOrigin} wants to ${label}.`,
+            message: "Website permission",
+            noLink: true,
+            type: "question" as const,
+        };
+        void (owner ? dialog.showMessageBox(owner, options) : dialog.showMessageBox(options))
+            .then((result) => callback(result.response === 1))
+            .catch(() => callback(false));
+    });
+}
+
+app.on("login", (event, _webContents, _details, authInfo, callback) => {
+    if (!authInfo.isProxy || authInfo.host !== "127.0.0.1" || authInfo.port !== browserProxy?.port)
+        return;
+    event.preventDefault();
+    callback(browserProxy.username, browserProxy.password);
+});
+
+function browserGuestAttach(window: BrowserWindow): void {
+    window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+        if (params.partition !== happyBrowserPartition || !browserWebUrl(params.src, true)) {
+            event.preventDefault();
+            return;
+        }
+        // Guest pages never inherit a preload or Node privilege from the app.
+        delete webPreferences.preload;
+        webPreferences.contextIsolation = true;
+        webPreferences.nodeIntegration = false;
+        webPreferences.nodeIntegrationInSubFrames = false;
+        webPreferences.nodeIntegrationInWorker = false;
+        webPreferences.sandbox = true;
+        webPreferences.webSecurity = true;
+        webPreferences.allowRunningInsecureContent = false;
+    });
+    window.webContents.on("did-attach-webview", (_event, guest) => {
+        guest.setUserAgent(happyBrowserUserAgent);
+        guest.setWindowOpenHandler(({ url }) => {
+            browserOpenPublish(window, url);
+            return { action: "deny" };
+        });
+        const navigationGuard = (event: Electron.Event, candidate: string) => {
+            if (!browserWebUrl(candidate, true)) event.preventDefault();
+        };
+        guest.on("will-navigate", navigationGuard);
+        guest.on("will-redirect", navigationGuard);
+    });
+}
 
 function windowOptions(
     bounds: DesktopWindowBounds | undefined,
@@ -97,12 +283,15 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             nodeIntegration: false,
             preload: join(dirname, "preload.cjs"),
             sandbox: true,
+            webviewTag: true,
         }),
     });
     window.webContents.setWindowOpenHandler(({ url }) => {
-        if (url.startsWith("https://")) void shell.openExternal(url);
+        if (browserWebUrl(url)) browserOpenPublish(window, url);
+        else if (url.startsWith("mailto:")) void shell.openExternal(url);
         return { action: "deny" };
     });
+    browserGuestAttach(window);
     const preventUntrustedNavigation = (event: Electron.Event, url: string) => {
         const allowed = hostedOrigin
             ? localWebNavigationAllowed(url, hostedOrigin)
@@ -222,6 +411,7 @@ void app
     .whenReady()
     .then(async () => {
         if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
+        await browserSessionConfigure();
         const desktopRoot = join(app.getPath("userData"), "desktop");
         const connector = localRigConnectorCreate();
         const rendererOrigin =
@@ -249,6 +439,13 @@ void app
             update: (snapshot) => runtime.updateSet(snapshot),
         });
         runtime.subscribe((snapshot) => {
+            if (
+                browserProxyConnectionId !== undefined &&
+                (snapshot.phase !== "ready" ||
+                    snapshot.mode !== "local" ||
+                    snapshot.connectionId !== browserProxyConnectionId)
+            )
+                void browserProxySerial(browserProxyFailClosed);
             const previous = windowLifecycle.get();
             const window = windowSynchronize(snapshot);
             applicationMenuInstall(snapshot);
@@ -260,6 +457,11 @@ void app
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.browserProxyApply, (_event, sessionId: unknown) => {
+            if (typeof sessionId !== "string" || sessionId.length === 0)
+                throw new Error("The Rig browser session identity is invalid.");
+            return browserProxyApply(sessionId);
+        });
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
@@ -352,6 +554,8 @@ app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
     void runtime.close().finally(() => {
+        browserProxy?.close();
+        browserProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();
         quitting = true;
         app.quit();

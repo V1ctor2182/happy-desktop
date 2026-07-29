@@ -29,6 +29,7 @@ import {
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
+import type { Duplex } from "node:stream";
 
 export type RigHttpProxyStart = (
     connection: LocalRigConnection,
@@ -142,6 +143,17 @@ export class DesktopRuntime implements AsyncDisposable {
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
+    }
+
+    /** Opens one authenticated browser-proxy tunnel through the active local Rig daemon. */
+    openHttpProxy(sessionId: string): Promise<Duplex> {
+        if (
+            this.snapshotValue.phase !== "ready" ||
+            this.snapshotValue.mode !== "local" ||
+            !this.rigConnection
+        )
+            throw new Error("The local Rig daemon is unavailable.");
+        return this.rigConnection.client.openHttpProxy(sessionId);
     }
 
     start(request: DesktopStartRequest): Promise<void> {

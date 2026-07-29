@@ -469,12 +469,22 @@ export interface RigGitChangedFile {
     readonly revision: string;
 }
 
+/** Current working-tree text loaded for an ordinary workspace-file tab. */
+export interface RigWorkspaceFileDocument {
+    readonly path: string;
+    readonly content: string;
+    /** SHA-256 identity returned by Rig and required for a conflict-safe save. */
+    readonly hash: string;
+}
+
 /** HEAD and working-tree text loaded for one changed-file diff tab. */
 export interface RigChangedFileDocument {
     readonly path: string;
     readonly oldPath: string;
     readonly oldContent: string;
     readonly newContent: string;
+    /** Working-tree identity, absent only when the file is deleted. */
+    readonly hash?: string;
 }
 
 /** Everything the workspace list needs to group sessions: the projects and their worktrees. */

@@ -6,6 +6,8 @@ import {
     type CSSProperties,
     type ClipboardEvent,
     type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent,
 } from "react";
 import type { TerminalCellSnapshot, TerminalGridSnapshot, TerminalRowSnapshot } from "happy2-state";
 import { Button } from "./Button";
@@ -31,6 +33,8 @@ export interface TerminalPanelProps {
     onClose?(): void;
     onHeightChange?(height: number): void;
     onInput(data: string): void;
+    /** Opens an http/https URL detected under the pointer in the terminal grid. */
+    onOpenLink?(url: string): void;
     onReconnect(): void;
     onResize(cols: number, rows: number): void;
 }
@@ -56,6 +60,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const screen = useRef<HTMLDivElement>(null);
     const input = useRef<HTMLTextAreaElement>(null);
     const drag = useRef<{ startHeight: number; startY: number } | undefined>(undefined);
+    const linkedCells = useRef<HTMLElement[]>([]);
     const [focused, focusedSet] = useState(false);
     // Whether new output should keep scrolling the screen into view. A terminal
     // follows its own output, but the moment the reader scrolls up into history
@@ -142,6 +147,23 @@ export function TerminalPanel(props: TerminalPanelProps) {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) input.current?.focus({ preventScroll: true });
     }
+    function screenClick(event: MouseEvent<HTMLDivElement>) {
+        const link = terminalLinkAt(event.target);
+        const selection = window.getSelection();
+        if (link && (!selection || selection.isCollapsed)) {
+            props.onOpenLink?.(link.url);
+            return;
+        }
+        screenFocus();
+    }
+    function linkHover(event: PointerEvent<HTMLDivElement>) {
+        for (const cell of linkedCells.current) delete cell.dataset.terminalLink;
+        linkedCells.current = [];
+        const link = terminalLinkAt(event.target);
+        if (!link || !props.onOpenLink) return;
+        linkedCells.current = link.cells;
+        for (const cell of link.cells) cell.dataset.terminalLink = "";
+    }
     const height = props.height;
     const onHeightChange = props.onHeightChange;
     // A terminal with no height of its own fills its parent, so it has nothing to
@@ -219,11 +241,16 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     className="happy2-terminal-panel__screen"
                     data-focused={focused ? "" : undefined}
                     data-happy2-ui="terminal-screen"
-                    onClick={screenFocus}
+                    onClick={screenClick}
                     onCopy={terminalSelectionCopy}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") screenFocus();
                     }}
+                    onPointerLeave={() => {
+                        for (const cell of linkedCells.current) delete cell.dataset.terminalLink;
+                        linkedCells.current = [];
+                    }}
+                    onPointerMove={linkHover}
                     onScroll={screenScroll}
                     ref={screen}
                     role="application"
@@ -347,6 +374,50 @@ function terminalCellSelectionText(cell: HTMLElement, range: Range): string {
         end = prefix.toString().length;
     }
     return text.slice(start, end);
+}
+
+interface TerminalLink {
+    readonly cells: HTMLElement[];
+    readonly url: string;
+}
+
+/** Resolves the web URL occupying the terminal cell under one pointer event. */
+function terminalLinkAt(target: EventTarget): TerminalLink | undefined {
+    if (!(target instanceof Element)) return undefined;
+    const cell = target.closest<HTMLElement>(".happy2-terminal-panel__cell");
+    const row = cell?.closest<HTMLElement>(".happy2-terminal-panel__row");
+    if (!cell || !row) return undefined;
+    const column = Number(cell.dataset.column);
+    if (!Number.isFinite(column)) return undefined;
+    const cells = [...row.querySelectorAll<HTMLElement>(".happy2-terminal-panel__cell")];
+    const characters: string[] = [];
+    for (const candidate of cells) {
+        const start = Number(candidate.dataset.column);
+        if (!Number.isFinite(start)) continue;
+        const text = candidate.textContent ?? "";
+        for (const [offset, character] of [...text].entries())
+            characters[start + offset] = character;
+    }
+    const text = Array.from(
+        { length: characters.length },
+        (_unused, index) => characters[index] ?? " ",
+    ).join("");
+    for (const match of text.matchAll(/\bhttps?:\/\/[^\s<>"']+/giu)) {
+        const raw = match[0];
+        const url = raw.replace(/[),.;:!?}\]]+$/u, "");
+        const start = match.index;
+        const end = start + url.length;
+        if (column < start || column >= end) continue;
+        return {
+            url,
+            cells: cells.filter((candidate) => {
+                const candidateStart = Number(candidate.dataset.column);
+                const candidateWidth = Number(candidate.dataset.width);
+                return candidateStart < end && candidateStart + candidateWidth > start;
+            }),
+        };
+    }
+    return undefined;
 }
 
 /**

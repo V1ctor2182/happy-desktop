@@ -4,6 +4,7 @@ import { Icon, type IconName } from "./Icon";
 export type TextFieldType = "text" | "email" | "password" | "search";
 export type TextFieldSize = "small" | "medium" | "large";
 export type TextFieldProps = {
+    "aria-label"?: string;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -48,6 +49,7 @@ const MULTILINE_LINE_HEIGHT = 20;
  */
 export function TextField(props: TextFieldProps) {
     const [local] = partitionComponentProps(props, [
+        "aria-label",
         "autoComplete",
         "className",
         "data-testid",
@@ -132,6 +134,7 @@ export function TextField(props: TextFieldProps) {
 
                 {local.multiline ? (
                     <textarea
+                        aria-label={local["aria-label"]}
                         aria-describedby={describedBy()}
                         aria-invalid={invalid() ? "true" : undefined}
                         className="happy2-text-field__input"
@@ -149,6 +152,7 @@ export function TextField(props: TextFieldProps) {
                     />
                 ) : (
                     <input
+                        aria-label={local["aria-label"]}
                         aria-describedby={describedBy()}
                         aria-invalid={invalid() ? "true" : undefined}
                         autoComplete={local.autoComplete}

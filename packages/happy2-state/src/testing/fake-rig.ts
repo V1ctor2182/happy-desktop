@@ -35,7 +35,8 @@ export type FakeRigOperation =
     | "modelsRead"
     | "projectsRead"
     | "changedFileRead"
-    | "changedFileWrite"
+    | "workspaceFileRead"
+    | "workspaceFileWrite"
     | "workspaceFilesRead"
     | "openInTargetsRead"
     | "openIn"
@@ -376,18 +377,25 @@ class FakeRigTransportModel implements FakeRigTransport {
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
         workspaceFilesRead: () =>
             this.perform("workspaceFilesRead", {}, () => ({ paths: [], truncated: false })),
-        changedFileWrite: () => this.perform("changedFileWrite", {}, () => undefined),
+        workspaceFileRead: (_sessionId, path) =>
+            this.perform("workspaceFileRead", {}, () => ({
+                path,
+                content: `Workspace file at ${path}`,
+                hash: "workspace-file-hash",
+            })),
+        workspaceFileWrite: () => this.perform("workspaceFileWrite", {}, () => undefined),
         // No host to open anything in, so the fake offers nothing and opening
         // is a no-op rather than a failure: a surface under test should render
         // the same whether or not a shell is there.
         openInTargetsRead: () => this.perform("openInTargetsRead", {}, () => []),
         openIn: () => this.perform("openIn", {}, () => undefined),
-        changedFileRead: (groupId, path) =>
+        changedFileRead: (_sessionId, groupId, path) =>
             this.perform("changedFileRead", {}, () => ({
                 path,
                 oldPath: path,
                 oldContent: `Original file in ${groupId}`,
                 newContent: `Changed file in ${groupId}`,
+                hash: "changed-file-hash",
             })),
         sessionsRead: () =>
             this.perform("sessionsRead", {}, () =>

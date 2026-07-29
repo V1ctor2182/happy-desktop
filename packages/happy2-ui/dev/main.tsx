@@ -85,6 +85,7 @@ import { SegmentedControlPage } from "./pages/SegmentedControlPage";
 import { SelectPage } from "./pages/SelectPage";
 import { SetupOptionCardPage } from "./pages/SetupOptionCardPage";
 import { BuildProgressPanelPage } from "./pages/BuildProgressPanelPage";
+import { BrowserPanelPage } from "./pages/BrowserPanelPage";
 import { SidebarPage } from "./pages/SidebarPage";
 import { StatTilePage } from "./pages/StatTilePage";
 import { StatusPickerPage } from "./pages/StatusPickerPage";
@@ -123,6 +124,7 @@ type BlueprintPage = {
 const components: BlueprintPage[] = [
     { id: "box", label: "Box", number: "C-001", page: BoxPage },
     { id: "terminal-panel", label: "Terminal panel", number: "C-078", page: TerminalPanelPage },
+    { id: "browser-panel", label: "Browser panel", number: "C-161", page: BrowserPanelPage },
     { id: "document-editor", label: "Document editor", number: "C-080", page: DocumentEditorPage },
     { id: "documents-panel", label: "Documents panel", number: "C-081", page: DocumentsPanelPage },
     { id: "documents-page", label: "Documents page", number: "C-140", page: DocumentsPagePage },

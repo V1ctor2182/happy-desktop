@@ -1,0 +1,68 @@
+.happy2-browser-panel {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--surface);
+}
+
+.happy2-browser-panel[hidden] {
+    display: none;
+}
+
+.happy2-browser-panel__toolbar {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--divider);
+    background: var(--surface);
+}
+
+.happy2-browser-panel__address {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.happy2-browser-panel__content {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface);
+}
+
+.happy2-browser-panel__content > webview {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy2-browser-panel__error {
+    /*
+     * Page failures float over the guest because its last committed document
+     * remains useful underneath; taking layout space would resize that live page.
+     */
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px var(--shadow-color);
+}

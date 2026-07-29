@@ -37,6 +37,7 @@ import type {
     RigContextGauge,
     RigOpenInTarget,
     RigWorkspaceFiles,
+    RigWorkspaceFileDocument,
     RigScrollPosition,
     RigSelection,
     RigServiceTier,
@@ -123,18 +124,24 @@ export interface RigConversationSnapshot {
     readonly scrollPosition?: RigScrollPosition;
 }
 
-/** One read-only changed file opened as a main-content document tab. */
-export interface RigChangedFileTabSnapshot {
+/** Whether a workspace tab shows the file itself or its working-tree diff. */
+export type RigFileTabKind = "file" | "diff";
+
+/** One workspace text file opened as a main-content document tab. */
+export interface RigFileTabSnapshot {
     readonly id: string;
+    readonly sessionId: RigSessionId;
     readonly groupId: RigGroupId;
     readonly path: string;
+    /** `All files` opens the file itself; `Changed` opens its Git diff. */
+    readonly kind: RigFileTabKind;
     /**
      * A single-click preview may be replaced by the next file previewed in this
      * group. Opening it permanently or editing it clears this flag.
      */
     readonly preview: boolean;
     readonly revision: string;
-    readonly document: Loadable<RigChangedFileDocument>;
+    readonly document: Loadable<RigWorkspaceFileDocument | RigChangedFileDocument>;
     readonly loading: boolean;
     /**
      * Unsaved edit to this file's working-tree text. Present only once it has
@@ -156,7 +163,7 @@ export interface RigWorkspaceSnapshot {
     readonly list: RigSessionListSnapshot;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
-    readonly fileTabs: readonly RigChangedFileTabSnapshot[];
+    readonly fileTabs: readonly RigFileTabSnapshot[];
     readonly activeFileTabId?: string;
     /**
      * The composer of an addressed group that holds no conversation yet. Sending
@@ -351,12 +358,22 @@ export interface RigWorkspaceStore {
     ): Promise<void>;
 
     /**
-     * Previews one changed file in the main-content tab strip. A new preview
+     * Previews one workspace file in the main-content tab strip. A new preview
      * replaces this group's previous preview without disturbing permanent tabs.
      */
-    filePreview(groupId: RigGroupId, path: string): void;
-    /** Opens one changed file permanently, promoting its preview when present. */
-    fileOpen(groupId: RigGroupId, path: string): void;
+    filePreview(
+        sessionId: RigSessionId,
+        groupId: RigGroupId,
+        path: string,
+        kind: RigFileTabKind,
+    ): void;
+    /** Opens one workspace file permanently, promoting its preview when present. */
+    fileOpen(
+        sessionId: RigSessionId,
+        groupId: RigGroupId,
+        path: string,
+        kind: RigFileTabKind,
+    ): void;
     /** Selects one open file tab, or clears file selection when a session is selected. */
     fileSelect(tabId: string | undefined): void;
     fileClose(tabId: string): void;
@@ -375,6 +392,8 @@ export interface RigWorkspaceStore {
     fileTreeToggle(path: string): void;
     /** Records an unsaved edit to one file's working-tree text. */
     fileDraftUpdate(tabId: string, draft: string): void;
+    /** Discards one file's unsaved edit and returns to its last loaded text. */
+    fileDraftRevert(tabId: string): void;
     /** Writes one file's pending edit back to the checkout. */
     fileDraftSave(tabId: string): Promise<void>;
 
@@ -592,7 +611,7 @@ export function rigWorkspaceStoreCreate(
      * conversation is opened again.
      */
     let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
-    let fileTabs: readonly RigChangedFileTabSnapshot[] = [];
+    let fileTabs: readonly RigFileTabSnapshot[] = [];
     let activeFileTabId: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
     const fileLoadControllers = new Map<string, AbortController>();
@@ -753,14 +772,26 @@ export function rigWorkspaceStoreCreate(
                       ...tab,
                       revision,
                       loading: true,
-                      ...(tab.document.type === "ready"
+                      ...(tab.document.type === "ready" &&
+                      (before.kind === "file"
+                          ? "content" in tab.document.value
+                          : "oldContent" in tab.document.value)
                           ? {}
                           : { document: { type: "loading" as const } }),
                   }
                 : tab,
         );
         recompute();
-        void client.changedFileRead(before.groupId, before.path, controller.signal).then(
+        const read =
+            before.kind === "file"
+                ? client.workspaceFileRead(before.sessionId, before.path, controller.signal)
+                : client.changedFileRead(
+                      before.sessionId,
+                      before.groupId,
+                      before.path,
+                      controller.signal,
+                  );
+        void read.then(
             (document) => {
                 if (
                     disposed ||
@@ -808,26 +839,50 @@ export function rigWorkspaceStoreCreate(
      * Opens a file with preview or permanent lifetime. Each group has at most
      * one preview; permanent tabs and previews in other groups keep their place.
      */
-    const fileTabOpen = (groupId: RigGroupId, path: string, preview: boolean): void => {
+    const fileTabOpen = (
+        sessionId: RigSessionId,
+        groupId: RigGroupId,
+        path: string,
+        kind: RigFileTabKind,
+        preview: boolean,
+    ): void => {
         const id = `${groupId}\u0000${path}`;
         const existing = fileTabs.find((tab) => tab.id === id);
         activeFileTabId = id;
         if (existing) {
+            const change = fileChangeFind(groupId, path);
+            const revision = change?.revision ?? "";
+            if (existing.kind !== kind || existing.sessionId !== sessionId) {
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === id
+                        ? {
+                              ...tab,
+                              sessionId,
+                              kind,
+                              revision,
+                              preview: preview && tab.preview,
+                          }
+                        : tab,
+                );
+                fileLoad(id, revision);
+                return;
+            }
             if (!preview && existing.preview)
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === id ? { ...tab, preview: false } : tab,
                 );
-            const change = fileChangeFind(groupId, path);
             if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
             else recompute();
             return;
         }
 
         const revision = fileChangeFind(groupId, path)?.revision ?? "";
-        const tab: RigChangedFileTabSnapshot = {
+        const tab: RigFileTabSnapshot = {
             id,
+            sessionId,
             groupId,
             path,
+            kind,
             preview,
             revision,
             saving: false,
@@ -1449,8 +1504,10 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        filePreview: (groupId, path) => fileTabOpen(groupId, path, true),
-        fileOpen: (groupId, path) => fileTabOpen(groupId, path, false),
+        filePreview: (sessionId, groupId, path, kind) =>
+            fileTabOpen(sessionId, groupId, path, kind, true),
+        fileOpen: (sessionId, groupId, path, kind) =>
+            fileTabOpen(sessionId, groupId, path, kind, false),
         fileSelect(tabId) {
             activeFileTabId =
                 tabId !== undefined && fileTabs.some((tab) => tab.id === tabId) ? tabId : undefined;
@@ -1501,6 +1558,14 @@ export function rigWorkspaceStoreCreate(
             );
             recompute();
         },
+        fileDraftRevert(tabId) {
+            fileTabs = fileTabs.map((tab) =>
+                tab.id === tabId && !tab.saving && tab.draft !== undefined
+                    ? { ...tab, draft: undefined }
+                    : tab,
+            );
+            recompute();
+        },
         async fileDraftSave(tabId) {
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (!tab || tab.saving || tab.draft === undefined) return;
@@ -1510,7 +1575,9 @@ export function rigWorkspaceStoreCreate(
             );
             recompute();
             try {
-                await client.changedFileWrite(tab.groupId, tab.path, draft);
+                const expectedHash =
+                    tab.document.type === "ready" ? (tab.document.value.hash ?? null) : null;
+                await client.workspaceFileWrite(tab.sessionId, tab.path, draft, expectedHash);
                 // The draft is dropped on success, not kept as the new content:
                 // what the file now says is the checkout's answer, and the
                 // reload below is what asks for it. Keeping the draft would

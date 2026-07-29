@@ -115,6 +115,8 @@ export type RigInstallTerminalEvent =
       };
 
 export interface HappyDesktopBridge {
+    browserProxyApply(sessionId: string): Promise<void>;
+    browserOpenSubscribe(listener: (url: string) => void): () => void;
     directoryPick(): Promise<string | undefined>;
     applicationMenuOpen(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
@@ -135,6 +137,8 @@ export interface HappyDesktopBridge {
 }
 
 export const desktopIpc = {
+    browserProxyApply: "happy2:browser:proxy-apply",
+    browserOpenRequested: "happy2:browser:open-requested",
     directoryPick: "happy2:directory:pick",
     applicationMenuOpen: "happy2:application-menu:open",
     runtimeChanged: "happy2:runtime:changed",
@@ -153,3 +157,6 @@ export const desktopIpc = {
     windowStateChanged: "happy2:window-state:changed",
     windowStateGet: "happy2:window-state:get",
 } as const;
+
+/** Persistent, capability-isolated Chromium profile used only by embedded browser tabs. */
+export const happyBrowserPartition = "persist:happy2-browser";

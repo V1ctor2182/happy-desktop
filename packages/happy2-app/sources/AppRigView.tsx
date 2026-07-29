@@ -4,7 +4,7 @@ import type {
     ConversationEntry,
     ConversationToolCall,
     RigClockStore,
-    RigChangedFileTabSnapshot,
+    RigFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
     RigCreateSnapshot,
@@ -35,6 +35,8 @@ import { rigAgentAuthor, rigOwnerAuthor, rigWindowStoreNoop } from "happy2-state
 import {
     AppShell,
     Banner,
+    BrowserPanel,
+    type BrowserContentRenderer,
     Button,
     ChannelHeader,
     ContextGauge,
@@ -42,6 +44,7 @@ import {
     ComposerModelControl,
     ConversationView,
     EmptyState,
+    FileEditor,
     FilePanel,
     Lightbox,
     Checkbox,
@@ -72,6 +75,7 @@ import {
     type SidebarItem,
     type TabItem,
 } from "happy2-ui";
+import { openExternalLink } from "./externalLink";
 
 export interface AppRigUpdate {
     readonly action: "refresh" | "restart";
@@ -109,6 +113,8 @@ export interface AppRigViewProps {
     update?: AppRigUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
     onUpdateApply?: () => void;
+    /** Native page renderer supplied only by the packaged Electron host. */
+    browserContent?: BrowserContentRenderer;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -295,7 +301,7 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     }));
 }
 
-function fileTabItem(tab: RigChangedFileTabSnapshot): TabItem {
+function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     return {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
@@ -468,14 +474,28 @@ export function AppRigView(props: AppRigViewProps) {
                 panel.open ? (
                     <RigPanelBody
                         canStartTerminal={props.chatId !== undefined}
+                        browserContent={props.browserContent}
+                        sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
                         layout={workspace.fileLayout}
                         onFileSelect={(path) => {
-                            if (openGroup) props.workspace.filePreview(openGroup.id, path);
+                            if (openGroup && props.chatId)
+                                props.workspace.filePreview(
+                                    props.chatId as RigSessionId,
+                                    openGroup.id,
+                                    path,
+                                    workspace.fileScope === "all" ? "file" : "diff",
+                                );
                         }}
                         onFileOpen={(path) => {
-                            if (openGroup) props.workspace.fileOpen(openGroup.id, path);
+                            if (openGroup && props.chatId)
+                                props.workspace.fileOpen(
+                                    props.chatId as RigSessionId,
+                                    openGroup.id,
+                                    path,
+                                    workspace.fileScope === "all" ? "file" : "diff",
+                                );
                         }}
                         onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
                         onPanelClose={() => props.workspace.panel.panelToggle()}
@@ -802,7 +822,13 @@ export function AppRigView(props: AppRigViewProps) {
                             }}
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
-                                if (file) props.workspace.fileOpen(file.groupId, file.path);
+                                if (file)
+                                    props.workspace.fileOpen(
+                                        file.sessionId,
+                                        file.groupId,
+                                        file.path,
+                                        file.kind,
+                                    );
                             }}
                             {...(groupFileTabs.length === 0
                                 ? {
@@ -832,7 +858,7 @@ export function AppRigView(props: AppRigViewProps) {
                             tabs={[...sessionTabs(openGroup), ...groupFileTabs.map(fileTabItem)]}
                         >
                             {activeFile ? (
-                                <RigChangedFileBody
+                                <RigFileBody
                                     appearance={appearance.appearance}
                                     file={activeFile}
                                     mode={workspace.fileViewMode}
@@ -914,14 +940,41 @@ export function AppRigView(props: AppRigViewProps) {
     );
 }
 
-function RigChangedFileBody(props: {
+function RigFileBody(props: {
     appearance: "dark" | "light";
-    file: RigChangedFileTabSnapshot;
+    file: RigFileTabSnapshot;
     mode: RigFileViewMode;
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
-    if (file.document.type === "ready")
+    if (
+        file.kind === "file" &&
+        file.document.type === "ready" &&
+        "content" in file.document.value
+    ) {
+        const content = file.document.value.content;
+        const dirty = file.draft !== undefined && file.draft !== content;
+        return (
+            <FileEditor
+                dirty={dirty}
+                onRevert={() => workspace.fileDraftRevert(file.id)}
+                onSave={() => {
+                    void workspace.fileDraftSave(file.id).catch(() => undefined);
+                }}
+                onValueChange={(value) => workspace.fileDraftUpdate(file.id, value)}
+                path={file.path}
+                readOnly={file.saving}
+                saving={file.saving}
+                status={file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}
+                value={file.draft ?? content}
+            />
+        );
+    }
+    if (
+        file.kind === "diff" &&
+        file.document.type === "ready" &&
+        "oldContent" in file.document.value
+    )
         return (
             <ChangedFileDiff
                 appearance={props.appearance}
@@ -959,7 +1012,11 @@ function RigChangedFileBody(props: {
         );
     return (
         <EmptyState
-            description="Reading the changed file from its workspace."
+            description={
+                file.kind === "file"
+                    ? "Reading the file from its workspace."
+                    : "Reading the changed file from its workspace."
+            }
             icon="doc"
             size="panel"
             title="Loading file…"
@@ -1304,6 +1361,7 @@ function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorks
 }
 
 function RigPanelBody(props: {
+    browserContent?: BrowserContentRenderer;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
@@ -1317,6 +1375,7 @@ function RigPanelBody(props: {
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
     scope: RigFileScope;
+    sessionId?: string;
     selectedPath?: string;
     store: RigPanelStore;
     workspaceFiles?: RigWorkspaceFiles;
@@ -1376,14 +1435,26 @@ function RigPanelBody(props: {
             <TabbedPane
                 actions={
                     props.canStartTerminal ? (
-                        <Button
-                            aria-label="New terminal"
-                            icon="plus"
-                            iconOnly
-                            onClick={() => props.store.terminalAdd()}
-                            size="small"
-                            variant="ghost"
-                        />
+                        <>
+                            {props.browserContent ? (
+                                <Button
+                                    aria-label="New browser"
+                                    icon="globe"
+                                    iconOnly
+                                    onClick={() => props.store.browserAdd()}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            ) : null}
+                            <Button
+                                aria-label="New terminal"
+                                icon="terminal"
+                                iconOnly
+                                onClick={() => props.store.terminalAdd()}
+                                size="small"
+                                variant="ghost"
+                            />
+                        </>
                     ) : undefined
                 }
                 activeId={props.panel.activeViewId}
@@ -1400,6 +1471,26 @@ function RigPanelBody(props: {
                 }}
                 tabs={tabs}
             >
+                {props.panel.tabs
+                    .filter((tab) => tab.kind === "browser")
+                    .map((tab) => (
+                        <BrowserPanel
+                            active={props.panel.activeViewId === tab.id}
+                            initialUrl={tab.url}
+                            key={tab.id}
+                            onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
+                            onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
+                            renderContent={
+                                props.browserContent && props.sessionId
+                                    ? (browserProps) =>
+                                          props.browserContent!({
+                                              ...browserProps,
+                                              sessionId: props.sessionId,
+                                          })
+                                    : undefined
+                            }
+                        />
+                    ))}
                 {props.panel.activeViewId === "files" ? (
                     <div className="happy2-rig-panel-files">
                         <div className="happy2-rig-file-controls">
@@ -1460,14 +1551,7 @@ function RigPanelBody(props: {
                         store={props.store}
                         tabId={activeToolTab.id}
                     />
-                ) : activeToolTab?.kind === "browser" ? (
-                    <EmptyState
-                        description="A browser tab will render a page here."
-                        icon="globe"
-                        size="panel"
-                        title="Not built yet"
-                    />
-                ) : (
+                ) : activeToolTab?.kind === "browser" ? null : (
                     <EmptyState
                         description="Select Files, a preview, or a live tool tab."
                         icon="files"
@@ -1510,6 +1594,7 @@ function RigTerminalScreen(props: { terminal: RigTerminalStore }) {
             {...(snapshot.grid ? { grid: snapshot.grid } : {})}
             {...(snapshot.error ? { error: snapshot.error.message } : {})}
             onInput={(data) => terminal.terminalWrite(data)}
+            onOpenLink={openExternalLink}
             onReconnect={() => terminal.terminalReconnect()}
             onResize={(cols, rows) => terminal.terminalResize(cols, rows)}
             status={snapshot.status}

@@ -31,6 +31,8 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
  */
 export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
+        browserProxyApply: async () => undefined,
+        browserOpenSubscribe: () => () => undefined,
         directoryPick: async () => undefined,
         applicationMenuOpen: async () => undefined,
         runtimeGet: async () => {

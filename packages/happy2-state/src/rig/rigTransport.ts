@@ -14,6 +14,7 @@ import type {
     RigPermissionMode,
     RigPermissionReview,
     RigOpenInTarget,
+    RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigProjectCatalog,
     RigProjectId,
@@ -297,11 +298,24 @@ export interface RigTransport {
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
 
-    /** Writes one changed text file back to its checkout. */
-    changedFileWrite(groupId: RigGroupId, path: string, content: string): Promise<void>;
+    /** Reads one existing text file from a project/worktree checkout. */
+    workspaceFileRead(
+        sessionId: RigSessionId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigWorkspaceFileDocument>;
+
+    /** Writes one existing text file back to its checkout. */
+    workspaceFileWrite(
+        sessionId: RigSessionId,
+        path: string,
+        content: string,
+        expectedHash: string | null,
+    ): Promise<void>;
 
     /** Reads one text file from a project/worktree changed-file list. */
     changedFileRead(
+        sessionId: RigSessionId,
         groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,

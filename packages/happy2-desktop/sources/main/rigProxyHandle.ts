@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type {
     RigModelSelection,
@@ -192,36 +192,21 @@ async function workspaceFilesRead(
 
 const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
 
-/**
- * Writes one changed file back to the checkout it came from.
- *
- * Validated exactly as reading it is, and for the same reason: the path is
- * relative, resolved against a root this process looks up from the daemon's
- * catalog, and the resolved real path must still be inside that root. A write
- * is the more consequential direction, so it additionally refuses a path that
- * does not already exist — this edits a file the reader was shown, and it is
- * not a way to create one.
- */
-async function changedFileWrite(
+async function workspaceFileWrite(
     client: RigProxyClient,
-    groupId: string,
+    sessionId: string,
     filePath: string,
     content: string,
+    expectedHash: string | null,
 ): Promise<void> {
-    if (!filePath || isAbsolute(filePath)) throw new Error("The changed file path is invalid.");
-    if (content.length > CHANGED_FILE_MAX_BYTES)
+    const bytes = Buffer.from(content, "utf8");
+    if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
         throw new Error("This file is too large to save from the editor.");
-    const catalog = await client.listCatalog();
-    const project = catalog.projects.find((candidate) => candidate.id === groupId);
-    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
-    const root = project?.path ?? workspace?.path;
-    if (!root) throw new Error("That project or workspace is no longer available.");
-    const target = resolve(root, filePath);
-    if (!pathInside(root, target)) throw new Error("The changed file path leaves its workspace.");
-    const canonical = await realpath(target);
-    if (!pathInside(await realpath(root), canonical))
-        throw new Error("The changed file path leaves its workspace.");
-    await writeFile(canonical, content, "utf8");
+    await client.writeFile(sessionId, {
+        content: bytes.toString("base64"),
+        expectedHash,
+        path: filePath,
+    });
 }
 
 function changedFileText(bytes: Buffer): string {
@@ -231,43 +216,52 @@ function changedFileText(bytes: Buffer): string {
     return bytes.toString("utf8");
 }
 
-function pathInside(root: string, candidate: string): boolean {
-    const fromRoot = relative(root, candidate);
-    return fromRoot === "" || (!fromRoot.startsWith("..") && !isAbsolute(fromRoot));
+/** Reads one existing, non-binary text file without asking Git for a diff. */
+async function workspaceFileRead(
+    client: RigProxyClient,
+    sessionId: string,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<{
+    readonly path: string;
+    readonly content: string;
+    readonly hash: string;
+}> {
+    const file = await client.readFile(sessionId, filePath, signal);
+    return {
+        path: filePath,
+        content: changedFileText(Buffer.from(file.content, "base64")),
+        hash: file.hash,
+    };
 }
 
 async function changedFileRead(
     client: RigProxyClient,
+    sessionId: string,
     groupId: string,
     filePath: string,
+    signal?: AbortSignal,
 ): Promise<{
     readonly path: string;
     readonly oldPath: string;
     readonly oldContent: string;
     readonly newContent: string;
+    readonly hash?: string;
 }> {
-    if (!filePath || isAbsolute(filePath)) throw new Error("The changed file path is invalid.");
     const catalog = await client.listCatalog();
-    const project = catalog.projects.find((candidate) => candidate.id === groupId);
-    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
-    const root = project?.path ?? workspace?.path;
+    const root =
+        catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
+        catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
     if (!root) throw new Error("That project or workspace is no longer available.");
     const git = await gitLineStatsRead(root);
     const change = git?.changes.find((candidate) => candidate.path === filePath);
     if (!change) throw new Error("That file is no longer changed.");
-    const target = resolve(root, filePath);
-    if (!pathInside(root, target)) throw new Error("The changed file path leaves its workspace.");
-
     let newContent = "";
+    let hash: string | undefined;
     if (change.status !== "deleted") {
-        try {
-            const canonical = await realpath(target);
-            if (!pathInside(await realpath(root), canonical))
-                throw new Error("The changed file path leaves its workspace.");
-            newContent = changedFileText(await readFile(canonical));
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        }
+        const file = await client.readFile(sessionId, filePath, signal);
+        newContent = changedFileText(Buffer.from(file.content, "base64"));
+        hash = file.hash;
     }
 
     const oldPath = change.previousPath ?? filePath;
@@ -280,7 +274,7 @@ async function changedFileRead(
         });
         oldContent = changedFileText(stdout);
     }
-    return { path: filePath, oldPath, oldContent, newContent };
+    return { path: filePath, oldPath, oldContent, newContent, ...(hash ? { hash } : {}) };
 }
 
 /** The subset of the daemon client the projected loopback surface calls. */
@@ -306,6 +300,8 @@ export type RigProxyClient = Pick<
     | "getSession"
     | "listSubagents"
     | "searchFiles"
+    | "readFile"
+    | "writeFile"
     | "getSessionUsage"
     | "getEvents"
     | "archiveSession"
@@ -452,20 +448,33 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 );
                 return true;
             }
+            if (path === "/workspace-file") {
+                const document = await requestWithAbort(request, (signal) =>
+                    workspaceFileRead(
+                        client,
+                        query.get("session") ?? "",
+                        query.get("path") ?? "",
+                        signal,
+                    ),
+                );
+                writeJson(response, 200, document);
+                return true;
+            }
             if (path === "/open-in-targets") {
                 writeJson(response, 200, await openInTargetsRead());
                 return true;
             }
             if (path === "/changed-file") {
-                writeJson(
-                    response,
-                    200,
-                    await changedFileRead(
+                const document = await requestWithAbort(request, (signal) =>
+                    changedFileRead(
                         client,
+                        query.get("session") ?? "",
                         query.get("group") ?? "",
                         query.get("path") ?? "",
+                        signal,
                     ),
                 );
+                writeJson(response, 200, document);
                 return true;
             }
             if (segments[0] === "project-assets" && segments.length === 2) {
@@ -567,13 +576,14 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             return false;
         }
 
-        if (method === "POST" && path === "/changed-file") {
+        if (method === "POST" && path === "/workspace-file") {
             const body = await bodyReadJson(request);
-            await changedFileWrite(
+            await workspaceFileWrite(
                 client,
-                String(body.group ?? ""),
+                String(body.session ?? ""),
                 String(body.path ?? ""),
                 typeof body.content === "string" ? body.content : "",
+                typeof body.expectedHash === "string" ? body.expectedHash : null,
             );
             writeJson(response, 200, {});
             return true;
@@ -1197,6 +1207,20 @@ function sseSend(response: ServerResponse, data: unknown, event?: string): void 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {
     response.writeHead(status, { "content-type": "application/json" });
     response.end(JSON.stringify(body));
+}
+
+async function requestWithAbort<T>(
+    request: IncomingMessage,
+    operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.once("aborted", abort);
+    try {
+        return await operation(controller.signal);
+    } finally {
+        request.off("aborted", abort);
+    }
 }
 
 async function bodyReadJson(request: IncomingMessage): Promise<Record<string, unknown>> {

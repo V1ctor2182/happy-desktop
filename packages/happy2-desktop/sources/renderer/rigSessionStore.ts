@@ -100,6 +100,7 @@ export function rigSessionStoreCreate(
         | undefined;
     let generation = 0;
     let runtimeUnsubscribe: (() => void) | undefined;
+    let browserOpenUnsubscribe: (() => void) | undefined;
     const listeners = new Set<() => void>();
     const notify = () => {
         for (const listener of listeners) listener();
@@ -227,6 +228,9 @@ export function rigSessionStoreCreate(
             listeners.add(listener);
             if (listeners.size === 1) {
                 runtimeUnsubscribe = runtime.subscribe(reconcile);
+                browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
+                    session?.workspace.panel.browserAdd(url);
+                });
                 reconcile();
             }
             return () => {
@@ -234,6 +238,8 @@ export function rigSessionStoreCreate(
                 if (listeners.size === 0) {
                     runtimeUnsubscribe?.();
                     runtimeUnsubscribe = undefined;
+                    browserOpenUnsubscribe?.();
+                    browserOpenUnsubscribe = undefined;
                     dispose();
                 }
             };
