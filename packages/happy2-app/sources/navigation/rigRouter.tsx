@@ -225,12 +225,18 @@ export function rigMemoryHistoryCreate(initialEntry = "/chats"): RouterHistory {
 }
 
 /**
- * Packaged desktop builds load over `file:`, where a browser history would rewrite
- * the document URL to a path that does not exist on disk; those use hash history.
+ * Packaged desktop builds load over `file:`, where a browser history would
+ * rewrite the document URL to a path that does not exist on disk. The hosted
+ * local shell has the same constraint because its static Pages host has no SPA
+ * fallback. Both use hash history; browser-local development retains normal
+ * browser URLs.
  */
 function defaultHistory(): RouterHistory {
     if (typeof window === "undefined") return rigMemoryHistoryCreate();
-    return window.location.protocol === "file:" ? createHashHistory() : createBrowserHistory();
+    const hostedDesktop = new URLSearchParams(window.location.search).get("desktop") === "1";
+    return window.location.protocol === "file:" || hostedDesktop
+        ? createHashHistory()
+        : createBrowserHistory();
 }
 
 export type RigRouter = ReturnType<typeof rigRouterCreate>;

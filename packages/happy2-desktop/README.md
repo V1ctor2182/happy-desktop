@@ -73,6 +73,11 @@ revalidation/no-cache and the hashed assets with immutable caching. Deploying
 that directory updates the local app UI without rebuilding, signing, or
 notarizing the native shell.
 
+`.github/workflows/local-web-pages.yml` publishes that directory to GitHub
+Pages after every push to `main`. Pages uses the custom domain
+`local.app.happy.engineering`, which preserves the local shell's unique,
+build-pinned security origin; the DNS record is a CNAME to `slopus.github.io`.
+
 ### Signed release build
 
 The fail-closed release command builds both distributions for both
