@@ -7,7 +7,7 @@ import { appRouterPlugin } from "happy2-app/vite";
 import { browserLocalRigPlugin } from "./sources/main/browserDevServer";
 
 export default defineConfig({
-    base: "./",
+    base: process.env.HAPPY2_LOCAL_WEB_SITE === "1" ? "/" : "./",
     plugins: [
         // The Rig terminal protocol (@slopus/ghostty-web) decodes compressed wire
         // frames with node:zlib and node Buffer; these polyfills make them real in

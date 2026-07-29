@@ -21,6 +21,16 @@ export function rendererNavigationAllowed(
     }
 }
 
+/** Allows the hosted local renderer to remain on its one build-pinned HTTPS origin. */
+export function localWebNavigationAllowed(candidateValue: string, rendererOrigin: string): boolean {
+    try {
+        const candidate = new URL(candidateValue);
+        return candidate.protocol === "https:" && candidate.origin === rendererOrigin;
+    } catch {
+        return false;
+    }
+}
+
 export type DesktopWindowTarget =
     | { key: "local"; kind: "local" }
     | { key: `cloud:${number}`; kind: "cloud"; url: string };

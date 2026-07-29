@@ -46,6 +46,70 @@ cookie-authenticated web app instead.
 
 ## Packaging
 
+Happy has two independently installable macOS distributions:
+
+- **Happy Place** (`com.slopus.happy2`) is the standard app. It includes the
+  renderer and supports both local and cloud topologies.
+- **Happy Place Local** (`com.slopus.happy2.local`) is the thin local-only
+  shell. It always starts the system Rig daemon and loads its renderer from the
+  build-pinned origin `https://local.app.happy.engineering`. The app allows
+  navigation and loopback-proxy CORS only for that exact HTTPS origin. Its
+  renderer is not packaged in the app.
+
+The separate identifiers give each distribution its own installation identity,
+user data, single-app lock, and update channel. Both distributions update from
+the same GitHub Release: the standard app reads `latest-mac.yml`, while the
+local shell reads `local-mac.yml`, so they cannot update into one another.
+
+Build the renderer that will be hosted at the local origin with:
+
+```sh
+pnpm desktop:local:web
+```
+
+The deployable static files are written to
+`packages/happy2-desktop/release/local-web-site`. Serve `index.html` with
+revalidation/no-cache and the hashed assets with immutable caching. Deploying
+that directory updates the local app UI without rebuilding, signing, or
+notarizing the native shell.
+
+### Signed release build
+
+The fail-closed release command builds both distributions for both
+architectures, signs and notarizes every app, staples the ticket, builds DMG and
+ZIP artifacts, verifies the signatures and disk images, and writes an updater
+manifest in each distribution directory:
+
+```sh
+APPLE_ID=... \
+APPLE_APP_SPECIFIC_PASSWORD=... \
+APPLE_TEAM_ID=... \
+pnpm desktop:mac:release
+```
+
+For organization automation, prefer an App Store Connect API key:
+
+```sh
+APPLE_API_KEY=/secure/path/AuthKey_KEY_ID.p8 \
+APPLE_API_KEY_ID=... \
+APPLE_API_ISSUER=... \
+pnpm desktop:mac:release
+```
+
+Use `--arch arm64` or `--arch x64` for a native CI/Mac-mini worker, and
+`--flavor standard` or `--flavor local-web` to build one distribution:
+
+```sh
+pnpm desktop:mac:release -- --arch arm64 --flavor local-web
+```
+
+Signing can use an installed **Developer ID Application** identity, or
+`CSC_LINK` plus `CSC_KEY_PASSWORD`. The script refuses to build when
+notarization credentials are missing and rejects output that does not pass
+`codesign`, `stapler`, `spctl`, and `hdiutil`.
+
+For a quick unsigned/local packaging run, the existing commands remain:
+
 ```sh
 pnpm desktop:assets
 pnpm --dir packages/happy2-desktop dist:mac
@@ -54,10 +118,15 @@ pnpm --dir packages/happy2-desktop dist:mac
 `desktop:assets` generates `icon.icns` from the source artwork before packaging.
 
 Tags matching the root version trigger `.github/workflows/desktop-release.yml`.
-The workflow builds native arm64 and x64 DMG/ZIP artifacts, signs with Developer
-ID, notarizes with Apple, combines both ZIPs into `latest-mac.yml`, and publishes
-everything to GitHub Releases for `electron-updater`.
+The workflow builds native arm64 and x64 DMG/ZIP artifacts for both
+distributions, signs with Developer ID, notarizes with Apple, and creates one
+architecture-aware updater manifest per distribution. Both native
+distributions are published together in one GitHub Release. The hosted renderer
+is uploaded as a separate CI artifact for deployment to
+`local.app.happy.engineering`.
 
-Required repository secrets are `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
-`APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. The release job fails closed
+Required organization secrets are `MACOS_CERTIFICATE_P12_BASE64`,
+`MACOS_CERTIFICATE_PASSWORD`, `APPLE_NOTARY_KEY_P8_BASE64`,
+`APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_ISSUER_ID`, and `APPLE_TEAM_ID`. The
+release job fails closed
 when any signing or notarization credential is absent.

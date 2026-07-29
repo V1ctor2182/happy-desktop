@@ -22,12 +22,10 @@ export interface RigHttpProxyOptions {
      */
     readonly onConnectionError?: (error: unknown) => void;
     /**
-     * The single browser origin allowed to call this proxy cross-origin, used only
-     * by the development shell: there the renderer is served by Vite on its own
-     * loopback port, so every request to this ephemeral port is cross-origin and
-     * the browser drops the response without these headers. The packaged app loads
-     * the renderer from `file:` and never needs them, so production passes nothing
-     * and the proxy answers no cross-origin caller.
+     * The single browser origin allowed to call this proxy cross-origin. The
+     * development shell supplies its Vite origin; the local-web distribution
+     * supplies its immutable hosted renderer origin. The standard packaged app
+     * loads `file:` and passes nothing.
      */
     readonly allowedOrigin?: string;
 }
@@ -89,6 +87,8 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             if (crossOrigin) {
                 const requestedMethod = request.headers["access-control-request-method"]?.trim();
                 const requestedHeaders = request.headers["access-control-request-headers"]?.trim();
+                const privateNetwork =
+                    request.headers["access-control-request-private-network"] === "true";
                 response.writeHead(204, {
                     "access-control-allow-headers":
                         requestedHeaders ||
@@ -96,6 +96,7 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
                     "access-control-allow-methods": requestedMethod
                         ? `${requestedMethod}, OPTIONS`
                         : "DELETE, GET, HEAD, PATCH, POST, PUT, OPTIONS",
+                    ...(privateNetwork ? { "access-control-allow-private-network": "true" } : {}),
                     "access-control-max-age": "600",
                 });
             } else {

@@ -41,6 +41,8 @@
         "dev:desktop:electron": "pnpm --dir packages/happy2-desktop dev:electron",
         "desktop:assets": "node scripts/create-mac-icon.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs",
+        "desktop:mac:release": "node scripts/build-mac-apps.mjs",
+        "desktop:local:web": "pnpm --dir packages/happy2-desktop build:local-web-ui",
         "dev:server": "pnpm --dir packages/happy2-server dev",
         "blueprint": "pnpm exec portless run --name happy2-blueprint node scripts/dev-blueprint.mjs",
         "plugins:build": "pnpm --filter './packages/happy2-plugin-*' --filter '!happy2-plugin-sdk' build",

@@ -13,7 +13,6 @@ export interface RigLoginEnvironment {
     readonly command: string;
     readonly environment: NodeJS.ProcessEnv;
     readonly shell: string;
-    readonly version: string;
 }
 
 export interface LocalRigConnection {
@@ -89,18 +88,14 @@ export async function rigLoginEnvironmentDiscover(
     });
     const parsed = discoveryOutputParse(result.stdout);
     if (!parsed.command) throw new RigCommandMissingError();
-    const versionResult = await host.execFile(parsed.command, ["--version"], {
-        env: parsed.environment,
-    });
     return {
         command: parsed.command,
         environment: parsed.environment,
         shell,
-        version: rigVersionParse(versionResult.stdout),
     };
 }
 
-/** Connects to a compatible normal daemon, starting it through the discovered command if absent. */
+/** Connects to the normal daemon, starting it through the discovered command if absent. */
 export function localRigConnectorCreate(
     options: {
         readonly host?: RigProcessHost;
@@ -137,14 +132,15 @@ export function localRigConnectorCreate(
                     wait,
                 );
             }
+            // The daemon owns its own lifecycle and may legitimately outlive an
+            // installed CLI update. Protocol requests remain the compatibility
+            // boundary; its version is informational and must never block startup.
             const health = await readyHealthWait(connection.client, wait);
-            if (health.identity.version !== login.version)
-                throw new RigDaemonIncompatibleError(login.version, health.identity.version);
             return {
                 client: connection.client,
                 command: login.command,
                 environment: login.environment,
-                version: login.version,
+                version: health.identity.version,
                 // ProtocolHttpClient is request-scoped and owns no persistent
                 // socket. Stream and terminal leases are closed by their IPC
                 // owners, so closing the connection deliberately does not stop

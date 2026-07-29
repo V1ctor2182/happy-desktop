@@ -42,12 +42,13 @@ export interface DesktopRuntimePaths {
 }
 
 export interface DesktopRuntimeOptions {
+    /** Pins this process to one automatically materialized local topology. */
+    readonly localOnly?: boolean;
     readonly localRigConnector?: LocalRigConnector;
     readonly rigHttpProxyStart?: RigHttpProxyStart;
     /**
-     * The development renderer's origin, when the shell is running against a Vite
-     * server instead of the packaged `file:` renderer. It is the only origin the
-     * loopback Rig proxy answers cross-origin.
+     * The exact hosted or development renderer origin. It is the only browser
+     * origin the loopback Rig proxy answers cross-origin.
      */
     readonly rendererOrigin?: string;
 }
@@ -67,6 +68,7 @@ export class DesktopRuntime implements AsyncDisposable {
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
     private readonly connector: LocalRigConnector;
+    private readonly localOnly: boolean;
     private readonly proxyStart: RigHttpProxyStart;
 
     private constructor(
@@ -75,6 +77,7 @@ export class DesktopRuntime implements AsyncDisposable {
         options: DesktopRuntimeOptions,
     ) {
         this.settings = settings;
+        this.localOnly = options.localOnly ?? false;
         this.connector = options.localRigConnector ?? localRigConnectorCreate();
         this.proxyStart =
             options.rigHttpProxyStart ??
@@ -84,7 +87,19 @@ export class DesktopRuntime implements AsyncDisposable {
                     onConnectionError,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                 }));
-        const active = settings?.topologies.find(({ id }) => id === settings.activeTopologyId);
+        const configuredActive = settings?.topologies.find(
+            ({ id }) => id === settings.activeTopologyId,
+        );
+        const active = this.localOnly
+            ? configuredActive?.mode === "local"
+                ? configuredActive
+                : (settings?.topologies.find(({ mode }) => mode === "local") ?? {
+                      id: desktopTopologyIdCreate(),
+                      mode: "local" as const,
+                  })
+            : configuredActive;
+        if (this.localOnly && !settings?.topologies.some(({ id }) => id === active?.id))
+            this.persistOnSuccess = true;
         if (active) {
             this.activeTopology = active;
             this.snapshotValue = {
@@ -113,7 +128,9 @@ export class DesktopRuntime implements AsyncDisposable {
         const runtime = new DesktopRuntime(paths, settings, options);
         if (runtime.activeTopology)
             void runtime
-                .serial(() => runtime.startValidated(runtime.activeTopology!, false))
+                .serial(() =>
+                    runtime.startValidated(runtime.activeTopology!, runtime.persistOnSuccess),
+                )
                 .catch(() => undefined);
         return runtime;
     }
@@ -130,6 +147,16 @@ export class DesktopRuntime implements AsyncDisposable {
     start(request: DesktopStartRequest): Promise<void> {
         return this.serial(async () => {
             const validated = desktopStartRequestValidate(request);
+            if (this.localOnly && validated.mode !== "local")
+                throw new Error("This Happy build supports local mode only.");
+            if (this.localOnly) {
+                const topology =
+                    this.activeTopology?.mode === "local"
+                        ? this.activeTopology
+                        : { id: desktopTopologyIdCreate(), mode: "local" as const };
+                await this.startValidated(topology, this.persistOnSuccess);
+                return;
+            }
             const topology = desktopTopologyFromRequest(desktopTopologyIdCreate(), validated);
             await this.startValidated(topology, true);
         });
@@ -161,6 +188,14 @@ export class DesktopRuntime implements AsyncDisposable {
 
     reset(): Promise<void> {
         return this.serial(async () => {
+            if (this.localOnly) {
+                const topology =
+                    this.activeTopology?.mode === "local"
+                        ? this.activeTopology
+                        : { id: desktopTopologyIdCreate(), mode: "local" as const };
+                await this.startValidated(topology, this.persistOnSuccess);
+                return;
+            }
             this.activationGeneration += 1;
             this.activeTopology = undefined;
             this.persistOnSuccess = false;
@@ -182,6 +217,8 @@ export class DesktopRuntime implements AsyncDisposable {
                 return;
             const topology = this.settings?.topologies.find(({ id }) => id === topologyId);
             if (!topology) throw new Error("The selected Happy topology does not exist.");
+            if (this.localOnly && topology.mode !== "local")
+                throw new Error("This Happy build supports local mode only.");
             await this.startValidated(topology, true);
         });
     }
@@ -313,7 +350,16 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private targets(): readonly DesktopTopologyTarget[] {
-        return (this.settings?.topologies ?? []).map(desktopTopologyTarget);
+        const configured = (this.settings?.topologies ?? []).filter(
+            (topology) => !this.localOnly || topology.mode === "local",
+        );
+        const active =
+            this.localOnly &&
+            this.activeTopology?.mode === "local" &&
+            !configured.some(({ id }) => id === this.activeTopology?.id)
+                ? [this.activeTopology]
+                : [];
+        return [...configured, ...active].map(desktopTopologyTarget);
     }
 }
 

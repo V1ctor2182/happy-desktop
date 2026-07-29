@@ -208,6 +208,13 @@ importers:
       '@lydell/node-pty':
         specifier: 1.2.0-beta.12
         version: 1.2.0-beta.12
+      electron-updater:
+        specifier: ^6.8.9
+        version: 6.8.9
+      ws:
+        specifier: ^8.21.1
+        version: 8.21.1
+    devDependencies:
       '@slopus/ghostty-web':
         specifier: 0.1.0
         version: 0.1.0
@@ -217,34 +224,12 @@ importers:
       '@slopus/rig-connect':
         specifier: 0.0.7
         version: 0.0.7
-      '@tanstack/react-router':
-        specifier: ^1.170.18
-        version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      electron-updater:
-        specifier: ^6.8.9
-        version: 6.8.9
-      happy2-app:
-        specifier: workspace:*
-        version: link:../happy2-app
-      happy2-state:
-        specifier: workspace:*
-        version: link:../happy2-state
-      happy2-ui:
-        specifier: workspace:*
-        version: link:../happy2-ui
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
-      ws:
-        specifier: ^8.21.1
-        version: 8.21.1
-    devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
+      '@tanstack/react-router':
+        specifier: ^1.170.18
+        version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
@@ -269,6 +254,21 @@ importers:
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3
+      happy2-app:
+        specifier: workspace:*
+        version: link:../happy2-app
+      happy2-state:
+        specifier: workspace:*
+        version: link:../happy2-state
+      happy2-ui:
+        specifier: workspace:*
+        version: link:../happy2-ui
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
       tailwindcss:
         specifier: ^4.3.2
         version: 4.3.2

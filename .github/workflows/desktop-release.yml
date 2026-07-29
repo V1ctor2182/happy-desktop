@@ -26,11 +26,12 @@ jobs:
         runs-on: ${{ matrix.runner }}
         timeout-minutes: 60
         env:
-            APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-            APPLE_ID: ${{ secrets.APPLE_ID }}
+            APPLE_API_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+            APPLE_API_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+            APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
             APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-            CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-            CSC_LINK: ${{ secrets.CSC_LINK }}
+            CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+            CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
 
         steps:
             - name: Check out source
@@ -58,9 +59,18 @@ jobs:
                   test "$DESKTOP_VERSION" = "$ROOT_VERSION"
                   test -n "$CSC_LINK"
                   test -n "$CSC_KEY_PASSWORD"
-                  test -n "$APPLE_ID"
-                  test -n "$APPLE_APP_SPECIFIC_PASSWORD"
+                  test -n "$APPLE_NOTARY_KEY_P8_BASE64"
+                  test -n "$APPLE_API_KEY_ID"
+                  test -n "$APPLE_API_ISSUER"
                   test -n "$APPLE_TEAM_ID"
+                  test "$APPLE_TEAM_ID" = "466DQWDR8C"
+
+            - name: Prepare App Store Connect API key
+              run: |
+                  NOTARY_KEY="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+                  printf '%s' "$APPLE_NOTARY_KEY_P8_BASE64" | base64 -D > "$NOTARY_KEY"
+                  chmod 600 "$NOTARY_KEY"
+                  printf 'APPLE_API_KEY=%s\n' "$NOTARY_KEY" >> "$GITHUB_ENV"
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
@@ -75,24 +85,36 @@ jobs:
                     -t "keeps the local/cloud instance boundary visible in every sidebar variant"
                   pnpm --dir packages/happy2-app typecheck
 
-            - name: Prepare signed application assets
-              run: pnpm desktop:assets
+            - name: Build, sign, notarize, and verify both desktop distributions
+              run: pnpm desktop:mac:release -- --arch ${{ matrix.arch }} --flavor all
 
-            - name: Build server and desktop
-              run: pnpm --dir packages/happy2-desktop build
-
-            - name: Sign, notarize, and package
-              working-directory: packages/happy2-desktop
-              run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never
+            - name: Remove App Store Connect API key
+              if: always()
+              run: rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
 
             - name: Upload architecture artifacts
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: happy2-macos-${{ matrix.arch }}
                   path: |
-                      packages/happy2-desktop/release/*.dmg
-                      packages/happy2-desktop/release/*.zip
-                      packages/happy2-desktop/release/*.blockmap
+                      packages/happy2-desktop/release/standard/*.dmg
+                      packages/happy2-desktop/release/standard/*.zip
+                      packages/happy2-desktop/release/standard/*.blockmap
+                      packages/happy2-desktop/release/local-web/*.dmg
+                      packages/happy2-desktop/release/local-web/*.zip
+                      packages/happy2-desktop/release/local-web/*.blockmap
+                  if-no-files-found: error
+
+            - name: Build hosted local renderer
+              if: matrix.arch == 'arm64'
+              run: pnpm desktop:local:web
+
+            - name: Upload hosted local renderer
+              if: matrix.arch == 'arm64'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: happy2-local-web-site
+                  path: packages/happy2-desktop/release/local-web-site
                   if-no-files-found: error
 
     release:
@@ -116,7 +138,13 @@ jobs:
               env:
                   RELEASE_VERSION: ${{ github.ref_name }}
               run: |
-                  RELEASE_VERSION="${RELEASE_VERSION#v}" node scripts/create-mac-update-manifest.mjs
+                  RELEASE_VERSION="${RELEASE_VERSION#v}" \
+                    node scripts/create-mac-update-manifest.mjs \
+                    packages/happy2-desktop/release/standard
+                  RELEASE_VERSION="${RELEASE_VERSION#v}" \
+                    RELEASE_CHANNEL="local" \
+                    node scripts/create-mac-update-manifest.mjs \
+                    packages/happy2-desktop/release/local-web
 
             - name: Publish release assets
               env:
@@ -124,9 +152,26 @@ jobs:
                   RELEASE_TAG: ${{ github.ref_name }}
               run: |
                   if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-                    gh release upload "$RELEASE_TAG" packages/happy2-desktop/release/* --clobber
+                    gh release upload "$RELEASE_TAG" \
+                      packages/happy2-desktop/release/standard/*.dmg \
+                      packages/happy2-desktop/release/standard/*.zip \
+                      packages/happy2-desktop/release/standard/*.blockmap \
+                      packages/happy2-desktop/release/standard/latest-mac.yml \
+                      packages/happy2-desktop/release/local-web/*.dmg \
+                      packages/happy2-desktop/release/local-web/*.zip \
+                      packages/happy2-desktop/release/local-web/*.blockmap \
+                      packages/happy2-desktop/release/local-web/local-mac.yml \
+                      --clobber
                   else
-                    gh release create "$RELEASE_TAG" packages/happy2-desktop/release/* \
+                    gh release create "$RELEASE_TAG" \
+                      packages/happy2-desktop/release/standard/*.dmg \
+                      packages/happy2-desktop/release/standard/*.zip \
+                      packages/happy2-desktop/release/standard/*.blockmap \
+                      packages/happy2-desktop/release/standard/latest-mac.yml \
+                      packages/happy2-desktop/release/local-web/*.dmg \
+                      packages/happy2-desktop/release/local-web/*.zip \
+                      packages/happy2-desktop/release/local-web/*.blockmap \
+                      packages/happy2-desktop/release/local-web/local-mac.yml \
                       --generate-notes \
                       --title "Happy 2 $RELEASE_TAG"
                   fi

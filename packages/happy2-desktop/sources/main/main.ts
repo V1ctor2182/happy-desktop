@@ -17,9 +17,11 @@ import { DesktopRuntime } from "./desktopRuntime";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
 import {
     desktopWindowTarget,
+    localWebNavigationAllowed,
     remoteNavigationAllowed,
     rendererNavigationAllowed,
 } from "./navigation";
+import { desktopFlavor } from "./desktopFlavor";
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
@@ -39,7 +41,9 @@ const builtApplicationIconPath = join(dirname, "renderer", "app-icon.png");
 const sourceApplicationIconPath = join(dirname, "..", "public", "app-icon.png");
 const applicationIconPath = existsSync(builtApplicationIconPath)
     ? builtApplicationIconPath
-    : sourceApplicationIconPath;
+    : existsSync(sourceApplicationIconPath)
+      ? sourceApplicationIconPath
+      : undefined;
 const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
 const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
     ? new URL(process.env.VITE_DEV_SERVER_URL).origin
@@ -72,7 +76,7 @@ function windowOptions(
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
         minWidth: 720,
         minHeight: 480,
-        icon: applicationIconPath,
+        ...(applicationIconPath ? { icon: applicationIconPath } : {}),
         show: false,
         ...macosWindowChrome,
         webPreferences,
@@ -80,9 +84,12 @@ function windowOptions(
 }
 
 function localWindowCreate(bounds?: DesktopWindowBounds) {
-    const developmentUrl = process.env.VITE_DEV_SERVER_URL;
+    const hostedOrigin =
+        desktopFlavor.kind === "local-web" ? desktopFlavor.rendererOrigin : undefined;
+    const developmentUrl = hostedOrigin ? undefined : process.env.VITE_DEV_SERVER_URL;
     const rendererPath = join(dirname, "renderer", "index.html");
-    const rendererUrl = developmentUrl ?? pathToFileURL(rendererPath).toString();
+    const hostedUrl = hostedOrigin ? `${hostedOrigin}/?desktop=1&mode=local` : undefined;
+    const rendererUrl = hostedUrl ?? developmentUrl ?? pathToFileURL(rendererPath).toString();
     const window = new BrowserWindow({
         ...windowOptions(bounds, {
             contextIsolation: true,
@@ -96,8 +103,10 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
         return { action: "deny" };
     });
     const preventUntrustedNavigation = (event: Electron.Event, url: string) => {
-        if (!rendererNavigationAllowed(url, rendererUrl, developmentUrl !== undefined))
-            event.preventDefault();
+        const allowed = hostedOrigin
+            ? localWebNavigationAllowed(url, hostedOrigin)
+            : rendererNavigationAllowed(url, rendererUrl, developmentUrl !== undefined);
+        if (!allowed) event.preventDefault();
     };
     window.webContents.on("will-navigate", preventUntrustedNavigation);
     window.webContents.on("will-redirect", preventUntrustedNavigation);
@@ -123,7 +132,11 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     });
     return {
         load: () =>
-            developmentUrl ? window.loadURL(developmentUrl) : window.loadFile(rendererPath),
+            hostedUrl
+                ? window.loadURL(hostedUrl)
+                : developmentUrl
+                  ? window.loadURL(developmentUrl)
+                  : window.loadFile(rendererPath),
         window,
     };
 }
@@ -152,6 +165,8 @@ function remoteWindowCreate(url: string, bounds?: DesktopWindowBounds) {
 }
 
 function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): BrowserWindow {
+    if (desktopFlavor.kind === "local-web")
+        return windowLifecycle.synchronize("local-web", (bounds) => localWindowCreate(bounds));
     const target = desktopWindowTarget(snapshot);
     return windowLifecycle.synchronize(target.key, (bounds) =>
         target.kind === "cloud"
@@ -177,45 +192,52 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
             click: () => void runtime.reset().catch(() => undefined),
         },
     );
-    Menu.setApplicationMenu(
-        Menu.buildFromTemplate([
-            {
-                role: "appMenu",
-                submenu: [
-                    { role: "about" },
-                    { type: "separator" },
-                    { role: "services" },
-                    { type: "separator" },
-                    { role: "hide" },
-                    { role: "hideOthers" },
-                    { role: "unhide" },
-                    { type: "separator" },
-                    { role: "quit" },
-                ],
-            },
-            { label: "Instances", submenu: instances },
-            { role: "editMenu" },
-            { role: "viewMenu" },
-            { role: "windowMenu" },
-        ]),
-    );
+    const template: MenuItemConstructorOptions[] = [
+        {
+            role: "appMenu",
+            submenu: [
+                { role: "about" },
+                { type: "separator" },
+                { role: "services" },
+                { type: "separator" },
+                { role: "hide" },
+                { role: "hideOthers" },
+                { role: "unhide" },
+                { type: "separator" },
+                { role: "quit" },
+            ],
+        },
+        ...(desktopFlavor.kind === "local-web"
+            ? []
+            : [{ label: "Instances", submenu: instances } as MenuItemConstructorOptions]),
+        { role: "editMenu" },
+        { role: "viewMenu" },
+        { role: "windowMenu" },
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 void app
     .whenReady()
     .then(async () => {
-        if (!app.isPackaged) app.dock?.setIcon(applicationIconPath);
+        if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
         const desktopRoot = join(app.getPath("userData"), "desktop");
         const connector = localRigConnectorCreate();
+        const rendererOrigin =
+            desktopFlavor.kind === "local-web"
+                ? desktopFlavor.rendererOrigin
+                : developmentRendererOrigin;
         runtime = await DesktopRuntime.create(
             {
                 root: desktopRoot,
             },
             {
+                localOnly: desktopFlavor.kind === "local-web",
                 localRigConnector: connector,
-                // In development the renderer is a page on the Vite server's own
-                // port, so its calls to the ephemeral proxy port are cross-origin.
-                ...(developmentRendererOrigin ? { rendererOrigin: developmentRendererOrigin } : {}),
+                // A hosted local renderer and the Vite development renderer both
+                // call the loopback proxy cross-origin. Only their exact,
+                // build-owned origin receives CORS access.
+                ...(rendererOrigin ? { rendererOrigin } : {}),
             },
         );
         rigInstallManager = new RigInstallTerminalManager(connector, {
@@ -229,7 +251,11 @@ void app
             const previous = windowLifecycle.get();
             const window = windowSynchronize(snapshot);
             applicationMenuInstall(snapshot);
-            if (window === previous && desktopWindowTarget(snapshot).kind === "local")
+            if (
+                window === previous &&
+                (desktopFlavor.kind === "local-web" ||
+                    desktopWindowTarget(snapshot).kind === "local")
+            )
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());

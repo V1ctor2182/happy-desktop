@@ -28,11 +28,10 @@ export interface RigTerminalBridgeOptions {
      */
     readonly prefix?: string;
     /**
-     * One extra browser origin allowed to attach, for the development shell where
-     * the renderer is served by Vite on a different loopback port than the bridge.
-     * A same-origin page and the packaged renderer's `file:` page are always
-     * accepted; anything else is refused, so a page the user happens to have open
-     * cannot open a shell on their machine.
+     * One extra browser origin allowed to attach: either the development Vite
+     * origin or the local-web distribution's build-pinned hosted origin. The
+     * standard packaged renderer's `file:` page is accepted through its opaque
+     * origin; anything else is refused.
      */
     readonly allowedOrigin?: string;
 }

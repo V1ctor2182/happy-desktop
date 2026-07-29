@@ -5,6 +5,9 @@ import { basename, join, resolve } from "node:path";
 const releaseDirectory = resolve(process.argv[2] ?? "packages/happy2-desktop/release");
 const version = process.env.RELEASE_VERSION ?? process.env.GITHUB_REF_NAME?.replace(/^v/u, "");
 if (!version) throw new Error("Set RELEASE_VERSION or run from a v* GitHub tag.");
+const channel = process.env.RELEASE_CHANNEL ?? "latest";
+if (!/^[a-z][a-z0-9-]*$/u.test(channel))
+    throw new Error("RELEASE_CHANNEL must be a lower-case channel name.");
 const names = (await readdir(releaseDirectory))
     .filter((name) => name.endsWith(".zip") && /-(arm64|x64)\.zip$/u.test(name))
     .sort();
@@ -36,5 +39,6 @@ const yaml = [
     `releaseDate: ${new Date().toISOString()}`,
     "",
 ].join("\n");
-await writeFile(join(releaseDirectory, "latest-mac.yml"), yaml);
-console.log(`Wrote ${join(releaseDirectory, "latest-mac.yml")}.`);
+const manifest = join(releaseDirectory, `${channel}-mac.yml`);
+await writeFile(manifest, yaml);
+console.log(`Wrote ${manifest}.`);
