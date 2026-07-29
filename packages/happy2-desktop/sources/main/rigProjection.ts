@@ -172,7 +172,9 @@ export function rigSessionProject(session: ProtocolSession, homeDir: string): Ri
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        orderKey: session.orderKey,
+        // A session with no place in an ordered list (a subagent) carries no key;
+        // the empty string sorts it ahead of every minted key.
+        orderKey: session.orderKey ?? "",
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,
@@ -581,6 +583,15 @@ function queuedMessagesProject(
 }
 
 function messageProject(message: Message): RigMessage {
+    // A compaction record is context bookkeeping, not a turn anyone wrote: keep it
+    // out of the transcript the way every other internal message is kept out.
+    if (message.role === "compaction")
+        return {
+            id: message.id,
+            role: "system",
+            blocks: (message.blocks as readonly AgentBlock[]).map(blockProject),
+            internal: true,
+        };
     return {
         id: message.id,
         role: message.role,
@@ -887,7 +898,9 @@ function summaryFromSession(
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        orderKey: session.orderKey,
+        // A session with no place in an ordered list (a subagent) carries no key;
+        // the empty string sorts it ahead of every minted key.
+        orderKey: session.orderKey ?? "",
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,

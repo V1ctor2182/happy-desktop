@@ -63,7 +63,7 @@ interface RigBlock {
 }
 
 interface RigMessage {
-    role: "agent" | "system" | "user";
+    role: "agent" | "compaction" | "system" | "user";
     id?: string;
     blocks: readonly RigBlock[];
     usage?: RigUsage;

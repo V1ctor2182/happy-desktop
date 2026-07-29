@@ -164,6 +164,9 @@ describe("document session store", () => {
     it("gates remote presence by revision, drops the local client, and expires leavers", async () => {
         const output = vi.fn();
         const store = documentStoreCreate("doc-1", output, { clientId: "client-a" });
+        // One pinned deadline: recomputing `Date.now()` per call lets the entry the
+        // server returns and the entry asserted below land a millisecond apart.
+        const expiresAt = Date.now() + 15_000;
         const entry = (revision: number, active: boolean, anchor: number) => ({
             documentId: "doc-1",
             userId: "user-b",
@@ -171,7 +174,7 @@ describe("document session store", () => {
             revision,
             active,
             state: { anchor },
-            ...(active ? { expiresAt: Date.now() + 15_000 } : {}),
+            ...(active ? { expiresAt } : {}),
         });
         store.getState().documentInput({
             type: "documentPresenceReconciled",
