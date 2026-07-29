@@ -803,6 +803,7 @@ export function ChatPage(props: ChatPageProps) {
         if (!projection) return;
         props.actions.chatSelect(id, projection.chat.kind === "dm" ? "chat" : "channel", replace);
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a completed create request must resolve against the newly committed sidebar projection before navigation can select its durable chat id
     useLayoutEffect(() => {
         const chats = sidebarChats();
         const pending = pendingSelection.current;
@@ -830,6 +831,7 @@ export function ChatPage(props: ChatPageProps) {
         if (!props.workspaceOverride && !activeConversationId() && chats.length)
             selectConversation(chats[0]!.id, true);
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- read acknowledgement is an imperative server action emitted only after the newest durable server message has committed to this chat surface
     useLayoutEffect(() => {
         const snapshot = chatSnapshot();
         const latest = [...(snapshot?.messages ?? [])]
@@ -841,6 +843,7 @@ export function ChatPage(props: ChatPageProps) {
     });
     const activityCount = chatState?.agentActivity.length ?? 0;
     const activeTurnRunning = turnStatus()?.status === "running";
+    // eslint-disable-next-line happy2-react/no-layout-effect -- live agent elapsed-time labels need one activity-scoped clock interval that is completely cleared when work stops or the surface unmounts
     useLayoutEffect(() => {
         if (activityCount === 0 && !activeTurnRunning) return;
         const timer = setInterval(() => setActivityNow(Date.now()), 1000);
@@ -925,6 +928,7 @@ export function ChatPage(props: ChatPageProps) {
         return members.value.find((member) => member.id === userId)?.displayName;
     }
     const typingChatId = props.navigation.chatId;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- typing presence is a remote ephemeral resource that must be explicitly cleared when this committed chat surface detaches
     useLayoutEffect(
         () => () => {
             if (sentTyping.current && typingChatId) props.actions.typingSet(typingChatId, false);

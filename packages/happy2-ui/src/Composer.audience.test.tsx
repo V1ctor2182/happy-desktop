@@ -238,7 +238,9 @@ it("keeps the audience and capability actions inside a panel-constrained compose
     const surface = view.$('[data-testid="composer-compact"] [data-happy2-ui="composer-surface"]');
     const toggle = view.$('[data-testid="composer-compact"] [data-happy2-ui="audience-toggle"]');
     expect(toggle.bounds().height).toBe(20);
-    expect(toggle.bounds().y).toBeCloseTo(surface.bounds().y + surface.bounds().height + 4, 1);
+    // The footer starts one 4px parent gap below the surface, and centers this
+    // 20px control inside its 28px row for another 4px optical inset.
+    expect(toggle.bounds().y).toBeCloseTo(surface.bounds().y + surface.bounds().height + 8, 1);
     expect(toggle.element.textContent).toBe("Talk to people");
     expect(toggle.element.getAttribute("title")).toBe("Shift+Tab switches to talk to agents");
     expect(

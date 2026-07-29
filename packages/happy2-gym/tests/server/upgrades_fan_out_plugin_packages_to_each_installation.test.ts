@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { serverSchemaMigrate } from "happy2-server";
 import { describe, expect, it } from "vitest";
+import { applyServerMigrations } from "./applyServerMigrations.js";
 
 describe("server upgrades with shared plugin packages", () => {
     it("copies package metadata, skills, and assets to every installation", async () => {
@@ -185,12 +186,10 @@ describe("server upgrades with shared plugin packages", () => {
                 "DROP INDEX projects_one_default_idx",
                 "DROP TABLE projects",
             ]);
-            await client.execute({
-                sql: "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
-                args: [1785369600000],
-            });
-
-            await serverSchemaMigrate(client);
+            await applyServerMigrations(client, [
+                "0041_plugin_installation_diagnostics",
+                "0042_document_write_base_sequence",
+            ]);
 
             const installations = await client.execute(
                 `SELECT id, source_version, package_digest, manifest_json, package_directory

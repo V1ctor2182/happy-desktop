@@ -1,4 +1,4 @@
-import { happyStateCreate, type ChatMessageItem } from "happy2-state";
+import { happyStateCreate, type ConversationMessageEntry } from "happy2-state";
 import { describe, expect, it } from "vitest";
 import { createMockRigDaemon, MockAgentSandboxRuntime } from "happy2-gym/rig";
 import { createGymServer, type GymRequestClient } from "../../sources/index.js";
@@ -142,7 +142,7 @@ describe("streamed agent Markdown through happy2-state", () => {
     }, 20_000);
 });
 
-function streamedReply(messages: readonly ChatMessageItem[]) {
+function streamedReply(messages: readonly ConversationMessageEntry[]) {
     return messages?.find(({ message }) => message.kind === "automated");
 }
 

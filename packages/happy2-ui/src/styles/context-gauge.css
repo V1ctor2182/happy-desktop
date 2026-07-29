@@ -23,12 +23,8 @@
     width: 14px;
     height: 14px;
     border-radius: var(--happy2-radius-pill);
-    background: conic-gradient(
-        currentColor 0 var(--happy2-context-gauge-turn, 1turn),
-        var(--border-subtle) var(--happy2-context-gauge-turn, 1turn) 1turn
-    );
-    mask: radial-gradient(circle, transparent 0 4px, #000 4.5px);
-    -webkit-mask: radial-gradient(circle, transparent 0 4px, #000 4.5px);
+    mask: radial-gradient(circle, transparent 0 4px, var(--text) 4.5px);
+    -webkit-mask: radial-gradient(circle, transparent 0 4px, var(--text) 4.5px);
 }
 
 /* Ample context is unremarkable and stays quiet; the warnings earn their color. */

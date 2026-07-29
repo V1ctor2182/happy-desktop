@@ -183,6 +183,7 @@ it("owns one subscription, routes safe actions, and rebinds cleanly when store i
         scopeId: string;
         text: string;
     }) {
+        // eslint-disable-next-line happy2-react/no-layout-effect -- this lifecycle probe counts actual committed child mounts, which cannot be observed from render output
         useLayoutEffect(() => {
             childMounts += 1;
         }, []);

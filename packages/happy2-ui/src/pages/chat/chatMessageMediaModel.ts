@@ -89,6 +89,7 @@ export function useChatMessageMediaModel(
         link.download = file.originalName ?? "download";
         link.click();
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- downloaded attachment object URLs are browser resources owned by this mounted media projection and every URL is revoked on unmount
     useLayoutEffect(
         () => () => {
             for (const url of urls.values()) URL.revokeObjectURL(url);

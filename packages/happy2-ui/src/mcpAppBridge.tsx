@@ -296,6 +296,7 @@ export function McpAppBridgeFrame(props: McpAppBridgeFrameProps) {
     // Attaches the host<->proxy relay listener once per mount, loads the inner
     // View when the proxy reports ready, and tears the bridge down on unmount by
     // sending ui/resource-teardown synchronously before the frame is removed.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the sandbox iframe relay is an imperative window-message bridge that must attach to the committed frame and synchronously tear down every listener and resource
     useLayoutEffect(() => {
         const element = hostFrame.current;
         if (!element) return;
@@ -333,6 +334,7 @@ export function McpAppBridgeFrame(props: McpAppBridgeFrameProps) {
     // Re-delivers the CallToolResult to an already-initialized View when it
     // arrives after the tool finishes (in_progress -> completed), firing only on
     // a result change and never remounting the frame.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a completed tool result must be posted to the already-initialized live iframe after the host render commits
     useLayoutEffect(() => {
         if (props.result !== undefined && bridge.current.initializedByView)
             sendToolResult(hostFrame.current, bridge.current, props.result);
@@ -343,6 +345,7 @@ export function McpAppBridgeFrame(props: McpAppBridgeFrameProps) {
     // is observed here and folded into `themeEpoch`. Only a real change of the
     // resolved theme + styles signature bumps it, so unrelated class churn in the
     // host tree does not thrash renders. Fully cleaned up on unmount.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- inherited host theme changes are observable only from the committed iframe ancestry, so this bridge owns a cleaned-up MutationObserver
     useLayoutEffect(() => {
         const frame = hostFrame.current;
         if (!frame) return;
@@ -381,6 +384,7 @@ export function McpAppBridgeFrame(props: McpAppBridgeFrameProps) {
     const deliverHostContext = useEffectEvent(() => {
         sendHostContextChanged(hostFrame.current, bridge.current, props, contextKey);
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- serialized host context changes must be delivered to the initialized live iframe after the matching host render commits
     useLayoutEffect(() => {
         deliverHostContext();
     }, [contextKey]);

@@ -63,7 +63,9 @@ export function ContextGauge(props: ContextGaugeProps) {
                 aria-hidden="true"
                 className="happy2-context-gauge__ring"
                 data-happy2-ui="context-gauge-ring"
-                style={{ ["--happy2-context-gauge-turn" as string]: `${fraction}turn` }}
+                style={{
+                    background: `conic-gradient(currentColor 0 ${String(fraction)}turn, var(--divider) ${String(fraction)}turn 1turn)`,
+                }}
             />
             <span aria-hidden="true" className="happy2-context-gauge__value">
                 {percent}%

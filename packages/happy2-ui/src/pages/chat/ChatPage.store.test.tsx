@@ -1149,7 +1149,7 @@ it("streams a turn's steps inline and folds them behind View traces when it ends
     // tool, and a line rewritten on every call reads as noise.
     expect(view.container.querySelector('[data-happy2-ui="agent-trace-row"]')).toBeNull();
     const status = view.container.querySelector<HTMLElement>(
-        '[data-happy2-ui="agent-status-line"]',
+        '[data-happy2-ui="agent-working-status"]',
     )!;
     expect(status.textContent).toContain("Working");
     expect(status.textContent).not.toContain("Reasoning");
@@ -1307,6 +1307,15 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     expect(
         composerCard.getBoundingClientRect().top - messageList.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 1);
+    // This test exercises the footer while reading both ends of a long virtual
+    // history. Put the reader at the newest content explicitly so the stable
+    // footer row is mounted before activity starts.
+    messageList.scrollTop = messageList.scrollHeight;
+    messageList.dispatchEvent(new Event("scroll"));
+    await nextFrame();
+    const statusRow = view.container.querySelector<HTMLElement>(
+        '[data-happy2-ui="agent-working-status"]',
+    )!;
 
     // The composer keeps its DOM node, focus, value, and selection across every
     // live activity update behind it.
@@ -1344,9 +1353,7 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
         agentActivity: [activity(2, 1, 12_400)],
     });
     await nextFrame();
-    const statusRow = view.container.querySelector<HTMLElement>(
-        '[data-happy2-ui="agent-status-line"]',
-    )!;
+    expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBe(statusRow);
     // It is the message list's footer, sitting in the clearance the transcript
     // already reserves below the last message rather than above the composer.
     expect(statusRow.closest('[data-happy2-ui="message-list-footer"]')).not.toBeNull();
@@ -1356,36 +1363,38 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     expect(
         composerCard.getBoundingClientRect().top - messageList.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 1);
-    const stats = statusRow.querySelector('[data-happy2-ui="agent-status-line-stats"]')!;
+    const stats = statusRow.querySelector('[data-happy2-ui="agent-working-status-details"]')!;
     expect(stats.textContent).toContain("2 agents");
-    expect(stats.textContent).toContain("1 process");
-    expect(stats.textContent).toContain("12k");
+    expect(stats.textContent).toContain("1 background task");
     expect(document.activeElement).toBe(textarea);
 
-    // The line is the last row of the transcript content, so scrolling back
-    // through the history takes it with the rest of the messages.
-    expect(messageList.scrollHeight).toBeGreaterThan(messageList.clientHeight);
-    const statusTopWhileFollowing = statusRow.getBoundingClientRect().top;
-    messageList.scrollTop = 0;
-    await nextFrame();
-    expect(messageList.scrollTop).toBe(0);
-    expect(statusRow.getBoundingClientRect().top).toBeGreaterThan(statusTopWhileFollowing);
-
-    // A live update rewrites the counts in place: same row, same composer.
+    // A live update rewrites the counts in place while the footer is mounted:
+    // same row, same composer.
     chatSurface.input({
         type: "agentActivityReconciled",
         agentActivity: [activity(1, 0, 80_000)],
     });
     await nextFrame();
-    expect(view.container.querySelector('[data-happy2-ui="agent-status-line"]')).toBe(statusRow);
+    expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBe(statusRow);
     expect(statusRow.textContent).toContain("1 agent");
     expect(statusRow.textContent).not.toContain("process");
-    expect(statusRow.textContent).toContain("80k");
     expect(view.container.querySelector("textarea")).toBe(textarea);
     expect(document.activeElement).toBe(textarea);
     expect(textarea.value).toBe("draft while the agent works");
     expect(textarea.selectionStart).toBe(6);
     expect(textarea.selectionEnd).toBe(11);
+
+    // The line is the last virtualized row of the transcript content, so
+    // scrolling far back unmounts it with the newest messages. The composer is
+    // outside that virtualized lifetime and keeps its focused DOM identity.
+    expect(messageList.scrollHeight).toBeGreaterThan(messageList.clientHeight);
+    messageList.scrollTop = 0;
+    messageList.dispatchEvent(new Event("scroll"));
+    await nextFrame();
+    expect(messageList.scrollTop).toBe(0);
+    expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBeNull();
+    expect(view.container.querySelector("textarea")).toBe(textarea);
+    expect(document.activeElement).toBe(textarea);
 
     // The line belongs to the working turn: completing it takes the line away
     // and leaves the "View traces" link on the settled reply.

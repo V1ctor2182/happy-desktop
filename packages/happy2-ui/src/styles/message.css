@@ -657,9 +657,12 @@
 /* Fenced code: a neutral raised card. The <pre> is the edge-to-edge scrollport
    and its inner <code> carries the 16px inset so the right pad survives
    horizontal scroll instead of being clipped by the overflow boundary. */
+.happy2-message__code-block {
+    margin: 12px 0;
+}
+
 .happy2-message__body--markdown pre {
-    margin-top: 12px;
-    margin-bottom: 12px;
+    margin: 0;
     background: var(--surface-pressed);
     border-radius: 8px;
     overflow-x: auto;

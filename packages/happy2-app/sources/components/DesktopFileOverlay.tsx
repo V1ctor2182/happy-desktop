@@ -1,6 +1,11 @@
-import { useReducer } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { Banner, FileAttachment, Modal, ModalOverlay, StoreSurface } from "happy2-ui";
-import type { HappyState } from "happy2-state";
+import {
+    fileDownloadStoreCreate,
+    type FileDownloadStore,
+    type FilesStore,
+    type HappyState,
+} from "happy2-state";
 export interface DesktopFileOverlayProps {
     fileId: string;
     state: HappyState;
@@ -8,37 +13,25 @@ export interface DesktopFileOverlayProps {
 }
 /** Hosts one route-addressable file card over the still-mounted primary surface. */
 export function DesktopFileOverlay(props: DesktopFileOverlayProps) {
-    const store = props.state.files();
-    const [downloadState, updateDownload] = useReducer(
-        (
-            current: { downloading: boolean; error?: string },
-            patch: Partial<{ downloading: boolean; error?: string }>,
-        ) => ({ ...current, ...patch }),
-        { downloading: false },
+    const files = props.state.files();
+    // Store identity follows the addressed file. Reusing it across ordinary
+    // FilesStore notifications preserves the overlay's visible download state.
+    const downloadStore = useMemo(
+        () =>
+            fileDownloadSurfaceCreate({
+                fileId: props.fileId,
+                files,
+                state: props.state,
+            }),
+        [props.fileId, props.state, files],
     );
-    const { downloading, error: downloadError } = downloadState;
-    const download = async () => {
-        if (downloading) return;
-        updateDownload({ downloading: true, error: undefined });
-        try {
-            const file = store.getState().files.find((candidate) => candidate.id === props.fileId);
-            const bytes = await props.state.fileDownload(props.fileId);
-            const url = URL.createObjectURL(new Blob([bytes], { type: file?.contentType }));
-            const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = file?.originalName ?? "download";
-            anchor.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (error) {
-            updateDownload({
-                error: error instanceof Error ? error.message : "The file could not be downloaded.",
-            });
-        } finally {
-            updateDownload({ downloading: false });
-        }
-    };
+    const download = useSyncExternalStore(
+        downloadStore.subscribe,
+        downloadStore.getState,
+        downloadStore.getInitialState,
+    );
     return (
-        <StoreSurface store={store}>
+        <StoreSurface store={files}>
             {(snapshot) => {
                 const file = () =>
                     snapshot.files.find((candidate) => candidate.id === props.fileId);
@@ -53,18 +46,18 @@ export function DesktopFileOverlay(props: DesktopFileOverlayProps) {
                             size="large"
                             title={kindTitle(file()?.kind)}
                         >
-                            {downloadError ? (
+                            {download.download.status === "failed" ? (
                                 <Banner tone="danger" title="Download failed">
-                                    {downloadError}
+                                    {download.download.message}
                                 </Banner>
                             ) : null}
-                            {downloading ? (
+                            {download.download.status === "downloading" ? (
                                 <Banner tone="info">Downloading the original file…</Banner>
                             ) : null}
                             <FileAttachment
                                 kind={file()?.kind ?? "file"}
                                 name={file()?.originalName ?? props.fileId}
-                                onOpen={() => void download()}
+                                onOpen={() => downloadStore.getState().fileDownloadStart()}
                                 size={file() ? formatBytes(file()!.size) : undefined}
                                 variant="chat"
                             />
@@ -74,6 +67,40 @@ export function DesktopFileOverlay(props: DesktopFileOverlayProps) {
             }}
         </StoreSurface>
     );
+}
+
+function fileDownloadSurfaceCreate(options: {
+    fileId: string;
+    files: FilesStore;
+    state: HappyState;
+}): FileDownloadStore {
+    let downloadStore: FileDownloadStore;
+    downloadStore = fileDownloadStoreCreate(() => {
+        void (async () => {
+            try {
+                const file = options.files
+                    .getState()
+                    .files.find((candidate) => candidate.id === options.fileId);
+                const bytes = await options.state.fileDownload(options.fileId);
+                const url = URL.createObjectURL(new Blob([bytes], { type: file?.contentType }));
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = file?.originalName ?? "download";
+                anchor.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                downloadStore.getState().fileDownloadInput({ type: "fileDownloadSucceeded" });
+            } catch (error) {
+                downloadStore.getState().fileDownloadInput({
+                    type: "fileDownloadFailed",
+                    message:
+                        error instanceof Error
+                            ? error.message
+                            : "The file could not be downloaded.",
+                });
+            }
+        })();
+    });
+    return downloadStore;
 }
 function kindTitle(kind?: string): string {
     switch (kind) {

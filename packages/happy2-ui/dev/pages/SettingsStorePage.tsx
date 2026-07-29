@@ -53,6 +53,7 @@ export function SettingsStorePage() {
 
         return { failed, ready, saving };
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- these three Blueprint fixtures own live subscriptions and are disposed together at the page lifetime boundary
     useLayoutEffect(
         () => () => {
             fixtures.ready[Symbol.dispose]();

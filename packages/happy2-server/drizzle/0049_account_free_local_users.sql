@@ -57,11 +57,11 @@ SELECT
   `agent_effort`, `agent_role`, `last_seen_at`
 FROM `users`;
 --> statement-breakpoint
-DROP TRIGGER `accounts_users_fts_bu`;
+DROP TRIGGER IF EXISTS `accounts_users_fts_bu`;
 --> statement-breakpoint
-DROP TRIGGER `accounts_users_fts_au`;
+DROP TRIGGER IF EXISTS `accounts_users_fts_au`;
 --> statement-breakpoint
-DROP TRIGGER `accounts_users_fts_bd`;
+DROP TRIGGER IF EXISTS `accounts_users_fts_bd`;
 --> statement-breakpoint
 DROP TABLE `users`;
 --> statement-breakpoint

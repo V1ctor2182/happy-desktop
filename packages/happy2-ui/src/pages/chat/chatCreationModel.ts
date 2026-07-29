@@ -106,6 +106,7 @@ export function useChatCreateRequest(options: {
     onChannel(): void;
 }) {
     const seen = useRef<number | undefined>(undefined);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a new host request nonce is an imperative command delivered after the matching chat surface commits, never renderable output
     useLayoutEffect(() => {
         const request = options.request ?? { kind: "agent" as const, nonce: 0 };
         if (seen.current === undefined) seen.current = request.nonce;

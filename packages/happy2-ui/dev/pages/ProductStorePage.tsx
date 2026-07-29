@@ -90,6 +90,7 @@ function NotificationsPage(props: {
         value.input({ type: "notificationsLoaded", notifications: [] });
         return value;
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this notifications specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         props.number,
@@ -104,6 +105,7 @@ function CallsPageSpecimen() {
         value.input({ type: "callsLoaded", calls: [] });
         return value;
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this calls specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         "P-006",
@@ -120,6 +122,7 @@ function FilesPageSpecimen() {
     });
     const [filter, setFilter] = useState<FilesPageFilter>("all");
     const [query, setQuery] = useState("");
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this files specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         "P-007",
@@ -146,6 +149,7 @@ function SearchPageSpecimen() {
         });
         return value;
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this search specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         "P-008",
@@ -175,6 +179,7 @@ function AdminPageSpecimen() {
         return { fixture, images, secrets, plugins, pluginInstall, roles };
     });
     const [section, setSection] = useState<AdminPageSection>("users");
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this administration specimen owns six disposable fake surfaces and must release every subscription when it unmounts
     useLayoutEffect(
         () => () => {
             fixture[Symbol.dispose]();
@@ -208,6 +213,7 @@ function AgentImagesPageSpecimen() {
         value.input({ type: "imagesLoaded", images: [] });
         return value;
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this agent-images specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         "P-010",
@@ -222,6 +228,7 @@ function AgentSecretsPageSpecimen() {
         value.input({ type: "secretsLoaded", secrets: [], agents: [], channels: [] });
         return value;
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this agent-secrets specimen owns one disposable fake store and releases its subscriptions on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     return frame(
         "P-011",

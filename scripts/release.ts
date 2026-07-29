@@ -119,7 +119,7 @@ async function release(): Promise<void> {
     }
 
     console.log("Validating the release...");
-    runCommand("pnpm", ["run", "check:release"]);
+    runCommand("pnpm", ["check"]);
 
     if (!retryingRelease) {
         console.log(`Creating the ${releaseInput} release commit and tag...`);

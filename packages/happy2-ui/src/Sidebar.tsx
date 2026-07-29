@@ -341,7 +341,10 @@ function SidebarItemAction(props: {
     );
 }
 
-function SidebarRow(props: {
+function SidebarRow({
+    nodeRef,
+    ...props
+}: {
     active: boolean;
     /** Renders the ASCII tree connector that ties a nested row to its parent. */
     branch?: "tee" | "end";
@@ -393,7 +396,7 @@ function SidebarRow(props: {
             onPointerMove={props.onPointerMove}
             onPointerCancel={props.onPointerUp}
             onPointerUp={props.onPointerUp}
-            ref={props.nodeRef}
+            ref={nodeRef}
             style={{
                 ...(depth() > 0
                     ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
@@ -605,7 +608,7 @@ export function Sidebar(props: SidebarProps) {
     const dragRef = useRef<{ sectionId: string; drag: SidebarDrag } | undefined>(undefined);
     // Live row nodes, so a drop can read where each row was before the new order
     // is applied and animate it from there.
-    const rowNodes = useRef(new Map<string, HTMLButtonElement>());
+    const [rowNodes] = useState(() => new Map<string, HTMLButtonElement>());
     // Row tops captured at the drop, consumed by the layout effect below.
     const flipRef = useRef<Map<string, number> | undefined>(undefined);
     // Lets go of a capture the rearranging render never came for.
@@ -720,7 +723,7 @@ export function Sidebar(props: SidebarProps) {
         if (!reducedMotion() && drag.from !== drag.to) {
             const firsts = new Map<string, number>();
             for (const item of section.items) {
-                const node = rowNodes.current.get(item.id);
+                const node = rowNodes.get(item.id);
                 if (node) firsts.set(item.id, node.getBoundingClientRect().top);
             }
             flipRef.current = firsts;
@@ -768,7 +771,7 @@ export function Sidebar(props: SidebarProps) {
         if (!firsts) return;
         const played: Animation[] = [];
         for (const [id, first] of firsts) {
-            const node = rowNodes.current.get(id);
+            const node = rowNodes.get(id);
             if (!node) continue;
             const delta = first - node.getBoundingClientRect().top;
             if (Math.abs(delta) < 0.5) continue;
@@ -953,76 +956,74 @@ export function Sidebar(props: SidebarProps) {
                                 </div>
                             ) : null}
                             {!section.headingOnly
-                                ? ((blocks) =>
-                                      section.items.map((item, index) => {
-                                          const drag = dragOf(section.id);
-                                          const dragging = drag?.moved === true;
-                                          // While a drag is live the row's position
-                                          // is read from that drag's own units, which
-                                          // are the top-level blocks or one row's
-                                          // children depending on where it started.
-                                          const unitIndex = dragging
-                                              ? drag.units.findIndex((unit) => unit.includes(index))
-                                              : -1;
-                                          const held = dragging && unitIndex === drag.from;
-                                          return (
-                                              <SidebarRow
-                                                  active={item.id === local.activeItemId}
-                                                  branch={
-                                                      (item.depth ?? 0) > 0
-                                                          ? isLastAtDepth(section.items, index)
-                                                              ? "end"
-                                                              : "tee"
-                                                          : undefined
+                                ? section.items.map((item, index) => {
+                                      const drag = dragOf(section.id);
+                                      const dragging = drag?.moved === true;
+                                      // While a drag is live the row's position
+                                      // is read from that drag's own units, which
+                                      // are the top-level blocks or one row's
+                                      // children depending on where it started.
+                                      const unitIndex = dragging
+                                          ? drag.units.findIndex((unit) => unit.includes(index))
+                                          : -1;
+                                      const held = dragging && unitIndex === drag.from;
+                                      return (
+                                          <SidebarRow
+                                              active={item.id === local.activeItemId}
+                                              branch={
+                                                  (item.depth ?? 0) > 0
+                                                      ? isLastAtDepth(section.items, index)
+                                                          ? "end"
+                                                          : "tee"
+                                                      : undefined
+                                              }
+                                              branchFirst={
+                                                  (item.depth ?? 0) > 0 &&
+                                                  isFirstAtDepth(section.items, index)
+                                              }
+                                              dragging={held || item.id === dropped}
+                                              key={item.id}
+                                              item={item}
+                                              onContextMenu={openItemMenu}
+                                              onPointerDown={
+                                                  local.onItemReorder
+                                                      ? (event) => dragStart(event, section, index)
+                                                      : undefined
+                                              }
+                                              onPointerMove={
+                                                  local.onItemReorder ? dragMove : undefined
+                                              }
+                                              onPointerUp={
+                                                  local.onItemReorder
+                                                      ? (event) => dragEnd(event, section)
+                                                      : undefined
+                                              }
+                                              onAction={
+                                                  local.onItemAction && item.action
+                                                      ? () => local.onItemAction?.(item.id)
+                                                      : undefined
+                                              }
+                                              nodeRef={(node) => {
+                                                  if (node) rowNodes.set(item.id, node);
+                                                  else rowNodes.delete(item.id);
+                                              }}
+                                              onSelect={(id) => {
+                                                  if (dragClick.current) {
+                                                      dragClick.current = false;
+                                                      return;
                                                   }
-                                                  branchFirst={
-                                                      (item.depth ?? 0) > 0 &&
-                                                      isFirstAtDepth(section.items, index)
-                                                  }
-                                                  dragging={held || item.id === dropped}
-                                                  key={item.id}
-                                                  item={item}
-                                                  onContextMenu={openItemMenu}
-                                                  onPointerDown={
-                                                      local.onItemReorder
-                                                          ? (event) =>
-                                                                dragStart(event, section, index)
-                                                          : undefined
-                                                  }
-                                                  onPointerMove={
-                                                      local.onItemReorder ? dragMove : undefined
-                                                  }
-                                                  onPointerUp={
-                                                      local.onItemReorder
-                                                          ? (event) => dragEnd(event, section)
-                                                          : undefined
-                                                  }
-                                                  onAction={
-                                                      local.onItemAction && item.action
-                                                          ? () => local.onItemAction?.(item.id)
-                                                          : undefined
-                                                  }
-                                                  nodeRef={(node) => {
-                                                      if (node) rowNodes.current.set(item.id, node);
-                                                      else rowNodes.current.delete(item.id);
-                                                  }}
-                                                  onSelect={(id) => {
-                                                      if (dragClick.current) {
-                                                          dragClick.current = false;
-                                                          return;
-                                                      }
-                                                      local.onItemSelect(id);
-                                                  }}
-                                                  shift={
-                                                      dragging && unitIndex >= 0
-                                                          ? unitIndex === drag.from
-                                                              ? drag.deltaY
-                                                              : blockShift(drag, unitIndex)
-                                                          : undefined
-                                                  }
-                                              />
-                                          );
-                                      }))(blocksOf(section.items))
+                                                  local.onItemSelect(id);
+                                              }}
+                                              shift={
+                                                  dragging && unitIndex >= 0
+                                                      ? unitIndex === drag.from
+                                                          ? drag.deltaY
+                                                          : blockShift(drag, unitIndex)
+                                                      : undefined
+                                              }
+                                          />
+                                      );
+                                  })
                                 : null}
                             {!section.headingOnly &&
                             (section.items.length === 0 ? section.empty : undefined)

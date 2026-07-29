@@ -178,10 +178,11 @@ it("reserves macOS chrome and keeps real desktop header controls clickable", asy
     const channelHeader = view.$('[data-happy2-ui="channel-header"]');
     const members = view.$('[data-happy2-ui="channel-header-members"]');
     const search = view.$('button[aria-label="Search"]');
-    // The heading clears both the native lights (x=14…68) and the sidebar
-    // toggle docked beside them (x=84…112).
-    expect(sidebarHeader.computedStyle("padding-left")).toBe("128px");
-    expect(logo.bounds().x).toBeGreaterThanOrEqual(128);
+    // The heading clears the native lights (x=14…68) with 16px trailing
+    // clearance. A supplied collapse toggle docks independently at the
+    // sidebar's right edge, so it does not widen this leading reservation.
+    expect(sidebarHeader.computedStyle("padding-left")).toBe("84px");
+    expect(logo.bounds().x).toBeGreaterThanOrEqual(84);
     if (server.browser === "chromium") {
         expect(appRegion(sidebarHeader.element)).toBe("drag");
         expect(appRegion(channelHeader.element)).toBe("drag");

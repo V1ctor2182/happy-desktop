@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { serverSchemaMigrate } from "happy2-server";
 import { describe, expect, it } from "vitest";
+import { applyServerMigrations } from "./applyServerMigrations.js";
 
 describe("server upgrades with automated message attribution", () => {
     it("preserves existing messages and marks them as not automated", async () => {
@@ -20,12 +21,7 @@ describe("server upgrades with automated message attribution", () => {
                 "INSERT INTO chats (id, kind, project_id, name, created_by_user_id) VALUES ('legacy-chat', 'private_channel', 'legacy-project', 'Legacy channel', 'legacy-user')",
                 "INSERT INTO messages (id, chat_id, sequence, change_pts, sender_user_id, text) VALUES ('legacy-message', 'legacy-chat', 1, 1, 'legacy-user', 'Existing user message')",
             ]);
-            await client.execute({
-                sql: "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
-                args: [1785888000000],
-            });
-
-            await serverSchemaMigrate(client);
+            await applyServerMigrations(client, ["0047_automated_user_messages"]);
 
             expect(
                 (

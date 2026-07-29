@@ -152,7 +152,7 @@ it("routes every entry kind to its shared chat component", async () => {
     expect(
         view.$('[data-testid="activity"] [data-happy2-ui="agent-activity-verb"]').element
             .textContent,
-    ).toBe("Ran");
+    ).toBe("Bash");
 
     // A notice is a SystemNotice; a divider is a DayDivider.
     expect(view.$(".probe-notice").element.getAttribute("data-happy2-ui")).toBe("system-notice");
@@ -220,13 +220,13 @@ it("streams an in-place agent reply rather than a separate live row", async () =
 
     // The streaming reply is an ordinary message carrying a generation status,
     // so it settles in place when the run finishes instead of being replaced.
+    // Streaming prose intentionally has no inline typing marker.
     const streaming = view.$('[data-testid="streaming"]');
     expect(streaming.element.getAttribute("data-happy2-ui")).toBe("message");
+    expect(streaming.element.getAttribute("data-generation-status")).toBe("streaming");
     expect(
-        view.container
-            .querySelector('[data-testid="streaming"] [data-generation-marker]')
-            ?.getAttribute("data-generation-marker"),
-    ).toBe("streaming");
+        view.container.querySelector('[data-testid="streaming"] [data-generation-marker]'),
+    ).toBeNull();
 
     await view.screenshot("ConversationEntryView.streaming.test");
 });

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { serverSchemaMigrate } from "happy2-server";
 import { describe, expect, it } from "vitest";
+import { applyServerMigrations } from "./applyServerMigrations.js";
 
-const PROJECTS_MIGRATION_TIMESTAMP = 1_785_801_600_000;
 const TEMPORARY_DEFAULT_PROJECT_ID = "happy2_temporary_default_project";
 
 describe("server upgrades with legacy channels", () => {
@@ -30,11 +30,6 @@ describe("server upgrades with legacy channels", () => {
                 "DROP INDEX projects_sync_sequence_idx",
                 "DROP TABLE projects",
             ]);
-            await client.execute({
-                sql: "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
-                args: [PROJECTS_MIGRATION_TIMESTAMP],
-            });
-
             await client.migrate([
                 "INSERT INTO chats (id, kind, name, dm_key) VALUES ('legacy-dm', 'dm', 'Legacy direct message', 'legacy-dm-key')",
                 "INSERT INTO chats (id, kind, name, slug) VALUES ('legacy-public', 'public_channel', 'Legacy public', 'legacy-public')",
@@ -44,6 +39,7 @@ describe("server upgrades with legacy channels", () => {
                 "INSERT INTO chats (id, kind, name, slug, deleted_at) VALUES ('legacy-deleted', 'private_channel', 'Legacy deleted', 'legacy-deleted', CURRENT_TIMESTAMP)",
             ]);
 
+            await applyServerMigrations(client, ["0046_projects"]);
             await serverSchemaMigrate(client);
 
             const defaultProjectId = await expectOneGeneratedDefaultProject(client);

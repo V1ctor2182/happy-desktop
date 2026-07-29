@@ -38,6 +38,7 @@ export function Checkbox(props: CheckboxProps) {
     const control = useRef<HTMLInputElement>(null);
     // indeterminate is a DOM property, not an attribute — mirror the prop onto
     // the live input so assistive tech announces the mixed state.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- HTML exposes the mixed checkbox state only through the live input.indeterminate DOM property, so it must be synchronized after commit
     useLayoutEffect(() => {
         if (control.current) control.current.indeterminate = local.indeterminate ?? false;
     }, [local.indeterminate]);

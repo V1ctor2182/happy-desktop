@@ -23,6 +23,7 @@ export function CallsPage(props: CallsPageProps) {
     const [muted, setMuted] = useState(false);
     const [videoOn, setVideoOn] = useState(true);
     const [now, setNow] = useState(() => Date.now());
+    // eslint-disable-next-line happy2-react/no-layout-effect -- an active call's elapsed-time label is driven by one mounted clock interval that is completely cleared with the calls surface
     useLayoutEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);

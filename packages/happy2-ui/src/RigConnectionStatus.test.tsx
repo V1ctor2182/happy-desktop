@@ -1,11 +1,12 @@
 import { expect, it } from "vitest";
 import "./theme.css";
-import "./styles/onboarding-screen.css";
 import "./styles/title-bar.css";
 import "./styles/icon.css";
 import "./styles/vector-icon.css";
-import "./styles/banner.css";
 import "./styles/button.css";
+import "./styles/spinner.css";
+import "./styles/spinner-braille.css";
+import "./styles/rig-connection-status.css";
 import { RigConnectionStatus } from "./RigConnectionStatus";
 import { createRenderer } from "./testing";
 
@@ -26,17 +27,19 @@ it("shows the probe loader while the transport is still connecting", async () =>
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="onboarding-kicker"]').element.textContent).toBe(
-        "Rig connection",
+    expect(
+        view.$('[data-happy2-ui="rig-connection-status"]').element.getAttribute("data-state"),
+    ).toBe("connecting");
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Connecting to Rig",
     );
-    expect(view.$('[data-happy2-ui="onboarding-title"]').element.textContent).toBe(
-        "Connecting to Rig.",
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
+        "Checking the local service…",
     );
-    expect(view.$('[data-happy2-ui="onboarding-loading-label"]').element.textContent).toBe(
-        "Reaching your local Rig daemon…",
-    );
-    // A loading card owns the body slot outright: no status banner is rendered.
-    expect(view.container.querySelector('[data-happy2-ui="banner"]')).toBeNull();
+    expect(view.container.querySelector('[data-happy2-ui="spinner"]')).not.toBeNull();
+    expect(
+        view.container.querySelector('[data-happy2-ui="rig-connection-status-body"] button'),
+    ).toBeNull();
 
     await view.screenshot("RigConnectionStatus.connecting");
 }, 120_000);
@@ -57,13 +60,16 @@ it("reports daemon boot as a loading state distinct from transport connection", 
     );
     await view.ready();
 
-    // Transport is live, so the kicker names the daemon rather than the connection.
-    expect(view.$('[data-happy2-ui="onboarding-kicker"]').element.textContent).toBe("Rig daemon");
-    expect(view.$('[data-happy2-ui="onboarding-title"]').element.textContent).toBe("Starting Rig.");
-    expect(view.$('[data-happy2-ui="onboarding-loading-label"]').element.textContent).toBe(
-        "Waiting for the Rig daemon to become ready…",
+    expect(
+        view.$('[data-happy2-ui="rig-connection-status"]').element.getAttribute("data-state"),
+    ).toBe("starting");
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Starting Rig",
     );
-    expect(view.container.querySelector('[data-happy2-ui="banner"]')).toBeNull();
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
+        "Waiting for the daemon to become ready…",
+    );
+    expect(view.container.querySelector('[data-happy2-ui="spinner"]')).not.toBeNull();
 }, 120_000);
 
 it("counts reconnect attempts and retries on demand while disconnected", async () => {
@@ -83,19 +89,14 @@ it("counts reconnect attempts and retries on demand while disconnected", async (
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="onboarding-title"]').element.textContent).toBe(
-        "Rig is unreachable.",
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Reconnecting to Rig",
     );
-    expect(view.$('[data-happy2-ui="banner"]').element.getAttribute("data-tone")).toBe("warning");
-    expect(view.$('[data-happy2-ui="banner-title"]').element.textContent).toBe(
-        "Reconnecting… (attempt 3)",
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
+        "Waiting for the local service · attempt 3",
     );
-    // The probe failure detail is surfaced verbatim, not summarised away.
-    expect(view.$('[data-happy2-ui="banner-message"]').element.textContent).toBe(
-        "connect ECONNREFUSED",
-    );
-
-    const retry = view.$('[data-happy2-ui="banner-actions"] button').element as HTMLButtonElement;
+    const retry = view.$('[data-happy2-ui="rig-connection-status-body"] button')
+        .element as HTMLButtonElement;
     expect(
         retry.querySelector('[data-happy2-ui="button-label"]')?.textContent ?? retry.textContent,
     ).toContain("Retry now");
@@ -120,12 +121,11 @@ it("uses singular reconnect copy on the first attempt", async () => {
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="banner-title"]').element.textContent).toBe(
-        "Reconnecting to your local Rig daemon…",
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Reconnecting to Rig",
     );
-    // Without a probe message the banner still explains the failure.
-    expect(view.$('[data-happy2-ui="banner-message"]').element.textContent).toBe(
-        "The Rig daemon did not respond.",
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
+        "Waiting for the local service…",
     );
 }, 120_000);
 
@@ -149,19 +149,15 @@ it("offers an explicit retry control when a reachable daemon reports an error", 
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="onboarding-title"]').element.textContent).toBe(
-        "Rig could not start.",
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Rig needs attention",
     );
-    expect(view.$('[data-happy2-ui="banner"]').element.getAttribute("data-tone")).toBe("danger");
-    expect(view.$('[data-happy2-ui="banner-message"]').element.textContent).toBe(
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
         "No provider is authenticated.",
     );
-    // A daemon error is not auto-retried, so the retry lives outside the banner.
-    expect(view.container.querySelector('[data-happy2-ui="banner-actions"]')).toBeNull();
-
     const button = view.$('[data-happy2-ui="rig-connection-status-body"] button')
         .element as HTMLButtonElement;
-    expect(button.querySelector('[data-happy2-ui="button-label"]')?.textContent).toBe("Try again");
+    expect(button.querySelector('[data-happy2-ui="button-label"]')?.textContent).toBe("Retry now");
     button.click();
     expect(retried).toBe(1);
 
@@ -184,10 +180,11 @@ it("confirms the connected daemon version without offering a retry", async () =>
     );
     await view.ready();
 
-    expect(view.$('[data-happy2-ui="onboarding-title"]').element.textContent).toBe("Rig is ready.");
-    expect(view.$('[data-happy2-ui="banner"]').element.getAttribute("data-tone")).toBe("success");
-    expect(view.$('[data-happy2-ui="banner-message"]').element.textContent).toBe(
-        "Connected to Rig 1.4.2.",
+    expect(view.$('[data-happy2-ui="rig-connection-status-label"]').element.textContent).toBe(
+        "Rig is ready",
+    );
+    expect(view.$('[data-happy2-ui="rig-connection-status-progress"]').element.textContent).toBe(
+        "Local daemon 1.4.2",
     );
     // A healthy connection is informational only — nothing to retry.
     expect(

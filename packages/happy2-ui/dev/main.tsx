@@ -529,6 +529,7 @@ function componentFromHash(): string {
 function Workbench() {
     const [active, setActive] = useState(componentFromHash());
     const syncHash = () => setActive(componentFromHash());
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the Blueprint route is driven by the browser hash, so this mounted workbench owns one hashchange listener with complete cleanup
     useLayoutEffect(() => {
         window.addEventListener("hashchange", syncHash);
         return () => window.removeEventListener("hashchange", syncHash);

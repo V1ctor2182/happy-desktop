@@ -144,6 +144,11 @@ const MarkdownParagraph = ({
         </p>
     );
 };
+const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => (
+    <div className="happy2-message__code-block" data-happy2-ui="message-code-block">
+        <pre {...props}>{children}</pre>
+    </div>
+);
 /**
  * Headings render with no generated `id`. Chat bodies are untrusted and appear
  * many-to-a-page, so generated heading anchors would collide across messages.
@@ -162,6 +167,7 @@ const markdownComponents: Components = {
     a: MarkdownLink,
     img: MarkdownImage,
     p: MarkdownParagraph,
+    pre: MarkdownPre,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
     h3: headingOverride("h3"),

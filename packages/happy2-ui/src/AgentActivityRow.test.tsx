@@ -142,10 +142,10 @@ it("renders each tool presentation and status with the correct dot tone", async 
     // File diff: verb + stats + DiffSnippet body.
     expect(
         view.$('[data-testid="diff"] [data-happy2-ui="agent-activity-verb"]').element.textContent,
-    ).toBe("Edited");
+    ).toBe("Edit");
     expect(
         view.$('[data-testid="diff"] [data-happy2-ui="agent-activity-text"]').element.textContent,
-    ).toBe("src/a.ts");
+    ).toBe("a.ts");
     expect(view.$('[data-testid="diff"] .happy2-agent-activity__added').element.textContent).toBe(
         "+1",
     );
@@ -208,7 +208,7 @@ it("renders each tool presentation and status with the correct dot tone", async 
     ).toBe("rgb(255, 59, 48)");
     expect(
         view.$('[data-testid="failed"] [data-happy2-ui="agent-activity-verb"]').element.textContent,
-    ).toBe("Failed");
+    ).toBe("Bash");
 
     await view.screenshot("AgentActivityRow.test");
 }, 120_000);

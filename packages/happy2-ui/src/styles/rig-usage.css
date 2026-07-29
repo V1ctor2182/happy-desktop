@@ -10,8 +10,8 @@
     width: 100%;
     box-sizing: border-box;
     padding: 16px;
-    color: var(--text-primary);
-    background: var(--surface-raised, var(--surface));
+    color: var(--text);
+    background: var(--surface-high);
     border: 1px solid var(--divider);
     border-radius: 12px;
 }
@@ -61,7 +61,7 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--text-tertiary, var(--text-secondary));
+    color: var(--text-secondary);
 }
 
 .happy2-rig-usage__table {
@@ -126,7 +126,7 @@
 
 .happy2-rig-usage__quota-empty {
     font-size: 12px;
-    color: var(--text-tertiary, var(--text-secondary));
+    color: var(--text-secondary);
 }
 
 .happy2-rig-usage__quota-window {
@@ -172,5 +172,5 @@
 
 .happy2-rig-usage__quota-reset {
     flex: none;
-    color: var(--text-tertiary, var(--text-secondary));
+    color: var(--text-secondary);
 }

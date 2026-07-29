@@ -288,6 +288,7 @@ export function ChatStorePage() {
         workspaceFileClose: () =>
             setNavigation((value) => ({ ...value, workspaceFilePath: undefined })),
     };
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this Blueprint page owns several disposable fake surfaces whose subscriptions must be released together when the specimen unmounts
     useLayoutEffect(
         () => () => {
             sidebar[Symbol.dispose]();

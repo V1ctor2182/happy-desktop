@@ -47,6 +47,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
     // Imperative focus handoff at the overlay's lifetime boundary: there is no
     // declarative way to move browser focus into the dialog on open and back to
     // the invoking control on close.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- opening and closing a modal must move live browser focus into its committed dialog and back to the still-connected invoker
     useLayoutEffect(() => {
         const overlay = overlayEl.current;
         if (!overlay) return;

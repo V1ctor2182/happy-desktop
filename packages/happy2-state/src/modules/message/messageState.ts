@@ -1,5 +1,5 @@
 import { type SendMessageInput, UserError } from "../../types.js";
-import { type ChatStore, messageItemProject } from "../chat/chatState";
+import { type ChatStore, messageItemProject } from "../chat/chatState.js";
 import {
     type ConversationMessageEntry,
     type ConversationMessageProjection,

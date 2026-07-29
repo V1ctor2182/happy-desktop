@@ -277,11 +277,11 @@ it("holds Composer geometry, colors, and typography", async () => {
             { width: 600, height: 260, padding: 20 },
         );
     await view.ready();
-    // The outer composer includes its 20px audience text below the 115px
+    // The outer composer includes its 28px audience row below the 115px
     // solid inset card, which keeps its own no-resting-hairline geometry.
     const root = view.$('[data-testid="composer-default"]');
     const surface = view.$('[data-testid="composer-default"] [data-happy2-ui="composer-surface"]');
-    expect(root.bounds()).toEqual({ x: 20, y: 20, width: 560, height: 139 });
+    expect(root.bounds()).toEqual({ x: 20, y: 20, width: 560, height: 147 });
     expect(surface.bounds()).toEqual({ x: 20, y: 20, width: 560, height: 115 });
     expect(
         surface.computedStyles([

@@ -92,7 +92,6 @@ it("holds the conversation surface geometry, live status, and composer dock", as
                 onAbort={() => undefined}
                 onComposerSend={() => undefined}
                 onComposerValueChange={() => undefined}
-                queued={[{ id: "q1", text: "Also update the changelog" }]}
                 running
                 subtitle="~/happy2"
                 title="Fix token rotation race"
@@ -120,10 +119,9 @@ it("holds the conversation surface geometry, live status, and composer dock", as
     expect(status.element.getAttribute("data-running")).toBe("");
     expect(view.$('[data-happy2-ui="conversation-elapsed"]').element.textContent).toBe("1m 32s");
 
-    // Queued steering messages preview above the dock.
-    expect(view.$('[data-happy2-ui="conversation-queued-item"]').element.textContent).toBe(
-        "Also update the changelog",
-    );
+    // Steering is now an ordered transcript entry, never a second preview
+    // queue floating above the dock.
+    expect(view.container.querySelector('[data-happy2-ui="conversation-queued-item"]')).toBeNull();
 
     // The dock owns the composer, whose one trailing control stops the run or
     // sends. This draft has something to say, so it stays a send control and

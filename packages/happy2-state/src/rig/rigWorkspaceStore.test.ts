@@ -60,11 +60,15 @@ describe("rigWorkspaceStore", () => {
         expect(fake.sessionSubscriberCount).toBe(1);
 
         unsubscribe();
-        expect(fake.sessionSubscriberCount).toBe(0);
+        // The client retains an opened, non-archived chat so background work
+        // keeps reconciling while no workspace surface is mounted.
+        expect(fake.sessionSubscriberCount).toBe(1);
         workspace[Symbol.dispose]();
+        client[Symbol.dispose]();
+        expect(fake.sessionSubscriberCount).toBe(0);
     });
 
-    it("switches the conversation lease when another one is addressed and disposes the previous", async () => {
+    it("switches the visible conversation while retaining opened chats for background sync", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         fake.sessionSet(fakeRigSession("session-b"));
@@ -81,11 +85,11 @@ describe("rigWorkspaceStore", () => {
         workspace.conversationOpen("session-b" as RigSessionId);
         await flush();
         expect(conversationReady(workspace).conversationId).toBe("session-b");
-        // Only the conversation the URL addresses holds a live subscription.
-        expect(fake.sessionSubscriberCount).toBe(1);
+        expect(fake.sessionSubscriberCount).toBe(2);
 
         unsubscribe();
         workspace[Symbol.dispose]();
+        client[Symbol.dispose]();
     });
 
     it("releases the conversation when the list is addressed without one", async () => {
@@ -103,10 +107,11 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         expect(workspace.get().conversation.type).toBe("unloaded");
-        expect(fake.sessionSubscriberCount).toBe(0);
+        expect(fake.sessionSubscriberCount).toBe(1);
 
         unsubscribe();
         workspace[Symbol.dispose]();
+        client[Symbol.dispose]();
     });
 
     it("asks its owner to address a conversation it created rather than opening one itself", async () => {
@@ -138,7 +143,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("re-acquires the addressed conversation after every subscriber leaves and returns", async () => {
+    it("reuses the retained addressed conversation after every subscriber leaves and returns", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         const client = rigClientCreate({ transport: fake.transport });
@@ -149,10 +154,10 @@ describe("rigWorkspaceStore", () => {
         await flush();
         expect(conversationReady(workspace).conversationId).toBe("session-a");
 
-        // The URL still names the conversation while nothing is mounted, so
-        // remounting must materialize it again without a second navigation.
+        // The URL still names the conversation while nothing is mounted, and
+        // the client keeps that non-archived chat synchronized in the background.
         first();
-        expect(fake.sessionSubscriberCount).toBe(0);
+        expect(fake.sessionSubscriberCount).toBe(1);
         const second = workspace.subscribe(() => undefined);
         await flush();
 
@@ -161,6 +166,7 @@ describe("rigWorkspaceStore", () => {
 
         second();
         workspace[Symbol.dispose]();
+        client[Symbol.dispose]();
     });
 
     it("returns a referentially stable snapshot across no-op notifications", async () => {
@@ -334,10 +340,11 @@ describe("rigWorkspaceStore", () => {
         await flush();
 
         expect(conversationReady(workspace).conversationId).toBe("session-b");
-        expect(fake.sessionSubscriberCount).toBe(1);
+        expect(fake.sessionSubscriberCount).toBe(2);
 
         unsubscribe();
         workspace[Symbol.dispose]();
+        client[Symbol.dispose]();
     });
 
     it("rejects the stale first response in an @a -> @ab -> @a mention race", async () => {

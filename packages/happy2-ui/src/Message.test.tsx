@@ -1726,10 +1726,10 @@ it("renders string bodies as safe streaming Markdown", async () => {
     /* ---- Multi-block stacking: 8px, or 12px around fenced code ----------- */
     /* The Markdown renderer emits every block as a direct body child, so the
        body's `> * + *` 8px rule is truthful, apart from the intentionally
-       roomier fenced-code card: `pre` sets its own margin-top/bottom:12px,
-       which is the more specific selector and so wins over the generic 8px
-       rule. Adjacent sibling margins collapse to their max, so any gap that
-       touches a `pre` on either side renders as 12px, not 8+12=20. */
+       roomier fenced-code wrapper. The wrapper owns 12px block margins while
+       its nested `pre` remains a full-bleed scrollport with no spacing. Adjacent
+       sibling margins collapse to their max, so any gap that touches the wrapper
+       renders as 12px, not 8+12=20. */
     const mdBlocks = [...mdBody.element.children].filter(
         (node): node is HTMLElement =>
             node instanceof HTMLElement &&
@@ -1740,7 +1740,10 @@ it("renders string bodies as safe streaming Markdown", async () => {
         const previous = mdBlocks[index - 1]!.getBoundingClientRect();
         const current = mdBlocks[index]!.getBoundingClientRect();
         const expectedGap =
-            mdBlocks[index - 1]!.tagName === "PRE" || mdBlocks[index]!.tagName === "PRE" ? 12 : 8;
+            mdBlocks[index - 1]!.classList.contains("happy2-message__code-block") ||
+            mdBlocks[index]!.classList.contains("happy2-message__code-block")
+                ? 12
+                : 8;
         expect(
             Math.abs(current.top - previous.bottom - expectedGap),
             `block ${index} has its expected vertical gap after block ${index - 1}`,

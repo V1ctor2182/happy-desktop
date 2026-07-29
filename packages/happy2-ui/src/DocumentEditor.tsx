@@ -86,21 +86,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     // exactly when the underlying Y.Doc changes, never on ordinary re-renders,
     // or cursors and undo history would reset while typing.
     const awareness = useMemo(() => new Awareness(props.ydoc), [props.ydoc]);
-    const commentUsersResolve = useEffectEvent(
-        async (
-            userIds: string[],
-        ): Promise<{ id: string; username: string; avatarUrl: string }[]> => {
-            const users = (await props.commentUsersResolve?.(userIds)) ?? [];
-            return userIds.map((id) => {
-                const user = users.find((candidate) => candidate.id === id);
-                return {
-                    id,
-                    username: user?.username ?? "Someone",
-                    avatarUrl: user?.avatarUrl ?? "",
-                };
-            });
-        },
-    );
+    const commentUsersResolve = props.commentUsersResolve;
     const commentUserId = props.commentUserId;
     const comments = useMemo(
         () =>
@@ -111,10 +97,20 @@ export function DocumentEditor(props: DocumentEditorProps) {
                           props.ydoc.getMap(documentThreadsName),
                           new DefaultThreadStoreAuth(commentUserId, "editor"),
                       ),
-                      resolveUsers: (userIds) => commentUsersResolve(userIds),
+                      resolveUsers: async (userIds) => {
+                          const users = (await commentUsersResolve?.(userIds)) ?? [];
+                          return userIds.map((id) => {
+                              const user = users.find((candidate) => candidate.id === id);
+                              return {
+                                  id,
+                                  username: user?.username ?? "Someone",
+                                  avatarUrl: user?.avatarUrl ?? "",
+                              };
+                          });
+                      },
                   })
                 : undefined,
-        [props.ydoc, commentUserId],
+        [props.ydoc, commentUserId, commentUsersResolve],
     );
     const editor = useCreateBlockNote(
         {
@@ -132,6 +128,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     const presenceEmit = useEffectEvent((payload: DocumentEditorPresencePayload) =>
         props.onPresence?.(payload),
     );
+    // eslint-disable-next-line happy2-react/no-layout-effect -- Yjs Awareness is an imperative collaborative-editor resource whose update listener and instance must be attached after commit and completely destroyed with this document
     useLayoutEffect(() => {
         const onUpdate = (
             changes: { added: number[]; updated: number[]; removed: number[] },
@@ -163,6 +160,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
     }, [awareness]);
 
     const appliedRef = useRef(new Map<string, DocumentEditorPresence>());
+    // eslint-disable-next-line happy2-react/no-layout-effect -- remote presence payloads must be applied to the live Yjs Awareness instance after the matching document render commits
     useLayoutEffect(() => {
         const applied = appliedRef.current;
         const present = new Set<string>();

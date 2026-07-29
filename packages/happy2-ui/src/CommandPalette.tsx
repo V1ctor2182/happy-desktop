@@ -57,6 +57,7 @@ export function CommandPalette(props: CommandPaletteProps) {
     const invokerRef = useRef<HTMLElement | null>(null);
     const composingRef = useRef(false);
     const label = () => local.placeholder ?? "Search";
+    // eslint-disable-next-line happy2-react/no-layout-effect -- opening the palette must capture the live invoking element and move browser focus into the committed input before paint
     useLayoutEffect(() => {
         // Capture the invoking control before autofocus moves focus into the
         // input, so closing the palette can hand focus back to it.
@@ -66,6 +67,7 @@ export function CommandPalette(props: CommandPaletteProps) {
             inputRef.current.select();
         }
     }, [local.autoFocus]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- closing the palette restores focus to the exact still-connected DOM control that invoked it, which is an imperative unmount handoff
     useLayoutEffect(
         () => () => {
             const invoker = invokerRef.current;

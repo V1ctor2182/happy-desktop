@@ -153,6 +153,21 @@ export type {
     SetupSnapshot,
     SetupStore,
 } from "./modules/setup/setupState.js";
+export {
+    setupDraftStoreCreate,
+    type SetupDraftSnapshot,
+    type SetupDraftState,
+    type SetupDraftStore,
+    type SetupDraftStoreOptions,
+} from "./modules/setup/setupDraftState.js";
+export {
+    fileDownloadStoreCreate,
+    type FileDownloadInput,
+    type FileDownloadOutput,
+    type FileDownloadSnapshot,
+    type FileDownloadState,
+    type FileDownloadStore,
+} from "./modules/files/fileDownloadState.js";
 export type {
     AgentSecretsSnapshot,
     AgentSecretsStore,

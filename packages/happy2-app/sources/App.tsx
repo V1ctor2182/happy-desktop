@@ -1,5 +1,10 @@
-import { useLayoutEffect, useReducer } from "react";
-import { happyStateCreate } from "happy2-state";
+import { useLayoutEffect, useMemo } from "react";
+import {
+    appearanceStoreCreate,
+    happyStateCreate,
+    type AppearanceStore,
+    type HappyState,
+} from "happy2-state";
 import { AuthGate, type AuthCredentialStore, type AuthSession } from "./components/AuthGate";
 import { DesktopApp } from "./components/DesktopApp";
 import { OnboardingBoundary } from "./components/OnboardingBoundary";
@@ -48,23 +53,27 @@ export interface AppProps {
  */
 export function App(props: AppProps) {
     const usesServer = !!props.serverUrl;
-    const [resources] = useReducer(
-        (value: {
-            state?: ReturnType<typeof happyStateCreate>;
-            router: AppRouter;
-            ownsRouter: boolean;
-        }) => value,
-        undefined,
+    // Identity contract: these resources are replaced only when the host changes
+    // between local/server ownership or supplies a genuinely different router.
+    const resources = useMemo<{
+        appearance: AppearanceStore;
+        state?: HappyState;
+        router: AppRouter;
+        ownsRouter: boolean;
+    }>(
         () => ({
+            appearance: appearanceStoreCreate(),
             state: usesServer ? undefined : happyStateCreate(),
             router: props.router ?? appRouterCreate(),
             ownsRouter: !props.router,
         }),
+        [usesServer, props.router],
     );
     // eslint-disable-next-line happy2-react/no-layout-effect -- disposes the process-local state and router history this component created
     useLayoutEffect(() => {
-        const { state, router, ownsRouter } = resources;
+        const { appearance, state, router, ownsRouter } = resources;
         return () => {
+            appearance[Symbol.dispose]();
             state?.[Symbol.dispose]();
             if (ownsRouter) router.history.destroy();
         };
@@ -72,6 +81,7 @@ export function App(props: AppProps) {
     const desktop = props.platform === "desktop";
     const renderWorkspace = (session: AuthSession) => (
         <DesktopApp
+            appearance={resources.appearance}
             desktopRuntime={props.desktopRuntime}
             platform={props.platform}
             router={resources.router}
@@ -96,6 +106,7 @@ export function App(props: AppProps) {
         );
     return (
         <DesktopApp
+            appearance={resources.appearance}
             desktopRuntime={props.desktopRuntime}
             platform={props.platform}
             router={resources.router}

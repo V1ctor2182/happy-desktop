@@ -290,7 +290,6 @@ export type ComposerProps = {
 const LINE_HEIGHT = 22;
 const MIN_LINES = 1;
 const MAX_LINES = 8;
-const TEXTAREA_VERTICAL_PADDING = 44;
 /**
  * Message composer: focus-within surface card with a one-line resting textarea
  * that grows through eight lines, context chips, capability-driven file/mention/emoji actions,
@@ -342,12 +341,13 @@ export function Composer(props: ComposerProps) {
         props.onAudienceChange?.(props.audience === "agents" ? "people" : "agents");
     };
     /* Start as one line, then grow up to eight lines for longer drafts. */
+    // eslint-disable-next-line happy2-react/no-layout-effect -- textarea auto-growth must read the committed scrollHeight and write its live DOM height before the browser paints the new draft
     useLayoutEffect(() => {
         void props.value;
         const el = textareaEl.current;
         if (!el) return;
-        const minHeight = LINE_HEIGHT * MIN_LINES + TEXTAREA_VERTICAL_PADDING;
-        const maxHeight = LINE_HEIGHT * MAX_LINES + TEXTAREA_VERTICAL_PADDING;
+        const minHeight = LINE_HEIGHT * MIN_LINES;
+        const maxHeight = LINE_HEIGHT * MAX_LINES;
         el.style.height = `${minHeight}px`;
         el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
     }, [props.value]);
@@ -364,6 +364,7 @@ export function Composer(props: ComposerProps) {
         closeMention();
         closeEmoji();
     };
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a completed send returns real keyboard focus to the committed textarea only when this composer initiated the focus handoff
     useLayoutEffect(() => {
         if (wasBusy.current && !busy && restoreFocusAfterSend.current) {
             textareaEl.current?.focus();
@@ -371,6 +372,7 @@ export function Composer(props: ComposerProps) {
         }
         wasBusy.current = busy;
     }, [busy]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- composer popovers require one document-level outside-pointer listener whose lifetime follows the mounted composer and is completely cleaned up
     useLayoutEffect(() => {
         const onPointerDown = (event: PointerEvent) => {
             if (!composerEl.current?.contains(event.target as Node)) closePopovers();
@@ -602,7 +604,13 @@ export function Composer(props: ComposerProps) {
                         />
                     </div>
                 ) : null}
-                <div className="happy2-composer__input" data-happy2-ui="composer-input">
+                <div
+                    className="happy2-composer__input"
+                    data-happy2-ui="composer-input"
+                    onPointerDown={(event) => {
+                        if (event.target === event.currentTarget) textareaEl.current?.focus();
+                    }}
+                >
                     <textarea
                         className="happy2-composer__textarea"
                         data-happy2-ui="composer-textarea"

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { serverSchemaMigrate } from "happy2-server";
 import { describe, expect, it } from "vitest";
+import { applyServerMigrations } from "./applyServerMigrations.js";
 
 describe("server upgrades for public ownership and child visibility", () => {
     it("removes public owners and matches an existing child's visibility to its parent", async () => {
@@ -27,12 +28,7 @@ describe("server upgrades for public ownership and child visibility", () => {
                 "INSERT INTO chat_members (chat_id, user_id, role, membership_epoch) VALUES ('legacy-private-parent', 'legacy-owner', 'owner', 'legacy-private-parent-owner')",
                 "INSERT INTO chat_members (chat_id, user_id, role, membership_epoch) VALUES ('legacy-private-child', 'legacy-user', 'owner', 'legacy-private-child-owner')",
             ]);
-            await client.execute({
-                sql: "DELETE FROM __drizzle_migrations WHERE created_at = ?",
-                args: [1785974400000],
-            });
-
-            await serverSchemaMigrate(client);
+            await applyServerMigrations(client, ["0048_channel_ownership_and_child_visibility"]);
 
             expect(
                 (

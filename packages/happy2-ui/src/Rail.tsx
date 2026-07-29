@@ -70,6 +70,7 @@ export function Rail(props: RailProps) {
     } = props;
     const [primaryMenuOpen, setPrimaryMenuOpen] = useState(false);
     const primaryRoot = useRef<HTMLDivElement>(null);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- an open rail menu owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (!primaryMenuOpen) return;
         const close = (event: PointerEvent) => {

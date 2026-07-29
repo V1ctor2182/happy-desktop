@@ -84,6 +84,13 @@ function workspace(): RigWorkspaceStore {
             },
         },
         conversation: { type: "unloaded" as const },
+        fileTabs: [],
+        openInTargets: [],
+        fileViewMode: "unified" as const,
+        fileScope: "changed" as const,
+        fileLayout: "flat" as const,
+        fileTreeExpanded: new Set<string>(),
+        workspaceFilesLoading: false,
     };
     return {
         get: () => snapshot,

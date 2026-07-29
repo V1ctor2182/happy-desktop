@@ -35,6 +35,7 @@ export function useAvatarImages(actions: { fileDownload(fileId: string): Promise
             // An avatar is optional; the initials remain visible on failure.
         }
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- avatar object URLs and in-flight downloads are browser resources whose disposal flag and URL revocation follow this mounted projection
     useLayoutEffect(() => {
         disposed.current = false;
         return () => {
@@ -71,6 +72,7 @@ export function usePluginRequestImages(actions: {
             // The staged image is optional; the glyph fallback remains visible.
         }
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- staged plugin-image object URLs and in-flight downloads are browser resources whose disposal flag and URL revocation follow this mounted projection
     useLayoutEffect(() => {
         disposed.current = false;
         return () => {

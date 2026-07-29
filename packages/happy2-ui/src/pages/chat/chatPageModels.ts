@@ -514,7 +514,7 @@ function turnEntries(
     // bare steps and only name the agent afterwards, so its own steps would read
     // as trailing whatever came before it. The identity leads instead, and every
     // step and text block below it continues that one group.
-    if (entries[0]?.kind === "traceStep")
+    if (entries[0]?.kind === "traceStep") {
         entries.unshift({
             ...entry,
             renderKey: `${entry.renderKey} turn`,
@@ -524,11 +524,15 @@ function turnEntries(
             agentTrace: undefined,
             generationStatus: undefined,
         });
-    // The control that folds a turn away rides the line that opened it, beside
-    // the agent's name, so expanding and collapsing never moves it: what changes
-    // is what hangs below that line, not where the reader clicks.
+        replyIndex += 1;
+    }
+    // The control that folds a turn away stays on the durable final reply. That
+    // row keeps the server message's render key while projected trace rows come
+    // and go around it, so the control remains mounted and can always collapse
+    // the expanded turn again.
     for (const [index, row] of entries.entries())
-        if (row.kind === "message") row.agentTrace = index === 0 ? entry.agentTrace : undefined;
+        if (row.kind === "message")
+            row.agentTrace = index === replyIndex ? entry.agentTrace : undefined;
     // A settled turn keeps a permanent status row under its last content: how
     // long it took from the request, and how many tools it used. Running turns
     // use the transcript footer instead so the clock can tick.

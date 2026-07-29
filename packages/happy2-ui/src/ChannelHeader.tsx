@@ -71,6 +71,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
     const menuActions = () =>
         (local.menuItems ?? []).filter((item) => item.kind === "item").length > 0;
     const hasMenu = () => Boolean(local.onMenuSelect) && menuActions();
+    // eslint-disable-next-line happy2-react/no-layout-effect -- an open header menu owns document-level outside-click and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (!menuOpen) return;
         const close = (event: Event) => {

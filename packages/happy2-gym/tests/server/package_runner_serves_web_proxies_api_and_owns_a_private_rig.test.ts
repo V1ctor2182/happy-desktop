@@ -464,22 +464,18 @@ describe.sequential("the package runner", () => {
             const desktopRigEndpoints = await mkdtemp(join(tmpdir(), "h2r-"));
             const invocationsPath = join(fixture.directory, "rig-invocations.jsonl");
             const wrapperPath = join(fixture.directory, "rig-wrapper.mjs");
-            const bundledRigMain = fixture.config.agents.command.replace(
-                /\/main\.js$/,
-                "/app/main.js",
-            );
+            const bundledRigMain = fixture.config.agents.command;
             await writeFile(
                 wrapperPath,
                 `#!/usr/bin/env node
 import { appendFile } from "node:fs/promises";
-import { main } from ${JSON.stringify(pathToFileURL(bundledRigMain).href)};
 await appendFile(${JSON.stringify(invocationsPath)}, JSON.stringify({
     arguments: process.argv.slice(2),
     disableHappySync: process.env.RIG_DISABLE_HAPPY_SYNC,
     rigHome: process.env.RIG_HOME,
     socketPath: process.env.RIG_SERVER_SOCKET_PATH,
 }) + "\\n");
-await main(process.argv.slice(2));
+await import(${JSON.stringify(pathToFileURL(bundledRigMain).href)});
 `,
                 { mode: 0o700 },
             );

@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useReducer, type ReactNode } from "react";
+import { useId, useLayoutEffect, useMemo, type ReactNode } from "react";
 import {
     Banner,
     BuildProgressPanel,
@@ -17,19 +17,21 @@ import {
     defaultAgentUsernameError,
     pickDefaultAgentIdentity,
 } from "../onboarding/defaultAgentIdentity";
-import type {
-    HappyState,
-    SandboxProviderStatus,
-    SetupBaseImageSummary,
-    SetupSnapshot,
-    SetupStore,
+import {
+    setupDraftStoreCreate,
+    type HappyState,
+    type SandboxProviderStatus,
+    type SetupBaseImageSummary,
+    type SetupDraftSnapshot,
+    type SetupDraftStore,
+    type SetupSnapshot,
+    type SetupStore,
 } from "happy2-state";
 import { onboardingStepForStatus, type OnboardingStepId } from "../onboarding/onboardingRoute";
 export type ServerOnboardingProps = {
     state: HappyState;
     showWindowDragRegion?: boolean;
-    /** Invoked once server setup is complete and the main application may take over. */
-    onComplete: () => void;
+    children: ReactNode;
 };
 /** Poll cadence for the live build surface as a stopgap alongside SSE reconciliation. */
 const BUILD_POLL_MS = 2500;
@@ -57,54 +59,64 @@ const SERVER_STAGES: {
  */
 export function ServerOnboarding(props: ServerOnboardingProps) {
     const setup = props.state.setup();
+    // This store is the stable owner of drafts for the complete onboarding
+    // lifetime; authoritative setup notifications must not replace it.
+    const drafts = useMemo(
+        () => setupDraftStoreCreate({ defaultAgent: DEFAULT_AGENT_PROPOSED }),
+        [],
+    );
     return (
         <>
             {props.showWindowDragRegion ? <WindowDragRegion /> : null}
             <StoreSurface store={setup}>
-                {(snapshot) => (
-                    <ServerOnboardingBody
-                        onComplete={props.onComplete}
-                        snapshot={snapshot}
-                        state={props.state}
-                        store={setup}
-                    />
-                )}
+                {(snapshot) => {
+                    const resolution =
+                        snapshot.status.type === "ready"
+                            ? onboardingStepForStatus(snapshot.status.value)
+                            : undefined;
+                    if (resolution?.kind === "app") return props.children;
+                    return (
+                        <StoreSurface store={drafts}>
+                            {(draft) => (
+                                <ServerOnboardingBody
+                                    draft={draft}
+                                    drafts={drafts}
+                                    snapshot={snapshot}
+                                    state={props.state}
+                                    store={setup}
+                                />
+                            )}
+                        </StoreSurface>
+                    );
+                }}
             </StoreSurface>
         </>
     );
 }
 function ServerOnboardingBody(props: {
-    onComplete: () => void;
+    draft: SetupDraftSnapshot;
+    drafts: SetupDraftStore;
     snapshot: SetupSnapshot;
     state: HappyState;
     store: SetupStore;
 }) {
-    const { onComplete, snapshot, state } = props;
+    const { snapshot, state } = props;
     const status = snapshot.status;
     const defaultAgentFormId = `${useId()}-default-agent`;
-    // The agent draft belongs to this stable screen owner so the body form and
-    // pinned footer action share validation, submission, and request state.
-    const [agentDraft, agentDraftUpdate] = useReducer(
-        (
-            current: { name: string; username: string; attempted: boolean },
-            patch: Partial<{ name: string; username: string; attempted: boolean }>,
-        ) => ({ ...current, ...patch }),
-        {
-            name: DEFAULT_AGENT_PROPOSED.name,
-            username: DEFAULT_AGENT_PROPOSED.username,
-            attempted: false,
-        },
-    );
+    const agentDraft = props.draft.defaultAgent;
+    const agentDraftUpdate = (
+        patch: Partial<{ name: string; username: string; attempted: boolean }>,
+    ) => {
+        if (patch.name !== undefined) props.drafts.getState().defaultAgentNameUpdate(patch.name);
+        if (patch.username !== undefined)
+            props.drafts.getState().defaultAgentUsernameUpdate(patch.username);
+        if (patch.attempted === true) props.drafts.getState().defaultAgentSubmitAttempt();
+    };
     const resolution = status.type === "ready" ? onboardingStepForStatus(status.value) : undefined;
     const canonicalStep: OnboardingStepId | undefined =
         resolution?.kind === "step" ? resolution.step : undefined;
-    // Hand off to the main application the moment server setup is durably complete.
-    // eslint-disable-next-line happy2-react/no-layout-effect -- the handoff latch is an imperative transition out of this surface, not rendered output
-    useLayoutEffect(() => {
-        if (resolution?.kind !== "app") return;
-        onComplete();
-    }, [resolution?.kind, onComplete]);
     // Load the data each step needs on entry, once, without a manual refresh.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- materializing the authoritative provider or image subresource is an imperative store-lifetime transition triggered when its owning setup step commits
     useLayoutEffect(() => {
         if (canonicalStep === "sandbox-provider" && snapshot.providers.type === "unloaded")
             state.setupProvidersReload();
@@ -117,6 +129,7 @@ function ServerOnboardingBody(props: {
     // Live build progress: SSE reconciles the surface, and a bounded poll while a
     // build is actually running covers long, quiet layers. It stops the moment the
     // build leaves the running state or the surface unmounts.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- build progress has a bounded visible-surface polling fallback whose interval is created after commit and completely cleared on every lifetime change
     useLayoutEffect(() => {
         const building =
             canonicalStep === "build-progress" &&
@@ -133,6 +146,7 @@ function ServerOnboardingBody(props: {
     // engine then sees the card clear without a manual refresh. The poll stops the
     // moment the step changes or the surface unmounts; SSE remains the durable
     // reconciliation path for every other setup change.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- provider health has no push channel, so this visible setup step owns one bounded polling interval with complete cleanup
     useLayoutEffect(() => {
         if (canonicalStep !== "sandbox-provider") return;
         const timer = setInterval(() => props.state.setupProvidersReload(), PROVIDER_POLL_MS);
@@ -292,6 +306,8 @@ function ServerOnboardingBody(props: {
                 defaultAgentUsernameError={agentUsernameError()}
                 defaultAgentDescription={agentDescription()}
                 onDefaultAgentDraftUpdate={agentDraftUpdate}
+                setupDraft={props.draft}
+                setupDraftStore={props.drafts}
                 snapshot={props.snapshot}
                 state={props.state}
                 step={canonicalStep}
@@ -316,6 +332,8 @@ function Switchboard(props: {
     onDefaultAgentDraftUpdate: (
         patch: Partial<{ name: string; username: string; attempted: boolean }>,
     ) => void;
+    setupDraft: SetupDraftSnapshot;
+    setupDraftStore: SetupDraftStore;
     snapshot: SetupSnapshot;
     state: HappyState;
     step: OnboardingStepId | undefined;
@@ -327,7 +345,12 @@ function Switchboard(props: {
                 <SandboxProviderStep snapshot={props.snapshot} store={props.store} />
             ) : null}
             {props.step === "base-image" ? (
-                <BaseImageStep snapshot={props.snapshot} store={props.store} />
+                <BaseImageStep
+                    draft={props.setupDraft}
+                    drafts={props.setupDraftStore}
+                    snapshot={props.snapshot}
+                    store={props.store}
+                />
             ) : null}
             {props.step === "build-progress" ? (
                 <BuildStep snapshot={props.snapshot} store={props.store} />
@@ -395,37 +418,26 @@ function SandboxProviderStep(props: { snapshot: SetupSnapshot; store: SetupStore
         </>
     );
 }
-function BaseImageStep(props: { snapshot: SetupSnapshot; store: SetupStore }) {
+function BaseImageStep(props: {
+    draft: SetupDraftSnapshot;
+    drafts: SetupDraftStore;
+    snapshot: SetupSnapshot;
+    store: SetupStore;
+}) {
     const baseImages = props.snapshot.baseImages;
     const imageView = baseImages.type === "ready" ? baseImages.value : undefined;
-    // The custom-image draft lives in stable local reducer state owned by this step, so
-    // it survives every background base-image reload (which replaces the loadable
-    // reference and remounts the keyed built-in list) and every transient submit
-    // failure. It is never derived from the changing snapshot.
-    const [draft, draftUpdate] = useReducer(
-        (
-            current: {
-                showCustom: boolean;
-                customName: string;
-                customDockerfile: string;
-                attempted: boolean;
-            },
-            patch: Partial<{
-                showCustom: boolean;
-                customName: string;
-                customDockerfile: string;
-                attempted: boolean;
-            }>,
-        ) => ({ ...current, ...patch }),
-        { showCustom: false, customName: "", customDockerfile: "", attempted: false },
-    );
-    const { showCustom, customName, customDockerfile, attempted } = draft;
+    const {
+        visible: showCustom,
+        name: customName,
+        dockerfile: customDockerfile,
+        attempted,
+    } = props.draft.customImage;
     const pending = () => props.snapshot.pending.selectingImage;
     const nameError = () => (attempted && !customName.trim() ? "Enter an image name." : undefined);
     const dockerfileError = () =>
         attempted && !customDockerfile.trim() ? "Enter the Dockerfile contents." : undefined;
     const submitCustom = () => {
-        draftUpdate({ attempted: true });
+        props.drafts.getState().customImageSubmitAttempt();
         if (!customName.trim() || !customDockerfile.trim()) return;
         props.store.getState().baseImageSelect({
             custom: { name: customName.trim(), dockerfile: customDockerfile },
@@ -467,7 +479,7 @@ function BaseImageStep(props: { snapshot: SetupSnapshot; store: SetupStore }) {
                 description="Build a sandbox from your own Dockerfile."
                 icon="code"
                 meta="Build"
-                onSelect={() => draftUpdate({ showCustom: !showCustom })}
+                onSelect={() => props.drafts.getState().customImageVisibilityToggle()}
                 selected={showCustom}
                 title="Custom Dockerfile"
             />
@@ -485,7 +497,9 @@ function BaseImageStep(props: { snapshot: SetupSnapshot; store: SetupStore }) {
                         fullWidth
                         label="Image name"
                         name="custom-image-name"
-                        onValueChange={(value) => draftUpdate({ customName: value })}
+                        onValueChange={(value) =>
+                            props.drafts.getState().customImageNameUpdate(value)
+                        }
                         required
                         value={customName}
                     />
@@ -496,7 +510,9 @@ function BaseImageStep(props: { snapshot: SetupSnapshot; store: SetupStore }) {
                         label="Dockerfile"
                         multiline
                         name="custom-image-dockerfile"
-                        onValueChange={(value) => draftUpdate({ customDockerfile: value })}
+                        onValueChange={(value) =>
+                            props.drafts.getState().customImageDockerfileUpdate(value)
+                        }
                         required
                         rows={6}
                         value={customDockerfile}

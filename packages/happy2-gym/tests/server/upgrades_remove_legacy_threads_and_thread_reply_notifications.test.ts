@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { serverSchemaMigrate } from "happy2-server";
 import { describe, expect, it } from "vitest";
+import { applyServerMigrations } from "./applyServerMigrations.js";
 
 describe("server upgrades after thread removal", () => {
     it("soft-deletes legacy thread chats and removes thread notification state", async () => {
@@ -44,12 +45,7 @@ describe("server upgrades after thread removal", () => {
                 "DROP INDEX projects_one_default_idx",
                 "DROP TABLE projects",
             ]);
-            await client.execute({
-                sql: "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
-                args: [1785628800000],
-            });
-
-            await serverSchemaMigrate(client);
+            await applyServerMigrations(client, ["0044_remove_threads"]);
 
             expect(
                 (

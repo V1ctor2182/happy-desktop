@@ -22,6 +22,7 @@ export interface SearchPageProps {
 const tones: ToneName[] = ["brand", "ocean", "rose", "amber", "mint", "violet"];
 /** Complete cross-workspace search surface with generation-safe results owned by SearchStore. */
 export function SearchPage(props: SearchPageProps) {
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the controlled search value is submitted to the imperative generation-safe SearchStore only after the matching visible query commits
     useLayoutEffect(() => {
         const query = props.query.trim();
         if (props.store.getState().query !== query) props.store.getState().queryUpdate(query);

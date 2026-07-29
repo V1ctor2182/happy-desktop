@@ -75,7 +75,7 @@ jobs:
 
             - name: Validate release
               if: steps.publication.outputs.channel == 'latest'
-              run: pnpm run check:release
+              run: pnpm check
 
             - name: Set canary version
               if: steps.publication.outputs.channel == 'canary'

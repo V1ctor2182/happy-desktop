@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import { type MemberPermissionDetail, type Permission, type RoleSummary } from "../../resources.js";
 import { type UserError } from "../../types.js";
 import { type Loadable } from "../../conversation/loadable.js";
-import { type IdentityCatalog } from "../identity/identityState";
+import { type IdentityCatalog } from "../identity/identityState.js";
 import { type ConversationAuthor } from "../../conversation/conversationAuthor.js";
 import { type StateRuntime, userError } from "../runtime/runtimeState.js";
 

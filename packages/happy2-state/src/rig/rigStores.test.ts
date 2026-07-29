@@ -248,10 +248,17 @@ describe("rigChatStore streaming reconciliation", () => {
         fake.sessionSet(fakeRigSession("s1", { lastEventId: "e0" as RigEventId }));
         const { store, unsubscribe } = await chatReady(fake, "s1");
         expect(store.get().session.type).toBe("ready");
+        const prompt: RigMessage = {
+            id: "u1",
+            role: "user",
+            internal: false,
+            blocks: [{ type: "text", text: "hello" }],
+        };
 
         fake.sessionSet(
             fakeRigSession("s1", {
                 status: "running",
+                messages: [prompt],
                 lastEventId: "e1" as RigEventId,
             }),
         );
@@ -267,6 +274,7 @@ describe("rigChatStore streaming reconciliation", () => {
             event("s1", "e2", 2, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "m1",
                 event: { type: "text_start" },
             }),
         );
@@ -275,6 +283,7 @@ describe("rigChatStore streaming reconciliation", () => {
             event("s1", "e3", 3, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "m1",
                 event: { type: "text_delta", text: "Hel" },
             }),
         );
@@ -283,6 +292,7 @@ describe("rigChatStore streaming reconciliation", () => {
             event("s1", "e4", 4, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "m1",
                 event: { type: "text_delta", text: "lo" },
             }),
         );
@@ -297,7 +307,7 @@ describe("rigChatStore streaming reconciliation", () => {
         fake.sessionSet(
             fakeRigSession("s1", {
                 status: "idle",
-                messages: [finalized],
+                messages: [prompt, finalized],
                 lastEventId: "e6" as RigEventId,
             }),
         );
@@ -467,15 +477,30 @@ describe("rigChatStore streaming reconciliation", () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const { store, unsubscribe } = await chatReady(fake, "s1");
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                status: "running",
+                messages: [
+                    {
+                        id: "u1",
+                        role: "user",
+                        internal: false,
+                        blocks: [{ type: "text", text: "list files" }],
+                    },
+                ],
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, { type: "run_started", runId: "r1" }),
         );
+        await flush();
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e2", 2, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "a1",
                 event: {
                     type: "tool_execution_start",
                     toolCallId: "t1",
@@ -491,6 +516,7 @@ describe("rigChatStore streaming reconciliation", () => {
             event("s1", "e3", 3, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "a1",
                 event: { type: "tool_execution_progress", toolCallId: "t1", display: "running…" },
             }),
         );
@@ -499,6 +525,7 @@ describe("rigChatStore streaming reconciliation", () => {
             event("s1", "e4", 4, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "a1",
                 event: {
                     type: "tool_execution_end",
                     toolCallId: "t1",
@@ -522,15 +549,30 @@ describe("rigChatStore streaming reconciliation", () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const { store, unsubscribe } = await chatReady(fake, "s1");
+        fake.sessionSet(
+            fakeRigSession("s1", {
+                status: "running",
+                messages: [
+                    {
+                        id: "u1",
+                        role: "user",
+                        internal: false,
+                        blocks: [{ type: "text", text: "write file" }],
+                    },
+                ],
+            }),
+        );
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e1", 1, { type: "run_started", runId: "r1" }),
         );
+        await flush();
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e2", 2, {
                 type: "agent_event",
                 runId: "r1",
+                messageId: "a1",
                 event: {
                     type: "permission_review",
                     toolCallId: "t1",
@@ -1054,10 +1096,17 @@ describe("rigChatStore actions", () => {
             }),
         );
         const { store, unsubscribe } = await chatReady(fake, "s1");
-        // The answered turn closes with its stats row. The first turn ran a tool
-        // but never replied, so it has no final message for a row to sit under.
+        // Settled turns collapse their internal work into one final agent row
+        // plus the permanent status/trace row.
         const kinds = shapesOf(store);
-        expect(kinds).toEqual(["user", "tool", "user", "agentText", "turnStatus"]);
+        expect(kinds).toEqual([
+            "user",
+            "agentText",
+            "turnStatus",
+            "user",
+            "agentText",
+            "turnStatus",
+        ]);
         unsubscribe();
     });
 
@@ -1368,17 +1417,15 @@ describe("rigChatStore actions", () => {
         store[Symbol.dispose]();
     });
 
-    it("shellRun falls back to the returned result when no events arrive", async () => {
+    it("keeps shellRun results out of the transcript when no events arrive", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         fake.shellResultSet("s1" as RigSessionId, { output: "hi\n", exitCode: 3 });
         const { store, unsubscribe } = await chatReady(fake, "s1");
 
         await store.shellRun("echo hi");
-        const shell = entriesOfShape(store, "shell")[0];
-        expect(shell).toMatchObject({
-            activity: { running: false, output: "hi\n", exitCode: 3 },
-        });
+        expect(entriesOfShape(store, "shell")).toEqual([]);
+        expect(fake.calls.some((call) => call.operation === "shellRun")).toBe(true);
 
         unsubscribe();
         store[Symbol.dispose]();
@@ -1520,7 +1567,7 @@ describe("rigChatStore lifecycle", () => {
 });
 
 describe("rigClient", () => {
-    it("shares one chat store across leases and disposes on the last release", async () => {
+    it("shares one retained chat store across leases and disposes it with the client", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
         const client = rigClientCreate({ transport: fake.transport });
@@ -1537,9 +1584,10 @@ describe("rigClient", () => {
         expect(fake.sessionSubscriberCount).toBe(1);
 
         second[Symbol.dispose]();
-        expect(fake.sessionSubscriberCount).toBe(0);
+        expect(fake.sessionSubscriberCount).toBe(1);
         unsubscribe();
         client[Symbol.dispose]();
+        expect(fake.sessionSubscriberCount).toBe(0);
     });
 
     it("caches the model catalog", async () => {

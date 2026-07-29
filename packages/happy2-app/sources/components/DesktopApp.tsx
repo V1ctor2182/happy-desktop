@@ -1,17 +1,13 @@
-import { useReducer } from "react";
+import { useSyncExternalStore } from "react";
 import { RouterProvider } from "@tanstack/react-router";
-import {
-    StoreSurface,
-    ThemeScope,
-    type DesktopInstanceSwitcherProps,
-    type ThemeMode,
-} from "happy2-ui";
-import type { HappyState } from "happy2-state";
+import { StoreSurface, ThemeScope, type DesktopInstanceSwitcherProps } from "happy2-ui";
+import type { AppearanceStore, HappyState } from "happy2-state";
 import type { AuthSession } from "./AuthGate";
 import type { AppRouter } from "../navigation/appRouter";
 import type { AppRouterContext } from "../navigation/appRouterContext";
 
 export interface DesktopAppProps {
+    appearance: AppearanceStore;
     desktopRuntime?: DesktopInstanceSwitcherProps;
     platform?: "desktop" | "web";
     router: AppRouter;
@@ -29,30 +25,26 @@ export interface DesktopAppProps {
  * about what the session may see.
  */
 export function DesktopApp(props: DesktopAppProps) {
-    const [themeMode, themeModeSelect] = useReducer(
-        (_mode: ThemeMode, currentAppearance: "dark" | "light") =>
-            currentAppearance === "dark" ? "light" : "dark",
-        "system" as ThemeMode,
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
     );
-    const systemAppearance = (): "dark" | "light" =>
-        window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    const appearance = themeMode === "system" ? systemAppearance() : themeMode;
     return (
         <StoreSurface store={props.state.permissions()}>
             {(permissions) => {
                 const context: AppRouterContext = {
-                    appearance,
-                    appearanceToggle: () =>
-                        themeModeSelect(themeMode === "system" ? systemAppearance() : themeMode),
+                    appearance: appearance.appearance,
+                    appearanceToggle: props.appearance.appearanceToggle,
                     desktopRuntime: props.desktopRuntime,
                     permissions,
                     platform: props.platform,
                     session: props.session,
                     state: props.state,
-                    themeMode,
+                    themeMode: appearance.mode,
                 };
                 return (
-                    <ThemeScope mode={themeMode}>
+                    <ThemeScope mode={appearance.mode}>
                         <RouterProvider context={context} router={props.router} />
                     </ThemeScope>
                 );

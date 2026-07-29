@@ -1,7 +1,7 @@
 import {
     useLayoutEffect,
-    useReducer,
     useRef,
+    useSyncExternalStore,
     type CSSProperties,
     type FormEvent,
     type ReactNode,
@@ -16,14 +16,8 @@ import {
     TextField,
     WindowDragRegion,
 } from "happy2-ui";
-import {
-    createServerClient,
-    ServerError,
-    type AuthMethods,
-    type PublicSetupPhase,
-    type PublicSetupRegistration,
-    type User,
-} from "../server";
+import { createServerClient, ServerError, type AuthMethods, type User } from "../server";
+import { authStoreCreate, type AuthStore } from "../authStore";
 import { createAuthenticatedTransport } from "../stateTransport";
 import { terminalDriverCreate } from "../terminalDriver";
 import { portShareAccessCreate } from "../portShareAccess";
@@ -62,41 +56,6 @@ type AuthGateProps = {
     cookieAuth?: boolean;
     credentialStore?: AuthCredentialStore;
 };
-type Mode = "loading" | "sign-in" | "onboarding" | "ready" | "unavailable";
-type AuthModel = {
-    mode: Mode;
-    methods?: AuthMethods;
-    phase?: PublicSetupPhase;
-    registration?: PublicSetupRegistration;
-    user?: User;
-    state?: HappyState;
-    isRegistering: boolean;
-    email: string;
-    password: string;
-    firstName: string;
-    username: string;
-    /** The development token being typed. Never persisted, in any mode. */
-    devToken: string;
-    /** Whether the sign-in screen is showing the development-token alternative. */
-    usingDevToken: boolean;
-    error?: string;
-    pending: boolean;
-    hasBearer: boolean;
-    loadingMessage: string;
-};
-const initialAuthModel: AuthModel = {
-    mode: "loading",
-    isRegistering: false,
-    email: "",
-    password: "",
-    firstName: "",
-    username: "",
-    devToken: "",
-    usingDevToken: false,
-    pending: false,
-    hasBearer: false,
-    loadingMessage: "Checking the server and your saved session.",
-};
 const tokenKey = "happy2.session-token";
 /* The <form> is a single child of the OnboardingScreen form slot, so the slot's gap
    can't reach its fields — space them here so the last field never butts up
@@ -110,10 +69,11 @@ export function AuthGate(props: AuthGateProps) {
     const clientRef = useRef<ReturnType<typeof createServerClient> | undefined>(undefined);
     clientRef.current ??= createServerClient(props.serverUrl);
     const client = clientRef.current;
-    const [model, update] = useReducer(
-        (current: AuthModel, patch: Partial<AuthModel>) => ({ ...current, ...patch }),
-        initialAuthModel,
-    );
+    const authStoreRef = useRef<AuthStore | undefined>(undefined);
+    authStoreRef.current ??= authStoreCreate();
+    const authStore = authStoreRef.current;
+    const model = useSyncExternalStore(authStore.subscribe, authStore.get, authStore.get);
+    const update = authStore.authUpdate;
     const {
         mode,
         methods,
@@ -252,6 +212,7 @@ export function AuthGate(props: AuthGateProps) {
         avatarUrlRef.current = URL.createObjectURL(new Blob([contents]));
         update({ user: { ...current, photoFileId, avatarUrl: avatarUrlRef.current } });
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the authenticated HappyState and avatar object URL are imperative resources owned by this mounted gate and both are released completely on unmount
     useLayoutEffect(
         () => () => {
             stateRef.current?.[Symbol.dispose]();
@@ -320,6 +281,7 @@ export function AuthGate(props: AuthGateProps) {
         }
     }
     const initialProbeStarted = useRef(false);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the first server capability and saved-session probe is a mount-scoped asynchronous integration that must start only after the gate commits
     useLayoutEffect(() => {
         if (initialProbeStarted.current) return;
         initialProbeStarted.current = true;

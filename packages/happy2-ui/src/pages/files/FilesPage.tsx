@@ -57,6 +57,7 @@ function FilesPageContent(props: FilesPageProps & { snapshot: FilesSnapshot }) {
             queueMicrotask(() => void previewLoad(file));
         }
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- preview object URLs and in-flight downloads are browser resources whose disposal flag and URL revocation follow this mounted file surface
     useLayoutEffect(() => {
         disposed.current = false;
         return () => {
@@ -103,6 +104,7 @@ function FilesPageContent(props: FilesPageProps & { snapshot: FilesSnapshot }) {
             });
         }
     }
+    // eslint-disable-next-line happy2-react/no-layout-effect -- preview downloads are imperative browser-resource work started only after the authoritative file list has committed to the visible gallery
     useLayoutEffect(() => previewsEnsure(snapshot.files));
     const source = snapshot.files.map((file) => toMediaItem(file, previewUrls[file.id]));
     const activeKind = kindFilters.find((entry) => entry.id === props.filter)?.kind;

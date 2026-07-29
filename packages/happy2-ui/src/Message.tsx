@@ -300,6 +300,7 @@ export function Message(props: MessageProps) {
     /* A failed-generation marker is painted at the end of the final rendered
        text run. It stays absolutely positioned so settling cannot alter the
        message's flow geometry. Streaming itself has no typing marker. */
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the failure marker must measure the committed final text range and write its absolute DOM position without changing message flow
     useLayoutEffect(() => {
         const bodyElement = body.current;
         const marker = generationMarker.current;
@@ -774,6 +775,7 @@ export function MessageList(props: MessageListProps) {
         const element = list.current;
         if (element) element.scrollTop = element.scrollHeight - element.clientHeight;
     };
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
@@ -833,24 +835,34 @@ export function MessageList(props: MessageListProps) {
          * composer. This applies equally to a following reader and someone
          * parked higher in history.
          */
-        const viewportObserver = new ResizeObserver(() => {
-            const nextHeight = element.clientHeight;
-            if (nextHeight === viewportHeight) return;
-            viewportHeight = nextHeight;
-            element.scrollTop = Math.max(0, element.scrollHeight - nextHeight - bottomOffset);
-            bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - nextHeight);
-            positionReport();
-        });
-        viewportObserver.observe(element);
+        const viewportObserver =
+            typeof ResizeObserver === "undefined"
+                ? undefined
+                : new ResizeObserver(() => {
+                      const nextHeight = element.clientHeight;
+                      if (nextHeight === viewportHeight) return;
+                      viewportHeight = nextHeight;
+                      element.scrollTop = Math.max(
+                          0,
+                          element.scrollHeight - nextHeight - bottomOffset,
+                      );
+                      bottomOffset = Math.max(
+                          0,
+                          element.scrollHeight - element.scrollTop - nextHeight,
+                      );
+                      positionReport();
+                  });
+        viewportObserver?.observe(element);
         return () => {
             if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
             observer?.disconnect();
-            viewportObserver.disconnect();
+            viewportObserver?.disconnect();
             scrollPositionSync.current = () => undefined;
             element.removeEventListener("scroll", onScroll);
         };
     }, [virtualized, virtualizer]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a resized virtual row can change scrollHeight only after commit, so a following reader must be re-pinned from the live list geometry before paint
     useLayoutEffect(() => {
         /*
          * A resized virtual row updates the virtualizer before React commits the

@@ -33,6 +33,7 @@ function labelFor(choices: readonly ComposerModelChoice[], value: string) {
 export function ComposerModelControl(props: ComposerModelControlProps) {
     const [panel, setPanel] = useState<Panel | null>(null);
     const root = useRef<HTMLDivElement>(null);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- an open model panel owns document-level outside-pointer and Escape listeners that are attached after commit and completely removed when it closes
     useLayoutEffect(() => {
         if (panel === null) return;
         const outsidePointerDown = (event: PointerEvent) => {

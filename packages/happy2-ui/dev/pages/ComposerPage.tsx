@@ -131,6 +131,7 @@ function Playground() {
             },
         }),
     );
+    // eslint-disable-next-line happy2-react/no-layout-effect -- this Blueprint specimen owns a disposable fake surface for exactly its mounted lifetime and releases it on unmount
     useLayoutEffect(() => () => fixture[Symbol.dispose](), [fixture]);
     const pendingRevision = (snapshot: ComposerSnapshot) => {
         const current = snapshot.submission;

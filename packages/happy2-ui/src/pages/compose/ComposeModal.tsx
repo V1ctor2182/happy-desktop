@@ -36,6 +36,7 @@ export function ComposeModal(props: ComposeModalProps) {
     );
     const [effort, setEffort] = useState(() => props.defaultEffort ?? "high");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- opening the compose dialog moves real keyboard focus into its committed prompt textarea before paint
     useLayoutEffect(() => {
         textareaRef.current?.focus();
     }, []);
