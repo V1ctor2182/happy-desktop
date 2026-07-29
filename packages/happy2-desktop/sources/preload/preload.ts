@@ -18,10 +18,11 @@ const bridge: HappyDesktopBridge = {
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
-    remoteRigAdd: (destination) => ipcRenderer.invoke(desktopIpc.remoteRigAdd, destination),
+    remoteRigAdd: (request) => ipcRenderer.invoke(desktopIpc.remoteRigAdd, request),
+    remoteRigConnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigConnect, id),
+    remoteRigDisconnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigDisconnect, id),
     remoteRigGet: () => ipcRenderer.invoke(desktopIpc.remoteRigGet),
     remoteRigRemove: (id) => ipcRenderer.invoke(desktopIpc.remoteRigRemove, id),
-    remoteRigRetry: (id) => ipcRenderer.invoke(desktopIpc.remoteRigRetry, id),
     remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void) {
         const receive = (_event: Electron.IpcRendererEvent, rigs: readonly RemoteRigSnapshot[]) =>
             listener(rigs);

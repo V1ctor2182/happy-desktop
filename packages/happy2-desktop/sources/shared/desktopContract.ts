@@ -98,12 +98,27 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+export interface RemoteRigAddRequest {
+    readonly endpoint: string;
+    readonly label?: string;
+    readonly token: string;
+}
+
+/**
+ * One remembered machine as the renderer sees it. `connected` is the reader's
+ * standing intent and `status` is where the connection actually is, so a machine
+ * that is reachable again shows up without the reader asking twice. `rigHttpUrl`
+ * is the loopback proxy the renderer opens its transports on; the endpoint's
+ * token never crosses this boundary.
+ */
 export interface RemoteRigSnapshot {
-    readonly destination: string;
+    readonly connected: boolean;
+    readonly endpoint: string;
     readonly id: string;
+    readonly label: string;
     readonly message?: string;
     readonly rigHttpUrl?: string;
-    readonly status: "connecting" | "connected" | "disconnected";
+    readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly version?: string;
 }
 
@@ -128,10 +143,11 @@ export interface HappyDesktopBridge {
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     directoryPick(): Promise<string | undefined>;
     applicationMenuOpen(): Promise<void>;
-    remoteRigAdd(destination: string): Promise<void>;
+    remoteRigAdd(request: RemoteRigAddRequest): Promise<void>;
+    remoteRigConnect(id: string): Promise<void>;
+    remoteRigDisconnect(id: string): Promise<void>;
     remoteRigGet(): Promise<readonly RemoteRigSnapshot[]>;
     remoteRigRemove(id: string): Promise<void>;
-    remoteRigRetry(id: string): Promise<void>;
     remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void): () => void;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
@@ -157,9 +173,10 @@ export const desktopIpc = {
     applicationMenuOpen: "happy2:application-menu:open",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
+    remoteRigConnect: "happy2:remote-rig:connect",
+    remoteRigDisconnect: "happy2:remote-rig:disconnect",
     remoteRigGet: "happy2:remote-rig:get",
     remoteRigRemove: "happy2:remote-rig:remove",
-    remoteRigRetry: "happy2:remote-rig:retry",
     runtimeChanged: "happy2:runtime:changed",
     runtimeGet: "happy2:runtime:get",
     runtimeReset: "happy2:runtime:reset",

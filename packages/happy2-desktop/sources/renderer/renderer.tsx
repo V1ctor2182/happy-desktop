@@ -21,7 +21,7 @@ import { ThemeScope, type BrowserContentRenderer } from "happy2-ui";
 import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
-import { rigSessionStoreCreate, type RigSessionStore } from "./rigSessionStore";
+import { rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
@@ -32,7 +32,6 @@ import {
 } from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
-import { remoteRigStoreCreate, type RemoteRigStore } from "./remoteRigStore";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
@@ -115,38 +114,29 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
     return <ThemeScope mode={appearance.mode}>{props.children}</ThemeScope>;
 }
 
+/**
+ * Mounts the workspace router as soon as this window has a Rig directory to
+ * render. Which Rig is on screen — and whether it has connected yet — is the
+ * directory's business and the URL's, not this boundary's, so a machine that is
+ * still connecting no longer holds the whole window on a startup screen.
+ */
 function RigBoundary(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     platform: "desktop" | "web";
     router: RigRouter;
-    remoteRigs: RemoteRigStore;
+    rigs: RigDirectoryStore;
     settings: RigSettingsStore;
-    store: RigSessionStore;
     update?: WorkspaceUpdate;
     windowState: RigWindowStore;
 }) {
-    const session = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const update = props.update;
-    if (!session)
-        return (
-            <DesktopStartupScreen
-                message="Connecting to your local Rig daemon…"
-                onChange={() => undefined}
-                onSubmit={() => undefined}
-                phase="starting"
-                values={desktopStartupValues({ mode: "local" })}
-            />
-        );
     return (
         <RouterProvider
             context={{
                 appearance: props.appearance,
                 browserContent: props.browserContent,
-                clock: session.clock,
-                connection: session.connection,
-                host: session.host,
                 ...(update
                     ? {
                           onUpdateApply: () => {
@@ -157,14 +147,11 @@ function RigBoundary(props: {
                           update: update.snapshot,
                       }
                     : {}),
-                models: session.models,
                 platform: props.platform,
-                remoteRigs: props.remoteRigs,
+                rigs: props.rigs,
                 settings: props.settings,
                 windowState: props.windowState,
-                workspace: session.workspace,
             }}
-            key={session.connectionId}
             router={props.router}
         />
     );
@@ -176,8 +163,7 @@ function DesktopRenderer(props: {
     bridge: HappyDesktopBridge;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
-    remoteRigs: RemoteRigStore;
-    rigSession: RigSessionStore;
+    rigs: RigDirectoryStore;
     settings: RigSettingsStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
@@ -275,9 +261,8 @@ function DesktopRenderer(props: {
             browserContent={props.browserContent}
             platform={props.platform}
             router={props.rigRouter}
-            remoteRigs={props.remoteRigs}
+            rigs={props.rigs}
             settings={props.settings}
-            store={props.rigSession}
             update={workspaceUpdate(snapshot.update, hostedUpdate)}
             windowState={props.windowState}
         />
@@ -301,6 +286,25 @@ if (bridge) {
     // The workspace's own preferences (default model, effort, permissions) belong
     // to the window as well: they outlive whichever daemon connection is current.
     const settings = rigSettingsStoreCreate();
+    // Every Rig in this window, each with its own product stores. The router is
+    // told to resolve its address again whenever the set of connected Rigs
+    // changes, so a machine that connects after the URL already named it opens
+    // the addressed conversation without the reader navigating twice.
+    const rigs = rigDirectoryStoreCreate(bridge, runtimeStore, {
+        conversationOpen: (rigId, location) =>
+            rigRouterConversationOpen(rigRouter, rigId, location),
+        groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
+    });
+    let materialized = "";
+    rigs.subscribe(() => {
+        const current = rigs
+            .get()
+            .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
+            .join(",");
+        if (current === materialized) return;
+        materialized = current;
+        void rigRouter.invalidate();
+    });
     createRoot(document.getElementById("root")!).render(
         <DesktopAppearance appearance={appearance}>
             <DesktopRenderer
@@ -311,11 +315,7 @@ if (bridge) {
                 // development server renders the same tree with web chrome.
                 platform={browserLocal ? "web" : "desktop"}
                 rigRouter={rigRouter}
-                remoteRigs={remoteRigStoreCreate(bridge)}
-                rigSession={rigSessionStoreCreate(bridge, runtimeStore, {
-                    conversationOpen: (location) => rigRouterConversationOpen(rigRouter, location),
-                    groupOpen: (groupId) => rigRouterGroupOpen(rigRouter, groupId),
-                })}
+                rigs={rigs}
                 localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
                 settings={settings}
                 startupValues={startupValuesStoreCreate()}

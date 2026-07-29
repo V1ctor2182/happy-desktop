@@ -14,11 +14,7 @@ import {
 } from "@tanstack/react-router";
 import type {
     AppearanceStore,
-    RigClockStore,
-    RigConnectionStore,
     RigGroupId,
-    RigHost,
-    RigModelStore,
     RigSessionId,
     RigSessionLocation,
     RigSettingsStore,
@@ -26,7 +22,7 @@ import type {
     RigWorkspaceStore,
 } from "happy2-state";
 import type { BrowserContentRenderer } from "happy2-ui";
-import { AppRigView, type AppRemoteRigStore, type AppRigUpdate } from "../AppRigView";
+import { AppRigView, type AppRigDirectoryStore, type AppRigUpdate } from "../AppRigView";
 import {
     AppRigSettingsView,
     RIG_SETTINGS_DEFAULT_CATEGORY,
@@ -35,23 +31,17 @@ import {
 
 /**
  * Everything the local route tree needs that the URL does not address: the
- * daemon connection, the workspace product store, the host, the clock, and the
- * appearance selection. It is
- * the local counterpart of `AppRouterContext` and is supplied to
- * `RouterProvider` once a connection exists, so the router can be constructed
- * before any of these do.
+ * directory of Rigs this window can work in — each carrying its own connection,
+ * workspace, host, clock, and model catalog — the window's own preferences, and
+ * the appearance selection. It is the local counterpart of `AppRouterContext`
+ * and is supplied to `RouterProvider` once the directory exists, so the router
+ * can be constructed before any Rig connects.
  */
 export interface RigRouterContext {
     /** Native Chromium guest renderer, present only in packaged Electron. */
     readonly browserContent?: BrowserContentRenderer;
-    readonly host: RigHost;
-    readonly connection: RigConnectionStore;
-    readonly remoteRigs?: AppRemoteRigStore;
-    readonly workspace: RigWorkspaceStore;
-    readonly clock: RigClockStore;
+    readonly rigs: AppRigDirectoryStore;
     readonly appearance: AppearanceStore;
-    /** This connection's model catalog, read by the settings window's pickers. */
-    readonly models?: RigModelStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: RigSettingsStore;
     /**
@@ -75,18 +65,50 @@ const rootRoute = createRootRouteWithContext<RigRouterContext>()({
     component: () => <Outlet />,
 });
 
+/**
+ * The Rig a bare address lands on: the first one in the window, which is the
+ * machine this window runs on. The default is read rather than written down so
+ * this file never names one Rig as special.
+ */
+function rigDefaultId(context: RigRouterContext): string {
+    return context.rigs.get().rigs[0]?.id ?? "local";
+}
+
+/**
+ * Redirects to one Rig's list. The global TanStack `Register` names the cloud
+ * route tree, so a local path cannot be expressed in the router's own types here;
+ * `rigRouterCreate` checks these paths against this route tree instead.
+ */
+function rigListRedirect(rigId: string): never {
+    throw redirect({
+        params: { rigId },
+        replace: true,
+        to: "/chats/$rigId",
+    } as unknown as Parameters<typeof redirect>[0]);
+}
+
+/** The addressed Rig's workspace store, absent while that Rig is not connected. */
+function rigWorkspace(context: RigRouterContext, rigId: string): RigWorkspaceStore | undefined {
+    context.rigs.rigActivate(rigId);
+    return context.rigs.get().rigs.find((rig) => rig.id === rigId)?.session?.workspace;
+}
+
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
-    beforeLoad: () => {
-        throw redirect({ replace: true, to: "/chats" });
-    },
+    beforeLoad: ({ context }) => rigListRedirect(rigDefaultId(context)),
+});
+
+const chatsRootRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/chats",
+    beforeLoad: ({ context }) => rigListRedirect(rigDefaultId(context)),
 });
 
 /**
  * The local workspace layout, pathless for the same reason the cloud one is: the
  * shell, the session list, and the open conversation's transcript keep one
- * instance while the addressed conversation changes underneath them.
+ * instance while the addressed Rig and conversation change underneath them.
  */
 const workspaceRoute = createRoute({
     component: RigWorkspaceLayout,
@@ -95,16 +117,16 @@ const workspaceRoute = createRoute({
 });
 
 /**
- * Addressing the list without a conversation releases whichever one was open.
- * Materialization is a store concern applied on navigation; the URL alone says
- * which conversation that is.
+ * Addressing one Rig without a conversation releases whichever one was open in
+ * it. Materialization is a store concern applied on navigation; the URL alone
+ * says which Rig and which conversation that is.
  */
 const chatsIndexRoute = createRoute({
     getParentRoute: () => workspaceRoute,
-    loader: ({ context }) => {
-        context.workspace.conversationClose();
+    loader: ({ context, params }) => {
+        rigWorkspace(context, params.rigId)?.conversationClose();
     },
-    path: "/chats",
+    path: "/chats/$rigId",
 });
 
 /**
@@ -114,19 +136,22 @@ const chatsIndexRoute = createRoute({
 const groupRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
-        context.workspace.groupOpen(params.groupId as RigGroupId);
+        rigWorkspace(context, params.rigId)?.groupOpen(params.groupId as RigGroupId);
     },
-    path: "/chats/$groupId",
+    path: "/chats/$rigId/$groupId",
 });
 
-/** Addressing one local session materializes it, releasing the previous one. */
+/** Addressing one session materializes it, releasing the previous one. */
 const chatRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
         const groupId = params.groupId as RigGroupId;
-        context.workspace.conversationOpen(params.chatId as RigSessionId, groupId);
+        rigWorkspace(context, params.rigId)?.conversationOpen(
+            params.chatId as RigSessionId,
+            groupId,
+        );
     },
-    path: "/chats/$groupId/$chatId",
+    path: "/chats/$rigId/$groupId/$chatId",
 });
 
 const settingsIndexRoute = createRoute({
@@ -162,6 +187,7 @@ const settingsSectionRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
     indexRoute,
+    chatsRootRoute,
     workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
     settingsIndexRoute,
     settingsSectionRoute,
@@ -181,9 +207,10 @@ function RigWorkspaceLayout() {
         replace?: boolean;
         to: string;
     }) => Promise<void>;
-    // `strict: false` because the list carries neither param and a group
-    // carries only `groupId`.
+    // `strict: false` because a Rig's list carries only `rigId`, and a group
+    // carries no `chatId`.
     const params = useParams({ strict: false }) as {
+        rigId?: string;
         groupId?: string;
         chatId?: string;
     };
@@ -192,26 +219,24 @@ function RigWorkspaceLayout() {
             appearance={context.appearance}
             browserContent={context.browserContent}
             chatId={params.chatId}
-            clock={context.clock}
-            connection={context.connection}
             groupId={params.groupId}
-            host={context.host}
             onUpdateApply={context.onUpdateApply}
             platform={context.platform}
-            remoteRigs={context.remoteRigs}
+            rigId={params.rigId ?? rigDefaultId(context)}
+            rigs={context.rigs}
             update={context.update}
             windowState={context.windowState}
-            onChatSelect={(groupId, chatId, replace) =>
+            onChatSelect={(rigId, groupId, chatId, replace) =>
                 void navigate(
                     groupId === undefined
-                        ? { replace, to: "/chats" }
+                        ? { params: { rigId }, replace, to: "/chats/$rigId" }
                         : chatId
                           ? {
-                                params: { chatId, groupId },
+                                params: { chatId, groupId, rigId },
                                 replace,
-                                to: "/chats/$groupId/$chatId",
+                                to: "/chats/$rigId/$groupId/$chatId",
                             }
-                          : { params: { groupId }, replace, to: "/chats/$groupId" },
+                          : { params: { groupId, rigId }, replace, to: "/chats/$rigId/$groupId" },
                 )
             }
             onSettingsOpen={() =>
@@ -220,7 +245,6 @@ function RigWorkspaceLayout() {
                     to: "/settings/$section",
                 })
             }
-            workspace={context.workspace}
         />
     );
 }
@@ -241,11 +265,11 @@ function RigSettingsRoute() {
     return (
         <AppRigSettingsView
             appearance={context.appearance}
-            models={context.models}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
             onClose={() => void navigate({ to: "/chats" })}
+            rigs={context.rigs}
             platform={context.platform}
             section={params.section ?? RIG_SETTINGS_DEFAULT_CATEGORY}
             settings={context.settings}
@@ -259,9 +283,10 @@ function RigSettingsRoute() {
  * sessions are grouped by the daemon's projects, so their address is the group —
  * the project, or the worktree inside it, by the durable id the daemon assigned
  * it, which keeps a filesystem layout out of the URL and survives a rename — and
- * then the session inside it: `/chats/$groupId/$chatId`. It stays the same
- * cloud-shaped addressing, so a session is a URL in both modes and neither keeps
- * a second, competing selection in a store.
+ * then the session inside it. The machine comes first, because the same project
+ * name may exist on several of them: `/chats/$rigId/$groupId/$chatId`. It stays
+ * the same cloud-shaped addressing, so a session is a URL in both modes and
+ * neither keeps a second, competing selection in a store.
  */
 export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
     return createRouter({
@@ -283,15 +308,19 @@ export function rigRouterCreate(history: RouterHistory = defaultHistory()) {
  * in the router's own types; keeping the cast here means the desktop shell never
  * hand-builds a local URL.
  */
-export function rigRouterConversationOpen(router: RigRouter, location: RigSessionLocation): void {
+export function rigRouterConversationOpen(
+    router: RigRouter,
+    rigId: string,
+    location: RigSessionLocation,
+): void {
     void (
         router.navigate as unknown as (options: {
             params: Record<string, string>;
             to: string;
         }) => Promise<void>
     )({
-        params: { chatId: location.sessionId, groupId: location.groupId },
-        to: "/chats/$groupId/$chatId",
+        params: { chatId: location.sessionId, groupId: location.groupId, rigId },
+        to: "/chats/$rigId/$groupId/$chatId",
     });
 }
 
@@ -300,17 +329,17 @@ export function rigRouterConversationOpen(router: RigRouter, location: RigSessio
  * reader has just added. The conversation started in it re-addresses the same
  * group through `rigRouterConversationOpen` once it exists.
  */
-export function rigRouterGroupOpen(router: RigRouter, groupId: string): void {
+export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: string): void {
     void (
         router.navigate as unknown as (options: {
             params: Record<string, string>;
             to: string;
         }) => Promise<void>
-    )({ params: { groupId }, to: "/chats/$groupId" });
+    )({ params: { groupId, rigId }, to: "/chats/$rigId/$groupId" });
 }
 
 /** Creates deterministic local-router history for application and navigation tests. */
-export function rigMemoryHistoryCreate(initialEntry = "/chats"): RouterHistory {
+export function rigMemoryHistoryCreate(initialEntry = "/chats/local"): RouterHistory {
     return createMemoryHistory({ initialEntries: [initialEntry] });
 }
 

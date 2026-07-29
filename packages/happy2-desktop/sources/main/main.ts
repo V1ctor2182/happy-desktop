@@ -13,6 +13,7 @@ import {
 } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Duplex } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DesktopRuntime } from "./desktopRuntime";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
@@ -26,7 +27,11 @@ import { desktopFlavor } from "./desktopFlavor";
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
-import { desktopIpc, happyBrowserPartition } from "../shared/desktopContract";
+import {
+    desktopIpc,
+    happyBrowserPartition,
+    type RemoteRigAddRequest,
+} from "../shared/desktopContract";
 import { localRigConnectorCreate } from "./localRig";
 import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
@@ -103,6 +108,16 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
     return next;
 }
 
+/**
+ * The daemon tunnel a browser tab's traffic goes through. The session belongs to
+ * exactly one Rig; this machine's daemon is tried first, and a session it does
+ * not own is opened on whichever connected remote machine does, so a browser tab
+ * in a remote workspace works the way one in the local workspace does.
+ */
+function browserProxyOpen(sessionId: string): Promise<Duplex> {
+    return runtime.openHttpProxy(sessionId).catch(() => remoteRigManager.openHttpProxy(sessionId));
+}
+
 function browserProxyApply(sessionId: string): Promise<void> {
     return browserProxySerial(async () => {
         const snapshot = runtime.get();
@@ -118,7 +133,7 @@ function browserProxyApply(sessionId: string): Promise<void> {
         const connectionId = snapshot.connectionId;
         const candidate = await rigBrowserProxyCreate({
             sessionId,
-            openHttpProxy: () => runtime.openHttpProxy(sessionId),
+            openHttpProxy: () => browserProxyOpen(sessionId),
         });
         const current = runtime.get();
         if (
@@ -469,17 +484,29 @@ void app
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.remoteRigGet, () => remoteRigManager.get());
-        ipcMain.handle(desktopIpc.remoteRigAdd, (_event, destination: unknown) => {
-            if (typeof destination !== "string") throw new Error("The SSH destination is invalid.");
-            return remoteRigManager.add(destination);
+        ipcMain.handle(desktopIpc.remoteRigAdd, (_event, request: unknown) => {
+            const value = request as RemoteRigAddRequest | undefined;
+            if (
+                !value ||
+                typeof value !== "object" ||
+                typeof value.endpoint !== "string" ||
+                typeof value.token !== "string" ||
+                (value.label !== undefined && typeof value.label !== "string")
+            )
+                throw new Error("The remote Rig endpoint is invalid.");
+            return remoteRigManager.add(value);
         });
         ipcMain.handle(desktopIpc.remoteRigRemove, (_event, id: unknown) => {
             if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
             return remoteRigManager.remove(id);
         });
-        ipcMain.handle(desktopIpc.remoteRigRetry, (_event, id: unknown) => {
+        ipcMain.handle(desktopIpc.remoteRigConnect, (_event, id: unknown) => {
             if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
-            remoteRigManager.retry(id);
+            return remoteRigManager.connect(id);
+        });
+        ipcMain.handle(desktopIpc.remoteRigDisconnect, (_event, id: unknown) => {
+            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
+            return remoteRigManager.disconnect(id);
         });
         ipcMain.handle(desktopIpc.browserProxyApply, (_event, sessionId: unknown) => {
             if (typeof sessionId !== "string" || sessionId.length === 0)

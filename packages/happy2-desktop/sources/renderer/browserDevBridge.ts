@@ -36,9 +36,10 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         directoryPick: async () => undefined,
         applicationMenuOpen: async () => undefined,
         remoteRigAdd: async () => undefined,
+        remoteRigConnect: async () => undefined,
+        remoteRigDisconnect: async () => undefined,
         remoteRigGet: async () => [],
         remoteRigRemove: async () => undefined,
-        remoteRigRetry: async () => undefined,
         remoteRigSubscribe: () => () => undefined,
         runtimeGet: async () => {
             const snapshot = await request<DesktopRuntimeSnapshot>("runtimeGet");

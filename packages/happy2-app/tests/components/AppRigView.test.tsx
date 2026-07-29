@@ -8,7 +8,11 @@ import type {
     RigWorkspaceStore,
 } from "happy2-state";
 import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
-import { AppRigView } from "../../sources/AppRigView";
+import {
+    AppRigView,
+    type AppRigDirectorySnapshot,
+    type AppRigDirectoryStore,
+} from "../../sources/AppRigView";
 
 /* The local workspace renders the shared cloud components with local product
  * state. These tests pin the parts of that contract the app layer owns: which
@@ -104,25 +108,67 @@ function workspace(): RigWorkspaceStore {
     } as unknown as RigWorkspaceStore;
 }
 
+/** One connected local Rig holding the project above; no remote machines. */
+function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][number]["projects"]) {
+    const snapshot: AppRigDirectorySnapshot = {
+        add: { endpoint: "", label: "", open: false, token: "" },
+        rigs: [
+            {
+                connected: true,
+                id: "local",
+                kind: "local",
+                label: "This Mac",
+                projects,
+                projectsStatus: "ready",
+                session: {
+                    clock: clock(),
+                    connection: connection(),
+                    host,
+                    workspace: workspace(),
+                },
+                status: "connected",
+            },
+        ],
+    };
+    const store: AppRigDirectoryStore = {
+        get: () => snapshot,
+        subscribe: () => () => undefined,
+        addOpen: () => undefined,
+        addClose: () => undefined,
+        endpointUpdate: () => undefined,
+        labelUpdate: () => undefined,
+        tokenUpdate: () => undefined,
+        addSubmit: () => undefined,
+        rigConnect: () => undefined,
+        rigDisconnect: () => undefined,
+        rigRemove: () => undefined,
+        rigActivate: () => undefined,
+    };
+    return store;
+}
+
 function view(
     options: {
         chatId?: string;
         groupId?: string;
         host?: RigHost;
-        onChatSelect?: (groupId: string, chatId?: string) => void;
+        onChatSelect?: (rigId: string, groupId: string | undefined, chatId?: string) => void;
     } = {},
 ) {
+    const projects = (
+        workspace().get() as unknown as {
+            list: { projects: { value: AppRigDirectorySnapshot["rigs"][number]["projects"] } };
+        }
+    ).list.projects.value;
     return render(
         <AppRigView
             appearance={appearanceStoreCreate({ mode: "light" })}
             chatId={options.chatId}
-            clock={clock()}
-            connection={connection()}
             groupId={options.groupId}
-            host={options.host ?? rigHostNoop}
             onChatSelect={options.onChatSelect ?? (() => undefined)}
             onSettingsOpen={() => undefined}
-            workspace={workspace()}
+            rigId="local"
+            rigs={directory(options.host ?? rigHostNoop, projects)}
         />,
     );
 }
@@ -148,16 +194,16 @@ it("highlights the addressed project and asks to navigate into it when it is pic
     const selected: (string | undefined)[][] = [];
     const { container } = view({
         groupId: "prj_one",
-        onChatSelect: (groupId, chatId) => selected.push([groupId, chatId]),
+        onChatSelect: (rigId, groupId, chatId) => selected.push([rigId, groupId, chatId]),
     });
 
-    const row = container.querySelector('[data-item-id="prj_one"]');
+    const row = container.querySelector('[data-item-id="local/prj_one"]');
     expect(row?.getAttribute("aria-current")).toBe("page");
 
     // Picking a row is a navigation request into the project's most recent
     // session; this surface never selects a conversation in the store itself.
     row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(selected).toEqual([["prj_one", "ses_one"]]);
+    expect(selected).toEqual([["local", "prj_one", "ses_one"]]);
 });
 
 it("lists one row per project and its sessions as tabs", () => {
@@ -166,7 +212,10 @@ it("lists one row per project and its sessions as tabs", () => {
     // The shared sidebar renders its compose row ("New session") ahead of the
     // list, so the project rows follow it.
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
-    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["new-chat", "prj_one"]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
+        "new-chat",
+        "local/prj_one",
+    ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
     expect(rows[1]?.textContent).toContain("happy2");

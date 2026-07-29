@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { Duplex } from "node:stream";
@@ -34,9 +35,47 @@ import type {
  */
 export const RIG_TERMINAL_MAX_WIRE_BYTES = 4 * 1024 * 1024;
 
-export interface RigDaemonClientOptions {
-    readonly socketPath: string;
-    readonly token: string;
+/**
+ * Where one Rig daemon answers. This machine reaches its own daemon through the
+ * Unix socket Rig opens for the user; another machine's daemon is an ordinary
+ * HTTP origin, optionally served under a reverse proxy's path prefix.
+ */
+export type RigDaemonClientOptions =
+    | { readonly socketPath: string; readonly token: string }
+    | { readonly url: string; readonly token: string };
+
+interface RigDaemonTransport {
+    /** Connection fields merged into every request this client makes. */
+    readonly connection: Readonly<Record<string, string | number>>;
+    /** Prefix applied to daemon route paths when the endpoint is served under one. */
+    readonly prefix: string;
+    readonly request: typeof httpRequest;
+    webSocketUrl(path: string): string;
+}
+
+function rigDaemonTransportCreate(options: RigDaemonClientOptions): RigDaemonTransport {
+    if ("socketPath" in options)
+        return {
+            connection: { socketPath: options.socketPath },
+            prefix: "",
+            request: httpRequest,
+            webSocketUrl: (path) => `ws+unix://${options.socketPath}:${path}`,
+        };
+    const url = new URL(options.url);
+    if (url.protocol !== "http:" && url.protocol !== "https:")
+        throw new Error("A Rig endpoint must be an http or https URL.");
+    const secure = url.protocol === "https:";
+    const prefix = url.pathname.replace(/\/+$/u, "");
+    return {
+        connection: {
+            host: url.hostname,
+            port: Number(url.port || (secure ? 443 : 80)),
+            protocol: url.protocol,
+        },
+        prefix,
+        request: secure ? httpsRequest : httpRequest,
+        webSocketUrl: (path) => `${secure ? "wss" : "ws"}://${url.host}${path}`,
+    };
 }
 
 export interface RigDaemonPaths {
@@ -79,17 +118,24 @@ export interface RigDaemonFileWriteRequest {
 }
 
 /**
- * Narrow client for the local Rig daemon routes consumed by Happy's main-process
- * projection. Rig intentionally exposes these routes over an authenticated Unix
- * socket; keeping the adapter here avoids depending on its private client modules.
+ * Narrow client for the Rig daemon routes consumed by Happy's main-process
+ * projection. Rig exposes these routes over an authenticated endpoint — the
+ * user's Unix socket on this machine, or another machine's HTTP origin with the
+ * same token contract — so one client serves a local and a remote daemon alike.
+ * Keeping the adapter here avoids depending on Rig's private client modules.
  */
 export class RigDaemonClient {
-    readonly socketPath: string;
+    readonly #transport: RigDaemonTransport;
     readonly #token: string;
 
     constructor(options: RigDaemonClientOptions) {
-        this.socketPath = options.socketPath;
+        this.#transport = rigDaemonTransportCreate(options);
         this.#token = options.token;
+    }
+
+    /** Route path as the endpoint serves it, including any reverse-proxy prefix. */
+    #path(path: string): string {
+        return `${this.#transport.prefix}${path}`;
     }
 
     health(): Promise<HealthResponse> {
@@ -124,12 +170,12 @@ export class RigDaemonClient {
                 authorization: `Bearer ${this.#token}`,
             };
             if (options.body !== undefined) headers["content-length"] = options.body.byteLength;
-            const request = httpRequest(
+            const request = this.#transport.request(
                 {
                     headers,
                     method: options.method,
-                    path: options.path,
-                    socketPath: this.socketPath,
+                    path: this.#path(options.path),
+                    ...this.#transport.connection,
                 },
                 (response) => {
                     response.once("close", cleanup);
@@ -356,11 +402,11 @@ export class RigDaemonClient {
 
     openHttpProxy(sessionId: string): Promise<Duplex> {
         return new Promise((resolvePromise, reject) => {
-            const request = httpRequest({
+            const request = this.#transport.request({
                 headers: { authorization: `Bearer ${this.#token}` },
                 method: "CONNECT",
-                path: `/sessions/${encodeURIComponent(sessionId)}/proxy`,
-                socketPath: this.socketPath,
+                path: this.#path(`/sessions/${encodeURIComponent(sessionId)}/proxy`),
+                ...this.#transport.connection,
             });
             request.once("connect", (response, socket, head) => {
                 if (response.statusCode !== 200) {
@@ -504,7 +550,7 @@ export class RigDaemonClient {
         const scope = await this.#terminalScope(sessionId);
         const path = `${this.#terminalCollectionPath(scope)}/${encodeURIComponent(terminalId)}/attach`;
         return new Promise((resolvePromise, reject) => {
-            const socket = new WebSocket(`ws+unix://${this.socketPath}:${path}`, {
+            const socket = new WebSocket(this.#transport.webSocketUrl(this.#path(path)), {
                 handshakeTimeout: 10_000,
                 headers: { authorization: `Bearer ${this.#token}` },
                 maxPayload: RIG_TERMINAL_MAX_WIRE_BYTES,
@@ -695,8 +741,8 @@ export class RigDaemonClient {
                 reject(new Error("The Rig daemon request was aborted."));
                 return;
             }
-            const request = httpRequest(
-                { headers, method, path, socketPath: this.socketPath },
+            const request = this.#transport.request(
+                { headers, method, path: this.#path(path), ...this.#transport.connection },
                 (response) => {
                     const chunks: Buffer[] = [];
                     response.on("data", (chunk: Buffer | string) =>
@@ -734,12 +780,12 @@ export class RigDaemonClient {
 
     #requestBuffer(path: string): Promise<ProjectAssetResponse> {
         return new Promise((resolvePromise, reject) => {
-            const request = httpRequest(
+            const request = this.#transport.request(
                 {
                     headers: { authorization: `Bearer ${this.#token}` },
                     method: "GET",
-                    path,
-                    socketPath: this.socketPath,
+                    path: this.#path(path),
+                    ...this.#transport.connection,
                 },
                 (response) => {
                     const chunks: Buffer[] = [];
@@ -792,15 +838,15 @@ export class RigDaemonClient {
                     reject,
                 );
             };
-            const request = httpRequest(
+            const request = this.#transport.request(
                 {
                     headers: {
                         accept: "text/event-stream",
                         authorization: `Bearer ${this.#token}`,
                     },
                     method: "GET",
-                    path: options.path,
-                    socketPath: this.socketPath,
+                    path: this.#path(options.path),
+                    ...this.#transport.connection,
                 },
                 (response) => {
                     const statusCode = response.statusCode ?? 500;
