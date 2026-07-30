@@ -463,15 +463,24 @@ function AgentToolActivity(props: {
                     >
                         <AgentActivityChangingText value={primaryText} />
                     </span>
-                    <span
-                        className="happy2-agent-activity__stats"
-                        data-happy2-ui="agent-activity-stats"
-                    >
-                        <span className="happy2-agent-activity__added">+{stats.added}</span>
-                        <span className="happy2-agent-activity__deleted">
-                            &minus;{stats.deleted}
+                    {/* A side that changed nothing is left unsaid: "+0" is a
+                        number the reader has to read before learning there was
+                        nothing to learn. */}
+                    {stats.added || stats.deleted ? (
+                        <span
+                            className="happy2-agent-activity__stats"
+                            data-happy2-ui="agent-activity-stats"
+                        >
+                            {stats.added ? (
+                                <span className="happy2-agent-activity__added">+{stats.added}</span>
+                            ) : null}
+                            {stats.deleted ? (
+                                <span className="happy2-agent-activity__deleted">
+                                    &minus;{stats.deleted}
+                                </span>
+                            ) : null}
                         </span>
-                    </span>
+                    ) : null}
                 </span>
             ) : (
                 <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">

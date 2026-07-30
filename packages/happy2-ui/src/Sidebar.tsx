@@ -105,12 +105,10 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      */
     actions?: SidebarItem[];
     /**
-     * Renders the product mark instead of a custom title row. `true` is the full
-     * lockup ("Happy" + faint "Place"); `"mark"` is the logo alone, for the
-     * desktop window in full screen, where the mark stands in the lane the
-     * native traffic lights vacated and has no room for the wordmark.
+     * Renders the product lockup — the logo and the word "Happy" — instead of a
+     * custom title row.
      */
-    brand?: boolean | "mark";
+    brand?: boolean;
     composeLabel?: string;
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
@@ -861,31 +859,21 @@ export function Sidebar(props: SidebarProps) {
                 ) : (
                     <div className="happy2-sidebar__heading" data-happy2-ui="sidebar-heading">
                         {local.brand ? (
-                            <span className="happy2-sidebar__title-row">
+                            <span className="happy2-sidebar__title-row happy2-sidebar__title-row--brand">
                                 <img
                                     alt=""
                                     aria-hidden="true"
                                     className="happy2-sidebar__brand-logo"
                                     data-happy2-ui="sidebar-brand-logo"
-                                    data-variant={local.brand === "mark" ? "mark" : undefined}
                                     draggable={false}
                                     src={happyLogoUrl}
                                 />
-                                {local.brand === "mark" ? null : (
-                                    <span
-                                        className="happy2-sidebar__title"
-                                        data-happy2-ui="sidebar-title"
-                                    >
-                                        Happy
-                                        <span
-                                            className="happy2-sidebar__title-suffix"
-                                            data-happy2-ui="sidebar-title-suffix"
-                                        >
-                                            {" "}
-                                            Place
-                                        </span>
-                                    </span>
-                                )}
+                                <span
+                                    className="happy2-sidebar__title happy2-sidebar__title--brand"
+                                    data-happy2-ui="sidebar-title"
+                                >
+                                    Happy
+                                </span>
                             </span>
                         ) : local.title !== undefined ? (
                             <span className="happy2-sidebar__title-row">

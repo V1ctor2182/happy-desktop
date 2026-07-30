@@ -66,14 +66,6 @@
     user-select: none;
 }
 
-/* The bare mark stands in the 40px window-chrome row rather than beside a 15px
-   wordmark, so it matches that row's other furniture — the 16px glyph inside the
-   28px sidebar toggle — instead of the web heading's larger lockup. */
-.happy2-sidebar__brand-logo[data-variant="mark"] {
-    width: 16px;
-    height: 16px;
-}
-
 .happy2-sidebar__title {
     display: block;
     overflow: hidden;
@@ -87,7 +79,20 @@
     transform: translateY(var(--happy2-sidebar-header-optical-y, 0px));
 }
 
-.happy2-sidebar__title-suffix {
+/*
+ * The lockup heads a list of muted rows, so it is stated in their colour rather
+ * than in the full-strength text one row's own selection earns. Its weight is
+ * what makes it the heading; the colour does not need to shout as well.
+ *
+ * It also sits a pixel low of the row it names: the logo is a solid disc whose
+ * ink fills its box, while a row's glyph and label leave air above and below, so
+ * matching their boxes exactly reads as the mark riding high.
+ */
+.happy2-sidebar__title-row--brand {
+    transform: translateY(1px);
+}
+
+.happy2-sidebar__title--brand {
     color: var(--text-secondary);
 }
 

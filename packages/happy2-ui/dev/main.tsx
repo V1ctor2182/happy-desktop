@@ -108,7 +108,7 @@ import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
-import { ContextGaugePage } from "./pages/ContextGaugePage";
+import { ContextMeterPage } from "./pages/ContextMeterPage";
 import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
@@ -254,10 +254,10 @@ const components: BlueprintPage[] = [
         page: ConversationViewPage,
     },
     {
-        id: "context-gauge",
-        label: "Context gauge",
+        id: "context-meter",
+        label: "Context meter",
         number: "C-159",
-        page: ContextGaugePage,
+        page: ContextMeterPage,
     },
     {
         id: "rig-usage-panel",

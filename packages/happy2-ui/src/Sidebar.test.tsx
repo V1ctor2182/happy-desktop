@@ -195,7 +195,9 @@ it("renders the Happy logo to the left of the product title", async () => {
     const logo = view.$('[data-happy2-ui="sidebar-brand-logo"]');
     const logoImage = logo.element as HTMLImageElement;
     await logoImage.decode();
-    expect(logo.bounds()).toEqual({ x: 16, y: 18, width: 20, height: 20 });
+    // The lockup rides one pixel low of the header's box centre: the logo is a
+    // solid disc filling its box, so matching the box exactly reads as high.
+    expect(logo.bounds()).toEqual({ x: 16, y: 19, width: 20, height: 20 });
     expect(logo.computedStyles(["display", "height", "object-fit", "width"])).toEqual({
         display: "block",
         height: "20px",
@@ -209,7 +211,7 @@ it("renders the Happy logo to the left of the product title", async () => {
 
     const title = view.$('[data-happy2-ui="sidebar-title"]');
     expect(title.bounds().x - (logo.bounds().x + logo.bounds().width)).toBe(5);
-    expect(title.element.textContent).toBe("Happy Place");
+    expect(title.element.textContent).toBe("Happy");
 
     await view.screenshot("Sidebar.brand.test");
 }, 120_000);

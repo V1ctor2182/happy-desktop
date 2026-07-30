@@ -48,24 +48,32 @@ export function DiffSnippet(props: DiffSnippetProps) {
                             {local.file}
                         </span>
                     ) : null}
-                    {local.stats
+                    {/* A side that changed nothing is left unsaid: "+0" is a
+                        number the reader has to read before learning there was
+                        nothing to learn, and a diff with neither side shows no
+                        stats cluster at all. */}
+                    {local.stats && (local.stats.added || local.stats.removed)
                         ? ((stats) => (
                               <span
                                   className="happy2-diff-snippet__stats"
                                   data-happy2-ui="diff-snippet-stats"
                               >
-                                  <span
-                                      className="happy2-diff-snippet__added"
-                                      data-happy2-ui="diff-snippet-added"
-                                  >
-                                      +{stats.added}
-                                  </span>
-                                  <span
-                                      className="happy2-diff-snippet__removed"
-                                      data-happy2-ui="diff-snippet-removed"
-                                  >
-                                      &minus;{stats.removed}
-                                  </span>
+                                  {stats.added ? (
+                                      <span
+                                          className="happy2-diff-snippet__added"
+                                          data-happy2-ui="diff-snippet-added"
+                                      >
+                                          +{stats.added}
+                                      </span>
+                                  ) : null}
+                                  {stats.removed ? (
+                                      <span
+                                          className="happy2-diff-snippet__removed"
+                                          data-happy2-ui="diff-snippet-removed"
+                                      >
+                                          &minus;{stats.removed}
+                                      </span>
+                                  ) : null}
                               </span>
                           ))(local.stats)
                         : null}

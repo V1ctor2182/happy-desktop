@@ -1,0 +1,108 @@
+/*
+ * ContextMeter — the spent share of the context window, at the end of the
+ * composer's control row. At rest it is only the bar: the row beside it is full
+ * of controls the reader uses constantly, and a running token count sitting
+ * there permanently is noise. Pointing at it is the question being asked, so the
+ * numbers appear then, sliding out to the left of the bar.
+ */
+.happy2-context-meter {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--text-secondary);
+}
+
+/*
+ * Collapsed rather than merely transparent: hidden numbers must not hold width
+ * open beside the bar, which would leave a gap in the row that never explains
+ * itself. The max-width is the widest readout this can hold, not a measurement.
+ */
+.happy2-context-meter__readout {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0;
+    /* The gap belongs to the numbers, not the row: collapsed, they must leave
+       nothing behind them, so it opens with them. */
+    margin-inline-end: 0;
+    transition:
+        max-width 140ms ease-out,
+        margin-inline-end 140ms ease-out,
+        opacity 140ms ease-out;
+}
+
+.happy2-context-meter:hover .happy2-context-meter__readout {
+    max-width: 140px;
+    margin-inline-end: 6px;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-context-meter__readout {
+        transition: none;
+    }
+}
+
+/* The counts are the same fact as the percentage, spelled out; they sit a shade
+   back so the percentage is what is read first. */
+.happy2-context-meter__tokens {
+    opacity: 0.72;
+}
+
+.happy2-context-meter__track {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    width: 64px;
+    height: 4px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--divider);
+    overflow: hidden;
+}
+
+.happy2-context-meter__fill {
+    flex: none;
+    height: 100%;
+    border-radius: var(--happy2-radius-pill);
+    background: currentColor;
+    /* The window only ever moves by a report at a time; the ease keeps a jump
+       from reading as a glitch without animating anything on its own. */
+    transition: width 240ms ease-out;
+}
+
+/* The compaction mark: a notch in the track, not a line over the fill, so the
+   fill passing it covers it rather than being cut by it. */
+.happy2-context-meter__threshold {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--surface);
+    opacity: 0.9;
+}
+
+/* Plenty of room left is unremarkable and stays in the row's own voice; the two
+   states that ask for something earn their colour. */
+.happy2-context-meter[data-tone="ample"] {
+    color: var(--text-secondary);
+    opacity: 0.72;
+}
+
+.happy2-context-meter[data-tone="ample"] .happy2-context-meter__fill {
+    background: var(--text-secondary);
+}
+
+.happy2-context-meter[data-tone="compact"] {
+    color: var(--box-warning-text);
+}
+
+.happy2-context-meter[data-tone="critical"] {
+    color: var(--status-error);
+}

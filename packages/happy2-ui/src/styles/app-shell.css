@@ -110,6 +110,26 @@
     padding-left: var(--happy2-app-shell-chrome-inset);
 }
 
+/* In full screen the traffic lights are gone, so the heading is no longer
+   holding a lane clear for them and the product mark simply heads the list. A
+   row's glyph box starts at the body's 8px inset plus the row's own 10px
+   padding, so the mark begins at that same 18px and its 20px box shares the
+   rows' glyph lane; the 8px gap after it puts the wordmark on their label lane. */
+.happy2-app-shell[data-window-controls][data-window-full-screen]
+    .happy2-app-shell__sidebar
+    > .happy2-sidebar
+    > .happy2-sidebar__header {
+    padding-left: 18px;
+}
+
+.happy2-app-shell[data-window-controls][data-window-full-screen]
+    .happy2-app-shell__sidebar
+    > .happy2-sidebar
+    > .happy2-sidebar__header
+    .happy2-sidebar__title-row {
+    gap: 8px;
+}
+
 /* Same reservation on whichever strip heads the workspace once the sidebar is
    hidden and the traffic lights plus the floating toggle sit over it. */
 .happy2-app-shell[data-window-controls][data-sidebar-collapsed] .happy2-channel-header,

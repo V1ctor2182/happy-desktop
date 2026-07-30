@@ -41,7 +41,7 @@ import {
     type BrowserContentRenderer,
     Button,
     ChannelHeader,
-    ContextGauge,
+    ContextMeter,
     ChangedFileDiff,
     ComposerFooterBar,
     ComposerModelControl,
@@ -534,9 +534,10 @@ export function AppRigView(props: AppRigViewProps) {
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
             // row becomes the window's drag lane. Full screen takes the lights
-            // away, and the bare mark takes the lane they left rather than
-            // leaving the window's top-left corner empty.
-            brand={desktop ? (windowState.fullScreen ? ("mark" as const) : false) : true}
+            // away, and the whole lockup heads the sidebar there — on the same
+            // lane as the rows beneath it — rather than leaving the window's
+            // top-left corner empty.
+            brand={desktop ? windowState.fullScreen : true}
             composeLabel="Create"
             footer={
                 <SidebarFooter
@@ -911,29 +912,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         // nowhere to run a terminal and the control would do nothing.
                         actions={
                             <>
-                                {/* How much room the open session has left.
-                                    It belongs on screen rather than inside the
-                                    usage panel: it is the thing that decides
-                                    whether the next message still fits. */}
-                                {workspace.conversation.type === "ready" &&
-                                workspace.conversation.value.contextGauge ? (
-                                    <ContextGauge
-                                        approximate={
-                                            workspace.conversation.value.contextGauge.approximate
-                                        }
-                                        remainingFraction={
-                                            workspace.conversation.value.contextGauge
-                                                .remainingFraction
-                                        }
-                                        remainingTokens={
-                                            workspace.conversation.value.contextGauge
-                                                .remainingTokens
-                                        }
-                                        totalTokens={
-                                            workspace.conversation.value.contextGauge.totalTokens
-                                        }
-                                    />
-                                ) : null}
                                 {/* Hands this project's directory to another
                                     application, or puts its path on the
                                     clipboard. The path is no longer spelled out
@@ -1421,22 +1399,42 @@ function RigConversationSurface(props: {
                 </>
             }
             composerFooterControl={
-                <RigSessionControls
-                    fields={["permission", "tier"]}
-                    menuPlacement="above"
-                    variant="ghost"
-                    menus={conversation.menus}
-                    onEffortChange={(effort?: RigThinkingLevel) =>
-                        workspace.sessionEffortUpdate(effort)
+                <ComposerFooterBar
+                    leading={
+                        <RigSessionControls
+                            fields={["permission", "tier"]}
+                            menuPlacement="above"
+                            variant="ghost"
+                            menus={conversation.menus}
+                            onEffortChange={(effort?: RigThinkingLevel) =>
+                                workspace.sessionEffortUpdate(effort)
+                            }
+                            onModelChange={(selection: RigModelSelection) =>
+                                workspace.sessionModelUpdate(selection)
+                            }
+                            onPermissionModeChange={(mode: RigPermissionMode) =>
+                                workspace.sessionPermissionModeUpdate(mode)
+                            }
+                            onServiceTierChange={(tier?: RigServiceTier) =>
+                                workspace.sessionServiceTierUpdate(tier)
+                            }
+                        />
                     }
-                    onModelChange={(selection: RigModelSelection) =>
-                        workspace.sessionModelUpdate(selection)
-                    }
-                    onPermissionModeChange={(mode: RigPermissionMode) =>
-                        workspace.sessionPermissionModeUpdate(mode)
-                    }
-                    onServiceTierChange={(tier?: RigServiceTier) =>
-                        workspace.sessionServiceTierUpdate(tier)
+                    /* How much of the window this session has spent, at the far
+                       end of the same row as the access mode and the speed: the
+                       reader is about to type one more message, and this is
+                       where they find out whether it still fits and when to
+                       compact. Absent until both a token count and a declared
+                       window are known — a bar over a guessed denominator says
+                       nothing. */
+                    trailing={
+                        conversation.contextGauge ? (
+                            <ContextMeter
+                                approximate={conversation.contextGauge.approximate}
+                                totalTokens={conversation.contextGauge.totalTokens}
+                                usedTokens={conversation.contextGauge.usedTokens}
+                            />
+                        ) : undefined
                     }
                 />
             }
@@ -1599,22 +1597,37 @@ function RigPanelComposer(props: {
                             />
                         }
                         trailing={
-                            <RigControlMenu
-                                items={chatTargetItems(props.projects)}
-                                label="Chat"
-                                menuAlign="end"
-                                menuPlacement="above"
-                                menuWidth={280}
-                                variant="ghost"
-                                onSelect={(id) => {
-                                    const [groupId, chatId] = id.split(CHAT_TARGET_SEP);
-                                    if (groupId && chatId) props.onChatSelect(groupId, chatId);
-                                }}
-                                value={
-                                    chatTargetLabel(props.projects, conversation.conversationId) ??
-                                    "This session"
-                                }
-                            />
+                            <>
+                                {/* The same window the conversation surface
+                                    reports: this dock writes into the same
+                                    session, so it answers the same question
+                                    about whether the next message fits. */}
+                                {conversation.contextGauge ? (
+                                    <ContextMeter
+                                        approximate={conversation.contextGauge.approximate}
+                                        totalTokens={conversation.contextGauge.totalTokens}
+                                        usedTokens={conversation.contextGauge.usedTokens}
+                                    />
+                                ) : null}
+                                <RigControlMenu
+                                    items={chatTargetItems(props.projects)}
+                                    label="Chat"
+                                    menuAlign="end"
+                                    menuPlacement="above"
+                                    menuWidth={280}
+                                    variant="ghost"
+                                    onSelect={(id) => {
+                                        const [groupId, chatId] = id.split(CHAT_TARGET_SEP);
+                                        if (groupId && chatId) props.onChatSelect(groupId, chatId);
+                                    }}
+                                    value={
+                                        chatTargetLabel(
+                                            props.projects,
+                                            conversation.conversationId,
+                                        ) ?? "This session"
+                                    }
+                                />
+                            </>
                         }
                     />
                 }

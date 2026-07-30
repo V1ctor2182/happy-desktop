@@ -117,7 +117,7 @@
 @import "./styles/rig-connection-status.css";
 @import "./styles/agent-activity-row.css";
 @import "./styles/tool-call-preview.css";
-@import "./styles/context-gauge.css";
+@import "./styles/context-meter.css";
 @import "./styles/conversation.css";
 @import "./styles/chat-conversation.css";
 @import "./styles/rig-usage.css";

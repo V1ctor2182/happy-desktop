@@ -225,7 +225,7 @@ export {
 export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
 export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
-export { ContextGauge, type ContextGaugeProps } from "./ContextGauge";
+export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export { fileTreeBuild, fileTreeFlatten, type FileTreeBuildEntry } from "./fileTreeBuild";
 export {
     ConversationStatus,

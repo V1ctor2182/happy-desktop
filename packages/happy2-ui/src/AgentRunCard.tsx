@@ -165,21 +165,25 @@ export function AgentRunCard(props: AgentRunCardProps) {
                           className="happy2-agent-run-card__meta"
                           data-happy2-ui="agent-run-card-meta"
                       >
-                          (stats.added !== undefined ?{" "}
-                          <span
-                              className="happy2-agent-run-card__added"
-                              data-happy2-ui="agent-run-card-added"
-                          >
-                              +{stats.added}
-                          </span>{" "}
-                          : null) (stats.removed !== undefined ?{" "}
-                          <span
-                              className="happy2-agent-run-card__removed"
-                              data-happy2-ui="agent-run-card-removed"
-                          >
-                              &minus;{stats.removed}
-                          </span>{" "}
-                          : null)
+                          {/* A side that changed nothing is not news; "+0" is
+                              a number the reader has to read before learning
+                              there was nothing to learn. */}
+                          {stats.added ? (
+                              <span
+                                  className="happy2-agent-run-card__added"
+                                  data-happy2-ui="agent-run-card-added"
+                              >
+                                  +{stats.added}
+                              </span>
+                          ) : null}
+                          {stats.removed ? (
+                              <span
+                                  className="happy2-agent-run-card__removed"
+                                  data-happy2-ui="agent-run-card-removed"
+                              >
+                                  &minus;{stats.removed}
+                              </span>
+                          ) : null}
                           {detail() ? (
                               <span
                                   className="happy2-agent-run-card__detail"
