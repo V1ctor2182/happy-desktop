@@ -170,9 +170,22 @@ export interface DesktopNoteApplyRequest {
     readonly title?: string;
 }
 
+/**
+ * HTTP result of one committed browser-guest navigation. Only the main process
+ * sees a guest's response code, so it forwards it to the renderer keyed by the
+ * guest's `webContents` id; a renderer tab claims the events for its own guest.
+ */
+export interface DesktopBrowserStatus {
+    readonly guestId: number;
+    readonly url: string;
+    readonly status: number;
+    readonly statusText: string;
+}
+
 export interface HappyDesktopBridge {
     browserProxyApply(sessionId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
+    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     directoryPick(): Promise<string | undefined>;
     noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
     noteCreate(title?: string): Promise<DesktopNoteContent>;
@@ -209,6 +222,7 @@ export interface HappyDesktopBridge {
 export const desktopIpc = {
     browserProxyApply: "happy2:browser:proxy-apply",
     browserOpenRequested: "happy2:browser:open-requested",
+    browserStatusChanged: "happy2:browser:status-changed",
     directoryPick: "happy2:directory:pick",
     applicationMenuOpen: "happy2:application-menu:open",
     noteApply: "happy2:notes:apply",

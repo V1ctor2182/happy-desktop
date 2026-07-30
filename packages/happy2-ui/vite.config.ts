@@ -29,6 +29,15 @@ export default defineConfig({
             headless: true,
             instances: [{ browser: "chromium" }, { browser: "firefox" }, { browser: "webkit" }],
             provider: playwright({
+                launchOptions: {
+                    /* Firefox honours HTTP_PROXY/ALL_PROXY from the environment,
+                     * so on a machine behind a local proxy it cannot reach the
+                     * Vitest server on loopback and every session times out.
+                     * Chromium and WebKit ignore those variables under
+                     * Playwright; pin Firefox to a direct connection so all
+                     * three behave the same wherever the suite runs. */
+                    firefoxUserPrefs: { "network.proxy.type": 0 },
+                },
                 contextOptions: {
                     deviceScaleFactor: 2,
                     /* Must be >= the tester viewport below: when the browser

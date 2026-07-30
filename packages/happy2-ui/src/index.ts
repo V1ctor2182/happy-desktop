@@ -162,11 +162,26 @@ export { EventCard, type EventCardProps } from "./EventCard";
 export { Fade, type FadeProps } from "./Fade";
 export {
     FileTree,
+    fileTreeFamily,
+    type FileTreeFamily,
     type FileTreeGitStatus,
     type FileTreeNode,
     type FileTreeProps,
 } from "./FileTree";
 export { FilePanel, type FilePanelProps } from "./FilePanel";
+export {
+    FileBrowser,
+    type FileBrowserLayout,
+    type FileBrowserProps,
+    type FileBrowserScope,
+} from "./FileBrowser";
+export {
+    FilePreview,
+    filePreviewKind,
+    type FilePreviewContent,
+    type FilePreviewKind,
+    type FilePreviewProps,
+} from "./FilePreview";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
 export { Icon, type IconName, iconNames, type IconProps } from "./Icon";
 export {
@@ -507,6 +522,7 @@ export {
     type BrowserContentProps,
     type BrowserContentRenderer,
     type BrowserController,
+    type BrowserFailure,
     type BrowserPanelProps,
 } from "./BrowserPanel";
 export {

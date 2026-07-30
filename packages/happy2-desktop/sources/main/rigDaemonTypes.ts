@@ -95,6 +95,9 @@ export interface GitChangedFile {
     readonly previousPath?: string;
     readonly status: "added" | "deleted" | "modified" | "renamed" | "untracked";
     readonly revision: string;
+    /** Lines gained and lost against HEAD. Absent when the file is binary. */
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */

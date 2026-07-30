@@ -57,6 +57,8 @@ export type IconName =
     | "sidebar-expand"
     | "panel-collapse"
     | "panel-expand"
+    | "panel-maximize"
+    | "panel-restore"
     | "trash"
     | "archive"
     | "dot";
@@ -153,6 +155,10 @@ const glyphs: Record<IconName, IconGlyph> = {
     // the two window edges point in opposite directions.
     "panel-collapse": { set: "octicons", name: "sidebar-collapse" },
     "panel-expand": { set: "octicons", name: "sidebar-expand" },
+    // Filling the window and going back to a docked column, as distinct from
+    // hiding the panel: the pair above says whether the panel is there at all.
+    "panel-maximize": { set: "octicons", name: "screen-full" },
+    "panel-restore": { set: "octicons", name: "screen-normal" },
     trash: { set: "ionicons", name: "trash-outline" },
     archive: { set: "ionicons", name: "archive-outline" },
     dot: { set: "ionicons", name: "ellipse" },

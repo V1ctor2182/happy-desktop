@@ -42,6 +42,7 @@ import type {
     RigContextGauge,
     RigOpenInTarget,
     RigWorkspaceFiles,
+    RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigScrollPosition,
     RigSelection,
@@ -77,6 +78,17 @@ export const rigComposerCommands: readonly ComposerCommand[] = [
 
 /** Number of `@`-mention candidates a local composer asks the workspace for. */
 const MENTION_LIMIT = 8;
+
+/**
+ * How far back one group's tab history is kept. It exists to answer "what was
+ * behind the tab I just closed", which a few dozen entries answer completely.
+ */
+const TAB_HISTORY_LIMIT = 50;
+
+/** One open file's tab id: the file itself, inside the group it was opened from. */
+function fileTabIdOf(groupId: RigGroupId, path: string): string {
+    return `${groupId}\u0000${path}`;
+}
 
 /**
  * The open conversation: its shared entries plus the local-only concepts a
@@ -131,8 +143,13 @@ export interface RigConversationSnapshot {
     readonly scrollPosition?: RigScrollPosition;
 }
 
-/** Whether a workspace tab shows the file itself or its working-tree diff. */
-export type RigFileTabKind = "file" | "diff";
+/**
+ * What a workspace tab shows: the file's text, its working-tree diff, or the
+ * file itself rendered. `media` is what a picture, a video, or anything else
+ * with no useful text opens as — its bytes reach the viewer whole rather than
+ * being refused by a read that only knows how to return a string.
+ */
+export type RigFileTabKind = "file" | "diff" | "media";
 
 /** One workspace text file opened as a main-content document tab. */
 export interface RigFileTabSnapshot {
@@ -148,7 +165,9 @@ export interface RigFileTabSnapshot {
      */
     readonly preview: boolean;
     readonly revision: string;
-    readonly document: Loadable<RigWorkspaceFileDocument | RigChangedFileDocument>;
+    readonly document: Loadable<
+        RigWorkspaceFileDocument | RigChangedFileDocument | RigWorkspaceFileBytes
+    >;
     readonly loading: boolean;
     /**
      * Unsaved edit to this file's working-tree text. Present only once it has
@@ -172,6 +191,13 @@ export interface RigWorkspaceSnapshot {
     readonly conversation: Loadable<RigConversationSnapshot>;
     readonly fileTabs: readonly RigFileTabSnapshot[];
     readonly activeFileTabId?: string;
+    /**
+     * The session focusing each project or worktree should land on: the tab it
+     * was left on, or the one behind that in its tab history when the reader has
+     * since closed it. A group whose remembered tabs are all gone is absent, and
+     * the surface falls back to the group's first session.
+     */
+    readonly groupResume: ReadonlyMap<RigGroupId, RigSessionId>;
     /**
      * The composer of an addressed group that holds no conversation yet. Sending
      * into it is what starts the group's first conversation, so a project or a
@@ -629,10 +655,24 @@ export function rigWorkspaceStoreCreate(
     let activeFileTabId: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
     const fileLoadControllers = new Map<string, AbortController>();
+    /** The group the URL currently names, so tab memory knows what it describes. */
+    let addressedGroupId: RigGroupId | undefined;
+    /** Groups whose remembered file tabs have already been reopened in this run. */
+    const restoredGroupIds = new Set<RigGroupId>();
+    /** True while reopening remembered tabs, so the reopening is not itself remembered. */
+    let restoring = false;
+    let groupResume: ReadonlyMap<RigGroupId, RigSessionId> = new Map();
+    // What `groupResume` was last resolved against. A transcript frame does not
+    // change where a group resumes, and resolving every group's history on every
+    // one of them would spend the whole list's projection to learn nothing.
+    let groupResumeList: RigSessionListSnapshot | undefined;
+    let groupResumeRevision = -1;
+    let memoryRevision = 0;
     let snapshot: RigWorkspaceSnapshot = {
         list: list.get(),
         conversation,
         fileTabs,
+        groupResume,
         openInTargets,
         fileViewMode,
         fileScope,
@@ -692,10 +732,69 @@ export function rigWorkspaceStoreCreate(
         };
     };
 
+    /** The sessions a group holds right now, or none while the list is not ready. */
+    const groupConversationIds = (groupId: RigGroupId): ReadonlySet<string> => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return new Set();
+        for (const project of projects.value) {
+            if (project.id === groupId)
+                return new Set(project.conversations.map((summary) => summary.id));
+            const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
+            if (worktree) return new Set(worktree.conversations.map((summary) => summary.id));
+        }
+        return new Set();
+    };
+
+    /**
+     * Resolves each group's remembered tabs against the sessions it still has,
+     * answering with the session focusing that group should open. A file tab
+     * resolves to the session it was read in, which is the session its content
+     * belongs to; opening that group reopens the file over it.
+     */
+    const groupResumeCompute = (): ReadonlyMap<RigGroupId, RigSessionId> => {
+        const listSnapshot = list.get();
+        if (groupResumeList === listSnapshot && groupResumeRevision === memoryRevision)
+            return groupResume;
+        groupResumeList = listSnapshot;
+        groupResumeRevision = memoryRevision;
+        const projects = listSnapshot.projects;
+        if (projects.type !== "ready") return groupResume;
+        const next = new Map<RigGroupId, RigSessionId>();
+        const resolve = (groupId: RigGroupId, conversationIds: ReadonlySet<string>): void => {
+            const memory = client.memory.groupRead(groupId);
+            if (!memory) return;
+            for (const tabId of memory.history) {
+                if (conversationIds.has(tabId)) {
+                    next.set(groupId, tabId as RigSessionId);
+                    return;
+                }
+                const file = memory.files.find(
+                    (candidate) => fileTabIdOf(groupId, candidate.path) === tabId,
+                );
+                if (file && conversationIds.has(file.sessionId)) {
+                    next.set(groupId, file.sessionId);
+                    return;
+                }
+            }
+        };
+        for (const project of projects.value) {
+            resolve(project.id, new Set(project.conversations.map((summary) => summary.id)));
+            for (const worktree of project.worktrees)
+                resolve(worktree.id, new Set(worktree.conversations.map((summary) => summary.id)));
+        }
+        if (
+            next.size === groupResume.size &&
+            [...next].every(([groupId, sessionId]) => groupResume.get(groupId) === sessionId)
+        )
+            return groupResume;
+        return next;
+    };
+
     // Rebuilds the combined snapshot only when a component snapshot actually
     // changed, so `get()` stays referentially stable across no-op ticks.
     const recompute = (): void => {
         const listSnapshot = list.get();
+        groupResume = groupResumeCompute();
         const chat = chatStore?.get();
         const draft = composer?.getState();
         // A failed acquisition stays failed until something retries it; the
@@ -723,6 +822,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId &&
+            snapshot.groupResume === groupResume &&
             snapshot.openInTargets === openInTargets &&
             snapshot.openInRecentId === openInRecentId &&
             snapshot.rename === rename &&
@@ -739,6 +839,7 @@ export function rigWorkspaceStoreCreate(
             list: listSnapshot,
             conversation,
             fileTabs,
+            groupResume,
             openInTargets,
             fileViewMode,
             fileScope,
@@ -768,6 +869,94 @@ export function rigWorkspaceStoreCreate(
         return undefined;
     };
 
+    /**
+     * Writes one group's tab memory: the tab now being read moves to the front
+     * of its history, and the group's open files are recorded as they stand.
+     * Entries for sessions the group no longer has are dropped once the list is
+     * ready to say so, so a closed session falls out of the memory instead of
+     * shadowing the tab behind it forever.
+     */
+    const groupTabRemember = (groupId: RigGroupId, tabId: string | undefined): void => {
+        if (restoring) return;
+        memoryRevision += 1;
+        const previous = client.memory.groupRead(groupId);
+        // A preview is a glance at a file, not a tab the reader put there, so it
+        // is not something to reopen a group with.
+        const files = fileTabs
+            .filter((tab) => tab.groupId === groupId && !tab.preview)
+            .map((tab) => ({ sessionId: tab.sessionId, path: tab.path, kind: tab.kind }));
+        const conversationIds = groupConversationIds(groupId);
+        const fileTabIds = new Set(files.map((file) => fileTabIdOf(groupId, file.path)));
+        const known = (id: string): boolean =>
+            conversationIds.size === 0 || conversationIds.has(id) || fileTabIds.has(id);
+        const history = [
+            ...(tabId === undefined ? [] : [tabId]),
+            ...(previous?.history ?? []).filter((id) => id !== tabId && known(id)),
+        ].slice(0, TAB_HISTORY_LIMIT);
+        const activeTabId = tabId ?? previous?.activeTabId;
+        if (history.length === 0 && files.length === 0) {
+            client.memory.groupForget(groupId);
+            return;
+        }
+        client.memory.groupUpdate(groupId, {
+            ...(activeTabId ? { activeTabId } : {}),
+            history,
+            files,
+        });
+    };
+
+    /** Drops one tab from a group's memory, for a tab that has just been closed. */
+    const groupTabForget = (groupId: RigGroupId, tabId: string): void => {
+        memoryRevision += 1;
+        const previous = client.memory.groupRead(groupId);
+        if (!previous) return;
+        const history = previous.history.filter((id) => id !== tabId);
+        const files = previous.files.filter((file) => fileTabIdOf(groupId, file.path) !== tabId);
+        if (history.length === 0 && files.length === 0) {
+            client.memory.groupForget(groupId);
+            return;
+        }
+        client.memory.groupUpdate(groupId, {
+            ...(previous.activeTabId && previous.activeTabId !== tabId
+                ? { activeTabId: previous.activeTabId }
+                : {}),
+            history,
+            files,
+        });
+    };
+
+    /**
+     * Reopens the files a group was left with, the first time that group is
+     * addressed in this run, and selects the tab it was left on when that tab was
+     * one of them. It waits for the session list, since a file belongs to a
+     * session and a group whose sessions are unknown cannot say which of its
+     * remembered files still have one.
+     */
+    const groupRestore = (groupId: RigGroupId): void => {
+        if (restoredGroupIds.has(groupId)) return;
+        const conversationIds = groupConversationIds(groupId);
+        if (conversationIds.size === 0) return;
+        restoredGroupIds.add(groupId);
+        const memory = client.memory.groupRead(groupId);
+        if (!memory || memory.files.length === 0) return;
+        restoring = true;
+        try {
+            for (const file of memory.files) {
+                if (!conversationIds.has(file.sessionId)) continue;
+                if (fileTabs.some((tab) => tab.id === fileTabIdOf(groupId, file.path))) continue;
+                fileTabOpen(file.sessionId, groupId, file.path, file.kind, false);
+            }
+        } finally {
+            restoring = false;
+        }
+        // Reopening moved the selection through every restored file; the reader
+        // left exactly one of them on screen, so the memory decides which.
+        activeFileTabId =
+            memory.activeTabId && fileTabs.some((tab) => tab.id === memory.activeTabId)
+                ? memory.activeTabId
+                : undefined;
+    };
+
     /** Stops pending work for a file tab that is being closed or replaced. */
     const fileTabRelease = (tabId: string): void => {
         fileLoadGenerations.delete(tabId);
@@ -789,10 +978,17 @@ export function rigWorkspaceStoreCreate(
                       ...tab,
                       revision,
                       loading: true,
+                      // A reload keeps showing what is already there only when
+                      // it is the shape this tab reads. A media document also
+                      // carries `content`, so its media type is what tells the
+                      // two apart rather than the presence of that field.
                       ...(tab.document.type === "ready" &&
-                      (before.kind === "file"
-                          ? "content" in tab.document.value
-                          : "oldContent" in tab.document.value)
+                      (before.kind === "media"
+                          ? "contentType" in tab.document.value
+                          : before.kind === "file"
+                            ? "content" in tab.document.value &&
+                              !("contentType" in tab.document.value)
+                            : "oldContent" in tab.document.value)
                           ? {}
                           : { document: { type: "loading" as const } }),
                   }
@@ -802,12 +998,14 @@ export function rigWorkspaceStoreCreate(
         const read =
             before.kind === "file"
                 ? client.workspaceFileRead(before.sessionId, before.path, controller.signal)
-                : client.changedFileRead(
-                      before.sessionId,
-                      before.groupId,
-                      before.path,
-                      controller.signal,
-                  );
+                : before.kind === "media"
+                  ? client.workspaceFileBytesRead(before.sessionId, before.path, controller.signal)
+                  : client.changedFileRead(
+                        before.sessionId,
+                        before.groupId,
+                        before.path,
+                        controller.signal,
+                    );
         void read.then(
             (document) => {
                 if (
@@ -863,7 +1061,7 @@ export function rigWorkspaceStoreCreate(
         kind: RigFileTabKind,
         preview: boolean,
     ): void => {
-        const id = `${groupId}\u0000${path}`;
+        const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
         activeFileTabId = id;
         if (existing) {
@@ -881,6 +1079,7 @@ export function rigWorkspaceStoreCreate(
                           }
                         : tab,
                 );
+                groupTabRemember(groupId, id);
                 fileLoad(id, revision);
                 return;
             }
@@ -888,6 +1087,7 @@ export function rigWorkspaceStoreCreate(
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === id ? { ...tab, preview: false } : tab,
                 );
+            groupTabRemember(groupId, id);
             if (change && change.revision !== existing.revision) fileLoad(id, change.revision);
             else recompute();
             return;
@@ -917,6 +1117,7 @@ export function rigWorkspaceStoreCreate(
         } else {
             fileTabs = [...fileTabs, tab];
         }
+        groupTabRemember(groupId, id);
         recompute();
         fileLoad(id, revision);
     };
@@ -1414,6 +1615,10 @@ export function rigWorkspaceStoreCreate(
         active = true;
         unsubscribeList = list.subscribe(() => {
             if (openId) list.sessionRead(openId);
+            // A group addressed before its sessions arrived could not have its
+            // remembered files reopened yet; the list saying which sessions it
+            // has is what makes that possible.
+            if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
             fileTabsReconcile();
             recompute();
         });
@@ -1446,6 +1651,7 @@ export function rigWorkspaceStoreCreate(
             list: list.get(),
             conversation,
             fileTabs,
+            groupResume,
             openInTargets,
             fileViewMode,
             fileScope,
@@ -1477,11 +1683,23 @@ export function rigWorkspaceStoreCreate(
         conversationOpen: (conversationId, groupId) => {
             releaseGroup();
             if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
+            if (groupId !== undefined) {
+                addressedGroupId = groupId;
+                groupRestore(groupId);
+                // A restored file tab is what this group was left showing, so it
+                // stays on screen and stays the tab this group resumes on.
+                const restoredFile = fileTabs.find(
+                    (tab) => tab.id === activeFileTabId && tab.groupId === groupId,
+                );
+                groupTabRemember(groupId, restoredFile ? restoredFile.id : conversationId);
+            }
             list.sessionRead(conversationId);
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
             openConversation(undefined);
+            addressedGroupId = groupId;
+            groupRestore(groupId);
             // The file scope belongs to the whole workspace, so "All files"
             // survives navigation. Apply it to the newly addressed checkout
             // even when this group already owns the empty-session composer.
@@ -1558,17 +1776,32 @@ export function rigWorkspaceStoreCreate(
         fileOpen: (sessionId, groupId, path, kind) =>
             fileTabOpen(sessionId, groupId, path, kind, false),
         fileSelect(tabId) {
-            activeFileTabId =
-                tabId !== undefined && fileTabs.some((tab) => tab.id === tabId) ? tabId : undefined;
+            const selected =
+                tabId !== undefined ? fileTabs.find((tab) => tab.id === tabId) : undefined;
+            activeFileTabId = selected?.id;
+            if (selected) groupTabRemember(selected.groupId, selected.id);
+            // Clearing file selection puts the open conversation back on screen,
+            // which is the tab this group is now being read on.
+            else if (addressedGroupId !== undefined && openId !== undefined)
+                groupTabRemember(addressedGroupId, openId);
             recompute();
         },
         fileClose(tabId) {
             const index = fileTabs.findIndex((tab) => tab.id === tabId);
-            if (index < 0) return;
+            const closing = fileTabs[index];
+            if (index < 0 || !closing) return;
             fileTabRelease(tabId);
             fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
             if (activeFileTabId === tabId)
                 activeFileTabId = fileTabs[Math.min(index, fileTabs.length - 1)]?.id;
+            groupTabForget(closing.groupId, tabId);
+            // What the closed tab uncovered in its own group: the next file
+            // there, or the conversation behind it when the group is addressed.
+            const uncovered =
+                fileTabs.find(
+                    (tab) => tab.id === activeFileTabId && tab.groupId === closing.groupId,
+                )?.id ?? (closing.groupId === addressedGroupId ? openId : undefined);
+            groupTabRemember(closing.groupId, uncovered);
             recompute();
         },
         fileRetry(tabId) {

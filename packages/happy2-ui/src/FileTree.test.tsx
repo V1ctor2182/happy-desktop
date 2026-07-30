@@ -8,10 +8,15 @@ import { createRenderer } from "./testing";
 /*
  * FileTree owns row LAYOUT (a 28px row grid, a fixed 16px disclosure slot, and
  * 16px-per-level indentation expressed as row left padding), the git-status
- * decoration tokens (name + single letter share one semantic color per state),
- * and the selection/hover surfaces. Every painted glyph is an Icon primitive
- * already optically tuned in Icon.test, so this file asserts geometry, computed
- * tokens, and typography — not glyph centroids.
+ * decoration tokens, the family colour of the row's icon, and the
+ * selection/hover surfaces. Every painted glyph is an Icon primitive already
+ * optically tuned in Icon.test, so this file asserts geometry, computed tokens,
+ * and typography — not glyph centroids.
+ *
+ * Git state colours the small parts that exist to carry it — the status letter
+ * — and not the file's name: a column where every changed name is tinted has no
+ * ordinary text left to read the tinting against. Deletion is the one exception,
+ * because that row names something that is no longer there.
  */
 
 const fontFamily = "happy2 Figtree, system-ui, sans-serif";
@@ -39,19 +44,21 @@ const nodes: FileTreeNode[] = [
 ];
 
 const statusColor: Record<string, string> = {
-    "src/index.ts": "rgb(142, 142, 147)", // modified · warning
-    "src/new.ts": "rgb(52, 199, 89)", // added · success
-    "src/old.ts": "rgb(244, 67, 54)", // deleted · danger
-    "notes.md": "rgb(0, 122, 255)", // renamed · info
-    ".env": "rgb(52, 199, 89)", // untracked · success
+    "src/index.ts": "rgb(194, 130, 10)", // modified
+    "src/new.ts": "rgb(46, 160, 67)", // added · new
+    "src/old.ts": "rgb(207, 34, 46)", // deleted
+    "notes.md": "rgb(9, 105, 218)", // renamed
+    ".env": "rgb(46, 160, 67)", // untracked · new
 };
 
+/* `added` and `untracked` are one thing to a reader — the file is new — so both
+   say N rather than asking which kind of new it was. */
 const statusLetter: Record<string, string> = {
     "src/index.ts": "M",
-    "src/new.ts": "A",
+    "src/new.ts": "N",
     "src/old.ts": "D",
     "notes.md": "R",
-    ".env": "U",
+    ".env": "N",
     "docs/": "I",
 };
 
@@ -160,7 +167,9 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     expect(iconName("docs/"), "directory").toBe("files");
     expect(iconName("src/index.ts"), ".ts is code").toBe("code");
     expect(iconName("src/theme.css"), ".css is braces").toBe("braces");
-    expect(iconName(".env"), ".env is braces").toBe("braces");
+    /* Configuration is its own family: `.env` is not read the way a stylesheet
+       or a JSON document is, and its colour says so. */
+    expect(iconName(".env"), ".env is settings").toBe("settings");
     expect(iconName("src/logo.png"), ".png is image").toBe("image");
     expect(iconName("notes.md"), ".md is doc").toBe("doc");
     expect(iconName("README.md"), "README.md is doc").toBe("doc");
@@ -174,15 +183,31 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     expect(srcMetrics.font.size).toBe(13);
     expect(srcMetrics.font.weight).toBe("600");
     expect(srcMetrics.font.lineHeight).toBe(18);
-    expect(srcName.computedStyle("color")).toBe("rgb(0, 0, 0)");
+    /* A directory is a container rather than a destination: same weight as a
+       file's name, without the file's full-contrast ink. */
+    expect(srcName.computedStyle("color")).toBe("rgb(73, 69, 79)");
 
     /* ---- File typography (unselected, no status) ----------------------- */
 
     const plainName = view.$(sel('[data-path="src/theme.css"] [data-happy2-ui="file-tree-name"]'));
     const plainMetrics = plainName.textMetrics();
-    expect(plainMetrics.font.weight).toBe("500");
+    expect(plainMetrics.font.weight).toBe("600");
     expect(plainMetrics.font.size).toBe(13);
-    expect(plainName.computedStyle("color")).toBe("rgb(73, 69, 79)");
+    /* Every file name is primary ink: the row is a list of things to read, and
+       secondary text in it belongs to the path, not the name. */
+    expect(plainName.computedStyle("color")).toBe("rgb(0, 0, 0)");
+
+    /* ---- Family colour: the icon says what sort of file this is --------- */
+
+    const styleIcon = view.$(sel('[data-path="src/theme.css"] [data-happy2-ui="file-tree-icon"]'));
+    expect(row("src/theme.css").element.getAttribute("data-family")).toBe("style");
+    expect(styleIcon.computedStyle("color")).toBe("rgb(124, 58, 237)");
+    const imageIcon = view.$(sel('[data-path="src/logo.png"] [data-happy2-ui="file-tree-icon"]'));
+    expect(row("src/logo.png").element.getAttribute("data-family")).toBe("image");
+    expect(imageIcon.computedStyle("color")).toBe("rgb(13, 148, 136)");
+    const codeIcon = view.$(sel('[data-path="src/index.ts"] [data-happy2-ui="file-tree-icon"]'));
+    expect(row("src/index.ts").element.getAttribute("data-family")).toBe("code");
+    expect(codeIcon.computedStyle("color")).toBe("rgb(37, 99, 235)");
 
     /* ---- Selection: README.md carries the accent-soft surface + solid ink */
 
@@ -196,26 +221,29 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     /* Unselected rows keep the transparent surface. */
     expect(row("src/theme.css").computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
 
-    /* ---- Git decorations: name + letter share one color per status ------ */
+    /* ---- Git decorations: the letter carries the state's color ---------- */
 
     for (const [path, color] of Object.entries(statusColor)) {
-        const name = view.$(
-            sel(`[data-path="${CSS.escape(path)}"] [data-happy2-ui="file-tree-name"]`),
-        );
         const status = view.$(
             sel(`[data-path="${CSS.escape(path)}"] [data-happy2-ui="file-tree-status"]`),
         );
-        expect(name.computedStyle("color"), `${path} name`).toBe(color);
         expect(status.computedStyle("color"), `${path} letter`).toBe(color);
         expect(status.element.textContent, `${path} letter`).toBe(statusLetter[path]);
     }
 
-    /* Deleted files are struck through; ignored directories dim to faint. */
-    expect(
-        view
-            .$(sel('[data-path="src/old.ts"] [data-happy2-ui="file-tree-name"]'))
-            .computedStyle("text-decoration-line"),
-    ).toBe("line-through");
+    /* A changed file's name stays ordinary text, so the decoration beside it is
+       the only thing the eye has to pick out. */
+    for (const path of ["src/index.ts", "src/new.ts", "notes.md", ".env"]) {
+        const name = view.$(
+            sel(`[data-path="${CSS.escape(path)}"] [data-happy2-ui="file-tree-name"]`),
+        );
+        expect(name.computedStyle("color"), `${path} name`).toBe("rgb(0, 0, 0)");
+    }
+
+    /* Deleted files are struck through and dimmed; ignored directories dim too. */
+    const deletedName = view.$(sel('[data-path="src/old.ts"] [data-happy2-ui="file-tree-name"]'));
+    expect(deletedName.computedStyle("text-decoration-line")).toBe("line-through");
+    expect(deletedName.computedStyle("color")).toBe("rgb(73, 69, 79)");
     const docsName = view.$(sel('[data-path="docs/"] [data-happy2-ui="file-tree-name"]'));
     expect(docsName.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(row("docs/").element.getAttribute("data-status")).toBe("ignored");
@@ -240,6 +268,118 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     window.scrollTo(0, 0);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await view.screenshot("FileTree.test");
+}, 120_000);
+
+it("prints a flat row's directory ahead of its name, dimmer and lighter, eliding only the path", async () => {
+    const view = createRenderer();
+    const deep = "packages/happy2-ui/src/pages/files/components/detail";
+    view.render(
+        () => (
+            <div style={{ background: "var(--surface)", display: "flex", flexDirection: "column" }}>
+                <div style={{ width: "440px" }}>
+                    <FileTree
+                        data-testid="flat"
+                        nodes={[
+                            {
+                                id: `${deep}/FilePreviewHeader.tsx`,
+                                name: "FilePreviewHeader.tsx",
+                                directory: deep,
+                                kind: "file",
+                                gitStatus: "modified",
+                                addedLines: 42,
+                                deletedLines: 7,
+                            },
+                            { id: "README.md", name: "README.md", kind: "file" },
+                        ]}
+                    />
+                </div>
+                <div style={{ width: "200px" }}>
+                    <FileTree
+                        data-testid="narrow"
+                        nodes={[
+                            {
+                                id: `${deep}/FilePreviewHeader.tsx`,
+                                name: "FilePreviewHeader.tsx",
+                                directory: deep,
+                                kind: "file",
+                                gitStatus: "modified",
+                                addedLines: 42,
+                                deletedLines: 7,
+                            },
+                        ]}
+                    />
+                </div>
+            </div>
+        ),
+        { width: 480, height: 160, padding: 16 },
+    );
+    await view.ready();
+
+    const part = (name: string) =>
+        view.$(`[data-testid="flat"] [data-happy2-ui="file-tree-${name}"]`);
+
+    /* The row still reads as the path it is: directory first, then the name. */
+    const label = part("label");
+    expect(label.element.textContent).toBe(`${deep}/FilePreviewHeader.tsx`);
+    const path = part("path");
+    const name = part("name");
+    expect(path.bounds().x).toBeLessThan(name.bounds().x);
+
+    /* Directory and name share a size and baseline so the pair reads as one
+       line, and separate by weight and colour so the name is what stands out. */
+    const pathMetrics = path.textMetrics();
+    const nameMetrics = name.textMetrics();
+    expect(pathMetrics.font.size).toBe(13);
+    expect(nameMetrics.font.size).toBe(13);
+    expect(pathMetrics.font.lineHeight).toBe(18);
+    expect(nameMetrics.font.lineHeight).toBe(18);
+    expect(pathMetrics.font.weight).toBe("400");
+    expect(nameMetrics.font.weight).toBe("600");
+    expect(path.computedStyle("color")).toBe("rgb(154, 150, 158)");
+    expect(name.computedStyle("color")).toBe("rgb(0, 0, 0)");
+
+    /* Too narrow for the whole path: the leading run elides, its last segment
+       survives whole, and the file name never loses a character. */
+    const head = view.$('[data-testid="flat"] .happy2-file-tree__path-head');
+    const tail = view.$('[data-testid="flat"] .happy2-file-tree__path-tail');
+    expect(head.element.scrollWidth).toBeGreaterThan(head.element.clientWidth);
+    expect(tail.element.scrollWidth).toBe(tail.element.clientWidth);
+    expect(tail.element.textContent).toBe("/detail/");
+    expect(name.element.scrollWidth).toBe(name.element.clientWidth);
+
+    /* Narrower still, past what any elision of the leading run can pay for: the
+       last segment gives up width in its turn rather than printing on top of the
+       name, which is what a path that refuses to shrink at all ends up doing. */
+    const narrowPath = view.$('[data-testid="narrow"] [data-happy2-ui="file-tree-path"]');
+    const narrowName = view.$('[data-testid="narrow"] [data-happy2-ui="file-tree-name"]');
+    const narrowTail = view.$('[data-testid="narrow"] .happy2-file-tree__path-tail');
+    expect(narrowTail.element.scrollWidth).toBeGreaterThan(narrowTail.element.clientWidth);
+    expect(narrowPath.bounds().x + narrowPath.bounds().width).toBeLessThanOrEqual(
+        narrowName.bounds().x + 0.5,
+    );
+
+    /* Both sides of the per-file stat, in the diff's own colours. */
+    expect(view.$('[data-testid="flat"] .happy2-file-tree__stat-added').element.textContent).toBe(
+        "+42",
+    );
+    expect(view.$('[data-testid="flat"] .happy2-file-tree__stat-deleted').element.textContent).toBe(
+        "−7",
+    );
+    expect(
+        view.$('[data-testid="flat"] .happy2-file-tree__stat-added').computedStyle("color"),
+    ).toBe("rgb(34, 197, 94)");
+    expect(
+        view.$('[data-testid="flat"] .happy2-file-tree__stat-deleted').computedStyle("color"),
+    ).toBe("rgb(239, 68, 68)");
+
+    /* A row with no directory prints only its name — no empty path box. */
+    expect(
+        document.querySelectorAll('[data-testid="flat"] [data-happy2-ui="file-tree-path"]').length,
+    ).toBe(1);
+
+    window.scrollTo(0, 0);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await view.screenshot("FileTree.path");
 }, 120_000);
 
 it("routes selection, disclosure, and paging callbacks, and renders loading/empty states", async () => {
@@ -295,13 +435,15 @@ it("routes selection, disclosure, and paging callbacks, and renders loading/empt
     expect(toggled).toEqual(["docs/"]);
     expect(paged).toEqual(["src/"]);
 
-    /* Selecting a directory's own name still selects (does not toggle). */
+    /* Clicking a directory's own name discloses it exactly as its chevron does.
+       A directory is not something a caller can open, so reporting the click as
+       a selection asked one to open a folder as though it were a file. */
     (
         view.$(at("live", '[data-path="src/"] [data-happy2-ui="file-tree-entry"]'))
             .element as HTMLButtonElement
     ).click();
-    expect(selected).toEqual(["README.md", "src/"]);
-    expect(toggled).toEqual(["docs/"]);
+    expect(selected).toEqual(["README.md"]);
+    expect(toggled).toEqual(["docs/", "src/"]);
 
     /* Whole-tree loading and empty states render a single muted status line. */
     const busy = view.$(at("busy", '[data-happy2-ui="file-tree-status-line"]'));

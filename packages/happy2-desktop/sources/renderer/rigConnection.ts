@@ -14,6 +14,8 @@ import {
     type RigModelStore,
     type RigSessionCatalogSnapshot,
     type RigSessionLocation,
+    type RigWorkspaceMemoryDocument,
+    type RigWorkspaceMemoryPersistence,
     type RigWorkspaceStore,
 } from "happy2-state";
 import {
@@ -46,6 +48,35 @@ const modelPreferencePersistence: RigModelPreferencePersistence = {
         }
     },
 };
+
+const WORKSPACE_MEMORY_PREFIX = "happy2.rig.workspace-memory.v1:";
+
+/**
+ * Where one Rig's tab and read memory is kept on this machine. Keyed by the Rig
+ * so two machines' projects never share a document: their ids are minted
+ * independently, and one machine's tabs must not decide another's.
+ */
+function workspaceMemoryPersistence(rigId: string): RigWorkspaceMemoryPersistence {
+    const key = `${WORKSPACE_MEMORY_PREFIX}${rigId}`;
+    return {
+        read() {
+            try {
+                const value = localStorage.getItem(key);
+                return value ? (JSON.parse(value) as RigWorkspaceMemoryDocument) : undefined;
+            } catch {
+                return undefined;
+            }
+        },
+        write(document) {
+            try {
+                localStorage.setItem(key, JSON.stringify(document));
+            } catch {
+                // A storage-denied renderer still remembers where the reader is
+                // for as long as the window stays open.
+            }
+        },
+    };
+}
 
 export interface RigSession {
     readonly connection: RigConnectionStore;
@@ -102,6 +133,8 @@ function healthProbe(rigHttpUrl: string): () => Promise<RigDaemonHealth> {
 export function rigConnectionOpen(input: {
     readonly host: RigHost;
     readonly deps: RigSessionDeps;
+    /** Which Rig this is, so its tab and read memory is kept apart from the others'. */
+    readonly rigId: string;
     readonly rigHttpUrl: string;
 }): RigConnectionHandle {
     let disposed = false;
@@ -137,6 +170,7 @@ export function rigConnectionOpen(input: {
             if (event.type === "sessionCompleted") completionChimePlay();
         },
         modelPreferencePersistence,
+        workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
         connectActions: rigConnect,

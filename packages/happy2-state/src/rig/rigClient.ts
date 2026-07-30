@@ -20,6 +20,7 @@ import type {
     RigChangedFileDocument,
     RigGroupId,
     RigOpenInTargets,
+    RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigModelCatalog,
@@ -27,6 +28,11 @@ import type {
 } from "./rigTypes.js";
 import { rigModelStoreCreate, type RigModelStore } from "./rigModelStore.js";
 import type { RigModelPreferencePersistence } from "./rigModelStore.js";
+import {
+    rigWorkspaceMemoryStoreCreate,
+    type RigWorkspaceMemoryPersistence,
+    type RigWorkspaceMemoryStore,
+} from "./rigWorkspaceMemory.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -37,6 +43,12 @@ export interface RigChatHandle {
 export interface RigClient {
     /** One model/capability/default/last-used authority for this daemon connection. */
     readonly models: RigModelStore;
+    /**
+     * What this Rig remembers between runs: each group's tabs and which sessions
+     * have unseen finished work. Shared by the list and the workspace so both
+     * read and write the one document the host persists.
+     */
+    readonly memory: RigWorkspaceMemoryStore;
     /** Loads (once) and returns the model catalog; cached for the client's lifetime. */
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
@@ -49,6 +61,15 @@ export interface RigClient {
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileDocument>;
+    /**
+     * Reads one workspace file as bytes, for showing it rather than editing it.
+     * Makes no claim that the file is text, so an image or a video arrives whole.
+     */
+    workspaceFileBytesRead(
+        sessionId: RigSessionId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigWorkspaceFileBytes>;
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         sessionId: RigSessionId,
@@ -111,6 +132,8 @@ export interface RigClientDeps {
     readonly chatOutput?: (sessionId: RigSessionId, event: RigChatOutput) => void;
     readonly backgroundError?: (error: UserError) => void;
     readonly modelPreferencePersistence?: RigModelPreferencePersistence;
+    /** Where this Rig's tab and read memory is kept; omitted keeps it in memory. */
+    readonly workspaceMemoryPersistence?: RigWorkspaceMemoryPersistence;
     /**
      * Builds the driver behind a terminal: the app-layer machinery that owns the
      * terminal protocol client and the VT emulator. Omitting it leaves terminals
@@ -142,18 +165,22 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             ? { preferencePersistence: deps.modelPreferencePersistence }
             : {}),
     });
+    const memory = rigWorkspaceMemoryStoreCreate(deps.workspaceMemoryPersistence);
     let sessionListStore: RigSessionListStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
     return {
         models,
+        memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (sessionId, groupId, path, signal) =>
             transport.changedFileRead(sessionId, groupId, path, signal),
         workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
         workspaceFileRead: (sessionId, path, signal) =>
             transport.workspaceFileRead(sessionId, path, signal),
+        workspaceFileBytesRead: (sessionId, path, signal) =>
+            transport.workspaceFileBytesRead(sessionId, path, signal),
         workspaceFileWrite: (sessionId, path, content, expectedHash) =>
             transport.workspaceFileWrite(sessionId, path, content, expectedHash),
         attachmentWrite: (sessionId, name, content) =>
@@ -166,6 +193,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 sessionListStore = rigSessionListStoreCreate({
                     transport,
                     catalogSource: deps.catalogSource,
+                    memory,
                     output: deps.sessionListOutput,
                     createId: deps.createId,
                 });

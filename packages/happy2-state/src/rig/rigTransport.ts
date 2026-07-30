@@ -14,6 +14,7 @@ import type {
     RigPermissionMode,
     RigPermissionReview,
     RigOpenInTargets,
+    RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigProjectCatalog,
@@ -304,6 +305,17 @@ export interface RigTransport {
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileDocument>;
+
+    /**
+     * Reads one workspace file as bytes, for a surface that shows the file
+     * rather than editing it. Unlike `workspaceFileRead` this makes no claim
+     * that the file is text, so an image, a video, or a PDF arrives intact.
+     */
+    workspaceFileBytesRead(
+        sessionId: RigSessionId,
+        path: string,
+        signal?: AbortSignal,
+    ): Promise<RigWorkspaceFileBytes>;
 
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(

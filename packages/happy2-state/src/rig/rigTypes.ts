@@ -475,6 +475,9 @@ export interface RigGitChangedFile {
     readonly status: "added" | "deleted" | "modified" | "renamed" | "untracked";
     /** Lightweight disk identity used to reload an open file after a Git watcher hint. */
     readonly revision: string;
+    /** Lines this file gained and lost against HEAD; absent when it is binary. */
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 }
 
 /** Current working-tree text loaded for an ordinary workspace-file tab. */
@@ -482,6 +485,20 @@ export interface RigWorkspaceFileDocument {
     readonly path: string;
     readonly content: string;
     /** SHA-256 identity returned by Rig and required for a conflict-safe save. */
+    readonly hash: string;
+}
+
+/**
+ * One workspace file's bytes, loaded to be shown rather than edited. `content`
+ * is base64 so the transport stays JSON; the surface turns it into an object URL
+ * of `contentType` and hands that to an `<img>`, `<video>`, or `<audio>`.
+ */
+export interface RigWorkspaceFileBytes {
+    readonly path: string;
+    /** Media type implied by the file's extension, or `application/octet-stream`. */
+    readonly contentType: string;
+    readonly content: string;
+    readonly size: number;
     readonly hash: string;
 }
 

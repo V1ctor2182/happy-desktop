@@ -2,10 +2,16 @@
  * C-052 FileTree — code-editor file/folder explorer.
  *
  * A column of 28px rows. Each row is a fixed 16px disclosure slot (chevron for
- * directories) followed by a flexible entry button: a 14px file-type icon, an
- * elliptical name, and an optional single-letter git decoration. Depth is
- * expressed as left padding on the row (8px base + 16px per level), so nested
- * names align under their parent's name. Colors and type are theme tokens only.
+ * directories) followed by a flexible entry button: a 14px file-type icon
+ * coloured by its family, the file's name at full contrast with its directory
+ * dimmed beside it, then the row's diff stat and a single-letter git decoration.
+ * Depth is expressed as left padding on the row (8px base + 16px per level), so
+ * nested names align under their parent's name.
+ *
+ * The name is never tinted by git state. A column where every changed file's
+ * name is orange or green is a column with no ordinary text left to read against
+ * — the state belongs on the small parts that exist to carry it. Colors and type
+ * are theme tokens only.
  */
 
 .happy2-file-tree,
@@ -93,31 +99,158 @@
 .happy2-file-tree__icon {
     display: flex;
     flex: none;
-    color: var(--text-secondary);
+    color: var(--file-other);
 }
 
+/* ---- File families ---------------------------------------------------- */
+
+.happy2-file-tree__row[data-family="archive"] .happy2-file-tree__icon {
+    color: var(--file-archive);
+}
+
+.happy2-file-tree__row[data-family="audio"] .happy2-file-tree__icon {
+    color: var(--file-audio);
+}
+
+.happy2-file-tree__row[data-family="code"] .happy2-file-tree__icon {
+    color: var(--file-code);
+}
+
+.happy2-file-tree__row[data-family="config"] .happy2-file-tree__icon {
+    color: var(--file-config);
+}
+
+.happy2-file-tree__row[data-family="data"] .happy2-file-tree__icon {
+    color: var(--file-data);
+}
+
+.happy2-file-tree__row[data-family="directory"] .happy2-file-tree__icon {
+    color: var(--file-directory);
+}
+
+.happy2-file-tree__row[data-family="image"] .happy2-file-tree__icon {
+    color: var(--file-image);
+}
+
+.happy2-file-tree__row[data-family="prose"] .happy2-file-tree__icon {
+    color: var(--file-prose);
+}
+
+.happy2-file-tree__row[data-family="secret"] .happy2-file-tree__icon {
+    color: var(--file-secret);
+}
+
+.happy2-file-tree__row[data-family="shell"] .happy2-file-tree__icon {
+    color: var(--file-shell);
+}
+
+.happy2-file-tree__row[data-family="style"] .happy2-file-tree__icon {
+    color: var(--file-style);
+}
+
+.happy2-file-tree__row[data-family="video"] .happy2-file-tree__icon {
+    color: var(--file-video);
+}
+
+/* ---- Label ------------------------------------------------------------ */
+
+/* The directory and the name are one continuous path with no gap between them,
+   but they shrink independently: the name keeps its width until the directory
+   ahead of it has nothing left to give. */
+.happy2-file-tree__label {
+    display: flex;
+    flex: 1;
+    align-items: baseline;
+    min-width: 0;
+}
+
+/* Last to give up width, because it is the word being looked for: the path
+   beside it shrinks a thousand times faster and is gone before the name loses
+   its first character. */
 .happy2-file-tree__name {
     display: block;
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--text-secondary);
+    color: var(--text);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     line-height: 18px;
     letter-spacing: -0.01em;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+/* A directory row is a container rather than a destination, so its name reads
+   at the same weight as a file's without the file's full-contrast ink. */
 .happy2-file-tree__row[data-kind="directory"] .happy2-file-tree__name {
-    color: var(--text);
-    font-weight: 600;
+    color: var(--text-secondary);
 }
 
-.happy2-file-tree__row[data-selected] .happy2-file-tree__name {
-    color: var(--text);
+/* The directory yields to the name: it is context, not the thing being looked
+   for, so it collapses to nothing before the name loses a character. It keeps
+   the name's size and line so the two still read as one path, and separates
+   itself by weight and colour — sharing both made the pair one grey run in
+   which the file being looked for was no longer the thing standing out. */
+.happy2-file-tree__path {
+    display: flex;
+    flex: 0 1000 auto;
+    align-items: baseline;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--file-path-text);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
 }
+
+/* Only the leading run elides, so the elision opens in the middle of the path
+   and its last segment — the part that says where the file actually lives —
+   survives at full length. */
+.happy2-file-tree__path-head {
+    display: block;
+    flex: 0 1000 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Holds its whole width while the head still has any to give, then elides in
+   turn. Refusing to shrink at all let it overflow the path and print on top of
+   the file name once the panel was narrow enough. */
+.happy2-file-tree__path-tail {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Diff stat -------------------------------------------------------- */
+
+.happy2-file-tree__stat {
+    display: flex;
+    flex: none;
+    align-items: baseline;
+    gap: 4px;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    font-feature-settings: "tnum" 1;
+}
+
+.happy2-file-tree__stat-added {
+    color: var(--git-added-text);
+}
+
+.happy2-file-tree__stat-deleted {
+    color: var(--git-removed-text);
+}
+
+/* ---- Git status decorations ------------------------------------------ */
 
 .happy2-file-tree__status {
     display: block;
@@ -132,37 +265,31 @@
     font-feature-settings: "tnum" 1;
 }
 
-/* ---- Git status decorations ------------------------------------------ */
-
-.happy2-file-tree__row[data-status="added"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="added"] .happy2-file-tree__status,
-.happy2-file-tree__row[data-status="untracked"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="untracked"] .happy2-file-tree__status {
-    color: var(--success);
+.happy2-file-tree__row[data-tone="new"] .happy2-file-tree__status {
+    color: var(--git-status-new);
 }
 
-.happy2-file-tree__row[data-status="modified"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="modified"] .happy2-file-tree__status {
-    color: var(--warning);
+.happy2-file-tree__row[data-tone="modified"] .happy2-file-tree__status {
+    color: var(--git-status-modified);
 }
 
-.happy2-file-tree__row[data-status="renamed"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="renamed"] .happy2-file-tree__status {
-    color: var(--status-connecting);
+.happy2-file-tree__row[data-tone="renamed"] .happy2-file-tree__status {
+    color: var(--git-status-renamed);
 }
 
-.happy2-file-tree__row[data-status="deleted"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="deleted"] .happy2-file-tree__status {
-    color: var(--text-destructive);
+.happy2-file-tree__row[data-tone="deleted"] .happy2-file-tree__status {
+    color: var(--git-status-deleted);
 }
 
-.happy2-file-tree__row[data-status="deleted"] .happy2-file-tree__name {
+/* A deleted file is the one case the name itself carries, because the row is
+   naming something that is no longer there. */
+.happy2-file-tree__row[data-tone="deleted"] .happy2-file-tree__name {
+    color: var(--text-secondary);
     text-decoration: line-through;
 }
 
-.happy2-file-tree__row[data-status="ignored"] .happy2-file-tree__icon,
-.happy2-file-tree__row[data-status="ignored"] .happy2-file-tree__name,
-.happy2-file-tree__row[data-status="ignored"] .happy2-file-tree__status {
+.happy2-file-tree__row[data-tone="ignored"] .happy2-file-tree__icon,
+.happy2-file-tree__row[data-tone="ignored"] .happy2-file-tree__name {
     color: var(--text-secondary);
 }
 

@@ -49,20 +49,28 @@
 
 .happy2-browser-panel__error {
     /*
-     * Page failures float over the guest because its last committed document
-     * remains useful underneath; taking layout space would resize that live page.
+     * A failed navigation leaves the guest blank, so the error page covers it
+     * completely instead of floating over emptiness. It overlays rather than
+     * replaces the guest, so the guest keeps its size and process while the
+     * next attempt loads.
      */
     position: absolute;
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
+    inset: 0;
     box-sizing: border-box;
-    padding: 8px 12px;
-    color: var(--text);
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    background: var(--surface);
+}
+
+.happy2-browser-panel__error-code {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
     font-size: 12px;
     line-height: 16px;
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px var(--shadow-color);
+    text-align: center;
 }

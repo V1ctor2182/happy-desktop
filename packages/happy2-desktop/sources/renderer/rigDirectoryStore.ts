@@ -156,6 +156,7 @@ export function rigDirectoryStoreCreate(
         rig.url = rigHttpUrl;
         rig.connection = rigConnectionOpen({
             host,
+            rigId: id,
             rigHttpUrl,
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(id, location),

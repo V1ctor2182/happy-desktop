@@ -1,0 +1,209 @@
+/*
+ * C-169 FilePreview — one file, shown rather than downloaded.
+ *
+ * A 56px surface header naming the file, then a body that fills whatever region
+ * the preview was given. Visual media is centered on the inset surface with the
+ * artwork contained rather than cropped, because a preview that crops has
+ * answered a different question than the one asked. Text and Markdown scroll in
+ * a full-bleed scrollport whose inner wrapper carries the reading measure.
+ * Colors and type are theme tokens only.
+ */
+
+.happy2-file-preview,
+.happy2-file-preview * {
+    box-sizing: border-box;
+}
+
+.happy2-file-preview {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    background: var(--surface);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    color: var(--text);
+}
+
+/* ---- Header ----------------------------------------------------------- */
+
+.happy2-file-preview__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    height: 56px;
+    padding: 0 12px 0 16px;
+}
+
+.happy2-file-preview__glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.happy2-file-preview__heading {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+.happy2-file-preview__name {
+    display: block;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-file-preview__subtitle {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-file-preview__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ---- Body ------------------------------------------------------------- */
+
+.happy2-file-preview__body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The stage is the dark room a picture hangs in: one centered child, contained
+   so nothing is cropped out of the answer. */
+.happy2-file-preview__stage {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 16px;
+    background: var(--groupped-background);
+}
+
+.happy2-file-preview__image,
+.happy2-file-preview__video {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: var(--happy2-radius-sm);
+    object-fit: contain;
+}
+
+.happy2-file-preview__audio {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+}
+
+.happy2-file-preview__document {
+    display: block;
+    flex: 1 1 0%;
+    width: 100%;
+    min-height: 0;
+    border: none;
+    background: var(--surface);
+}
+
+/* Scrollport: edge-to-edge, no padding of its own. */
+.happy2-file-preview__scroll {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.happy2-file-preview__prose {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--happy2-chat-measure);
+    margin: 0 auto;
+    padding: 20px 24px 40px;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 22px;
+}
+
+.happy2-file-preview__code {
+    display: block;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    padding: 16px 20px 32px;
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    tab-size: 4;
+    white-space: pre;
+}
+
+/* ---- Notices ---------------------------------------------------------- */
+
+.happy2-file-preview__notice {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 24px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.happy2-file-preview__notice[data-tone="danger"] {
+    color: var(--text-destructive);
+}
+
+.happy2-file-preview__notice-title {
+    display: block;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy2-file-preview__notice[data-tone="danger"] .happy2-file-preview__notice-title {
+    color: var(--text-destructive);
+}
+
+.happy2-file-preview__notice-detail {
+    display: block;
+    max-width: 360px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}

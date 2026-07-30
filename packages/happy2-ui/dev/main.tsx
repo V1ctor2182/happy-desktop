@@ -52,8 +52,10 @@ import { EmptyStatePage } from "./pages/EmptyStatePage";
 import { EventCardPage } from "./pages/EventCardPage";
 import { FadePage } from "./pages/FadePage";
 import { FileAttachmentPage } from "./pages/FileAttachmentPage";
+import { FileBrowserPage } from "./pages/FileBrowserPage";
 import { FileEditorPage } from "./pages/FileEditorPage";
 import { FilePanelPage } from "./pages/FilePanelPage";
+import { FilePreviewPage } from "./pages/FilePreviewPage";
 import { FileTreePage } from "./pages/FileTreePage";
 import { FormRowPage } from "./pages/FormRowPage";
 import { IconPage } from "./pages/IconPage";
@@ -229,6 +231,8 @@ const components: BlueprintPage[] = [
         number: "C-167",
         page: FloatingConversationDockPage,
     },
+    { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
+    { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
     {
         id: "rig-user-input-prompt",
         label: "Rig user input prompt",

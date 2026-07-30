@@ -5,6 +5,7 @@ import type {
     ConversationSummary,
     ConversationToolCall,
     RigClockStore,
+    RigFileTabKind,
     RigFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
@@ -50,8 +51,10 @@ import {
     ConversationDock,
     ConversationView,
     EmptyState,
+    FileBrowser,
     FileEditor,
-    FilePanel,
+    FilePreview,
+    filePreviewKind,
     FloatingConversationDock,
     Lightbox,
     Checkbox,
@@ -61,7 +64,6 @@ import {
     RigActivityPanel,
     RigConnectionStatus,
     RigControlMenu,
-    SegmentedControl,
     fileTreeBuild,
     fileTreeFlatten,
     type FileTreeBuildEntry,
@@ -402,12 +404,32 @@ function sessionTabs(group: OpenGroup): TabItem[] {
 }
 
 function fileTabItem(tab: RigFileTabSnapshot): TabItem {
+    // A tab of a picture says picture. Wearing the document glyph over every
+    // open file made the strip a row of identical marks with only the name to
+    // tell them apart.
+    const kind = tab.kind === "media" ? filePreviewKind(tab.path) : undefined;
     return {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
-        icon: "doc",
+        icon: kind === "image" ? "image" : kind === "video" || kind === "audio" ? "play" : "doc",
         preview: tab.preview,
     };
+}
+
+/**
+ * How opening one file should show it.
+ *
+ * A picture, a video, or an archive has no text view worth offering, and asking
+ * for one only produced "Binary files cannot be opened in the editor." over the
+ * thing the reader just clicked — so those open as media regardless of scope.
+ * Everything else keeps the scope's answer: the whole checkout opens the file
+ * itself, the changed list opens what changed in it.
+ */
+function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
+    const kind = filePreviewKind(path);
+    if (kind === "image" || kind === "video" || kind === "audio" || kind === "pdf") return "media";
+    if (kind === "binary") return "media";
+    return scope === "all" ? "file" : "diff";
 }
 
 /** Resolves an addressed group id against the list, matching projects and worktrees alike. */
@@ -665,8 +687,10 @@ export function AppRigView(props: AppRigViewProps) {
                         : workspace.projectArchive(owner.project.id)
                 ).catch(() => undefined);
             }}
-            // Addressing a group opens its most recent session, so a list
-            // row lands on work rather than on an empty screen.
+            // Addressing a group opens the tab it was left on, so a list row
+            // lands back where the reader was rather than on an empty screen.
+            // Once every remembered tab is gone, its first session is what the
+            // group still has to show.
             onItemSelect={(id) => {
                 if (id === CONNECT_REMOTE_ITEM) {
                     props.onSettingsOpen();
@@ -679,10 +703,12 @@ export function AppRigView(props: AppRigViewProps) {
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
+                const groupId = row.id as RigGroupId;
                 props.onChatSelect(
                     rig.id,
                     row.id,
-                    openGroupFind(rig.projects, row.id)?.conversations[0]?.id,
+                    rig.session?.workspace.get().groupResume.get(groupId) ??
+                        openGroupFind(rig.projects, row.id)?.conversations[0]?.id,
                 );
             }}
             onItemAction={(id) => {
@@ -956,9 +982,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             windowControls={desktop}
             windowFullScreen={windowState.fullScreen}
             panelResizable
-            panelMaximizable={panel.open}
+            // Widening the panel is one of its two chrome controls and lives in
+            // its header beside the other, so the shell's floating tab on the
+            // divider is deliberately not asked for here.
             panelMaximized={panel.maximized}
-            onPanelMaximizedChange={() => props.workspace.panel.panelMaximizeToggle()}
             panelFooter={panelComposer}
             panelFooterFloating
             panel={
@@ -976,7 +1003,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     props.chatId as RigSessionId,
                                     openGroup.id,
                                     path,
-                                    workspace.fileScope === "all" ? "file" : "diff",
+                                    fileTabKind(path, workspace.fileScope),
                                 );
                         }}
                         onFileOpen={(path) => {
@@ -985,7 +1012,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     props.chatId as RigSessionId,
                                     openGroup.id,
                                     path,
-                                    workspace.fileScope === "all" ? "file" : "diff",
+                                    fileTabKind(path, workspace.fileScope),
                                 );
                         }}
                         onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
@@ -1313,6 +1340,16 @@ function RigFileBody(props: {
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
+    if (file.kind === "media")
+        return (
+            <RigFilePreview
+                document={file.document}
+                key={file.id}
+                loading={file.loading}
+                onRetry={() => workspace.fileRetry(file.id)}
+                path={file.path}
+            />
+        );
     if (
         file.kind === "file" &&
         file.document.type === "ready" &&
@@ -1388,6 +1425,56 @@ function RigFileBody(props: {
             title="Loading file…"
         />
     );
+}
+
+/**
+ * One workspace file shown rather than edited.
+ *
+ * The bytes become a `data:` URL rather than an object URL: an object URL is a
+ * browser resource with a lifetime, and revoking it correctly would mean holding
+ * disposal state in the view, which this layer does not own. A data URL is a
+ * value — it lives exactly as long as the render that produced it.
+ */
+function RigFilePreview(props: {
+    document: RigFileTabSnapshot["document"];
+    loading: boolean;
+    onRetry: () => void;
+    path: string;
+}) {
+    const document = props.document;
+    if (document.type === "error")
+        return (
+            <FilePreview
+                content={{ type: "error", message: document.error.message }}
+                path={props.path}
+            />
+        );
+    if (document.type !== "ready" || props.loading)
+        return <FilePreview content={{ type: "loading" }} path={props.path} />;
+    const value = document.value;
+    if (!("contentType" in value))
+        return <FilePreview content={{ type: "unavailable" }} path={props.path} />;
+    // A format with no viewer is stated as such rather than rendered as an
+    // <img> that will only ever show a broken-image glyph.
+    const kind = filePreviewKind(props.path);
+    return (
+        <FilePreview
+            content={
+                value.contentType === "application/octet-stream" || kind === "binary"
+                    ? { type: "unavailable" }
+                    : { type: "url", url: `data:${value.contentType};base64,${value.content}` }
+            }
+            path={props.path}
+            size={fileSizeFormat(value.size)}
+        />
+    );
+}
+
+/** A byte count as a person reads it. */
+function fileSizeFormat(size: number): string {
+    if (size < 1024) return `${String(size)} B`;
+    if (size < 1024 * 1024) return `${String(Math.round(size / 102.4) / 10)} KB`;
+    return `${String(Math.round(size / (102.4 * 1024)) / 10)} MB`;
 }
 
 /** The open conversation's materialization states, inside the directory's tabs. */
@@ -1921,16 +2008,26 @@ function RigPanelBody(props: {
     // Under "All files" the changed ones keep their status marks, so the work in
     // progress stays findable inside the whole tree rather than becoming
     // indistinguishable from everything around it.
-    const statuses = new Map(props.changes.map((change) => [change.path, change.status]));
+    const changeEntry = (change: OpenGroup["changes"][number]): FileTreeBuildEntry => ({
+        path: change.path,
+        gitStatus: change.status,
+        ...(change.addedLines === undefined ? {} : { addedLines: change.addedLines }),
+        ...(change.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),
+    });
+    const changesByPath = new Map(props.changes.map((change) => [change.path, change]));
     const entries: FileTreeBuildEntry[] = all
         ? (props.workspaceFiles?.paths ?? []).map((path: string) => {
-              const status = statuses.get(path);
-              return { path, ...(status ? { gitStatus: status } : {}) };
+              const change = changesByPath.get(path);
+              return change ? changeEntry(change) : { path };
           })
-        : props.changes.map((change) => ({ path: change.path, gitStatus: change.status }));
+        : props.changes.map(changeEntry);
     const nodes: FileTreeNode[] =
         props.layout === "tree" ? fileTreeBuild(entries, props.expanded) : fileTreeFlatten(entries);
     const loading = all && props.workspaceFilesLoading;
+    // The listing's own total, summed from the rows it is about to draw, so the
+    // number over the list and the numbers in it can never disagree.
+    const addedLines = props.changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
+    const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
     const count = entries.length;
     const activeToolTab = props.panel.tabs.find((tab) => tab.id === props.panel.activeViewId);
     const tabs: TabItem[] = [
@@ -1957,6 +2054,11 @@ function RigPanelBody(props: {
     ];
     return (
         <>
+            {/* Both of the panel's own chrome controls, together at its leading
+                edge. Widening the panel used to be a tab pinned to the middle of
+                the divider, which put a control the reader has to hunt for in
+                the one place nothing else lives — and shifted the whole column's
+                content aside to make room for it. */}
             <PanelHeader edgeControl>
                 <Button
                     aria-label="Hide panel"
@@ -1964,6 +2066,15 @@ function RigPanelBody(props: {
                     icon="panel-collapse"
                     iconOnly
                     onClick={props.onPanelClose}
+                    size="small"
+                    variant="ghost"
+                />
+                <Button
+                    aria-label={props.panel.maximized ? "Restore panel" : "Expand panel"}
+                    aria-pressed={props.panel.maximized}
+                    icon={props.panel.maximized ? "panel-restore" : "panel-maximize"}
+                    iconOnly
+                    onClick={() => props.store.panelMaximizeToggle()}
                     size="small"
                     variant="ghost"
                 />
@@ -2028,48 +2139,28 @@ function RigPanelBody(props: {
                         />
                     ))}
                 {props.panel.activeViewId === "files" ? (
-                    <div className="happy2-rig-panel-files">
-                        <div className="happy2-rig-file-controls">
-                            <SegmentedControl
-                                onChange={(value: string) =>
-                                    props.onScopeChange(value as RigFileScope)
-                                }
-                                segments={[
-                                    { value: "changed", label: "Changed" },
-                                    { value: "all", label: "All files" },
-                                ]}
-                                size="small"
-                                value={props.scope}
-                            />
-                            <SegmentedControl
-                                onChange={(value: string) =>
-                                    props.onLayoutChange(value as RigFileLayout)
-                                }
-                                segments={[
-                                    { value: "flat", label: "List", icon: "files" },
-                                    { value: "tree", label: "Tree", icon: "branch" },
-                                ]}
-                                size="small"
-                                value={props.layout}
-                            />
-                        </div>
-                        <FilePanel
-                            emptyLabel={all ? "No files." : "No changed files."}
-                            loading={loading}
-                            nodes={nodes}
-                            // A truncated listing says so rather than passing off
-                            // part of a repository as the whole of it.
-                            {...(all && props.workspaceFiles?.truncated
-                                ? { note: "Showing the first 20,000 files." }
-                                : {})}
-                            onSelect={props.onFileSelect}
-                            onOpen={props.onFileOpen}
-                            onToggle={props.onToggle}
-                            selectedId={props.selectedPath}
-                            subtitle={`${String(count)} ${count === 1 ? "file" : "files"}`}
-                            title={all ? "Files" : "Changes"}
-                        />
-                    </div>
+                    <FileBrowser
+                        // The whole-checkout listing is not a diff, so it states
+                        // how many files it holds and nothing about lines.
+                        {...(all ? {} : { addedLines, deletedLines })}
+                        count={count}
+                        emptyLabel={all ? "No files." : "No changed files."}
+                        layout={props.layout}
+                        loading={loading}
+                        nodes={nodes}
+                        // A truncated listing says so rather than passing off
+                        // part of a repository as the whole of it.
+                        {...(all && props.workspaceFiles?.truncated
+                            ? { note: "Showing the first 20,000 files." }
+                            : {})}
+                        onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
+                        onOpen={props.onFileOpen}
+                        onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
+                        onSelect={props.onFileSelect}
+                        onToggle={props.onToggle}
+                        scope={props.scope}
+                        selectedId={props.selectedPath}
+                    />
                 ) : props.panel.activeViewId === "preview" ? (
                     props.previewTool ? (
                         <ToolCallPreview tool={props.previewTool} />

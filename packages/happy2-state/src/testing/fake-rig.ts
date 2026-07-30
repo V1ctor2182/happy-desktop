@@ -36,6 +36,7 @@ export type FakeRigOperation =
     | "projectsRead"
     | "changedFileRead"
     | "workspaceFileRead"
+    | "workspaceFileBytesRead"
     | "workspaceFileWrite"
     | "attachmentWrite"
     | "workspaceFilesRead"
@@ -391,6 +392,16 @@ class FakeRigTransportModel implements FakeRigTransport {
                 path,
                 content: `Workspace file at ${path}`,
                 hash: "workspace-file-hash",
+            })),
+        // One byte, so a preview under test has real content to render without
+        // the fake pretending to hold an actual image.
+        workspaceFileBytesRead: (_sessionId, path) =>
+            this.perform("workspaceFileBytesRead", {}, () => ({
+                path,
+                contentType: "application/octet-stream",
+                content: "AA==",
+                size: 1,
+                hash: "workspace-file-bytes-hash",
             })),
         workspaceFileWrite: () => this.perform("workspaceFileWrite", {}, () => undefined),
         // The fake has no working directory, so a copy lands under the name it

@@ -30,6 +30,7 @@ import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtim
 import {
     desktopIpc,
     happyBrowserPartition,
+    type DesktopBrowserStatus,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
 import { localRigConnectorCreate } from "./localRig";
@@ -274,6 +275,17 @@ function browserGuestAttach(window: BrowserWindow): void {
         };
         guest.on("will-navigate", navigationGuard);
         guest.on("will-redirect", navigationGuard);
+        // Only the main process observes a guest's response code. The renderer
+        // needs it to tell a served error page from a blank failed navigation.
+        guest.on("did-navigate", (_navigation, url, status, statusText) => {
+            if (window.isDestroyed()) return;
+            window.webContents.send(desktopIpc.browserStatusChanged, {
+                guestId: guest.id,
+                url,
+                status,
+                statusText,
+            } satisfies DesktopBrowserStatus);
+        });
     });
 }
 

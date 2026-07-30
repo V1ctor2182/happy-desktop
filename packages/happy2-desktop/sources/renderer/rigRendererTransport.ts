@@ -13,6 +13,7 @@ import type {
     RigOpenInTarget,
     RigOpenInTargets,
     RigWorkspaceFiles,
+    RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigProjectCatalog,
     RigServiceTier,
@@ -154,6 +155,13 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 signal,
             });
             return readJson<RigWorkspaceFileDocument>(response);
+        },
+        workspaceFileBytesRead: async (sessionId, path, signal) => {
+            const response = await fetch(
+                url("/workspace-file-bytes", { session: sessionId, path }),
+                { signal },
+            );
+            return readJson<RigWorkspaceFileBytes>(response);
         },
         workspaceFileWrite: async (sessionId, path, content, expectedHash) => {
             await postJson<Record<string, never>>("/workspace-file", {

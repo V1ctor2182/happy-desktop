@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
     desktopIpc,
+    type DesktopBrowserStatus,
     type DesktopNoteApplyRequest,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
@@ -16,6 +17,12 @@ const bridge: HappyDesktopBridge = {
         const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);
         ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserOpenRequested, receive);
+    },
+    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, status: DesktopBrowserStatus) =>
+            listener(status);
+        ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),

@@ -9,6 +9,7 @@ import {
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
+import type { RigWorkspaceMemoryStore } from "./rigWorkspaceMemory.js";
 import type {
     RigGroupId,
     RigProjectCatalog,
@@ -61,7 +62,10 @@ export interface RigSessionListStore {
      * button: it runs on hydration and after mutations to converge on server truth.
      */
     sessionsRefresh(): Promise<void>;
-    /** Marks the session's latest completed work as seen in this app lifetime. */
+    /**
+     * Marks the session's latest completed work as seen. The mark is durable:
+     * a session read before the window closed is not unread when it opens again.
+     */
     sessionRead(sessionId: RigSessionId): void;
     /**
      * Creates a session and resolves with its address, or with `undefined` when
@@ -148,6 +152,12 @@ export interface RigSessionListDeps {
      * project/workspace/session reads and their delivery-hint subscription.
      */
     readonly catalogSource?: RigSessionCatalogSource;
+    /**
+     * This Rig's durable memory. Read state lives there rather than in this
+     * store's lifetime: work that finished before the app was closed is still
+     * unseen when it opens again.
+     */
+    readonly memory?: RigWorkspaceMemoryStore;
     readonly output?: (event: RigSessionListOutput) => void;
     readonly createId?: () => string;
 }
@@ -197,7 +207,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // The durable rows this surface last reconciled, kept so a projection can be
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
-    const unreadSessionIds = new Set<RigSessionId>();
+    const unreadSessionIds = new Set<RigSessionId>(deps.memory?.unreadRead() ?? []);
+    /**
+     * Writes read state back to the Rig's memory. Called after every change to
+     * the set rather than on an interval, so closing the window right after
+     * reading a session still remembers that it was read.
+     */
+    const unreadRemember = (): void => {
+        deps.memory?.unreadUpdate([...unreadSessionIds]);
+    };
     const pendingCompletions = new Map<
         RigSessionId,
         { readonly deadline: number; readonly timer: ReturnType<typeof setTimeout> }
@@ -298,6 +316,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     completionSchedule(session.id);
             }
             const now = Date.now();
+            let unreadChanged = false;
             for (const [sessionId, pending] of pendingCompletions) {
                 const session = sessions.find((candidate) => candidate.id === sessionId);
                 if (!session || session.status !== "completed") {
@@ -307,11 +326,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 if (pending.deadline > now) continue;
                 completionCancel(sessionId);
                 unreadSessionIds.add(sessionId);
+                unreadChanged = true;
                 output({ type: "sessionCompleted", sessionId });
             }
             for (const sessionId of unreadSessionIds)
                 if (!sessions.some((session) => session.id === sessionId))
-                    unreadSessionIds.delete(sessionId);
+                    unreadChanged = unreadSessionIds.delete(sessionId) || unreadChanged;
+            if (unreadChanged) unreadRemember();
             publish();
             worktreesSettle();
         } catch (error) {
@@ -396,6 +417,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         sessionsRefresh: () => reconcile(),
         sessionRead(sessionId) {
             if (!unreadSessionIds.delete(sessionId)) return;
+            unreadRemember();
             publish();
         },
         sessionCreate: (input) =>

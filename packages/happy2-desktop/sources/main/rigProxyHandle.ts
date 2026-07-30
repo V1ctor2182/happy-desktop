@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -90,20 +90,91 @@ function gitChangedFilesParse(output: string): readonly Omit<GitChangedFile, "re
     return changes;
 }
 
+/** Lines one path gained and lost, as `git diff --numstat` reports them. */
+interface GitFileLines {
+    readonly addedLines: number;
+    readonly deletedLines: number;
+}
+
+/**
+ * Reads `git diff --numstat -z` into per-path line counts.
+ *
+ * The `-z` form writes each record as an `added\tdeleted\t` field followed by
+ * one path field, or by two path fields when rename detection fired. Nothing in
+ * the record says which it was, so a path field is claimed as a rename
+ * destination exactly when the field after it is not another stats field.
+ * Binary files report `-` on both sides and are left without counts rather than
+ * being called an empty change.
+ */
+function gitNumstatParse(output: string): ReadonlyMap<string, GitFileLines> {
+    const lines = new Map<string, GitFileLines>();
+    const fields = output.split("\0");
+    const stats = /^(\d+|-)\t(\d+|-)\t$/;
+    for (let index = 0; index < fields.length; index += 1) {
+        const match = stats.exec(fields[index] ?? "");
+        if (!match) continue;
+        const first = fields[index + 1];
+        if (first === undefined) break;
+        const second = fields[index + 2];
+        const renamed = second !== undefined && !stats.test(second) && second.length > 0;
+        const path = renamed ? second : first;
+        index += renamed ? 2 : 1;
+        if (match[1] === "-" || match[2] === "-") continue;
+        lines.set(path, { addedLines: Number(match[1]), deletedLines: Number(match[2]) });
+    }
+    return lines;
+}
+
+/** Files larger than this are summarized without counting their lines. */
+const UNTRACKED_LINE_LIMIT = 1024 * 1024;
+
+/**
+ * A file Git has never seen has no diff, so its whole content is what it added.
+ * Counting it keeps a new file from being the one row in the list with nothing
+ * to say about its size. A binary or oversized file is left uncounted.
+ */
+async function gitUntrackedLinesRead(
+    path: string,
+    size: number,
+): Promise<GitFileLines | undefined> {
+    if (size > UNTRACKED_LINE_LIMIT) return undefined;
+    try {
+        const content = await readFile(path);
+        if (content.includes(0)) return undefined;
+        const text = content.toString("utf8");
+        if (text.length === 0) return { addedLines: 0, deletedLines: 0 };
+        const newlines = text.split("\n").length;
+        return {
+            addedLines: text.endsWith("\n") ? newlines - 1 : newlines,
+            deletedLines: 0,
+        };
+    } catch {
+        return undefined;
+    }
+}
+
 async function gitChangedFilesRevise(
     root: string,
     changes: readonly Omit<GitChangedFile, "revision">[],
+    lines: ReadonlyMap<string, GitFileLines>,
 ): Promise<readonly GitChangedFile[]> {
     return Promise.all(
         changes.map(async (change) => {
+            const counted = lines.get(change.path);
             try {
                 const details = await stat(resolve(root, change.path));
+                const stats =
+                    counted ??
+                    (change.status === "untracked"
+                        ? await gitUntrackedLinesRead(resolve(root, change.path), details.size)
+                        : undefined);
                 return {
                     ...change,
+                    ...(stats ?? {}),
                     revision: `${String(details.mtimeMs)}:${String(details.size)}`,
                 };
             } catch {
-                return { ...change, revision: change.status };
+                return { ...change, ...(counted ?? {}), revision: change.status };
             }
         }),
     );
@@ -117,7 +188,7 @@ async function gitChangedFilesRevise(
 async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined> {
     try {
         const [stdout, statusOutput] = await Promise.all([
-            gitExecText(["diff", "--numstat", "HEAD", "--"], {
+            gitExecText(["diff", "--numstat", "-z", "HEAD", "--"], {
                 cwd: path,
                 maxBuffer: 4 * 1024 * 1024,
                 timeout: 5_000,
@@ -128,18 +199,21 @@ async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined>
                 timeout: 5_000,
             }),
         ]);
+        const lines = gitNumstatParse(stdout);
+        const changes = await gitChangedFilesRevise(
+            path,
+            gitChangedFilesParse(statusOutput),
+            lines,
+        );
+        // The checkout total is the sum of the rows the panel lists, so the
+        // header and the rows beneath it can never disagree about the same diff.
         let addedLines = 0;
         let deletedLines = 0;
-        for (const line of stdout.split("\n")) {
-            const [added, deleted] = line.split("\t", 2);
-            if (added !== undefined && added !== "-") addedLines += Number(added);
-            if (deleted !== undefined && deleted !== "-") deletedLines += Number(deleted);
+        for (const change of changes) {
+            addedLines += change.addedLines ?? 0;
+            deletedLines += change.deletedLines ?? 0;
         }
-        return {
-            addedLines,
-            deletedLines,
-            changes: await gitChangedFilesRevise(path, gitChangedFilesParse(statusOutput)),
-        };
+        return { addedLines, deletedLines, changes };
     } catch {
         return undefined;
     }
@@ -283,6 +357,72 @@ async function workspaceFileRead(
     return {
         path: filePath,
         content: changedFileText(Buffer.from(file.content, "base64")),
+        hash: file.hash,
+    };
+}
+
+/** Media types the preview surface can render, by lowercase file extension. */
+const PREVIEW_CONTENT_TYPE: Record<string, string> = {
+    avif: "image/avif",
+    bmp: "image/bmp",
+    gif: "image/gif",
+    heic: "image/heic",
+    ico: "image/x-icon",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    svg: "image/svg+xml",
+    tiff: "image/tiff",
+    webp: "image/webp",
+    m4v: "video/x-m4v",
+    mkv: "video/x-matroska",
+    mov: "video/quicktime",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    aac: "audio/aac",
+    flac: "audio/flac",
+    m4a: "audio/mp4",
+    mp3: "audio/mpeg",
+    ogg: "audio/ogg",
+    wav: "audio/wav",
+    pdf: "application/pdf",
+};
+
+/** Cap on the bytes one preview may pull across the proxy. */
+const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Reads one workspace file as bytes, for a surface that shows the file rather
+ * than editing it.
+ *
+ * The editor read refuses anything with a NUL in it, which is correct for a
+ * textarea and exactly wrong for the picture someone just clicked. This read
+ * makes no claim about the content beyond its size and the media type its
+ * extension implies, so an image, a video, or a PDF reaches the viewer intact.
+ */
+async function workspaceFileBytesRead(
+    client: RigProxyClient,
+    sessionId: string,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<{
+    readonly path: string;
+    readonly contentType: string;
+    readonly content: string;
+    readonly size: number;
+    readonly hash: string;
+}> {
+    const file = await client.readFile(sessionId, filePath, signal);
+    const bytes = Buffer.from(file.content, "base64");
+    if (bytes.byteLength > PREVIEW_MAX_BYTES) throw new Error("This file is too large to preview.");
+    const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
+    const dot = name.lastIndexOf(".");
+    const extension = dot > 0 ? name.slice(dot + 1) : "";
+    return {
+        path: filePath,
+        contentType: PREVIEW_CONTENT_TYPE[extension] ?? "application/octet-stream",
+        content: file.content,
+        size: bytes.byteLength,
         hash: file.hash,
     };
 }
@@ -503,6 +643,18 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             if (path === "/workspace-file") {
                 const document = await requestWithAbort(request, (signal) =>
                     workspaceFileRead(
+                        client,
+                        query.get("session") ?? "",
+                        query.get("path") ?? "",
+                        signal,
+                    ),
+                );
+                writeJson(response, 200, document);
+                return true;
+            }
+            if (path === "/workspace-file-bytes") {
+                const document = await requestWithAbort(request, (signal) =>
+                    workspaceFileBytesRead(
                         client,
                         query.get("session") ?? "",
                         query.get("path") ?? "",

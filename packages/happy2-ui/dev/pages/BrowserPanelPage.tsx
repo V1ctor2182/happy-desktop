@@ -1,4 +1,9 @@
-import { BrowserPanel, type BrowserContentProps } from "../../src/BrowserPanel";
+import {
+    BrowserPanel,
+    type BrowserContentProps,
+    type BrowserContentRenderer,
+    type BrowserFailure,
+} from "../../src/BrowserPanel";
 import { ComponentPage, Specimen } from "../kit";
 
 function BrowserPreview(_props: BrowserContentProps) {
@@ -12,6 +17,39 @@ function BrowserPreview(_props: BrowserContentProps) {
         </div>
     );
 }
+
+/**
+ * A guest that fails its first load, the way Electron leaves the region blank
+ * when a navigation never commits. The failure is reported once, from the ref
+ * callback, so the specimen shows the panel's own error page.
+ */
+function browserFailurePreview(failure: BrowserFailure): BrowserContentRenderer {
+    let reported = false;
+    return function BrowserFailedPreview(props: BrowserContentProps) {
+        return (
+            <div
+                ref={() => {
+                    if (reported) return;
+                    reported = true;
+                    props.browserFailed(failure);
+                }}
+                style={preview}
+            />
+        );
+    };
+}
+
+const unreachablePreview = browserFailurePreview({
+    code: -105,
+    description: "ERR_NAME_NOT_RESOLVED",
+    url: "https://exmaple.invalid/dashboard",
+});
+
+const httpErrorPreview = browserFailurePreview({
+    description: "Bad Request",
+    status: 400,
+    url: "http://localhost:3005/api/session",
+});
 
 export function BrowserPanelPage() {
     return (
@@ -42,6 +80,34 @@ export function BrowserPanelPage() {
             >
                 <div style={frame}>
                     <BrowserPanel active initialUrl="about:blank" />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="network failure · named host · retry from the error page or the toolbar"
+                label="Site unreachable"
+                number="03"
+                stage="app"
+            >
+                <div style={frame}>
+                    <BrowserPanel
+                        active
+                        initialUrl="https://exmaple.invalid/dashboard"
+                        renderContent={unreachablePreview}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="committed 4xx response with an empty body · raw status kept visible"
+                label="HTTP error"
+                number="04"
+                stage="app"
+            >
+                <div style={frame}>
+                    <BrowserPanel
+                        active
+                        initialUrl="http://localhost:3005/api/session"
+                        renderContent={httpErrorPreview}
+                    />
                 </div>
             </Specimen>
         </ComponentPage>

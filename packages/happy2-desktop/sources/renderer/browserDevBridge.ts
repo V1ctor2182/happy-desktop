@@ -36,6 +36,7 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
         browserProxyApply: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
+        browserStatusSubscribe: () => () => undefined,
         directoryPick: async () => undefined,
         applicationMenuOpen: async () => undefined,
         noteApply: (apply: DesktopNoteApplyRequest) =>

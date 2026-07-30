@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
+import type { IconName } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import { TextField } from "./TextField";
 
@@ -12,6 +13,23 @@ export interface BrowserController {
     browserStop(): void;
 }
 
+/**
+ * One failed navigation, described by the host in the terms its engine reports.
+ * The panel turns this into the page a person reads; the host writes no copy.
+ */
+export interface BrowserFailure {
+    /** Chromium network error code, when the network stack refused the load. */
+    readonly code?: number;
+    /** Engine failure name (`ERR_NAME_NOT_RESOLVED`) or HTTP status text. */
+    readonly description?: string;
+    /** HTTP status of a committed response that rendered nothing readable. */
+    readonly status?: number;
+    /** Host-level explanation when the failure is not the page's own network result. */
+    readonly message?: string;
+    /** Address that failed, so a commit elsewhere can retire this failure. */
+    readonly url?: string;
+}
+
 export interface BrowserContentProps {
     /** Rig session whose network boundary owns this browser guest. */
     readonly sessionId?: string;
@@ -21,7 +39,7 @@ export interface BrowserContentProps {
     browserLoadingChanged(loading: boolean): void;
     browserLocationChanged(url: string, canGoBack: boolean, canGoForward: boolean): void;
     browserTitleChanged(title: string): void;
-    browserFailed(message: string): void;
+    browserFailed(failure: BrowserFailure): void;
 }
 
 /** Native browser-content adapter supplied by the host (Electron in production). */
@@ -40,7 +58,7 @@ interface BrowserViewState {
     readonly address: string;
     readonly canGoBack: boolean;
     readonly canGoForward: boolean;
-    readonly error?: string;
+    readonly failure?: BrowserFailure;
     readonly loading: boolean;
 }
 
@@ -65,11 +83,19 @@ export function BrowserPanel(props: BrowserPanelProps) {
         loading: props.initialUrl !== "about:blank",
     });
 
+    const load = (url: string) => {
+        viewSet((current) => ({ ...current, address: url, failure: undefined, loading: true }));
+        controller?.browserLoad(url);
+    };
+
     const navigate = () => {
         const url = browserAddressResolve(view.address);
-        if (!url) return;
-        viewSet((current) => ({ ...current, address: url, error: undefined, loading: true }));
-        controller?.browserLoad(url);
+        if (url) load(url);
+    };
+
+    const retry = () => {
+        const url = view.failure?.url ?? browserAddressResolve(view.address);
+        if (url) load(url);
     };
 
     return (
@@ -102,9 +128,13 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 <Button
                     aria-label={view.loading ? "Stop loading" : "Reload"}
                     iconOnly
-                    onClick={() =>
-                        view.loading ? controller?.browserStop() : controller?.browserReload()
-                    }
+                    onClick={() => {
+                        if (view.loading) controller?.browserStop();
+                        // A failed navigation may never have committed, so its
+                        // history entry cannot be reloaded — load the address again.
+                        else if (view.failure) retry();
+                        else controller?.browserReload();
+                    }}
                     size="small"
                     variant="ghost"
                 >
@@ -132,7 +162,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
                             controllerSet(next);
                         },
                         browserLoadingChanged(loading) {
-                            viewSet((current) => ({ ...current, loading }));
+                            // A new navigation retires the previous error page;
+                            // finishing one must not, because the failure that
+                            // produced it is reported before loading stops.
+                            viewSet((current) => ({
+                                ...current,
+                                failure: loading ? undefined : current.failure,
+                                loading,
+                            }));
                         },
                         browserLocationChanged(url, canGoBack, canGoForward) {
                             viewSet((current) => ({
@@ -140,17 +177,23 @@ export function BrowserPanel(props: BrowserPanelProps) {
                                 address: url === "about:blank" ? "" : url,
                                 canGoBack,
                                 canGoForward,
-                                error: undefined,
+                                // The guest keeps reporting the failed address
+                                // after a failure; only a different document
+                                // means there is something to show again.
+                                failure:
+                                    current.failure?.url && current.failure.url !== url
+                                        ? undefined
+                                        : current.failure,
                             }));
                             props.onLocationChange?.(url);
                         },
                         browserTitleChanged(title) {
                             props.onTitleChange?.(title);
                         },
-                        browserFailed(message) {
+                        browserFailed(failure) {
                             viewSet((current) => ({
                                 ...current,
-                                error: message,
+                                failure,
                                 loading: false,
                             }));
                         },
@@ -163,18 +206,114 @@ export function BrowserPanel(props: BrowserPanelProps) {
                         title="Browser unavailable"
                     />
                 )}
-                {view.error ? (
-                    <div
-                        className="happy2-browser-panel__error"
-                        data-happy2-ui="browser-error"
-                        role="status"
-                    >
-                        {view.error}
-                    </div>
-                ) : null}
+                {view.failure
+                    ? ((page) => (
+                          <div
+                              className="happy2-browser-panel__error"
+                              data-happy2-ui="browser-error"
+                              role="alert"
+                          >
+                              <EmptyState
+                                  action={{ label: "Try again", onClick: retry }}
+                                  description={page.description}
+                                  icon={page.icon}
+                                  // Content-sized, so the raw engine code stays
+                                  // grouped under the action instead of being
+                                  // pushed to the bottom of a filled region.
+                                  size="inline"
+                                  title={page.title}
+                              />
+                              <p
+                                  className="happy2-browser-panel__error-code"
+                                  data-happy2-ui="browser-error-code"
+                              >
+                                  {page.code}
+                              </p>
+                          </div>
+                      ))(browserFailureDescribe(view.failure))
+                    : null}
             </div>
         </section>
     );
+}
+
+interface BrowserFailurePage {
+    readonly code: string;
+    readonly description: string;
+    readonly icon: IconName;
+    readonly title: string;
+}
+
+/**
+ * Turn one engine-level failure into the page a person reads. The wording
+ * follows the browser conventions people already know, names the host that
+ * failed, and always ends with the raw engine code so a developer debugging a
+ * local service still sees exactly what Chromium reported.
+ */
+function browserFailureDescribe(failure: BrowserFailure): BrowserFailurePage {
+    const host = browserFailureHost(failure.url);
+    const code =
+        failure.status !== undefined
+            ? `HTTP ERROR ${failure.status}`
+            : (failure.description ?? (failure.code !== undefined ? `ERROR ${failure.code}` : ""));
+    const page = (title: string, description: string, icon: IconName = "globe") => ({
+        code,
+        description,
+        icon,
+        title,
+    });
+    if (failure.message) return page("This page could not be loaded", failure.message);
+    if (failure.status !== undefined)
+        return page(
+            "This page isn’t working",
+            `${host} could not handle this request${failure.description ? ` (${failure.description})` : ""}.`,
+        );
+    switch (failure.code) {
+        case -105: // ERR_NAME_NOT_RESOLVED
+            return page(
+                "This site can’t be reached",
+                `${host}’s server address could not be found.`,
+            );
+        case -102: // ERR_CONNECTION_REFUSED
+            return page("This site can’t be reached", `${host} refused to connect.`);
+        case -104: // ERR_CONNECTION_FAILED
+        case -109: // ERR_ADDRESS_UNREACHABLE
+            return page("This site can’t be reached", `${host} is unreachable.`);
+        case -7: // ERR_TIMED_OUT
+        case -118: // ERR_CONNECTION_TIMED_OUT
+            return page("This site can’t be reached", `${host} took too long to respond.`);
+        case -101: // ERR_CONNECTION_RESET
+        case -100: // ERR_CONNECTION_CLOSED
+            return page("This site can’t be reached", `The connection to ${host} was interrupted.`);
+        case -106: // ERR_INTERNET_DISCONNECTED
+            return page("No internet connection", "This computer is offline.");
+        case -324: // ERR_EMPTY_RESPONSE
+            return page("This page isn’t working", `${host} did not send any data.`);
+        case -6: // ERR_FILE_NOT_FOUND
+            return page("This page could not be found", `Nothing is served at this address.`);
+        case -300: // ERR_INVALID_URL
+            return page("That address isn’t valid", "Check the address and try again.");
+        default:
+            break;
+    }
+    // The certificate range Chromium reserves for a rejected secure connection.
+    if (failure.code !== undefined && failure.code <= -200 && failure.code > -220)
+        return page(
+            "Your connection isn’t private",
+            `The security certificate for ${host} could not be verified.`,
+            "lock",
+        );
+    return page("This page could not be loaded", `${host} did not return a page.`);
+}
+
+/** Host label for failure copy; a malformed address is described as typed. */
+function browserFailureHost(url: string | undefined): string {
+    if (!url) return "This site";
+    try {
+        return new URL(url).host || url;
+    } catch {
+        return url;
+    }
 }
 
 /** Chromium-like omnibox resolution: URL/host first, otherwise a web search. */

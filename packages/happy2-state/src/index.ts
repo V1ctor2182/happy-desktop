@@ -400,6 +400,14 @@ export {
     type RigModelStoreSnapshot,
 } from "./rig/rigModelStore.js";
 export {
+    rigWorkspaceMemoryStoreCreate,
+    type RigFileTabMemory,
+    type RigGroupTabMemory,
+    type RigWorkspaceMemoryDocument,
+    type RigWorkspaceMemoryPersistence,
+    type RigWorkspaceMemoryStore,
+} from "./rig/rigWorkspaceMemory.js";
+export {
     rigModelKey,
     rigSettingsStoreCreate,
     type RigModelKey,

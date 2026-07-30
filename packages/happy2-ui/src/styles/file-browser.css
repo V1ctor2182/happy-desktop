@@ -1,0 +1,183 @@
+/*
+ * C-168 FileBrowser — the file listing of a workspace panel.
+ *
+ * A 32px control row over a full-bleed scrollport. The row holds the scope
+ * switch, what the listing contains, and the layout switch; every control in it
+ * is flat, so the only thing with a box in this column is the row under the
+ * pointer. No rule separates the row from the files: the change of type size
+ * already says where the controls stop, and a hairline there cut a narrow panel
+ * into two panels. Colors and type are theme tokens only.
+ */
+
+.happy2-file-browser,
+.happy2-file-browser * {
+    box-sizing: border-box;
+}
+
+.happy2-file-browser {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    color: var(--text);
+}
+
+/* ---- Control row ------------------------------------------------------ */
+
+.happy2-file-browser__controls {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+}
+
+.happy2-file-browser__scopes,
+.happy2-file-browser__layouts {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+}
+
+.happy2-file-browser__scope {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 24px;
+    margin: 0;
+    padding: 0 6px;
+    border: none;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+}
+
+.happy2-file-browser__scope:hover {
+    color: var(--text);
+}
+
+/* Contrast is the whole selected state. The active scope is the only text in
+   the row set in the primary colour, which is legible at a glance without
+   drawing a second shape around it. */
+.happy2-file-browser__scope[data-active] {
+    color: var(--text);
+}
+
+.happy2-file-browser__layout {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.happy2-file-browser__layout:hover {
+    color: var(--text);
+}
+
+.happy2-file-browser__layout[data-active] {
+    color: var(--text);
+    background: var(--surface-selected);
+}
+
+/* Takes the slack between the two switches so both stay at their own edge.
+   Wrapping into a one-line-tall clipped box is how a number leaves rather than
+   loses a digit: when the panel is too narrow for the totals they wrap onto a
+   second line nobody can see, instead of overflowing the row and having their
+   leading "+" sliced off into a different character. */
+.happy2-file-browser__summary {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    height: 16px;
+    overflow: hidden;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    white-space: nowrap;
+    font-feature-settings: "tnum" 1;
+}
+
+/* The two totals travel together: half a diff stat is worse than none. */
+.happy2-file-browser__lines {
+    display: flex;
+    flex: none;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.happy2-file-browser__count {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+}
+
+.happy2-file-browser__added {
+    display: block;
+    flex: none;
+    color: var(--git-added-text);
+}
+
+.happy2-file-browser__deleted {
+    display: block;
+    flex: none;
+    color: var(--git-removed-text);
+}
+
+.happy2-file-browser__note {
+    display: flex;
+    flex: none;
+    align-items: center;
+    padding: 0 12px 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+/* ---- Body ------------------------------------------------------------- */
+
+/* Scrollport: edge-to-edge, no padding of its own. */
+.happy2-file-browser__body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Inner content wrapper carries the tree inset. */
+.happy2-file-browser__body-content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    padding: 0 6px 6px;
+}

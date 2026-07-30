@@ -3,6 +3,17 @@ import type { FileTreeGitStatus, FileTreeNode } from "./FileTree";
 export interface FileTreeBuildEntry {
     readonly path: string;
     readonly gitStatus?: FileTreeGitStatus;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
+}
+
+/** The per-entry facts a node carries verbatim, whichever shape it is built into. */
+function entryFacts(entry: FileTreeBuildEntry) {
+    return {
+        ...(entry.gitStatus ? { gitStatus: entry.gitStatus } : {}),
+        ...(entry.addedLines === undefined ? {} : { addedLines: entry.addedLines }),
+        ...(entry.deletedLines === undefined ? {} : { deletedLines: entry.deletedLines }),
+    };
 }
 
 /**
@@ -23,7 +34,7 @@ export function fileTreeBuild(
 ): FileTreeNode[] {
     interface Directory {
         readonly children: Map<string, Directory>;
-        readonly files: { name: string; path: string; gitStatus?: FileTreeGitStatus }[];
+        readonly files: (FileTreeBuildEntry & { name: string })[];
     }
     const directoryCreate = (): Directory => ({ children: new Map(), files: [] });
     const root = directoryCreate();
@@ -41,11 +52,7 @@ export function fileTreeBuild(
             }
             directory = child;
         }
-        directory.files.push({
-            name,
-            path: entry.path,
-            ...(entry.gitStatus ? { gitStatus: entry.gitStatus } : {}),
-        });
+        directory.files.push({ ...entry, name });
     }
 
     const nodesOf = (directory: Directory, prefix: string): FileTreeNode[] => {
@@ -84,7 +91,7 @@ export function fileTreeBuild(
                 id: file.path,
                 name: file.name,
                 kind: "file" as const,
-                ...(file.gitStatus ? { gitStatus: file.gitStatus } : {}),
+                ...entryFacts(file),
             }));
         return [...directories, ...files];
     };
@@ -92,12 +99,23 @@ export function fileTreeBuild(
     return nodesOf(root, "");
 }
 
-/** The same entries as one row per file, labelled by their full path. */
+/**
+ * The same entries as one row per file.
+ *
+ * A flat listing is read by file name, so the name is the last segment and the
+ * directory that holds it travels beside it as secondary text. Labelling the row
+ * with the whole path instead put the only word being looked for at the far end
+ * of the line, where it is the first thing an ellipsis eats.
+ */
 export function fileTreeFlatten(entries: readonly FileTreeBuildEntry[]): FileTreeNode[] {
-    return entries.map((entry) => ({
-        id: entry.path,
-        name: entry.path,
-        kind: "file" as const,
-        ...(entry.gitStatus ? { gitStatus: entry.gitStatus } : {}),
-    }));
+    return entries.map((entry) => {
+        const cut = entry.path.lastIndexOf("/");
+        return {
+            id: entry.path,
+            name: cut === -1 ? entry.path : entry.path.slice(cut + 1),
+            kind: "file" as const,
+            ...(cut === -1 ? {} : { directory: entry.path.slice(0, cut) }),
+            ...entryFacts(entry),
+        };
+    });
 }
