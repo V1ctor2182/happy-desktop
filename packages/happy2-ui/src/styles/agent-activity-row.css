@@ -19,6 +19,26 @@
     font-family: var(--happy2-font-ui);
 }
 
+/* The header and its copy action share one row; only the header stretches. */
+.happy2-agent-activity__line {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.happy2-agent-activity__line .happy2-agent-activity__header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy2-agent-activity-row:hover .happy2-copy-button,
+.happy2-agent-activity-row:focus-within .happy2-copy-button {
+    opacity: 1;
+}
+
 .happy2-agent-activity__header {
     display: flex;
     flex-direction: row;
@@ -86,14 +106,14 @@
     color: var(--text-link);
 }
 
+/* A command or path longer than the row scrolls sideways (see ScrollingText)
+   rather than losing its tail, so nothing an agent did is unreadable. */
 .happy2-agent-activity__text {
     min-width: 0;
     flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     font-family: var(--happy2-font-mono);
     font-size: 13px;
+    line-height: 20px;
     color: var(--text);
 }
 

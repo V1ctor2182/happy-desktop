@@ -27,6 +27,8 @@ export type TabItem = {
      * running that is the thing worth showing.
      */
     busy?: boolean;
+    /** Paints a colored dot in the same leading lane once finished work is unread. */
+    unread?: boolean;
 };
 export type TabsProps = {
     className?: string;
@@ -266,6 +268,14 @@ export function Tabs(props: TabsProps) {
                                     size={iconSizes[size()]}
                                     tone="muted"
                                 />
+                            </span>
+                        ) : tab.unread ? (
+                            <span
+                                aria-label={`${tab.label} has unread activity`}
+                                className="happy2-tabs__tab-icon happy2-tabs__tab-unread-slot"
+                                data-happy2-ui="tab-unread"
+                            >
+                                <span className="happy2-tabs__tab-unread" />
                             </span>
                         ) : tab.icon ? (
                             ((name) => (

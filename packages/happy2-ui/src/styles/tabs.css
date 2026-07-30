@@ -77,6 +77,22 @@
     flex: none;
 }
 
+.happy2-tabs__tab-unread-slot {
+    position: relative;
+    width: 16px;
+    height: 16px;
+}
+
+.happy2-tabs__tab-unread {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text-link);
+}
+
 .happy2-tabs__tab-label {
     display: block;
     flex: none;

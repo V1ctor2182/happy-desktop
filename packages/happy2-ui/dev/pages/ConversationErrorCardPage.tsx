@@ -95,7 +95,7 @@ export function ConversationErrorCardPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="long infrastructure reason truncates on the single activity line"
+                detail="a long infrastructure reason scrolls sideways behind a 24px fade instead of truncating · the copy action reveals on hover"
                 label="Detailed reason"
                 number="02"
                 stage="surface"

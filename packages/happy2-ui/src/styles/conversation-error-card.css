@@ -68,14 +68,18 @@
     color: color-mix(in srgb, var(--box-warning-text) 38%, var(--text-secondary));
 }
 
+/* The reason scrolls sideways (see ScrollingText) instead of ending in an
+   ellipsis: a failure a reader cannot finish reading is not a report. */
 .happy2-conversation-error-card__reason {
     min-width: 0;
     flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
     font-size: 14px;
     font-weight: 400;
     line-height: 20px;
-    white-space: nowrap;
+}
+
+.happy2-conversation-error-card:hover .happy2-copy-button,
+.happy2-conversation-error-card:focus-within .happy2-copy-button {
+    opacity: 1;
 }

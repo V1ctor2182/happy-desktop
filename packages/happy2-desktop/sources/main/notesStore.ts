@@ -97,11 +97,13 @@ function noteTitleNormalize(value: unknown): string {
     if (typeof value !== "string") return "";
     // A title becomes a single line in a list row; newlines and control
     // characters would let one note's title redraw the rows around it.
-    return value
-        // eslint-disable-next-line no-control-regex -- control characters are precisely what this removes
-        .replace(/[\u0000-\u001f\u007f]/g, " ")
-        .trim()
-        .slice(0, NOTE_TITLE_MAX_LENGTH);
+    return (
+        value
+            // eslint-disable-next-line no-control-regex -- control characters are precisely what this removes
+            .replace(/[\u0000-\u001f\u007f]/g, " ")
+            .trim()
+            .slice(0, NOTE_TITLE_MAX_LENGTH)
+    );
 }
 
 function noteExcerptDerive(markdown: string): string {

@@ -376,6 +376,8 @@ function SidebarRow({
 }) {
     const item = () => props.item;
     const unread = () => item().unread === true;
+    const unreadOnLeading = () =>
+        unread() && (item().kind === "project" || item().kind === "workspace");
     const mentioned = () => (item().badge ?? 0) > 0;
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
@@ -456,12 +458,19 @@ function SidebarRow({
                     ) : (
                         <Icon name={leadingIcon(item())} size={16} />
                     )}
+                    {unreadOnLeading() ? (
+                        <span
+                            aria-label="Unread activity"
+                            className="happy2-sidebar__item-leading-unread"
+                            data-happy2-ui="sidebar-item-leading-unread"
+                        />
+                    ) : null}
                 </span>
             ) : null}
             <span className="happy2-sidebar__item-label" data-happy2-ui="sidebar-item-label">
                 {item().label}
             </span>
-            {unread() && !mentioned() ? (
+            {unread() && !unreadOnLeading() && !mentioned() ? (
                 <span
                     aria-label="Unread"
                     className="happy2-sidebar__item-unread"

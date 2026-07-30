@@ -8,9 +8,11 @@ import type {
     ConversationJson,
     ConversationToolCall,
 } from "happy2-state";
+import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
+import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
@@ -396,6 +398,21 @@ function AgentToolActivity(props: {
             ? presentation.input.replace(/\n+$/, "").split("\n")
             : undefined;
 
+    /* What a reader reaches for the clipboard to get: the subject that scrolled
+       out of the row, followed by the output or result the row only shows in
+       part. Both are elided on screen, so the copy is the unabridged text. */
+    const copyText = [
+        primaryText,
+        presentation?.type === "execCommand"
+            ? presentation.output
+            : presentation === undefined
+              ? tool.display
+              : undefined,
+    ]
+        .map((part) => part?.replace(/\n+$/, ""))
+        .filter((part): part is string => part !== undefined && part.length > 0)
+        .join("\n");
+
     const hasBody = singleLine
         ? false
         : presentation?.type === "fileDiff"
@@ -457,12 +474,12 @@ function AgentToolActivity(props: {
                     className="happy2-agent-activity__file-summary"
                     data-happy2-ui="agent-activity-file-summary"
                 >
-                    <span
+                    <ScrollingText
                         className="happy2-agent-activity__text"
                         data-happy2-ui="agent-activity-text"
                     >
                         <AgentActivityChangingText value={primaryText} />
-                    </span>
+                    </ScrollingText>
                     {/* A side that changed nothing is left unsaid: "+0" is a
                         number the reader has to read before learning there was
                         nothing to learn. */}
@@ -483,9 +500,12 @@ function AgentToolActivity(props: {
                     ) : null}
                 </span>
             ) : (
-                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                <ScrollingText
+                    className="happy2-agent-activity__text"
+                    data-happy2-ui="agent-activity-text"
+                >
                     <AgentActivityChangingText value={primaryText} />
-                </span>
+                </ScrollingText>
             )}
             {hasBody ? (
                 <span aria-hidden="true" className="happy2-agent-activity__chevron">
@@ -507,34 +527,44 @@ function AgentToolActivity(props: {
             data-expanded={expanded ? "" : undefined}
             data-happy2-ui="agent-activity-call"
         >
-            {singleLine && props.onSelect ? (
-                <button
-                    className="happy2-agent-activity__header"
-                    data-happy2-ui="agent-activity-header"
-                    onClick={() => props.onSelect?.(tool)}
-                    type="button"
-                >
-                    {header}
-                </button>
-            ) : singleLine ? (
-                <div
-                    className="happy2-agent-activity__header"
-                    data-happy2-ui="agent-activity-header"
-                >
-                    {header}
-                </div>
-            ) : (
-                <button
-                    aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
-                    className="happy2-agent-activity__header"
-                    data-happy2-ui="agent-activity-header"
-                    disabled={!hasBody}
-                    onClick={() => hasBody && setExpanded((open) => !open)}
-                    type="button"
-                >
-                    {header}
-                </button>
-            )}
+            {/* The copy action is a sibling of the header rather than part of
+                it: the header is itself a button in most variants, and a
+                nested button would be neither valid nor clickable. */}
+            <div className="happy2-agent-activity__line" data-happy2-ui="agent-activity-line">
+                {singleLine && props.onSelect ? (
+                    <button
+                        className="happy2-agent-activity__header"
+                        data-happy2-ui="agent-activity-header"
+                        onClick={() => props.onSelect?.(tool)}
+                        type="button"
+                    >
+                        {header}
+                    </button>
+                ) : singleLine ? (
+                    <div
+                        className="happy2-agent-activity__header"
+                        data-happy2-ui="agent-activity-header"
+                    >
+                        {header}
+                    </div>
+                ) : (
+                    <button
+                        aria-expanded={hasBody ? (expanded ? "true" : "false") : undefined}
+                        className="happy2-agent-activity__header"
+                        data-happy2-ui="agent-activity-header"
+                        disabled={!hasBody}
+                        onClick={() => hasBody && setExpanded((open) => !open)}
+                        type="button"
+                    >
+                        {header}
+                    </button>
+                )}
+                <CopyButton
+                    data-happy2-ui="agent-activity-copy"
+                    label="Copy tool detail"
+                    text={copyText}
+                />
+            </div>
 
             {!singleLine && tool.review ? <PermissionReviewRow review={tool.review} /> : null}
 
@@ -673,9 +703,12 @@ function AgentReasoningActivity(props: {
                 <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                     {props.streaming ? "Thinking" : "Thought"}
                 </span>
-                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                <ScrollingText
+                    className="happy2-agent-activity__text"
+                    data-happy2-ui="agent-activity-text"
+                >
                     {summary}
-                </span>
+                </ScrollingText>
                 <span aria-hidden="true" className="happy2-agent-activity__chevron">
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
@@ -747,9 +780,12 @@ function AgentShellActivity(props: {
                 <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                     Bash
                 </span>
-                <span className="happy2-agent-activity__text" data-happy2-ui="agent-activity-text">
+                <ScrollingText
+                    className="happy2-agent-activity__text"
+                    data-happy2-ui="agent-activity-text"
+                >
                     {props.command}
-                </span>
+                </ScrollingText>
                 <span
                     className="happy2-agent-activity__status"
                     data-failed={failed ? "true" : undefined}
@@ -804,12 +840,12 @@ function AgentLabeledActivity(props: {
                     {props.label}
                 </span>
                 {props.subject !== undefined && props.subject.length > 0 ? (
-                    <span
+                    <ScrollingText
                         className="happy2-agent-activity__text"
                         data-happy2-ui="agent-activity-text"
                     >
                         {props.subject}
-                    </span>
+                    </ScrollingText>
                 ) : null}
                 <AgentActivityTime time={props.time} />
             </div>

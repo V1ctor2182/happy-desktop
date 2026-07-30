@@ -25,6 +25,7 @@ import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
+import { completionChimePlay } from "./completionChime";
 
 const MODEL_PREFERENCES_KEY = "happy2.rig.model-preferences.v1";
 
@@ -132,6 +133,9 @@ export function rigConnectionOpen(input: {
     });
     const client: RigClient = rigClientCreate({
         transport,
+        sessionListOutput: (event) => {
+            if (event.type === "sessionCompleted") completionChimePlay();
+        },
         modelPreferencePersistence,
         catalogSource,
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),

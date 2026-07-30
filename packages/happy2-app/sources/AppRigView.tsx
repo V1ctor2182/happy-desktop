@@ -268,6 +268,9 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             },
             // A row only carries a status while one of its sessions is live.
             ...(project.activity === "running" ? { status: "working" as const } : {}),
+            ...(project.conversations.some((conversation) => conversation.unread)
+                ? { unread: true }
+                : {}),
             ...(projectHasLineChanges
                 ? {
                       changeStats: {
@@ -290,6 +293,9 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 reveal: "hover" as const,
             },
             ...(worktree.activity === "running" ? { status: "working" as const } : {}),
+            ...(worktree.conversations.some((conversation) => conversation.unread)
+                ? { unread: true }
+                : {}),
             ...((worktree.addedLines ?? 0) > 0 || (worktree.deletedLines ?? 0) > 0
                 ? {
                       changeStats: {
@@ -391,6 +397,7 @@ function sessionTabs(group: OpenGroup): TabItem[] {
         id: summary.id,
         label: summary.title,
         ...(summary.activity === "running" ? { busy: true } : {}),
+        ...(summary.unread ? { unread: true } : {}),
     }));
 }
 

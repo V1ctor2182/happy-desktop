@@ -1,3 +1,4 @@
+import type { ConversationToolCall } from "happy2-state";
 import { AgentActivityRow } from "../../src/AgentActivityRow";
 import { ComponentPage, Specimen } from "../kit";
 import {
@@ -146,6 +147,41 @@ export function AgentActivityRowPage() {
                     />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="a command wider than its row scrolls sideways behind a 24px fade · the copy action reveals on row hover"
+                label="Overflowing subject"
+                number="05"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        width: "420px",
+                    }}
+                >
+                    <AgentActivityRow activity={{ kind: "tool", tool: longExecTool }} />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: longExecTool }}
+                        onToolSelect={() => undefined}
+                        singleLine
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }
+
+/** A command far wider than a 420px row, so the scroll and its fade are visible. */
+const longExecTool: ConversationToolCall = {
+    ...rigExecTool,
+    toolCallId: "tool-exec-long",
+    presentation: {
+        type: "execCommand",
+        command:
+            "pnpm --dir packages/happy2-server exec drizzle-kit generate --config ./drizzle.config.ts --name add_session_request_telemetry",
+        output: "Applied 1 migration.",
+    },
+};

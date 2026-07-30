@@ -21,6 +21,9 @@ import type {
     RigWorktreeId,
 } from "./rigTypes.js";
 
+/** Lets a steering turn enter `queued` before a transient completed frame is announced. */
+const COMPLETION_SETTLE_MS = 750;
+
 /**
  * The list surface of the local workspace: a `Loadable` of projects, each
  * carrying its sessions — and its worktrees' sessions — as ordinary conversation
@@ -47,7 +50,8 @@ export interface RigSessionLocation {
 export type RigSessionListOutput =
     | { readonly type: "sessionCreated"; readonly location: RigSessionLocation }
     | { readonly type: "sessionForked"; readonly location: RigSessionLocation }
-    | { readonly type: "sessionReset"; readonly sessionId: RigSessionId };
+    | { readonly type: "sessionReset"; readonly sessionId: RigSessionId }
+    | { readonly type: "sessionCompleted"; readonly sessionId: RigSessionId };
 
 export interface RigSessionListStore {
     get(): RigSessionListSnapshot;
@@ -57,6 +61,8 @@ export interface RigSessionListStore {
      * button: it runs on hydration and after mutations to converge on server truth.
      */
     sessionsRefresh(): Promise<void>;
+    /** Marks the session's latest completed work as seen in this app lifetime. */
+    sessionRead(sessionId: RigSessionId): void;
     /**
      * Creates a session and resolves with its address, or with `undefined` when
      * the mutation failed and was recorded in `mutationError`. That address is
@@ -191,6 +197,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // The durable rows this surface last reconciled, kept so a projection can be
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
+    const unreadSessionIds = new Set<RigSessionId>();
+    const pendingCompletions = new Map<
+        RigSessionId,
+        { readonly deadline: number; readonly timer: ReturnType<typeof setTimeout> }
+    >();
     let catalog: RigProjectCatalog = EMPTY_CATALOG;
     // Callers waiting for a freshly reserved worktree to finish initializing.
     // Settled from `publish`, which every reconcile runs through, so the wait is
@@ -199,7 +210,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const publish = (): void => {
         const previous = store.getState();
-        const projected = rigProjectGroupsProject(catalog, sessions);
+        const projected = rigProjectGroupsProject(catalog, sessions, unreadSessionIds);
         // An unchanged project keeps its previous object — and with it the
         // identity of the worktrees and conversation rows nested inside it — so a
         // reconcile that changed one session does not replace every project row.
@@ -241,6 +252,22 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         });
     };
 
+    const completionCancel = (sessionId: RigSessionId): void => {
+        const pending = pendingCompletions.get(sessionId);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        pendingCompletions.delete(sessionId);
+    };
+
+    const completionSchedule = (sessionId: RigSessionId): void => {
+        completionCancel(sessionId);
+        const deadline = Date.now() + COMPLETION_SETTLE_MS;
+        const timer = setTimeout(() => {
+            if (!disposed && active) void reconcile();
+        }, COMPLETION_SETTLE_MS);
+        pendingCompletions.set(sessionId, { deadline, timer });
+    };
+
     const reconcile = async (): Promise<void> => {
         if (reconciling) {
             reconcileAgain = true;
@@ -259,8 +286,32 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                       deps.transport.sessionsRead(),
                   ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
             if (disposed || current !== generation) return;
+            const previousSessions = new Map(sessions.map((session) => [session.id, session]));
             catalog = snapshot.catalog;
             sessions = snapshot.sessions;
+            for (const session of sessions) {
+                const previous = previousSessions.get(session.id);
+                const wasRunning = previous?.status === "running" || previous?.status === "queued";
+                const isRunning = session.status === "running" || session.status === "queued";
+                if (isRunning) completionCancel(session.id);
+                else if (wasRunning && session.status === "completed")
+                    completionSchedule(session.id);
+            }
+            const now = Date.now();
+            for (const [sessionId, pending] of pendingCompletions) {
+                const session = sessions.find((candidate) => candidate.id === sessionId);
+                if (!session || session.status !== "completed") {
+                    completionCancel(sessionId);
+                    continue;
+                }
+                if (pending.deadline > now) continue;
+                completionCancel(sessionId);
+                unreadSessionIds.add(sessionId);
+                output({ type: "sessionCompleted", sessionId });
+            }
+            for (const sessionId of unreadSessionIds)
+                if (!sessions.some((session) => session.id === sessionId))
+                    unreadSessionIds.delete(sessionId);
             publish();
             worktreesSettle();
         } catch (error) {
@@ -310,6 +361,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const stop = (): void => {
         active = false;
         generation += 1;
+        for (const sessionId of pendingCompletions.keys()) completionCancel(sessionId);
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
     };
@@ -342,6 +394,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             };
         },
         sessionsRefresh: () => reconcile(),
+        sessionRead(sessionId) {
+            if (!unreadSessionIds.delete(sessionId)) return;
+            publish();
+        },
         sessionCreate: (input) =>
             mutate(async () => {
                 void createId();

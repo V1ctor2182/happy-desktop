@@ -3,7 +3,7 @@ import { type TabItem, Tabs, type TabsSize } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const inboxTabs: TabItem[] = [
     { id: "all", label: "All", icon: "inbox" },
-    { id: "unread", label: "Unread", badge: 3 },
+    { id: "unread", label: "Unread", unread: true },
     { id: "mentions", label: "Mentions", icon: "at", badge: 12 },
     { id: "channels", label: "Channels", icon: "hash" },
     { id: "reactions", label: "Reactions" },

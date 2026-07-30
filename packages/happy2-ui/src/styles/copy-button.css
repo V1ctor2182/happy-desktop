@@ -1,0 +1,42 @@
+/*
+ * CopyButton — a 20px clipboard action beside a line of transcript text.
+ *
+ * It is invisible until its row is hovered or holds focus, the way the row's
+ * timestamp is, so a long transcript keeps one column of verbs and subjects
+ * rather than a rail of repeated icons.
+ */
+
+.happy2-copy-button {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-copy-button:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
+
+.happy2-copy-button:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-copy-button[data-copied] {
+    opacity: 1;
+    color: var(--success);
+}

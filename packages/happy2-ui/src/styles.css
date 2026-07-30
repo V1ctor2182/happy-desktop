@@ -20,6 +20,8 @@
 @import "./styles/changing-text.css";
 @import "./styles/agent-working-status.css";
 @import "./styles/turn-summary.css";
+@import "./styles/scrolling-text.css";
+@import "./styles/copy-button.css";
 @import "./styles/conversation-error-card.css";
 @import "./styles/agent-desk.css";
 @import "./styles/agent-trace-row.css";

@@ -465,12 +465,24 @@
 }
 
 .happy2-sidebar__item-leading {
+    position: relative;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
     width: 20px;
     color: var(--text-secondary);
+}
+
+.happy2-sidebar__item-leading-unread {
+    position: absolute;
+    top: 1px;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--surface);
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text-link);
 }
 
 /* The compose pencil's ink is bottom-heavy; lift it to the row's optical center. */

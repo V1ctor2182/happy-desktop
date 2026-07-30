@@ -1,5 +1,7 @@
 import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
+import { CopyButton } from "./CopyButton";
+import { ScrollingText } from "./ScrollingText";
 import { Octicon } from "./vectorIcons/VectorIcon";
 
 export interface ConversationErrorCardProps {
@@ -58,13 +60,21 @@ export function ConversationErrorCard(props: ConversationErrorCardProps) {
                     >
                         {local.title}
                     </strong>
-                    <span
+                    <ScrollingText
                         className="happy2-conversation-error-card__reason"
                         data-happy2-ui="conversation-error-reason"
                     >
                         {local.reason}
-                    </span>
+                    </ScrollingText>
                 </span>
+                {/* A failure is the line a reader most often needs verbatim —
+                    in a bug report, a search, or a reply — so the whole reason
+                    is one click away, not a careful drag-selection. */}
+                <CopyButton
+                    data-happy2-ui="conversation-error-copy"
+                    label="Copy error"
+                    text={`${local.title}: ${local.reason}`}
+                />
             </div>
         </div>
     );

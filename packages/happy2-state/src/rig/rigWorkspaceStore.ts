@@ -1413,6 +1413,7 @@ export function rigWorkspaceStoreCreate(
     const start = (): void => {
         active = true;
         unsubscribeList = list.subscribe(() => {
+            if (openId) list.sessionRead(openId);
             fileTabsReconcile();
             recompute();
         });
@@ -1476,6 +1477,7 @@ export function rigWorkspaceStoreCreate(
         conversationOpen: (conversationId, groupId) => {
             releaseGroup();
             if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
+            list.sessionRead(conversationId);
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
