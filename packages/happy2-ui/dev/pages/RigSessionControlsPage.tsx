@@ -55,9 +55,32 @@ export function RigSessionControlsPage() {
             </Specimen>
 
             <Specimen
+                detail="a provider without a fast tier: the speed control is absent, not a one-row menu"
+                label="Standard only"
+                number="03"
+                stage="surface"
+            >
+                <div style={{ width: "620px", padding: "12px", background: "var(--surface)" }}>
+                    <RigSessionControls
+                        fields={["permission", "tier"]}
+                        menuPlacement="above"
+                        menus={{
+                            ...rigMenus,
+                            serviceTierOptions: [{ tier: null, label: "Standard", current: true }],
+                        }}
+                        onEffortChange={() => undefined}
+                        onModelChange={() => undefined}
+                        onPermissionModeChange={() => undefined}
+                        onServiceTierChange={() => undefined}
+                        variant="ghost"
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="a trigger wearing an application's own icon, as Open in does"
                 label="Leading icon"
-                number="03"
+                number="04"
                 stage="surface"
             >
                 <div style={{ width: "320px", padding: "12px", background: "var(--surface)" }}>
@@ -76,7 +99,7 @@ export function RigSessionControlsPage() {
             <Specimen
                 detail="one control opened to its Menu popover"
                 label="Open control menu"
-                number="04"
+                number="05"
                 stage="surface"
             >
                 <div

@@ -174,8 +174,16 @@ function emptyAgentMessage(
     };
 }
 
-/** Attaches the turn summary that turns an agent message meta row into "View trace". */
+/**
+ * Attaches the turn summary that turns a row's meta line into "View traces".
+ *
+ * An agent message and an agent activity row both qualify, because the row the
+ * control belongs on depends on how much of the turn is showing: a collapsed
+ * turn is one answer, while an expanded one begins with whatever the agent did
+ * first — often a tool call, and sometimes nothing else at all.
+ */
 function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary): ConversationEntry {
+    if (entry.kind === "agentActivity") return { ...entry, agentTrace: trace };
     if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") return entry;
     return { ...entry, message: { ...entry.message, agentTrace: trace } };
 }
@@ -280,9 +288,10 @@ function attachSectionTraces(
             backgroundTerminals: [],
         };
         // A turn with nothing behind its answer has no trace to reveal, so it
-        // keeps a plain message with no control.
-        const summarizable =
-            finalMessage !== undefined && (turnBody.length > 1 || activities.length > 0);
+        // keeps a plain message with no control. The work itself is what can be
+        // revealed, so a turn that produced no text still offers the control on
+        // the row its work starts on.
+        const summarizable = activities.length > 0;
         const collapsed = summarizable && !expanded ? finalMessage : undefined;
         // Collapsing hides the turn's work, but not what went wrong doing it: a
         // failure or a retry is the reason the answer looks the way it does, and
@@ -304,6 +313,12 @@ function attachSectionTraces(
             : expanded
               ? turnBody
               : projectedBody;
+        /*
+         * The control rides the row that opens what is on screen: the single
+         * answer of a collapsed turn, and the first row of an expanded one. Both
+         * fall out of taking the first row of `shown` that can carry it, since a
+         * collapsed turn shows no activity rows at all.
+         */
         let traced = !summarizable;
         for (const entry of shown) {
             if (traced) {

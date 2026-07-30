@@ -165,8 +165,11 @@ export interface SessionSummary {
     readonly id: string;
     readonly projectId: string;
     readonly workspaceId?: string;
-    /** Fractional index the daemon sorts sessions by within their group. */
-    readonly orderKey: string;
+    /**
+     * Fractional index the daemon sorts sessions by within their group. Absent
+     * for a session with no place in an ordered list, such as a subagent.
+     */
+    readonly orderKey?: string;
     readonly cwd: string;
     readonly providerId: string;
     readonly modelId: string;

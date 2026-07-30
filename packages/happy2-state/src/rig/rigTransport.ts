@@ -313,6 +313,18 @@ export interface RigTransport {
         expectedHash: string | null,
     ): Promise<void>;
 
+    /**
+     * Copies an attached file into the session's working directory and answers
+     * with the path it landed on, relative to that directory. The name is a
+     * request rather than a promise: nothing is ever overwritten, so a name that
+     * is already taken lands beside its neighbour as a numbered variant.
+     */
+    attachmentWrite(
+        sessionId: RigSessionId,
+        name: string,
+        content: string,
+    ): Promise<{ readonly path: string }>;
+
     /** Reads one text file from a project/worktree changed-file list. */
     changedFileRead(
         sessionId: RigSessionId,

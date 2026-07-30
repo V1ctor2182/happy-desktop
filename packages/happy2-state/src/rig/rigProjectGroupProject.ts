@@ -67,6 +67,9 @@ export interface RigProjectGroup {
     readonly changes?: RigProject["changes"];
 }
 
+/** A session the host has given a position, and which therefore takes a row. */
+type RigPlacedSession = RigSessionSummary & { readonly orderKey: string };
+
 /**
  * Groups the flat session catalog under the daemon's projects and worktrees,
  * preserving the incoming session order inside each group and ordering the
@@ -83,13 +86,19 @@ export function rigProjectGroupsProject(
     catalog: RigProjectCatalog,
     sessions: readonly RigSessionSummary[],
 ): readonly RigProjectGroup[] {
-    const projectSessions = new Map<RigProjectId, RigSessionSummary[]>();
-    const worktreeSessions = new Map<RigWorktreeId, RigSessionSummary[]>();
+    const projectSessions = new Map<RigProjectId, RigPlacedSession[]>();
+    const worktreeSessions = new Map<RigWorktreeId, RigPlacedSession[]>();
     for (const session of sessions) {
+        // No position, no place in the list. A subagent runs under the session
+        // that started it and is reachable through that session; giving it a row
+        // of its own would put a session nobody opened in the tab strip and
+        // leave the drag order with rows the host will not reorder.
+        if (session.orderKey === undefined) continue;
+        const placed: RigPlacedSession = { ...session, orderKey: session.orderKey };
         const bucket = session.worktreeId
             ? mapAppend(worktreeSessions, session.worktreeId)
             : mapAppend(projectSessions, session.projectId);
-        bucket.push(session);
+        bucket.push(placed);
     }
 
     const worktreesByProject = new Map<RigProjectId, RigWorktreeGroup[]>();
@@ -180,7 +189,7 @@ function byOrderKey(
  * rewrites only the moved row's key: sorting on the key is what moves the row.
  */
 function conversationsOf(
-    sessions: readonly RigSessionSummary[] | undefined,
+    sessions: readonly RigPlacedSession[] | undefined,
 ): readonly ConversationSummary[] {
     return [...(sessions ?? [])].sort(byOrderKey).map(rigConversationSummaryProject);
 }

@@ -155,10 +155,40 @@ it("renders only the requested controls, in the requested order", async () => {
     expect(view.container.querySelector('[data-testid="rig-control-model"]')).toBeNull();
     expect(view.container.querySelector('[data-testid="rig-control-effort"]')).toBeNull();
 
+    // The permission mode names itself, so it carries no caption at all.
     const rendered = [
         ...view.container.querySelectorAll<HTMLElement>('[data-happy2-ui="rig-control-label"]'),
     ].map((label) => label.textContent);
-    expect(rendered).toEqual(["Access", "Speed"]);
+    expect(rendered).toEqual(["Speed"]);
+    expect(
+        view.$('[data-testid="rig-control-permission"] [data-happy2-ui="rig-control-value"]')
+            .element.textContent,
+    ).toBe("Auto");
+});
+
+it("drops the speed control for a model that offers only the standard tier", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <RigSessionControls
+                data-testid="standard-only"
+                fields={["permission", "tier"]}
+                menus={{
+                    ...menus,
+                    serviceTierOptions: [{ tier: null, label: "Standard", current: true }],
+                }}
+                onEffortChange={() => undefined}
+                onModelChange={() => undefined}
+                onPermissionModeChange={() => undefined}
+                onServiceTierChange={() => undefined}
+            />
+        ),
+        { width: 620, height: 120, padding: 16 },
+    );
+    await view.ready();
+
+    expect(view.container.querySelector('[data-testid="rig-control-tier"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="rig-control-permission"]')).not.toBeNull();
 });
 
 it("defaults to every control when no fields are requested", async () => {
@@ -181,5 +211,5 @@ it("defaults to every control when no fields are requested", async () => {
     const rendered = [
         ...view.container.querySelectorAll<HTMLElement>('[data-happy2-ui="rig-control-label"]'),
     ].map((label) => label.textContent);
-    expect(rendered).toEqual(["Model", "Effort", "Access", "Speed"]);
+    expect(rendered).toEqual(["Model", "Effort", "Speed"]);
 });

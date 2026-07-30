@@ -6,6 +6,8 @@ import type {
     ConversationMessageProjection,
     ConversationToolCall,
 } from "../conversation/conversationEntry.js";
+import { inlineImageSize } from "../conversation/inlineImageSize.js";
+import type { AgentTurnTraceSummary } from "../types.js";
 import type { RigUserInputRequest } from "./rigTypes.js";
 import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 
@@ -83,6 +85,7 @@ function rigConnectGroupProject(
                             id: `${element.id}:image:${String(index)}`,
                             mediaType: attachment.mediaType,
                             data: attachment.data,
+                            ...inlineImageSize(attachment.data),
                         })),
                     }),
                 });
@@ -232,46 +235,105 @@ function rigConnectGroupProject(
             break;
         }
     }
-    if (finalAgentIndex < 0) return entries;
+    const finalAgent = finalAgentIndex < 0 ? undefined : entries[finalAgentIndex];
+    if (finalAgent?.kind === "message") {
+        const status = entries[statusIndex];
+        if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
+            entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
+    }
 
-    const finalAgent = entries[finalAgentIndex]!;
-    if (finalAgent.kind !== "message") return entries;
-    const status = entries[statusIndex];
-    if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
-        entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
-
+    /*
+     * Collapsing hides the turn's work, not the record of it going wrong: a
+     * failure or a retry is why the answer reads the way it does, and burying it
+     * behind a control the reader has no reason to open would leave a broken run
+     * looking like a clean one. Every non-informational notice therefore stays.
+     */
     const visibleCollapsed = entries.filter(
         (entry, index) =>
             entry.kind === "turnStatus" ||
             index === finalAgentIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
-            (entry.kind === "notice" && entry.level === "error"),
+            (entry.kind === "notice" && entry.level !== "info"),
     );
     const hiddenCount = entries.length - visibleCollapsed.length;
     if (hiddenCount === 0) return entries;
 
+    const trace: AgentTurnTraceSummary = {
+        turnId: groupEnd.groupId,
+        agentUserId: rigAgentAuthor.id,
+        status: groupEnd.reason === "error" || groupEnd.reason === "abort" ? "failed" : "complete",
+        startedAt: new Date(groupEnd.startedAt).toISOString(),
+        completedAt: new Date(groupEnd.endedAt).toISOString(),
+        entryCount: hiddenCount,
+        toolCallCount: elements.filter((element) => element.kind === "tool_call").length,
+        subagents: [],
+        backgroundTerminals: [],
+    };
+
+    /*
+     * Expanded, the control folds the turn back up, so it rides the first row of
+     * the turn — usually a tool call, and the only row there is when the turn
+     * ran tools and answered nothing. Collapsed, the one row on screen is the
+     * final answer, and it carries the control that reveals the rest.
+     */
+    if (input.expandedGroupIds.has(groupEnd.groupId)) {
+        for (let index = 0; index < entries.length; index += 1) {
+            const entry = entries[index]!;
+            if (entry.kind === "agentActivity") {
+                entries[index] = { ...entry, agentTrace: trace };
+                break;
+            }
+            if (entry.kind === "message" && entry.message.sender?.kind === "agent") {
+                entries[index] = { ...entry, message: { ...entry.message, agentTrace: trace } };
+                break;
+            }
+        }
+        return entries;
+    }
+    /*
+     * A turn that worked without answering still collapses to one row: a faint
+     * empty result standing in for the reply it never wrote. Without it the
+     * turn would have nowhere to keep its control, and folding it up would hide
+     * the fact that it ran at all.
+     *
+     * A turn that did no work has nothing to stand in for. One that only failed
+     * is entirely on screen already — its notices are the turn — so it keeps
+     * them as they are rather than growing an empty answer and a control that
+     * would reveal nothing.
+     */
+    if (!finalAgent || finalAgent.kind !== "message") {
+        if (!entries.some((entry) => entry.kind === "agentActivity")) return entries;
+        const empty: ConversationEntry = {
+            kind: "message",
+            source: "server",
+            delivery: "sent",
+            message: {
+                ...messageProject({
+                    id: `${groupEnd.groupId}:empty-agent-text`,
+                    sessionId: input.sessionId,
+                    sequence: "",
+                    text: "",
+                    createdAt: groupEnd.endedAt,
+                    author: rigAgentAuthor,
+                    generationStatus: "complete",
+                }),
+                agentTrace: trace,
+            },
+        };
+        const statusPosition = visibleCollapsed.findIndex((entry) => entry.kind === "turnStatus");
+        return statusPosition < 0
+            ? [...visibleCollapsed, empty]
+            : [
+                  ...visibleCollapsed.slice(0, statusPosition),
+                  empty,
+                  ...visibleCollapsed.slice(statusPosition),
+              ];
+    }
     const tracedFinal: ConversationEntry = {
         ...finalAgent,
-        message: {
-            ...finalAgent.message,
-            agentTrace: {
-                turnId: groupEnd.groupId,
-                agentUserId: rigAgentAuthor.id,
-                status:
-                    groupEnd.reason === "error" || groupEnd.reason === "abort"
-                        ? "failed"
-                        : "complete",
-                startedAt: new Date(groupEnd.startedAt).toISOString(),
-                completedAt: new Date(groupEnd.endedAt).toISOString(),
-                entryCount: hiddenCount,
-                toolCallCount: elements.filter((element) => element.kind === "tool_call").length,
-                subagents: [],
-                backgroundTerminals: [],
-            },
-        },
+        message: { ...finalAgent.message, agentTrace: trace },
     };
     entries[finalAgentIndex] = tracedFinal;
-    if (input.expandedGroupIds.has(groupEnd.groupId)) return entries;
     return visibleCollapsed.map((entry) => (entry === finalAgent ? tracedFinal : entry));
 }
 

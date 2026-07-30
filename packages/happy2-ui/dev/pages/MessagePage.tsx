@@ -226,6 +226,42 @@ export function MessagePage() {
                     {channelFrame(
                         <Message
                             author="Nora Kim"
+                            body="A page-tall screenshot keeps a usable width and crops; a small one stays its own size."
+                            images={[
+                                {
+                                    id: "p2",
+                                    alt: "Full-page screenshot",
+                                    height: 3000,
+                                    url: demoImage(900, 3000, "#8b7cf7", "#34d399"),
+                                    width: 900,
+                                },
+                            ]}
+                            onImageOpen={() => {}}
+                            time="11:14"
+                            tone="rose"
+                        />,
+                    )}
+                    {channelFrame(
+                        <Message
+                            author="Nora Kim"
+                            body=""
+                            grouped
+                            images={[
+                                {
+                                    id: "p3",
+                                    alt: "Small sticker",
+                                    height: 96,
+                                    url: demoImage(96, 96, "#fbbf24", "#f87171"),
+                                    width: 96,
+                                },
+                            ]}
+                            onImageOpen={() => {}}
+                            time="11:15"
+                        />,
+                    )}
+                    {channelFrame(
+                        <Message
+                            author="Nora Kim"
                             body="And the before/after grid for the settings redesign:"
                             images={[
                                 { id: "g1", url: demoImage(400, 400, "#60a5fa", "#34d399") },

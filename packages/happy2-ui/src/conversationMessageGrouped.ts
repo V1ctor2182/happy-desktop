@@ -54,22 +54,33 @@ export function conversationMessageGrouped(
     return previous !== undefined && sameSender(entry, previous);
 }
 
+/** Rows the agent itself produces, and which can therefore open its turn. */
+function agentOwnedRow(entry: ConversationEntry | undefined): boolean {
+    return (
+        entry?.kind === "agentActivity" || (entry?.kind === "notice" && entry.variant === "notice")
+    );
+}
+
 /**
- * Whether this activity is the first agent-authored row after a user boundary.
- * It owns the identity header for a tool-first turn; later activity rows and the
- * final answer continue that same visual group.
+ * Whether this row is the first agent-authored one after a user boundary. It
+ * owns the identity header for a turn that opens with something other than
+ * prose; later rows and the final answer continue that same visual group.
+ *
+ * A service notice counts, because a turn can fail before it does anything
+ * else: two retries and an authentication failure are the whole turn, and
+ * without this they would float in the transcript with nothing saying who
+ * produced them.
  */
-export function conversationAgentActivityStartsGroup(
+export function conversationAgentRowStartsGroup(
     entries: readonly ConversationEntry[],
     index: number,
 ): boolean {
-    if (entries[index]?.kind !== "agentActivity") return false;
+    if (!agentOwnedRow(entries[index])) return false;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = entries[cursor];
         if (!entry) break;
-        if (entry.kind === "agentActivity") return false;
+        if (agentOwnedRow(entry)) return false;
         if (entry.kind === "message") return entry.message.sender?.kind !== "agent";
-        if (entry.kind === "notice") continue;
         break;
     }
     return true;

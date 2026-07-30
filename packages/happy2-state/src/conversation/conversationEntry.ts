@@ -1,4 +1,4 @@
-import type { FileSummary, MessageSummary, UserError } from "../types.js";
+import type { AgentTurnTraceSummary, FileSummary, MessageSummary, UserError } from "../types.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
 /** Structured value carried verbatim from an agent tool call into its render. */
@@ -37,6 +37,13 @@ export type ConversationAttachment =
           readonly mediaType: string;
           /** Base64 payload exactly as the producer supplied it. */
           readonly data: string;
+          /**
+           * Intrinsic pixel size read from the payload's own header, so a surface
+           * reserves this image's real box instead of one invented shape for
+           * every image. Absent only for a format the header parser cannot read.
+           */
+          readonly width?: number;
+          readonly height?: number;
           readonly detail?: "high" | "original";
       };
 
@@ -266,6 +273,14 @@ export interface ConversationActivityEntry {
     readonly occurredAt?: number;
     /** Ordering key inside the conversation, compared like a message sequence. */
     readonly sequence: string;
+    /**
+     * The turn this row opens, when it is the first row of an expanded turn. It
+     * carries the control that folds the turn back up, which has to ride the row
+     * the turn begins on: a turn that ran tools and answered nothing has no
+     * message to hang it from, and one that answered in the middle would put
+     * "Hide traces" below the work it hides.
+     */
+    readonly agentTrace?: AgentTurnTraceSummary;
 }
 
 export interface ConversationNoticeEntry {

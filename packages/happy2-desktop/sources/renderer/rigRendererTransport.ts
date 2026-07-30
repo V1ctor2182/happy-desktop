@@ -163,6 +163,12 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 expectedHash,
             });
         },
+        attachmentWrite: (sessionId, name, content) =>
+            postJson<{ readonly path: string }>("/attachment", {
+                session: sessionId,
+                name,
+                content,
+            }),
         openInTargetsRead: async () => {
             const targets = await getJson<readonly RigOpenInTarget[]>("/open-in-targets");
             const recentId = openInRecentRead();

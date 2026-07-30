@@ -14,7 +14,7 @@ import { ChannelHeader } from "./ChannelHeader";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationEntryView } from "./ConversationEntryView";
 import {
-    conversationAgentActivityStartsGroup,
+    conversationAgentRowStartsGroup,
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
@@ -114,6 +114,20 @@ export type ConversationViewProps = {
     "data-testid"?: string;
     style?: CSSProperties;
 };
+
+/** Whether the turn this row carries the trace control for is currently open. */
+function conversationEntryTraceOpen(
+    entry: ConversationEntry,
+    expandedTurnIds: ReadonlySet<string> | undefined,
+): boolean {
+    const trace =
+        entry.kind === "message"
+            ? entry.message.agentTrace
+            : entry.kind === "agentActivity"
+              ? entry.agentTrace
+              : undefined;
+    return trace !== undefined && expandedTurnIds?.has(trace.turnId) === true;
+}
 
 function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
@@ -246,7 +260,7 @@ export function ConversationView(props: ConversationViewProps) {
                             <ConversationEntryView
                                 activityAuthor={
                                     props.agentAuthor &&
-                                    conversationAgentActivityStartsGroup(props.entries, index)
+                                    conversationAgentRowStartsGroup(props.entries, index)
                                         ? props.agentAuthor
                                         : undefined
                                 }
@@ -278,12 +292,11 @@ export function ConversationView(props: ConversationViewProps) {
                                 onRequestAnswer={props.onRequestAnswer}
                                 onToolSelect={props.onToolSelect}
                                 onTraceToggle={props.onTraceToggle}
-                                traceOpen={
-                                    entry.kind === "message" &&
-                                    entry.message.agentTrace !== undefined &&
-                                    props.expandedTurnIds?.has(entry.message.agentTrace.turnId) ===
-                                        true
-                                }
+                                /* Either kind of row can be the one a turn hung
+                                   its control on: the answer when the turn is
+                                   folded up, the row its work starts on when it
+                                   is open. */
+                                traceOpen={conversationEntryTraceOpen(entry, props.expandedTurnIds)}
                                 requestError={
                                     submission?.status === "failed" ? submission.error : undefined
                                 }

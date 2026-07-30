@@ -98,7 +98,6 @@ export function ConversationDock(props: ConversationDockProps) {
             ) : null}
             <div className="happy2-conversation__dock-inner">
                 <Composer
-                    attachmentAccept="image/*"
                     attachmentMultiple
                     commands={commandItems}
                     contextItems={contextItemsOf(composer)}

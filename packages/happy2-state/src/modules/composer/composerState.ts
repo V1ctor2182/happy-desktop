@@ -60,6 +60,22 @@ export type ComposerAttachment =
           readonly mediaType: string;
           /** Base64 payload of the image bytes, without a data-URL prefix. */
           readonly data: string;
+      }
+    | {
+          /**
+           * A file the agent should read rather than look at. Only an image can be
+           * handed to a model inline, so anything else travels as a copy written
+           * into the session's working directory, and the turn names that copy by
+           * path. The bytes wait in the draft because a group composer has no
+           * session to write into until its own send creates one.
+           */
+          readonly kind: "workspaceFile";
+          /** Client-minted; unique within this draft only. */
+          readonly id: string;
+          readonly name: string;
+          readonly size: number;
+          /** Base64 payload of the file bytes, without a data-URL prefix. */
+          readonly data: string;
       };
 
 export type ComposerSubmission =

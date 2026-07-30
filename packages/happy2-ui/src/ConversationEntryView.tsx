@@ -1,5 +1,6 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import type {
+    AgentTurnTraceSummary,
     ConversationAttachment,
     ConversationAuthor,
     ConversationEntry,
@@ -55,6 +56,46 @@ export type ConversationEntryViewProps = {
 const NOTICE_ICON = { info: "dot", warning: "shield" } as const;
 
 /**
+ * Whether a turn has settled into something worth revealing. A running turn
+ * lists its steps in the transcript and keeps its live readout on the
+ * message-list footer, so no row of its own carries a control while it works.
+ */
+function traceSettled(trace: AgentTurnTraceSummary | undefined): boolean {
+    return (
+        trace !== undefined &&
+        trace.status !== "pending" &&
+        trace.status !== "running" &&
+        trace.entryCount > 0
+    );
+}
+
+/**
+ * The compact "View traces" / "Hide traces" control for the row a settled turn
+ * anchored it to. Which row that is belongs to product state — the answer when
+ * the turn is folded up, its first row when it is open — so this only renders
+ * whatever row was handed the summary.
+ */
+function traceControl(
+    trace: AgentTurnTraceSummary | undefined,
+    open: boolean | undefined,
+    onToggle: ((turnId: string) => void) | undefined,
+): ReactNode {
+    if (!trace || !traceSettled(trace)) return undefined;
+    return (
+        <AgentTraceRow
+            entryCount={trace.entryCount}
+            onOpen={onToggle ? () => onToggle(trace.turnId) : undefined}
+            open={open}
+            status={trace.status === "failed" ? "failed" : "complete"}
+            toggles
+            toolCallCount={trace.toolCallCount}
+            totalTokens={trace.totalTokens}
+            variant="meta"
+        />
+    );
+}
+
+/**
  * ConversationEntryView — renders one `ConversationEntry` through the shared
  * chat vocabulary: an authored message is a `Message`, agent activity is one
  * glanceable `AgentActivityRow`, a service line is a `SystemNotice`, a section
@@ -71,6 +112,12 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     const entry = props.entry;
     if (entry.kind === "agentActivity") {
         const time = eventTime(entry.occurredAt);
+        /* An expanded turn hangs its "Hide traces" control on the row it began
+           with, which is this one when the agent reached for a tool before it
+           said anything. The row's identity header is the only meta line it
+           has, so the control rides there rather than opening a line of its
+           own between the header and the work. */
+        const leadTrace = traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle);
         const activity = (
             <AgentActivityRow
                 activity={entry.activity}
@@ -94,6 +141,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                metaAccessory={leadTrace}
                 style={props.style}
                 time={time}
             >
@@ -119,36 +167,59 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 style={props.style}
             />
         );
-    if (entry.kind === "notice")
-        return entry.variant === "divider" ? (
-            <DayDivider className={props.className} label={entry.text} />
-        ) : entry.level === "error" || entry.retry !== undefined ? (
-            <ConversationErrorCard
-                className={props.className}
-                data-testid={props["data-testid"]}
-                reason={entry.text}
+    if (entry.kind === "notice") {
+        if (entry.variant === "divider")
+            return <DayDivider className={props.className} label={entry.text} />;
+        const notice =
+            entry.level === "error" || entry.retry !== undefined ? (
+                <ConversationErrorCard
+                    className={props.activityAuthor ? undefined : props.className}
+                    data-testid={props["data-testid"]}
+                    reason={entry.text}
+                    style={props.activityAuthor ? undefined : props.style}
+                    title={
+                        entry.retry === undefined
+                            ? (entry.title ?? "Error")
+                            : entry.retry.attempt === undefined || entry.retry.attempt === 1
+                              ? "Connection Error"
+                              : `Connection Error (Attempt ${String(entry.retry.attempt)})`
+                    }
+                    tone={entry.retry ? "warning" : "error"}
+                />
+            ) : (
+                // Mid-turn agent context (system prompts, reasoning preambles,
+                // run notices) belongs to the turn that produced it, so it reads
+                // as a quiet left-aligned hint rather than a centered channel
+                // banner.
+                <SystemNotice
+                    align="start"
+                    className={props.activityAuthor ? undefined : props.className}
+                    icon={NOTICE_ICON[entry.level]}
+                    style={props.activityAuthor ? undefined : props.style}
+                    text={entry.title ? `${entry.title}: ${entry.text}` : entry.text}
+                />
+            );
+        /* A turn can fail before it does anything else, and then these notices
+           are the entire turn. They take the same identity header a tool-first
+           turn takes, so a run that only failed still reads as the agent's work
+           rather than as loose text in the transcript. */
+        return props.activityAuthor ? (
+            <Message
+                agent
+                author={props.activityAuthor.displayName}
+                body=""
+                className={["happy2-message--activity-lead", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
+                initials={initialsOf(props.activityAuthor.displayName)}
                 style={props.style}
-                title={
-                    entry.retry === undefined
-                        ? (entry.title ?? "Error")
-                        : entry.retry.attempt === undefined || entry.retry.attempt === 1
-                          ? "Connection Error"
-                          : `Connection Error (Attempt ${String(entry.retry.attempt)})`
-                }
-                tone={entry.retry ? "warning" : "error"}
-            />
+            >
+                {notice}
+            </Message>
         ) : (
-            // Mid-turn agent context (system prompts, reasoning preambles, run
-            // notices) belongs to the turn that produced it, so it reads as a
-            // quiet left-aligned hint rather than a centered channel banner.
-            <SystemNotice
-                align="start"
-                className={props.className}
-                icon={NOTICE_ICON[entry.level]}
-                style={props.style}
-                text={entry.title ? `${entry.title}: ${entry.text}` : entry.text}
-            />
+            notice
         );
+    }
     if (entry.kind === "request")
         return (
             <ConversationRequestView
@@ -169,17 +240,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     const own = author !== undefined && author.id === props.viewerId;
     const images = imagesOf(message.attachments, props.attachmentUrl);
     const trace = message.agentTrace;
-    /* A running turn lists its steps in the transcript and keeps its live
-       readout on the message-list footer, so the message itself carries no
-       bordered status row. The compact "View traces" link only appears once the
-       turn has settled. */
-    const traceCollapsible =
-        trace !== undefined &&
-        trace.status !== "pending" &&
-        trace.status !== "running" &&
-        trace.entryCount > 0;
-    const traceToggle =
-        trace && props.onTraceToggle ? () => props.onTraceToggle?.(trace.turnId) : undefined;
+    const traceCollapsible = traceSettled(trace);
+    const traceRow = traceControl(trace, props.traceOpen, props.onTraceToggle);
     return (
         <Message
             agent={author?.kind === "agent"}
@@ -200,20 +262,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             }
             grouped={props.grouped}
             initials={initialsOf(author?.displayName)}
-            metaAccessory={
-                traceCollapsible && trace ? (
-                    <AgentTraceRow
-                        entryCount={trace.entryCount}
-                        onOpen={traceToggle}
-                        open={props.traceOpen}
-                        status={trace.status === "failed" ? "failed" : "complete"}
-                        toggles
-                        toolCallCount={trace.toolCallCount}
-                        totalTokens={trace.totalTokens}
-                        variant="meta"
-                    />
-                ) : undefined
-            }
+            metaAccessory={traceRow}
             images={images.length > 0 ? [...images] : undefined}
             onImageOpen={
                 props.onImageOpen
@@ -243,6 +292,8 @@ function imagesOf(
                 id: attachment.id,
                 url: `data:${attachment.mediaType};base64,${attachment.data}`,
                 alt: "Attached image",
+                ...(attachment.width !== undefined ? { width: attachment.width } : {}),
+                ...(attachment.height !== undefined ? { height: attachment.height } : {}),
             });
             continue;
         }

@@ -14,6 +14,7 @@ import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Icon, type IconName } from "./Icon";
+import { messageMediaSingleBox } from "./conversationRowHeight";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 export type MessageSegment =
     | {
@@ -47,26 +48,17 @@ export type MessageImage = {
     width?: number;
     height?: number;
 };
-const MEDIA_SINGLE_MAX_W = 380;
-const MEDIA_SINGLE_MAX_H = 320;
-const MEDIA_SINGLE_FALLBACK_W = 240;
-const MEDIA_SINGLE_FALLBACK_RATIO = "4 / 3";
 /**
- * Inline box for a lone photo: an aspect-ratio plus a capped width reserves the
- * exact layout up front so nothing reflows when the image finishes loading.
- * Missing source dimensions use a stable 4:3 fallback rather than the image's
- * eventual intrinsic size. Multi-image tiles are square via CSS and need none.
+ * Inline box for a lone photo: the exact pixel box `messageMediaSingleBox`
+ * computes from the image's own dimensions, so the layout is reserved up front and
+ * nothing reflows when the bytes arrive — and the transcript's virtualizer, which
+ * reserves the row from the same function, agrees with it. Multi-image tiles are
+ * square via CSS and need none.
  */
 function mediaItemStyle(image: MessageImage, count: number): CSSProperties | undefined {
     if (count !== 1) return undefined;
-    if (!image.width || !image.height)
-        return {
-            width: `${MEDIA_SINGLE_FALLBACK_W}px`,
-            aspectRatio: MEDIA_SINGLE_FALLBACK_RATIO,
-        };
-    const ratio = image.width / image.height;
-    const width = Math.round(Math.min(image.width, MEDIA_SINGLE_MAX_W, MEDIA_SINGLE_MAX_H * ratio));
-    return { width: `${width}px`, aspectRatio: `${image.width} / ${image.height}` };
+    const box = messageMediaSingleBox(image);
+    return { width: `${box.width}px`, height: `${box.height}px` };
 }
 
 /** One image tile; without an open action it remains media, not a fake button. */

@@ -209,6 +209,58 @@ async function workspaceFileWrite(
     });
 }
 
+/**
+ * What is left of an attached file's name once it can only name a file in the
+ * session's own working directory: no separators, no parent hops, no leading dot
+ * that would hide the copy from the person who attached it.
+ */
+function attachmentNameSafe(name: string): string {
+    const base = name.split(/[\\/]/u).pop() ?? "";
+    const printable = [...base]
+        .filter((character) => (character.codePointAt(0) ?? 0) >= 0x20)
+        .join("");
+    return printable.replace(/^\.+/u, "").trim().slice(0, 120) || "attachment";
+}
+
+/** `report.pdf` becomes `report-2.pdf`, so a copy never loses its extension. */
+function attachmentNameNumbered(name: string, attempt: number): string {
+    const dot = name.lastIndexOf(".");
+    if (dot <= 0) return `${name}-${String(attempt)}`;
+    return `${name.slice(0, dot)}-${String(attempt)}${name.slice(dot)}`;
+}
+
+/**
+ * How many names one attachment will try before giving up. A working directory
+ * that already holds this many copies of the same file is telling us something
+ * other than "pick another number".
+ */
+const ATTACHMENT_NAME_ATTEMPTS = 50;
+
+/**
+ * Copies an attached file into the session's working directory. The daemon is
+ * the only way to place bytes there — the machine running the agent may not be
+ * this one — and it refuses to overwrite when no hash is given, which is exactly
+ * the collision check this needs: a taken name simply moves to the next one.
+ */
+async function attachmentWrite(
+    client: RigProxyClient,
+    sessionId: string,
+    name: string,
+    content: string,
+): Promise<{ readonly path: string }> {
+    const wanted = attachmentNameSafe(name);
+    for (let attempt = 1; attempt <= ATTACHMENT_NAME_ATTEMPTS; attempt += 1) {
+        const path = attempt === 1 ? wanted : attachmentNameNumbered(wanted, attempt);
+        try {
+            await client.writeFile(sessionId, { content, expectedHash: null, path });
+            return { path };
+        } catch (error) {
+            if (!(error instanceof RigDaemonHttpError) || error.statusCode !== 409) throw error;
+        }
+    }
+    throw new Error(`The working directory already holds every name for ${wanted}.`);
+}
+
 function changedFileText(bytes: Buffer): string {
     if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
         throw new Error("This file is too large to open in the editor.");
@@ -586,6 +638,21 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 typeof body.expectedHash === "string" ? body.expectedHash : null,
             );
             writeJson(response, 200, {});
+            return true;
+        }
+
+        if (method === "POST" && path === "/attachment") {
+            const body = await bodyReadJson(request);
+            writeJson(
+                response,
+                200,
+                await attachmentWrite(
+                    client,
+                    String(body.session ?? ""),
+                    String(body.name ?? ""),
+                    typeof body.content === "string" ? body.content : "",
+                ),
+            );
             return true;
         }
 
@@ -1223,12 +1290,19 @@ async function requestWithAbort<T>(
     }
 }
 
+/**
+ * A submitted turn carries its images inline as base64, so the ceiling on a JSON
+ * body is really a ceiling on how much someone can paste into one message. Base64
+ * costs a third on top of the bytes, which puts a handful of five-megabyte
+ * screenshots comfortably under this and still refuses a body large enough to be
+ * a mistake.
+ */
+const JSON_BODY_MAX_BYTES = 64 * 1024 * 1024;
+
 async function bodyReadJson(request: IncomingMessage): Promise<Record<string, unknown>> {
-    let body = "";
-    for await (const chunk of request) {
-        body += chunk;
-        if (body.length > 512 * 1024) throw new Error("The request body is too large.");
-    }
+    // Decoded once at the end rather than per chunk: a multi-byte character split
+    // across a chunk boundary would otherwise arrive as replacement characters.
+    const body = (await bodyReadBuffer(request, JSON_BODY_MAX_BYTES)).toString("utf8");
     if (body.trim().length === 0) return {};
     return JSON.parse(body) as Record<string, unknown>;
 }

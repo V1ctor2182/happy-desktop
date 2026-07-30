@@ -258,7 +258,7 @@ export type ComposerProps = {
     onAttachFile?: () => void;
     /** Called for toggle clicks and Shift+Tab with the next audience. */
     onAudienceChange?: (audience: AudienceValue) => void;
-    /** Receives files selected through the native picker or images pasted into the text input. */
+    /** Receives files selected through the native picker or pasted into the text input. */
     onAttachmentsSelect?: (files: File[]) => void;
     onContextRemove?: (id: string) => void;
     /** Called after an emoji is selected. Unicode emoji are also inserted into the draft. */
@@ -611,12 +611,13 @@ export function Composer(props: ComposerProps) {
         detectMention(event.currentTarget);
     };
     const onPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
-        const images = Array.from(event.clipboardData.files).filter((file) =>
-            file.type.startsWith("image/"),
-        );
-        if (images.length === 0 || !props.onAttachmentsSelect) return;
+        // Anything on the clipboard that arrived as a file is an attachment: a
+        // screenshot, a PDF copied in Finder, a log someone dragged in. Text
+        // pastes carry no files and fall through to the textarea untouched.
+        const files = Array.from(event.clipboardData.files);
+        if (files.length === 0 || !props.onAttachmentsSelect) return;
         event.preventDefault();
-        props.onAttachmentsSelect(images);
+        props.onAttachmentsSelect(files);
     };
     /*
      * The composer is one input surface, not a small textarea surrounded by

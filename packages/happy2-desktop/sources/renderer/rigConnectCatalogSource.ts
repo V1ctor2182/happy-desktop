@@ -250,7 +250,10 @@ function sessionProject(session: GroupSession): RigSessionSummary {
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        orderKey: session.orderKey,
+        // rig-connect only groups sessions the host has placed, so a session
+        // reaching here always has a key; it is carried through rather than
+        // asserted so the absence would propagate honestly if that changed.
+        ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         cwd: session.cwd,
         displayCwd: session.cwd,
         providerId: session.providerId,

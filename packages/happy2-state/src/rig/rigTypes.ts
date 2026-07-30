@@ -511,8 +511,14 @@ export interface RigSessionSummary {
     readonly projectId: RigProjectId;
     /** Set when the session runs inside one of the project's worktrees. */
     readonly worktreeId?: RigWorktreeId;
-    /** Fractional index the host sorts sessions by within their own group. */
-    readonly orderKey: string;
+    /**
+     * Fractional index the host sorts sessions by within their own group.
+     *
+     * Absent for a session that has no place in an ordered list. A subagent is
+     * the case that matters: it syncs and can be opened by id, but it belongs to
+     * the session that started it, so it must never take a row of its own.
+     */
+    readonly orderKey?: string;
     /** Canonical absolute working directory. */
     readonly cwd: string;
     /** Original Rig path retained for presentation when it differs from `cwd`. */
@@ -537,8 +543,8 @@ export interface RigSession {
     readonly id: RigSessionId;
     readonly projectId: RigProjectId;
     readonly worktreeId?: RigWorktreeId;
-    /** Fractional index this session sorts by within its own group. */
-    readonly orderKey: string;
+    /** Fractional index this session sorts by; absent for a subagent (see `RigSessionSummary`). */
+    readonly orderKey?: string;
     readonly cwd: string;
     readonly displayCwd: string;
     readonly providerId: string;

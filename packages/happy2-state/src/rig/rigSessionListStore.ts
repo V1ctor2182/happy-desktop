@@ -405,10 +405,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // the host mints it, so the optimistic order is exactly the one
                 // the reconcile confirms rather than a guess it has to undo.
                 const group = rigSessionGroupIdOf(moved);
+                // Only the rows the host places take part: a subagent has no key
+                // and no row, so it must not be counted as a neighbour when the
+                // moved row's new key is minted between two of them.
                 const orderKey = orderKeyAfter(
-                    sessions
-                        .filter((session) => rigSessionGroupIdOf(session) === group)
-                        .map((session) => ({ id: session.id, orderKey: session.orderKey })),
+                    sessions.flatMap((session) =>
+                        session.orderKey !== undefined && rigSessionGroupIdOf(session) === group
+                            ? [{ id: session.id, orderKey: session.orderKey }]
+                            : [],
+                    ),
                     sessionId,
                     afterId,
                 );

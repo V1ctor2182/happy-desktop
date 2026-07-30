@@ -18,8 +18,12 @@ const MODEL_ID_SEP = " ";
 const SERVICE_TIER_OFF = "__rig_service_tier_off__";
 
 export type RigControlMenuProps = {
-    /** Short field caption (e.g. "Model"). */
-    label: string;
+    /**
+     * Short field caption (e.g. "Model"). Omitted where the value already names
+     * its own field — "Read only" needs no word in front of it — so the caption
+     * is not spent repeating what the reader can see.
+     */
+    label?: string;
     /**
      * An image shown before the label — an installed application's own icon,
      * where the control stands for something that brings its own artwork.
@@ -99,9 +103,11 @@ export function RigControlMenu(props: RigControlMenuProps) {
                         src={props.leadingIconUrl}
                     />
                 )}
-                <span className="happy2-rig-control__label" data-happy2-ui="rig-control-label">
-                    {props.label}
-                </span>
+                {props.label === undefined ? null : (
+                    <span className="happy2-rig-control__label" data-happy2-ui="rig-control-label">
+                        {props.label}
+                    </span>
+                )}
                 {props.value === undefined ? null : (
                     <span className="happy2-rig-control__value" data-happy2-ui="rig-control-value">
                         {props.value}
@@ -276,7 +282,6 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     disabled={!menus}
                     items={permissionItems}
                     key={field}
-                    label="Access"
                     menuPlacement={props.menuPlacement}
                     variant={props.variant}
                     menuWidth={200}
@@ -284,6 +289,10 @@ export function RigSessionControls(props: RigSessionControlsProps) {
                     value={menus ? PERMISSION_LABELS[menus.currentPermissionMode] : "…"}
                 />
             );
+        // Speed is a choice only where the provider actually offers a fast tier.
+        // On a standard-only model the menu would hold one unchangeable row, so
+        // the control is absent rather than shown as a decision nobody can make.
+        if (serviceTierItems.length < 2) return null;
         return (
             <RigControlMenu
                 data-testid="rig-control-tier"

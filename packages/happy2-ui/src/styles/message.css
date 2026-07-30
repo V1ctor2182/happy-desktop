@@ -1095,6 +1095,13 @@
     padding: 4px 20px 4px 8px;
 }
 
+/* Same as the activity row and the error card: the identity Message around a
+   turn's first notice already supplies the transcript inset. */
+.happy2-message--activity-lead .happy2-system-notice[data-align="start"] {
+    padding-right: 0;
+    padding-left: 0;
+}
+
 /* Center the 14px leading glyph on the 20px line box of the text beside it. */
 .happy2-system-notice[data-align="start"] .happy2-system-notice__icon {
     height: 20px;

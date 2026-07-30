@@ -37,6 +37,7 @@ export type FakeRigOperation =
     | "changedFileRead"
     | "workspaceFileRead"
     | "workspaceFileWrite"
+    | "attachmentWrite"
     | "workspaceFilesRead"
     | "openInTargetsRead"
     | "openIn"
@@ -366,9 +367,17 @@ class FakeRigTransportModel implements FakeRigTransport {
         return session;
     }
 
-    /** The order this host lists in: fractional index, then id, exactly as Rig does. */
+    /**
+     * The order this host lists in: fractional index, then id, exactly as Rig
+     * does. A session with no key has no place in the list, and sorts last so
+     * the caller filtering it out never has to look past the keyed rows.
+     */
     private static compare(left: RigSession, right: RigSession): number {
-        if (left.orderKey !== right.orderKey) return left.orderKey < right.orderKey ? -1 : 1;
+        if (left.orderKey !== right.orderKey) {
+            if (left.orderKey === undefined) return 1;
+            if (right.orderKey === undefined) return -1;
+            return left.orderKey < right.orderKey ? -1 : 1;
+        }
         return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
     }
 
@@ -384,6 +393,10 @@ class FakeRigTransportModel implements FakeRigTransport {
                 hash: "workspace-file-hash",
             })),
         workspaceFileWrite: () => this.perform("workspaceFileWrite", {}, () => undefined),
+        // The fake has no working directory, so a copy lands under the name it
+        // asked for; a surface under test cares that the path came back at all.
+        attachmentWrite: (_sessionId, name) =>
+            this.perform("attachmentWrite", {}, () => ({ path: name })),
         // No host to open anything in, so the fake offers nothing and opening
         // is a no-op rather than a failure: a surface under test should render
         // the same whether or not a shell is there.
@@ -443,7 +456,11 @@ class FakeRigTransportModel implements FakeRigTransport {
                     (candidate) => (candidate.worktreeId ?? candidate.projectId) === group,
                 );
                 const orderKey = orderKeyAfter(
-                    peers.map((peer) => ({ id: peer.id, orderKey: peer.orderKey })),
+                    peers.flatMap((peer) =>
+                        peer.orderKey === undefined
+                            ? []
+                            : [{ id: peer.id, orderKey: peer.orderKey }],
+                    ),
                     sessionId,
                     afterId,
                 );

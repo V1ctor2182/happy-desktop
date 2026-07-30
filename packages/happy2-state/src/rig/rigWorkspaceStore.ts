@@ -2,13 +2,18 @@ import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
     composerStoreCreate,
+    type ComposerAttachment,
     type ComposerCommand,
     type ComposerSnapshot,
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
 import type { RigChatSnapshot, RigChatStore, RigOpenImage } from "./rigChatStore.js";
-import { rigImageAttachmentRead, rigImageInputsOf } from "./rigImageAttachment.js";
+import {
+    rigAttachmentTextAppend,
+    rigComposerAttachmentRead,
+    rigImageInputsOf,
+} from "./rigComposerAttachment.js";
 import { rigPanelStoreCreate, type RigPanelStore } from "./rigPanelStore.js";
 import {
     rigSessionDraftStoreCreate,
@@ -1003,6 +1008,31 @@ export function rigWorkspaceStoreCreate(
         }
     };
 
+    /**
+     * Places a draft's non-image attachments in the session's working directory
+     * and returns the text the turn should carry, which names them. Copies are
+     * written one at a time: their order in the draft is the order they take
+     * names in, and two writes racing for the same name would settle it by luck.
+     * A failed copy fails the send, which is the only place a reader is looking.
+     */
+    const attachmentsPlace = async (
+        sessionId: RigSessionId,
+        text: string,
+        attachments: readonly ComposerAttachment[],
+    ): Promise<string> => {
+        const paths: string[] = [];
+        for (const attachment of attachments) {
+            if (attachment.kind !== "workspaceFile") continue;
+            const written = await client.attachmentWrite(
+                sessionId,
+                attachment.name,
+                attachment.data,
+            );
+            paths.push(written.path);
+        }
+        return rigAttachmentTextAppend(text, paths);
+    };
+
     const composerCreate = (conversationId: RigSessionId): ComposerStore => {
         const created: ComposerStore = composerStoreCreate(conversationId, {
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
@@ -1017,11 +1047,16 @@ export function rigWorkspaceStoreCreate(
                         void withChatStore((store) =>
                             store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
-                        submitting(created, event.revision, () =>
-                            withChatStore((store) =>
-                                store.messageSend(event.text, rigImageInputsOf(event.attachments)),
-                            ),
-                        );
+                        submitting(created, event.revision, async () => {
+                            const text = await attachmentsPlace(
+                                conversationId,
+                                event.text,
+                                event.attachments,
+                            );
+                            await withChatStore((store) =>
+                                store.messageSend(text, rigImageInputsOf(event.attachments)),
+                            );
+                        });
                         return;
                     case "shellCommandSubmitted":
                         submitting(created, event.revision, () =>
@@ -1200,7 +1235,7 @@ export function rigWorkspaceStoreCreate(
     const groupSubmit = (
         groupId: RigGroupId,
         text: string,
-        images: readonly RigImageInput[],
+        attachments: readonly ComposerAttachment[],
         selection: RigSelection | undefined,
     ): Promise<void> => {
         const start = groupStartFind(groupId);
@@ -1215,9 +1250,10 @@ export function rigWorkspaceStoreCreate(
         ).then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
             output({ type: "conversationOpenRequested", location });
+            const placed = await attachmentsPlace(location.sessionId, text, attachments);
             const acquired = await client.chat(location.sessionId);
             try {
-                await acquired.store.messageSend(text, images);
+                await acquired.store.messageSend(placed, rigImageInputsOf(attachments));
             } finally {
                 acquired[Symbol.dispose]();
             }
@@ -1460,12 +1496,7 @@ export function rigWorkspaceStoreCreate(
                     // group and its draft with it.
                     const selection = groupDraft?.get().selection;
                     submitting(created, event.revision, () =>
-                        groupSubmit(
-                            groupId,
-                            event.text,
-                            rigImageInputsOf(event.attachments),
-                            selection,
-                        ),
+                        groupSubmit(groupId, event.text, event.attachments, selection),
                     );
                 },
             });
@@ -1627,12 +1658,12 @@ export function rigWorkspaceStoreCreate(
             if (!target) return;
             for (const file of files) {
                 const id = `attachment:${++attachmentSequence}`;
-                void rigImageAttachmentRead(id, file).then(
+                void rigComposerAttachmentRead(id, file).then(
                     (attachment) => {
                         // The draft may have been released (or replaced by
                         // addressing elsewhere) while the bytes were read; an
-                        // image never lands in a composer other than its own.
-                        if (!attachment || (groupComposer ?? composer) !== target) return;
+                        // attachment never lands in a composer other than its own.
+                        if ((groupComposer ?? composer) !== target) return;
                         target.getState().attachmentAdd(attachment);
                     },
                     () => undefined,

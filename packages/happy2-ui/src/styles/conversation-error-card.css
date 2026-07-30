@@ -19,6 +19,15 @@
     font-synthesis: none;
 }
 
+/* A turn that failed before it did anything else puts its first notice inside
+   the Message that owns the agent identity line. Message already supplies the
+   transcript inset, so keeping the card's own would indent it past the notices
+   beneath it. */
+.happy2-message--activity-lead .happy2-conversation-error-card {
+    padding-right: 0;
+    padding-left: 0;
+}
+
 .happy2-conversation-error-card__bubble {
     display: flex;
     align-items: center;

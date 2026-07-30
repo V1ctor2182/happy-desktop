@@ -148,7 +148,10 @@ export function rigSessionSummaryProject(
         id: summary.id as RigSessionId,
         projectId: summary.projectId as RigProjectId,
         ...(summary.workspaceId ? { worktreeId: summary.workspaceId as RigWorktreeId } : {}),
-        orderKey: summary.orderKey,
+        // A subagent carries no key. Passing the absence through is what keeps it
+        // out of the lists; inventing one would file it under a project as an
+        // ordinary session.
+        ...(summary.orderKey === undefined ? {} : { orderKey: summary.orderKey }),
         cwd: summary.cwd,
         displayCwd: rigDisplayCwd(summary.cwd, homeDir),
         providerId: summary.providerId,
@@ -172,9 +175,8 @@ export function rigSessionProject(session: ProtocolSession, homeDir: string): Ri
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        // A session with no place in an ordered list (a subagent) carries no key;
-        // the empty string sorts it ahead of every minted key.
-        orderKey: session.orderKey ?? "",
+        // A session with no place in an ordered list (a subagent) carries no key.
+        ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,
@@ -898,9 +900,8 @@ function summaryFromSession(
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        // A session with no place in an ordered list (a subagent) carries no key;
-        // the empty string sorts it ahead of every minted key.
-        orderKey: session.orderKey ?? "",
+        // A session with no place in an ordered list (a subagent) carries no key.
+        ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         cwd: session.cwd,
         displayCwd: rigDisplayCwd(session.cwd, homeDir),
         providerId: session.providerId,

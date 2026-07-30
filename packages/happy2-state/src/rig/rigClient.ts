@@ -56,6 +56,15 @@ export interface RigClient {
         content: string,
         expectedHash: string | null,
     ): Promise<void>;
+    /**
+     * Copies an attached file into a session's working directory, answering with
+     * the path it landed on relative to that directory.
+     */
+    attachmentWrite(
+        sessionId: RigSessionId,
+        name: string,
+        content: string,
+    ): Promise<{ readonly path: string }>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<RigOpenInTargets>;
     /** Opens one project or worktree root in one of those applications. */
@@ -147,6 +156,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             transport.workspaceFileRead(sessionId, path, signal),
         workspaceFileWrite: (sessionId, path, content, expectedHash) =>
             transport.workspaceFileWrite(sessionId, path, content, expectedHash),
+        attachmentWrite: (sessionId, name, content) =>
+            transport.attachmentWrite(sessionId, name, content),
         openInTargetsRead: () => transport.openInTargetsRead(),
         openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {

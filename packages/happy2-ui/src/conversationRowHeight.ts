@@ -1,6 +1,6 @@
 import type { ConversationEntry } from "happy2-state";
 import {
-    conversationAgentActivityStartsGroup,
+    conversationAgentRowStartsGroup,
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
@@ -72,6 +72,15 @@ const MEDIA_MARGIN_BARE = 4;
 const MEDIA_MAX_WIDTH = 420;
 const MEDIA_SINGLE_MAX_W = 380;
 const MEDIA_SINGLE_MAX_H = 320;
+/**
+ * The narrowest a lone photo is drawn once its height is capped. A page-tall
+ * screenshot scaled whole would arrive as an unreadable 90px sliver, so past this
+ * ratio the box keeps a usable width and the image crops — the click that opens
+ * it full size is right there.
+ */
+const MEDIA_SINGLE_MIN_W = 240;
+/** Box for a lone image whose format hid its dimensions: 240 × 4:3. */
+const MEDIA_FALLBACK_W = 240;
 const MEDIA_FALLBACK_H = 180;
 /** Collapsed `.happy2-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
@@ -96,8 +105,37 @@ export function contentWidth(width: number): number {
     return Math.min(width, CHAT_MEASURE);
 }
 /**
+ * The box a lone photo is drawn in, from its intrinsic pixel size alone.
+ *
+ * Scaling down is the only transform: an image smaller than the cap keeps its own
+ * size rather than being blown up past its detail. Larger, it scales to
+ * `MEDIA_SINGLE_MAX_W`, and if that leaves it taller than `MEDIA_SINGLE_MAX_H` the
+ * height is capped — by scaling further down, or, once that would take the width
+ * below `MEDIA_SINGLE_MIN_W`, by holding that width and letting the painted image
+ * crop into it. This is the single source of that arithmetic: `Message` styles the
+ * element with it and this module reserves the row for it, and the two disagreeing
+ * is a visible jump the moment the image loads.
+ */
+export function messageMediaSingleBox(image: {
+    readonly width?: number;
+    readonly height?: number;
+}): { readonly width: number; readonly height: number } {
+    if (!image.width || !image.height) return { width: MEDIA_FALLBACK_W, height: MEDIA_FALLBACK_H };
+    const ratio = image.width / image.height;
+    const width = Math.min(image.width, MEDIA_SINGLE_MAX_W);
+    const height = width / ratio;
+    if (height <= MEDIA_SINGLE_MAX_H)
+        return { width: Math.round(width), height: Math.round(height) };
+    return {
+        width: Math.round(
+            Math.min(Math.max(MEDIA_SINGLE_MAX_H * ratio, MEDIA_SINGLE_MIN_W), width),
+        ),
+        height: MEDIA_SINGLE_MAX_H,
+    };
+}
+/**
  * Painted height of a message's image grid. A lone photo reserves the exact box
- * `mediaItemStyle` computes; a 2–4 tile grid is two square columns. An own
+ * `messageMediaSingleBox` computes; a 2–4 tile grid is two square columns. An own
  * message's grid shrinks to fit its content instead of stretching, so its tile
  * width is not knowable here — the stretched width is used as the floor and the
  * row's measurement corrects it.
@@ -109,15 +147,7 @@ function mediaHeight(
 ): number {
     const margin = hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE;
     const count = Math.min(images.length, 4);
-    if (count === 1) {
-        const image = images[0]!;
-        if (!image.width || !image.height) return margin + MEDIA_FALLBACK_H;
-        const ratio = image.width / image.height;
-        const width = Math.round(
-            Math.min(image.width, MEDIA_SINGLE_MAX_W, MEDIA_SINGLE_MAX_H * ratio),
-        );
-        return margin + width / ratio;
-    }
+    if (count === 1) return margin + messageMediaSingleBox(images[0]!).height;
     const column = (Math.min(measure, MEDIA_MAX_WIDTH) - MEDIA_GAP) / 2;
     const rows = Math.ceil(count / 2);
     return margin + rows * column + (rows - 1) * MEDIA_GAP;
@@ -213,7 +243,7 @@ export function conversationRowHeight(
         const activityHeight = conversationActivityHeight(entry.activity.kind);
         if (
             context.surface === "conversation" &&
-            conversationAgentActivityStartsGroup(entries, index) &&
+            conversationAgentRowStartsGroup(entries, index) &&
             activityHeight !== undefined
         )
             return ACTIVITY_LEAD_CHROME + activityHeight;
@@ -226,7 +256,13 @@ export function conversationRowHeight(
         if (entry.variant === "divider") return DIVIDER_HEIGHT;
         if (entry.level === "error") return undefined;
         const text = entry.title ? `${entry.title}: ${entry.text}` : entry.text;
-        return noticeRowHeight(text, width, "start");
+        /* A notice that opens its turn wears the same identity header a
+           tool-first row does, and therefore the same chrome above it. */
+        const lead =
+            context.surface === "conversation" && conversationAgentRowStartsGroup(entries, index)
+                ? ACTIVITY_LEAD_CHROME
+                : 0;
+        return lead + noticeRowHeight(text, width, "start");
     }
     if (entry.kind === "request") return undefined;
     const message = entry.message;
@@ -275,7 +311,7 @@ export function conversationRowHeight(
         height += messageMediaHeight(
             images.map((attachment) =>
                 attachment.kind === "inlineImage"
-                    ? {}
+                    ? { width: attachment.width, height: attachment.height }
                     : { width: attachment.file.width, height: attachment.file.height },
             ),
             width,

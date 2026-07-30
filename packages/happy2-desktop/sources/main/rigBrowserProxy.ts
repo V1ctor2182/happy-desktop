@@ -42,6 +42,11 @@ export function rigBrowserProxyCreate(
         void proxyRequest(options.openHttpProxy, request, response, sockets);
     });
     server.on("connect", (request, client, head) => {
+        // An upgraded socket has left the HTTP server's own error handling, so it
+        // must carry a handler from the first moment: Chromium abandoning a tunnel
+        // fails the very next write with EPIPE/ECONNRESET, and an unhandled 'error'
+        // here is an uncaught exception in the main process.
+        client.on("error", () => client.destroy());
         if (!proxyAuthorized(request, authorization)) {
             client.end(
                 'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="Happy"\r\nConnection: close\r\n\r\n',
@@ -86,6 +91,7 @@ async function proxyRequest(
     try {
         tunnel = await openHttpProxy();
         sockets.add(tunnel);
+        tunnel.on("error", () => tunnel?.destroy());
         tunnel.once("close", () => sockets.delete(tunnel!));
         const upstream = httpRequest(
             {
@@ -99,6 +105,7 @@ async function proxyRequest(
                     upstreamResponse.statusCode ?? 502,
                     forwardedHeaders(upstreamResponse.headers),
                 );
+                upstreamResponse.on("error", () => tunnel?.destroy());
                 upstreamResponse.pipe(response);
                 upstreamResponse.once("end", () => tunnel?.destroy());
             },
@@ -108,6 +115,8 @@ async function proxyRequest(
             response.end(error.message);
             tunnel?.destroy();
         });
+        response.on("error", () => tunnel?.destroy());
+        request.on("error", () => upstream.destroy());
         request.once("aborted", () => upstream.destroy());
         request.pipe(upstream);
     } catch (error) {
@@ -128,6 +137,7 @@ async function proxyConnect(
     try {
         tunnel = await openHttpProxy();
         sockets.add(tunnel);
+        tunnel.on("error", () => tunnel?.destroy());
         tunnel.once("close", () => sockets.delete(tunnel!));
         const nested = httpRequest({
             agent: singleSocketAgent(tunnel),
@@ -148,8 +158,7 @@ async function proxyConnect(
             client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
             if (proxyHead.length > 0) client.write(proxyHead);
             if (head.length > 0) upstream.write(head);
-            client.pipe(upstream);
-            upstream.pipe(client);
+            relay(client, upstream);
         });
         nested.once("response", (proxyResponse) => {
             proxyResponse.resume();
@@ -165,6 +174,19 @@ async function proxyConnect(
         tunnel?.destroy();
         client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
     }
+}
+
+/**
+ * Carries bytes both ways between a browser socket and its tunneled upstream and
+ * treats a failure on either side as an ordinary end of tunnel. Only one end of a
+ * CONNECT tunnel needs to disappear for the relayed write to the other to fail,
+ * which is normal browsing, not a proxy fault worth crashing over.
+ */
+function relay(first: Duplex, second: Duplex): void {
+    first.on("error", () => second.destroy());
+    second.on("error", () => first.destroy());
+    first.pipe(second);
+    second.pipe(first);
 }
 
 function proxyAuthorized(request: IncomingMessage, authorization: string): boolean {

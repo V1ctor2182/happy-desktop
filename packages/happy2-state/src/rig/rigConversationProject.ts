@@ -7,6 +7,7 @@ import type {
     ConversationMessageProjection,
     ConversationToolCall,
 } from "../conversation/conversationEntry.js";
+import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type {
     RigMessage,
@@ -196,6 +197,7 @@ function messageAttachments(message: RigMessage): readonly ConversationAttachmen
             id: `${message.id}:image:${index}`,
             mediaType: block.mediaType,
             data: block.data,
+            ...inlineImageSize(block.data),
             ...(block.detail !== undefined ? { detail: block.detail } : {}),
         });
     });
