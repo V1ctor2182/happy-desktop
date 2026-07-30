@@ -1,7 +1,9 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "./Icon";
 
 export type ComposerModelChoice = {
+    /** Optional heading this choice belongs to; consecutive choices sharing it are one group. */
+    group?: string;
     id: string;
     label: string;
 };
@@ -19,6 +21,19 @@ export type ComposerModelControlProps = {
 };
 
 type Panel = "effort" | "main" | "model";
+
+/** Breathing room kept between an opened choice list and the top of the window. */
+const VIEWPORT_GAP = 16;
+
+/**
+ * The choice list hangs upwards from the composer, so how tall it may grow is
+ * only knowable once it is placed: measure its anchored bottom edge and let it
+ * use every pixel above it except one gap, scrolling only past that.
+ */
+function fitToViewport(node: HTMLDivElement | null) {
+    if (node === null) return;
+    node.style.maxHeight = `${Math.max(96, node.getBoundingClientRect().bottom - VIEWPORT_GAP)}px`;
+}
 
 function labelFor(choices: readonly ComposerModelChoice[], value: string) {
     return choices.find((choice) => choice.id === value)?.label ?? value;
@@ -70,24 +85,43 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             aria-label={`Select ${next}`}
             className="happy2-composer-model-control__choices"
             data-happy2-ui="composer-model-control-choices"
+            ref={fitToViewport}
             role="dialog"
         >
-            <div className="happy2-composer-model-control__choices-label">
-                {next === "model" ? "Model" : "Effort"}
+            <div
+                className="happy2-composer-model-control__list"
+                data-happy2-ui="composer-model-control-list"
+            >
+                {choicesFor(next).map((choice, index) => {
+                    const group = choice.group;
+                    const startsGroup =
+                        group !== undefined && group !== choicesFor(next)[index - 1]?.group;
+                    return (
+                        <Fragment key={choice.id}>
+                            {startsGroup ? (
+                                <div
+                                    className="happy2-composer-model-control__group"
+                                    data-happy2-ui="composer-model-control-group"
+                                >
+                                    {group}
+                                </div>
+                            ) : null}
+                            <button
+                                aria-pressed={choice.id === valueFor(next)}
+                                className="happy2-composer-model-control__choice"
+                                data-happy2-ui="composer-model-control-choice"
+                                onClick={() => change(next, choice.id)}
+                                type="button"
+                            >
+                                <span>{choice.label}</span>
+                                {choice.id === valueFor(next) ? (
+                                    <Icon name="check" size={20} />
+                                ) : null}
+                            </button>
+                        </Fragment>
+                    );
+                })}
             </div>
-            {choicesFor(next).map((choice) => (
-                <button
-                    aria-pressed={choice.id === valueFor(next)}
-                    className="happy2-composer-model-control__choice"
-                    data-happy2-ui="composer-model-control-choice"
-                    key={choice.id}
-                    onClick={() => change(next, choice.id)}
-                    type="button"
-                >
-                    <span>{choice.label}</span>
-                    {choice.id === valueFor(next) ? <Icon name="check" size={20} /> : null}
-                </button>
-            ))}
         </div>
     );
     return (

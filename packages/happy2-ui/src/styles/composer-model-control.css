@@ -70,8 +70,7 @@
 }
 
 .happy2-composer-model-control__summary > :last-child,
-.happy2-composer-model-control__row-value,
-.happy2-composer-model-control__choices-label {
+.happy2-composer-model-control__row-value {
     color: var(--text-secondary);
 }
 
@@ -139,20 +138,48 @@
     display: flex;
     flex-direction: column;
     width: 240px;
+    /* The measured cap comes from the control itself; this is the fallback for a
+     * list rendered before it can be measured. */
+    max-height: calc(100vh - 16px);
     padding: 6px;
 }
 
-.happy2-composer-model-control__choices-label {
-    display: block;
-    height: 28px;
+.happy2-composer-model-control__list {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.happy2-composer-model-control__group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-width: 0;
+    height: 26px;
+    margin-top: 4px;
     padding: 0 10px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 28px;
+    overflow: hidden;
+    border-top: 1px solid var(--modal-border);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.happy2-composer-model-control__group:first-of-type {
+    margin-top: 0;
+    border-top: 0;
 }
 
 .happy2-composer-model-control__choice {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
     min-height: 36px;

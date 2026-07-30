@@ -66,13 +66,13 @@ const TOOLBAR_STAGES = [
     { contentWidth: 420, label: "420px content · compact audience" },
 ] as const;
 const MODEL_OPTIONS: readonly ComposerModelChoice[] = [
-    { id: "sol", label: "5.6 Sol" },
-    { id: "terra", label: "5.6 Terra" },
-    { id: "luna", label: "5.6 Luna" },
-    { id: "five-five", label: "5.5" },
-    { id: "five-four", label: "5.4" },
-    { id: "five-four-mini", label: "5.4 Mini" },
-    { id: "spark", label: "5.3 Codex Spark" },
+    { group: "Codex", id: "sol", label: "5.6 Sol" },
+    { group: "Codex", id: "terra", label: "5.6 Terra" },
+    { group: "Codex", id: "luna", label: "5.6 Luna" },
+    { group: "Codex", id: "spark", label: "5.3 Codex Spark" },
+    { group: "Claude", id: "sonnet", label: "Sonnet 5" },
+    { group: "Claude", id: "opus", label: "Opus 5 1M" },
+    { group: "Grok", id: "grok-build", label: "Grok Build" },
 ];
 const EFFORT_OPTIONS: readonly ComposerModelChoice[] = [
     { id: "low", label: "Low" },
