@@ -8,8 +8,9 @@ projects, the same sessions, the same screens, the same code paths. The only
 thing that differs is which machine the work happens on.
 
 To reach a remote Rig we need two things: a token and an endpoint (socket or
-HTTP). That is the whole connection contract. Today we can only connect over
-SSH; that is a limitation to remove, not the design.
+HTTP). That is the whole connection contract. SSH is how that pair is resolved:
+if you have access to the machine, you have access to its endpoint and token, so
+you name a machine the way you already reach it and Happy reads the rest itself.
 
 There is already a prototype that connects remote projects. It builds a
 parallel state that behaves like the local one. That parallel structure is the
@@ -35,7 +36,8 @@ boundary — it is transparent.
 
 ## How we know it is done
 
-- A remote Rig is configured with a token and an endpoint, with no SSH required.
+- A remote Rig is configured by naming the machine over SSH, and its token and
+  endpoint are resolved from that access rather than published or copied by hand.
 - Its projects appear in the sidebar next to local projects and open the same
   screens through the same state.
 - Connect and Disconnect work on demand, and a disconnected Rig degrades
