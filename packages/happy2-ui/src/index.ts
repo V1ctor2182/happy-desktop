@@ -349,6 +349,7 @@ export {
 } from "./DocumentSurface";
 export { DocumentDeleteDialog, type DocumentDeleteDialogProps } from "./DocumentDeleteDialog";
 export { DocumentsPage, type DocumentsPageProps } from "./pages/documents/DocumentsPage";
+export { NotesPage, type NotesPageProps } from "./pages/notes/NotesPage";
 export {
     DocumentDetailPane,
     type DocumentDetailPaneProps,

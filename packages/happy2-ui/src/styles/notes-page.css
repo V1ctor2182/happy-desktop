@@ -1,0 +1,137 @@
+.happy2-notes-page {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+}
+
+/* The list keeps a fixed lane so opening a note never re-lays out the index
+ * beside it; only the pane on the right changes. */
+.happy2-notes-page__list-column {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 280px;
+    min-height: 0;
+    border-right: 1px solid var(--divider);
+}
+
+.happy2-notes-page__scroll {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.happy2-notes-page__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+}
+
+.happy2-notes-page__item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 6px;
+    border-radius: var(--happy2-radius-md);
+}
+
+.happy2-notes-page__item:hover,
+.happy2-notes-page__item:focus-within {
+    background: var(--surface-ripple);
+}
+
+.happy2-notes-page__item[data-selected="true"] {
+    background: var(--surface-selected, var(--surface-ripple));
+}
+
+.happy2-notes-page__row {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--happy2-radius-md);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy2-notes-page__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy2-notes-page__title {
+    font: 500 13px/1.4 var(--happy2-font-ui);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-notes-page__meta {
+    font: 400 12px/1.4 var(--happy2-font-ui);
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-notes-page__row-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+}
+
+.happy2-notes-page__item:hover .happy2-notes-page__row-delete,
+.happy2-notes-page__item:focus-within .happy2-notes-page__row-delete {
+    opacity: 1;
+}
+
+.happy2-notes-page__row-delete:hover {
+    background: var(--surface-ripple);
+    color: var(--text-destructive);
+}
+
+.happy2-notes-page__row-delete:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy2-notes-page__pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy2-notes-page__status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    padding: 24px;
+    font: 400 13px/1.5 var(--happy2-font-ui);
+    color: var(--text-secondary);
+}
+
+.happy2-notes-page__status[data-happy2-tone="danger"] {
+    color: var(--text-destructive);
+}

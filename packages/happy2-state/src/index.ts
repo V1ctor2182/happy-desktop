@@ -370,6 +370,25 @@ export {
     rigOwnerAuthor,
 } from "./rig/rigConversationProject.js";
 export { rigConversationAttachTurnTraces } from "./rig/rigConversationTurnTrace.js";
+export { notesStoreCreate, type NotesSnapshot, type NotesStore } from "./notes/notesStore.js";
+export {
+    noteStoreCreate,
+    type NoteSnapshot,
+    type NoteStore,
+    type NoteStoreDeps,
+} from "./notes/noteStore.js";
+export {
+    notesSessionStoreCreate,
+    type NotesSessionSnapshot,
+    type NotesSessionStore,
+} from "./notes/notesSessionStore.js";
+export type {
+    NoteApplyRequest,
+    NoteContent,
+    NoteSaveState,
+    NoteSummary,
+    NotesTransport,
+} from "./notes/notesTypes.js";
 export {
     rigModelStoreCreate,
     type RigModelStore,

@@ -27,6 +27,9 @@ export default defineConfig({
                 "electron",
                 "electron-updater",
                 "ws",
+                // Kept out of the bundle and shipped as a runtime dependency, so
+                // the notes collection merges with the same Yjs the editor uses.
+                "yjs",
             ],
             output: {
                 entryFileNames: "[name].js",

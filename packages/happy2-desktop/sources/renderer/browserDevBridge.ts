@@ -1,4 +1,7 @@
 import type {
+    DesktopNoteApplyRequest,
+    DesktopNoteContent,
+    DesktopNoteSummary,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     HappyDesktopBridge,
@@ -35,6 +38,16 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         browserOpenSubscribe: () => () => undefined,
         directoryPick: async () => undefined,
         applicationMenuOpen: async () => undefined,
+        noteApply: (apply: DesktopNoteApplyRequest) =>
+            request<DesktopNoteSummary>("noteApply", apply),
+        noteCreate: (title) => request<DesktopNoteContent>("noteCreate", title),
+        noteRead: (id) => request<DesktopNoteContent>("noteRead", id),
+        noteRemove: (id) => request<void>("noteRemove", id),
+        noteRename: (id, title) => request<DesktopNoteSummary>("noteRename", { id, title }),
+        notesList: () => request<readonly DesktopNoteSummary[]>("notesList"),
+        // The development bridge has no push channel, so a change made outside
+        // this window is picked up the next time the surface reads.
+        notesSubscribe: () => () => undefined,
         remoteRigAdd: async () => undefined,
         remoteRigConnect: async () => undefined,
         remoteRigDisconnect: async () => undefined,

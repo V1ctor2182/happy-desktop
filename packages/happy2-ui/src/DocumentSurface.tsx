@@ -45,6 +45,8 @@ export interface DocumentSurfaceProps {
     readonly commentUsersResolve?: (
         userIds: readonly string[],
     ) => Promise<readonly DocumentEditorCommentUser[]>;
+    /** The document's text after each change, for a host that keeps a readable copy. */
+    readonly onMarkdown?: (markdown: string) => void;
 }
 
 const SAVE_LABELS = {
@@ -82,6 +84,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
                 commentUserId={props.commentUserId}
                 commentUsersResolve={props.commentUsersResolve}
                 editable={props.editable}
+                onMarkdown={props.onMarkdown}
                 onPresence={props.onPresence}
                 presence={props.presence}
                 theme={props.theme}

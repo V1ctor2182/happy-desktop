@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
     desktopIpc,
+    type DesktopNoteApplyRequest,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -18,6 +19,18 @@ const bridge: HappyDesktopBridge = {
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
+    noteApply: (request: DesktopNoteApplyRequest) =>
+        ipcRenderer.invoke(desktopIpc.noteApply, request),
+    noteCreate: (title) => ipcRenderer.invoke(desktopIpc.noteCreate, title),
+    noteRead: (id) => ipcRenderer.invoke(desktopIpc.noteRead, id),
+    noteRemove: (id) => ipcRenderer.invoke(desktopIpc.noteRemove, id),
+    noteRename: (id, title) => ipcRenderer.invoke(desktopIpc.noteRename, id, title),
+    notesList: () => ipcRenderer.invoke(desktopIpc.notesList),
+    notesSubscribe(listener: () => void) {
+        const receive = () => listener();
+        ipcRenderer.on(desktopIpc.notesChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.notesChanged, receive);
+    },
     remoteRigAdd: (request) => ipcRenderer.invoke(desktopIpc.remoteRigAdd, request),
     remoteRigConnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigConnect, id),
     remoteRigDisconnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigDisconnect, id),

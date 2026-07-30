@@ -138,10 +138,50 @@ export type RigInstallTerminalEvent =
           readonly message?: string;
       };
 
+/**
+ * One note in this machine's collection. A note belongs to the machine rather
+ * than to a Rig connection, so it travels over the desktop bridge instead of a
+ * Rig's HTTP proxy and stays available whichever Rig the window is looking at.
+ */
+export interface DesktopNoteSummary {
+    readonly id: string;
+    readonly title: string;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+    readonly sequence: number;
+    readonly excerpt: string;
+}
+
+export interface DesktopNoteContent {
+    readonly note: DesktopNoteSummary;
+    /** Complete collaborative state as one base64 Yjs update. */
+    readonly state: string;
+}
+
+export interface DesktopNoteApplyRequest {
+    readonly id: string;
+    readonly updates: readonly string[];
+    /**
+     * The author's normalized Markdown after these updates. The editor's schema
+     * lives with the editor, so the writer derives this and the main process
+     * stores it beside the note without interpreting the collaborative bytes.
+     */
+    readonly markdown?: string;
+    readonly title?: string;
+}
+
 export interface HappyDesktopBridge {
     browserProxyApply(sessionId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     directoryPick(): Promise<string | undefined>;
+    noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
+    noteCreate(title?: string): Promise<DesktopNoteContent>;
+    noteRead(id: string): Promise<DesktopNoteContent>;
+    noteRemove(id: string): Promise<void>;
+    noteRename(id: string, title: string): Promise<DesktopNoteSummary>;
+    notesList(): Promise<readonly DesktopNoteSummary[]>;
+    /** Fires whenever the collection changes, including edits made outside Happy. */
+    notesSubscribe(listener: () => void): () => void;
     applicationMenuOpen(): Promise<void>;
     remoteRigAdd(request: RemoteRigAddRequest): Promise<void>;
     remoteRigConnect(id: string): Promise<void>;
@@ -171,6 +211,13 @@ export const desktopIpc = {
     browserOpenRequested: "happy2:browser:open-requested",
     directoryPick: "happy2:directory:pick",
     applicationMenuOpen: "happy2:application-menu:open",
+    noteApply: "happy2:notes:apply",
+    noteCreate: "happy2:notes:create",
+    noteRead: "happy2:notes:read",
+    noteRemove: "happy2:notes:remove",
+    noteRename: "happy2:notes:rename",
+    notesChanged: "happy2:notes:changed",
+    notesList: "happy2:notes:list",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
     remoteRigConnect: "happy2:remote-rig:connect",

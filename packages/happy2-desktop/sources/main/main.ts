@@ -33,6 +33,13 @@ import {
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
 import { localRigConnectorCreate } from "./localRig";
+import { NotesStore } from "./notesStore";
+import {
+    noteApplyRequestValidate,
+    noteIdValidate,
+    noteTitleOptionalValidate,
+    noteTitleValidate,
+} from "./notesIpcValidation";
 import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
@@ -74,6 +81,7 @@ app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_pro
 let runtime: DesktopRuntime;
 let rigInstallManager: RigInstallTerminalManager;
 let remoteRigManager: RemoteRigManager;
+let notesStore: NotesStore;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
@@ -457,6 +465,15 @@ void app
             if (window && !window.isDestroyed())
                 window.webContents.send(desktopIpc.remoteRigChanged, rigs);
         });
+        // Notes live in the user's home rather than in this app's private data
+        // directory: the Markdown beside each note is meant to be found by an
+        // agent working on this machine, and an application-support path is not
+        // somewhere anyone would look.
+        notesStore = new NotesStore();
+        notesStore.subscribe(() => {
+            const window = windowLifecycle.get();
+            if (window && !window.isDestroyed()) window.webContents.send(desktopIpc.notesChanged);
+        });
         rigInstallManager = new RigInstallTerminalManager(connector, {
             verified: () => void runtime.retry().catch(() => undefined),
         });
@@ -515,6 +532,24 @@ void app
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
+        ipcMain.handle(desktopIpc.notesList, () => notesStore.list());
+        ipcMain.handle(desktopIpc.noteCreate, (_event, title: unknown) => {
+            const validated = noteTitleOptionalValidate(title);
+            return notesStore.create(validated === undefined ? {} : { title: validated });
+        });
+        ipcMain.handle(desktopIpc.noteRead, (_event, id: unknown) =>
+            notesStore.read(noteIdValidate(id)),
+        );
+        ipcMain.handle(desktopIpc.noteApply, (_event, request: unknown) => {
+            const validated = noteApplyRequestValidate(request);
+            return notesStore.applyUpdates(validated.id, validated);
+        });
+        ipcMain.handle(desktopIpc.noteRename, (_event, id: unknown, title: unknown) =>
+            notesStore.rename(noteIdValidate(id), noteTitleValidate(title)),
+        );
+        ipcMain.handle(desktopIpc.noteRemove, (_event, id: unknown) =>
+            notesStore.remove(noteIdValidate(id)),
+        );
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {

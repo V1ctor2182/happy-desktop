@@ -17,6 +17,8 @@ import type {
     RigGroupId,
     RigModelStore,
     RigModelSelection,
+    NotesSessionStore,
+    NoteSummary,
     RigPanelSnapshot,
     RigPanelStore,
     RigPanelTabId,
@@ -55,6 +57,7 @@ import {
     Checkbox,
     Modal,
     ModalOverlay,
+    NotesPage,
     RigActivityPanel,
     RigConnectionStatus,
     RigControlMenu,
@@ -204,6 +207,17 @@ export interface AppRigViewProps {
     ): void;
     /** Opens the local settings destination from the pinned sidebar footer. */
     onSettingsOpen(): void;
+    /**
+     * This machine's notes. They belong to the window rather than to any Rig —
+     * they are files in the reader's own home directory — so they arrive here as
+     * one store beside the directory of Rigs instead of inside a Rig's session.
+     */
+    notes?: NotesSessionStore;
+    /** Whether the URL addresses the notes surface, and which note in it. */
+    notesOpen?: boolean;
+    noteId?: string;
+    /** Addresses the notes surface, with a note or without one. */
+    onNotesOpen?(noteId?: string): void;
 }
 
 /**
@@ -484,6 +498,13 @@ function rigStatusLabel(rig: AppRigEntry): string {
 const CONNECT_REMOTE_ITEM = "connect-remote";
 
 /**
+ * The pinned row that opens this machine's notes. It sits with the other pinned
+ * rows rather than under a project because a note belongs to the reader, not to
+ * one repository or one machine's daemon.
+ */
+const NOTES_ITEM = "notes";
+
+/**
  * The workspace window. It owns no product state: it subscribes to the directory
  * of Rigs, renders their projects as one sidebar, and hands the addressed Rig's
  * own stores to the surface below. A Rig that is still connecting, or one the
@@ -529,8 +550,27 @@ export function AppRigView(props: AppRigViewProps) {
                     kind: "action",
                     label: "Connect remote",
                 },
+                // Notes follow the two rows that give the window somewhere to
+                // work, because they are the third thing this window holds that
+                // is not a session: the reader's own writing on this machine.
+                ...(props.notes
+                    ? [
+                          {
+                              icon: "doc" as const,
+                              id: NOTES_ITEM,
+                              kind: "action" as const,
+                              label: "Notes",
+                          },
+                      ]
+                    : []),
             ]}
-            activeItemId={props.groupId ? rigItemId(props.rigId, props.groupId) : ""}
+            activeItemId={
+                props.notesOpen
+                    ? NOTES_ITEM
+                    : props.groupId
+                      ? rigItemId(props.rigId, props.groupId)
+                      : ""
+            }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
             // row becomes the window's drag lane. Full screen takes the lights
@@ -625,6 +665,10 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onSettingsOpen();
                     return;
                 }
+                if (id === NOTES_ITEM) {
+                    props.onNotesOpen?.();
+                    return;
+                }
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -673,6 +717,26 @@ export function AppRigView(props: AppRigViewProps) {
             sections={rigSections(directory)}
         />
     );
+
+    // The notes surface is the window's, not a Rig's, so it is shown whatever the
+    // addressed machine is doing — including while none of them is reachable.
+    if (props.notesOpen && props.notes)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <RigNotesSurface
+                    noteId={props.noteId}
+                    notes={props.notes}
+                    onOpen={(id) => props.onNotesOpen?.(id)}
+                    theme={appearance.appearance}
+                />
+            </AppShell>
+        );
 
     if (active?.session)
         return (
@@ -724,6 +788,43 @@ export function AppRigView(props: AppRigViewProps) {
                 title={active ? active.label : "No machine"}
             />
         </AppShell>
+    );
+}
+
+/**
+ * This machine's notes inside the window's shell. It subscribes to the notes
+ * session alone — never to a Rig — because a note is a file in the reader's home
+ * directory and outlives every daemon connection in this window. Creating a note
+ * addresses it as soon as it exists, so writing starts in the editor rather than
+ * in the list.
+ */
+function RigNotesSurface(props: {
+    noteId?: string;
+    notes: NotesSessionStore;
+    onOpen(noteId?: string): void;
+    theme: "dark" | "light";
+}) {
+    const session = useSyncExternalStore(props.notes.subscribe, props.notes.get, props.notes.get);
+    return (
+        <NotesPage
+            note={session.note}
+            notes={session.notes}
+            onCreate={() => {
+                void props.notes
+                    .noteCreate()
+                    .then((note: NoteSummary) => props.onOpen(note.id))
+                    .catch(() => undefined);
+            }}
+            onDelete={(note) => {
+                // The deleted note may be the addressed one, so the URL stops
+                // naming it: only this surface addresses, never the store.
+                if (note.id === props.noteId) props.onOpen(undefined);
+                void props.notes.noteRemove(note.id).catch(() => undefined);
+            }}
+            onOpen={(id) => props.onOpen(id)}
+            selectedId={session.noteId}
+            theme={props.theme}
+        />
     );
 }
 

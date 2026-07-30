@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-router";
 import type {
     AppearanceStore,
+    NotesSessionStore,
     RigGroupId,
     RigSessionId,
     RigSessionLocation,
@@ -42,6 +43,12 @@ export interface RigRouterContext {
     readonly browserContent?: BrowserContentRenderer;
     readonly rigs: AppRigDirectoryStore;
     readonly appearance: AppearanceStore;
+    /**
+     * This machine's notes, absent in a host that stores none. They are the
+     * window's, not a Rig's: the files live in the reader's home directory, so
+     * they outlive every connection this window makes.
+     */
+    readonly notes?: NotesSessionStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: RigSettingsStore;
     /**
@@ -154,6 +161,30 @@ const chatRoute = createRoute({
     path: "/chats/$rigId/$groupId/$chatId",
 });
 
+/**
+ * This machine's notes, addressed without a Rig: they are files in the reader's
+ * home directory, so no machine appears in their address. The note itself is a
+ * path segment for the same reason a conversation is — the window's back and
+ * forward move between notes, and the open one survives a reload.
+ */
+const notesIndexRoute = createRoute({
+    component: RigNotesRoute,
+    getParentRoute: () => rootRoute,
+    loader: ({ context }) => {
+        context.notes?.notesOpen();
+    },
+    path: "/notes",
+});
+
+const noteRoute = createRoute({
+    component: RigNotesRoute,
+    getParentRoute: () => rootRoute,
+    loader: ({ context, params }) => {
+        context.notes?.notesOpen(params.noteId);
+    },
+    path: "/notes/$noteId",
+});
+
 const settingsIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/settings",
@@ -189,11 +220,22 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     chatsRootRoute,
     workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
+    notesIndexRoute,
+    noteRoute,
     settingsIndexRoute,
     settingsSectionRoute,
 ]);
 
-function RigWorkspaceLayout() {
+/**
+ * The notes address renders the same window as a conversation does: the shell and
+ * its sidebar stay, and only the content area changes, so opening notes is not
+ * leaving the workspace.
+ */
+function RigNotesRoute() {
+    return <RigWorkspaceLayout notes />;
+}
+
+function RigWorkspaceLayout(props: { notes?: boolean } = {}) {
     // The router hooks resolve their types through the single global `Register`
     // declaration, which names the cloud router. Route definitions above are
     // still typed by `RigRouterContext` (loaders read it directly); only this
@@ -213,6 +255,7 @@ function RigWorkspaceLayout() {
         rigId?: string;
         groupId?: string;
         chatId?: string;
+        noteId?: string;
     };
     return (
         <AppRigView
@@ -220,6 +263,16 @@ function RigWorkspaceLayout() {
             browserContent={context.browserContent}
             chatId={params.chatId}
             groupId={params.groupId}
+            noteId={params.noteId}
+            notes={context.notes}
+            notesOpen={props.notes}
+            onNotesOpen={(noteId) =>
+                void navigate(
+                    noteId === undefined
+                        ? { to: "/notes" }
+                        : { params: { noteId }, to: "/notes/$noteId" },
+                )
+            }
             onUpdateApply={context.onUpdateApply}
             platform={context.platform}
             rigId={params.rigId ?? rigDefaultId(context)}

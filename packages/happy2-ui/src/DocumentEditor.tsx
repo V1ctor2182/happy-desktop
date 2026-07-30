@@ -22,6 +22,13 @@ export const documentThreadsName = "threads";
 
 const remotePresenceOrigin = "happy2-remote-presence";
 
+/**
+ * Pause after a change before the Markdown projection is derived again. Shorter
+ * than any host's own save pause, so the readable copy is ready before the write
+ * that carries it.
+ */
+const MARKDOWN_DERIVE_PAUSE_MS = 200;
+
 export interface DocumentEditorUser {
     readonly name: string;
     readonly color: string;
@@ -72,6 +79,14 @@ export interface DocumentEditorProps {
     commentUsersResolve?: (
         userIds: readonly string[],
     ) => Promise<readonly DocumentEditorCommentUser[]>;
+    /**
+     * The document's text after each change, as normalized Markdown.
+     *
+     * The collaborative state stays the authority; this is a projection of it.
+     * But only the editor knows its own schema, so a host that keeps a readable
+     * copy beside the document gets it from here rather than parsing Yjs itself.
+     */
+    onMarkdown?: (markdown: string) => void;
     "data-testid"?: string;
 }
 
@@ -158,6 +173,33 @@ export function DocumentEditor(props: DocumentEditorProps) {
             awareness.destroy();
         };
     }, [awareness]);
+
+    const markdownEmit = useEffectEvent((markdown: string) => props.onMarkdown?.(markdown));
+    const markdownWanted = props.onMarkdown !== undefined;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the editor's change stream is an imperative resource that must be subscribed after commit and unsubscribed with this document
+    useLayoutEffect(() => {
+        if (!markdownWanted) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        // Deriving Markdown walks the whole document, so it runs on a short pause
+        // rather than per keystroke: the projection is always read from the
+        // document as it stands when the pause ends, so coalescing loses nothing.
+        const derive = () => {
+            timer = undefined;
+            markdownEmit(editor.blocksToMarkdownLossy());
+        };
+        // Every change, local or remote: the projection describes the document,
+        // not who last touched it, so a remote edit must update it too.
+        const unsubscribe = editor.onChange(() => {
+            if (timer === undefined) timer = setTimeout(derive, MARKDOWN_DERIVE_PAUSE_MS);
+        });
+        return () => {
+            unsubscribe?.();
+            // Closing the document must not drop the last words written in it.
+            if (timer === undefined) return;
+            clearTimeout(timer);
+            derive();
+        };
+    }, [editor, markdownWanted]);
 
     const appliedRef = useRef(new Map<string, DocumentEditorPresence>());
     // eslint-disable-next-line happy2-react/no-layout-effect -- remote presence payloads must be applied to the live Yjs Awareness instance after the matching document render commits

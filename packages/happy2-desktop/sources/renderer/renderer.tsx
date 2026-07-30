@@ -12,8 +12,10 @@ import {
 } from "happy2-app";
 import {
     appearanceStoreCreate,
+    notesSessionStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
+    type NotesSessionStore,
     type RigSettingsStore,
     type RigWindowStore,
 } from "happy2-state";
@@ -124,6 +126,7 @@ function RigBoundary(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
+    notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
     rigs: RigDirectoryStore;
@@ -147,6 +150,7 @@ function RigBoundary(props: {
                           update: update.snapshot,
                       }
                     : {}),
+                notes: props.notes,
                 platform: props.platform,
                 rigs: props.rigs,
                 settings: props.settings,
@@ -161,6 +165,7 @@ function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
     bridge: HappyDesktopBridge;
+    notes: NotesSessionStore;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
     rigs: RigDirectoryStore;
@@ -259,6 +264,7 @@ function DesktopRenderer(props: {
             appearance={props.appearance}
             bridge={props.bridge}
             browserContent={props.browserContent}
+            notes={props.notes}
             platform={props.platform}
             router={props.rigRouter}
             rigs={props.rigs}
@@ -286,6 +292,10 @@ if (bridge) {
     // The workspace's own preferences (default model, effort, permissions) belong
     // to the window as well: they outlive whichever daemon connection is current.
     const settings = rigSettingsStoreCreate();
+    // The reader's notes are files in their home directory, so they belong to the
+    // window rather than to any Rig: the main process stores them, and this store
+    // outlives every daemon connection the window makes.
+    const notes = notesSessionStoreCreate(bridge);
     // Every Rig in this window, each with its own product stores. The router is
     // told to resolve its address again whenever the set of connected Rigs
     // changes, so a machine that connects after the URL already named it opens
@@ -311,6 +321,7 @@ if (bridge) {
                 appearance={appearance}
                 browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                 bridge={bridge}
+                notes={notes}
                 // Only the Electron window hides its title bar; the browser
                 // development server renders the same tree with web chrome.
                 platform={browserLocal ? "web" : "desktop"}
