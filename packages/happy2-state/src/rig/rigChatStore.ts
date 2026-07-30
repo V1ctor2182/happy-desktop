@@ -714,6 +714,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 ? ephemeral
                 : transcriptEphemeralProject(transcriptSession, ephemeral)
         ).filter((entry) => entry.kind !== "agentActivity" || entry.activity.kind !== "shell");
+        // Also the transcript's source of sender names: background-work news
+        // quotes the description of the subagent that sent it.
+        const subagents =
+            transcriptSession === undefined
+                ? (session?.subagents ?? [])
+                : transcriptSubagentsProject(transcriptSession);
         const built =
             transcriptElements === undefined
                 ? rigConversationAttachTurnTraces(
@@ -748,6 +754,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                       ephemeral: projectedEphemeral,
                       pendingUserInputs,
                       expandedGroupIds: expandedTurnIds,
+                      subagents,
                   });
         const withHistoryState: readonly ConversationEntry[] =
             transcriptSession?.loadingMore === true
@@ -841,10 +848,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 transcriptSession === undefined
                     ? session?.goal
                     : transcriptGoalProject(transcriptSession),
-            subagents:
-                transcriptSession === undefined
-                    ? (session?.subagents ?? [])
-                    : transcriptSubagentsProject(transcriptSession),
+            subagents,
             backgroundProcesses:
                 transcriptSession === undefined
                     ? (session?.backgroundProcesses ?? [])

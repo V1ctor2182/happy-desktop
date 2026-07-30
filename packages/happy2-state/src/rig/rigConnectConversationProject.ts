@@ -8,8 +8,9 @@ import type {
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
-import type { RigUserInputRequest } from "./rigTypes.js";
-import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import type { RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
+import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 
 export interface RigConnectConversationInput {
     readonly elements: readonly ChatElement[];
@@ -18,6 +19,50 @@ export interface RigConnectConversationInput {
     readonly ephemeral: readonly ConversationEntry[];
     readonly pendingUserInputs: readonly RigUserInputRequest[];
     readonly expandedGroupIds: ReadonlySet<string>;
+    /** Named senders for background-work news, matched by the description it quotes. */
+    readonly subagents: readonly RigSubagentSummary[];
+}
+
+/**
+ * Recognizes background-work news by the sentence Rig sends. The transcript marks
+ * an element as a notification only while its live submission event is on the
+ * wire, so a session whose history is reloaded from scratch arrives with that
+ * marker gone and the wording is the only durable evidence left. Every outcome is
+ * spelled out and the metrics tail is quote-free, so an ordinary typed message
+ * cannot fall into it.
+ */
+const backgroundWorkNotice =
+    /^Background work "([\s\S]+)" ((?:completed|failed|was stopped|was suspended|stopped when the local server restarted)[^"]*)$/;
+
+/**
+ * Names the sender of a notification injected into the user slot and rewrites the
+ * line it will now be attributed to. Background-work news is the only such
+ * notification that says where it came from: it quotes the subagent's
+ * description, which identifies that child session while it is still listed. The
+ * reader gets one row per named subagent instead of a run of identical
+ * "Background work" lines, so the quote is dropped from the body its author line
+ * now carries. Anything else keeps the unattributed inbound identity and its text.
+ */
+function notificationProject(
+    text: string,
+    subagents: readonly RigSubagentSummary[],
+): { readonly author: ConversationAuthor; readonly text: string } {
+    const notice = backgroundWorkNotice.exec(text);
+    if (!notice) return { author: rigInboundAuthor, text };
+    const description = notice[1]!;
+    const outcome = notice[2]!;
+    const subagent = subagents.find((candidate) => candidate.description === description);
+    return {
+        author: {
+            ...rigInboundAuthor,
+            // A pruned subagent still names itself in the text it sent, so the
+            // quote stands in as identity when the child session is gone.
+            id: `${rigInboundAuthor.id}:${subagent?.id ?? description}`,
+            displayName: description,
+            username: subagent?.taskName ?? rigInboundAuthor.username,
+        },
+        text: `Background work ${outcome}`,
+    };
 }
 
 /**
@@ -68,7 +113,14 @@ function rigConnectGroupProject(
     for (const element of elements) {
         const sequence = sequenceOf(entries.length);
         switch (element.kind) {
-            case "user_message":
+            case "user_message": {
+                // A notification uses the user slot but nobody typed it: it is
+                // subagent or workflow news arriving in the session, so it reads
+                // as incoming from its sender rather than as the reader's turn.
+                const notification =
+                    element.source === "notification" || backgroundWorkNotice.test(element.text)
+                        ? notificationProject(element.text, input.subagents)
+                        : undefined;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -77,9 +129,9 @@ function rigConnectGroupProject(
                         id: element.messageId,
                         sessionId: input.sessionId,
                         sequence,
-                        text: element.text,
+                        text: notification?.text ?? element.text,
                         createdAt: element.createdAt,
-                        author: rigOwnerAuthor,
+                        author: notification?.author ?? rigOwnerAuthor,
                         attachments: (element.attachments ?? []).map((attachment, index) => ({
                             kind: "inlineImage" as const,
                             id: `${element.id}:image:${String(index)}`,
@@ -90,6 +142,7 @@ function rigConnectGroupProject(
                     }),
                 });
                 break;
+            }
             case "system_notice":
                 entries.push({
                     kind: "notice",

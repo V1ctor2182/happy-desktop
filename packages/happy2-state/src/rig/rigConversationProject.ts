@@ -28,6 +28,21 @@ export const rigOwnerAuthor: ConversationAuthor = {
     kind: "human",
 };
 
+/**
+ * Stable identity of a message that lands in the user slot without the owner
+ * writing it: background-work news and another agent's reply reach a session
+ * through the same steering channel a person types into. It is deliberately not
+ * the owner, so the transcript reads it as something that arrived rather than as
+ * the reader's own outgoing turn, and it stays person-shaped so it keeps the
+ * incoming bubble instead of taking this session's own agent treatment.
+ */
+export const rigInboundAuthor: ConversationAuthor = {
+    id: "rig:inbound",
+    displayName: "Agent",
+    username: "agent",
+    kind: "human",
+};
+
 /** Stable identity of the local agent; a local session has exactly one. */
 export const rigAgentAuthor: ConversationAuthor = {
     id: "rig:agent",
