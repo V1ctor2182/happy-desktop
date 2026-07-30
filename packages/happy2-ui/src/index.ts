@@ -167,6 +167,7 @@ export {
     type FileTreeGitStatus,
     type FileTreeNode,
     type FileTreeProps,
+    type FileTreeSelectModifiers,
 } from "./FileTree";
 export { FilePanel, type FilePanelProps } from "./FilePanel";
 export {
@@ -243,7 +244,12 @@ export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnect
 export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
-export { fileTreeBuild, fileTreeFlatten, type FileTreeBuildEntry } from "./fileTreeBuild";
+export {
+    fileTreeBuild,
+    fileTreeFlatten,
+    fileTreeVisibleFiles,
+    type FileTreeBuildEntry,
+} from "./fileTreeBuild";
 export {
     ConversationStatus,
     ConversationView,

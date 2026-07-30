@@ -48,6 +48,15 @@
     background: var(--surface-selected);
 }
 
+/* Picked as part of a set, which is a different fact from being the row that is
+   open: both can be true of the same row at once. The one being read owns the
+   selected fill, so a picked row is marked along its leading edge in the
+   interactive colour rather than by a second, competing fill. */
+.happy2-file-tree__row[data-picked] {
+    background: var(--surface-selected);
+    box-shadow: inset 2px 0 0 0 var(--text-link);
+}
+
 /* ---- Disclosure ------------------------------------------------------- */
 
 .happy2-file-tree__disc {

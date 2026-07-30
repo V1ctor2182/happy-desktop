@@ -74,3 +74,51 @@ body {
 .happy2-rig-create__keep-open {
     margin-right: auto;
 }
+
+/*
+ * The revert confirmation body: what happens, then the files it happens to.
+ * The list is bounded and scrolls, because a selection of forty files is
+ * exactly the case where reading them before agreeing matters most.
+ */
+.happy2-rig-revert {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.happy2-rig-revert__text {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-rig-revert__paths {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 180px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.happy2-rig-revert__path {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy2-rig-revert__error {
+    margin: 0;
+    color: var(--status-error);
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+}

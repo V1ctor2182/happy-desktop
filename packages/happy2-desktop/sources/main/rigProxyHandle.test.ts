@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -112,6 +112,7 @@ function clientStub(overrides: Partial<RigProxyClient> = {}): RigProxyClient {
                 {
                     id: "session-1",
                     cwd: `${HOME}/work`,
+                    projectId: "project-1",
                     providerId: "openai",
                     modelId: "gpt-x",
                     permissionMode: "auto",
@@ -303,9 +304,20 @@ describe("rigProxyHandle", () => {
                 workspaces: [],
                 gitSnapshots: [],
             }));
+            const readFileFromSession = vi.fn(async (sessionId: string, path: string) => {
+                expect(sessionId).toBe("session-1");
+                const content = await readFile(join(root, path));
+                return {
+                    content: content.toString("base64"),
+                    hash: "current-hash",
+                };
+            });
             const captured = fakeResponse();
             await handle(
-                clientStub({ listCatalog } as unknown as Partial<RigProxyClient>),
+                clientStub({
+                    listCatalog,
+                    readFile: readFileFromSession,
+                } as unknown as Partial<RigProxyClient>),
                 "GET",
                 "/changed-file",
                 getRequest(),
@@ -319,6 +331,7 @@ describe("rigProxyHandle", () => {
                 oldPath: "src/answer.ts",
                 oldContent: "export const answer = 42;\n",
                 newContent: "export const answer = 43;\nexport const ready = true;\n",
+                hash: "current-hash",
             });
         } finally {
             await rm(root, { recursive: true, force: true });

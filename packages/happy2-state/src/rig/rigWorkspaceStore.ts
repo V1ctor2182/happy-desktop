@@ -238,6 +238,14 @@ export interface RigWorkspaceSnapshot {
     /** Directories the reader has opened in the tree, by full path. */
     readonly fileTreeExpanded: ReadonlySet<string>;
     /**
+     * Changed files picked for one act on all of them at once. A listing is
+     * where a reader decides that four of these eleven files were a mistake, so
+     * the decision is held here rather than being re-made file by file.
+     */
+    readonly fileSelection: ReadonlySet<string>;
+    /** The revert confirmation, while it is open. */
+    readonly fileRevert?: RigFileRevertSnapshot;
+    /**
      * Every file in the open group's checkout, once it has been asked for.
      * Absent until then, which is what "All files" is loading.
      */
@@ -279,6 +287,21 @@ export interface RigCreateGroupOption {
     readonly label: string;
     /** True for a worktree, which is listed under the project it belongs to. */
     readonly nested: boolean;
+}
+
+/**
+ * A revert the reader has asked for but not yet confirmed. Discarding work is
+ * the one act in this panel that cannot be undone by doing it again, so the
+ * paths are captured when the dialog opens: what is confirmed is what was read,
+ * even if the selection or the checkout moves underneath it.
+ */
+export interface RigFileRevertSnapshot {
+    /** The paths that will be returned to what HEAD holds. */
+    readonly paths: readonly string[];
+    /** True while the checkout is being changed; the dialog stays up and inert. */
+    readonly submitting: boolean;
+    /** A failed revert, said in the dialog rather than thrown away. */
+    readonly error?: string;
 }
 
 /** Which files the panel lists. */
@@ -429,6 +452,33 @@ export interface RigWorkspaceStore {
     fileLayoutUpdate(layout: RigFileLayout): void;
     /** Opens or closes one directory in the tree. */
     fileTreeToggle(path: string): void;
+    /**
+     * Picks one changed file, replacing whatever was picked before, and makes it
+     * the row a later range extends from. This is the plain click, so a listing
+     * with nothing chosen behaves exactly as it always did.
+     */
+    fileSelectionReplace(path: string): void;
+    /** Adds or removes one changed file, leaving the rest of the selection alone. */
+    fileSelectionToggle(path: string): void;
+    /**
+     * Extends the selection from the row it was anchored on through `path`.
+     * `orderedPaths` is the listing in the order it is drawn, because which
+     * files lie between two rows is a question only the visible arrangement can
+     * answer — a tree and a flat list disagree about it.
+     */
+    fileSelectionExtend(path: string, orderedPaths: readonly string[]): void;
+    /** Drops the whole selection. */
+    fileSelectionClear(): void;
+    /** Asks to discard the selected files' changes, opening the confirmation. */
+    fileRevertPromptOpen(): void;
+    /** Closes that confirmation without touching the checkout. */
+    fileRevertPromptClose(): void;
+    /**
+     * Discards the confirmed files' working-tree changes. The listing is not
+     * updated from here: the checkout's Git state is reported by the daemon, so
+     * the panel learns what actually happened rather than what was asked for.
+     */
+    fileRevertConfirm(groupId: RigGroupId): Promise<void>;
     /** Records an unsaved edit to one file's working-tree text. */
     fileDraftUpdate(tabId: string, draft: string): void;
     /** Discards one file's unsaved edit and returns to its last loaded text. */
@@ -628,6 +678,10 @@ export function rigWorkspaceStoreCreate(
     let fileScope: RigFileScope = "changed";
     let fileLayout: RigFileLayout = "flat";
     let fileTreeExpanded: ReadonlySet<string> = new Set();
+    let fileSelection: ReadonlySet<string> = new Set();
+    /** The row a range extends from: the last one picked without extending. */
+    let fileSelectionAnchor: string | undefined;
+    let fileRevert: RigFileRevertSnapshot | undefined;
     let create: RigCreateSnapshot | undefined;
     let createDraft: RigSessionDraftStore | undefined;
     let unsubscribeCreateDraft: (() => void) | undefined;
@@ -678,6 +732,7 @@ export function rigWorkspaceStoreCreate(
         fileScope,
         fileLayout,
         fileTreeExpanded,
+        fileSelection,
         workspaceFilesLoading,
     };
 
@@ -830,6 +885,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileScope === fileScope &&
             snapshot.fileLayout === fileLayout &&
             snapshot.fileTreeExpanded === fileTreeExpanded &&
+            snapshot.fileSelection === fileSelection &&
+            snapshot.fileRevert === fileRevert &&
             snapshot.workspaceFiles === workspaceFiles &&
             snapshot.workspaceFilesLoading === workspaceFilesLoading &&
             snapshot.create === create
@@ -845,6 +902,8 @@ export function rigWorkspaceStoreCreate(
             fileScope,
             fileLayout,
             fileTreeExpanded,
+            fileSelection,
+            ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
@@ -855,6 +914,18 @@ export function rigWorkspaceStoreCreate(
             ...(rename ? { rename } : {}),
         };
         notify();
+    };
+
+    /**
+     * Forgets what was picked in the changed listing. A path only means anything
+     * inside the checkout it came from, so leaving that checkout — or leaving the
+     * listing itself — has to leave the selection behind rather than carry it
+     * onto rows in another repository that happen to share a name.
+     */
+    const fileSelectionReset = (): void => {
+        fileSelection = new Set();
+        fileSelectionAnchor = undefined;
+        fileRevert = undefined;
     };
 
     const fileChangeFind = (groupId: RigGroupId, path: string): RigGitChangedFile | undefined => {
@@ -1656,6 +1727,8 @@ export function rigWorkspaceStoreCreate(
             fileScope,
             fileLayout,
             fileTreeExpanded,
+            fileSelection,
+            ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
@@ -1680,6 +1753,7 @@ export function rigWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
+            if (groupId !== addressedGroupId) fileSelectionReset();
             releaseGroup();
             if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
@@ -1696,6 +1770,7 @@ export function rigWorkspaceStoreCreate(
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
+            if (groupId !== addressedGroupId) fileSelectionReset();
             openConversation(undefined);
             addressedGroupId = groupId;
             groupRestore(groupId);
@@ -1820,6 +1895,9 @@ export function rigWorkspaceStoreCreate(
             if (scope === "all") workspaceFilesEnsure(groupId);
             if (fileScope === scope) return;
             fileScope = scope;
+            // Picking files to revert is something only the changed listing
+            // offers, so leaving the listing drops what was picked in it.
+            fileSelectionReset();
             recompute();
         },
         fileLayoutUpdate(layout) {
@@ -1831,6 +1909,80 @@ export function rigWorkspaceStoreCreate(
             const next = new Set(fileTreeExpanded);
             if (!next.delete(path)) next.add(path);
             fileTreeExpanded = next;
+            recompute();
+        },
+        fileSelectionReplace(path) {
+            fileSelection = new Set([path]);
+            fileSelectionAnchor = path;
+            recompute();
+        },
+        fileSelectionToggle(path) {
+            const next = new Set(fileSelection);
+            if (!next.delete(path)) next.add(path);
+            fileSelection = next;
+            // The row just acted on is where a range starts from next, whether
+            // it was added or removed: it is the last place the reader pointed.
+            fileSelectionAnchor = path;
+            recompute();
+        },
+        fileSelectionExtend(path, orderedPaths) {
+            const anchor = fileSelectionAnchor ?? path;
+            const from = orderedPaths.indexOf(anchor);
+            const to = orderedPaths.indexOf(path);
+            // An anchor the listing no longer holds — the file was reverted, or
+            // the scope changed under it — leaves the clicked row as the whole
+            // selection rather than guessing at a range with one end missing.
+            if (from === -1 || to === -1) {
+                fileSelection = new Set([path]);
+                fileSelectionAnchor = path;
+                recompute();
+                return;
+            }
+            const [start, end] = from <= to ? [from, to] : [to, from];
+            fileSelection = new Set(orderedPaths.slice(start, end + 1));
+            recompute();
+        },
+        fileSelectionClear() {
+            if (fileSelection.size === 0) return;
+            fileSelection = new Set();
+            fileSelectionAnchor = undefined;
+            recompute();
+        },
+        fileRevertPromptOpen() {
+            if (fileSelection.size === 0 || fileRevert) return;
+            fileRevert = { paths: [...fileSelection], submitting: false };
+            recompute();
+        },
+        fileRevertPromptClose() {
+            if (!fileRevert || fileRevert.submitting) return;
+            fileRevert = undefined;
+            recompute();
+        },
+        async fileRevertConfirm(groupId) {
+            const pending = fileRevert;
+            if (!pending || pending.submitting) return;
+            fileRevert = { ...pending, submitting: true };
+            recompute();
+            try {
+                await client.changedFilesRevert(groupId, pending.paths);
+            } catch (error) {
+                fileRevert = {
+                    ...pending,
+                    submitting: false,
+                    error: error instanceof Error ? error.message : "That revert did not happen.",
+                };
+                recompute();
+                return;
+            }
+            fileRevert = undefined;
+            // The files are gone from the listing, so a selection naming them is
+            // gone with them; anything else the reader had picked stays picked.
+            const kept = new Set(
+                [...fileSelection].filter((path) => !pending.paths.includes(path)),
+            );
+            fileSelection = kept;
+            if (fileSelectionAnchor !== undefined && !kept.has(fileSelectionAnchor))
+                fileSelectionAnchor = undefined;
             recompute();
         },
         fileDraftUpdate(tabId, draft) {

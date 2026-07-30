@@ -39,6 +39,18 @@ export type FileTreeNode = {
     hasMore?: boolean;
     children?: FileTreeNode[];
 };
+/**
+ * What was held down when a row was clicked. A listing where several files can
+ * be picked has to tell "open this one" apart from "add this one" and "take
+ * everything from there to here", and the keys are the only difference between
+ * the three. The tree reports them and decides nothing.
+ */
+export type FileTreeSelectModifiers = {
+    /** Command on macOS, Control elsewhere: add or remove this one row. */
+    readonly toggle: boolean;
+    /** Shift: take the run of rows from the last one picked through this one. */
+    readonly extend: boolean;
+};
 export type FileTreeProps = {
     className?: string;
     "data-testid"?: string;
@@ -46,7 +58,13 @@ export type FileTreeProps = {
     nodes: FileTreeNode[];
     /** Currently selected entry id, if any. */
     selectedId?: string;
-    onSelect?: (id: string) => void;
+    /**
+     * Entries picked as a set, for an act on all of them at once. Independent of
+     * `selectedId`, which is the one entry being looked at: a reader can be
+     * reading one file while four are marked.
+     */
+    selectedIds?: ReadonlySet<string>;
+    onSelect?: (id: string, modifiers: FileTreeSelectModifiers) => void;
     /** File activated with a double click; directories continue to toggle. */
     onOpen?: (id: string) => void;
     /** Directory expand/collapse request. */
@@ -326,7 +344,8 @@ function FileTreeRow(props: {
     depth: number;
     indent: number;
     selectedId?: string;
-    onSelect?: (id: string) => void;
+    selectedIds?: ReadonlySet<string>;
+    onSelect?: (id: string, modifiers: FileTreeSelectModifiers) => void;
     onOpen?: (id: string) => void;
     onToggle?: (id: string) => void;
     onLoadMore?: (id: string) => void;
@@ -335,6 +354,7 @@ function FileTreeRow(props: {
     const node = () => props.node;
     const directory = () => node().kind === "directory";
     const selected = () => props.selectedId === node().id;
+    const picked = () => props.selectedIds?.has(node().id) ?? false;
     const status = () => (node().gitStatus ? GIT_STATUS[node().gitStatus!] : undefined);
     const padLeft = () => BASE_PADDING + props.depth * props.indent;
     return (
@@ -346,6 +366,7 @@ function FileTreeRow(props: {
                 data-kind={node().kind}
                 data-path={node().id}
                 data-selected={selected() ? "" : undefined}
+                data-picked={picked() ? "" : undefined}
                 data-status={node().gitStatus}
                 data-tone={status()?.tone}
                 data-expanded={directory() && node().expanded ? "" : undefined}
@@ -380,8 +401,17 @@ function FileTreeRow(props: {
                     // does and what the whole row looks like it should do.
                     // Reporting it as a selection asked the caller to open a
                     // folder as though it were a file.
-                    onClick={() =>
-                        directory() ? props.onToggle?.(node().id) : props.onSelect?.(node().id)
+                    onClick={(event) =>
+                        directory()
+                            ? props.onToggle?.(node().id)
+                            : props.onSelect?.(node().id, {
+                                  // Control-click is the same act as Command-click
+                                  // on the platforms that have no Command key; on
+                                  // macOS it is the context menu, which never
+                                  // reaches a plain click handler.
+                                  toggle: event.metaKey || event.ctrlKey,
+                                  extend: event.shiftKey,
+                              })
                     }
                     onDoubleClick={() => {
                         if (!directory()) props.onOpen?.(node().id);
@@ -437,6 +467,7 @@ function FileTreeRow(props: {
                                 onSelect={props.onSelect}
                                 onToggle={props.onToggle}
                                 selectedId={props.selectedId}
+                                selectedIds={props.selectedIds}
                             />
                         ))}
                         {node().hasMore ? (
@@ -473,6 +504,7 @@ export function FileTree(props: FileTreeProps) {
         "style",
         "nodes",
         "selectedId",
+        "selectedIds",
         "onSelect",
         "onOpen",
         "onToggle",
@@ -506,6 +538,7 @@ export function FileTree(props: FileTreeProps) {
                             onSelect={local.onSelect}
                             onToggle={local.onToggle}
                             selectedId={local.selectedId}
+                            selectedIds={local.selectedIds}
                         />
                     ))
                 ) : (

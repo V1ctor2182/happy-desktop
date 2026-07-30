@@ -35,6 +35,7 @@ export type FakeRigOperation =
     | "modelsRead"
     | "projectsRead"
     | "changedFileRead"
+    | "changedFilesRevert"
     | "workspaceFileRead"
     | "workspaceFileBytesRead"
     | "workspaceFileWrite"
@@ -422,6 +423,9 @@ class FakeRigTransportModel implements FakeRigTransport {
                 newContent: `Changed file in ${groupId}`,
                 hash: "changed-file-hash",
             })),
+        // Nothing here is a checkout, so a revert is only the fact that it was
+        // asked for: a surface under test asserts the call, not a working tree.
+        changedFilesRevert: () => this.perform("changedFilesRevert", {}, () => undefined),
         sessionsRead: () =>
             this.perform("sessionsRead", {}, () =>
                 [...this.sessions.values()]

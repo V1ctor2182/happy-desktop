@@ -206,6 +206,12 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             );
             return readJson<RigChangedFileDocument>(response);
         },
+        changedFilesRevert: async (groupId, paths) => {
+            await postJson<Record<string, never>>("/changed-files/revert", {
+                group: groupId,
+                paths,
+            });
+        },
         sessionsRead: () => getJson<readonly RigSessionSummary[]>("/sessions"),
         sessionRead: (sessionId) => getJson<RigSession>(`/sessions/${sessionId}`),
         subagentsRead: (sessionId) =>

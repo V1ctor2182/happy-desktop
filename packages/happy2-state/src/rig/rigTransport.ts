@@ -344,6 +344,13 @@ export interface RigTransport {
         path: string,
         signal?: AbortSignal,
     ): Promise<RigChangedFileDocument>;
+    /**
+     * Throws away the working-tree changes of the named files in one checkout,
+     * returning each to what HEAD holds — a file Git has never seen stops
+     * existing, a deleted one comes back. Paths that are no longer changed are
+     * skipped, so a selection overtaken by the agent still reverts the rest.
+     */
+    changedFilesRevert(groupId: RigGroupId, paths: readonly string[]): Promise<void>;
 
     sessionsRead(): Promise<readonly RigSessionSummary[]>;
     sessionRead(sessionId: RigSessionId): Promise<RigSession>;

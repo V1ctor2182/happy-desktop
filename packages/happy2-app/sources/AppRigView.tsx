@@ -66,6 +66,7 @@ import {
     RigControlMenu,
     fileTreeBuild,
     fileTreeFlatten,
+    fileTreeVisibleFiles,
     type FileTreeBuildEntry,
     RigSessionControls,
     RigUsagePanel,
@@ -82,6 +83,7 @@ import {
     sidebarReorderMove,
     type MenuItem,
     type FileTreeNode,
+    type FileTreeSelectModifiers,
     type SidebarItem,
     type SidebarSection,
     type TabItem,
@@ -1000,7 +1002,24 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
                         layout={workspace.fileLayout}
-                        onFileSelect={(path) => {
+                        // A plain click still opens the file and makes it the
+                        // only thing picked; the modifier clicks build a set to
+                        // act on and deliberately open nothing, since picking
+                        // eleven files should not open eleven tabs. Only the
+                        // changed listing has anything to do with a set, so the
+                        // whole checkout ignores the modifiers entirely rather
+                        // than quietly collecting an invisible selection.
+                        onFileSelect={(path, modifiers, orderedPaths) => {
+                            const picking = workspace.fileScope === "changed";
+                            if (picking && modifiers.extend) {
+                                props.workspace.fileSelectionExtend(path, orderedPaths);
+                                return;
+                            }
+                            if (picking && modifiers.toggle) {
+                                props.workspace.fileSelectionToggle(path);
+                                return;
+                            }
+                            if (picking) props.workspace.fileSelectionReplace(path);
                             if (openGroup && props.chatId)
                                 props.workspace.filePreview(
                                     props.chatId as RigSessionId,
@@ -1009,6 +1028,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     fileTabKind(path, workspace.fileScope),
                                 );
                         }}
+                        onRevert={() => props.workspace.fileRevertPromptOpen()}
                         onFileOpen={(path) => {
                             if (openGroup && props.chatId)
                                 props.workspace.fileOpen(
@@ -1027,6 +1047,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         panel={panel}
                         previewTool={previewTool}
                         scope={workspace.fileScope}
+                        selection={workspace.fileSelection}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
@@ -1329,6 +1350,65 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
                             value={workspace.rename.draft}
                         />
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
+            {/* Reverting is the one act in the file panel that destroys work
+                nothing else can give back, so what is about to happen is said
+                in full — how many files, and that HEAD is where they land —
+                before it happens. */}
+            {workspace.fileRevert && openGroup ? (
+                <ModalOverlay onDismiss={() => props.workspace.fileRevertPromptClose()}>
+                    <Modal
+                        footer={
+                            <>
+                                <Button
+                                    disabled={workspace.fileRevert.submitting}
+                                    onClick={() => props.workspace.fileRevertPromptClose()}
+                                    variant="ghost"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    disabled={workspace.fileRevert.submitting}
+                                    onClick={() => {
+                                        void props.workspace
+                                            .fileRevertConfirm(openGroup.id)
+                                            .catch(() => undefined);
+                                    }}
+                                    variant="danger"
+                                >
+                                    Revert
+                                </Button>
+                            </>
+                        }
+                        icon="trash"
+                        onClose={() => props.workspace.fileRevertPromptClose()}
+                        size="small"
+                        title={
+                            workspace.fileRevert.paths.length === 1
+                                ? "Revert 1 file"
+                                : `Revert ${String(workspace.fileRevert.paths.length)} files`
+                        }
+                    >
+                        <div className="happy2-rig-revert">
+                            <p className="happy2-rig-revert__text">
+                                Their changes are discarded and each file returns to what HEAD
+                                holds. This cannot be undone.
+                            </p>
+                            <ul className="happy2-rig-revert__paths">
+                                {workspace.fileRevert.paths.map((path) => (
+                                    <li className="happy2-rig-revert__path" key={path}>
+                                        {path}
+                                    </li>
+                                ))}
+                            </ul>
+                            {workspace.fileRevert.error ? (
+                                <p className="happy2-rig-revert__error" role="alert">
+                                    {workspace.fileRevert.error}
+                                </p>
+                            ) : null}
+                        </div>
                     </Modal>
                 </ModalOverlay>
             ) : null}
@@ -1993,7 +2073,12 @@ function RigPanelBody(props: {
     expanded: ReadonlySet<string>;
     layout: RigFileLayout;
     onFileOpen: (path: string) => void;
-    onFileSelect: (path: string) => void;
+    onFileSelect: (
+        path: string,
+        modifiers: FileTreeSelectModifiers,
+        orderedPaths: readonly string[],
+    ) => void;
+    onRevert: () => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
     onScopeChange: (scope: RigFileScope) => void;
@@ -2001,6 +2086,7 @@ function RigPanelBody(props: {
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
     scope: RigFileScope;
+    selection: ReadonlySet<string>;
     sessionId?: string;
     selectedPath?: string;
     store: RigPanelStore;
@@ -2159,10 +2245,17 @@ function RigPanelBody(props: {
                         onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
                         onOpen={props.onFileOpen}
                         onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
-                        onSelect={props.onFileSelect}
+                        onRevert={props.onRevert}
+                        onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
+                            props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
+                        }
                         onToggle={props.onToggle}
                         scope={props.scope}
                         selectedId={props.selectedPath}
+                        // Picking files is what the changed listing is for: the
+                        // whole checkout has nothing to revert to and no bulk
+                        // act to offer, so it is left as the plain listing.
+                        {...(all ? {} : { selectedIds: props.selection })}
                     />
                 ) : props.panel.activeViewId === "preview" ? (
                     props.previewTool ? (

@@ -119,3 +119,25 @@ export function fileTreeFlatten(entries: readonly FileTreeBuildEntry[]): FileTre
         };
     });
 }
+
+/**
+ * The files of a built tree in the order they are drawn, skipping the ones a
+ * closed directory is hiding.
+ *
+ * A range selection means "everything between these two rows", and what lies
+ * between them is a question about the arrangement on screen, not about the
+ * paths: the same two files have different neighbours flat than they do nested
+ * under half-open folders. Directories are left out because a range picks files
+ * to act on, and a folder is not one of them.
+ */
+export function fileTreeVisibleFiles(nodes: readonly FileTreeNode[]): string[] {
+    const paths: string[] = [];
+    const walk = (level: readonly FileTreeNode[]): void => {
+        for (const node of level) {
+            if (node.kind === "file") paths.push(node.id);
+            else if (node.expanded && node.children) walk(node.children);
+        }
+    };
+    walk(nodes);
+    return paths;
+}

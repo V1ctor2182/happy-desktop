@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type {
     RigModelSelection,
@@ -530,13 +530,27 @@ async function changedFileRead(
         catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
         catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
     if (!root) throw new Error("That project or workspace is no longer available.");
+    const sessions = (await client.listSessions()).sessions;
+    const groupSession =
+        sessions.find(
+            (candidate) =>
+                candidate.id === sessionId &&
+                (candidate.workspaceId === groupId ||
+                    (candidate.workspaceId === undefined && candidate.projectId === groupId)),
+        ) ??
+        sessions.find(
+            (candidate) =>
+                candidate.workspaceId === groupId ||
+                (candidate.workspaceId === undefined && candidate.projectId === groupId),
+        );
+    if (!groupSession) throw new Error("That project or workspace has no session available.");
     const git = await gitLineStatsRead(root);
     const change = git?.changes.find((candidate) => candidate.path === filePath);
     if (!change) throw new Error("That file is no longer changed.");
     let newContent = "";
     let hash: string | undefined;
     if (change.status !== "deleted") {
-        const file = await client.readFile(sessionId, filePath, signal);
+        const file = await client.readFile(groupSession.id, filePath, signal);
         newContent = changedFileText(Buffer.from(file.content, "base64"));
         hash = file.hash;
     }
@@ -552,6 +566,74 @@ async function changedFileRead(
         oldContent = changedFileText(stdout);
     }
     return { path: filePath, oldPath, oldContent, newContent, ...(hash ? { hash } : {}) };
+}
+
+/**
+ * Throws the working-tree changes of the named files away, returning each of
+ * them to what HEAD says it should be.
+ *
+ * What that means depends on how the file changed, and Git has a different act
+ * for each: a file it has never seen is deleted, a file added to the index goes
+ * back to not existing, and a modified or deleted file is restored from HEAD.
+ * A rename is two of those at once — the destination disappears and the source
+ * comes back — so both of its paths are handled together, never leaving a
+ * checkout holding the file under both names.
+ *
+ * The index is restored alongside the working tree: a staged change the reader
+ * asked to be rid of is still a change, and leaving it staged would put a file
+ * back in the changed list the moment the panel refreshed.
+ *
+ * Paths that are no longer changed are skipped rather than refused, because a
+ * selection made a second ago may have been overtaken by the agent still
+ * working in this checkout.
+ */
+async function changedFilesRevert(
+    client: RigProxyClient,
+    groupId: string,
+    paths: readonly string[],
+): Promise<void> {
+    const catalog = await client.listCatalog();
+    const root =
+        catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
+        catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
+    if (!root) throw new Error("That project or workspace is no longer available.");
+    const git = await gitLineStatsRead(root);
+    if (!git) throw new Error("That checkout has no Git state to revert to.");
+    const wanted = new Set(paths);
+    // Restored from HEAD: the file exists there and should again.
+    const fromHead: string[] = [];
+    // Restored from the index after the index is reset to HEAD, which is how a
+    // file HEAD does not have stops existing at all.
+    const fromIndex: string[] = [];
+    const removed: string[] = [];
+    for (const change of git.changes) {
+        if (!wanted.has(change.path)) continue;
+        if (change.status === "untracked") removed.push(change.path);
+        else if (change.status === "added") fromIndex.push(change.path);
+        else if (change.status === "renamed") {
+            fromIndex.push(change.path);
+            if (change.previousPath) fromHead.push(change.previousPath);
+        } else fromHead.push(change.path);
+    }
+    for (const path of removed) {
+        // A path from the listing is already relative to this checkout, but it
+        // arrives over a request, and deleting outside the checkout is not a
+        // thing this route may ever be talked into doing.
+        const absolute = resolve(root, path);
+        const inside = relative(root, absolute);
+        if (inside.startsWith("..") || isAbsolute(inside)) continue;
+        await rm(absolute, { force: true });
+    }
+    const restore = (args: string[], targets: readonly string[]) =>
+        targets.length === 0
+            ? Promise.resolve("")
+            : gitExecText([...args, "--", ...targets], {
+                  cwd: root,
+                  maxBuffer: 4 * 1024 * 1024,
+                  timeout: 15_000,
+              });
+    await restore(["restore", "--staged", "--worktree"], fromIndex);
+    await restore(["restore", "--source=HEAD", "--staged", "--worktree"], fromHead);
 }
 
 /** The subset of the daemon client the projected loopback surface calls. */
@@ -887,6 +969,19 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 String(body.path ?? ""),
                 typeof body.content === "string" ? body.content : "",
                 typeof body.expectedHash === "string" ? body.expectedHash : null,
+            );
+            writeJson(response, 200, {});
+            return true;
+        }
+
+        if (method === "POST" && path === "/changed-files/revert") {
+            const body = await bodyReadJson(request);
+            await changedFilesRevert(
+                client,
+                String(body.group ?? ""),
+                Array.isArray(body.paths)
+                    ? body.paths.filter((entry): entry is string => typeof entry === "string")
+                    : [],
             );
             writeJson(response, 200, {});
             return true;

@@ -98,6 +98,12 @@ export interface RigClient {
         signal?: AbortSignal,
     ): Promise<RigChangedFileDocument>;
     /**
+     * Throws away the working-tree changes of the named files in one checkout.
+     * The listing is not updated from here: the daemon's Git watch reports the
+     * new state, which is the same path every other change to the checkout takes.
+     */
+    changedFilesRevert(groupId: RigGroupId, paths: readonly string[]): Promise<void>;
+    /**
      * Acquires a retained chat store for one session. Concurrent and later
      * acquisitions share its messages and model state; releasing a view lease
      * never evicts it or stops its client-owned background synchronization.
@@ -176,6 +182,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (sessionId, groupId, path, signal) =>
             transport.changedFileRead(sessionId, groupId, path, signal),
+        changedFilesRevert: (groupId, paths) => transport.changedFilesRevert(groupId, paths),
         workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
         workspaceFileRead: (sessionId, path, signal) =>
             transport.workspaceFileRead(sessionId, path, signal),

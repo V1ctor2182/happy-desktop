@@ -17,6 +17,18 @@ export type FileBrowserProps = {
     /** Rows to list. Passed straight through to FileTree. */
     nodes: FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
+    /**
+     * Files picked as a set. Passing it is what makes the listing a place where
+     * several files can be acted on at once; the control row states how many are
+     * picked and offers `onRevert` in place of the listing's totals.
+     */
+    selectedIds?: FileTreeProps["selectedIds"];
+    /**
+     * Discards the picked files' changes. Omitted, the count is still stated but
+     * nothing is offered to do with it — a caller with no way to change a
+     * checkout should not show a control that promises to.
+     */
+    onRevert?: () => void;
     onSelect?: FileTreeProps["onSelect"];
     onOpen?: FileTreeProps["onOpen"];
     onToggle?: FileTreeProps["onToggle"];
@@ -64,6 +76,8 @@ export function FileBrowser(props: FileBrowserProps) {
         "onLayoutChange",
         "nodes",
         "selectedId",
+        "selectedIds",
+        "onRevert",
         "onSelect",
         "onOpen",
         "onToggle",
@@ -78,6 +92,7 @@ export function FileBrowser(props: FileBrowserProps) {
     ]);
     const added = local.addedLines !== undefined && local.addedLines > 0;
     const deleted = local.deletedLines !== undefined && local.deletedLines > 0;
+    const picked = local.selectedIds?.size ?? 0;
     return (
         <section
             className={["happy2-file-browser", local.className].filter(Boolean).join(" ")}
@@ -101,14 +116,25 @@ export function FileBrowser(props: FileBrowserProps) {
                         </button>
                     ))}
                 </div>
+                {/* What is picked replaces what the listing holds, because the
+                    two answer the same question and only one of them is what
+                    the reader is currently doing. The act on the picked files
+                    sits beside their count rather than in a menu: a selection
+                    exists to be acted on, and it is gone as soon as it is. */}
                 <span
                     className="happy2-file-browser__summary"
                     data-happy2-ui="file-browser-summary"
                 >
-                    <span className="happy2-file-browser__count">
-                        {`${String(local.count)} ${local.count === 1 ? "file" : "files"}`}
-                    </span>
-                    {added || deleted ? (
+                    {picked > 0 ? (
+                        <span className="happy2-file-browser__picked">
+                            {`${String(picked)} selected`}
+                        </span>
+                    ) : (
+                        <span className="happy2-file-browser__count">
+                            {`${String(local.count)} ${local.count === 1 ? "file" : "files"}`}
+                        </span>
+                    )}
+                    {picked === 0 && (added || deleted) ? (
                         <span className="happy2-file-browser__lines">
                             {added ? (
                                 <span className="happy2-file-browser__added">{`+${String(local.addedLines)}`}</span>
@@ -119,6 +145,16 @@ export function FileBrowser(props: FileBrowserProps) {
                         </span>
                     ) : null}
                 </span>
+                {picked > 0 && local.onRevert ? (
+                    <button
+                        className="happy2-file-browser__revert"
+                        data-happy2-ui="file-browser-revert"
+                        onClick={() => local.onRevert?.()}
+                        type="button"
+                    >
+                        Revert
+                    </button>
+                ) : null}
                 <div className="happy2-file-browser__layouts" role="group">
                     <button
                         aria-label="List files"
@@ -161,6 +197,7 @@ export function FileBrowser(props: FileBrowserProps) {
                         onSelect={local.onSelect}
                         onToggle={local.onToggle}
                         selectedId={local.selectedId}
+                        selectedIds={local.selectedIds}
                     />
                 </div>
             </div>
