@@ -979,15 +979,14 @@ export function rigWorkspaceStoreCreate(
                       revision,
                       loading: true,
                       // A reload keeps showing what is already there only when
-                      // it is the shape this tab reads. A media document also
-                      // carries `content`, so its media type is what tells the
-                      // two apart rather than the presence of that field.
+                      // it is the shape this tab reads: a media descriptor names
+                      // where the bytes are, an editable file carries its text,
+                      // and a diff carries both sides of one.
                       ...(tab.document.type === "ready" &&
                       (before.kind === "media"
                           ? "contentType" in tab.document.value
                           : before.kind === "file"
-                            ? "content" in tab.document.value &&
-                              !("contentType" in tab.document.value)
+                            ? "content" in tab.document.value
                             : "oldContent" in tab.document.value)
                           ? {}
                           : { document: { type: "loading" as const } }),

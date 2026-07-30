@@ -161,7 +161,15 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 url("/workspace-file-bytes", { session: sessionId, path }),
                 { signal },
             );
-            return readJson<RigWorkspaceFileBytes>(response);
+            const file = await readJson<Omit<RigWorkspaceFileBytes, "url">>(response);
+            // The media URL is assembled here rather than in the proxy because
+            // the capability prefix that makes it fetchable is this transport's
+            // to know. Naming the revision in it keeps a picture from surviving
+            // the edit that replaced it.
+            return {
+                ...file,
+                url: url("/workspace-file-media", { session: sessionId, path, hash: file.hash }),
+            };
         },
         workspaceFileWrite: async (sessionId, path, content, expectedHash) => {
             await postJson<Record<string, never>>("/workspace-file", {

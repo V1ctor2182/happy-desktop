@@ -707,7 +707,10 @@ export function AppRigView(props: AppRigViewProps) {
                 props.onChatSelect(
                     rig.id,
                     row.id,
-                    rig.session?.workspace.get().groupResume.get(groupId) ??
+                    // A workspace that has not recorded where this project was
+                    // left falls back to its most recent conversation, which is
+                    // also what a workspace without the memory at all does.
+                    rig.session?.workspace.get().groupResume?.get(groupId) ??
                         openGroupFind(rig.projects, row.id)?.conversations[0]?.id,
                 );
             }}
@@ -1430,10 +1433,10 @@ function RigFileBody(props: {
 /**
  * One workspace file shown rather than edited.
  *
- * The bytes become a `data:` URL rather than an object URL: an object URL is a
- * browser resource with a lifetime, and revoking it correctly would mean holding
- * disposal state in the view, which this layer does not own. A data URL is a
- * value — it lives exactly as long as the render that produced it.
+ * The document says where the bytes are rather than carrying them, so the
+ * picture element fetches its own source over an ordinary URL. Nothing here
+ * holds a browser resource with a lifetime to revoke, and a video's seeks become
+ * range requests against the proxy instead of a whole file already in the DOM.
  */
 function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
@@ -1462,7 +1465,7 @@ function RigFilePreview(props: {
             content={
                 value.contentType === "application/octet-stream" || kind === "binary"
                     ? { type: "unavailable" }
-                    : { type: "url", url: `data:${value.contentType};base64,${value.content}` }
+                    : { type: "url", url: value.url }
             }
             path={props.path}
             size={fileSizeFormat(value.size)}

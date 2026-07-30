@@ -497,7 +497,13 @@ export interface RigWorkspaceFileBytes {
     readonly path: string;
     /** Media type implied by the file's extension, or `application/octet-stream`. */
     readonly contentType: string;
-    readonly content: string;
+    /**
+     * Where the bytes are, rather than the bytes themselves. A picture element
+     * wants a source it can fetch: handing it the file inline makes the whole
+     * file resident in the document, decoded from base64 before anything is
+     * shown, and denies a video the range requests it seeks with.
+     */
+    readonly url: string;
     readonly size: number;
     readonly hash: string;
 }

@@ -393,13 +393,14 @@ class FakeRigTransportModel implements FakeRigTransport {
                 content: `Workspace file at ${path}`,
                 hash: "workspace-file-hash",
             })),
-        // One byte, so a preview under test has real content to render without
-        // the fake pretending to hold an actual image.
+        // One byte behind a real URL, so a preview under test has something its
+        // elements can actually fetch without the fake standing up a server or
+        // pretending to hold an actual image.
         workspaceFileBytesRead: (_sessionId, path) =>
             this.perform("workspaceFileBytesRead", {}, () => ({
                 path,
                 contentType: "application/octet-stream",
-                content: "AA==",
+                url: "data:application/octet-stream;base64,AA==",
                 size: 1,
                 hash: "workspace-file-bytes-hash",
             })),

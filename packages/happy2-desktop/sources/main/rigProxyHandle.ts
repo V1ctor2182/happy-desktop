@@ -392,6 +392,27 @@ const PREVIEW_CONTENT_TYPE: Record<string, string> = {
 const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
+ * The file a preview is currently on, held so the descriptor read and the media
+ * request that follows it do not each pull the same file across the daemon
+ * socket, and so a video's seeks are answered without re-reading it once per
+ * scrub. One entry, because one file is being looked at; it is replaced the
+ * moment a different one is asked for, so what it costs is bounded by the
+ * preview cap above rather than by how many files have been opened.
+ */
+let previewHeld: { key: string; contentType: string; bytes: Buffer } | undefined;
+
+function previewKey(sessionId: string, filePath: string, hash?: string): string {
+    return `${sessionId}\u0000${filePath}\u0000${hash ?? ""}`;
+}
+
+/** The media type a file's extension implies, or the honest refusal to guess. */
+function previewContentType(filePath: string): string {
+    const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
+    const dot = name.lastIndexOf(".");
+    return PREVIEW_CONTENT_TYPE[dot > 0 ? name.slice(dot + 1) : ""] ?? "application/octet-stream";
+}
+
+/**
  * Reads one workspace file as bytes, for a surface that shows the file rather
  * than editing it.
  *
@@ -399,6 +420,29 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  * textarea and exactly wrong for the picture someone just clicked. This read
  * makes no claim about the content beyond its size and the media type its
  * extension implies, so an image, a video, or a PDF reaches the viewer intact.
+ */
+async function workspaceFileBytesLoad(
+    client: RigProxyClient,
+    sessionId: string,
+    filePath: string,
+    hash?: string,
+    signal?: AbortSignal,
+): Promise<{ readonly contentType: string; readonly bytes: Buffer; readonly hash: string }> {
+    const held = previewHeld;
+    if (held && hash !== undefined && held.key === previewKey(sessionId, filePath, hash))
+        return { contentType: held.contentType, bytes: held.bytes, hash };
+    const file = await client.readFile(sessionId, filePath, signal);
+    const bytes = Buffer.from(file.content, "base64");
+    if (bytes.byteLength > PREVIEW_MAX_BYTES) throw new Error("This file is too large to preview.");
+    const contentType = previewContentType(filePath);
+    previewHeld = { key: previewKey(sessionId, filePath, file.hash), contentType, bytes };
+    return { contentType, bytes, hash: file.hash };
+}
+
+/**
+ * What a preview needs to open a file, without the file in it: its media type,
+ * how big it is, and which revision the bytes will be. The viewer fetches the
+ * bytes themselves from the media route with an ordinary URL.
  */
 async function workspaceFileBytesRead(
     client: RigProxyClient,
@@ -408,23 +452,64 @@ async function workspaceFileBytesRead(
 ): Promise<{
     readonly path: string;
     readonly contentType: string;
-    readonly content: string;
     readonly size: number;
     readonly hash: string;
 }> {
-    const file = await client.readFile(sessionId, filePath, signal);
-    const bytes = Buffer.from(file.content, "base64");
-    if (bytes.byteLength > PREVIEW_MAX_BYTES) throw new Error("This file is too large to preview.");
-    const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
-    const dot = name.lastIndexOf(".");
-    const extension = dot > 0 ? name.slice(dot + 1) : "";
+    const file = await workspaceFileBytesLoad(client, sessionId, filePath, undefined, signal);
     return {
         path: filePath,
-        contentType: PREVIEW_CONTENT_TYPE[extension] ?? "application/octet-stream",
-        content: file.content,
-        size: bytes.byteLength,
+        contentType: file.contentType,
+        size: file.bytes.byteLength,
         hash: file.hash,
     };
+}
+
+/**
+ * Serves one workspace file's bytes to an `img`, `video`, `audio`, or `iframe`.
+ *
+ * Answers range requests, which is not a nicety: a `video` element seeks by
+ * asking for the range it wants, and a server that can only reply with the whole
+ * file gives the reader a scrubber that does nothing until the download ends.
+ */
+async function workspaceFileMediaServe(
+    client: RigProxyClient,
+    sessionId: string,
+    filePath: string,
+    hash: string | undefined,
+    request: IncomingMessage,
+    response: ServerResponse,
+    signal?: AbortSignal,
+): Promise<void> {
+    const file = await workspaceFileBytesLoad(client, sessionId, filePath, hash, signal);
+    const total = file.bytes.byteLength;
+    const headers: Record<string, string> = {
+        "content-type": file.contentType,
+        "accept-ranges": "bytes",
+        // Addressed by revision, so a stale picture can never outlive an edit
+        // and there is nothing to revalidate while one is being looked at.
+        "cache-control": hash === undefined ? "no-store" : "private, max-age=3600",
+    };
+    const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range ?? "");
+    if (range && (range[1] !== "" || range[2] !== "")) {
+        const suffix = range[1] === "";
+        const start = suffix ? Math.max(total - Number(range[2]), 0) : Number(range[1]);
+        const end = suffix || range[2] === "" ? total - 1 : Math.min(Number(range[2]), total - 1);
+        if (start > end || start >= total) {
+            response.writeHead(416, { ...headers, "content-range": `bytes */${String(total)}` });
+            response.end();
+            return;
+        }
+        const part = file.bytes.subarray(start, end + 1);
+        response.writeHead(206, {
+            ...headers,
+            "content-length": String(part.byteLength),
+            "content-range": `bytes ${String(start)}-${String(end)}/${String(total)}`,
+        });
+        response.end(part);
+        return;
+    }
+    response.writeHead(200, { ...headers, "content-length": String(total) });
+    response.end(file.bytes);
 }
 
 async function changedFileRead(
@@ -662,6 +747,20 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     ),
                 );
                 writeJson(response, 200, document);
+                return true;
+            }
+            if (path === "/workspace-file-media") {
+                await requestWithAbort(request, (signal) =>
+                    workspaceFileMediaServe(
+                        client,
+                        query.get("session") ?? "",
+                        query.get("path") ?? "",
+                        query.get("hash") ?? undefined,
+                        request,
+                        response,
+                        signal,
+                    ),
+                );
                 return true;
             }
             if (path === "/open-in-targets") {
