@@ -62,6 +62,7 @@ function dock(value: string) {
                         <RigSessionControls
                             fields={["permission", "tier"]}
                             menuPlacement="above"
+                            variant="ghost"
                             menus={rigMenus}
                             onEffortChange={noop}
                             onModelChange={noop}
@@ -76,6 +77,7 @@ function dock(value: string) {
                             menuAlign="end"
                             menuPlacement="above"
                             menuWidth={280}
+                            variant="ghost"
                             onSelect={noop}
                             value="Local settings"
                         />

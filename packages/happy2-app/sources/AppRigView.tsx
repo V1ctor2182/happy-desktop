@@ -1584,6 +1584,7 @@ function RigPanelComposer(props: {
                             <RigSessionControls
                                 fields={["permission", "tier"]}
                                 menuPlacement="above"
+                                variant="ghost"
                                 menus={conversation.menus}
                                 onEffortChange={(effort?: RigThinkingLevel) =>
                                     workspace.sessionEffortUpdate(effort)
@@ -1606,6 +1607,7 @@ function RigPanelComposer(props: {
                                 menuAlign="end"
                                 menuPlacement="above"
                                 menuWidth={280}
+                                variant="ghost"
                                 onSelect={(id) => {
                                     const [groupId, chatId] = id.split(CHAT_TARGET_SEP);
                                     if (groupId && chatId) props.onChatSelect(groupId, chatId);
