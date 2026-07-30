@@ -158,8 +158,9 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
         "padding-top": "16px",
     });
 
-    /* Leading icon chip: 28px rounded square, accent-soft fill, on the 20px
-     * inset, vertically centered in the 60px header. */
+    /* Leading icon chip: 28px rounded square, neutral fill and glyph, on the
+     * 20px inset, vertically centered in the 60px header. The glyph names the
+     * dialog's subject rather than offering a link, so it carries no accent. */
     const chip = view.$('[data-testid="md"] [data-happy2-ui="modal-icon"]');
     expect(chip.bounds().width).toBe(28);
     expect(chip.bounds().height).toBe(28);
@@ -168,7 +169,7 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     expect(chip.computedStyles(["background-color", "border-radius", "color"])).toEqual({
         "background-color": "rgb(234, 234, 234)",
         "border-radius": "8px",
-        color: "rgb(43, 172, 204)",
+        color: "rgb(0, 0, 0)",
     });
     /* The chip's glyph is a font codepoint the icon font paints box-centered:
      * prove it actually paints inside the chip. */

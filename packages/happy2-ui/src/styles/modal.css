@@ -77,7 +77,9 @@
     height: 28px;
     background: var(--surface-selected);
     border-radius: 8px;
-    color: var(--text-link);
+    /* Neutral: a dialog's glyph names its subject rather than offering a link,
+       and colour in this shell is kept for the destructive tone below. */
+    color: var(--text);
 }
 
 .happy2-modal__dialog[data-tone="danger"] .happy2-modal__icon {

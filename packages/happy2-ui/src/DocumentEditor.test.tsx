@@ -82,6 +82,38 @@ it("renders seeded blocks, applies remote updates in place, and announces local 
     await view.screenshot("DocumentEditor.test");
 });
 
+it("leaves BlockNote's own motion and accents out of the monochrome surface", async () => {
+    createRenderer().render(
+        () => (
+            <DocumentEditor
+                data-testid="editor-quiet"
+                user={{ name: "Ada", color: "#2baccc" }}
+                ydoc={documentEditorSeedDoc()}
+            />
+        ),
+        { width: 520, height: 320 },
+    );
+    await frames(3);
+
+    // Making a line a heading must not grow its text over 200ms while the caret
+    // is still in it, and the blocks below it must not slide.
+    for (const selector of ['[data-content-type="heading"]', ".bn-block-outer"]) {
+        const element = document.querySelector(
+            `[data-happy2-ui="document-editor"] ${selector}`,
+        ) as HTMLElement;
+        expect(element).not.toBeNull();
+        expect(getComputedStyle(element).transitionDuration).toBe("0s");
+    }
+
+    // The editor's selection reads as a shade of the surface, never as a hue.
+    const container = document.querySelector(
+        '[data-happy2-ui="document-editor"] .bn-container',
+    ) as HTMLElement;
+    expect(
+        getComputedStyle(container).getPropertyValue("--bn-colors-selected-background").trim(),
+    ).toBe("#eaeaea");
+});
+
 it("honors the read-only flag on the underlying contenteditable surface", async () => {
     const view = createRenderer().render(
         () => (
