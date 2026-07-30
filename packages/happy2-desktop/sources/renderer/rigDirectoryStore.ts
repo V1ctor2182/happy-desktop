@@ -20,8 +20,8 @@ export interface RigDirectoryEntry {
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
     readonly version?: string;
-    /** The address a remote machine answers on; absent for this machine. */
-    readonly endpoint?: string;
+    /** The SSH destination a remote machine is reached at; absent for this machine. */
+    readonly destination?: string;
     /** This machine's projects, kept live while the Rig is connected. */
     readonly projects: readonly RigProjectGroup[];
     /** Where that project list is: still arriving, ready, or refused by the daemon. */
@@ -32,9 +32,8 @@ export interface RigDirectoryEntry {
 
 export interface RigDirectoryAddSnapshot {
     readonly open: boolean;
-    readonly endpoint: string;
+    readonly destination: string;
     readonly label: string;
-    readonly token: string;
     readonly error?: string;
 }
 
@@ -48,9 +47,8 @@ export interface RigDirectoryStore {
     subscribe(listener: () => void): () => void;
     addOpen(): void;
     addClose(): void;
-    endpointUpdate(value: string): void;
+    destinationUpdate(value: string): void;
     labelUpdate(value: string): void;
-    tokenUpdate(value: string): void;
     addSubmit(): void;
     rigConnect(id: string): void;
     rigDisconnect(id: string): void;
@@ -71,7 +69,7 @@ interface LiveRig {
     workspaceUnsubscribe?: () => void;
 }
 
-const ADD_EMPTY: RigDirectoryAddSnapshot = { endpoint: "", label: "", open: false, token: "" };
+const ADD_EMPTY: RigDirectoryAddSnapshot = { destination: "", label: "", open: false };
 
 export interface RigDirectoryDeps {
     /** Navigates to a conversation the named Rig just created. */
@@ -239,7 +237,7 @@ export function rigDirectoryStoreCreate(
             const rig: LiveRig = rigs.get(source.id) ?? {
                 entry: {
                     connected: source.connected,
-                    endpoint: source.endpoint,
+                    destination: source.destination,
                     id: source.id,
                     kind: "remote",
                     label: source.label,
@@ -252,7 +250,7 @@ export function rigDirectoryStoreCreate(
             rig.entry = {
                 ...rig.entry,
                 connected: source.connected,
-                endpoint: source.endpoint,
+                destination: source.destination,
                 label: source.label,
                 message: source.message,
                 status: source.status,
@@ -306,22 +304,17 @@ export function rigDirectoryStoreCreate(
             add = ADD_EMPTY;
             publish();
         },
-        endpointUpdate(endpoint) {
-            add = { ...add, endpoint, error: undefined };
+        destinationUpdate(destination) {
+            add = { ...add, destination, error: undefined };
             publish();
         },
         labelUpdate(label) {
             add = { ...add, error: undefined, label };
             publish();
         },
-        tokenUpdate(token) {
-            add = { ...add, error: undefined, token };
-            publish();
-        },
         addSubmit() {
             const request: RemoteRigAddRequest = {
-                endpoint: add.endpoint,
-                token: add.token,
+                destination: add.destination,
                 ...(add.label.trim() ? { label: add.label.trim() } : {}),
             };
             void bridge.remoteRigAdd(request).then(() => {

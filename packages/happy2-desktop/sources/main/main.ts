@@ -489,11 +489,10 @@ void app
             if (
                 !value ||
                 typeof value !== "object" ||
-                typeof value.endpoint !== "string" ||
-                typeof value.token !== "string" ||
+                typeof value.destination !== "string" ||
                 (value.label !== undefined && typeof value.label !== "string")
             )
-                throw new Error("The remote Rig endpoint is invalid.");
+                throw new Error("The remote Rig destination is invalid.");
             return remoteRigManager.add(value);
         });
         ipcMain.handle(desktopIpc.remoteRigRemove, (_event, id: unknown) => {

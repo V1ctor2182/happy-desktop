@@ -14,8 +14,8 @@ export interface RigMachineRow {
     readonly label: string;
     /** The machine this window runs on, which is neither disconnectable nor removable. */
     readonly local: boolean;
-    /** The address a remote machine's Rig answers on; absent for this machine. */
-    readonly endpoint?: string;
+    /** The SSH destination a remote machine is reached at; absent for this machine. */
+    readonly destination?: string;
     /** The reader's standing intent, which a failed connection does not change. */
     readonly connected: boolean;
     readonly status: RigMachineStatus;
@@ -25,9 +25,8 @@ export interface RigMachineRow {
 }
 
 export interface RigMachineDraft {
-    readonly endpoint: string;
+    readonly destination: string;
     readonly label: string;
-    readonly token: string;
     readonly error?: string;
 }
 
@@ -36,9 +35,8 @@ export type RigMachineSettingsProps = {
     draft: RigMachineDraft;
     /** Set while the add form is being submitted, so it says so and cannot resubmit. */
     adding?: boolean;
-    onEndpointChange: (value: string) => void;
+    onDestinationChange: (value: string) => void;
     onLabelChange: (value: string) => void;
-    onTokenChange: (value: string) => void;
     onAdd: () => void;
     onConnect: (id: string) => void;
     onDisconnect: (id: string) => void;
@@ -61,8 +59,9 @@ const STATUS_VARIANTS: Record<RigMachineStatus, BadgeVariant> = {
 
 /**
  * The Machines category: every Rig this window can work in, and the form that
- * adds another one. A machine is reached with an endpoint and a token and
- * nothing else, so that pair is the whole form.
+ * adds another one. A machine is named the way the reader already reaches it — an
+ * SSH host — so that one field is the whole form, and nothing has to be published
+ * or copied off the other machine.
  *
  * Connecting and disconnecting live here rather than in the sidebar because they
  * are deliberate, infrequent acts about a machine rather than about the work in
@@ -71,10 +70,7 @@ const STATUS_VARIANTS: Record<RigMachineStatus, BadgeVariant> = {
  * no controls: it is where the window is running.
  */
 export function RigMachineSettings(props: RigMachineSettingsProps) {
-    const submittable =
-        !props.adding &&
-        props.draft.endpoint.trim().length > 0 &&
-        props.draft.token.trim().length > 0;
+    const submittable = !props.adding && props.draft.destination.trim().length > 0;
     return (
         <>
             <RigSettingsSection
@@ -151,7 +147,7 @@ export function RigMachineSettings(props: RigMachineSettingsProps) {
                 ))}
             </RigSettingsSection>
             <RigSettingsSection
-                description="A remote Rig is reached with the address it answers on and the token it accepts."
+                description="A remote Rig is reached over SSH, using the hosts and keys this machine is already set up with."
                 rows="cards"
                 title="Connect a remote Rig"
             >
@@ -160,24 +156,13 @@ export function RigMachineSettings(props: RigMachineSettingsProps) {
                     <TextField
                         autoComplete="off"
                         fullWidth
-                        hint="The address the other machine's Rig answers on."
-                        label="Endpoint"
-                        leadingIcon="link"
+                        hint="An SSH host or user@host that already works from a terminal."
+                        label="Host"
+                        leadingIcon="terminal"
                         onSubmit={() => (submittable ? props.onAdd() : undefined)}
-                        onValueChange={props.onEndpointChange}
-                        placeholder="http://desk.local:4711"
-                        value={props.draft.endpoint}
-                    />
-                    <TextField
-                        autoComplete="off"
-                        fullWidth
-                        hint="The token that Rig accepts."
-                        label="Token"
-                        leadingIcon="lock"
-                        onSubmit={() => (submittable ? props.onAdd() : undefined)}
-                        onValueChange={props.onTokenChange}
-                        type="password"
-                        value={props.draft.token}
+                        onValueChange={props.onDestinationChange}
+                        placeholder="desk.local"
+                        value={props.draft.destination}
                     />
                     <TextField
                         autoComplete="off"
@@ -203,7 +188,7 @@ export function RigMachineSettings(props: RigMachineSettingsProps) {
 
 function machineMeta(machine: RigMachineRow): string {
     const projects = `${machine.projectCount} ${machine.projectCount === 1 ? "project" : "projects"}`;
-    const parts = [machine.local ? "This machine" : (machine.endpoint ?? "")].filter(Boolean);
+    const parts = [machine.local ? "This machine" : (machine.destination ?? "")].filter(Boolean);
     if (machine.version) parts.push(`Rig ${machine.version}`);
     parts.push(projects);
     return parts.join("  —  ");

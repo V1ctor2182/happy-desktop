@@ -125,7 +125,7 @@ const MODELS_LOADING = { type: "loading" } as const;
 /** One connected local Rig holding the project above; no remote machines. */
 function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][number]["projects"]) {
     const snapshot: AppRigDirectorySnapshot = {
-        add: { endpoint: "", label: "", open: false, token: "" },
+        add: { destination: "", label: "", open: false },
         rigs: [
             {
                 connected: true,
@@ -150,9 +150,8 @@ function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][numb
         subscribe: () => () => undefined,
         addOpen: () => undefined,
         addClose: () => undefined,
-        endpointUpdate: () => undefined,
+        destinationUpdate: () => undefined,
         labelUpdate: () => undefined,
-        tokenUpdate: () => undefined,
         addSubmit: () => undefined,
         rigConnect: () => undefined,
         rigDisconnect: () => undefined,

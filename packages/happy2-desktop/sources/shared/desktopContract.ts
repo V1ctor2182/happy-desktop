@@ -98,22 +98,22 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+/** An SSH destination — `host` or `user@host` — and the name to list it under. */
 export interface RemoteRigAddRequest {
-    readonly endpoint: string;
+    readonly destination: string;
     readonly label?: string;
-    readonly token: string;
 }
 
 /**
  * One remembered machine as the renderer sees it. `connected` is the reader's
  * standing intent and `status` is where the connection actually is, so a machine
  * that is reachable again shows up without the reader asking twice. `rigHttpUrl`
- * is the loopback proxy the renderer opens its transports on; the endpoint's
- * token never crosses this boundary.
+ * is the loopback proxy the renderer opens its transports on; nothing the SSH
+ * connection reads from the machine crosses this boundary.
  */
 export interface RemoteRigSnapshot {
     readonly connected: boolean;
-    readonly endpoint: string;
+    readonly destination: string;
     readonly id: string;
     readonly label: string;
     readonly message?: string;

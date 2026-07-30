@@ -36,7 +36,7 @@ function workspaceSpy() {
 /** One connected Rig named `local`, whose workspace is the spy above. */
 function directory(store: RigWorkspaceStore): AppRigDirectoryStore {
     const snapshot: AppRigDirectorySnapshot = {
-        add: { endpoint: "", label: "", open: false, token: "" },
+        add: { destination: "", label: "", open: false },
         rigs: [
             {
                 connected: true,
@@ -70,9 +70,8 @@ function directory(store: RigWorkspaceStore): AppRigDirectoryStore {
         subscribe: () => () => undefined,
         addOpen: () => undefined,
         addClose: () => undefined,
-        endpointUpdate: () => undefined,
+        destinationUpdate: () => undefined,
         labelUpdate: () => undefined,
-        tokenUpdate: () => undefined,
         addSubmit: () => undefined,
         rigConnect: () => undefined,
         rigDisconnect: () => undefined,

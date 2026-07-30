@@ -92,8 +92,8 @@ export interface AppRigUpdate {
 
 /**
  * One Rig this window can work in: the daemon on this machine, or a remembered
- * machine reached over its endpoint. Both carry the same product stores, which is
- * what lets another machine's projects open the same screens as this one's.
+ * machine reached over SSH. Both carry the same product stores, which is what lets
+ * another machine's projects open the same screens as this one's.
  */
 export interface AppRigEntry {
     readonly id: string;
@@ -104,8 +104,8 @@ export interface AppRigEntry {
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
     readonly version?: string;
-    /** The address a remote machine answers on; absent for this machine. */
-    readonly endpoint?: string;
+    /** The SSH destination a remote machine is reached at; absent for this machine. */
+    readonly destination?: string;
     readonly projects: readonly RigProjectGroup[];
     readonly projectsStatus: "loading" | "ready" | "error";
     /** The live stores for this Rig, present once its connection is up. */
@@ -123,9 +123,8 @@ export interface AppRigSession {
 
 export interface AppRigAddSnapshot {
     readonly open: boolean;
-    readonly endpoint: string;
+    readonly destination: string;
     readonly label: string;
-    readonly token: string;
     readonly error?: string;
 }
 
@@ -144,9 +143,8 @@ export interface AppRigDirectoryStore {
     subscribe(listener: () => void): () => void;
     addOpen(): void;
     addClose(): void;
-    endpointUpdate(value: string): void;
+    destinationUpdate(value: string): void;
     labelUpdate(value: string): void;
-    tokenUpdate(value: string): void;
     addSubmit(): void;
     rigConnect(id: string): void;
     rigDisconnect(id: string): void;

@@ -123,19 +123,17 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             {props.section === "machines" ? (
                 <RigMachineSettings
                     draft={{
-                        endpoint: directory.add.endpoint,
+                        destination: directory.add.destination,
                         label: directory.add.label,
-                        token: directory.add.token,
                         ...(directory.add.error ? { error: directory.add.error } : {}),
                     }}
                     machines={machineRows(directory)}
                     onAdd={() => props.rigs.addSubmit()}
                     onConnect={(id) => props.rigs.rigConnect(id)}
                     onDisconnect={(id) => props.rigs.rigDisconnect(id)}
-                    onEndpointChange={(value) => props.rigs.endpointUpdate(value)}
+                    onDestinationChange={(value) => props.rigs.destinationUpdate(value)}
                     onForget={(id) => props.rigs.rigRemove(id)}
                     onLabelChange={(value) => props.rigs.labelUpdate(value)}
-                    onTokenChange={(value) => props.rigs.tokenUpdate(value)}
                 />
             ) : props.section === "providers" ? (
                 <RigProviderSettings
@@ -194,7 +192,7 @@ function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow
         local: rig.kind === "local",
         projectCount: rig.projects.length,
         status: rig.status,
-        ...(rig.endpoint ? { endpoint: rig.endpoint } : {}),
+        ...(rig.destination ? { destination: rig.destination } : {}),
         ...(rig.message ? { message: rig.message } : {}),
         ...(rig.version ? { version: rig.version } : {}),
     }));

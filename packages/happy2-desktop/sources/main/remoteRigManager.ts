@@ -7,8 +7,7 @@ import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import {
     remoteRigConnectorCreate,
     remoteRigLabelDerive,
-    remoteRigTokenValidate,
-    remoteRigUrlValidate,
+    sshDestinationValidate,
     type RemoteRigConnection,
     type RemoteRigConnector,
 } from "./remoteRig";
@@ -17,15 +16,14 @@ import {
  * A remote Rig as it is remembered between runs. `connected` is the reader's
  * intent rather than an observation: a machine left connected is reached again at
  * the next start, and one the reader disconnected from stays quiet until they ask
- * for it. The token lives here because the endpoint is worthless without it; the
- * file is written 0600 and never leaves the main process.
+ * for it. Only the SSH destination is remembered — the machine's own token is read
+ * over SSH each time it is reached, so nothing secret is stored here.
  */
 interface SavedRemoteRig {
     readonly connected: boolean;
-    readonly endpoint: string;
+    readonly destination: string;
     readonly id: string;
     readonly label: string;
-    readonly token: string;
 }
 
 interface LiveRemoteRig {
@@ -41,8 +39,8 @@ interface LiveRemoteRig {
  * loopback proxy each connected one is reached through. Connecting and
  * disconnecting are deliberate acts by the reader, so a rig that fails stays
  * listed with its message and can be connected again; a rig the reader
- * disconnected is not retried behind their back. No token or endpoint credential
- * leaves this process: the renderer only ever learns the loopback proxy URL.
+ * disconnected is not retried behind their back. No credential read from a
+ * machine leaves this process: the renderer only ever learns the loopback proxy URL.
  */
 export class RemoteRigManager implements AsyncDisposable {
     private closed = false;
@@ -61,7 +59,7 @@ export class RemoteRigManager implements AsyncDisposable {
     ): Promise<RemoteRigManager> {
         const manager = new RemoteRigManager(
             path,
-            options.connector ?? remoteRigConnectorCreate(),
+            options.connector ?? remoteRigConnectorCreate(dirname(path)),
             options.rendererOrigin,
         );
         for (const saved of await savedRead(path))
@@ -86,16 +84,14 @@ export class RemoteRigManager implements AsyncDisposable {
 
     /** Remembers a machine and connects to it straight away, as adding it implies. */
     async add(request: RemoteRigAddRequest): Promise<void> {
-        const endpoint = remoteRigUrlValidate(request.endpoint);
-        const token = remoteRigTokenValidate(request.token);
-        if ([...this.rigs.values()].some(({ saved }) => saved.endpoint === endpoint))
-            throw new Error("That Rig endpoint is already in this workspace.");
+        const destination = sshDestinationValidate(request.destination);
+        if ([...this.rigs.values()].some(({ saved }) => saved.destination === destination))
+            throw new Error("That machine is already in this workspace.");
         const saved: SavedRemoteRig = {
             connected: true,
-            endpoint,
+            destination,
             id: `rig_${randomBytes(16).toString("hex")}`,
-            label: request.label?.trim() || remoteRigLabelDerive(endpoint),
-            token,
+            label: request.label?.trim() || remoteRigLabelDerive(destination),
         };
         this.rigs.set(saved.id, { generation: 0, saved, snapshot: snapshotIdle(saved) });
         await this.persist();
@@ -172,10 +168,7 @@ export class RemoteRigManager implements AsyncDisposable {
         rig.snapshot = { ...snapshotIdle(rig.saved), status: "connecting" };
         this.publish();
         try {
-            const connection = await this.connector.connect({
-                token: rig.saved.token,
-                url: rig.saved.endpoint,
-            });
+            const connection = await this.connector.connect(rig.saved.destination);
             if (this.closed || generation !== rig.generation) {
                 connection.close();
                 return;
@@ -231,7 +224,7 @@ export class RemoteRigManager implements AsyncDisposable {
 function snapshotIdle(saved: SavedRemoteRig): RemoteRigSnapshot {
     return {
         connected: saved.connected,
-        endpoint: saved.endpoint,
+        destination: saved.destination,
         id: saved.id,
         label: saved.label,
         status: "disconnected",
@@ -247,9 +240,8 @@ async function savedRead(path: string): Promise<readonly SavedRemoteRig[]> {
                 !!value &&
                 typeof value === "object" &&
                 typeof (value as SavedRemoteRig).id === "string" &&
-                typeof (value as SavedRemoteRig).endpoint === "string" &&
+                typeof (value as SavedRemoteRig).destination === "string" &&
                 typeof (value as SavedRemoteRig).label === "string" &&
-                typeof (value as SavedRemoteRig).token === "string" &&
                 typeof (value as SavedRemoteRig).connected === "boolean",
         );
     } catch (error) {
