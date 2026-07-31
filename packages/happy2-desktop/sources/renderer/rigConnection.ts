@@ -16,6 +16,7 @@ import {
     type RigSessionLocation,
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
+    type RigInboxStore,
     type RigWorkspaceStore,
 } from "happy2-state";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
+import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -85,6 +87,8 @@ export interface RigSession {
     readonly models: RigModelStore;
     /** The joined session-list + active-chat workspace store for this connection. */
     readonly workspace: RigWorkspaceStore;
+    /** Every question this Rig's agents are waiting on, across all its sessions. */
+    readonly inbox: RigInboxStore | undefined;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
     readonly clock: RigClockStore;
 }
@@ -149,6 +153,10 @@ export function rigConnectionOpen(input: {
             for (const listener of mutationListeners) listener(rejection);
         },
     });
+    // Opened before the catalog: the inbox is filled by the catalog handshake,
+    // which happens once per connection, so it has to be watching before the
+    // catalog loads rather than after a surface asks for it.
+    const inboxSource = rigConnectInboxSourceCreate(rigConnect);
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -172,6 +180,7 @@ export function rigConnectionOpen(input: {
         modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,
+        inboxSource,
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -200,6 +209,7 @@ export function rigConnectionOpen(input: {
                             else input.deps.groupOpen(event.groupId);
                         },
                     }),
+                    inbox: client.inbox(),
                     clock: rigClockStoreCreate(),
                 };
                 input.deps.changed();
@@ -224,6 +234,7 @@ export function rigConnectionOpen(input: {
                 session = undefined;
             }
             client[Symbol.dispose]();
+            inboxSource.close();
             rigConnect.close();
         },
     };

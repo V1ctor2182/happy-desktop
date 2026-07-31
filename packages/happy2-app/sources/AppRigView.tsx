@@ -24,6 +24,9 @@ import type {
     RigPanelStore,
     RigPanelTabId,
     RigPermissionMode,
+    RigInboxItem,
+    RigInboxSnapshot,
+    RigInboxStore,
     RigProjectGroup,
     RigProjectId,
     RigServiceTier,
@@ -37,7 +40,12 @@ import type {
     RigWorkspaceStore,
     RigWorktreeId,
 } from "happy2-state";
-import { rigAgentAuthor, rigOwnerAuthor, rigWindowStoreNoop } from "happy2-state";
+import {
+    rigAgentAuthor,
+    rigInboxStoreNoop,
+    rigOwnerAuthor,
+    rigWindowStoreNoop,
+} from "happy2-state";
 import {
     AppShell,
     Banner,
@@ -75,6 +83,7 @@ import {
     Sidebar,
     SidebarFooter,
     SidebarUpdateAction,
+    RigInboxPage,
     TabbedPane,
     TextField,
     TerminalPanel,
@@ -128,6 +137,12 @@ export interface AppRigSession {
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
+    /**
+     * Every question this Rig's agents are waiting on. Absent when the machine
+     * offers no question feed, which is why the inbox row is absent too rather
+     * than opening onto an empty queue that means nothing.
+     */
+    readonly inbox?: RigInboxStore;
 }
 
 export interface AppRigAddSnapshot {
@@ -224,6 +239,10 @@ export interface AppRigViewProps {
     noteId?: string;
     /** Addresses the notes surface, with a note or without one. */
     onNotesOpen?(noteId?: string): void;
+    /** Whether the URL addresses the addressed Rig's inbox of agent questions. */
+    inboxOpen?: boolean;
+    /** Addresses that inbox. */
+    onInboxOpen?(): void;
 }
 
 /**
@@ -605,6 +624,14 @@ const CONNECT_REMOTE_ITEM = "connect-remote";
 const NOTES_ITEM = "notes";
 
 /**
+ * The pinned row that opens the addressed Rig's inbox. It belongs with the
+ * pinned rows rather than under a project because the questions it collects come
+ * from every session on that machine at once, and the person answering them is
+ * working through a queue rather than visiting a repository.
+ */
+const INBOX_ITEM = "inbox";
+
+/**
  * The workspace window. It owns no product state: it subscribes to the directory
  * of Rigs, renders their projects as one sidebar, and hands the addressed Rig's
  * own stores to the surface below. A Rig that is still connecting, or one the
@@ -627,6 +654,12 @@ export function AppRigView(props: AppRigViewProps) {
     const active =
         directory.rigs.find((rig) => rig.id === props.rigId) ?? directory.rigs[0] ?? undefined;
     const rigOf = (rigId: string) => directory.rigs.find((rig) => rig.id === rigId);
+    // The pinned row carries a live count, so the window subscribes to the
+    // addressed Rig's inbox whether or not the inbox itself is open: the point of
+    // the count is to be seen while the reader is doing something else.
+    const inboxStore = active?.session?.inbox ?? rigInboxStoreNoop;
+    const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
+    const inboxPending = inbox.pending.length;
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
@@ -663,13 +696,29 @@ export function AppRigView(props: AppRigViewProps) {
                           },
                       ]
                     : []),
+                // The inbox belongs to the addressed machine, so it appears only
+                // while that machine is reachable: a queue of questions is
+                // meaningless from a Rig that cannot say what it is waiting on.
+                ...(active?.session?.inbox
+                    ? [
+                          {
+                              badge: inboxPending,
+                              icon: "bell" as const,
+                              id: INBOX_ITEM,
+                              kind: "action" as const,
+                              label: "Inbox",
+                          },
+                      ]
+                    : []),
             ]}
             activeItemId={
                 props.notesOpen
                     ? NOTES_ITEM
-                    : props.groupId
-                      ? rigItemId(props.rigId, props.groupId)
-                      : ""
+                    : props.inboxOpen
+                      ? INBOX_ITEM
+                      : props.groupId
+                        ? rigItemId(props.rigId, props.groupId)
+                        : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -771,6 +820,10 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onNotesOpen?.();
                     return;
                 }
+                if (id === INBOX_ITEM) {
+                    props.onInboxOpen?.();
+                    return;
+                }
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -841,6 +894,29 @@ export function AppRigView(props: AppRigViewProps) {
                     notes={props.notes}
                     onOpen={(id) => props.onNotesOpen?.(id)}
                     theme={appearance.appearance}
+                />
+            </AppShell>
+        );
+
+    // The inbox belongs to the addressed machine, so it is shown only while that
+    // machine has stores to answer through.
+    if (props.inboxOpen && active?.session?.inbox)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <RigInboxSurface
+                    onOpenSession={(rigId, groupId, chatId) =>
+                        props.onChatSelect(rigId, groupId, chatId)
+                    }
+                    projects={active.projects}
+                    rigId={active.id}
+                    snapshot={inbox}
+                    store={active.session.inbox}
                 />
             </AppShell>
         );
@@ -932,6 +1008,61 @@ function RigNotesSurface(props: {
             selectedId={session.noteId}
             theme={props.theme}
         />
+    );
+}
+
+/**
+ * One Rig's inbox inside the window's shell. It subscribes to nothing: the
+ * window already reads this store for the sidebar count, so the queue and the
+ * badge are one subscription and can never disagree about how many questions
+ * are waiting.
+ *
+ * Naming an item's location and opening the session that asked are addressing
+ * acts, which is why they live here rather than in the page: the page renders
+ * questions, the window decides where they came from and where they lead.
+ */
+function RigInboxSurface(props: {
+    onOpenSession(rigId: string, groupId: string, chatId: string): void;
+    projects: readonly RigProjectGroup[];
+    rigId: string;
+    snapshot: RigInboxSnapshot;
+    store: RigInboxStore;
+}) {
+    const locate = (item: RigInboxItem) => {
+        const project = props.projects.find((candidate) => candidate.id === item.projectId);
+        if (!project) return undefined;
+        const worktree = item.worktreeId
+            ? project.worktrees.find((candidate) => candidate.id === item.worktreeId)
+            : undefined;
+        return worktree ? `${project.name} · ${worktree.name}` : project.name;
+    };
+    return (
+        <RigInboxPage
+            answered={props.snapshot.answered}
+            {...(props.snapshot.error ? { error: props.snapshot.error } : {})}
+            itemLocation={locate}
+            itemTime={(item) =>
+                inboxItemTime(item.status === "answered" ? item.resolvedAt : item.createdAt)
+            }
+            loading={props.snapshot.loading}
+            onAnswer={(itemId, answers) => props.store.itemAnswer(itemId, answers)}
+            onOpenSession={(item) => {
+                // A question is answered here, but its argument lives in the
+                // conversation that raised it; the worktree is the group when
+                // the asking session is filed under one.
+                props.onOpenSession(props.rigId, item.worktreeId ?? item.projectId, item.sessionId);
+            }}
+            pending={props.snapshot.pending}
+            submissions={props.snapshot.submissions}
+        />
+    );
+}
+
+/** When a question was asked or settled, as an absolute local time. */
+function inboxItemTime(value: number | undefined): string | undefined {
+    if (value === undefined) return undefined;
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(value),
     );
 }
 

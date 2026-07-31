@@ -185,6 +185,18 @@ const noteRoute = createRoute({
     path: "/notes/$noteId",
 });
 
+/**
+ * One machine's inbox of agent questions. The Rig is in the address because the
+ * queue is that machine's — its agents are the ones waiting — so the window's
+ * back and forward move between machines' inboxes rather than between two views
+ * of one ambiguous list.
+ */
+const inboxRoute = createRoute({
+    component: RigInboxRoute,
+    getParentRoute: () => rootRoute,
+    path: "/inbox/$rigId",
+});
+
 const settingsIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/settings",
@@ -222,6 +234,7 @@ const routeTree = rootRoute.addChildren([
     workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
     notesIndexRoute,
     noteRoute,
+    inboxRoute,
     settingsIndexRoute,
     settingsSectionRoute,
 ]);
@@ -235,7 +248,16 @@ function RigNotesRoute() {
     return <RigWorkspaceLayout notes />;
 }
 
-function RigWorkspaceLayout(props: { notes?: boolean } = {}) {
+/**
+ * The inbox address renders the same window a conversation does: the shell and
+ * its sidebar stay, and only the content area changes, so working through
+ * questions is not leaving the workspace.
+ */
+function RigInboxRoute() {
+    return <RigWorkspaceLayout inbox />;
+}
+
+function RigWorkspaceLayout(props: { inbox?: boolean; notes?: boolean } = {}) {
     // The router hooks resolve their types through the single global `Register`
     // declaration, which names the cloud router. Route definitions above are
     // still typed by `RigRouterContext` (loaders read it directly); only this
@@ -266,6 +288,13 @@ function RigWorkspaceLayout(props: { notes?: boolean } = {}) {
             noteId={params.noteId}
             notes={context.notes}
             notesOpen={props.notes}
+            inboxOpen={props.inbox}
+            onInboxOpen={() =>
+                void navigate({
+                    params: { rigId: params.rigId ?? rigDefaultId(context) },
+                    to: "/inbox/$rigId",
+                })
+            }
             onNotesOpen={(noteId) =>
                 void navigate(
                     noteId === undefined

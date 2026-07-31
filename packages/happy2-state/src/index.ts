@@ -319,6 +319,18 @@ export {
     type RigClientDeps,
 } from "./rig/rigClient.js";
 export {
+    rigInboxStoreCreate,
+    rigInboxStoreNoop,
+    type RigInboxInput,
+    type RigInboxOutput,
+    type RigInboxSnapshot,
+    type RigInboxSource,
+    type RigInboxSourceItem,
+    type RigInboxStore,
+    type RigInboxStoreDeps,
+    type RigInboxSubmission,
+} from "./rig/rigInboxStore.js";
+export {
     rigTerminalOpen,
     type RigTerminalDeps,
     type RigTerminalHandle,

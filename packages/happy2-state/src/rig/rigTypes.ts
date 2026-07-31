@@ -776,3 +776,35 @@ export interface RigUserInputAnswers {
     readonly requestId: string;
     readonly answers: Readonly<Record<string, readonly string[]>>;
 }
+
+// ---------------------------------------------------------------------------
+// Inbox
+// ---------------------------------------------------------------------------
+
+declare const rigInboxItemIdBrand: unique symbol;
+
+/**
+ * Branded identity of one question an agent asked. It is the session and the
+ * request together, because a request id is only unique inside its session.
+ */
+export type RigInboxItemId = string & { readonly [rigInboxItemIdBrand]: true };
+
+export type RigInboxItemStatus = "pending" | "answered";
+
+/** One agent question waiting on the person, or the answer they already gave. */
+export interface RigInboxItem {
+    readonly id: RigInboxItemId;
+    readonly sessionId: RigSessionId;
+    readonly requestId: string;
+    readonly projectId: RigProjectId;
+    /** Files the asking session under one of the project's worktrees. */
+    readonly worktreeId?: RigWorktreeId;
+    /** The asking session's title, when it has earned one. */
+    readonly sessionTitle?: string;
+    readonly questions: readonly RigUserInputQuestion[];
+    readonly status: RigInboxItemStatus;
+    /** Chosen option labels by question id; present once answered. */
+    readonly answers?: Readonly<Record<string, readonly string[]>>;
+    readonly createdAt: number;
+    readonly resolvedAt?: number;
+}

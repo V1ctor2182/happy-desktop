@@ -33,6 +33,7 @@ import {
     type RigWorkspaceMemoryPersistence,
     type RigWorkspaceMemoryStore,
 } from "./rigWorkspaceMemory.js";
+import { rigInboxStoreCreate, type RigInboxSource, type RigInboxStore } from "./rigInboxStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -53,6 +54,14 @@ export interface RigClient {
     catalogRead(): Promise<RigModelCatalog>;
     /** The single session-list store; materialized on first access. */
     sessionList(): RigSessionListStore;
+    /**
+     * The single inbox store for this Rig: every question its agents are waiting
+     * on. Materialized on first access and shared, because the sidebar's pending
+     * count and the open inbox are the same queue seen twice. Unavailable when the
+     * host supplied no question feed, so a surface can say so instead of showing
+     * an inbox that is empty for the wrong reason.
+     */
+    inbox(): RigInboxStore | undefined;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /** Reads one existing text file from a project/worktree checkout. */
@@ -125,6 +134,11 @@ export interface RigClientDeps {
     readonly transport: RigTransport;
     /** Stream-owned read authority for the project/workspace/session catalog. */
     readonly catalogSource?: RigSessionCatalogSource;
+    /**
+     * Stream-owned feed of the questions this Rig's agents are waiting on.
+     * Omitted leaves the inbox unavailable rather than empty.
+     */
+    readonly inboxSource?: RigInboxSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -173,6 +187,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     });
     const memory = rigWorkspaceMemoryStoreCreate(deps.workspaceMemoryPersistence);
     let sessionListStore: RigSessionListStore | undefined;
+    let inboxStore: RigInboxStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -210,6 +225,44 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 });
             }
             return sessionListStore;
+        },
+        inbox() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.inboxSource;
+            if (!source) return undefined;
+            inboxStore ??= rigInboxStoreCreate({
+                source,
+                output: (event) => {
+                    const store = inboxStore;
+                    if (!store) return;
+                    if (deps.connectActions) {
+                        deps.connectActions.answerUserInput(event.sessionId, event.requestId, {
+                            answers: event.answers,
+                        });
+                        store.inboxInput({ type: "itemAnswerSucceeded", itemId: event.itemId });
+                        return;
+                    }
+                    transport
+                        .answerUserInput(event.sessionId, {
+                            requestId: event.requestId,
+                            answers: event.answers,
+                        })
+                        .then(() => {
+                            store.inboxInput({
+                                type: "itemAnswerSucceeded",
+                                itemId: event.itemId,
+                            });
+                        })
+                        .catch((error: unknown) => {
+                            store.inboxInput({
+                                type: "itemAnswerFailed",
+                                itemId: event.itemId,
+                                error,
+                            });
+                        });
+                },
+            });
+            return inboxStore;
         },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -304,6 +357,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             disposed = true;
             sessionListStore?.[Symbol.dispose]();
             sessionListStore = undefined;
+            inboxStore?.[Symbol.dispose]();
+            inboxStore = undefined;
             deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();

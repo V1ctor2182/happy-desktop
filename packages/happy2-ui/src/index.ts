@@ -568,6 +568,11 @@ export { AgentSecretsPage, type AgentSecretsPageProps } from "./pages/admin/Agen
 export { PluginsPage, type PluginsPageProps } from "./pages/admin/PluginsPage";
 export { AdminPage, type AdminPageProps, type AdminPageSection } from "./pages/admin/AdminPage";
 export { ActivityPage, type ActivityPageProps } from "./pages/activity/ActivityPage";
+export {
+    RigInboxPage,
+    type RigInboxAnswerMap,
+    type RigInboxPageProps,
+} from "./pages/inbox/RigInboxPage";
 export { ProfilePage, type ProfilePageProps } from "./pages/profile/ProfilePage";
 export { CallsPage, type CallsPageProps } from "./pages/calls/CallsPage";
 export {
