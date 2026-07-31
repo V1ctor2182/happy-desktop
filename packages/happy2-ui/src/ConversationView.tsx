@@ -4,6 +4,7 @@ import type {
     ConversationAuthor,
     ConversationEntry,
     ConversationRequestSubmission,
+    ConversationToolCall,
 } from "happy2-state";
 import {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
@@ -91,6 +92,8 @@ export type ConversationViewProps = {
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** The composer surface snapshot; the draft never lives in this component. */
     composer: ComposerSnapshot;
+    /** Keeps the conversation readable while disabling every composer action. */
+    composerDisabled?: boolean;
     composerPlaceholder?: string;
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
@@ -104,7 +107,7 @@ export type ConversationViewProps = {
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens one tool entry in the workspace's replaceable Preview tab. */
-    onToolSelect?: (entryId: string) => void;
+    onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -313,6 +316,7 @@ export function ConversationView(props: ConversationViewProps) {
             <ConversationDock
                 composer={composer}
                 composerControls={props.composerControls}
+                disabled={props.composerDisabled}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
                 composerPlaceholder={props.composerPlaceholder}

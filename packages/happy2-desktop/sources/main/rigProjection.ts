@@ -210,6 +210,7 @@ export function rigSubagentProject(subagent: SubagentSummary): RigSubagentSummar
     return {
         id: subagent.id as RigSessionId,
         parentSessionId: subagent.parentSessionId as RigSessionId,
+        ...(subagent.parentToolCallId ? { parentToolCallId: subagent.parentToolCallId } : {}),
         description: subagent.description,
         modelId: subagent.modelId,
         status: subagent.status,

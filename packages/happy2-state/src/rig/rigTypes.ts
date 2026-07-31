@@ -273,6 +273,8 @@ export interface RigGoal {
 export interface RigSubagentSummary {
     readonly id: RigSessionId;
     readonly parentSessionId: RigSessionId;
+    /** Tool invocation in the parent transcript which created this child session. */
+    readonly parentToolCallId?: string;
     readonly description: string;
     readonly taskName?: string;
     readonly modelId: string;

@@ -202,6 +202,8 @@ const ALL_FIELDS: readonly RigSessionControlField[] = ["model", "effort", "permi
 export type RigSessionControlsProps = {
     /** Absent while a session is loading; controls remain mounted but inert. */
     menus?: RigMenusSnapshot;
+    /** Shows the current session configuration without allowing it to change. */
+    disabled?: boolean;
     /**
      * Which controls to render, in this order. Defaults to all four. A surface
      * that has already placed the model picker elsewhere (the composer toolbar)
@@ -291,7 +293,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
             return (
                 <RigControlMenu
                     data-testid="rig-control-model"
-                    disabled={!menus}
+                    disabled={props.disabled || !menus}
                     items={modelItems}
                     key={field}
                     label="Model"
@@ -309,7 +311,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
             return (
                 <RigControlMenu
                     data-testid="rig-control-effort"
-                    disabled={!menus}
+                    disabled={props.disabled || !menus}
                     items={effortItems}
                     key={field}
                     label="Effort"
@@ -323,7 +325,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
             return (
                 <RigControlMenu
                     data-testid="rig-control-permission"
-                    disabled={!menus}
+                    disabled={props.disabled || !menus}
                     items={permissionItems}
                     key={field}
                     menuPlacement={props.menuPlacement}
@@ -340,7 +342,7 @@ export function RigSessionControls(props: RigSessionControlsProps) {
         return (
             <RigControlMenu
                 data-testid="rig-control-tier"
-                disabled={!menus}
+                disabled={props.disabled || !menus}
                 items={serviceTierItems}
                 key={field}
                 label="Speed"

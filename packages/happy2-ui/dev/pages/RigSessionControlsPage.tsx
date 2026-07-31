@@ -78,9 +78,27 @@ export function RigSessionControlsPage() {
             </Specimen>
 
             <Specimen
+                detail="the current model, effort, access, and speed remain legible but cannot be changed"
+                label="Read only"
+                number="04"
+                stage="surface"
+            >
+                <div style={{ width: "620px", padding: "12px", background: "var(--surface)" }}>
+                    <RigSessionControls
+                        disabled
+                        menus={rigMenus}
+                        onEffortChange={() => undefined}
+                        onModelChange={() => undefined}
+                        onPermissionModeChange={() => undefined}
+                        onServiceTierChange={() => undefined}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="a trigger wearing an application's own icon, as Open in does"
                 label="Leading icon"
-                number="04"
+                number="05"
                 stage="surface"
             >
                 <div style={{ width: "320px", padding: "12px", background: "var(--surface)" }}>
@@ -99,7 +117,7 @@ export function RigSessionControlsPage() {
             <Specimen
                 detail="the label side repeats the last choice; only the chevron opens the list"
                 label="Split trigger"
-                number="05"
+                number="06"
                 stage="surface"
             >
                 <div style={{ width: "320px", padding: "12px", background: "var(--surface)" }}>
@@ -122,7 +140,7 @@ export function RigSessionControlsPage() {
             <Specimen
                 detail="one control opened to its Menu popover"
                 label="Open control menu"
-                number="06"
+                number="07"
                 stage="surface"
             >
                 <div

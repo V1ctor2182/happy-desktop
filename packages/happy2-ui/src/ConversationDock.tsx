@@ -8,6 +8,8 @@ export type ConversationDockProps = {
     className?: string;
     /** The composer surface snapshot; the draft never lives in this component. */
     composer: ComposerSnapshot;
+    /** Keeps the session configuration visible while making its write end inert. */
+    disabled?: boolean;
     /** Controls rendered inside the composer toolbar, beside the send control. */
     composerControls?: ReactNode;
     /** Accessory rendered below the composer card. */
@@ -90,7 +92,11 @@ export function ConversationDock(props: ConversationDockProps) {
         >
             {composer.submission.status === "failed" ? (
                 <Banner
-                    action={{ label: "Retry", onClick: props.onComposerSend }}
+                    action={
+                        props.disabled
+                            ? undefined
+                            : { label: "Retry", onClick: props.onComposerSend }
+                    }
                     data-testid="conversation-submission-error"
                     tone="danger"
                     title="Message not sent"
@@ -103,6 +109,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     attachmentMultiple
                     commands={commandItems}
                     contextItems={contextItemsOf(composer)}
+                    disabled={props.disabled}
                     focusOnType={props.composerFocusOnType}
                     hint={composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"}
                     mentions={mentionsOf(composer)}
@@ -110,10 +117,10 @@ export function ConversationDock(props: ConversationDockProps) {
                     modelControl={props.composerControls}
                     onAttachmentsSelect={props.onComposerAttachmentsSelect}
                     onCommandSelect={(commandId) => props.onCommandInvoke?.(commandId)}
-                    onContextRemove={props.onComposerAttachmentRemove}
+                    onContextRemove={props.disabled ? undefined : props.onComposerAttachmentRemove}
                     onFocusChange={props.onComposerFocusChange}
                     onSend={props.onComposerSend}
-                    onStop={props.onAbort}
+                    onStop={props.disabled ? undefined : props.onAbort}
                     onValueChange={props.onComposerValueChange}
                     pending={composer.submission.status === "pending"}
                     placeholder={props.composerPlaceholder ?? "Message the agent…"}

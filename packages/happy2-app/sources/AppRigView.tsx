@@ -29,6 +29,7 @@ import type {
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
+    RigSubagentSummary,
     RigTerminalStore,
     RigThinkingLevel,
     RigWindowStore,
@@ -394,6 +395,73 @@ function previewToolFind(
     return entry?.kind === "agentActivity" && entry.activity.kind === "tool"
         ? entry.activity.tool
         : undefined;
+}
+
+/** Agent tools which address one delegated session rather than only reporting a list. */
+const SUBAGENT_TOOL_NAMES = new Set([
+    "Agent",
+    "TaskOutput",
+    "agent_info",
+    "agent_send",
+    "followup_task",
+    "interrupt_agent",
+    "send_message",
+    "spawn_agent",
+    "spawn_workspace_agent",
+    "wait_agent",
+]);
+
+/** Collects the strings in a closed tool-argument tree for target matching. */
+function toolArgumentStrings(
+    value: ConversationToolCall["arguments"],
+    strings: string[] = [],
+): string[] {
+    if (typeof value === "string") strings.push(value);
+    else if (Array.isArray(value)) for (const item of value) toolArgumentStrings(item, strings);
+    else if (value !== null && typeof value === "object")
+        for (const item of Object.values(value)) toolArgumentStrings(item, strings);
+    return strings;
+}
+
+/**
+ * Resolves an agent-oriented tool call against the parent session's authoritative
+ * subagent list. Arguments cover spawn/follow-up/send/interrupt calls, while the
+ * result text covers a completed wait. An unqualified wait can only name a chat
+ * when exactly one child exists; otherwise the ordinary tool preview remains the
+ * honest destination.
+ */
+function subagentForTool(
+    tool: ConversationToolCall,
+    subagents: readonly RigSubagentSummary[],
+): RigSubagentSummary | undefined {
+    const spawned = subagents.filter((subagent) => subagent.parentToolCallId === tool.toolCallId);
+    if (spawned.length === 1) return spawned[0];
+
+    const toolName = tool.toolName.split(/[.:/]/).at(-1) ?? tool.toolName;
+    if (!SUBAGENT_TOOL_NAMES.has(toolName)) return undefined;
+    const strings = toolArgumentStrings(tool.arguments);
+    if (tool.display) strings.push(tool.display);
+
+    const exact = subagents.filter((subagent) =>
+        strings.some(
+            (value) =>
+                value === subagent.id ||
+                value === subagent.taskName ||
+                value === subagent.description ||
+                (subagent.taskName !== undefined && value.endsWith(`/${subagent.taskName}`)),
+        ),
+    );
+    if (exact.length === 1) return exact[0];
+
+    const mentioned = subagents.filter((subagent) =>
+        strings.some(
+            (value) =>
+                value.includes(subagent.id) ||
+                (subagent.taskName !== undefined && value.includes(subagent.taskName)),
+        ),
+    );
+    if (mentioned.length === 1) return mentioned[0];
+    return toolName === "wait_agent" && subagents.length === 1 ? subagents[0] : undefined;
 }
 
 /** One tab per session in the open group, marked while the agent is working. */
@@ -965,6 +1033,25 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         (target) => target.id === workspace.openInRecentId,
     );
     const conversation = workspace.conversation;
+    const detachedConversationId =
+        openGroup &&
+        props.chatId &&
+        !openGroup.conversations.some((summary) => summary.id === props.chatId)
+            ? props.chatId
+            : undefined;
+    const detachedConversation =
+        detachedConversationId && conversation.type === "ready" ? conversation.value : undefined;
+    const detachedConversationTab: TabItem | undefined = detachedConversationId
+        ? {
+              id: detachedConversationId,
+              icon: "agents",
+              label: detachedConversation?.title ?? "Subagent",
+              ...(detachedConversation?.running ? { busy: true } : {}),
+          }
+        : undefined;
+    // Sessions without a list position are delegated children. They remain
+    // readable by id, but their runner owns their input and configuration.
+    const conversationReadOnly = detachedConversationId !== undefined;
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const desktop = props.platform === "desktop";
 
@@ -978,6 +1065,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 conversation={conversation.value}
                 onChatSelect={props.onChatSelect}
                 projects={rows}
+                readOnly={conversationReadOnly}
                 workspace={props.workspace}
             />
         ) : undefined;
@@ -1220,7 +1308,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             }
                         />
                     ) : null}
-                    {openGroup.conversations.length > 0 || groupFileTabs.length > 0 ? (
+                    {openGroup.conversations.length > 0 ||
+                    groupFileTabs.length > 0 ||
+                    detachedConversationTab ? (
                         <TabbedPane
                             actions={
                                 <Button
@@ -1240,6 +1330,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             onClose={(tabId) => {
                                 if (groupFileTabs.some((tab) => tab.id === tabId)) {
                                     props.workspace.fileClose(tabId);
+                                    return;
+                                }
+                                if (tabId === detachedConversationId) {
+                                    props.onChatSelect(
+                                        openGroup.conversations.length > 0
+                                            ? openGroup.id
+                                            : undefined,
+                                        openGroup.conversations[0]?.id,
+                                        true,
+                                    );
                                     return;
                                 }
                                 // Closing the addressed session addresses what is left
@@ -1270,7 +1370,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         file.kind,
                                     );
                             }}
-                            {...(groupFileTabs.length === 0
+                            {...(groupFileTabs.length === 0 && !detachedConversationTab
                                 ? {
                                       onReorder: (chatIds: readonly string[]) => {
                                           const move = sidebarReorderMove(
@@ -1295,7 +1395,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 props.workspace.fileSelect(undefined);
                                 props.onChatSelect(openGroup.id, tabId);
                             }}
-                            tabs={[...sessionTabs(openGroup), ...groupFileTabs.map(fileTabItem)]}
+                            tabs={[
+                                ...sessionTabs(openGroup),
+                                ...(detachedConversationTab ? [detachedConversationTab] : []),
+                                ...groupFileTabs.map(fileTabItem),
+                            ]}
                         >
                             {activeFile ? (
                                 <RigFileBody
@@ -1308,8 +1412,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 <RigConversationBody
                                     conversation={conversation}
                                     focusOnType={composerClaimsTyping}
+                                    groupId={openGroup.id}
                                     now={now}
                                     onCreate={() => groupConversationCreate(openGroup)}
+                                    onChatSelect={props.onChatSelect}
+                                    readOnly={conversationReadOnly}
                                     workspace={props.workspace}
                                 />
                             )}
@@ -1588,8 +1695,11 @@ function fileSizeFormat(size: number): string {
 function RigConversationBody(props: {
     conversation: RigWorkspaceSnapshot["conversation"];
     focusOnType: boolean;
+    groupId: string;
     now: number;
     onCreate: () => void;
+    onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
+    readOnly: boolean;
     workspace: RigWorkspaceStore;
 }) {
     const conversation = props.conversation;
@@ -1598,7 +1708,10 @@ function RigConversationBody(props: {
             <RigConversationSurface
                 conversation={conversation.value}
                 focusOnType={props.focusOnType}
+                groupId={props.groupId}
                 now={props.now}
+                onChatSelect={props.onChatSelect}
+                readOnly={props.readOnly}
                 workspace={props.workspace}
             />
         );
@@ -1644,7 +1757,10 @@ function RigConversationBody(props: {
 function RigConversationSurface(props: {
     conversation: RigConversationSnapshot;
     focusOnType: boolean;
+    groupId: string;
     now: number;
+    onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
+    readOnly: boolean;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -1671,8 +1787,9 @@ function RigConversationSurface(props: {
         <ConversationView
             agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
-            composerFocusOnType={props.focusOnType}
-            composerPlaceholder="Message Happy…"
+            composerDisabled={props.readOnly}
+            composerFocusOnType={!props.readOnly && props.focusOnType}
+            composerPlaceholder={props.readOnly ? "Subagent chats are read-only" : "Message Happy…"}
             conversationId={conversation.conversationId}
             entries={conversation.entries}
             loading={!conversation.ready}
@@ -1694,7 +1811,7 @@ function RigConversationSurface(props: {
                                 // is active or queued behind it, so the control
                                 // says so rather than accepting a choice the
                                 // next message could not apply.
-                                disabled: conversation.modelLocked,
+                                disabled: props.readOnly || conversation.modelLocked,
                                 onEffortChange: (effort?: RigThinkingLevel) =>
                                     workspace.sessionEffortUpdate(effort),
                                 onModelChange: (selection: RigModelSelection) =>
@@ -1708,6 +1825,7 @@ function RigConversationSurface(props: {
                 <ComposerFooterBar
                     leading={
                         <RigSessionControls
+                            disabled={props.readOnly}
                             fields={["permission", "tier"]}
                             menuPlacement="above"
                             variant="ghost"
@@ -1744,7 +1862,7 @@ function RigConversationSurface(props: {
                     }
                 />
             }
-            onAbort={() => swallow(workspace.runAbort())}
+            onAbort={props.readOnly ? undefined : () => swallow(workspace.runAbort())}
             onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
             onComposerAttachmentRemove={(attachmentId) =>
                 workspace.composerAttachmentRemove(attachmentId)
@@ -1754,7 +1872,14 @@ function RigConversationSurface(props: {
             onComposerSend={() => workspace.composerTextSubmit()}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
             onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
-            onToolSelect={(entryId) => workspace.panel.previewOpen(entryId)}
+            onToolSelect={(entryId, tool) => {
+                const subagent = subagentForTool(tool, conversation.subagents);
+                if (subagent) {
+                    props.onChatSelect(props.groupId, subagent.id);
+                    return;
+                }
+                workspace.panel.previewOpen(entryId);
+            }}
             onRequestAnswer={(requestId, answers) =>
                 swallow(workspace.answerInput({ requestId, answers }))
             }
@@ -1858,6 +1983,7 @@ function RigPanelComposer(props: {
     conversation: RigConversationSnapshot;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
+    readOnly: boolean;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -1866,15 +1992,18 @@ function RigPanelComposer(props: {
         <FloatingConversationDock>
             <ConversationDock
                 composer={conversation.composer}
+                disabled={props.readOnly}
                 // This dock only exists while it covers the workspace column's
                 // composer, so it is the surface the reader writes into.
-                composerFocusOnType
-                composerPlaceholder="Message Happy…"
+                composerFocusOnType={!props.readOnly}
+                composerPlaceholder={
+                    props.readOnly ? "Subagent chats are read-only" : "Message Happy…"
+                }
                 composerControls={
                     conversation.menus ? (
                         <ComposerModelControl
                             {...rigComposerModelControlProps(conversation.menus, {
-                                disabled: conversation.modelLocked,
+                                disabled: props.readOnly || conversation.modelLocked,
                                 onEffortChange: (effort?: RigThinkingLevel) =>
                                     workspace.sessionEffortUpdate(effort),
                                 onModelChange: (selection: RigModelSelection) =>
@@ -1887,6 +2016,7 @@ function RigPanelComposer(props: {
                     <ComposerFooterBar
                         leading={
                             <RigSessionControls
+                                disabled={props.readOnly}
                                 fields={["permission", "tier"]}
                                 menuPlacement="above"
                                 variant="ghost"
@@ -1940,7 +2070,7 @@ function RigPanelComposer(props: {
                         }
                     />
                 }
-                onAbort={() => swallow(workspace.runAbort())}
+                onAbort={props.readOnly ? undefined : () => swallow(workspace.runAbort())}
                 onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
                 onComposerAttachmentRemove={(attachmentId) =>
                     workspace.composerAttachmentRemove(attachmentId)

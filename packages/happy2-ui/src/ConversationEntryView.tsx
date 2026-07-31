@@ -4,6 +4,7 @@ import type {
     ConversationAttachment,
     ConversationAuthor,
     ConversationEntry,
+    ConversationToolCall,
     UserError,
 } from "happy2-state";
 import { AgentActivityRow } from "./AgentActivityRow";
@@ -37,7 +38,7 @@ export type ConversationEntryViewProps = {
     /** Opens an attached image full size. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens this entry's tool call in an owner-provided preview surface. */
-    onToolSelect?: (entryId: string) => void;
+    onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -125,7 +126,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 defaultExpanded={props.activityDefaultExpanded}
                 onToolSelect={
                     entry.activity.kind === "tool"
-                        ? () => props.onToolSelect?.(entry.id)
+                        ? (tool) => props.onToolSelect?.(entry.id, tool)
                         : undefined
                 }
                 singleLine={entry.activity.kind === "tool"}

@@ -164,9 +164,51 @@ export function ConversationViewPage() {
             </Specimen>
 
             <Specimen
+                detail="a delegated session keeps its transcript and configuration visible while its composer explains that replies belong in the parent"
+                label="Read-only subagent"
+                number="04"
+                stage="app"
+            >
+                <div style={{ width: "980px", height: "440px", display: "flex" }}>
+                    <ConversationView
+                        composer={composer()}
+                        composerControls={
+                            <ComposerModelControl
+                                {...rigComposerModelControlProps(rigMenus, {
+                                    disabled: true,
+                                    onEffortChange: () => undefined,
+                                    onModelChange: () => undefined,
+                                })}
+                            />
+                        }
+                        composerDisabled
+                        composerFooterControl={
+                            <RigSessionControls
+                                disabled
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                menus={rigMenus}
+                                onEffortChange={() => undefined}
+                                onModelChange={() => undefined}
+                                onPermissionModeChange={() => undefined}
+                                onServiceTierChange={() => undefined}
+                                variant="ghost"
+                            />
+                        }
+                        composerPlaceholder="Subagent chats are read-only"
+                        entries={conversationEntries.slice(0, 3)}
+                        onComposerSend={() => undefined}
+                        onComposerValueChange={() => undefined}
+                        subtitle="~/happy2"
+                        title="Subagent"
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="a collapsed tool-only section synthesizes one faint empty assistant result before its footer"
                 label="Tool-only turn"
-                number="04"
+                number="05"
                 stage="app"
             >
                 <div style={{ width: "980px", height: "440px", display: "flex" }}>
@@ -193,7 +235,7 @@ export function ConversationViewPage() {
             <Specimen
                 detail="expanded mode preserves the original tool row order and omits the collapsed-only placeholder"
                 label="Tool-only turn expanded"
-                number="05"
+                number="06"
                 stage="app"
             >
                 <div style={{ width: "980px", height: "480px", display: "flex" }}>

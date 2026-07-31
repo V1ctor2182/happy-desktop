@@ -202,6 +202,9 @@ function transcriptSubagentsProject(session: SessionState): readonly RigSubagent
     return session.subagents.map((subagent) => ({
         id: subagent.id as RigSessionId,
         parentSessionId: subagent.parentSessionId as RigSessionId,
+        ...(subagent.parentToolCallId === undefined
+            ? {}
+            : { parentToolCallId: subagent.parentToolCallId }),
         description: subagent.description,
         ...(subagent.taskName === undefined ? {} : { taskName: subagent.taskName }),
         modelId: subagent.modelId,
