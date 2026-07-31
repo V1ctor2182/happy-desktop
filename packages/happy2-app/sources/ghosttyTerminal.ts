@@ -75,11 +75,22 @@ class GhosttyTerminalEmulator implements TerminalEmulator {
     }
 
     snapshot(): TerminalGridSnapshot {
+        // The browser owns the user's scroll position over our accumulated
+        // transcript; Ghostty's private viewport must always follow live output.
+        // `snapshotPage` restores the same numeric offset after reading history,
+        // but that does not preserve Ghostty's follow-bottom state. Re-pin before
+        // capturing so output received since the previous history read cannot sit
+        // invisibly below the native viewport.
+        this.terminal.scrollToBottom();
         const current = this.terminal.snapshot();
         const historyEnd = Math.max(0, current.totalRows - current.visibleRows);
         if (this.reflowed || historyEnd < this.capturedEnd) this.historyRebuild(historyEnd);
         else if (historyEnd > this.capturedEnd) this.historyExtend(historyEnd);
         else if (this.evicting(current)) this.historyRebuild(historyEnd);
+        // History reads end by restoring an absolute row rather than the semantic
+        // bottom. Leave Ghostty following the tail for output that arrives before
+        // the next render snapshot.
+        this.terminal.scrollToBottom();
         this.topLine = rowText(current.rows[0]);
         return ghosttySnapshotToGrid(current, this.history, this.inputModes.get());
     }
