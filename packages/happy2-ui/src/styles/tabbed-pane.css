@@ -4,9 +4,9 @@
  *
  * The pane is a flex column so the body, not the pane, owns scrolling:
  * `min-height: 0` lets the body shrink inside the column instead of pushing the
- * bar out of view. The bar owns the hairline and keeps its trailing actions
- * outside the strip's scrollport; inside it the strip scrolls horizontally,
- * with `overflow-y: hidden` so a scrollbar never appears under the tabs. Because
+ * bar out of view. The bar owns the hairline; inside it the strip scrolls
+ * horizontally, with `overflow-y: hidden` so a scrollbar never appears under
+ * the tabs. Because
  * that scrollport would clip the tab underline's usual 1px overhang, the
  * underline sits flush at the bottom of the tab here.
  */
@@ -40,6 +40,14 @@
     display: none;
 }
 
+/* Sized by its content, so it is the strip — not the scrollport — that bounds
+   how far the sticky actions can travel. */
+.happy2-tabbed-pane__strip {
+    display: flex;
+    flex: none;
+    align-items: stretch;
+}
+
 .happy2-tabbed-pane__tabs {
     flex: none;
     border-bottom: 0;
@@ -62,13 +70,25 @@
     bottom: 0;
 }
 
+/*
+ * The actions follow the last tab inside the scrollport, so the "add tab"
+ * control reads as the next thing after the tabs. `sticky` is what keeps that
+ * from costing reachability: once the strip overflows, the control parks
+ * against the trailing edge rather than scrolling out of the surface, and its
+ * own background keeps the tabs passing underneath from showing through.
+ */
 .happy2-tabbed-pane__actions {
+    position: sticky;
+    right: 0;
     display: flex;
     flex: none;
     align-items: center;
     gap: 4px;
-    padding: 0 8px;
-    border-left: 1px solid var(--divider);
+    /* No leading padding: the last tab already ends with its own, and doubling
+       it left the "+" stranded away from the tabs. The trailing padding is the
+       gutter the control keeps once it is stuck against the edge. */
+    padding: 0 8px 0 0;
+    background: var(--surface);
 }
 
 .happy2-tabbed-pane__body {

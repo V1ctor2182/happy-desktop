@@ -15,6 +15,66 @@ export interface ContextMeterProps {
 /** Above this share used, the bar asks for a compaction; above the second, it insists. */
 const COMPACT_FRACTION = 0.75;
 const CRITICAL_FRACTION = 0.9;
+const contextMeterFractions = new WeakMap<HTMLElement, number>();
+
+function contextMeterAnimate(node: HTMLElement | null, fraction: number): void {
+    if (!node) return;
+
+    const previousFraction = contextMeterFractions.get(node);
+    contextMeterFractions.set(node, fraction);
+    if (
+        previousFraction === undefined ||
+        previousFraction === fraction ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+        return;
+
+    const track = node.querySelector<HTMLElement>(".happy2-context-meter__track");
+    if (!track) return;
+
+    track.getAnimations().forEach((animation) => animation.cancel());
+    if (fraction > previousFraction) {
+        track.animate(
+            [
+                { transform: "scaleX(1) scaleY(1)" },
+                { transform: "scaleX(1.025) scaleY(1.45)", offset: 0.32 },
+                { transform: "scaleX(0.995) scaleY(0.92)", offset: 0.68 },
+                { transform: "scaleX(1) scaleY(1)" },
+            ],
+            {
+                duration: 360,
+                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            },
+        );
+        const shine = track.querySelector<HTMLElement>(".happy2-context-meter__shine");
+        shine?.animate(
+            [
+                { opacity: 0, transform: "translateX(-160%)" },
+                { opacity: 0.82, offset: 0.24 },
+                { opacity: 0, transform: "translateX(260%)" },
+            ],
+            {
+                duration: 520,
+                easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            },
+        );
+        return;
+    }
+
+    track.animate(
+        [
+            { transform: "scaleX(1) scaleY(1)" },
+            { transform: "scaleX(0.92) scaleY(1.55)", offset: 0.24 },
+            { transform: "scaleX(1.035) scaleY(0.88)", offset: 0.58 },
+            { transform: "scaleX(0.99) scaleY(1.08)", offset: 0.8 },
+            { transform: "scaleX(1) scaleY(1)" },
+        ],
+        {
+            duration: 460,
+            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        },
+    );
+}
 
 function tokensFormat(tokens: number): string {
     if (tokens < 1000) return String(Math.max(0, Math.round(tokens)));
@@ -56,6 +116,9 @@ export function ContextMeter(props: ContextMeterProps) {
             data-happy2-ui="context-meter"
             data-testid={props["data-testid"]}
             data-tone={tone}
+            ref={(node) => {
+                contextMeterAnimate(node, fraction);
+            }}
             role="img"
             style={props.style}
             title={`${tokensFormat(used)} of ${tokensFormat(total)} context tokens used${props.approximate ? " (approximate)" : ""}${tone === "ample" ? "" : " — compact the conversation to free room"}`}
@@ -83,6 +146,7 @@ export function ContextMeter(props: ContextMeterProps) {
                     data-happy2-ui="context-meter-fill"
                     style={{ width: `${String(fraction * 100)}%` }}
                 />
+                <span className="happy2-context-meter__shine" />
                 {/*
                  * Where compacting becomes the right move, notched into the
                  * track itself, so the fill approaching it is legible before the

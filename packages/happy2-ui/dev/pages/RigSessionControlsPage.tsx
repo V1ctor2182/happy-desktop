@@ -97,9 +97,32 @@ export function RigSessionControlsPage() {
             </Specimen>
 
             <Specimen
+                detail="the label side repeats the last choice; only the chevron opens the list"
+                label="Split trigger"
+                number="05"
+                stage="surface"
+            >
+                <div style={{ width: "320px", padding: "12px", background: "var(--surface)" }}>
+                    <RigControlMenu
+                        items={[
+                            { kind: "item", id: "vscode", label: "VS Code", iconUrl: APP_ICON },
+                            { kind: "item", id: "finder", label: "Finder", iconUrl: APP_ICON },
+                            { kind: "separator" },
+                            { kind: "item", id: "copy-path", label: "Copy path", icon: "doc" },
+                        ]}
+                        label="Open in"
+                        leadingIconUrl={APP_ICON}
+                        onPrimary={() => undefined}
+                        onSelect={() => undefined}
+                        primaryLabel="Open in VS Code"
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="one control opened to its Menu popover"
                 label="Open control menu"
-                number="05"
+                number="06"
                 stage="surface"
             >
                 <div

@@ -37,6 +37,18 @@ export type RigControlMenuProps = {
     value?: string;
     items: MenuItem[];
     onSelect: (id: string) => void;
+    /**
+     * Splits the trigger in two: the labelled side performs this action outright
+     * and only the chevron opens the menu. A control whose current value is the
+     * answer nearly every time — "Open in", wearing the application it was last
+     * handed to — should not charge a menu for repeating it.
+     */
+    onPrimary?: () => void;
+    /**
+     * Accessible name for the action side of a split trigger, which otherwise
+     * reads only as its field caption ("Open in Zed", not "Open in").
+     */
+    primaryLabel?: string;
     menuWidth?: number;
     /** Direction the popover opens from its trigger. Defaults to below. */
     menuPlacement?: "above" | "below";
@@ -65,12 +77,14 @@ export function RigControlMenu(props: RigControlMenuProps) {
     const [open, setOpen] = useState(false);
     const expanded = open && !props.disabled;
     const ghost = props.variant === "ghost";
+    const split = props.onPrimary !== undefined;
 
     return (
         <div
             className={["happy2-rig-control", props.className].filter(Boolean).join(" ")}
             data-happy2-ui="rig-control"
             data-open={expanded ? "" : undefined}
+            data-split={split ? "" : undefined}
             data-testid={props["data-testid"]}
             data-variant={ghost ? "ghost" : undefined}
             onKeyDown={(event) => {
@@ -87,12 +101,21 @@ export function RigControlMenu(props: RigControlMenuProps) {
             style={props.style}
         >
             <button
-                aria-expanded={expanded ? "true" : "false"}
-                aria-haspopup="menu"
+                {...(split
+                    ? {
+                          ...(props.primaryLabel === undefined
+                              ? {}
+                              : { "aria-label": props.primaryLabel }),
+                          onClick: props.onPrimary,
+                      }
+                    : {
+                          "aria-expanded": expanded ? ("true" as const) : ("false" as const),
+                          "aria-haspopup": "menu" as const,
+                          onClick: () => setOpen((value) => !value),
+                      })}
                 className="happy2-rig-control__trigger"
                 data-happy2-ui="rig-control-trigger"
                 disabled={props.disabled}
-                onClick={() => setOpen((value) => !value)}
                 type="button"
             >
                 {props.leadingIconUrl === undefined ? null : (
@@ -113,10 +136,31 @@ export function RigControlMenu(props: RigControlMenuProps) {
                         {props.value}
                     </span>
                 )}
-                <span aria-hidden="true" className="happy2-rig-control__chevron">
-                    <Icon name="chevron-down" size={12} />
-                </span>
+                {split ? null : (
+                    <span aria-hidden="true" className="happy2-rig-control__chevron">
+                        <Icon name="chevron-down" size={12} />
+                    </span>
+                )}
             </button>
+            {/* The menu half of a split control: the same trigger box reduced to
+                its chevron, sharing an edge with the action beside it so the two
+                still read as one control. */}
+            {split ? (
+                <button
+                    aria-expanded={expanded ? "true" : "false"}
+                    aria-haspopup="menu"
+                    aria-label={props.label === undefined ? "More options" : `${props.label}…`}
+                    className="happy2-rig-control__trigger happy2-rig-control__trigger--menu"
+                    data-happy2-ui="rig-control-menu-trigger"
+                    disabled={props.disabled}
+                    onClick={() => setOpen((value) => !value)}
+                    type="button"
+                >
+                    <span aria-hidden="true" className="happy2-rig-control__chevron">
+                        <Icon name="chevron-down" size={12} />
+                    </span>
+                </button>
+            ) : null}
             {expanded ? (
                 <>
                     {/* Transparent full-window backdrop closes the popover on an

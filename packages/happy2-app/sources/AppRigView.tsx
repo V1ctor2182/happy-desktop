@@ -89,6 +89,7 @@ import {
     type TabItem,
 } from "happy2-ui";
 import { openExternalLink } from "./externalLink";
+import { NewSessionShortcut } from "./components/NewSessionShortcut";
 
 export interface AppRigUpdate {
     readonly action: "refresh" | "restart";
@@ -1098,9 +1099,22 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     label="Open in"
                                     // The control wears whatever was opened last,
                                     // so the answer to "again, please" is already
-                                    // on screen instead of one menu away.
+                                    // on screen instead of one menu away — and
+                                    // once it is worn, the label side hands the
+                                    // project straight back to that application
+                                    // while only the chevron opens the list.
                                     leadingIconUrl={openInRecent?.iconUrl}
                                     menuAlign="end"
+                                    {...(openInRecent
+                                        ? {
+                                              onPrimary: () =>
+                                                  void props.workspace.openIn(
+                                                      openGroup.id,
+                                                      openInRecent.id,
+                                                  ),
+                                              primaryLabel: `Open in ${openInRecent.label}`,
+                                          }
+                                        : {})}
                                     onSelect={(id: string) => {
                                         if (id === "copy-path") {
                                             void navigator.clipboard?.writeText(
@@ -1127,6 +1141,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
                     />
+                    {/* Cmd+T opens a tab, and here a tab is a session in the
+                        project that is already open. */}
+                    <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
                     {openGroup.conversations.length === 0 && workspace.groupComposer ? (
                         // A group with nothing in it gets no tab strip — an empty
                         // strip is a control that does nothing but take a row —

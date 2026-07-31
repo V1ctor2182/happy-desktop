@@ -160,6 +160,33 @@
     object-fit: contain;
 }
 
+/* ---- Split control --------------------------------------------------------
+ *
+ * One box divided rather than two controls placed side by side: the action side
+ * keeps the leading corners, the chevron side the trailing ones, and the single
+ * hairline between them is the action side's own right border. Each half lights
+ * on hover so it is visible that they answer separately.
+ */
+
+.happy2-rig-control[data-split] .happy2-rig-control__trigger {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.happy2-rig-control[data-split] .happy2-rig-control__trigger--menu {
+    padding: 0 6px;
+    border-left: 0;
+    border-radius: 0 var(--happy2-radius-sm) var(--happy2-radius-sm) 0;
+}
+
+.happy2-rig-control[data-split] .happy2-rig-control__trigger:hover:not(:disabled) {
+    background: var(--surface-ripple);
+}
+
+.happy2-rig-control[data-split][data-open] .happy2-rig-control__trigger--menu:not(:disabled) {
+    background: var(--surface-ripple);
+}
+
 /* ---- Ghost variant --------------------------------------------------------
  *
  * The composer footer's form of the control: no box, no fill, dimmed until it

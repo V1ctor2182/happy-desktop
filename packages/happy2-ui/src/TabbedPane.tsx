@@ -21,9 +21,10 @@ export type TabbedPaneProps = {
     onReorder?: (ids: readonly string[]) => void;
     size?: TabsSize;
     /**
-     * Controls pinned to the trailing end of the bar, outside the tab strip's
-     * scrollport — an "add tab" affordance stays reachable however many tabs
-     * there are.
+     * Controls that ride directly after the last tab, such as an "add tab"
+     * affordance. They sit inside the strip's scrollport so they read as the
+     * next thing after the tabs, and stick to the trailing edge once the strip
+     * overflows, so they stay reachable however many tabs there are.
      */
     actions?: ReactNode;
 };
@@ -34,9 +35,10 @@ export type TabbedPaneProps = {
  *
  * The bar is the component's reason to exist: it is a fixed row that never
  * grows, so an unbounded number of tabs scrolls horizontally inside it instead
- * of squeezing the trailing actions off the surface or wrapping into a second
- * row that would move the body. Labels truncate at a fixed tab width so the
- * strip stays scannable, and the body owns its own scrollports.
+ * of wrapping into a second row that would move the body. Labels truncate at a
+ * fixed tab width so the strip stays scannable, and the body owns its own
+ * scrollports. The trailing actions scroll with the tabs while they fit and
+ * stick to the trailing edge once they do not, so they are never scrolled off.
  *
  * It renders exactly one body — whatever the owner passes as `children` for the
  * active tab — so switching tabs is the owner's state change, not a hidden
@@ -66,26 +68,32 @@ export function TabbedPane(props: TabbedPaneProps) {
         >
             <div className="happy2-tabbed-pane__bar" data-happy2-ui="tabbed-pane-bar">
                 <div className="happy2-tabbed-pane__scroller" data-happy2-ui="tabbed-pane-scroller">
-                    <Tabs
-                        activeId={local.activeId}
-                        className="happy2-tabbed-pane__tabs"
-                        closeLabel={local.closeLabel}
-                        onClose={local.onClose}
-                        onDoubleClick={local.onDoubleClick}
-                        onReorder={local.onReorder}
-                        onSelect={local.onSelect}
-                        size={local.size ?? "small"}
-                        tabs={local.tabs}
-                    />
-                </div>
-                {local.actions ? (
-                    <div
-                        className="happy2-tabbed-pane__actions"
-                        data-happy2-ui="tabbed-pane-actions"
-                    >
-                        {local.actions}
+                    {/* The strip is only as wide as the tabs and their actions,
+                        which is what bounds the sticky actions: with room to
+                        spare they stay beside the last tab instead of drifting
+                        to the far edge of an empty scrollport. */}
+                    <div className="happy2-tabbed-pane__strip" data-happy2-ui="tabbed-pane-strip">
+                        <Tabs
+                            activeId={local.activeId}
+                            className="happy2-tabbed-pane__tabs"
+                            closeLabel={local.closeLabel}
+                            onClose={local.onClose}
+                            onDoubleClick={local.onDoubleClick}
+                            onReorder={local.onReorder}
+                            onSelect={local.onSelect}
+                            size={local.size ?? "small"}
+                            tabs={local.tabs}
+                        />
+                        {local.actions ? (
+                            <div
+                                className="happy2-tabbed-pane__actions"
+                                data-happy2-ui="tabbed-pane-actions"
+                            >
+                                {local.actions}
+                            </div>
+                        ) : null}
                     </div>
-                ) : null}
+                </div>
             </div>
             <div className="happy2-tabbed-pane__body" data-happy2-ui="tabbed-pane-body">
                 {local.children}

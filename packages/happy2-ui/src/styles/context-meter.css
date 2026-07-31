@@ -65,6 +65,21 @@
     border-radius: var(--happy2-radius-pill);
     background: var(--divider);
     overflow: hidden;
+    transform-origin: center;
+    transition:
+        height 140ms ease-out,
+        transform 140ms ease-out;
+}
+
+.happy2-context-meter:hover .happy2-context-meter__track {
+    height: 6px;
+    transform: scaleX(1.0625);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-context-meter__track {
+        transition: none;
+    }
 }
 
 .happy2-context-meter__fill {
@@ -75,6 +90,26 @@
     /* The window only ever moves by a report at a time; the ease keeps a jump
        from reading as a glitch without animating anything on its own. */
     transition: width 240ms ease-out;
+}
+
+/*
+ * A narrow specular streak crosses the whole track only when the occupied
+ * fraction grows. Its movement is started by the component's ref callback so
+ * repeated reports can replay it without remounting any meter element.
+ */
+.happy2-context-meter__shine {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 32%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--surface) 88%, transparent),
+        transparent
+    );
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* The compaction mark: a notch in the track, not a line over the fill, so the
