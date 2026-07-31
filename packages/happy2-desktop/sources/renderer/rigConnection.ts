@@ -152,6 +152,7 @@ export function rigConnectionOpen(input: {
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);
         },
+        onSessionFinished: () => completionChimePlay(),
     });
     // Opened before the catalog: the inbox is filled by the catalog handshake,
     // which happens once per connection, so it has to be watching before the
@@ -174,9 +175,6 @@ export function rigConnectionOpen(input: {
     });
     const client: RigClient = rigClientCreate({
         transport,
-        sessionListOutput: (event) => {
-            if (event.type === "sessionCompleted") completionChimePlay();
-        },
         modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,

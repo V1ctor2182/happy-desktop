@@ -534,17 +534,20 @@ function summaryTitle(session: RigSessionSummary): string {
  * directory is the subtitle that tells two sessions apart, and its run state is
  * the live-activity marker every agent-driven conversation renders.
  */
-export function rigConversationSummaryProject(
-    session: RigSessionSummary,
-    unread = false,
-): ConversationSummary {
+export function rigConversationSummaryProject(session: RigSessionSummary): ConversationSummary {
+    const activity =
+        session.unreadReason === "attention_needed"
+            ? "awaitingInput"
+            : session.status === "running" || session.status === "queued"
+              ? "running"
+              : "idle";
     return {
         id: session.id,
         title: summaryTitle(session),
         subtitle: session.displayCwd || session.cwd,
-        activity: session.status === "running" || session.status === "queued" ? "running" : "idle",
+        activity,
         updatedAt: session.lastMessageAt ?? session.updatedAt,
-        ...(unread ? { unread: true } : {}),
+        ...(session.unreadReason === undefined ? {} : { unread: true }),
         participants: [rigOwnerAuthor, rigAgentAuthor],
     };
 }

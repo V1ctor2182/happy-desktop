@@ -219,7 +219,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     ...(deps.connectMutationSubscribe
                         ? { connectMutationSubscribe: deps.connectMutationSubscribe }
                         : {}),
-                    memory,
                     output: deps.sessionListOutput,
                     createId: deps.createId,
                 });

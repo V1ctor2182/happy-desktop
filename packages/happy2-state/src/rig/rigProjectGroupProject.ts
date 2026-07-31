@@ -86,7 +86,6 @@ type RigPlacedSession = RigSessionSummary & { readonly orderKey: string };
 export function rigProjectGroupsProject(
     catalog: RigProjectCatalog,
     sessions: readonly RigSessionSummary[],
-    unreadSessionIds: ReadonlySet<RigSessionId> = new Set(),
 ): readonly RigProjectGroup[] {
     const projectSessions = new Map<RigProjectId, RigPlacedSession[]>();
     const worktreeSessions = new Map<RigWorktreeId, RigPlacedSession[]>();
@@ -113,7 +112,7 @@ export function rigProjectGroupsProject(
         // A worktree is listed as soon as it exists, before anything has run in
         // it: it was created deliberately and is where the next session goes, so
         // an empty one is a destination rather than clutter.
-        const conversations = conversationsOf(worktreeSessions.get(worktree.id), unreadSessionIds);
+        const conversations = conversationsOf(worktreeSessions.get(worktree.id));
         mapAppend(worktreesByProject, worktree.projectId).push({
             id: worktree.id,
             projectId: worktree.projectId,
@@ -134,7 +133,7 @@ export function rigProjectGroupsProject(
     const groups = catalog.projects.map((project) =>
         projectGroup(
             project,
-            conversationsOf(projectSessions.get(project.id), unreadSessionIds),
+            conversationsOf(projectSessions.get(project.id)),
             (worktreesByProject.get(project.id) ?? []).sort(byOrderKey),
         ),
     );
@@ -192,16 +191,14 @@ function byOrderKey(
  */
 function conversationsOf(
     sessions: readonly RigPlacedSession[] | undefined,
-    unreadSessionIds: ReadonlySet<RigSessionId>,
 ): readonly ConversationSummary[] {
-    return [...(sessions ?? [])]
-        .sort(byOrderKey)
-        .map((session) => rigConversationSummaryProject(session, unreadSessionIds.has(session.id)));
+    return [...(sessions ?? [])].sort(byOrderKey).map(rigConversationSummaryProject);
 }
 
 function activityOf(
     conversations: readonly ConversationSummary[],
 ): "running" | "awaitingInput" | "idle" {
+    if (conversations.some((row) => row.activity === "awaitingInput")) return "awaitingInput";
     return conversations.some((row) => row.activity === "running") ? "running" : "idle";
 }
 

@@ -10,7 +10,6 @@ import {
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
-import type { RigWorkspaceMemoryStore } from "./rigWorkspaceMemory.js";
 import type {
     RigGroupId,
     RigProjectCatalog,
@@ -22,9 +21,6 @@ import type {
     RigWorktree,
     RigWorktreeId,
 } from "./rigTypes.js";
-
-/** Lets a steering turn enter `queued` before a transient completed frame is announced. */
-const COMPLETION_SETTLE_MS = 750;
 
 /** How many outstanding rig-connect mutations this surface can attribute a refusal to. */
 const PENDING_MUTATION_LIMIT = 256;
@@ -55,8 +51,7 @@ export interface RigSessionLocation {
 export type RigSessionListOutput =
     | { readonly type: "sessionCreated"; readonly location: RigSessionLocation }
     | { readonly type: "sessionForked"; readonly location: RigSessionLocation }
-    | { readonly type: "sessionReset"; readonly sessionId: RigSessionId }
-    | { readonly type: "sessionCompleted"; readonly sessionId: RigSessionId };
+    | { readonly type: "sessionReset"; readonly sessionId: RigSessionId };
 
 export interface RigSessionListStore {
     get(): RigSessionListSnapshot;
@@ -166,7 +161,7 @@ export interface RigSessionListDeps {
      * every mutation falls back to the request/reconcile path on `transport`,
      * which is how the store runs standalone against a fake server.
      */
-    readonly connectActions?: Pick<RigConnection, "createWorkspace">;
+    readonly connectActions?: Pick<RigConnection, "createWorkspace" | "markSessionRead">;
     /**
      * Terminal failures for mutations issued through `connectActions`. They
      * arrive here rather than as a rejected promise, because such a mutation is
@@ -175,12 +170,6 @@ export interface RigSessionListDeps {
     readonly connectMutationSubscribe?: (
         listener: (rejection: MutationRejectedDelta) => void,
     ) => () => void;
-    /**
-     * This Rig's durable memory. Read state lives there rather than in this
-     * store's lifetime: work that finished before the app was closed is still
-     * unseen when it opens again.
-     */
-    readonly memory?: RigWorkspaceMemoryStore;
     readonly output?: (event: RigSessionListOutput) => void;
     readonly createId?: () => string;
 }
@@ -237,19 +226,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // The durable rows this surface last reconciled, kept so a projection can be
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
-    const unreadSessionIds = new Set<RigSessionId>(deps.memory?.unreadRead() ?? []);
-    /**
-     * Writes read state back to the Rig's memory. Called after every change to
-     * the set rather than on an interval, so closing the window right after
-     * reading a session still remembers that it was read.
-     */
-    const unreadRemember = (): void => {
-        deps.memory?.unreadUpdate([...unreadSessionIds]);
-    };
-    const pendingCompletions = new Map<
-        RigSessionId,
-        { readonly deadline: number; readonly timer: ReturnType<typeof setTimeout> }
-    >();
     let catalog: RigProjectCatalog = EMPTY_CATALOG;
     // Callers waiting for a freshly reserved worktree to finish initializing.
     // Settled from `publish`, which every reconcile runs through, so the wait is
@@ -258,7 +234,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const publish = (): void => {
         const previous = store.getState();
-        const projected = rigProjectGroupsProject(catalog, sessions, unreadSessionIds);
+        const projected = rigProjectGroupsProject(catalog, sessions);
         // An unchanged project keeps its previous object — and with it the
         // identity of the worktrees and conversation rows nested inside it — so a
         // reconcile that changed one session does not replace every project row.
@@ -300,22 +276,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         });
     };
 
-    const completionCancel = (sessionId: RigSessionId): void => {
-        const pending = pendingCompletions.get(sessionId);
-        if (!pending) return;
-        clearTimeout(pending.timer);
-        pendingCompletions.delete(sessionId);
-    };
-
-    const completionSchedule = (sessionId: RigSessionId): void => {
-        completionCancel(sessionId);
-        const deadline = Date.now() + COMPLETION_SETTLE_MS;
-        const timer = setTimeout(() => {
-            if (!disposed && active) void reconcile();
-        }, COMPLETION_SETTLE_MS);
-        pendingCompletions.set(sessionId, { deadline, timer });
-    };
-
     const reconcile = async (): Promise<void> => {
         if (reconciling) {
             reconcileAgain = true;
@@ -334,35 +294,8 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                       deps.transport.sessionsRead(),
                   ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
             if (disposed || current !== generation) return;
-            const previousSessions = new Map(sessions.map((session) => [session.id, session]));
             catalog = snapshot.catalog;
             sessions = snapshot.sessions;
-            for (const session of sessions) {
-                const previous = previousSessions.get(session.id);
-                const wasRunning = previous?.status === "running" || previous?.status === "queued";
-                const isRunning = session.status === "running" || session.status === "queued";
-                if (isRunning) completionCancel(session.id);
-                else if (wasRunning && session.status === "completed")
-                    completionSchedule(session.id);
-            }
-            const now = Date.now();
-            let unreadChanged = false;
-            for (const [sessionId, pending] of pendingCompletions) {
-                const session = sessions.find((candidate) => candidate.id === sessionId);
-                if (!session || session.status !== "completed") {
-                    completionCancel(sessionId);
-                    continue;
-                }
-                if (pending.deadline > now) continue;
-                completionCancel(sessionId);
-                unreadSessionIds.add(sessionId);
-                unreadChanged = true;
-                output({ type: "sessionCompleted", sessionId });
-            }
-            for (const sessionId of unreadSessionIds)
-                if (!sessions.some((session) => session.id === sessionId))
-                    unreadChanged = unreadSessionIds.delete(sessionId) || unreadChanged;
-            if (unreadChanged) unreadRemember();
             publish();
             worktreesSettle();
         } catch (error) {
@@ -422,7 +355,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const stop = (): void => {
         active = false;
         generation += 1;
-        for (const sessionId of pendingCompletions.keys()) completionCancel(sessionId);
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         unsubscribeMutationRejections?.();
@@ -473,9 +405,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         },
         sessionsRefresh: () => reconcile(),
         sessionRead(sessionId) {
-            if (!unreadSessionIds.delete(sessionId)) return;
-            unreadRemember();
+            const session = sessions.find((candidate) => candidate.id === sessionId);
+            if (session?.unreadReason === undefined) return;
+            sessions = sessions.map((candidate) =>
+                candidate.id === sessionId ? { ...candidate, unreadReason: undefined } : candidate,
+            );
             publish();
+            deps.connectActions?.markSessionRead(sessionId);
         },
         sessionCreate: (input) =>
             mutate(async () => {

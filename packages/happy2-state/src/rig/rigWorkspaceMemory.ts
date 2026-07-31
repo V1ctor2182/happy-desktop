@@ -25,13 +25,11 @@ export interface RigGroupTabMemory {
 
 /**
  * Everything one Rig's window remembers between runs about where the reader
- * was: each group's tabs, and which sessions still have unseen finished work.
- * Read state belongs here rather than in the session list's lifetime because a
- * session whose work finished before a restart is still unread after it.
+ * was: each group's open and recently read tabs. Chat read state is durable Rig
+ * state and deliberately does not have a second local copy here.
  */
 export interface RigWorkspaceMemoryDocument {
     readonly groups: { readonly [groupId: string]: RigGroupTabMemory | undefined };
-    readonly unreadSessionIds: readonly string[];
 }
 
 /**
@@ -45,17 +43,13 @@ export interface RigWorkspaceMemoryPersistence {
 }
 
 /**
- * The one memory both the session list and the workspace write into, so a Rig
- * keeps a single durable document rather than two that can disagree about which
- * sessions exist.
+ * The workspace's durable navigation memory.
  */
 export interface RigWorkspaceMemoryStore {
     groupRead(groupId: RigGroupId): RigGroupTabMemory | undefined;
     groupUpdate(groupId: RigGroupId, memory: RigGroupTabMemory): void;
     /** Drops a group that no longer exists, with everything remembered about it. */
     groupForget(groupId: RigGroupId): void;
-    unreadRead(): readonly RigSessionId[];
-    unreadUpdate(sessionIds: readonly RigSessionId[]): void;
 }
 
 const FILE_KINDS: readonly RigFileTabKind[] = ["file", "diff"];
@@ -97,8 +91,6 @@ export function rigWorkspaceMemoryStoreCreate(
     persistence?: RigWorkspaceMemoryPersistence,
 ): RigWorkspaceMemoryStore {
     const groups = new Map<string, RigGroupTabMemory>();
-    let unreadSessionIds: readonly RigSessionId[] = [];
-
     const stored = (() => {
         try {
             return persistence?.read();
@@ -113,20 +105,12 @@ export function rigWorkspaceMemoryStoreCreate(
                 const group = groupParse(value);
                 if (group) groups.set(groupId, group);
             }
-        const storedUnread = (stored as RigWorkspaceMemoryDocument).unreadSessionIds;
-        if (Array.isArray(storedUnread))
-            unreadSessionIds = storedUnread.filter(
-                (id): id is RigSessionId => typeof id === "string",
-            );
     }
 
     const flush = (): void => {
         if (!persistence) return;
         try {
-            persistence.write({
-                groups: Object.fromEntries(groups),
-                unreadSessionIds: [...unreadSessionIds],
-            });
+            persistence.write({ groups: Object.fromEntries(groups) });
         } catch {
             // Storage the host refused still keeps this client's memory alive.
         }
@@ -140,11 +124,6 @@ export function rigWorkspaceMemoryStoreCreate(
         },
         groupForget(groupId) {
             if (!groups.delete(groupId)) return;
-            flush();
-        },
-        unreadRead: () => unreadSessionIds,
-        unreadUpdate(sessionIds) {
-            unreadSessionIds = [...sessionIds];
             flush();
         },
     };

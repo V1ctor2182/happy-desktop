@@ -1604,6 +1604,9 @@ function createRequest(input: RigSessionCreateInput) {
         // TUI asks for this) archive themselves once idle, and the workspace
         // list hides exactly those.
         archiveOnIdle: false,
+        // Happy owns a persistent chat list, so Rig is the durable authority for
+        // which of those chats have finished or are asking the person something.
+        trackUnread: true,
         ...(input.worktreeId ? { workspaceId: input.worktreeId } : {}),
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.modelId ? { modelId: input.modelId } : {}),
