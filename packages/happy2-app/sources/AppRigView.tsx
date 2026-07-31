@@ -1194,6 +1194,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
+    // Workspace files belong to the project/worktree, not to the lifetime of a
+    // chat. The desktop transport accepts the group id as the file-addressing
+    // scope when there is no session to carry that scope.
+    const fileSessionId = (props.chatId ?? openGroup?.id) as RigSessionId | undefined;
     const openInRecent = workspace.openInTargets.find(
         (target) => target.id === workspace.openInRecentId,
     );
@@ -1279,9 +1283,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 return;
                             }
                             if (picking) props.workspace.fileSelectionReplace(path);
-                            if (openGroup && props.chatId)
+                            if (openGroup && fileSessionId)
                                 props.workspace.filePreview(
-                                    props.chatId as RigSessionId,
+                                    fileSessionId,
                                     openGroup.id,
                                     path,
                                     fileTabKind(path, workspace.fileScope),
@@ -1289,9 +1293,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }}
                         onRevert={() => props.workspace.fileRevertPromptOpen()}
                         onFileOpen={(path) => {
-                            if (openGroup && props.chatId)
+                            if (openGroup && fileSessionId)
                                 props.workspace.fileOpen(
-                                    props.chatId as RigSessionId,
+                                    fileSessionId,
                                     openGroup.id,
                                     path,
                                     fileTabKind(path, workspace.fileScope),

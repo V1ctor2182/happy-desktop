@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -268,7 +269,7 @@ const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
 
 async function workspaceFileWrite(
     client: RigProxyClient,
-    sessionId: string,
+    sessionOrGroupId: string,
     filePath: string,
     content: string,
     expectedHash: string | null,
@@ -276,7 +277,20 @@ async function workspaceFileWrite(
     const bytes = Buffer.from(content, "utf8");
     if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
         throw new Error("This file is too large to save from the editor.");
-    await client.writeFile(sessionId, {
+    const catalog = await client.listCatalog();
+    const isGroup =
+        catalog.projects.some((candidate) => candidate.id === sessionOrGroupId) ||
+        catalog.workspaces.some((candidate) => candidate.id === sessionOrGroupId);
+    if (isGroup) {
+        const target = await workspacePathResolve(client, sessionOrGroupId, filePath);
+        const current = await readFile(target);
+        const currentHash = createHash("sha256").update(current).digest("hex");
+        if (expectedHash !== null && expectedHash !== currentHash)
+            throw new Error("This file changed since it was opened.");
+        await writeFile(target, bytes);
+        return;
+    }
+    await client.writeFile(sessionOrGroupId, {
         content: bytes.toString("base64"),
         expectedHash,
         path: filePath,
@@ -342,6 +356,53 @@ function changedFileText(bytes: Buffer): string {
     return bytes.toString("utf8");
 }
 
+/** Resolves a catalog group and a relative workspace path without escaping it. */
+async function workspacePathResolve(
+    client: RigProxyClient,
+    groupId: string,
+    filePath: string,
+): Promise<string> {
+    const catalog = await client.listCatalog();
+    const root =
+        catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
+        catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
+    if (!root) throw new Error("That project or workspace is no longer available.");
+    const canonicalRoot = await realpath(root);
+    const target = await realpath(resolve(canonicalRoot, filePath));
+    const within = relative(canonicalRoot, target);
+    if (
+        within === "" ||
+        within === ".." ||
+        within.startsWith(`..${pathSeparator}`) ||
+        isAbsolute(within)
+    )
+        throw new Error("That file is outside the project or workspace.");
+    return target;
+}
+
+const pathSeparator = process.platform === "win32" ? "\\" : "/";
+
+async function workspaceFileLoad(
+    client: RigProxyClient,
+    sessionOrGroupId: string,
+    filePath: string,
+    signal?: AbortSignal,
+): Promise<{ readonly content: string; readonly hash: string }> {
+    const catalog = await client.listCatalog();
+    const isGroup =
+        catalog.projects.some((candidate) => candidate.id === sessionOrGroupId) ||
+        catalog.workspaces.some((candidate) => candidate.id === sessionOrGroupId);
+    if (isGroup) {
+        const target = await workspacePathResolve(client, sessionOrGroupId, filePath);
+        const bytes = await readFile(target, { signal });
+        return {
+            content: bytes.toString("base64"),
+            hash: createHash("sha256").update(bytes).digest("hex"),
+        };
+    }
+    return client.readFile(sessionOrGroupId, filePath, signal);
+}
+
 /** Reads one existing, non-binary text file without asking Git for a diff. */
 async function workspaceFileRead(
     client: RigProxyClient,
@@ -353,7 +414,7 @@ async function workspaceFileRead(
     readonly content: string;
     readonly hash: string;
 }> {
-    const file = await client.readFile(sessionId, filePath, signal);
+    const file = await workspaceFileLoad(client, sessionId, filePath, signal);
     return {
         path: filePath,
         content: changedFileText(Buffer.from(file.content, "base64")),
@@ -431,7 +492,7 @@ async function workspaceFileBytesLoad(
     const held = previewHeld;
     if (held && hash !== undefined && held.key === previewKey(sessionId, filePath, hash))
         return { contentType: held.contentType, bytes: held.bytes, hash };
-    const file = await client.readFile(sessionId, filePath, signal);
+    const file = await workspaceFileLoad(client, sessionId, filePath, signal);
     const bytes = Buffer.from(file.content, "base64");
     if (bytes.byteLength > PREVIEW_MAX_BYTES) throw new Error("This file is too large to preview.");
     const contentType = previewContentType(filePath);
@@ -543,14 +604,13 @@ async function changedFileRead(
                 candidate.workspaceId === groupId ||
                 (candidate.workspaceId === undefined && candidate.projectId === groupId),
         );
-    if (!groupSession) throw new Error("That project or workspace has no session available.");
     const git = await gitLineStatsRead(root);
     const change = git?.changes.find((candidate) => candidate.path === filePath);
     if (!change) throw new Error("That file is no longer changed.");
     let newContent = "";
     let hash: string | undefined;
     if (change.status !== "deleted") {
-        const file = await client.readFile(groupSession.id, filePath, signal);
+        const file = await workspaceFileLoad(client, groupSession?.id ?? groupId, filePath, signal);
         newContent = changedFileText(Buffer.from(file.content, "base64"));
         hash = file.hash;
     }
