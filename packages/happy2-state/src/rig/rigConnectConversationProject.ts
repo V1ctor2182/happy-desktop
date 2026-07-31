@@ -59,6 +59,10 @@ function notificationProject(
             // quote stands in as identity when the child session is gone.
             id: `${rigInboundAuthor.id}:${subagent?.id ?? description}`,
             displayName: description,
+            // The child session's own id, so its mark is the one that session
+            // wears everywhere else. A pruned subagent has only its description
+            // left to be recognized by, which is stable for as long as it is.
+            sessionId: subagent?.id ?? description,
             username: subagent?.taskName ?? rigInboundAuthor.username,
         },
         text: `Background work ${outcome}`,

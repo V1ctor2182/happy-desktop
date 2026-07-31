@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { RigInboxItem, RigInboxItemId, RigInboxSubmission, UserError } from "happy2-state";
+import { AvatarBrutalist } from "../../AvatarBrutalist";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
@@ -143,6 +144,15 @@ function InboxItemHeader(props: InboxItemHeaderProps) {
     return (
         <div className="happy2-rig-inbox__item-header" data-happy2-ui="rig-inbox-item-header">
             <span className="happy2-rig-inbox__item-identity">
+                {/* The asking session's own mark, the same one its tab wears, so
+                    a question read here and the session it came from are the
+                    same thing at a glance rather than two titles to match up. */}
+                <AvatarBrutalist
+                    aria-label={title}
+                    className="happy2-rig-inbox__item-avatar"
+                    id={props.item.sessionId}
+                    size={20}
+                />
                 <span className="happy2-rig-inbox__item-title">{title}</span>
                 {props.location ? (
                     <span className="happy2-rig-inbox__item-location">{props.location}</span>

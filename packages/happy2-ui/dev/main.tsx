@@ -20,6 +20,7 @@ import { AutomatedTagPage } from "./pages/AutomatedTagPage";
 import { ChannelAccessSummaryPage } from "./pages/ChannelAccessSummaryPage";
 import { ChannelDirectoryListPage } from "./pages/ChannelDirectoryListPage";
 import { AuthScreenPage } from "./pages/AuthScreenPage";
+import { AvatarBrutalistPage } from "./pages/AvatarBrutalistPage";
 import { AvatarPage } from "./pages/AvatarPage";
 import { BadgePage } from "./pages/BadgePage";
 import { BannerPage } from "./pages/BannerPage";
@@ -234,6 +235,12 @@ const components: BlueprintPage[] = [
     },
     { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
+    {
+        id: "avatar-brutalist",
+        label: "Avatar brutalist",
+        number: "C-170",
+        page: AvatarBrutalistPage,
+    },
     {
         id: "rig-user-input-prompt",
         label: "Rig user input prompt",

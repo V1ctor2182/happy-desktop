@@ -8,6 +8,18 @@ const inboxTabs: TabItem[] = [
     { id: "channels", label: "Channels", icon: "hash" },
     { id: "reactions", label: "Reactions" },
 ];
+/**
+ * Session-shaped tabs: no glyph of their own, but they report `busy` and
+ * `unread`, so they hold the leading lane open in every state.
+ */
+const laneTabs = (state: { avatar?: boolean; busy?: boolean; unread?: boolean }): TabItem[] =>
+    ["one", "two", "three"].map((id, index) => ({
+        id,
+        label: ["Migrate the table", "Rewrite the header", "Connect a Rig"][index]!,
+        avatarId: state.avatar === true ? `ses_${id}` : undefined,
+        busy: state.busy === true,
+        unread: state.unread === true,
+    }));
 const adminTabs: TabItem[] = [
     { id: "members", label: "Members", badge: 128 },
     { id: "bans", label: "Bans", badge: 4 },
@@ -152,6 +164,57 @@ export function TabsPage() {
                         />
                         <Bar active="members" tabs={adminTabs} width={440} />
                         <DimensionRule label="badge tone: accent active · neutral idle" />
+                    </div>
+                </Specimen>
+            </div>
+
+            <div className="specimen-grid">
+                <Specimen
+                    detail="the same tabs idle, working, and unread — the labels do not move"
+                    label="Leading lane holds"
+                    number="T-09"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "20px",
+                            padding: "24px",
+                        }}
+                    >
+                        <Bar active="one" tabs={laneTabs({})} width={440} />
+                        <Bar active="one" tabs={laneTabs({ busy: true })} width={440} />
+                        <Bar active="one" tabs={laneTabs({ unread: true })} width={440} />
+                        <DimensionRule label="lane 16 · held while busy and unread are reported" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="a generated mark fills the lane; unread rides its corner; work still wins the lane"
+                    label="Generated marks"
+                    number="T-10"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "20px",
+                            padding: "24px",
+                        }}
+                    >
+                        <Bar active="one" tabs={laneTabs({ avatar: true })} width={440} />
+                        <Bar
+                            active="one"
+                            tabs={laneTabs({ avatar: true, unread: true })}
+                            width={440}
+                        />
+                        <Bar
+                            active="one"
+                            tabs={laneTabs({ avatar: true, busy: true })}
+                            width={440}
+                        />
+                        <DimensionRule label="mark 16 · the same lane the glyph and spinner use" />
                     </div>
                 </Specimen>
             </div>

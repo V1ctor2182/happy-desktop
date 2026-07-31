@@ -488,8 +488,13 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     return group.conversations.map((summary) => ({
         id: summary.id,
         label: summary.title,
-        ...(summary.activity === "running" ? { busy: true } : {}),
-        ...(summary.unread ? { unread: true } : {}),
+        // The session's own id, so the mark survives every rename of the title.
+        avatarId: summary.id,
+        // Both are stated even when false: a session tab holds its leading lane
+        // open, so work starting or finishing makes the mark appear and go
+        // without sliding the title sideways under the reader.
+        busy: summary.activity === "running",
+        unread: summary.unread === true,
     }));
 }
 

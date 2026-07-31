@@ -657,6 +657,31 @@ export function MessagePage() {
                 )}
                 <DimensionRule label="italic · secondary text · 64% opacity" />
             </Specimen>
+
+            <Specimen
+                detail="a message that arrived from another session wears that session's generated mark instead of initials"
+                label="Message — from another session"
+                number="16"
+                stage="app"
+            >
+                {channelFrame(
+                    <>
+                        <Message
+                            author="Inspect workspace status"
+                            avatarSessionId="rj3ssbvts1t0wqrn39af3prx"
+                            body="Background work completed."
+                            time="9:14"
+                        />
+                        <Message
+                            author="Migrate the plugin permission table"
+                            avatarSessionId="cm4x81kq0000zt6hf2b9d7we"
+                            body="Background work completed."
+                            time="9:16"
+                        />
+                    </>,
+                )}
+                <DimensionRule label="mark 12 · the identity gutter, same slot as an initials avatar" />
+            </Specimen>
         </ComponentPage>
     );
 }

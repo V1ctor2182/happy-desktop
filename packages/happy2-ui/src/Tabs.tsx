@@ -5,6 +5,7 @@ import {
     type CSSProperties,
     type PointerEvent as ReactPointerEvent,
 } from "react";
+import { AvatarBrutalist } from "./AvatarBrutalist";
 import { CountBadge } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
@@ -27,9 +28,63 @@ export type TabItem = {
      * running that is the thing worth showing.
      */
     busy?: boolean;
-    /** Paints a colored dot in the same leading lane once finished work is unread. */
+    /** Marks the tab as carrying unread activity with a dot on its leading mark. */
     unread?: boolean;
+    /**
+     * Gives the tab a generated brutalist mark derived from this string, so a
+     * tab that has no icon still has a face the reader can aim at. Supply the
+     * entity's own id — the session's, the project's — and the mark stays the
+     * same for as long as the entity does. `busy` and `icon` both outrank it.
+     */
+    avatarId?: string;
 };
+
+/**
+ * Whether a tab keeps its leading lane even when nothing is in it. A tab that
+ * reports `busy` or `unread` at all owns the lane permanently, so starting and
+ * finishing work makes the mark appear and go without sliding the tab's own
+ * label sideways underneath it. A tab that never speaks of either — a fixed
+ * section, say — has no lane to hold open and its label starts at the edge.
+ */
+function tabHoldsLeadingLane(tab: TabItem): boolean {
+    return tab.busy !== undefined || tab.unread !== undefined;
+}
+
+/**
+ * The tab's leading lane. Running work outranks everything, then an explicit
+ * icon, then the tab's generated mark; a tab with none of those still holds the
+ * lane open if it ever speaks of `busy` or `unread`. Unread rides on top of
+ * whichever mark is there as a corner dot, and only stands in the lane alone
+ * when there is no mark to ride — so the news arriving never moves the label.
+ */
+function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
+    const mark = tab.busy ? (
+        <Spinner label={`${tab.label} is working`} size={iconSize} tone="muted" />
+    ) : tab.icon ? (
+        <Icon name={tab.icon} size={iconSize} />
+    ) : tab.avatarId !== undefined ? (
+        <AvatarBrutalist id={tab.avatarId} size={iconSize} />
+    ) : null;
+    if (mark === null && !tab.unread && !tabHoldsLeadingLane(tab)) return null;
+    return (
+        <span
+            aria-label={tab.unread ? `${tab.label} has unread activity` : undefined}
+            className="happy2-tabs__tab-icon"
+            data-happy2-ui={tab.unread ? "tab-unread" : mark === null ? "tab-lane" : "tab-icon"}
+        >
+            {mark}
+            {tab.unread && !tab.busy ? (
+                <span
+                    className={
+                        mark === null
+                            ? "happy2-tabs__tab-unread"
+                            : "happy2-tabs__tab-unread happy2-tabs__tab-unread--corner"
+                    }
+                />
+            ) : null}
+        </span>
+    );
+}
 export type TabsProps = {
     className?: string;
     "data-testid"?: string;
@@ -261,29 +316,7 @@ export function Tabs(props: TabsProps) {
                         }
                         type="button"
                     >
-                        {tab.busy ? (
-                            <span className="happy2-tabs__tab-icon" data-happy2-ui="tab-icon">
-                                <Spinner
-                                    label={`${tab.label} is working`}
-                                    size={iconSizes[size()]}
-                                    tone="muted"
-                                />
-                            </span>
-                        ) : tab.unread ? (
-                            <span
-                                aria-label={`${tab.label} has unread activity`}
-                                className="happy2-tabs__tab-icon happy2-tabs__tab-unread-slot"
-                                data-happy2-ui="tab-unread"
-                            >
-                                <span className="happy2-tabs__tab-unread" />
-                            </span>
-                        ) : tab.icon ? (
-                            ((name) => (
-                                <span className="happy2-tabs__tab-icon" data-happy2-ui="tab-icon">
-                                    <Icon name={name} size={iconSizes[size()]} />
-                                </span>
-                            ))(tab.icon)
-                        ) : null}
+                        {tabLeadingMark(tab, iconSizes[size()])}
                         <span className="happy2-tabs__tab-label" data-happy2-ui="tab-label">
                             {tab.label}
                         </span>

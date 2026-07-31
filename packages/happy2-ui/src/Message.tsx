@@ -10,6 +10,7 @@ import {
     type ReactNode,
 } from "react";
 import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
+import { AvatarBrutalist } from "./AvatarBrutalist";
 import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
@@ -152,6 +153,14 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * Defaults to `time`. */
     gutterTime?: string;
     imageUrl?: string;
+    /**
+     * A session this message speaks for rather than a person: the avatar becomes
+     * that session's generated mark instead of initials. It is what separates a
+     * message that arrived from another session from one written here — and the
+     * mark matches the one that session wears in the tab strip, so the two read
+     * as the same thing. An `imageUrl` still wins over it.
+     */
+    avatarSessionId?: string;
     /** Inline photo attachments rendered as a clickable thumbnail grid. */
     images?: MessageImage[];
     /** Opens an image (by id) — wire to a web-modal lightbox, never a new tab. */
@@ -223,12 +232,21 @@ function hasRenderableChild(value: ReactNode): boolean {
  * One chat message on the app surface: a compact inline identity, author/time row,
  * rich body segments, attachment slot, reactions, and reply affordance.
  */
+/**
+ * Edge of the mark in the identity gutter. An `Avatar` is shrunk to this by
+ * `.happy2-message__avatar-dangling` in `message.css`; a generated mark carries
+ * its size inline, where a stylesheet cannot reach it, so it is stated here and
+ * the two must stay equal or the gutter's marks will not match.
+ */
+const GUTTER_MARK_PIXELS = 12;
+
 export function Message(props: MessageProps) {
     const [local, rest] = partitionComponentProps(props, [
         "agent",
         "audienceLabel",
         "automated",
         "author",
+        "avatarSessionId",
         "body",
         "children",
         "className",
@@ -265,15 +283,18 @@ export function Message(props: MessageProps) {
     const showIncomingMeta = () => !local.own && !grouped();
     const authorActionLabel = () => `View ${local.author}’s profile`;
     const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
-    const renderAvatar = (size: AvatarSize) => (
-        <Avatar
-            imageUrl={happyAgent() ? happyLogoUrl : local.imageUrl}
-            initials={local.initials ?? deriveInitials(local.author)}
-            size={size}
-            tone={local.tone}
-            type={local.agent ? "agent" : "human"}
-        />
-    );
+    const renderAvatar = (size: AvatarSize) =>
+        local.avatarSessionId !== undefined && local.imageUrl === undefined && !happyAgent() ? (
+            <AvatarBrutalist id={local.avatarSessionId} size={GUTTER_MARK_PIXELS} />
+        ) : (
+            <Avatar
+                imageUrl={happyAgent() ? happyLogoUrl : local.imageUrl}
+                initials={local.initials ?? deriveInitials(local.author)}
+                size={size}
+                tone={local.tone}
+                type={local.agent ? "agent" : "human"}
+            />
+        );
     const renderDanglingAvatar = () =>
         local.onAuthorSelect ? (
             <button

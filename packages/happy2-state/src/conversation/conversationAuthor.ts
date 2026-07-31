@@ -14,4 +14,11 @@ export interface ConversationAuthor {
     readonly username: string;
     readonly kind: UserSummary["kind"];
     readonly photoFileId?: string;
+    /**
+     * The session this author speaks for, when the author is another session
+     * rather than a person or this session's own agent. A surface renders it as
+     * a generated mark keyed by the session, so a message that arrived from
+     * elsewhere is recognizable as coming from that particular elsewhere.
+     */
+    readonly sessionId?: string;
 }

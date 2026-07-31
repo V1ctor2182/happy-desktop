@@ -247,6 +247,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         <Message
             agent={author?.kind === "agent"}
             author={author?.displayName ?? "Unknown"}
+            {...(author?.sessionId === undefined ? {} : { avatarSessionId: author.sessionId })}
             body={message.text}
             className={props.className}
             data-testid={props["data-testid"]}

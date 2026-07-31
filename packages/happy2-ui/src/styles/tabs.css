@@ -72,25 +72,48 @@
     line-height: 20px;
 }
 
+/*
+ * One leading lane, one width. A glyph, a spinner, an unread dot, and a lane
+ * held open with nothing in it all measure the same, so a tab that starts
+ * working, finishes, and is then read never slides its own label sideways.
+ */
 .happy2-tabs__tab-icon {
+    position: relative;
     display: flex;
     flex: none;
-}
-
-.happy2-tabs__tab-unread-slot {
-    position: relative;
+    align-items: center;
+    justify-content: center;
     width: 16px;
     height: 16px;
 }
 
+.happy2-tabs[data-size="small"] .happy2-tabs__tab-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.happy2-tabs[data-size="large"] .happy2-tabs__tab-icon {
+    width: 18px;
+    height: 18px;
+}
+
 .happy2-tabs__tab-unread {
-    position: absolute;
-    top: 1px;
-    left: 1px;
     width: 6px;
     height: 6px;
     border-radius: var(--happy2-radius-pill);
     background: var(--text-link);
+}
+
+/*
+ * When the lane already holds a mark, unread rides its corner instead of
+ * replacing it: the tab keeps the face the reader aims at, and the news is a
+ * dot on top of it. The ring separates the dot from whatever it overlaps.
+ */
+.happy2-tabs__tab-unread--corner {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    box-shadow: 0 0 0 1.5px var(--surface);
 }
 
 .happy2-tabs__tab-label {

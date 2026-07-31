@@ -104,6 +104,7 @@ export {
     type AvatarType,
     type ToneName,
 } from "./Avatar";
+export { AvatarBrutalist, type AvatarBrutalistProps } from "./AvatarBrutalist";
 export { AutomatedTag, type AutomatedTagProps } from "./AutomatedTag";
 export {
     ChannelAccessSummary,
