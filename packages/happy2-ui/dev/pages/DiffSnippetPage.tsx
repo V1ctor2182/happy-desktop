@@ -147,6 +147,30 @@ export function DiffSnippetPage() {
                     <DimensionRule label="360px" />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="wrap · the same lines soft-wrapped for a column too narrow to scroll a block at a time"
+                label="Wrapped lines"
+                number="05"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        width: "250px",
+                    }}
+                >
+                    <DiffSnippet
+                        file="src/auth/client.ts"
+                        lines={overflowLines}
+                        stats={{ added: 1, removed: 1 }}
+                        wrap
+                    />
+                    <DimensionRule label="250px · no sideways scroll" />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

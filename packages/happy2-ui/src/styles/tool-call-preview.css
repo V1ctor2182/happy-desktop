@@ -105,6 +105,15 @@
     min-height: 100%;
 }
 
+/*
+ * Every block keeps its own height. As shrinkable flex items they were squeezed
+ * to fit the panel instead of overflowing it, so a long diff was silently cut
+ * off and the column that should have scrolled had nothing to scroll.
+ */
+.happy2-tool-call-preview__content > * {
+    flex: none;
+}
+
 .happy2-tool-call-preview__section,
 .happy2-tool-call-preview__operations {
     display: flex;

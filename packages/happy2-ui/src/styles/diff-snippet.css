@@ -5,7 +5,8 @@
  * (mono file name + right-aligned +N/−N stats), then 20px mono diff
  * lines with a 24px +/− gutter, optional 32px line-number gutter, and
  * add/del/context/meta treatments. Long lines scroll horizontally
- * inside the well; they never wrap.
+ * inside the well; they never wrap — unless the well is asked to wrap
+ * them, which a column too narrow to scroll one block at a time does.
  */
 
 .happy2-diff-snippet {
@@ -148,6 +149,33 @@
     box-sizing: border-box;
     flex: none;
     transform: translateY(var(--happy2-diff-text-optical-y));
+}
+
+/*
+ * Wrapped: the code column stops being wider than the well, so nothing scrolls
+ * sideways and a long line continues on the next row. The row loses its fixed
+ * height and keeps it as a minimum; the gutters stay on the first row of the
+ * line they mark, which is where the reader looks for them.
+ */
+.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__scroll {
+    overflow-x: hidden;
+}
+
+.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__code {
+    width: auto;
+}
+
+.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__line {
+    height: auto;
+    min-height: 20px;
+    align-items: flex-start;
+}
+
+.happy2-diff-snippet[data-wrap] .happy2-diff-snippet__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 /*

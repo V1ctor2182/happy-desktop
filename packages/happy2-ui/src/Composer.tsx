@@ -7,7 +7,7 @@ import {
     type CSSProperties,
     type FormEvent,
     type KeyboardEvent as ReactKeyboardEvent,
-    type PointerEvent as ReactPointerEvent,
+    type MouseEvent as ReactMouseEvent,
     type ReactNode,
 } from "react";
 import { AudienceToggle, type AudienceValue } from "./AudienceToggle";
@@ -625,8 +625,15 @@ export function Composer(props: ComposerProps) {
      * pointer interactions, but direct every other point in the card to the
      * editable control. Popovers are visually adjacent to the card but own
      * their separate keyboard interactions.
+     *
+     * It runs on mousedown and suppresses that event's default, which is the
+     * whole point: pressing a plain <div> otherwise hands focus to the nearest
+     * focusable ancestor — the document body — right after this handler asked
+     * for the textarea, so the card looked inert everywhere but the text itself.
+     * Only dead space is defaulted away; interactive targets return first and
+     * keep their own press behavior.
      */
-    const focusTextareaFromSurface = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const focusTextareaFromSurface = (event: ReactMouseEvent<HTMLDivElement>) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
         const interactive = target.closest(
@@ -635,6 +642,7 @@ export function Composer(props: ComposerProps) {
         if (interactive && event.currentTarget.contains(interactive)) return;
         const textarea = textareaEl.current;
         if (!textarea || textarea.disabled) return;
+        event.preventDefault();
         textarea.focus();
     };
     return (
@@ -647,7 +655,7 @@ export function Composer(props: ComposerProps) {
             data-pending={props.pending ? "" : undefined}
             data-happy2-ui="composer"
             data-testid={props["data-testid"]}
-            onPointerDown={focusTextareaFromSurface}
+            onMouseDown={focusTextareaFromSurface}
             onBlur={(event) => {
                 const next = event.relatedTarget;
                 if (next && !event.currentTarget.contains(next as Node)) closePopovers();
@@ -665,13 +673,7 @@ export function Composer(props: ComposerProps) {
                         />
                     </div>
                 ) : null}
-                <div
-                    className="happy2-composer__input"
-                    data-happy2-ui="composer-input"
-                    onPointerDown={(event) => {
-                        if (event.target === event.currentTarget) textareaEl.current?.focus();
-                    }}
-                >
+                <div className="happy2-composer__input" data-happy2-ui="composer-input">
                     <textarea
                         className="happy2-composer__textarea"
                         data-happy2-ui="composer-textarea"

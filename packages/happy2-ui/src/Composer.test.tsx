@@ -550,7 +550,7 @@ it("focuses the draft from every unoccupied composer surface", async () => {
 
     for (const surface of [card, context, input, toolbar]) {
         textarea.blur();
-        surface.element.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+        surface.element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
         expect(document.activeElement).toBe(textarea);
     }
 

@@ -143,6 +143,10 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                                       added: file.added ?? 0,
                                       removed: file.deleted ?? 0,
                                   }}
+                                  // The inspector is a narrow column, so a diff
+                                  // that scrolled sideways here would keep most
+                                  // of every line it shows out of sight.
+                                  wrap
                               />
                           ))
                         : null}

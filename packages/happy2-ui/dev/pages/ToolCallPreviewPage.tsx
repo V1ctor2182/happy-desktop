@@ -32,6 +32,44 @@ const completedCommand: ConversationToolCall = {
     },
 };
 
+/* A patch longer and wider than the panel: the inspector has to scroll down to
+   its result, and every diff line has to stay readable at 250px. */
+const patch: ConversationToolCall = {
+    toolCallId: "tool-preview-patch",
+    toolName: "apply_patch",
+    arguments: { path: "README.md" },
+    status: "success",
+    failed: false,
+    display: "Applied patch",
+    presentation: {
+        type: "fileDiff",
+        files: [
+            {
+                path: "/Users/steve/Developer/murmur/README.md",
+                kind: "update",
+                added: 14,
+                deleted: 14,
+                hunks: [
+                    {
+                        oldStart: 1,
+                        newStart: 1,
+                        lines: [
+                            ...Array.from({ length: 14 }, (_unused, index) => ({
+                                kind: "delete" as const,
+                                text: `**Offline-First** — agents do not need to be online at the same time, line ${String(index + 1)}`,
+                            })),
+                            ...Array.from({ length: 14 }, (_unused, index) => ({
+                                kind: "add" as const,
+                                text: `Murmur ships as one public library for browsers and Node.js, line ${String(index + 1)}`,
+                            })),
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
 function Preview(props: { tool: ConversationToolCall; width: number }) {
     return (
         <div
@@ -75,6 +113,17 @@ export function ToolCallPreviewPage() {
                     <div style={{ padding: "24px" }}>
                         <Preview tool={completedCommand} width={360} />
                         <DimensionRule label="360px · completed result" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="250px inspector · a patch taller and wider than the panel scrolls down to its result, with every diff line wrapped in place"
+                    label="File edit"
+                    number="T-03"
+                    stage="app"
+                >
+                    <div style={{ padding: "24px" }}>
+                        <Preview tool={patch} width={250} />
+                        <DimensionRule label="250px · wrapped diff lines" />
                     </div>
                 </Specimen>
             </div>

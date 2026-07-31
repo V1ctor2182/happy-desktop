@@ -15,6 +15,13 @@ export type DiffSnippetProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
         removed: number;
     };
     style?: CSSProperties;
+    /**
+     * Soft-wraps long lines instead of scrolling them sideways. A diff read in a
+     * narrow column — an inspector panel rather than a full-width page — has no
+     * room to carry a scrollport per block, and a line the reader never sees is
+     * worse than a line that takes two rows.
+     */
+    wrap?: boolean;
 };
 function gutterGlyph(kind: DiffLineKind) {
     if (kind === "add") return "+";
@@ -28,6 +35,7 @@ export function DiffSnippet(props: DiffSnippetProps) {
         "lines",
         "stats",
         "style",
+        "wrap",
     ]);
     const numbered = () => local.lines.some((line) => line.number !== undefined);
     return (
@@ -36,6 +44,7 @@ export function DiffSnippet(props: DiffSnippetProps) {
             className={["happy2-diff-snippet", local.className].filter(Boolean).join(" ")}
             data-numbered={numbered() ? "" : undefined}
             data-happy2-ui="diff-snippet"
+            data-wrap={local.wrap ? "" : undefined}
             style={local.style}
         >
             {local.file !== undefined || local.stats !== undefined ? (
