@@ -53,6 +53,13 @@ When the user does ask for tests, follow the rules in the sections below for
 where they live and what they must prove. Keep existing tests passing for the
 code you touch.
 
+The `happy2-ui` suite is very slow — it drives real browsers and takes many
+minutes. Do not run it more than once, and do not run it at all unless you
+actually need its result. `pnpm check` (and therefore `pnpm release`) already
+runs it, so never run the package suite separately alongside one of those. When
+you only need to inspect one failure, run that single test file instead of the
+whole package.
+
 ## Review
 
 Review is optional for every edit and never gates pushing or merging. An
