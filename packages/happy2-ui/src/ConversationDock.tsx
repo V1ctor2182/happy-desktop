@@ -13,6 +13,8 @@ export type ConversationDockProps = {
     /** Accessory rendered below the composer card. */
     composerFooterControl?: ReactNode;
     composerPlaceholder?: string;
+    /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
+    composerFocusOnType?: boolean;
     "data-testid"?: string;
     /** Stops the current run; the send control becomes this while running. */
     onAbort?: () => void;
@@ -101,6 +103,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     attachmentMultiple
                     commands={commandItems}
                     contextItems={contextItemsOf(composer)}
+                    focusOnType={props.composerFocusOnType}
                     hint={composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"}
                     mentions={mentionsOf(composer)}
                     footerControl={props.composerFooterControl}

@@ -252,6 +252,14 @@ export type ComposerProps = {
     onCommandSelect?: (id: string) => void;
     "data-testid"?: string;
     disabled?: boolean;
+    /**
+     * Makes this composer the last resort for typing: a character typed while no
+     * control that wants it has focus moves focus here and lands in the draft.
+     * Only the composer the reader is currently writing into may claim it, so an
+     * owner that mounts more than one composer at a time turns it on for exactly
+     * one of them.
+     */
+    focusOnType?: boolean;
     /** e.g. "Enter to send · @ to hand off to an agent" */
     hint?: string;
     /** Opens a host-owned attachment browser. Takes precedence over the native picker. */
@@ -299,6 +307,53 @@ export type ComposerProps = {
 const LINE_HEIGHT = 22;
 const MIN_LINES = 1;
 const MAX_LINES = 8;
+
+/**
+ * Controls that make words out of characters: text entry, and the list and menu
+ * roles whose typeahead selects by what is typed. Focus here is the reader
+ * writing somewhere else, so the composer never takes a character from them.
+ */
+const TEXT_TARGETS =
+    'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="option"], [role="searchbox"], [role="textbox"]';
+
+/**
+ * Controls that are pressed rather than typed into. They keep only the keys they
+ * actually answer to — Enter, which is not a character, and Space — because a
+ * button holding focus is usually just where the last click landed. Clicking
+ * "+" for a new tab must not mean the next word is swallowed by the button.
+ */
+const ACTIVATION_TARGETS =
+    'button, a[href], [role="button"], [role="checkbox"], [role="switch"], [role="tab"], [role="radio"]';
+
+/**
+ * Whether this keystroke is ordinary typing that nothing on screen has claimed,
+ * which is what makes redirecting it into `textarea` a last resort rather than a
+ * hijack. It is typing when a single character was produced without a command
+ * modifier and no composition is in flight; it is unclaimed when nothing has
+ * already handled the event, no text control has focus, no focused button is
+ * being pressed with Space, and no modal is up — while a dialog owns the screen
+ * the composer behind it is not where the reader is writing. A composer that is
+ * not rendered cannot be typed into either.
+ *
+ * The button rule is the point of the split: `:focus-visible` cannot tell a
+ * clicked button from a tabbed-to one (Chromium reports it for both once a key
+ * arrives, and WebKit does not focus buttons on click at all), so this asks what
+ * the control does with the key instead of how it came to be focused.
+ */
+function typingIsUnclaimed(event: KeyboardEvent, textarea: HTMLTextAreaElement): boolean {
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return false;
+    if (event.metaKey || event.ctrlKey || event.altKey) return false;
+    // Length 1 is what separates a produced character from Escape, Enter, Tab,
+    // the arrows, and a dead key waiting for the one it will combine with.
+    if (event.key.length !== 1) return false;
+    const target = event.target;
+    if (target instanceof Element) {
+        if (target.closest(TEXT_TARGETS)) return false;
+        if (event.key === " " && target.closest(ACTIVATION_TARGETS)) return false;
+    }
+    if (document.querySelector('[data-happy2-ui="modal-overlay"], [role="dialog"]')) return false;
+    return textarea.isConnected && textarea.checkVisibility();
+}
 /**
  * Message composer: focus-within surface card with a one-line resting textarea
  * that grows through eight lines, context chips, capability-driven file/mention/emoji actions,
@@ -409,6 +464,20 @@ export function Composer(props: ComposerProps) {
         document.addEventListener("pointerdown", onPointerDown);
         return () => document.removeEventListener("pointerdown", onPointerDown);
     });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- claiming typing that no focused control wants requires one window-level keydown listener, which no handler on a rendered element can express
+    useLayoutEffect(() => {
+        if (!props.focusOnType || busy) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            const textarea = textareaEl.current;
+            if (!textarea || !typingIsUnclaimed(event, textarea)) return;
+            // Deliberately not prevented: focusing the textarea inside keydown
+            // makes the browser deliver this very character to it, so the letter
+            // that summoned the composer is the first one typed into it.
+            textarea.focus();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [busy, props.focusOnType]);
     const rememberSelection = () => {
         const el = textareaEl.current;
         if (!el) return;

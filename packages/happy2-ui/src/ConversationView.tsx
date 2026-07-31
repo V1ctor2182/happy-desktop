@@ -92,6 +92,8 @@ export type ConversationViewProps = {
     /** The composer surface snapshot; the draft never lives in this component. */
     composer: ComposerSnapshot;
     composerPlaceholder?: string;
+    /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
+    composerFocusOnType?: boolean;
     onComposerValueChange: (value: string) => void;
     onComposerFocusChange?: (focused: boolean) => void;
     onComposerSend: () => void;
@@ -312,6 +314,7 @@ export function ConversationView(props: ConversationViewProps) {
                 composer={composer}
                 composerControls={props.composerControls}
                 composerFooterControl={props.composerFooterControl}
+                composerFocusOnType={props.composerFocusOnType}
                 composerPlaceholder={props.composerPlaceholder}
                 onAbort={props.onAbort}
                 onCommandInvoke={props.onCommandInvoke}

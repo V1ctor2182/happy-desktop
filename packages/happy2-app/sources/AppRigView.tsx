@@ -981,6 +981,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 workspace={props.workspace}
             />
         ) : undefined;
+    // Exactly one composer may claim typing that nothing else wants, and it is
+    // whichever one the reader can actually see: with the panel expanded over
+    // the workspace column the dock is the write end of the session, and the
+    // composer it covers must not answer the keyboard from underneath it.
+    const composerClaimsTyping = panelComposer === undefined;
 
     return (
         <AppShell
@@ -1154,6 +1159,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         <ConversationView
                             agentAuthor={rigAgentAuthor}
                             composer={workspace.groupComposer}
+                            composerFocusOnType={composerClaimsTyping}
                             composerPlaceholder="Message Happy…"
                             entries={NO_ENTRIES}
                             // The first message is what creates the session, so
@@ -1301,6 +1307,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             ) : (
                                 <RigConversationBody
                                     conversation={conversation}
+                                    focusOnType={composerClaimsTyping}
                                     now={now}
                                     onCreate={() => groupConversationCreate(openGroup)}
                                     workspace={props.workspace}
@@ -1580,6 +1587,7 @@ function fileSizeFormat(size: number): string {
 /** The open conversation's materialization states, inside the directory's tabs. */
 function RigConversationBody(props: {
     conversation: RigWorkspaceSnapshot["conversation"];
+    focusOnType: boolean;
     now: number;
     onCreate: () => void;
     workspace: RigWorkspaceStore;
@@ -1589,6 +1597,7 @@ function RigConversationBody(props: {
         return (
             <RigConversationSurface
                 conversation={conversation.value}
+                focusOnType={props.focusOnType}
                 now={props.now}
                 workspace={props.workspace}
             />
@@ -1634,6 +1643,7 @@ function RigConversationBody(props: {
  */
 function RigConversationSurface(props: {
     conversation: RigConversationSnapshot;
+    focusOnType: boolean;
     now: number;
     workspace: RigWorkspaceStore;
 }) {
@@ -1661,6 +1671,7 @@ function RigConversationSurface(props: {
         <ConversationView
             agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
+            composerFocusOnType={props.focusOnType}
             composerPlaceholder="Message Happy…"
             conversationId={conversation.conversationId}
             entries={conversation.entries}
@@ -1855,6 +1866,9 @@ function RigPanelComposer(props: {
         <FloatingConversationDock>
             <ConversationDock
                 composer={conversation.composer}
+                // This dock only exists while it covers the workspace column's
+                // composer, so it is the surface the reader writes into.
+                composerFocusOnType
                 composerPlaceholder="Message Happy…"
                 composerControls={
                     conversation.menus ? (
