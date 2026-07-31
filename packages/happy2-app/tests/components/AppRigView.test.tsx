@@ -195,9 +195,7 @@ it("heads the local sidebar with the shared brand mark, not a local-only title",
     const logo = container.querySelector('[data-happy2-ui="sidebar-brand-logo"]');
     expect(logo).not.toBeNull();
     expect(logo?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector('[data-happy2-ui="sidebar-title"]')?.textContent).toBe(
-        "Happy Place",
-    );
+    expect(container.querySelector('[data-happy2-ui="sidebar-title"]')?.textContent).toBe("Happy");
 
     // The plain title row and its chevron affordance are gone.
     expect(container.textContent).not.toContain("Local");
