@@ -574,6 +574,7 @@ export {
     type RigInboxAnswerMap,
     type RigInboxPageProps,
 } from "./pages/inbox/RigInboxPage";
+export { FriendsPage, type Friend, type FriendsPageProps } from "./pages/friends/FriendsPage";
 export { ProfilePage, type ProfilePageProps } from "./pages/profile/ProfilePage";
 export { CallsPage, type CallsPageProps } from "./pages/calls/CallsPage";
 export {

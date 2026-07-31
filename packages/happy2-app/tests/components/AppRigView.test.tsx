@@ -226,7 +226,7 @@ it("lists one row per project and its sessions as tabs", () => {
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
         "new-chat",
-        "connect-remote",
+        "friends",
         "local/prj_one",
     ]);
     // The row is the project's name alone; its path would crowd the name out,

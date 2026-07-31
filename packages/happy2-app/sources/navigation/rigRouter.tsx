@@ -197,6 +197,16 @@ const inboxRoute = createRoute({
     path: "/inbox/$rigId",
 });
 
+/**
+ * The account's friends, addressed without a Rig: who a person is connected to
+ * does not belong to one machine, so no machine appears in the address.
+ */
+const friendsRoute = createRoute({
+    component: RigFriendsRoute,
+    getParentRoute: () => rootRoute,
+    path: "/friends",
+});
+
 const settingsIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/settings",
@@ -235,6 +245,7 @@ const routeTree = rootRoute.addChildren([
     notesIndexRoute,
     noteRoute,
     inboxRoute,
+    friendsRoute,
     settingsIndexRoute,
     settingsSectionRoute,
 ]);
@@ -257,7 +268,15 @@ function RigInboxRoute() {
     return <RigWorkspaceLayout inbox />;
 }
 
-function RigWorkspaceLayout(props: { inbox?: boolean; notes?: boolean } = {}) {
+/**
+ * The friends address renders the same window a conversation does: the shell and
+ * its sidebar stay, and only the content area changes.
+ */
+function RigFriendsRoute() {
+    return <RigWorkspaceLayout friends />;
+}
+
+function RigWorkspaceLayout(props: { friends?: boolean; inbox?: boolean; notes?: boolean } = {}) {
     // The router hooks resolve their types through the single global `Register`
     // declaration, which names the cloud router. Route definitions above are
     // still typed by `RigRouterContext` (loaders read it directly); only this
@@ -289,6 +308,8 @@ function RigWorkspaceLayout(props: { inbox?: boolean; notes?: boolean } = {}) {
             notes={context.notes}
             notesOpen={props.notes}
             inboxOpen={props.inbox}
+            friendsOpen={props.friends}
+            onFriendsOpen={() => void navigate({ to: "/friends" })}
             onInboxOpen={() =>
                 void navigate({
                     params: { rigId: params.rigId ?? rigDefaultId(context) },

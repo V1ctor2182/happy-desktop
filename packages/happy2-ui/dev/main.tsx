@@ -84,6 +84,7 @@ import { RailPage } from "./pages/RailPage";
 import { SearchResultsPage } from "./pages/SearchResultsPage";
 import { FloatingConversationDockPage } from "./pages/FloatingConversationDockPage";
 import { RigSettingsBlueprintPage } from "./pages/RigSettingsPage";
+import { FriendsBlueprintPage } from "./pages/FriendsBlueprintPage";
 import { RigInboxBlueprintPage } from "./pages/RigInboxBlueprintPage";
 import { SettingsStorePage } from "./pages/SettingsStorePage";
 import { SecretRevealPage } from "./pages/SecretRevealPage";
@@ -545,6 +546,7 @@ const fullScreens: BlueprintPage[] = [
         page: () => <ProductStorePage kind="agent-secrets" />,
     },
     { id: "rig-inbox", label: "Rig inbox", number: "P-013", page: RigInboxBlueprintPage },
+    { id: "friends", label: "Friends", number: "P-014", page: FriendsBlueprintPage },
 ];
 const pageNumberCompare = (left: BlueprintPage, right: BlueprintPage) =>
     left.number.localeCompare(right.number, undefined, { numeric: true });

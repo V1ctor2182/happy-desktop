@@ -69,6 +69,7 @@ import {
     Checkbox,
     Modal,
     ModalOverlay,
+    FriendsPage,
     NotesPage,
     RigActivityPanel,
     RigConnectionStatus,
@@ -243,6 +244,10 @@ export interface AppRigViewProps {
     inboxOpen?: boolean;
     /** Addresses that inbox. */
     onInboxOpen?(): void;
+    /** Whether the URL addresses the account's friends. */
+    friendsOpen?: boolean;
+    /** Addresses friends. */
+    onFriendsOpen?(): void;
 }
 
 /**
@@ -618,9 +623,6 @@ function rigStatusLabel(rig: AppRigEntry): string {
     return rig.status === "error" ? "Not reachable" : "Disconnected";
 }
 
-/** The pinned row that opens the Machines settings, where a machine is added. */
-const CONNECT_REMOTE_ITEM = "connect-remote";
-
 /**
  * The pinned row that opens this machine's notes. It sits with the other pinned
  * rows rather than under a project because a note belongs to the reader, not to
@@ -635,6 +637,14 @@ const NOTES_ITEM = "notes";
  * working through a queue rather than visiting a repository.
  */
 const INBOX_ITEM = "inbox";
+
+/**
+ * The pinned row that opens the people this account is connected to. It comes
+ * last of the pinned rows because it is the only one that is not about this
+ * machine's work: notes and the inbox are what there is to do here, and friends
+ * are who is beyond it.
+ */
+const FRIENDS_ITEM = "friends";
 
 /**
  * The workspace window. It owns no product state: it subscribes to the directory
@@ -677,17 +687,7 @@ export function AppRigView(props: AppRigViewProps) {
     ) : undefined;
     const sidebar = (
         <Sidebar
-            // Connecting another machine sits under Create because it is the
-            // other way this window gains somewhere to work, and it opens the
-            // Machines settings rather than a dialog of its own: a machine is a
-            // durable part of the setup, not a one-off prompt.
             actions={[
-                {
-                    icon: "link",
-                    id: CONNECT_REMOTE_ITEM,
-                    kind: "action",
-                    label: "Connect remote",
-                },
                 // Notes follow the two rows that give the window somewhere to
                 // work, because they are the third thing this window holds that
                 // is not a session: the reader's own writing on this machine.
@@ -715,15 +715,26 @@ export function AppRigView(props: AppRigViewProps) {
                           },
                       ]
                     : []),
+                // Friends belong to the account rather than to a machine, so
+                // this row is always here: it opens whether or not any Rig is
+                // reachable.
+                {
+                    icon: "users" as const,
+                    id: FRIENDS_ITEM,
+                    kind: "action" as const,
+                    label: "Friends",
+                },
             ]}
             activeItemId={
                 props.notesOpen
                     ? NOTES_ITEM
                     : props.inboxOpen
                       ? INBOX_ITEM
-                      : props.groupId
-                        ? rigItemId(props.rigId, props.groupId)
-                        : ""
+                      : props.friendsOpen
+                        ? FRIENDS_ITEM
+                        : props.groupId
+                          ? rigItemId(props.rigId, props.groupId)
+                          : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -817,16 +828,16 @@ export function AppRigView(props: AppRigViewProps) {
             // Once every remembered tab is gone, its first session is what the
             // group still has to show.
             onItemSelect={(id) => {
-                if (id === CONNECT_REMOTE_ITEM) {
-                    props.onSettingsOpen();
-                    return;
-                }
                 if (id === NOTES_ITEM) {
                     props.onNotesOpen?.();
                     return;
                 }
                 if (id === INBOX_ITEM) {
                     props.onInboxOpen?.();
+                    return;
+                }
+                if (id === FRIENDS_ITEM) {
+                    props.onFriendsOpen?.();
                     return;
                 }
                 const row = rigItemParse(id);
@@ -900,6 +911,24 @@ export function AppRigView(props: AppRigViewProps) {
                     onOpen={(id) => props.onNotesOpen?.(id)}
                     theme={appearance.appearance}
                 />
+            </AppShell>
+        );
+
+    // Friends belong to the account rather than to a machine, so like notes the
+    // surface is shown whatever the addressed machine is doing.
+    if (props.friendsOpen)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                {/* No connection model exists yet, so the gallery is handed
+                    nobody. The surface is the same one it will render a real
+                    list into. */}
+                <FriendsPage friends={[]} />
             </AppShell>
         );
 

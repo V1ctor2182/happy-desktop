@@ -1,0 +1,74 @@
+/*
+ * Friends: the people this account is connected to, as a gallery of tiles that
+ * fills the window. Colors and type come only from theme roles.
+ */
+
+.happy2-friends {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-friends__header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 8px;
+}
+
+/* The scrollport is flush; spacing belongs to the grid inside it. */
+.happy2-friends__scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+}
+
+/*
+ * Genuinely two-dimensional: tiles wrap into rows and every tile in a row has to
+ * share that row's height, so a taller card does not leave its neighbours short.
+ * Flexbox cannot express that, so this is one of the few real grids in the app.
+ * Tracks are sized rather than counted, so the gallery reflows with the window
+ * without a breakpoint.
+ */
+.happy2-friends__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+}
+
+/* A tile is a button wrapping the card, so it carries no box of its own: the
+   card it holds is the visible surface, and the button only makes it pressable. */
+.happy2-friends__tile {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-md);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    appearance: none;
+    cursor: pointer;
+}
+
+.happy2-friends__tile:hover .happy2-profile-card {
+    background: var(--surface-high);
+}
+
+.happy2-friends__tile:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 2px;
+}
