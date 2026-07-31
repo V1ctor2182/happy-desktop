@@ -10,7 +10,7 @@ import type {
     GetSessionUsageResponse,
     GlobalEventQueueEntry,
     GlobalEventDelivery,
-    GlobalStateResponse,
+    GlobalCatalogResponse,
     HealthResponse,
     ModelCatalog,
     Project,
@@ -155,13 +155,14 @@ export class RigDaemonClient {
     }
 
     /**
-     * The daemon's project/worktree catalog. It is read from `/state` rather than
-     * from `/projects` because worktrees have no global listing route of their
-     * own — only a per-project one — and one read of the whole catalog is both
-     * cheaper and internally consistent compared with fanning out per project.
+     * The daemon's project/worktree catalog. It is read from `/catalog` rather
+     * than from `/projects` because worktrees have no global listing route of
+     * their own — only a per-project one — and one read of the whole catalog is
+     * both cheaper and internally consistent compared with fanning out per
+     * project.
      */
-    listCatalog(): Promise<GlobalStateResponse> {
-        return this.#requestJson("GET", "/state");
+    listCatalog(): Promise<GlobalCatalogResponse> {
+        return this.#requestJson("GET", "/catalog");
     }
 
     gitWatch(
@@ -188,14 +189,15 @@ export class RigDaemonClient {
     /**
      * Reserves a git worktree in the project. The daemon answers as soon as the
      * row exists, with the checkout still initializing, and reports it ready (or
-     * failed) over the global event queue. `clientRequestId` makes a retry of the
-     * same request return the same worktree instead of reserving a second one.
+     * failed) over the global event queue. `id` is the caller's own cuid2 for the
+     * worktree, so repeating a request returns the worktree it already created
+     * rather than reserving a second one.
      */
     createWorkspace(
         projectId: string,
         request: {
             readonly baseRef: string;
-            readonly clientRequestId: string;
+            readonly id: string;
             readonly name: string;
         },
     ): Promise<{ readonly workspace: ProjectWorkspace }> {
@@ -709,7 +711,7 @@ export class RigDaemonClient {
                             reject(
                                 new RigDaemonHttpError(
                                     statusCode,
-                                    text.length > 0 ? text : `Rig daemon HTTP ${statusCode}`,
+                                    failureMessage(text, statusCode),
                                 ),
                             );
                             return;
@@ -753,9 +755,7 @@ export class RigDaemonClient {
                             reject(
                                 new RigDaemonHttpError(
                                     statusCode,
-                                    bytes.length > 0
-                                        ? bytes.toString("utf8")
-                                        : `Rig daemon HTTP ${statusCode}`,
+                                    failureMessage(bytes.toString("utf8"), statusCode),
                                 ),
                             );
                             return;
@@ -873,6 +873,29 @@ export async function rigDaemonTokenRead(tokenPath: string): Promise<string | un
     } catch {
         return undefined;
     }
+}
+
+/**
+ * What the daemon said went wrong, in the form a reader can be shown.
+ *
+ * A failing route answers `{"error": "…"}`, and that sentence is the whole point
+ * of the response: keeping the JSON envelope around it only means the text
+ * arrives at the UI quoted inside a string that has to be unwrapped again. A
+ * body in any other shape is passed through verbatim, and an empty one leaves
+ * the status as the only thing there is to say.
+ */
+function failureMessage(body: string, statusCode: number): string {
+    if (body.length === 0) return `Rig daemon HTTP ${statusCode}`;
+    try {
+        const parsed: unknown = JSON.parse(body);
+        if (typeof parsed === "object" && parsed !== null) {
+            const { error } = parsed as { readonly error?: unknown };
+            if (typeof error === "string" && error.length > 0) return error;
+        }
+    } catch {
+        // Not JSON; the body is the message.
+    }
+    return body;
 }
 
 /**

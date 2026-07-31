@@ -1053,7 +1053,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     // from the project's current commit, which is what "new
                     // worktree here" means without asking for a branch first.
                     baseRef: typeof body.baseRef === "string" ? body.baseRef : "HEAD",
-                    clientRequestId: String(body.idempotencyKey ?? ""),
+                    // The renderer's idempotency key is a cuid2, which is exactly
+                    // what the daemon wants for the worktree's own id: repeating
+                    // one creation returns that worktree instead of a second one.
+                    id: String(body.idempotencyKey ?? ""),
                     name: typeof body.name === "string" ? body.name : "Workspace",
                 });
                 writeJson(response, 200, rigWorktreeProject(created.workspace, home));
@@ -1116,7 +1119,15 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
     } catch (error) {
         if (rigDaemonConnectionUnavailable(error)) options.onConnectionError?.(error);
         if (!response.headersSent) {
-            writeJson(response, 502, { error: errorMessage(error) });
+            // A daemon that answered is not a bad gateway: it said what was wrong
+            // and with what status, and that is exactly what the renderer has to
+            // act on. Restating every one of them as 502 turns "this worktree
+            // name is taken" and "that session is gone" into the same opaque
+            // failure. 502 is kept for the case it describes — no usable answer
+            // from the daemon at all.
+            if (error instanceof RigDaemonHttpError)
+                writeJson(response, error.statusCode, { error: error.message });
+            else writeJson(response, 502, { error: errorMessage(error) });
         } else {
             response.end();
         }

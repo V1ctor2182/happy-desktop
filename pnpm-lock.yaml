@@ -30,11 +30,11 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.84
-        version: 0.0.84(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
+        specifier: 0.0.98
+        version: 0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.4)
+        version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
       fastify:
         specifier: ^5.8.2
         version: 5.10.0
@@ -222,11 +222,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.0.84
-        version: 0.0.84(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
+        specifier: 0.0.98
+        version: 0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       '@slopus/rig-connect':
-        specifier: 0.0.11
-        version: 0.0.11
+        specifier: 0.0.12
+        version: 0.0.12
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -703,11 +703,11 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.84
-        version: 0.0.84(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
+        specifier: 0.0.98
+        version: 0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.4)
+        version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
       fastify:
         specifier: ^5.8.2
         version: 5.10.0
@@ -800,8 +800,8 @@ importers:
   packages/happy2-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.0.11
-        version: 0.0.11
+        specifier: 0.0.12
+        version: 0.0.12
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2739,12 +2739,13 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/rig-connect@0.0.11':
-    resolution: {integrity: sha512-XgT/u35hbA0xzTdYZCPxIOTNFBYYDFWhZeFXBiiBXyNfbdEQgdqhYzokhcch/HVrp3Ump7fv739bma0YCsPxTA==}
+  '@slopus/rig-connect@0.0.12':
+    resolution: {integrity: sha512-3ln6MeRRI3ZLyIOEcLLVsb/9b5pMMK83pf+Sdr1xMRN/gnou0DTtgelupABJLBMxRayH0TUJhNMxXWq7eFwKBw==}
     engines: {node: '>=20'}
 
-  '@slopus/rig@0.0.84':
-    resolution: {integrity: sha512-g8al+pdqSjARXeigGkveg6U2W61BB725JNK1/JzZ4LyfnA8XCaYE7ijyV5u3uPoMGbkiZFtTdeRtv4iM6tdexw==}
+  '@slopus/rig@0.0.98':
+    resolution: {integrity: sha512-GIgDQc/dY6YEL/ajJnvEB//clELsLYgSjZPxUAfcbidMnOIkl57cTdgAZogqq4xPlC2zJmctpyJeeRBT/HSDBw==}
+    engines: {node: '>=24'}
     hasBin: true
 
   '@stablelib/base64@1.0.1':
@@ -3658,6 +3659,10 @@ packages:
 
   bcrypt-pbkdf@1.0.2:
     resolution: {integrity: sha512-qeFIXtP4MSoi6NLqO12WfqARWWuCKi2Rn/9hJLEmtB5yTNr9DqFWkJRCf2qShWzPeAMRnOgCrq0sg/KLv5ES9w==}
+
+  better-sqlite3@13.0.2:
+    resolution: {integrity: sha512-jW6oufeDhXZaiX9Lw5A+oerVClx4iFrI6uDj1zu7SqUAjak9vbJvA0NEcKLNxHiQHb6kYCoFzzXYV0YOauhV3g==}
+    engines: {node: '>=22'}
 
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
@@ -5520,6 +5525,10 @@ packages:
   node-abi@4.33.0:
     resolution: {integrity: sha512-vLBWCKb+7LWsX+TbfzWOkw0W81m377tyx3hOweBTjO43CXZnRGS1/JPWs20fr0PgZyDXk6ROYrylsEycK8raDA==}
     engines: {node: '>=22.12.0'}
+
+  node-addon-api@8.9.0:
+    resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==}
@@ -8771,9 +8780,9 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/rig-connect@0.0.11': {}
+  '@slopus/rig-connect@0.0.12': {}
 
-  '@slopus/rig@0.0.84(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
+  '@slopus/rig@0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64
@@ -8785,6 +8794,7 @@ snapshots:
       '@pydantic/monty': 0.0.18(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/ghostty-wasm': 1.3.6
       '@vscode/ripgrep': 1.18.0
+      better-sqlite3: 13.0.2
       sharp: 0.35.3(@types/node@26.1.1)
       ssh2: 1.17.0
       zod: 4.4.3
@@ -9730,6 +9740,10 @@ snapshots:
     dependencies:
       tweetnacl: 0.14.5
 
+  better-sqlite3@13.0.2:
+    dependencies:
+      node-addon-api: 8.9.0
+
   bidi-js@1.0.3:
     dependencies:
       require-from-string: 2.0.2
@@ -10214,9 +10228,10 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  drizzle-orm@0.45.2(@libsql/client@0.17.4):
+  drizzle-orm@0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2):
     optionalDependencies:
       '@libsql/client': 0.17.4
+      better-sqlite3: 13.0.2
 
   dunder-proto@1.0.1:
     dependencies:
@@ -12022,6 +12037,8 @@ snapshots:
   node-abi@4.33.0:
     dependencies:
       semver: 7.8.5
+
+  node-addon-api@8.9.0: {}
 
   node-api-version@0.2.1:
     dependencies:

@@ -100,11 +100,14 @@ export interface GitChangedFile {
     readonly deletedLines?: number;
 }
 
-/** The daemon's one-shot global read; Happy uses it for the project/worktree catalog. */
-export interface GlobalStateResponse {
+/**
+ * The daemon's one-shot catalog read. It carries the whole global snapshot —
+ * model catalog, identity, sessions, terminal groups — but Happy reads it only
+ * for projects and worktrees, so the rest is deliberately absent here.
+ */
+export interface GlobalCatalogResponse {
     readonly projects: readonly Project[];
     readonly workspaces: readonly ProjectWorkspace[];
-    readonly gitSnapshots: readonly GlobalLiveEvent[];
 }
 
 export interface GitRepositoryFacts {

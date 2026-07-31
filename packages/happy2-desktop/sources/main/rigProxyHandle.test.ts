@@ -302,7 +302,6 @@ describe("rigProxyHandle", () => {
             const listCatalog = vi.fn(async () => ({
                 projects: [{ id: "project-1", path: root }],
                 workspaces: [],
-                gitSnapshots: [],
             }));
             const readFileFromSession = vi.fn(async (sessionId: string, path: string) => {
                 expect(sessionId).toBe("session-1");
@@ -485,7 +484,8 @@ describe("rigProxyHandle", () => {
             onConnectionError,
         );
 
-        expect(captured.status).toBe(502);
+        expect(captured.status).toBe(401);
+        expect(captured.body).toContain("unauthorized");
         expect(onConnectionError).toHaveBeenCalledOnce();
     });
 
@@ -505,7 +505,8 @@ describe("rigProxyHandle", () => {
             onConnectionError,
         );
 
-        expect(captured.status).toBe(502);
+        expect(captured.status).toBe(404);
+        expect(captured.body).toContain("no such session");
         expect(onConnectionError).not.toHaveBeenCalled();
     });
 

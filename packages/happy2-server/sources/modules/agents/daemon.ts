@@ -63,7 +63,7 @@ interface RigBlock {
 }
 
 interface RigMessage {
-    role: "agent" | "compaction" | "system" | "user";
+    role: "agent" | "compaction" | "error" | "system" | "user";
     id?: string;
     blocks: readonly RigBlock[];
     usage?: RigUsage;
@@ -195,7 +195,13 @@ export class RigDaemonClient {
             "PATCH",
             "/config",
             {
-                settings: { durableGlobalEventQueue: true },
+                // The daemon applies the whole settings block, so the retry
+                // budget is echoed back exactly as read: turning the queue on
+                // must not quietly reset a setting this code has no opinion on.
+                settings: {
+                    codexStreamMaxRetries: current.config.settings.codexStreamMaxRetries,
+                    durableGlobalEventQueue: true,
+                },
             } satisfies UpdateDaemonConfigRequest,
             signal,
         );

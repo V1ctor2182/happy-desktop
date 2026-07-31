@@ -1,3 +1,4 @@
+import type { MutationRejectedDelta, RigConnection } from "@slopus/rig-connect";
 import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
 import type { UserError } from "../types.js";
@@ -24,6 +25,9 @@ import type {
 
 /** Lets a steering turn enter `queued` before a transient completed frame is announced. */
 const COMPLETION_SETTLE_MS = 750;
+
+/** How many outstanding rig-connect mutations this surface can attribute a refusal to. */
+const PENDING_MUTATION_LIMIT = 256;
 
 /**
  * The list surface of the local workspace: a `Loadable` of projects, each
@@ -148,10 +152,29 @@ export interface RigSessionListDeps {
     /**
      * A stream-owned catalog authority, when the host can provide one.
      *
-     * Mutations still travel through `transport`; this source replaces only the
-     * project/workspace/session reads and their delivery-hint subscription.
+     * Most mutations still travel through `transport`; this source replaces the
+     * project/workspace/session reads and their delivery-hint subscription, and
+     * backs the optimistic overlay of the mutations that go through
+     * `connectActions`.
      */
     readonly catalogSource?: RigSessionCatalogSource;
+    /**
+     * Optimistic mutation authority paired with `catalogSource`. A mutation
+     * issued here names the entity it creates, shows it in the catalog before
+     * the host answers, and withdraws it if the host refuses — so this store
+     * neither mints the identity nor keeps a second copy of the row. Absent,
+     * every mutation falls back to the request/reconcile path on `transport`,
+     * which is how the store runs standalone against a fake server.
+     */
+    readonly connectActions?: Pick<RigConnection, "createWorkspace">;
+    /**
+     * Terminal failures for mutations issued through `connectActions`. They
+     * arrive here rather than as a rejected promise, because such a mutation is
+     * accepted locally and can only fail later.
+     */
+    readonly connectMutationSubscribe?: (
+        listener: (rejection: MutationRejectedDelta) => void,
+    ) => () => void;
     /**
      * This Rig's durable memory. Read state lives there rather than in this
      * store's lifetime: work that finished before the app was closed is still
@@ -204,6 +227,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     let reconciling = false;
     let reconcileAgain = false;
     let unsubscribeGlobal: (() => void) | undefined;
+    let unsubscribeMutationRejections: (() => void) | undefined;
+    // Mutations issued through `connectActions` and not yet refused, newest last.
+    // The bound keeps a long-lived list from remembering every mutation it ever
+    // made; a refusal that arrives after this many later ones is not worth the
+    // memory to attribute.
+    const pendingMutationIds = new Set<string>();
+    const pendingMutationOrder: string[] = [];
     // The durable rows this surface last reconciled, kept so a projection can be
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
@@ -376,6 +406,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                   },
               )
             : deps.transport.globalEventsSubscribe(observer);
+        unsubscribeMutationRejections = deps.connectMutationSubscribe?.((rejection) => {
+            // Another surface's refusal is not this list's to report, and the
+            // withdrawal of the optimistic row is rig-connect's own doing: what
+            // is left for this store is saying why the row went away.
+            if (disposed || !pendingMutationIds.delete(rejection.mutationId)) return;
+            store.setState({
+                ...store.getState(),
+                mutationError: rigUserError(new Error(rejection.message)),
+            });
+        });
         void reconcile();
     };
 
@@ -385,12 +425,29 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         for (const sessionId of pendingCompletions.keys()) completionCancel(sessionId);
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
+        unsubscribeMutationRejections?.();
+        unsubscribeMutationRejections = undefined;
     };
 
     const notify = (): void => {
         for (const listener of listeners) listener();
     };
     const storeUnsub = store.subscribe(notify);
+
+    /**
+     * Remembers a mutation issued through `connectActions` so its later refusal
+     * can be told apart from one belonging to another surface, and returns its
+     * id, which for a create is also the identity of what it created.
+     */
+    const connectMutationTrack = (mutationId: string): string => {
+        pendingMutationIds.add(mutationId);
+        pendingMutationOrder.push(mutationId);
+        while (pendingMutationOrder.length > PENDING_MUTATION_LIMIT) {
+            const expired = pendingMutationOrder.shift();
+            if (expired) pendingMutationIds.delete(expired);
+        }
+        return mutationId;
+    };
 
     const mutate = async <T>(run: () => Promise<T>): Promise<T | undefined> => {
         try {
@@ -507,6 +564,24 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
         worktreeCreate: (projectId) =>
             mutate(async () => {
+                // rig-connect names the worktree itself and returns that name
+                // synchronously, so the row is in the catalog — through the same
+                // stream that carries the authoritative one — before the request
+                // is even sent, and the id can be addressed immediately. A
+                // refusal withdraws the row and arrives as a rejection rather
+                // than as a thrown error, which is why it is tracked below.
+                if (deps.connectActions) {
+                    const worktreeId = connectMutationTrack(
+                        deps.connectActions.createWorkspace({
+                            // The project's current commit: what "new worktree
+                            // here" means without asking for a branch first.
+                            baseRef: "HEAD",
+                            name: "Workspace",
+                            projectId,
+                        }),
+                    ) as RigWorktreeId;
+                    return worktreeId;
+                }
                 const reserved = await deps.transport.worktreeCreate(projectId, {
                     idempotencyKey: createId(),
                     name: "Workspace",
@@ -671,6 +746,12 @@ function sessionLocationOf(session: RigSessionSummary): RigSessionLocation {
     return { sessionId: session.id, groupId: rigSessionGroupIdOf(session) };
 }
 
+/**
+ * A retry token for the request/reconcile fallback, and nothing more. Where a
+ * host adopts the client's key as the created entity's own identity, that host
+ * mints it: `connectActions` names what it creates, so this never has to satisfy
+ * an identity format the transport contract does not state.
+ */
 function defaultCreateId(): string {
     return `rig_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }

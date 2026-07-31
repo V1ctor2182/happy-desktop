@@ -594,6 +594,16 @@ function messageProject(message: Message): RigMessage {
             blocks: (message.blocks as readonly AgentBlock[]).map(blockProject),
             internal: true,
         };
+    // A failed inference attempt is history the reader has to see — it is why the
+    // run stopped, or why it took another turn — but nobody authored it, so it
+    // reads as the transcript's own voice rather than as the agent speaking.
+    if (message.role === "error")
+        return {
+            id: message.id,
+            role: "system",
+            blocks: (message.blocks as readonly AgentBlock[]).map(blockProject),
+            internal: false,
+        };
     return {
         id: message.id,
         role: message.role,
@@ -674,6 +684,15 @@ function presentationProject(presentation: ToolResultPresentation): RigToolPrese
     }
     if (presentation.type === "exec_command") {
         return { type: "execCommand", command: presentation.command, output: presentation.output };
+    }
+    // A command shown as exploration while it ran stays exploration once it
+    // finishes, so the finished row replaces the running one rather than
+    // appearing beside it as a second, unrelated tool call.
+    if (presentation.type === "exploration") {
+        return {
+            type: "exploration",
+            operations: presentation.operations.map((operation) => ({ ...operation })),
+        };
     }
     return {
         type: "backgroundTerminalInteraction",

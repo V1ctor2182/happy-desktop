@@ -200,6 +200,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 sessionListStore = rigSessionListStoreCreate({
                     transport,
                     catalogSource: deps.catalogSource,
+                    ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
+                    ...(deps.connectMutationSubscribe
+                        ? { connectMutationSubscribe: deps.connectMutationSubscribe }
+                        : {}),
                     memory,
                     output: deps.sessionListOutput,
                     createId: deps.createId,
