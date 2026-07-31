@@ -253,11 +253,11 @@ export type ComposerProps = {
     "data-testid"?: string;
     disabled?: boolean;
     /**
-     * Makes this composer the last resort for typing: a character typed while no
-     * control that wants it has focus moves focus here and lands in the draft.
-     * Only the composer the reader is currently writing into may claim it, so an
-     * owner that mounts more than one composer at a time turns it on for exactly
-     * one of them.
+     * Makes this composer the last resort for typing: a character typed — or a
+     * Cmd/Ctrl+V pasted — while no control that wants it has focus moves focus
+     * here and lands in the draft. Only the composer the reader is currently
+     * writing into may claim it, so an owner that mounts more than one composer
+     * at a time turns it on for exactly one of them.
      */
     focusOnType?: boolean;
     /** e.g. "Enter to send · @ to hand off to an agent" */
@@ -326,6 +326,17 @@ const ACTIVATION_TARGETS =
     'button, a[href], [role="button"], [role="checkbox"], [role="switch"], [role="tab"], [role="radio"]';
 
 /**
+ * Cmd/Ctrl+V alone. Paste is the one command shortcut the composer claims,
+ * because it carries content rather than performing an action: pasting with
+ * nothing focused means putting that text or image somewhere, and the draft is
+ * the only place on the surface that can hold it.
+ */
+function isPasteShortcut(event: KeyboardEvent): boolean {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false;
+    return event.key === "v" || event.key === "V";
+}
+
+/**
  * Whether this keystroke is ordinary typing that nothing on screen has claimed,
  * which is what makes redirecting it into `textarea` a last resort rather than a
  * hijack. It is typing when a single character was produced without a command
@@ -342,14 +353,19 @@ const ACTIVATION_TARGETS =
  */
 function typingIsUnclaimed(event: KeyboardEvent, textarea: HTMLTextAreaElement): boolean {
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return false;
-    if (event.metaKey || event.ctrlKey || event.altKey) return false;
-    // Length 1 is what separates a produced character from Escape, Enter, Tab,
-    // the arrows, and a dead key waiting for the one it will combine with.
-    if (event.key.length !== 1) return false;
+    const paste = isPasteShortcut(event);
+    if (!paste) {
+        if (event.metaKey || event.ctrlKey || event.altKey) return false;
+        // Length 1 is what separates a produced character from Escape, Enter,
+        // Tab, the arrows, and a dead key waiting for the one it will combine
+        // with.
+        if (event.key.length !== 1) return false;
+    }
     const target = event.target;
     if (target instanceof Element) {
         if (target.closest(TEXT_TARGETS)) return false;
-        if (event.key === " " && target.closest(ACTIVATION_TARGETS)) return false;
+        // A button answers to Space, but never to paste.
+        if (!paste && event.key === " " && target.closest(ACTIVATION_TARGETS)) return false;
     }
     if (document.querySelector('[data-happy2-ui="modal-overlay"], [role="dialog"]')) return false;
     return textarea.isConnected && textarea.checkVisibility();
@@ -471,8 +487,10 @@ export function Composer(props: ComposerProps) {
             const textarea = textareaEl.current;
             if (!textarea || !typingIsUnclaimed(event, textarea)) return;
             // Deliberately not prevented: focusing the textarea inside keydown
-            // makes the browser deliver this very character to it, so the letter
-            // that summoned the composer is the first one typed into it.
+            // makes the browser deliver this very keystroke to it, so the letter
+            // that summoned the composer is the first one typed into it, and a
+            // redirected Cmd+V pastes into the draft through the composer's own
+            // paste handler — images and files included.
             textarea.focus();
         };
         window.addEventListener("keydown", onKeyDown);
