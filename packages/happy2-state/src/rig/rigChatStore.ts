@@ -67,6 +67,9 @@ import type {
     RigWorkingPhase,
 } from "./rigTypes.js";
 
+/** Longest live status label the footer renders before it is elided. */
+const WORKING_LABEL_MAX = 64;
+
 function latestUserMessageId(messages: readonly RigMessage[]): string | undefined {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
@@ -115,8 +118,14 @@ function workingPhaseProject(
 function workingLabelProject(session: SessionState | undefined): string | undefined {
     const activity = session?.activity;
     if (activity === undefined || activity.kind === "idle") return undefined;
-    const label = activity.label.trim();
-    return label.length > 0 ? label : undefined;
+    const label = activity.label.split("\n")[0]?.trim() ?? "";
+    if (label.length === 0) return undefined;
+    // A status line is a glance, not a report. A daemon that describes itself
+    // with a whole sentence — a reconnect reason, say — keeps the opening of it
+    // here; the full text stays on the notice row that carries it.
+    return label.length > WORKING_LABEL_MAX
+        ? `${label.slice(0, WORKING_LABEL_MAX - 1).trimEnd()}…`
+        : label;
 }
 
 function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {

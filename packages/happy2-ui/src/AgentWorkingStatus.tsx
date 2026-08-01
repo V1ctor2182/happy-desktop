@@ -1,6 +1,7 @@
 import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Spinner } from "./Spinner";
+import { TypedText } from "./TypedText";
 
 export type AgentWorkingPhase =
     | "working"
@@ -103,13 +104,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                         </span>
                     </>
                 )}
-                <span
-                    key={label}
-                    className="happy2-changing-text"
-                    data-happy2-ui="agent-working-status-phase"
-                >
-                    {label}
-                </span>
+                <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
             </span>
             {details.length > 0 ? (
                 <span

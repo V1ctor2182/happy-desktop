@@ -177,12 +177,21 @@
 }
 
 .happy2-rig-usage-page__percent,
+.happy2-rig-usage-page__reset,
 .happy2-rig-usage-page__credits-value {
     flex: 0 0 auto;
     min-width: 44px;
     font-size: 12px;
     color: var(--text);
     text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage-page__reset {
+    flex: 0 0 auto;
+    width: 112px;
+    font-size: 12px;
+    color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
 

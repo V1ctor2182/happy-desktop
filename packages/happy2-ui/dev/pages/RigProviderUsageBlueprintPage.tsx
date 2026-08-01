@@ -51,7 +51,11 @@ export function RigProviderUsageBlueprintPage() {
                 label="Accounts"
                 number="01"
             >
-                <RigProviderUsagePage providers={providers} readingTime={time} />
+                <RigProviderUsagePage
+                    currentTime={1_700_000_000_000}
+                    providers={providers}
+                    readingTime={time}
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
@@ -76,6 +80,7 @@ export function RigProviderUsageBlueprintPage() {
                 number="04"
             >
                 <RigProviderUsagePage
+                    currentTime={1_700_000_000_000}
                     error={{ name: "UserError", message: "The Rig stopped reporting usage." }}
                     providers={providers}
                     readingTime={time}

@@ -35,6 +35,7 @@
     line-height: 24px;
     color: var(--text-secondary);
     white-space: nowrap;
+    overflow: hidden;
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
@@ -45,12 +46,19 @@
     opacity: 1;
 }
 
+/* The clock and phase share the row with the fan-out details, so a talkative
+   label gives way inside the row rather than running past its right edge. */
 .happy2-agent-working-status__state {
     display: flex;
-    flex: none;
+    flex: 0 1 auto;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     padding-left: 3px;
+}
+
+.happy2-agent-working-status__state .happy2-typed-text {
+    min-width: 0;
 }
 
 .happy2-agent-working-status__spinner {

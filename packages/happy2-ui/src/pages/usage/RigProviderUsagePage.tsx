@@ -18,6 +18,8 @@ export interface RigProviderUsagePageProps {
     error?: UserError;
     /** Renders how long ago a reading was taken, the way the rest of the app renders time. */
     readingTime?: (capturedAt: number) => string | undefined;
+    /** Current epoch millis used to render live time remaining until each reported reset. */
+    currentTime?: number;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -80,6 +82,7 @@ export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
 
                     {providers.map((provider) => (
                         <ProviderCard
+                            currentTime={props.currentTime}
                             key={provider.providerId}
                             provider={provider}
                             {...(props.readingTime ? { readingTime: props.readingTime } : {})}
@@ -92,6 +95,7 @@ export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
 }
 
 function ProviderCard(props: {
+    currentTime?: number;
     provider: RigProviderUsageEntry;
     readingTime?: (capturedAt: number) => string | undefined;
 }) {
@@ -140,9 +144,21 @@ function ProviderCard(props: {
                 <p className="happy2-rig-usage-page__unread">This account has not been read yet.</p>
             ) : (
                 <div className="happy2-rig-usage-page__windows">
-                    <UsageWindow label="5 hours" window={usage.fiveHour} />
-                    <UsageWindow label="Week" window={usage.weekly} />
-                    <UsageWindow label="Month" window={usage.monthly} />
+                    <UsageWindow
+                        currentTime={props.currentTime}
+                        label="5 hours"
+                        window={usage.fiveHour}
+                    />
+                    <UsageWindow
+                        currentTime={props.currentTime}
+                        label="Week"
+                        window={usage.weekly}
+                    />
+                    <UsageWindow
+                        currentTime={props.currentTime}
+                        label="Month"
+                        window={usage.monthly}
+                    />
                     {usage.credits ? (
                         <div
                             className="happy2-rig-usage-page__credits"
@@ -169,7 +185,11 @@ function ProviderCard(props: {
  * bar for it: an empty track would read as "none of it used", which is the
  * opposite of "we were not told".
  */
-function UsageWindow(props: { label: string; window?: RigProviderUsageWindow }) {
+function UsageWindow(props: {
+    currentTime?: number;
+    label: string;
+    window?: RigProviderUsageWindow;
+}) {
     const window = props.window;
     if (!window) return null;
     const percent = Math.min(100, Math.max(0, window.usedPercent));
@@ -200,8 +220,31 @@ function UsageWindow(props: { label: string; window?: RigProviderUsageWindow }) 
             >
                 {Math.round(percent)}%
             </span>
+            {window.resetsAt !== undefined && props.currentTime !== undefined ? (
+                <span
+                    className="happy2-rig-usage-page__reset"
+                    data-happy2-ui="rig-usage-page-reset"
+                >
+                    {resetTimeRemaining(window.resetsAt, props.currentTime)}
+                </span>
+            ) : null}
         </div>
     );
+}
+
+function resetTimeRemaining(resetsAt: number, currentTime: number): string {
+    const remainingMinutes = Math.ceil((resetsAt - currentTime) / 60_000);
+    if (remainingMinutes <= 0) return "reset due";
+    if (remainingMinutes < 60) return `resets in ${String(remainingMinutes)}m`;
+
+    const remainingHours = Math.floor(remainingMinutes / 60);
+    const minutes = remainingMinutes % 60;
+    if (remainingHours < 24)
+        return `resets in ${String(remainingHours)}h${minutes === 0 ? "" : ` ${String(minutes)}m`}`;
+
+    const days = Math.floor(remainingHours / 24);
+    const hours = remainingHours % 24;
+    return `resets in ${String(days)}d${hours === 0 ? "" : ` ${String(hours)}h`}`;
 }
 
 function creditsText(

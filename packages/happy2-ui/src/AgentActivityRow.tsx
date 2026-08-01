@@ -14,6 +14,7 @@ import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 import { ScrollingText } from "./ScrollingText";
 import { Spinner } from "./Spinner";
+import { TypedText } from "./TypedText";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
 export type AgentActivityRowProps = {
@@ -113,7 +114,7 @@ function toolVerb(
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return active ? "Exploring" : "Explored";
     if (/(read|view|cat|open)/.test(lower)) return active ? "Reading" : "Read";
     if (/(write|edit|patch|update|apply)/.test(lower)) return active ? "Editing" : "Edited";
-    return active ? "..." : "Used";
+    return active ? "Tool" : "Used";
 }
 
 /**
@@ -157,17 +158,9 @@ function ToolIcon(props: { glyph: ToolGlyph }) {
     return <Icon name={props.glyph.name} size={12} />;
 }
 
-/** Replays the tool-label transition whenever its projected text changes. */
+/** Retypes a tool label whenever this row's projected text changes. */
 function AgentActivityChangingText(props: { value: string }) {
-    return (
-        <span
-            key={props.value}
-            className="happy2-changing-text"
-            data-happy2-ui="agent-activity-changing-text"
-        >
-            {props.value}
-        </span>
-    );
+    return <TypedText data-happy2-ui="agent-activity-changing-text" value={props.value} />;
 }
 
 function explorationSummary(
@@ -847,14 +840,14 @@ function AgentLabeledActivity(props: {
         >
             <div className="happy2-agent-activity__header" data-happy2-ui="agent-activity-header">
                 <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
-                    {props.label}
+                    <AgentActivityChangingText value={props.label} />
                 </span>
                 {props.subject !== undefined && props.subject.length > 0 ? (
                     <ScrollingText
                         className="happy2-agent-activity__text"
                         data-happy2-ui="agent-activity-text"
                     >
-                        {props.subject}
+                        <AgentActivityChangingText value={props.subject} />
                     </ScrollingText>
                 ) : null}
                 <AgentActivityTime time={props.time} />

@@ -1,0 +1,55 @@
+/*
+ * Retyping text for live agent activity labels. When a tool row's verb or
+ * subject changes, the new text is typed out one character at a time instead of
+ * swapping in place, so a working row reads like a terminal writing its next
+ * line. The label is monospace, which lets one width animation stepped by
+ * character count stand in for per-character markup: `1ch` is exactly one
+ * glyph, so the reveal lands on glyph boundaries with a single element.
+ *
+ * The animation is only applied to text that replaced earlier text; the first
+ * label a row ever shows is already there when the row appears.
+ */
+
+.happy2-typed-text {
+    /* Typing rate, in time per character. The duration below is this multiplied
+       by the character count, so every label — one word or a long path — is
+       typed at the same speed and only takes longer for being longer. */
+    --happy2-typed-char-duration: 18ms;
+
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- the label is one inline text run whose revealed width is animated: as a flex box the text would become an anonymous, shrinkable item that squeezes instead of being clipped */
+    display: inline-block;
+    /* Clips the text the width animation has not revealed yet. At rest the
+       width is the text's own, so nothing is hidden. */
+    overflow: hidden;
+    vertical-align: bottom;
+    white-space: nowrap;
+    font-family: var(--happy2-font-mono);
+}
+
+.happy2-typed-text[data-typing] {
+    /* No fill mode: once typed, the label goes back to its natural width and
+       stops depending on the `ch` estimate for its layout. */
+    animation: happy2-typed-text-type
+        calc(var(--happy2-typed-chars) * var(--happy2-typed-char-duration))
+        steps(var(--happy2-typed-chars), end);
+}
+
+@keyframes happy2-typed-text-type {
+    from {
+        width: 0;
+        /* A caret rides the typing edge. It is a shadow rather than a border so
+           it never occupies layout width of its own. */
+        box-shadow: 1px 0 0 currentcolor;
+    }
+
+    to {
+        width: calc(var(--happy2-typed-chars) * 1ch);
+        box-shadow: 1px 0 0 currentcolor;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-typed-text[data-typing] {
+        animation: none;
+    }
+}

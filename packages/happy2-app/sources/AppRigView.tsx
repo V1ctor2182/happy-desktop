@@ -27,6 +27,7 @@ import type {
     RigInboxItem,
     RigInboxSnapshot,
     RigInboxStore,
+    RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
     RigProjectId,
@@ -40,6 +41,7 @@ import type {
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
     RigWorktreeId,
+    UserError,
 } from "happy2-state";
 import {
     rigAgentAuthor,
@@ -1012,11 +1014,11 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
-                <RigProviderUsagePage
+                <RigProviderUsageSurface
+                    clock={active.session.clock}
                     {...(usage.error ? { error: usage.error } : {})}
                     loading={usage.loading}
                     providers={usage.providers}
-                    readingTime={usageReadingTime}
                 />
             </AppShell>
         );
@@ -1165,6 +1167,28 @@ function RigInboxSurface(props: {
  */
 function usageReadingTime(capturedAt: number): string {
     return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(capturedAt));
+}
+
+function RigProviderUsageSurface(props: {
+    clock: RigClockStore;
+    error?: UserError;
+    loading: boolean;
+    providers: readonly RigProviderUsageEntry[];
+}) {
+    const currentTime = useSyncExternalStore(
+        props.clock.subscribe,
+        props.clock.get,
+        props.clock.get,
+    );
+    return (
+        <RigProviderUsagePage
+            currentTime={currentTime}
+            {...(props.error ? { error: props.error } : {})}
+            loading={props.loading}
+            providers={props.providers}
+            readingTime={usageReadingTime}
+        />
+    );
 }
 
 /** When a question was asked or settled, as an absolute local time. */
