@@ -216,7 +216,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     onPermissionModeChange={(mode) =>
                         props.settings.defaultPermissionModeUpdate(mode as RigPermissionMode)
                     }
-                    permissionMode={settings.defaultPermissionMode ?? "auto"}
+                    permissionMode={settings.defaultPermissionMode}
                     permissionModeOptions={PERMISSION_MODES.map((mode) => ({
                         label: rigPermissionLabel(mode),
                         value: mode,

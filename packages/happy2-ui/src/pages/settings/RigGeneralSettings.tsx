@@ -17,7 +17,7 @@ export type RigGeneralSettingsProps = {
     effort?: string;
     /** The chosen model's own reasoning levels; empty when it exposes none. */
     effortOptions: readonly SelectOption[];
-    permissionMode?: string;
+    permissionMode: string;
     permissionModeOptions: readonly SelectOption[];
     /** Set while the catalog is still being read, so the pickers say so. */
     loading?: boolean;
@@ -125,7 +125,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     control={
                         <Box width={280}>
                             <Select
-                                aria-label="Permission mode"
+                                aria-label="Default access mode"
                                 fullWidth
                                 id="rig-settings-permission-mode"
                                 onValueChange={props.onPermissionModeChange}
@@ -137,7 +137,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     }
                     description="How much of the machine a new session may touch without asking"
                     htmlFor="rig-settings-permission-mode"
-                    label="Permissions"
+                    label="Default access mode"
                 />
             </RigSettingsSection>
         </>

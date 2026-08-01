@@ -1,6 +1,7 @@
 import type {
     RigModelPreferenceDocument,
     RigModelPreferencePersistence,
+    RigPermissionMode,
     RigServiceTier,
     RigSettingsInitial,
     RigSettingsSnapshot,
@@ -68,6 +69,7 @@ export function desktopModelSettingsCreate(
         initialSettings: settingsInitial(config),
         preferencePersistence,
         settingsChanged(snapshot) {
+            const nextPermissionMode = snapshot.defaultPermissionMode;
             const nextDefault =
                 snapshot.defaultProviderId && snapshot.defaultModelId
                     ? {
@@ -76,7 +78,11 @@ export function desktopModelSettingsCreate(
                           ...(snapshot.defaultEffort ? { effort: snapshot.defaultEffort } : {}),
                       }
                     : undefined;
-            if (defaultEqual(config.defaultModel, nextDefault)) return;
+            if (
+                defaultEqual(config.defaultModel, nextDefault) &&
+                config.defaultPermissionMode === nextPermissionMode
+            )
+                return;
 
             let modelPreferences = config.modelPreferences;
             if (nextDefault?.effort) {
@@ -102,6 +108,7 @@ export function desktopModelSettingsCreate(
             }
             commit({
                 ...(nextDefault ? { defaultModel: nextDefault } : {}),
+                defaultPermissionMode: nextPermissionMode,
                 ...(nextDefault
                     ? {
                           lastPickedModel: {
@@ -129,6 +136,7 @@ function settingsInitial(config: DesktopConfig): RigSettingsInitial {
               }
             : {}),
         ...(effort ? { defaultEffort: effort } : {}),
+        defaultPermissionMode: permissionMode(config.defaultPermissionMode),
     };
 }
 
@@ -161,6 +169,7 @@ function preferenceDocument(config: DesktopConfig): RigModelPreferenceDocument {
               }
             : {}),
         ...(config.lastPickedModel ? { lastPickedModel: config.lastPickedModel } : {}),
+        defaultPermissionMode: permissionMode(config.defaultPermissionMode),
         preferences,
     };
 }
@@ -202,6 +211,7 @@ function configFromPreferenceDocument(
               ? { defaultModel: current.defaultModel }
               : {}),
         ...(document.lastPickedModel ? { lastPickedModel: document.lastPickedModel } : {}),
+        defaultPermissionMode: current.defaultPermissionMode,
         modelPreferences,
         version: 1,
     };
@@ -209,6 +219,17 @@ function configFromPreferenceDocument(
 
 function thinkingLevel(value: string | undefined): RigThinkingLevel | undefined {
     return value && THINKING_LEVELS.has(value) ? (value as RigThinkingLevel) : undefined;
+}
+
+function permissionMode(value: string | undefined): RigPermissionMode {
+    switch (value) {
+        case "workspace_write":
+        case "read_only":
+        case "full_access":
+            return value;
+        default:
+            return "auto";
+    }
 }
 
 function defaultEqual(

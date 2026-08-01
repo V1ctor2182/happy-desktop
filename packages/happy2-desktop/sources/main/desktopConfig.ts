@@ -7,15 +7,23 @@ import type {
     DesktopDefaultModel,
     DesktopModelIdentity,
     DesktopModelPreference,
+    DesktopPermissionMode,
 } from "../shared/desktopContract";
 
 const CONFIG_VERSION = 1;
 const MAXIMUM_MODEL_PREFERENCES = 1_000;
 const MAXIMUM_VALUE_LENGTH = 500;
+const PERMISSION_MODES: ReadonlySet<string> = new Set([
+    "auto",
+    "workspace_write",
+    "read_only",
+    "full_access",
+]);
 
 class InvalidDesktopConfigError extends Error {}
 
 export const desktopConfigEmpty: DesktopConfig = {
+    defaultPermissionMode: "auto",
     modelPreferences: [],
     version: CONFIG_VERSION,
 };
@@ -96,19 +104,30 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         candidate.modelPreferences.length > MAXIMUM_MODEL_PREFERENCES
     )
         throw invalidConfigError();
-    const allowed = new Set(["defaultModel", "lastPickedModel", "modelPreferences", "version"]);
+    const allowed = new Set([
+        "defaultModel",
+        "defaultPermissionMode",
+        "lastPickedModel",
+        "modelPreferences",
+        "version",
+    ]);
     if (Object.keys(candidate).some((key) => !allowed.has(key))) throw invalidConfigError();
 
     const defaultModel =
         candidate.defaultModel === undefined
             ? undefined
             : defaultModelParse(candidate.defaultModel);
+    const defaultPermissionMode =
+        candidate.defaultPermissionMode === undefined
+            ? "auto"
+            : permissionModeParse(candidate.defaultPermissionMode);
     const lastPickedModel =
         candidate.lastPickedModel === undefined
             ? undefined
             : modelIdentityOnlyParse(candidate.lastPickedModel);
     if (
         (candidate.defaultModel !== undefined && !defaultModel) ||
+        !defaultPermissionMode ||
         (candidate.lastPickedModel !== undefined && !lastPickedModel)
     )
         throw invalidConfigError();
@@ -125,6 +144,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
     }
     return {
         ...(defaultModel ? { defaultModel } : {}),
+        defaultPermissionMode,
         ...(lastPickedModel ? { lastPickedModel } : {}),
         modelPreferences,
         version: CONFIG_VERSION,
@@ -192,6 +212,12 @@ function identityValueValid(value: unknown): value is string {
 
 function preferenceValueValid(value: unknown): value is string {
     return identityValueValid(value);
+}
+
+function permissionModeParse(value: unknown): DesktopPermissionMode | undefined {
+    return typeof value === "string" && PERMISSION_MODES.has(value)
+        ? (value as DesktopPermissionMode)
+        : undefined;
 }
 
 function invalidConfigError(): Error {

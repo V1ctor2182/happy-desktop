@@ -18,7 +18,8 @@ export interface RigSettingsSnapshot {
     readonly defaultProviderId?: string;
     readonly defaultModelId?: string;
     readonly defaultEffort?: RigThinkingLevel;
-    readonly defaultPermissionMode?: RigPermissionMode;
+    /** Access granted to a new session before its composer overrides the choice. */
+    readonly defaultPermissionMode: RigPermissionMode;
     /** Models switched off for this workspace. Absent from the set means enabled. */
     readonly disabledModels: ReadonlySet<RigModelKey>;
 }
@@ -47,12 +48,17 @@ export interface RigSettingsInitial {
     readonly defaultProviderId?: string;
     readonly defaultModelId?: string;
     readonly defaultEffort?: RigThinkingLevel;
+    readonly defaultPermissionMode?: RigPermissionMode;
 }
 
 /** Creates the workspace-lifetime preference store; it opens no transport or timers. */
 export function rigSettingsStoreCreate(initial: RigSettingsInitial = {}): RigSettingsStore {
     const listeners = new Set<() => void>();
-    let snapshot: RigSettingsSnapshot = { ...initial, disabledModels: EMPTY_DISABLED };
+    let snapshot: RigSettingsSnapshot = {
+        ...initial,
+        defaultPermissionMode: initial.defaultPermissionMode ?? "auto",
+        disabledModels: EMPTY_DISABLED,
+    };
 
     const publish = (next: RigSettingsSnapshot): void => {
         snapshot = next;

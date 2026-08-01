@@ -350,7 +350,7 @@ if (bridge) {
     };
     void desktopBridge.desktopConfigGet().then(start, (error: unknown) => {
         console.error("Could not read desktop model settings.", error);
-        start({ modelPreferences: [], version: 1 });
+        start({ defaultPermissionMode: "auto", modelPreferences: [], version: 1 });
     });
 } else {
     root.render(<App cookieAuth platform="web" serverUrl="/" />);

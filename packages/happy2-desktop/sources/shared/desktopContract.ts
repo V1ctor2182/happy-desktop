@@ -1,5 +1,8 @@
 export type DesktopMode = "local" | "cloud";
 
+/** Access granted to a newly created local Rig session. */
+export type DesktopPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
+
 /** One provider-qualified model identity in desktop preferences. */
 export interface DesktopModelIdentity {
     readonly providerId: string;
@@ -24,6 +27,7 @@ export interface DesktopModelPreference extends DesktopModelIdentity {
  */
 export interface DesktopConfig {
     readonly defaultModel?: DesktopDefaultModel;
+    readonly defaultPermissionMode: DesktopPermissionMode;
     readonly lastPickedModel?: DesktopModelIdentity;
     readonly modelPreferences: readonly DesktopModelPreference[];
     readonly version: 1;

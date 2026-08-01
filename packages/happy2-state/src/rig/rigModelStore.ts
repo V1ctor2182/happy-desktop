@@ -2,7 +2,12 @@ import { UserError } from "../types.js";
 import { rigMenusDerive } from "./rigMenusStore.js";
 import { rigSelectionModelUpdate, rigSessionSelectionDefault } from "./rigSessionDraftStore.js";
 import type { RigMenusSnapshot, RigModelCatalog, RigSelection } from "./rigTypes.js";
-import type { RigModelSelection, RigServiceTier, RigThinkingLevel } from "./rigTypes.js";
+import type {
+    RigModelSelection,
+    RigPermissionMode,
+    RigServiceTier,
+    RigThinkingLevel,
+} from "./rigTypes.js";
 
 export interface RigModelPreference {
     readonly effort?: RigThinkingLevel | null;
@@ -29,6 +34,8 @@ export interface RigModelPreferenceDefault extends RigModelPreferenceIdentity {
 /** Complete machine-local model choices supplied by the desktop host. */
 export interface RigModelPreferenceDocument {
     readonly defaultSelection?: RigModelPreferenceDefault;
+    /** Access mode configured for a new session, independent of its model. */
+    readonly defaultPermissionMode?: RigPermissionMode;
     readonly lastPickedModel?: RigModelPreferenceIdentity;
     readonly preferences: RigModelPreferences;
 }
@@ -220,19 +227,29 @@ function selectionsFromDocument(
     current?: RigModelStoreReadySnapshot,
 ): Pick<RigModelStoreReadySnapshot, "defaultSelection" | "lastUsedSelection"> {
     const catalogDefault = rigSessionSelectionDefault(catalog);
+    const defaultPermissionMode =
+        document.defaultPermissionMode ??
+        current?.defaultSelection.permissionMode ??
+        catalogDefault.permissionMode;
+    const catalogSelection = {
+        ...catalogDefault,
+        permissionMode: defaultPermissionMode,
+    };
     const defaultSelection =
         preferenceSelection(
             catalog,
             document.defaultSelection,
             document.preferences,
-            current?.defaultSelection.permissionMode ?? catalogDefault.permissionMode,
-        ) ?? catalogDefault;
+            defaultPermissionMode,
+        ) ?? catalogSelection;
     const lastUsedSelection =
         preferenceSelection(
             catalog,
             document.lastPickedModel,
             document.preferences,
-            current?.lastUsedSelection.permissionMode ?? defaultSelection.permissionMode,
+            document.defaultPermissionMode ??
+                current?.lastUsedSelection.permissionMode ??
+                defaultSelection.permissionMode,
         ) ?? defaultSelection;
     return { defaultSelection, lastUsedSelection };
 }
