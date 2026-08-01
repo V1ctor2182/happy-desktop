@@ -100,7 +100,7 @@ for (const selectedFlavor of flavors) {
             ["scripts/create-mac-update-manifest.mjs", join(desktopDirectory, output)],
             {
                 RELEASE_VERSION: packageJson.version,
-                ...(selectedFlavor === "local-web" ? { RELEASE_CHANNEL: "local" } : {}),
+                ...(selectedFlavor === "local-web" ? { RELEASE_CHANNEL: "nightly" } : {}),
             },
         );
 }
@@ -116,11 +116,11 @@ function standardBuilderConfiguration(base, output, app) {
 function localBuilderConfiguration(base, output, app) {
     return {
         ...sharedBuilderConfiguration(base, output, app),
-        appId: "com.slopus.happy2.local",
-        productName: "Happy Place Local",
+        appId: "com.slopus.happy2.nightly",
+        productName: "Happy Nightly",
         files: ["dist/main.js", "dist/preload.cjs", "package.json"],
-        artifactName: "Happy-2-Local-${version}-${arch}.${ext}",
-        publish: { ...structuredClone(base.publish), channel: "local" },
+        artifactName: "Happy-Nightly-${version}-${arch}.${ext}",
+        publish: { ...structuredClone(base.publish), channel: "nightly" },
     };
 }
 
@@ -162,7 +162,7 @@ async function releaseVerify(selectedFlavor, output, productName) {
     for (const selectedArchitecture of architectures) {
         const applicationDirectory = selectedArchitecture === "arm64" ? "mac-arm64" : "mac";
         const application = join(releaseDirectory, applicationDirectory, `${productName}.app`);
-        const artifactPrefix = selectedFlavor === "local-web" ? "Happy-2-Local" : "Happy-2";
+        const artifactPrefix = selectedFlavor === "local-web" ? "Happy-Nightly" : "Happy-2";
         const dmg = join(
             releaseDirectory,
             `${artifactPrefix}-${packageJson.version}-${selectedArchitecture}.dmg`,

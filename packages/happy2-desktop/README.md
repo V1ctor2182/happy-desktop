@@ -48,9 +48,9 @@ cookie-authenticated web app instead.
 
 Happy has two independently installable macOS distributions:
 
-- **Happy Place** (`com.slopus.happy2`) is the standard app. It includes the
+- **Happy** (`com.slopus.happy2`) is the standard app. It includes the
   renderer and supports both local and cloud topologies.
-- **Happy Place Local** (`com.slopus.happy2.local`) is the thin local-only
+- **Happy Nightly** (`com.slopus.happy2.nightly`) is the thin local-only
   shell. It always starts the system Rig daemon and loads its renderer from the
   build-pinned origin `https://local.app.happy.engineering`. The app allows
   navigation and loopback-proxy CORS only for that exact HTTPS origin. Its
@@ -59,7 +59,7 @@ Happy has two independently installable macOS distributions:
 The separate identifiers give each distribution its own installation identity,
 user data, single-app lock, and update channel. Both distributions update from
 the same GitHub Release: the standard app reads `latest-mac.yml`, while the
-local shell reads `local-mac.yml`, so they cannot update into one another.
+nightly shell reads `nightly-mac.yml`, so they cannot update into one another.
 
 Build the renderer that will be hosted at the local origin with:
 
