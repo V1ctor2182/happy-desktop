@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
+import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import type { LocalRigConnection } from "./localRig";
 import { localRigConnectorCreate } from "./localRig";
 import {
@@ -14,6 +15,7 @@ import { rigProxyHandle } from "./rigProxyHandle";
 import { rigTerminalBridgeCreate } from "./rigTerminalBridge";
 
 const endpoint = "/__happy2_local_rig";
+const maximumBridgeBodyBytes = 3 * 1024 * 1024;
 
 interface DevRuntime {
     readonly connection: LocalRigConnection;
@@ -22,6 +24,8 @@ interface DevRuntime {
 export interface BrowserLocalRigOptions {
     /** Opens one daemon connection; injectable so tests drive reconnection deterministically. */
     readonly connect?: () => Promise<LocalRigConnection>;
+    /** Overrides the normal home-directory config path for an isolated host. */
+    readonly desktopConfigPath?: string;
 }
 
 /**
@@ -37,6 +41,13 @@ export interface BrowserLocalRigOptions {
  */
 export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plugin {
     const connect = options.connect ?? (() => localRigConnectorCreate().connect());
+    let desktopConfigTask: Promise<DesktopConfigStore> | undefined;
+    const desktopConfig = (): Promise<DesktopConfigStore> => {
+        desktopConfigTask ??= DesktopConfigStore.create(
+            options.desktopConfigPath ?? desktopConfigPath(),
+        );
+        return desktopConfigTask;
+    };
     let runtimeTask: Promise<DevRuntime> | undefined;
     const runtime = (): Promise<DevRuntime> => {
         if (runtimeTask) return runtimeTask;
@@ -104,10 +115,11 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             server.middlewares.use(async (request, response, next) => {
                 const url = new URL(request.url ?? "/", "http://127.0.0.1");
                 const path = url.pathname;
-                // The exact endpoint is the browser development bridge (runtimeGet);
-                // everything under it is a projected Rig proxy route.
+                // The exact endpoint is the browser development bridge for
+                // runtime and machine-local actions; everything under it is a
+                // projected Rig proxy route.
                 if (path === endpoint && request.method === "POST") {
-                    await handleRequest(request, response, runtime);
+                    await handleRequest(request, response, runtime, desktopConfig);
                     return;
                 }
                 if (path === endpoint || path.startsWith(`${endpoint}/`)) {
@@ -191,10 +203,27 @@ async function notesActionHandle(
     }
 }
 
+async function desktopConfigActionHandle(
+    action: string,
+    input: unknown,
+    desktopConfig: () => Promise<DesktopConfigStore>,
+): Promise<{ readonly handled: boolean; readonly value?: unknown }> {
+    switch (action) {
+        case "desktopConfigGet":
+            return { handled: true, value: (await desktopConfig()).get() };
+        case "desktopConfigWrite":
+            await (await desktopConfig()).write(input);
+            return { handled: true, value: undefined };
+        default:
+            return { handled: false };
+    }
+}
+
 async function handleRequest(
     request: IncomingMessage,
     response: ServerResponse,
     runtime: () => Promise<DevRuntime>,
+    desktopConfig: () => Promise<DesktopConfigStore>,
 ): Promise<void> {
     try {
         const body = JSON.parse(await bodyRead(request)) as { action?: string; input?: unknown };
@@ -203,6 +232,17 @@ async function handleRequest(
         const notes = await notesActionHandle(body.action ?? "", body.input);
         if (notes.handled) {
             json(response, 200, { value: notes.value });
+            return;
+        }
+        // Desktop config is another machine-local capability. Like notes, it
+        // stays available even while the normal Rig daemon is offline.
+        const config = await desktopConfigActionHandle(
+            body.action ?? "",
+            body.input,
+            desktopConfig,
+        );
+        if (config.handled) {
+            json(response, 200, { value: config.value });
             return;
         }
         const active = await runtime();
@@ -239,7 +279,7 @@ async function bodyRead(request: IncomingMessage): Promise<string> {
     let body = "";
     for await (const chunk of request) {
         body += chunk;
-        if (body.length > 64 * 1024) throw new Error("The request body is too large.");
+        if (body.length > maximumBridgeBodyBytes) throw new Error("The request body is too large.");
     }
     return body;
 }

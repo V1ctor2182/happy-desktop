@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeTheme,
+    screen,
     session as electronSession,
     shell,
     type BrowserWindowConstructorOptions,
@@ -45,6 +46,8 @@ import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValid
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 import { RemoteRigManager } from "./remoteRigManager";
+import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
+import { DesktopWindowStateStore } from "./windowState";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
@@ -80,6 +83,8 @@ app.commandLine.appendSwitch("disable-quic");
 app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
 
 let runtime: DesktopRuntime;
+let desktopConfigStore: DesktopConfigStore;
+let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let remoteRigManager: RemoteRigManager;
 let notesStore: NotesStore;
@@ -307,6 +312,15 @@ function windowOptions(
     };
 }
 
+function windowGeometryRemember(window: BrowserWindow): void {
+    const remember = () => {
+        if (!window.isDestroyed()) desktopWindowStateStore.remember(window.getNormalBounds());
+    };
+    window.on("move", remember);
+    window.on("resize", remember);
+    remember();
+}
+
 function localWindowCreate(bounds?: DesktopWindowBounds) {
     const hostedOrigin =
         desktopFlavor.kind === "local-web" ? desktopFlavor.rendererOrigin : undefined;
@@ -323,6 +337,7 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             webviewTag: true,
         }),
     });
+    windowGeometryRemember(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
         if (browserWebUrl(url)) browserOpenPublish(window, url);
         else if (url.startsWith("mailto:")) void shell.openExternal(url);
@@ -379,6 +394,7 @@ function remoteWindowCreate(url: string, bounds?: DesktopWindowBounds) {
             sandbox: true,
         }),
     });
+    windowGeometryRemember(window);
     window.webContents.setWindowOpenHandler(({ url: candidate }) => {
         if (remoteNavigationAllowed(candidate)) void shell.openExternal(candidate);
         return { action: "deny" };
@@ -392,13 +408,19 @@ function remoteWindowCreate(url: string, bounds?: DesktopWindowBounds) {
 }
 
 function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): BrowserWindow {
+    const restoredBounds = desktopWindowStateStore.restore(
+        screen.getAllDisplays(),
+        screen.getPrimaryDisplay(),
+    );
     if (desktopFlavor.kind === "local-web")
-        return windowLifecycle.synchronize("local-web", (bounds) => localWindowCreate(bounds));
+        return windowLifecycle.synchronize("local-web", (bounds) =>
+            localWindowCreate(bounds ?? restoredBounds),
+        );
     const target = desktopWindowTarget(snapshot);
     return windowLifecycle.synchronize(target.key, (bounds) =>
         target.kind === "cloud"
-            ? remoteWindowCreate(target.url, bounds)
-            : localWindowCreate(bounds),
+            ? remoteWindowCreate(target.url, bounds ?? restoredBounds)
+            : localWindowCreate(bounds ?? restoredBounds),
     );
 }
 
@@ -450,6 +472,10 @@ void app
         if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
         await browserSessionConfigure();
         const desktopRoot = join(app.getPath("userData"), "desktop");
+        desktopWindowStateStore = await DesktopWindowStateStore.create(
+            join(desktopRoot, "window-state.json"),
+        );
+        desktopConfigStore = await DesktopConfigStore.create(desktopConfigPath());
         const connector = localRigConnectorCreate();
         const rendererOrigin =
             desktopFlavor.kind === "local-web"
@@ -512,6 +538,10 @@ void app
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
+        ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
+            desktopConfigStore.write(config),
+        );
         ipcMain.handle(desktopIpc.remoteRigGet, () => remoteRigManager.get());
         ipcMain.handle(desktopIpc.remoteRigAdd, (_event, request: unknown) => {
             const value = request as RemoteRigAddRequest | undefined;
@@ -650,7 +680,11 @@ app.on("second-instance", () => {
 app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
-    void Promise.all([runtime.close(), remoteRigManager?.[Symbol.asyncDispose]()]).finally(() => {
+    void Promise.all([
+        runtime.close(),
+        remoteRigManager?.[Symbol.asyncDispose](),
+        desktopWindowStateStore?.flush(),
+    ]).finally(() => {
         browserProxy?.close();
         browserProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();

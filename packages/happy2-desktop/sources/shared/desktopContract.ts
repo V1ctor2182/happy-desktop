@@ -1,5 +1,34 @@
 export type DesktopMode = "local" | "cloud";
 
+/** One provider-qualified model identity in desktop preferences. */
+export interface DesktopModelIdentity {
+    readonly providerId: string;
+    readonly modelId: string;
+}
+
+/** The explicit model and effort a new desktop session starts with. */
+export interface DesktopDefaultModel extends DesktopModelIdentity {
+    readonly effort?: string;
+}
+
+/** The choices most recently made while using one provider-qualified model. */
+export interface DesktopModelPreference extends DesktopModelIdentity {
+    readonly lastEffort?: string;
+    /** `standard` names the provider's ordinary tier; every other value is a catalog tier. */
+    readonly lastSpeed: string;
+}
+
+/**
+ * Machine-local desktop preferences. Model ids are provider-qualified because
+ * the same model can be offered through more than one account/provider.
+ */
+export interface DesktopConfig {
+    readonly defaultModel?: DesktopDefaultModel;
+    readonly lastPickedModel?: DesktopModelIdentity;
+    readonly modelPreferences: readonly DesktopModelPreference[];
+    readonly version: 1;
+}
+
 export type DesktopStartRequest =
     | { mode: "local" }
     | {
@@ -187,6 +216,8 @@ export interface HappyDesktopBridge {
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     directoryPick(): Promise<string | undefined>;
+    desktopConfigGet(): Promise<DesktopConfig>;
+    desktopConfigWrite(config: DesktopConfig): Promise<void>;
     noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
     noteCreate(title?: string): Promise<DesktopNoteContent>;
     noteRead(id: string): Promise<DesktopNoteContent>;
@@ -224,6 +255,8 @@ export const desktopIpc = {
     browserOpenRequested: "happy2:browser:open-requested",
     browserStatusChanged: "happy2:browser:status-changed",
     directoryPick: "happy2:directory:pick",
+    desktopConfigGet: "happy2:desktop-config:get",
+    desktopConfigWrite: "happy2:desktop-config:write",
     applicationMenuOpen: "happy2:application-menu:open",
     noteApply: "happy2:notes:apply",
     noteCreate: "happy2:notes:create",

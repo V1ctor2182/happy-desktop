@@ -1,4 +1,9 @@
-import type { RigHost, RigProjectGroup, RigSessionLocation } from "happy2-state";
+import type {
+    RigHost,
+    RigModelPreferencePersistence,
+    RigProjectGroup,
+    RigSessionLocation,
+} from "happy2-state";
 import type {
     HappyDesktopBridge,
     RemoteRigAddRequest,
@@ -76,6 +81,8 @@ export interface RigDirectoryDeps {
     readonly conversationOpen: (rigId: string, location: RigSessionLocation) => void;
     /** Navigates to a group of the named Rig that holds no conversation yet. */
     readonly groupOpen: (rigId: string, groupId: string) => void;
+    /** Desktop-wide model memory shared by local and remote Rig connections. */
+    readonly modelPreferencePersistence: RigModelPreferencePersistence;
 }
 
 /**
@@ -158,6 +165,7 @@ export function rigDirectoryStoreCreate(
             host,
             rigId: id,
             rigHttpUrl,
+            modelPreferencePersistence: deps.modelPreferencePersistence,
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(id, location),
                 groupOpen: (groupId) => deps.groupOpen(id, groupId),

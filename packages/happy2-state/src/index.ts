@@ -421,6 +421,9 @@ export {
     rigModelStoreCreate,
     type RigModelStore,
     type RigModelPreference,
+    type RigModelPreferenceDefault,
+    type RigModelPreferenceDocument,
+    type RigModelPreferenceIdentity,
     type RigModelPreferences,
     type RigModelPreferencePersistence,
     type RigModelStoreOptions,
@@ -440,6 +443,7 @@ export {
     rigSettingsStoreCreate,
     type RigModelKey,
     type RigSettingsSnapshot,
+    type RigSettingsInitial,
     type RigSettingsStore,
 } from "./rig/rigSettingsStore.js";
 export {

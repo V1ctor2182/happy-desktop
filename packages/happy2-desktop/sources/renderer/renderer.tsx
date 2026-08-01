@@ -20,7 +20,11 @@ import {
     type RigWindowStore,
 } from "happy2-state";
 import { ThemeScope, type BrowserContentRenderer } from "happy2-ui";
-import type { DesktopUpdateSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
+import type {
+    DesktopConfig,
+    DesktopUpdateSnapshot,
+    HappyDesktopBridge,
+} from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import { rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
@@ -34,6 +38,7 @@ import {
 } from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
+import { desktopModelSettingsCreate } from "./desktopModelSettings";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
@@ -280,63 +285,73 @@ function DesktopRenderer(props: {
 const browserLocal =
     document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
+const root = createRoot(document.getElementById("root")!);
 if (bridge) {
-    const runtimeStore = desktopRuntimeStoreCreate(bridge);
-    // The local router outlives any single daemon connection, so it is created
-    // here and the session store navigates through it when a conversation it
-    // created should be opened.
-    const rigRouter = rigRouterCreate();
-    // Appearance is chosen for the window, not for one connection, so the store is
-    // created here beside the router and outlives both.
-    const appearance = appearanceStoreCreate();
-    // The workspace's own preferences (default model, effort, permissions) belong
-    // to the window as well: they outlive whichever daemon connection is current.
-    const settings = rigSettingsStoreCreate();
-    // The reader's notes are files in their home directory, so they belong to the
-    // window rather than to any Rig: the main process stores them, and this store
-    // outlives every daemon connection the window makes.
-    const notes = notesSessionStoreCreate(bridge);
-    // Every Rig in this window, each with its own product stores. The router is
-    // told to resolve its address again whenever the set of connected Rigs
-    // changes, so a machine that connects after the URL already named it opens
-    // the addressed conversation without the reader navigating twice.
-    const rigs = rigDirectoryStoreCreate(bridge, runtimeStore, {
-        conversationOpen: (rigId, location) =>
-            rigRouterConversationOpen(rigRouter, rigId, location),
-        groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
+    const desktopBridge = bridge;
+    const start = (config: DesktopConfig): void => {
+        const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
+        // The local router outlives any single daemon connection, so it is created
+        // here and the session store navigates through it when a conversation it
+        // created should be opened.
+        const rigRouter = rigRouterCreate();
+        // Appearance is chosen for the window, not for one connection, so the store is
+        // created here beside the router and outlives both.
+        const appearance = appearanceStoreCreate();
+        const modelSettings = desktopModelSettingsCreate(desktopBridge, config);
+        // Defaults and model picker memory belong to the desktop, not one daemon.
+        // The state stores stay synchronous while the bridge persists their typed
+        // snapshots through the main process.
+        const settings = rigSettingsStoreCreate(modelSettings.initialSettings);
+        settings.subscribe(() => modelSettings.settingsChanged(settings.get()));
+        // The reader's notes are files in their home directory, so they belong to the
+        // window rather than to any Rig: the main process stores them, and this store
+        // outlives every daemon connection the window makes.
+        const notes = notesSessionStoreCreate(desktopBridge);
+        // Every Rig in this window, each with its own product stores. The router is
+        // told to resolve its address again whenever the set of connected Rigs
+        // changes, so a machine that connects after the URL already named it opens
+        // the addressed conversation without the reader navigating twice.
+        const rigs = rigDirectoryStoreCreate(desktopBridge, runtimeStore, {
+            conversationOpen: (rigId, location) =>
+                rigRouterConversationOpen(rigRouter, rigId, location),
+            groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
+            modelPreferencePersistence: modelSettings.preferencePersistence,
+        });
+        let materialized = "";
+        rigs.subscribe(() => {
+            const current = rigs
+                .get()
+                .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
+                .join(",");
+            if (current === materialized) return;
+            materialized = current;
+            void rigRouter.invalidate();
+        });
+        root.render(
+            <DesktopAppearance appearance={appearance}>
+                <DesktopRenderer
+                    appearance={appearance}
+                    browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                    bridge={desktopBridge}
+                    notes={notes}
+                    // Only the Electron window hides its title bar; the browser
+                    // development server renders the same tree with web chrome.
+                    platform={browserLocal ? "web" : "desktop"}
+                    rigRouter={rigRouter}
+                    rigs={rigs}
+                    localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                    settings={settings}
+                    startupValues={startupValuesStoreCreate()}
+                    store={runtimeStore}
+                    windowState={windowStateStoreCreate(desktopBridge)}
+                />
+            </DesktopAppearance>,
+        );
+    };
+    void desktopBridge.desktopConfigGet().then(start, (error: unknown) => {
+        console.error("Could not read desktop model settings.", error);
+        start({ modelPreferences: [], version: 1 });
     });
-    let materialized = "";
-    rigs.subscribe(() => {
-        const current = rigs
-            .get()
-            .rigs.map((rig) => `${rig.id}:${rig.session ? "up" : "down"}`)
-            .join(",");
-        if (current === materialized) return;
-        materialized = current;
-        void rigRouter.invalidate();
-    });
-    createRoot(document.getElementById("root")!).render(
-        <DesktopAppearance appearance={appearance}>
-            <DesktopRenderer
-                appearance={appearance}
-                browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                bridge={bridge}
-                notes={notes}
-                // Only the Electron window hides its title bar; the browser
-                // development server renders the same tree with web chrome.
-                platform={browserLocal ? "web" : "desktop"}
-                rigRouter={rigRouter}
-                rigs={rigs}
-                localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                settings={settings}
-                startupValues={startupValuesStoreCreate()}
-                store={runtimeStore}
-                windowState={windowStateStoreCreate(bridge)}
-            />
-        </DesktopAppearance>,
-    );
 } else {
-    createRoot(document.getElementById("root")!).render(
-        <App cookieAuth platform="web" serverUrl="/" />,
-    );
+    root.render(<App cookieAuth platform="web" serverUrl="/" />);
 }

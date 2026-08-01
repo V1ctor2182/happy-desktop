@@ -17,9 +17,27 @@ export interface RigModelPreferences {
         | undefined;
 }
 
+export interface RigModelPreferenceIdentity {
+    readonly providerId: string;
+    readonly modelId: string;
+}
+
+export interface RigModelPreferenceDefault extends RigModelPreferenceIdentity {
+    readonly effort?: RigThinkingLevel;
+}
+
+/** Complete machine-local model choices supplied by the desktop host. */
+export interface RigModelPreferenceDocument {
+    readonly defaultSelection?: RigModelPreferenceDefault;
+    readonly lastPickedModel?: RigModelPreferenceIdentity;
+    readonly preferences: RigModelPreferences;
+}
+
 export interface RigModelPreferencePersistence {
-    read(): RigModelPreferences | undefined;
-    write(preferences: RigModelPreferences): void;
+    read(): RigModelPreferenceDocument | undefined;
+    write(document: RigModelPreferenceDocument): void;
+    /** Reports a replacement written through another store sharing this host document. */
+    subscribe?(listener: () => void): () => void;
 }
 
 export type RigModelStoreSnapshot =
@@ -49,6 +67,7 @@ export interface RigModelStore {
     selectionUsed(selection: RigSelection): void;
     /** Selects a model with that model's last locally remembered effort and speed. */
     modelSelect(current: RigSelection, input: RigModelSelection): RigSelection;
+    [Symbol.dispose](): void;
 }
 
 export interface RigModelStoreOptions {
@@ -66,11 +85,27 @@ export function rigModelStoreCreate(options: RigModelStoreOptions): RigModelStor
     const listeners = new Set<() => void>();
     let snapshot: RigModelStoreSnapshot = { type: "loading" };
     let loadPromise: Promise<RigModelStoreReadySnapshot> | undefined;
-    let preferences: RigModelPreferences = options.preferencePersistence?.read() ?? {};
+    let document: RigModelPreferenceDocument = { preferences: {} };
+    let preferences = document.preferences;
+    let preferenceUnsubscribe: (() => void) | undefined;
+    let writingPreferences = false;
 
     const publish = (next: RigModelStoreSnapshot): void => {
         snapshot = next;
         for (const listener of listeners) listener();
+    };
+
+    const preferencesReconcile = (): void => {
+        if (writingPreferences) return;
+        document = options.preferencePersistence?.read() ?? { preferences: {} };
+        preferences = document.preferences;
+        if (snapshot.type !== "ready") return;
+        const selections = selectionsFromDocument(snapshot.catalog, document, snapshot);
+        publish({
+            ...snapshot,
+            ...selections,
+            menus: rigMenusDerive(snapshot.catalog, selections.lastUsedSelection),
+        });
     };
 
     return {
@@ -80,18 +115,23 @@ export function rigModelStoreCreate(options: RigModelStoreOptions): RigModelStor
             return () => listeners.delete(listener);
         },
         load() {
+            document = options.preferencePersistence?.read() ?? document;
+            preferences = document.preferences;
+            preferenceUnsubscribe ??=
+                options.preferencePersistence?.subscribe?.(preferencesReconcile);
             if (snapshot.type === "ready") return Promise.resolve(snapshot);
             if (loadPromise) return loadPromise;
             if (snapshot.type === "error") publish({ type: "loading" });
             loadPromise = options.catalogRead().then(
                 (catalog) => {
-                    const defaultSelection = rigSessionSelectionDefault(catalog);
+                    document = options.preferencePersistence?.read() ?? document;
+                    preferences = document.preferences;
+                    const selections = selectionsFromDocument(catalog, document);
                     const ready: RigModelStoreReadySnapshot = {
                         type: "ready",
                         catalog,
-                        defaultSelection,
-                        lastUsedSelection: defaultSelection,
-                        menus: rigMenusDerive(catalog, defaultSelection),
+                        ...selections,
+                        menus: rigMenusDerive(catalog, selections.lastUsedSelection),
                     };
                     publish(ready);
                     loadPromise = undefined;
@@ -119,7 +159,20 @@ export function rigModelStoreCreate(options: RigModelStoreOptions): RigModelStor
                     },
                 },
             };
-            options.preferencePersistence?.write(preferences);
+            document = {
+                ...document,
+                lastPickedModel: {
+                    providerId: selection.providerId,
+                    modelId: selection.modelId,
+                },
+                preferences,
+            };
+            writingPreferences = true;
+            try {
+                options.preferencePersistence?.write(document);
+            } finally {
+                writingPreferences = false;
+            }
             publish({
                 ...snapshot,
                 lastUsedSelection: selection,
@@ -154,6 +207,67 @@ export function rigModelStoreCreate(options: RigModelStoreOptions): RigModelStor
                 ...(serviceTier !== undefined ? { serviceTier } : {}),
             };
         },
+        [Symbol.dispose]() {
+            preferenceUnsubscribe?.();
+            listeners.clear();
+        },
+    };
+}
+
+function selectionsFromDocument(
+    catalog: RigModelCatalog,
+    document: RigModelPreferenceDocument,
+    current?: RigModelStoreReadySnapshot,
+): Pick<RigModelStoreReadySnapshot, "defaultSelection" | "lastUsedSelection"> {
+    const catalogDefault = rigSessionSelectionDefault(catalog);
+    const defaultSelection =
+        preferenceSelection(
+            catalog,
+            document.defaultSelection,
+            document.preferences,
+            current?.defaultSelection.permissionMode ?? catalogDefault.permissionMode,
+        ) ?? catalogDefault;
+    const lastUsedSelection =
+        preferenceSelection(
+            catalog,
+            document.lastPickedModel,
+            document.preferences,
+            current?.lastUsedSelection.permissionMode ?? defaultSelection.permissionMode,
+        ) ?? defaultSelection;
+    return { defaultSelection, lastUsedSelection };
+}
+
+function preferenceSelection(
+    catalog: RigModelCatalog,
+    identity: RigModelPreferenceIdentity | undefined,
+    preferences: RigModelPreferences,
+    permissionMode: RigSelection["permissionMode"],
+): RigSelection | undefined {
+    if (!identity) return undefined;
+    const provider = catalog.providers.find((candidate) => candidate.id === identity.providerId);
+    const model = provider?.models.find((candidate) => candidate.id === identity.modelId);
+    if (!provider || provider.disabledReason !== undefined || !model) return undefined;
+    const candidateEffort =
+        "effort" in identity ? (identity as RigModelPreferenceDefault).effort : undefined;
+    const explicitEffort =
+        candidateEffort && model.thinkingLevels.includes(candidateEffort)
+            ? candidateEffort
+            : undefined;
+    const preference = preferences[identity.providerId]?.[identity.modelId];
+    const rememberedEffort =
+        preference?.effort && model.thinkingLevels.includes(preference.effort)
+            ? preference.effort
+            : undefined;
+    const serviceTier =
+        preference?.serviceTier && provider.serviceTiers.includes(preference.serviceTier)
+            ? preference.serviceTier
+            : undefined;
+    return {
+        providerId: identity.providerId,
+        modelId: identity.modelId,
+        effort: explicitEffort ?? rememberedEffort ?? model.defaultThinkingLevel,
+        permissionMode,
+        ...(serviceTier !== undefined ? { serviceTier } : {}),
     };
 }
 

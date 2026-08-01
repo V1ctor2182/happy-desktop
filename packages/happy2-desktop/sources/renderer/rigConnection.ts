@@ -10,7 +10,6 @@ import {
     type RigGlobalEvent,
     type RigHost,
     type RigModelPreferencePersistence,
-    type RigModelPreferences,
     type RigModelStore,
     type RigSessionCatalogSnapshot,
     type RigSessionLocation,
@@ -32,26 +31,6 @@ import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSo
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
-
-const MODEL_PREFERENCES_KEY = "happy2.rig.model-preferences.v1";
-
-const modelPreferencePersistence: RigModelPreferencePersistence = {
-    read() {
-        try {
-            const value = localStorage.getItem(MODEL_PREFERENCES_KEY);
-            return value ? (JSON.parse(value) as RigModelPreferences) : undefined;
-        } catch {
-            return undefined;
-        }
-    },
-    write(preferences) {
-        try {
-            localStorage.setItem(MODEL_PREFERENCES_KEY, JSON.stringify(preferences));
-        } catch {
-            // A storage-denied renderer still keeps the choices for this client lifetime.
-        }
-    },
-};
 
 const WORKSPACE_MEMORY_PREFIX = "happy2.rig.workspace-memory.v1:";
 
@@ -141,6 +120,7 @@ function healthProbe(rigHttpUrl: string): () => Promise<RigDaemonHealth> {
 export function rigConnectionOpen(input: {
     readonly host: RigHost;
     readonly deps: RigSessionDeps;
+    readonly modelPreferencePersistence: RigModelPreferencePersistence;
     /** Which Rig this is, so its tab and read memory is kept apart from the others'. */
     readonly rigId: string;
     readonly rigHttpUrl: string;
@@ -183,7 +163,7 @@ export function rigConnectionOpen(input: {
     });
     const client: RigClient = rigClientCreate({
         transport,
-        modelPreferencePersistence,
+        modelPreferencePersistence: input.modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,
         inboxSource,

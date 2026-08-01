@@ -163,8 +163,13 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
                     onDefaultModelChange={(key) => {
                         const [providerId, ...rest] = key.split(":");
-                        if (providerId)
-                            props.settings.defaultModelUpdate(providerId, rest.join(":"));
+                        const modelId = rest.join(":");
+                        const selected = catalog?.providers
+                            .find((provider) => provider.id === providerId)
+                            ?.models.find((candidate) => candidate.id === modelId);
+                        if (!providerId || !selected) return;
+                        props.settings.defaultModelUpdate(providerId, modelId);
+                        props.settings.defaultEffortUpdate(selected.defaultThinkingLevel);
                     }}
                     onEffortChange={(effort) =>
                         props.settings.defaultEffortUpdate(effort as RigThinkingLevel)

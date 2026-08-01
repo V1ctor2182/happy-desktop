@@ -25,6 +25,8 @@ const bridge: HappyDesktopBridge = {
         return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
+    desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
+    desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     noteApply: (request: DesktopNoteApplyRequest) =>
         ipcRenderer.invoke(desktopIpc.noteApply, request),

@@ -1,4 +1,5 @@
 import type {
+    DesktopConfig,
     DesktopNoteApplyRequest,
     DesktopNoteContent,
     DesktopNoteSummary,
@@ -30,7 +31,8 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
  * Creates the same renderer capability as the preload bridge, backed by the local
  * Vite server. The renderer reaches the daemon's health over the dev server's
  * `${endpoint}/health` route (advertised as `rigHttpUrl` in the runtime snapshot),
- * so host operations are the only surface this bridge stubs.
+ * while machine-local file operations use the exact endpoint and the remaining
+ * native-only operations degrade explicitly.
  */
 export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
@@ -38,6 +40,8 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
         directoryPick: async () => undefined,
+        desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
+        desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),
         applicationMenuOpen: async () => undefined,
         noteApply: (apply: DesktopNoteApplyRequest) =>
             request<DesktopNoteSummary>("noteApply", apply),

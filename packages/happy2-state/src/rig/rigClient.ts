@@ -381,6 +381,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            models[Symbol.dispose]();
             sessionListStore?.[Symbol.dispose]();
             sessionListStore = undefined;
             inboxStore?.[Symbol.dispose]();

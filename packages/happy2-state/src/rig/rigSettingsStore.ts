@@ -26,9 +26,9 @@ export interface RigSettingsSnapshot {
 /**
  * The local workspace's own preferences: which model a new session starts on and
  * which of the catalog's models the pickers are allowed to offer. It is the
- * reader's selection, not the daemon's — the daemon has no preference API yet, so
- * this store is deliberately memory-only and never claims a saved or
- * server-confirmed state.
+ * reader's selection, not the daemon's. The concrete store stays memory-only;
+ * its desktop host may seed it from local configuration and persist notifications
+ * without turning those choices into server-confirmed state.
  */
 export interface RigSettingsStore {
     get(): RigSettingsSnapshot;
@@ -43,10 +43,16 @@ export interface RigSettingsStore {
 
 const EMPTY_DISABLED: ReadonlySet<RigModelKey> = new Set<RigModelKey>();
 
+export interface RigSettingsInitial {
+    readonly defaultProviderId?: string;
+    readonly defaultModelId?: string;
+    readonly defaultEffort?: RigThinkingLevel;
+}
+
 /** Creates the workspace-lifetime preference store; it opens no transport or timers. */
-export function rigSettingsStoreCreate(): RigSettingsStore {
+export function rigSettingsStoreCreate(initial: RigSettingsInitial = {}): RigSettingsStore {
     const listeners = new Set<() => void>();
-    let snapshot: RigSettingsSnapshot = { disabledModels: EMPTY_DISABLED };
+    let snapshot: RigSettingsSnapshot = { ...initial, disabledModels: EMPTY_DISABLED };
 
     const publish = (next: RigSettingsSnapshot): void => {
         snapshot = next;
