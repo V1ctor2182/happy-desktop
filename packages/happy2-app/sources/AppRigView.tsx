@@ -621,6 +621,16 @@ function openGroupFind(
     return undefined;
 }
 
+/**
+ * The composer prompt names where the message lands. A window holds several
+ * projects and worktrees at once, and their names read as anything from `happy2`
+ * to `Fix login redirect`, so the group is quoted rather than glued into a
+ * sentence that only reads well for one kind of title.
+ */
+function composerPlaceholder(groupName: string | undefined): string {
+    return groupName === undefined ? "Message Happy…" : `Message Happy in “${groupName}”…`;
+}
+
 /** A sidebar row's id: which Rig it belongs to, then the group inside it. */
 function rigItemId(rigId: string, id: string): string {
     return `${rigId}/${id}`;
@@ -1375,6 +1385,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         panel.open && panel.maximized && conversation.type === "ready" ? (
             <RigPanelComposer
                 conversation={conversation.value}
+                groupName={openGroup?.name}
                 onChatSelect={props.onChatSelect}
                 projects={rows}
                 readOnly={conversationReadOnly}
@@ -1566,7 +1577,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             agentAuthor={rigAgentAuthor}
                             composer={workspace.groupComposer}
                             composerFocusOnType={composerClaimsTyping}
-                            composerPlaceholder="Message Happy…"
+                            composerPlaceholder={composerPlaceholder(openGroup.name)}
                             entries={NO_ENTRIES}
                             // The first message is what creates the session, so
                             // its model, effort, and access mode have to be
@@ -1731,6 +1742,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     conversation={conversation}
                                     focusOnType={composerClaimsTyping}
                                     groupId={openGroup.id}
+                                    groupName={openGroup.name}
                                     now={now}
                                     onCreate={() => groupConversationCreate(openGroup)}
                                     onChatSelect={props.onChatSelect}
@@ -2053,6 +2065,7 @@ function RigConversationBody(props: {
     conversation: RigWorkspaceSnapshot["conversation"];
     focusOnType: boolean;
     groupId: string;
+    groupName: string;
     now: number;
     onCreate: () => void;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
@@ -2067,6 +2080,7 @@ function RigConversationBody(props: {
                 conversation={conversation.value}
                 focusOnType={props.focusOnType}
                 groupId={props.groupId}
+                groupName={props.groupName}
                 now={props.now}
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
@@ -2117,6 +2131,7 @@ function RigConversationSurface(props: {
     conversation: RigConversationSnapshot;
     focusOnType: boolean;
     groupId: string;
+    groupName: string;
     now: number;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     /** Opens a file the transcript names, in the panel beside it. */
@@ -2150,7 +2165,11 @@ function RigConversationSurface(props: {
             composer={conversation.composer}
             composerDisabled={props.readOnly}
             composerFocusOnType={!props.readOnly && props.focusOnType}
-            composerPlaceholder={props.readOnly ? "Subagent chats are read-only" : "Message Happy…"}
+            composerPlaceholder={
+                props.readOnly
+                    ? "Subagent chats are read-only"
+                    : composerPlaceholder(props.groupName)
+            }
             conversationId={conversation.conversationId}
             entries={conversation.entries}
             loading={!conversation.ready}
@@ -2345,6 +2364,7 @@ function chatTargetLabel(
  */
 function RigPanelComposer(props: {
     conversation: RigConversationSnapshot;
+    groupName: string | undefined;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
@@ -2361,7 +2381,9 @@ function RigPanelComposer(props: {
                 // composer, so it is the surface the reader writes into.
                 composerFocusOnType={!props.readOnly}
                 composerPlaceholder={
-                    props.readOnly ? "Subagent chats are read-only" : "Message Happy…"
+                    props.readOnly
+                        ? "Subagent chats are read-only"
+                        : composerPlaceholder(props.groupName)
                 }
                 composerControls={
                     conversation.menus ? (
