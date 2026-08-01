@@ -113,7 +113,7 @@ function toolVerb(
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return active ? "Exploring" : "Explored";
     if (/(read|view|cat|open)/.test(lower)) return active ? "Reading" : "Read";
     if (/(write|edit|patch|update|apply)/.test(lower)) return active ? "Editing" : "Edited";
-    return active ? "Using" : "Used";
+    return active ? "..." : "Used";
 }
 
 /**
@@ -346,6 +346,7 @@ function AgentToolActivity(props: {
     const presentation = tool.presentation;
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
     const singleLine = props.singleLine ?? false;
+    const running = tool.status === "running";
 
     const tone = singleLine ? "neutral" : statusTone(tool.status);
 
@@ -458,13 +459,22 @@ function AgentToolActivity(props: {
                 className="happy2-agent-activity__glyph"
                 data-happy2-ui="agent-activity-glyph"
             >
-                <ToolIcon
-                    glyph={toolGlyph(
-                        tool.toolName,
-                        presentation,
-                        tool.failed || tool.status === "failed",
-                    )}
-                />
+                {running ? (
+                    <Spinner
+                        label={`${humanizeToolName(tool.toolName)} is running`}
+                        size={12}
+                        tone="muted"
+                        variant="circle"
+                    />
+                ) : (
+                    <ToolIcon
+                        glyph={toolGlyph(
+                            tool.toolName,
+                            presentation,
+                            tool.failed || tool.status === "failed",
+                        )}
+                    />
+                )}
             </span>
             <span className="happy2-agent-activity__verb" data-happy2-ui="agent-activity-verb">
                 <AgentActivityChangingText value={verb} />
