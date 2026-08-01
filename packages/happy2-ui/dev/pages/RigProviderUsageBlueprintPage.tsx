@@ -43,11 +43,11 @@ export function RigProviderUsageBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-015"
-            summary="How much of each provider account's plan this machine has spent: one card per account, carrying the windows that vendor reports and whatever credit is left once they are gone."
+            summary="How much of each provider account's plan this machine has spent: one section per account, carrying the windows that vendor reports and whatever credit is left once they are gone. A window's share runs the full width of the column and stays the ink of the text until it is worth colouring."
             title="RigProviderUsagePage"
         >
             <FullScreenSpecimen
-                detail="Three accounts: one with room, one spent with credits behind it, one that could not be read."
+                detail="Three accounts, separated by a rule rather than boxed: one with room, one spent with credits behind it, one that could not be read."
                 label="Accounts"
                 number="01"
             >

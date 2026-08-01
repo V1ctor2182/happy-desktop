@@ -206,12 +206,14 @@ export class RigDaemonClient {
      * row exists, with the checkout still initializing, and reports it ready (or
      * failed) over the global event queue. `id` is the caller's own cuid2 for the
      * worktree, so repeating a request returns the worktree it already created
-     * rather than reserving a second one.
+     * rather than reserving a second one. `baseRef` is optional because the
+     * daemon forks a named ref verbatim and otherwise fetches the remote and
+     * forks the project's trunk, which is what an unqualified request wants.
      */
     createWorkspace(
         projectId: string,
         request: {
-            readonly baseRef: string;
+            readonly baseRef?: string;
             readonly id: string;
             readonly name: string;
         },

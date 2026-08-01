@@ -1130,10 +1130,12 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             if (segments[2] === "worktrees" && segments.length === 3) {
                 const body = await bodyReadJson(request);
                 const created = await client.createWorkspace(projectId, {
-                    // `HEAD` is what the reader is looking at: a worktree started
-                    // from the project's current commit, which is what "new
-                    // worktree here" means without asking for a branch first.
-                    baseRef: typeof body.baseRef === "string" ? body.baseRef : "HEAD",
+                    // A base is only forwarded when the renderer named one: the
+                    // daemon forks a requested ref verbatim, and forking nothing
+                    // in particular is what makes it fetch the remote and cut
+                    // the worktree from the project's trunk there rather than
+                    // from whatever the project folder is checked out on.
+                    ...(typeof body.baseRef === "string" ? { baseRef: body.baseRef } : {}),
                     // The renderer's idempotency key is a cuid2, which is exactly
                     // what the daemon wants for the worktree's own id: repeating
                     // one creation returns that worktree instead of a second one.

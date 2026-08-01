@@ -509,9 +509,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 if (deps.connectActions) {
                     const worktreeId = connectMutationTrack(
                         deps.connectActions.createWorkspace({
-                            // The project's current commit: what "new worktree
-                            // here" means without asking for a branch first.
-                            baseRef: "HEAD",
+                            // No base is named: a ref given here is taken as a
+                            // deliberate choice and forked verbatim, while
+                            // leaving it out has Rig fetch the remote and fork
+                            // the project's trunk there. "New worktree here"
+                            // means current work, not whatever commit the
+                            // project folder happens to be checked out on.
                             name: "Workspace",
                             projectId,
                         }),

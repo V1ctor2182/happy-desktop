@@ -82,11 +82,13 @@ function mcpResultRows(display: string, budget: number): { rows: string[]; omitt
 function humanizeToolName(name: string): string {
     const explicit: Record<string, string> = {
         Agent: "Subagent",
+        TaskInput: "Terminal input",
         TaskList: "Task list",
         TaskOutput: "Background output",
         spawn_agent: "Start subagent",
         wait_agent: "Wait for subagents",
         workflow: "Workflow",
+        write_stdin: "Terminal input",
     };
     if (explicit[name]) return explicit[name]!;
     if (name.startsWith("mcp__")) {
@@ -101,6 +103,13 @@ function humanizeToolName(name: string): string {
         .replace(/^./, (character) => character.toUpperCase());
 }
 
+/**
+ * Tools that type into a terminal that is already running, rather than starting
+ * one. Matched by name for the window before the result arrives, when the row
+ * has no presentation to classify it by.
+ */
+const TERMINAL_INPUT_TOOL = /stdin|terminal_?input|taskinput/;
+
 /** Active/done verb for a tool by name + status (A2/A3). */
 function toolVerb(
     name: string,
@@ -112,11 +121,13 @@ function toolVerb(
     const active = status === "running";
     const lower = name.toLowerCase();
     if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
-    if (
-        presentation?.type === "execCommand" ||
-        presentation?.type === "backgroundTerminalInteraction" ||
-        /(bash|exec|shell|command|run)/.test(lower)
-    )
+    // Typing into a terminal that is already running is not the same act as
+    // starting one, and it is certainly not editing a file: `write_stdin` would
+    // otherwise fall through to the write/edit family below and claim to have
+    // edited something called "Write stdin".
+    if (presentation?.type === "backgroundTerminalInteraction" || TERMINAL_INPUT_TOOL.test(lower))
+        return active ? "Typing" : "Typed";
+    if (presentation?.type === "execCommand" || /(bash|exec|shell|command|run)/.test(lower))
         return "Bash";
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return active ? "Exploring" : "Explored";
     if (/(read|view|cat|open)/.test(lower)) return active ? "Reading" : "Read";
@@ -131,7 +142,7 @@ function toolVerb(
  */
 type ToolGlyph =
     | { set: "house"; name: IconName }
-    | { set: "ionicons"; name: "document-outline" }
+    | { set: "ionicons"; name: "document-outline" | "terminal-outline" }
     | { set: "octicons"; name: "alert" | "code" };
 
 function toolGlyph(
@@ -142,12 +153,12 @@ function toolGlyph(
     if (failed) return { set: "octicons", name: "alert" };
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
-    if (
-        presentation?.type === "execCommand" ||
-        presentation?.type === "backgroundTerminalInteraction"
-    )
-        return { set: "octicons", name: "code" };
     const lower = name.toLowerCase();
+    // Typing into a running terminal gets the terminal itself, so it is not
+    // mistaken for the command that started one or for a file edit.
+    if (presentation?.type === "backgroundTerminalInteraction" || TERMINAL_INPUT_TOOL.test(lower))
+        return { set: "ionicons", name: "terminal-outline" };
+    if (presentation?.type === "execCommand") return { set: "octicons", name: "code" };
     if (/(bash|exec|shell|command|run)/.test(lower)) return { set: "octicons", name: "code" };
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return { set: "house", name: "search" };
     if (/(read|view|cat|open)/.test(lower)) return { set: "house", name: "doc" };
@@ -207,6 +218,27 @@ function diffVerb(kind: ConversationFileDiff["kind"]): string {
     if (kind === "add") return "Added";
     if (kind === "delete") return "Deleted";
     return "Edit";
+}
+
+/**
+ * What was typed into a terminal, on one line. Terminal input is mostly control
+ * characters and newlines, which paint as nothing at all: an interrupt would
+ * otherwise be an empty row. Control codes are shown the way a terminal echoes
+ * them, and a multi-line paste keeps its first line with the rest counted.
+ */
+function terminalInputSummary(input: string): string {
+    const visible = input
+        .replaceAll("\r\n", "\n")
+        .replace(/\n+$/, "")
+        // eslint-disable-next-line no-control-regex -- Terminal input is exactly where control codes arrive, and they must be made visible rather than filtered out.
+        .replaceAll(/[\u0000-\u001F\u007F]/g, (character) =>
+            character === "\n"
+                ? "\n"
+                : `^${String.fromCharCode(character.charCodeAt(0) ^ 0x40).toUpperCase()}`,
+        );
+    if (visible.length === 0) return "";
+    const lines = visible.split("\n");
+    return lines.length > 1 ? `${lines[0]!} … +${String(lines.length - 1)} lines` : lines[0]!;
 }
 
 function fileName(path: string): string {
@@ -415,7 +447,11 @@ function AgentToolActivity(props: {
         primaryText = presentation.command;
     } else if (presentation?.type === "backgroundTerminalInteraction") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
-        primaryText = presentation.command;
+        // What was typed, not the command that started the terminal: several
+        // interactions with one background task all carry the same command, so
+        // showing that made a run of rows read as the same thing happening over
+        // and over. The command is context, and it moves into the body below.
+        primaryText = terminalInputSummary(presentation.input) || presentation.command;
     } else {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = humanizeToolName(tool.toolName);

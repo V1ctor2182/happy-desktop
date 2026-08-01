@@ -187,7 +187,7 @@ export function RigSettingsBlueprintPage() {
                         onRevert={noop}
                         onSave={noop}
                         onValueChange={noop}
-                        path="~/.rig/AGENTS.md"
+                        path="~/Happy/Config/AGENTS.md"
                         value={instructions}
                     />
                 </RigSettingsShell>

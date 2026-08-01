@@ -1,3 +1,4 @@
+import type { CreateWorkspaceInput, MutationId } from "@slopus/rig-connect";
 import { describe, expect, it } from "vitest";
 import { UserError } from "../types.js";
 import {
@@ -23,6 +24,7 @@ import type {
     RigSession,
     RigMessage,
     RigModelCatalog,
+    RigProjectId,
     RigSessionId,
     RigSessionUsage,
 } from "./rigTypes.js";
@@ -204,6 +206,31 @@ describe("rigSessionListStore", () => {
         expect(store.get()).toBe(before);
         expect(projectsOf(store)).toBe(projects);
         expect(notifications).toBe(0);
+        unsubscribe();
+    });
+
+    it("creates a worktree without naming a base so the host forks its fetched trunk", async () => {
+        const fake = createFakeRigTransport();
+        const requests: CreateWorkspaceInput[] = [];
+        const store = rigSessionListStoreCreate({
+            transport: fake.transport,
+            connectActions: {
+                createWorkspace: (input) => {
+                    requests.push(input);
+                    return "mutation-1" as MutationId;
+                },
+                markSessionRead: () => "mutation-read" as MutationId,
+            },
+        });
+        const unsubscribe = store.subscribe(() => undefined);
+        await flush();
+
+        await store.worktreeCreate("p1" as RigProjectId);
+
+        // A named base is forked verbatim, stale local trunk and all; leaving it
+        // out is what makes the host fetch and fork the remote trunk instead.
+        expect(requests).toEqual([{ name: "Workspace", projectId: "p1" }]);
+        expect(requests[0] !== undefined && "baseRef" in requests[0]).toBe(false);
         unsubscribe();
     });
 });

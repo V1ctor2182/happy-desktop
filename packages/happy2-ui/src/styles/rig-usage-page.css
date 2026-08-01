@@ -1,7 +1,9 @@
 /*
- * Provider usage: one card per provider account, each holding the windows that
- * vendor reports. A reading column under a surface header, scrolling as one
- * list. Layout is flexbox throughout; colors and type come only from theme
+ * Provider usage: one section per provider account, each holding the windows
+ * that vendor reports, read down a single column. There is no card around an
+ * account — the rule between two sections is the only shape on the page, and a
+ * window's own line runs the full width of the column so a small share is still
+ * visible. Layout is flexbox throughout; colors and type come only from theme
  * roles.
  */
 
@@ -15,8 +17,8 @@
     font-family: var(--happy2-font-ui);
 }
 
-/* The header shares the column the cards are read in, so the title sits above
- * them rather than out at the window's edge. */
+/* The header shares the column the sections are read in, so the title sits
+ * above them rather than out at the window's edge. */
 .happy2-rig-usage-page__header {
     display: flex;
     flex: 0 0 auto;
@@ -25,6 +27,9 @@
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
+    /* The toolbar insets its own title by 16px, so the strip carries the
+       remaining 8px that puts that title over the column below it. */
+    padding: 0 8px;
 }
 
 /* The scrollport is flush; spacing belongs to the content wrapper inside it. */
@@ -40,33 +45,35 @@
 .happy2-rig-usage-page__content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 32px;
     margin: 0 auto;
-    padding: 16px;
+    padding: 16px 24px 48px;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
 }
 
-.happy2-rig-usage-page__card {
+.happy2-rig-usage-page__provider {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px;
+    gap: 16px;
     box-sizing: border-box;
     width: 100%;
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
 }
 
-.happy2-rig-usage-page__card-header {
+/* One account is told apart from the next by a rule above it, not by a box
+   around either. The first needs nothing: the header already ends the page. */
+.happy2-rig-usage-page__provider + .happy2-rig-usage-page__provider {
+    padding-top: 32px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-rig-usage-page__provider-header {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: 12px;
     width: 100%;
-    min-height: 24px;
 }
 
 .happy2-rig-usage-page__identity {
@@ -78,8 +85,9 @@
 
 .happy2-rig-usage-page__name {
     overflow: hidden;
-    font-size: 14px;
+    font-size: 17px;
     font-weight: 600;
+    line-height: 22px;
     color: var(--text);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -87,33 +95,32 @@
 
 .happy2-rig-usage-page__plan {
     overflow: hidden;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 22px;
     color: var(--text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-rig-usage-page__card-meta {
+.happy2-rig-usage-page__provider-meta {
     display: flex;
     flex: 0 0 auto;
-    align-items: center;
-    gap: 8px;
+    align-items: baseline;
+    gap: 12px;
 }
 
-/* An account with nothing left says so in the one place colour is warranted. */
+/* An account with nothing left says so in the one place colour is warranted,
+   as a word rather than as a pill: the page has no other filled shapes. */
 .happy2-rig-usage-page__exhausted {
-    display: flex;
-    align-items: center;
-    padding: 2px 8px;
-    background: var(--surface-selected);
-    border-radius: var(--happy2-radius-pill);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
+    line-height: 22px;
     color: var(--status-error);
 }
 
 .happy2-rig-usage-page__taken {
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 22px;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
@@ -121,51 +128,80 @@
 .happy2-rig-usage-page__provider-error,
 .happy2-rig-usage-page__unread {
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 20px;
     color: var(--text-secondary);
 }
 
 .happy2-rig-usage-page__windows {
     display: flex;
     flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+.happy2-rig-usage-page__window {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
     width: 100%;
 }
 
-/* Label, bar, and reading on one lane so the bars line up down the card. */
-.happy2-rig-usage-page__window,
-.happy2-rig-usage-page__credits {
+/* Name on the left, share on the right, and the reset pushed up against the
+   share so the two readings about the same window stay together. */
+.happy2-rig-usage-page__window-line {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 12px;
     width: 100%;
-    min-height: 20px;
 }
 
 .happy2-rig-usage-page__window-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-usage-page__reset {
     flex: 0 0 auto;
-    width: 64px;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 20px;
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage-page__percent {
+    flex: 0 0 auto;
+    min-width: 40px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .happy2-rig-usage-page__track {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     align-items: stretch;
     overflow: hidden;
-    height: 6px;
-    background: var(--surface-selected);
-    border-radius: var(--happy2-radius-pill);
+    width: 100%;
+    height: 2px;
+    background: var(--divider);
 }
 
-/* The fill is a width, not a transform: the track is a few pixels tall and a
- * scaled fill would smear its rounded end. */
+/* The fill is a width, not a transform: the track is two pixels tall and a
+ * scaled fill would smear its end. It is the same ink as the text until the
+ * share is worth colouring, so a healthy page stays monochrome. */
 .happy2-rig-usage-page__fill {
     display: block;
     min-width: 0;
-    background: var(--text-secondary);
-    border-radius: var(--happy2-radius-pill);
+    background: var(--text);
 }
 
 .happy2-rig-usage-page__window[data-tone="warning"] .happy2-rig-usage-page__fill {
@@ -176,26 +212,24 @@
     background: var(--status-error);
 }
 
-.happy2-rig-usage-page__percent,
-.happy2-rig-usage-page__reset,
+.happy2-rig-usage-page__window[data-tone="critical"] .happy2-rig-usage-page__percent {
+    color: var(--status-error);
+}
+
+/* Credits have no share to draw, so they read as a labelled value on one line
+   in the same column the window names occupy. */
+.happy2-rig-usage-page__credits {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    width: 100%;
+}
+
 .happy2-rig-usage-page__credits-value {
     flex: 0 0 auto;
-    min-width: 44px;
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 20px;
     color: var(--text);
     text-align: right;
     font-variant-numeric: tabular-nums;
-}
-
-.happy2-rig-usage-page__reset {
-    flex: 0 0 auto;
-    width: 112px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-}
-
-.happy2-rig-usage-page__credits-value {
-    flex: 1 1 auto;
-    text-align: left;
 }

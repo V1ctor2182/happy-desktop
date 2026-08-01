@@ -246,7 +246,7 @@ function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow
  * Where the daemon keeps its global instructions. The path is fixed by Rig
  * itself and is shown rather than asked for, so it is plain what a save changes.
  */
-const INSTRUCTIONS_PATH = "~/.rig/AGENTS.md";
+const INSTRUCTIONS_PATH = "~/Happy/Config/AGENTS.md";
 
 const noSubscribe = () => () => undefined;
 const UNLOADED = { type: "loading" } as const;

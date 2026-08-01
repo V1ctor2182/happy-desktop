@@ -39,11 +39,16 @@ const VENDOR_LABELS: Record<RigProviderVendor, string> = {
  * RigProviderUsagePage — how much of each provider account's plan this machine
  * has spent.
  *
- * One card per account, each carrying the windows that vendor reports: the
- * five-hour burst limit, the week, the month, and whatever credit is left once
- * they are gone. The bars are the answer at a glance — a person opens this
- * screen to learn whether they can keep working — and the numbers behind them
- * are there for when the answer is "nearly".
+ * A person opens this screen to learn one thing: whether they can keep working.
+ * So the answer is the content and nothing is drawn around it — an account is a
+ * name with its windows listed beneath, and the only rule on the page is the
+ * one that separates one account from the next. Each window gives its share as
+ * a number and repeats it as a line the full width of the column, because a
+ * long measure makes a small difference visible where a short bar hides it.
+ *
+ * Colour is spent here rather than everywhere: a bar stays the same ink as the
+ * text until the share crosses into warning, so the one account in trouble is
+ * the only thing on the page that is coloured.
  *
  * It renders exactly what it is handed. It reads nothing and refreshes nothing:
  * the owner keeps the readings current for as long as this surface is on screen.
@@ -81,7 +86,7 @@ export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
                     ) : null}
 
                     {providers.map((provider) => (
-                        <ProviderCard
+                        <ProviderSection
                             currentTime={props.currentTime}
                             key={provider.providerId}
                             provider={provider}
@@ -94,7 +99,7 @@ export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
     );
 }
 
-function ProviderCard(props: {
+function ProviderSection(props: {
     currentTime?: number;
     provider: RigProviderUsageEntry;
     readingTime?: (capturedAt: number) => string | undefined;
@@ -104,23 +109,23 @@ function ProviderCard(props: {
     const taken = usage ? props.readingTime?.(usage.capturedAt) : undefined;
     return (
         <section
-            className="happy2-rig-usage-page__card"
+            className="happy2-rig-usage-page__provider"
             data-happy2-ui="rig-usage-page-provider"
             data-provider={provider.providerId}
         >
-            <header className="happy2-rig-usage-page__card-header">
+            <header className="happy2-rig-usage-page__provider-header">
                 <span className="happy2-rig-usage-page__identity">
                     <span
                         className="happy2-rig-usage-page__name"
                         data-happy2-ui="rig-usage-page-provider-name"
                     >
-                        {usage ? VENDOR_LABELS[usage.vendor] : provider.providerId}
+                        {providerLabel(provider)}
                     </span>
                     {usage?.planName ? (
                         <span className="happy2-rig-usage-page__plan">{usage.planName}</span>
                     ) : null}
                 </span>
-                <span className="happy2-rig-usage-page__card-meta">
+                <span className="happy2-rig-usage-page__provider-meta">
                     {usage?.exhausted ? (
                         <span
                             className="happy2-rig-usage-page__exhausted"
@@ -181,9 +186,12 @@ function ProviderCard(props: {
 }
 
 /**
- * One reported window. A vendor that does not report a window is not shown a
- * bar for it: an empty track would read as "none of it used", which is the
- * opposite of "we were not told".
+ * One reported window: a line naming it and giving its share, and beneath that
+ * the same share as a rule the full width of the column.
+ *
+ * A vendor that does not report a window is not shown a bar for it: an empty
+ * track would read as "none of it used", which is the opposite of "we were not
+ * told".
  */
 function UsageWindow(props: {
     currentTime?: number;
@@ -195,13 +203,34 @@ function UsageWindow(props: {
     const percent = Math.min(100, Math.max(0, window.usedPercent));
     const tone =
         percent >= CRITICAL_PERCENT ? "critical" : percent >= WARNING_PERCENT ? "warning" : "ample";
+    const reset =
+        window.resetsAt !== undefined && props.currentTime !== undefined
+            ? resetTimeRemaining(window.resetsAt, props.currentTime)
+            : undefined;
     return (
         <div
             className="happy2-rig-usage-page__window"
             data-happy2-ui="rig-usage-page-window"
             data-tone={tone}
         >
-            <span className="happy2-rig-usage-page__window-label">{props.label}</span>
+            <div className="happy2-rig-usage-page__window-line">
+                <span className="happy2-rig-usage-page__window-label">{props.label}</span>
+                {reset ? (
+                    <span
+                        className="happy2-rig-usage-page__reset"
+                        data-happy2-ui="rig-usage-page-reset"
+                    >
+                        {reset}
+                    </span>
+                ) : null}
+                <span
+                    aria-label={`${String(Math.round(percent))}% of ${props.label} used`}
+                    className="happy2-rig-usage-page__percent"
+                    role="img"
+                >
+                    {Math.round(percent)}%
+                </span>
+            </div>
             <span
                 aria-hidden="true"
                 className="happy2-rig-usage-page__track"
@@ -213,23 +242,20 @@ function UsageWindow(props: {
                     style={{ width: `${String(percent)}%` }}
                 />
             </span>
-            <span
-                aria-label={`${String(Math.round(percent))}% of ${props.label} used`}
-                className="happy2-rig-usage-page__percent"
-                role="img"
-            >
-                {Math.round(percent)}%
-            </span>
-            {window.resetsAt !== undefined && props.currentTime !== undefined ? (
-                <span
-                    className="happy2-rig-usage-page__reset"
-                    data-happy2-ui="rig-usage-page-reset"
-                >
-                    {resetTimeRemaining(window.resetsAt, props.currentTime)}
-                </span>
-            ) : null}
         </div>
     );
+}
+
+/**
+ * What to call an account. An account that has been read names its own vendor;
+ * one that has not is left with its configured id, so an id that is already a
+ * vendor's name is given that vendor's spelling rather than appearing beside
+ * the others in lower case.
+ */
+function providerLabel(provider: RigProviderUsageEntry): string {
+    const vendor = provider.usage?.vendor;
+    if (vendor) return VENDOR_LABELS[vendor];
+    return VENDOR_LABELS[provider.providerId as RigProviderVendor] ?? provider.providerId;
 }
 
 function resetTimeRemaining(resetsAt: number, currentTime: number): string {

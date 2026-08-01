@@ -1,6 +1,8 @@
 /*
- * Friends: the people this account is connected to, as a gallery of tiles that
- * fills the window. Colors and type come only from theme roles.
+ * Friends: the people this account is connected to, read down one column the
+ * way a conversation is. Nothing is drawn around a person — the face, the name,
+ * and what they are doing are the whole row, and a fill appears only under the
+ * pointer. Colors and type come only from theme roles.
  */
 
 .happy2-friends {
@@ -13,16 +15,20 @@
     font-family: var(--happy2-font-ui);
 }
 
+/* The header shares the column the people are read in, so the title sits above
+   them rather than out at the window's edge. The toolbar insets its own title
+   by 16px, which is exactly the column's own side padding. */
 .happy2-friends__header {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
+    margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
-    padding: 0 8px;
+    max-width: 720px;
 }
 
-/* The scrollport is flush; spacing belongs to the grid inside it. */
+/* The scrollport is flush; spacing belongs to the list inside it. */
 .happy2-friends__scroll {
     display: flex;
     flex: 1 1 auto;
@@ -32,44 +38,137 @@
     overflow-y: auto;
 }
 
-/*
- * Genuinely two-dimensional: tiles wrap into rows and every tile in a row has to
- * share that row's height, so a taller card does not leave its neighbours short.
- * Flexbox cannot express that, so this is one of the few real grids in the app.
- * Tracks are sized rather than counted, so the gallery reflows with the window
- * without a breakpoint.
- */
-.happy2-friends__grid {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- Wrapped tiles must share their row's height, which flexbox cannot express. */
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
+/* The reading column. Its side padding is wide enough to hold the hover fill
+   and a focus ring clear of the scrollbar. */
+.happy2-friends__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
-    padding: 16px;
+    max-width: 720px;
+    padding: 16px 16px 32px;
 }
 
-/* A tile is a button wrapping the card, so it carries no box of its own: the
-   card it holds is the visible surface, and the button only makes it pressable. */
-.happy2-friends__tile {
-    display: block;
+/*
+ * A row carries no border and no fill of its own: it is a face and a name on
+ * the page surface. The pointer is what makes it look like an object.
+ */
+.happy2-friends__row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     margin: 0;
-    padding: 0;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
     border: 0;
     border-radius: var(--happy2-radius-md);
-    background: transparent;
-    color: inherit;
+    color: var(--text);
     font: inherit;
     text-align: left;
     appearance: none;
+}
+
+button.happy2-friends__row {
     cursor: pointer;
 }
 
-.happy2-friends__tile:hover .happy2-profile-card {
+button.happy2-friends__row:hover {
     background: var(--surface-high);
 }
 
-.happy2-friends__tile:focus-visible {
-    outline: 2px solid var(--surface-selected);
+button.happy2-friends__row:active {
+    background: var(--surface-pressed);
+}
+
+button.happy2-friends__row:focus-visible {
+    outline: 2px solid var(--text-link);
     outline-offset: 2px;
+}
+
+.happy2-friends__avatar {
+    flex: none;
+}
+
+.happy2-friends__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* Name and handle share one baseline: the handle identifies the name rather
+   than describing the person, so it belongs on the same line. */
+.happy2-friends__identity {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-friends__name {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-friends__username {
+    flex: 0 1 auto;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* What they do and what they are doing read as one sentence, so they share a
+   line and are separated by a middle dot rather than by a pill. */
+.happy2-friends__secondary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.happy2-friends__title,
+.happy2-friends__status-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy2-friends__dot {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+/* Emoji fall through to an operating-system colour font whose artwork does not
+   fill the em square the way letters do, so the glyph gets a fixed slot of its
+   own instead of sitting in the text run. */
+.happy2-friends__status-emoji {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+}
+
+.happy2-friends__status-emoji-glyph {
+    font-family: var(--happy2-font-emoji);
+    font-size: 12px;
+    line-height: 1;
 }

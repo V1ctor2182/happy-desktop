@@ -54,19 +54,19 @@ export function FriendsBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-014"
-            summary="The people this account is connected to, as a gallery of tiles that fills the window. Tracks are sized, not counted, so the gallery reflows without a breakpoint."
+            summary="The people this account is connected to, read down one column the way a conversation is. Nothing is drawn around a person; a fill appears only under the pointer."
             title="FriendsPage"
         >
             <FullScreenSpecimen
-                detail="Seven people; tiles wrap into rows and share each row's height. A card carries presence, an optional title, and an optional status."
-                label="Gallery"
+                detail="Seven people. A row carries the face with its presence, the name and handle on one baseline, and what they do and are doing on the line beneath."
+                label="List"
                 number="01"
             >
                 <FriendsPage friends={friends} onFriendOpen={() => undefined} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Nobody yet: the header still names the destination and counts what is there, and the grid is simply empty."
+                detail="Nobody yet: the header still names the destination and counts what is there, and the column is simply empty."
                 label="No one"
                 number="02"
             >
