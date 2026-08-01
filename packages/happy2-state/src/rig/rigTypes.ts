@@ -86,6 +86,16 @@ export const RIG_DEFAULT_THINKING_LEVEL: RigThinkingLevel = "medium";
 
 export type RigStopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
 
+/**
+ * Both ends of the scheduled wait a session's agent is sitting inside, in epoch
+ * milliseconds. Both travel together because either alone measures nothing:
+ * a surface counts the interval down against its own clock.
+ */
+export interface RigSessionWait {
+    readonly startedAt: number;
+    readonly dueAt: number;
+}
+
 export type RigTaskStatus = "pending" | "in_progress" | "completed";
 
 export type RigGoalStatus = "active" | "blocked" | "complete" | "paused";
@@ -557,6 +567,8 @@ export interface RigSessionSummary {
     readonly effort?: RigThinkingLevel;
     readonly serviceTier?: RigServiceTier;
     readonly status: RigSessionStatus;
+    /** Present while the agent is inside a scheduled `wait`/`wait_until`. */
+    readonly wait?: RigSessionWait;
     /** Why this chat is waiting for the person, as durably tracked by Rig. */
     readonly unreadReason?: "attention_needed" | "turn_finished";
     readonly title?: string;

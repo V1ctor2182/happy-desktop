@@ -328,7 +328,13 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 ...(projectHasLineChanges ? { reveal: "hover" as const } : {}),
             },
             // A row only carries a status while one of its sessions is live.
-            ...(project.activity === "running" ? { status: "working" as const } : {}),
+            // Waiting is the low-priority modifier: any session doing real work
+            // makes the row spin, and only an all-waiting row wears the clock.
+            ...(project.activity === "running"
+                ? { status: "working" as const }
+                : project.activity === "waiting"
+                  ? { status: "waiting" as const }
+                  : {}),
             ...(project.conversations.some((conversation) => conversation.unread)
                 ? { unread: true }
                 : {}),
@@ -353,7 +359,11 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 label: `Archive ${worktree.name}`,
                 reveal: "hover" as const,
             },
-            ...(worktree.activity === "running" ? { status: "working" as const } : {}),
+            ...(worktree.activity === "running"
+                ? { status: "working" as const }
+                : worktree.activity === "waiting"
+                  ? { status: "waiting" as const }
+                  : {}),
             ...(worktree.conversations.some((conversation) => conversation.unread)
                 ? { unread: true }
                 : {}),
@@ -530,6 +540,7 @@ function sessionTabs(group: OpenGroup): TabItem[] {
         // open, so work starting or finishing makes the mark appear and go
         // without sliding the title sideways under the reader.
         busy: summary.activity === "running",
+        waiting: summary.activity === "waiting",
         unread: summary.unread === true,
     }));
 }

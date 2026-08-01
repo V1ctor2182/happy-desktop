@@ -158,6 +158,9 @@ export function rigSessionSummaryProject(
         modelId: summary.modelId,
         permissionMode: summary.permissionMode,
         status: summary.status,
+        ...(summary.wait === undefined
+            ? {}
+            : { wait: { startedAt: summary.wait.startedAt, dueAt: summary.wait.dueAt } }),
         createdAt: summary.createdAt,
         updatedAt: summary.updatedAt,
         ...(summary.effort ? { effort: summary.effort as RigThinkingLevel } : {}),
@@ -928,6 +931,14 @@ function summaryFromSession(
         modelId: session.modelId,
         permissionMode: session.permissionMode,
         status: session.status,
+        ...(session.activity?.wait === undefined
+            ? {}
+            : {
+                  wait: {
+                      startedAt: session.activity.wait.startedAt,
+                      dueAt: session.activity.wait.dueAt,
+                  },
+              }),
         createdAt,
         updatedAt: session.metadataUpdatedAt ?? createdAt,
         ...(session.effort ? { effort: session.effort as RigThinkingLevel } : {}),

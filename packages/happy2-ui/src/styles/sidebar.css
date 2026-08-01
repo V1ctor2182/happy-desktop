@@ -474,6 +474,18 @@
     color: var(--text-secondary);
 }
 
+/*
+ * A scheduled wait's clock in the leading slot. Accent-tinted so a row whose
+ * agent is deliberately doing nothing still stands apart from an idle one,
+ * without the spinner's claim that work is happening.
+ */
+.happy2-sidebar__item-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-link);
+}
+
 .happy2-sidebar__item-leading-unread {
     position: absolute;
     top: 1px;

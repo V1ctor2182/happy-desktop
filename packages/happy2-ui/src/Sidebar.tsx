@@ -55,7 +55,13 @@ export type SidebarItem = {
         reveal?: "hover";
     };
     online?: boolean;
-    status?: "ready" | "working";
+    /**
+     * `working` spins in the leading slot; `waiting` shows a highlighted clock
+     * there instead — the row's agent is inside a scheduled wait, deliberately
+     * doing nothing. Waiting is the lower-priority state: a row whose sessions
+     * do real work reports `working`.
+     */
+    status?: "ready" | "working" | "waiting";
     tone?: ToneName;
     unread?: boolean;
 };
@@ -433,6 +439,16 @@ function SidebarRow({
                     {(item().kind === "workspace" || item().kind === "project") &&
                     item().status === "working" ? (
                         <Spinner label={`${item().label} is working`} size={14} tone="muted" />
+                    ) : (item().kind === "workspace" || item().kind === "project") &&
+                      item().status === "waiting" ? (
+                        <span
+                            aria-label={`${item().label} is waiting`}
+                            className="happy2-sidebar__item-waiting"
+                            data-happy2-ui="sidebar-item-waiting"
+                            role="img"
+                        >
+                            <Icon name="clock" size={14} />
+                        </span>
                     ) : item().kind === "person" ||
                       item().kind === "agent" ||
                       item().kind === "project" ? (

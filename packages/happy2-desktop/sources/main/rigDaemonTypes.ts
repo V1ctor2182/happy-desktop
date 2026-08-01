@@ -20,7 +20,19 @@ export type {
 export type ProtocolSession = PublishedProtocolSession & {
     readonly draft?: string;
     readonly draftUpdatedAt?: number;
+    /**
+     * The session's live activity. The published `@slopus/rig/types` subset does
+     * not carry it, so only the wait — the one field Happy reads — is stated.
+     */
+    readonly activity?: { readonly wait?: SessionActivityWait };
 };
+
+/** Both ends of a scheduled `wait`/`wait_until` the agent is inside. */
+export interface SessionActivityWait {
+    readonly startedAt: number;
+    readonly dueAt: number;
+    readonly toolCallId: string;
+}
 
 /**
  * Rig's project/worktree protocol shapes. They are part of the daemon's HTTP
@@ -186,6 +198,8 @@ export interface SessionSummary {
     readonly modelId: string;
     readonly permissionMode: ProtocolSession["permissionMode"];
     readonly status: ProtocolSession["status"];
+    /** Present while the agent is inside a scheduled `wait`/`wait_until`. */
+    readonly wait?: SessionActivityWait;
     readonly createdAt: number;
     readonly updatedAt: number;
     readonly effort?: string;

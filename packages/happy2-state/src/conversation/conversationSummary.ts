@@ -12,7 +12,7 @@ export interface ConversationSummary {
     readonly id: string;
     readonly title: string;
     readonly subtitle?: string;
-    readonly activity: "running" | "awaitingInput" | "idle";
+    readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
     /** Epoch milliseconds of the newest content, for relative timestamps. */
     readonly updatedAt: number;
     readonly unread?: boolean;

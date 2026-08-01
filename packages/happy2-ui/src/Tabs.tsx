@@ -28,6 +28,14 @@ export type TabItem = {
      * running that is the thing worth showing.
      */
     busy?: boolean;
+    /**
+     * Whether the work behind this tab is sitting inside a scheduled wait. A
+     * lower-priority sibling of `busy`: it takes the same leading lane with a
+     * highlighted clock instead of the spinner, so a tab that is deliberately
+     * doing nothing reads as waiting rather than as working or stalled. `busy`
+     * outranks it — real work is the thing worth showing.
+     */
+    waiting?: boolean;
     /** Marks the tab as carrying unread activity with a dot on its leading mark. */
     unread?: boolean;
     /**
@@ -47,12 +55,13 @@ export type TabItem = {
  * section, say — has no lane to hold open and its label starts at the edge.
  */
 function tabHoldsLeadingLane(tab: TabItem): boolean {
-    return tab.busy !== undefined || tab.unread !== undefined;
+    return tab.busy !== undefined || tab.waiting !== undefined || tab.unread !== undefined;
 }
 
 /**
- * The tab's leading lane. Running work outranks everything, then an explicit
- * icon, then the tab's generated mark; a tab with none of those still holds the
+ * The tab's leading lane. Running work outranks everything, then a scheduled
+ * wait's clock, then an explicit icon, then the tab's generated mark; a tab
+ * with none of those still holds the
  * lane open if it ever speaks of `busy` or `unread`. Unread rides on top of
  * whichever mark is there as a corner dot, and only stands in the lane alone
  * when there is no mark to ride — so the news arriving never moves the label.
@@ -60,6 +69,15 @@ function tabHoldsLeadingLane(tab: TabItem): boolean {
 function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
     const mark = tab.busy ? (
         <Spinner label={`${tab.label} is working`} size={iconSize} tone="muted" />
+    ) : tab.waiting ? (
+        <span
+            aria-label={`${tab.label} is waiting`}
+            className="happy2-tabs__tab-waiting"
+            data-happy2-ui="tab-waiting"
+            role="img"
+        >
+            <Icon name="clock" size={iconSize} />
+        </span>
     ) : tab.icon ? (
         <Icon name={tab.icon} size={iconSize} />
     ) : tab.avatarId !== undefined ? (

@@ -270,6 +270,9 @@ function sessionProject(session: GroupSession): RigSessionSummary {
         ...(effort ? { effort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         status: session.status as RigSessionStatus,
+        ...(session.wait === undefined
+            ? {}
+            : { wait: { startedAt: session.wait.startedAt, dueAt: session.wait.dueAt } }),
         ...(session.unread === undefined ? {} : { unreadReason: session.unread.reason }),
         ...(session.title === undefined ? {} : { title: session.title }),
         ...(session.recap === undefined ? {} : { recap: session.recap }),

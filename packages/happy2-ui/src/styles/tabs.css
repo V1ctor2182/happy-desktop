@@ -97,6 +97,18 @@
     height: 18px;
 }
 
+/*
+ * A scheduled wait's clock. Highlighted with the link/accent color so a tab
+ * deliberately doing nothing still stands apart from an idle one, without
+ * borrowing the spinner's claim that work is happening.
+ */
+.happy2-tabs__tab-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-link);
+}
+
 .happy2-tabs__tab-unread {
     width: 6px;
     height: 6px;

@@ -535,11 +535,16 @@ function summaryTitle(session: RigSessionSummary): string {
  * the live-activity marker every agent-driven conversation renders.
  */
 export function rigConversationSummaryProject(session: RigSessionSummary): ConversationSummary {
+    // A scheduled wait demotes a running session to "waiting": the agent is
+    // alive but deliberately doing nothing, and a spinner would claim work is
+    // happening. A question for the person still outranks it.
     const activity =
         session.unreadReason === "attention_needed"
             ? "awaitingInput"
             : session.status === "running" || session.status === "queued"
-              ? "running"
+              ? session.wait !== undefined
+                  ? "waiting"
+                  : "running"
               : "idle";
     return {
         id: session.id,

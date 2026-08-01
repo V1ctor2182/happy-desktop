@@ -29,7 +29,7 @@ export interface RigWorktreeGroup {
     readonly displayPath: string;
     readonly conversations: readonly ConversationSummary[];
     /** Live marker of the busiest session in the worktree. */
-    readonly activity: "running" | "awaitingInput" | "idle";
+    readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
     /** Epoch milliseconds of the newest content in any of its sessions. */
     readonly updatedAt: number;
     readonly changedFiles?: number;
@@ -59,7 +59,7 @@ export interface RigProjectGroup {
     readonly conversations: readonly ConversationSummary[];
     readonly worktrees: readonly RigWorktreeGroup[];
     /** Live marker of the busiest session directly in the project. */
-    readonly activity: "running" | "awaitingInput" | "idle";
+    readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
     /** Epoch milliseconds of the newest content anywhere under the project. */
     readonly updatedAt: number;
     readonly changedFiles?: number;
@@ -197,9 +197,13 @@ function conversationsOf(
 
 function activityOf(
     conversations: readonly ConversationSummary[],
-): "running" | "awaitingInput" | "idle" {
+): "running" | "awaitingInput" | "waiting" | "idle" {
     if (conversations.some((row) => row.activity === "awaitingInput")) return "awaitingInput";
-    return conversations.some((row) => row.activity === "running") ? "running" : "idle";
+    // Waiting is a low-priority modifier: one session doing real work makes the
+    // whole group read as working, and only a group where nothing runs at all
+    // wears the clock.
+    if (conversations.some((row) => row.activity === "running")) return "running";
+    return conversations.some((row) => row.activity === "waiting") ? "waiting" : "idle";
 }
 
 function newestOf(conversations: readonly ConversationSummary[]): number {
