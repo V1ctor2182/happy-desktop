@@ -1,0 +1,40 @@
+/*
+ * WaitTimer: a determinate ring plus the time left, sized to sit inline in an
+ * activity row where an indeterminate spinner would otherwise be. Colors come
+ * only from theme roles; the row above owns the spacing around it.
+ */
+
+.happy2-wait-timer {
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy2-wait-timer__ring {
+    display: block;
+    flex: none;
+}
+
+.happy2-wait-timer__track {
+    stroke: var(--divider);
+}
+
+.happy2-wait-timer__fill {
+    stroke: var(--text-secondary);
+}
+
+/* The countdown changes every second, so its digits must not change width. */
+.happy2-wait-timer__label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+}

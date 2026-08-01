@@ -8,7 +8,12 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
-import type { RigChatSnapshot, RigChatStore, RigOpenImage } from "./rigChatStore.js";
+import type {
+    RigChatSnapshot,
+    RigChatStore,
+    RigOpenImage,
+    RigWorkingWait,
+} from "./rigChatStore.js";
 import {
     rigAttachmentTextAppend,
     rigComposerAttachmentRead,
@@ -108,8 +113,8 @@ export interface RigConversationSnapshot {
     readonly workingPhase: RigWorkingPhase;
     /** Display-ready activity text from the agent, when it describes its work. */
     readonly workingLabel?: string;
-    /** Epoch ms the agent's scheduled wait ends, so a surface can count down. */
-    readonly workingWaitDueAt?: number;
+    /** The scheduled wait the agent is inside, so a surface can count it down. */
+    readonly workingWait?: RigWorkingWait;
     readonly runStartedAt?: number;
     readonly turnElapsedMs?: number;
     readonly transcriptComplete: boolean;
@@ -806,9 +811,7 @@ export function rigWorkspaceStoreCreate(
             running: chat.runStatus === "running",
             workingPhase: chat.workingPhase,
             ...(chat.workingLabel !== undefined ? { workingLabel: chat.workingLabel } : {}),
-            ...(chat.workingWaitDueAt !== undefined
-                ? { workingWaitDueAt: chat.workingWaitDueAt }
-                : {}),
+            ...(chat.workingWait !== undefined ? { workingWait: chat.workingWait } : {}),
             ...(chat.runStartedAt !== undefined ? { runStartedAt: chat.runStartedAt } : {}),
             ...(chat.turnElapsedMs !== undefined ? { turnElapsedMs: chat.turnElapsedMs } : {}),
             transcriptComplete: chat.transcriptComplete,

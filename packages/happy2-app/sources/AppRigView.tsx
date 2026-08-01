@@ -43,6 +43,7 @@ import type {
     RigWindowStore,
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
+    RigWorkingWait,
     RigWorktreeId,
     UserError,
 } from "happy2-state";
@@ -54,6 +55,7 @@ import {
     rigWindowStoreNoop,
 } from "happy2-state";
 import {
+    type AgentWaitStatus,
     AppShell,
     Banner,
     BrowserPanel,
@@ -2306,7 +2308,7 @@ function RigConversationSurface(props: {
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
-            workingRemainingMs={rigWaitRemainingMs(conversation, props.now)}
+            workingWait={rigWaitStatus(conversation, props.now)}
             viewerId={rigOwnerAuthor.id}
         />
     );
@@ -2472,16 +2474,18 @@ function RigPanelComposer(props: {
 }
 
 /**
- * Time left on the agent's scheduled wait, counted against the surface clock.
- * The daemon's own label states the absolute deadline; this is what turns it
- * into something that keeps changing while the reader watches it.
+ * The scheduled wait the footer counts down, paired with the surface clock it
+ * is measured against. The daemon's own label states an absolute deadline that
+ * stops being useful the moment it is written; handing the status line both
+ * ends and a ticking `now` is what turns it into something that keeps changing
+ * while the reader watches it.
  */
-function rigWaitRemainingMs(
-    conversation: { readonly running: boolean; readonly workingWaitDueAt?: number },
+function rigWaitStatus(
+    conversation: { readonly running: boolean; readonly workingWait?: RigWorkingWait },
     now: number,
-): number | undefined {
-    if (!conversation.running || conversation.workingWaitDueAt === undefined) return undefined;
-    return Math.max(0, conversation.workingWaitDueAt - now);
+): AgentWaitStatus | undefined {
+    if (!conversation.running || conversation.workingWait === undefined) return undefined;
+    return { ...conversation.workingWait, now };
 }
 
 /**

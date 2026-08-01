@@ -115,6 +115,7 @@ import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
+import { WaitTimerPage } from "./pages/WaitTimerPage";
 import { ContextMeterPage } from "./pages/ContextMeterPage";
 import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
@@ -205,6 +206,12 @@ const components: BlueprintPage[] = [
         label: "Agent activity row",
         number: "C-148",
         page: AgentActivityRowPage,
+    },
+    {
+        id: "wait-timer",
+        label: "Wait timer",
+        number: "C-172",
+        page: WaitTimerPage,
     },
     {
         id: "tool-call-preview",

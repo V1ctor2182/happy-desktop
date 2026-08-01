@@ -66,8 +66,7 @@
     margin-right: 3px;
 }
 
-.happy2-agent-working-status__timer,
-.happy2-agent-working-status__countdown {
+.happy2-agent-working-status__timer {
     flex: none;
     font-family: var(--happy2-font-mono);
     font-size: 14px;

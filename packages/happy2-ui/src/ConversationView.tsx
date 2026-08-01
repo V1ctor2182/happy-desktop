@@ -9,6 +9,7 @@ import type {
 import {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
+    type AgentWaitStatus,
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
 import { ChannelHeader } from "./ChannelHeader";
@@ -46,8 +47,8 @@ export type ConversationViewProps = {
     workingPhase?: AgentWorkingPhase;
     /** Humanized activity text from the agent, preferred over the phase word. */
     workingLabel?: string;
-    /** Time left on a scheduled wait in ms, counted down by the owner's clock. */
-    workingRemainingMs?: number;
+    /** The scheduled wait the turn is inside, counted down by the owner's clock. */
+    workingWait?: AgentWaitStatus;
     /** Subagents currently running under the active turn. */
     runningAgents?: number;
     /** Background tasks currently owned by the active turn. */
@@ -254,7 +255,7 @@ export function ConversationView(props: ConversationViewProps) {
                             elapsedMs={props.elapsedMs}
                             label={props.workingLabel}
                             phase={props.workingPhase}
-                            remainingMs={props.workingRemainingMs}
+                            wait={props.workingWait}
                         />
                     }
                     footerHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}

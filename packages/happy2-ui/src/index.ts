@@ -7,6 +7,7 @@ export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
+    type AgentWaitStatus,
     type AgentWorkingPhase,
     type AgentWorkingStatusProps,
 } from "./AgentWorkingStatus";
@@ -318,6 +319,7 @@ export {
     type SpinnerTone,
     type SpinnerVariant,
 } from "./Spinner";
+export { WaitTimer, type WaitTimerProps, waitRemainingLabel } from "./WaitTimer";
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {

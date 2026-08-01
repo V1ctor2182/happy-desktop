@@ -311,6 +311,7 @@ export {
     type RigChatStore,
     type RigChatTranscriptConnect,
     type RigChatTranscriptConnection,
+    type RigWorkingWait,
 } from "./rig/rigChatStore.js";
 export {
     rigClientCreate,

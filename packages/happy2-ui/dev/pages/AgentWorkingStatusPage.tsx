@@ -9,6 +9,9 @@ const column: CSSProperties = {
     width: "640px",
 };
 
+/* Pinned so the countdown renders the same twice; the product ticks instead. */
+const WAIT_STARTED_AT = Date.parse("2026-08-01T09:00:00Z");
+
 export function AgentWorkingStatusPage() {
     return (
         <ComponentPage
@@ -60,23 +63,43 @@ export function AgentWorkingStatusPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="A scheduled wait keeps its deadline and counts down beside it"
+                detail="A scheduled wait replaces the spinner, the agent's absolute deadline, and the turn clock with one determinate ring counting down · hover names the day it ends on"
                 label="Wait countdown"
                 number="03"
                 stage="surface"
             >
                 <div style={column}>
                     <AgentWorkingStatus
-                        elapsedMs={3_960_000}
-                        label="Waiting until 8/1/2026, 11:17:06 AM"
                         phase="callingTools"
-                        remainingMs={3_492_000}
+                        wait={{
+                            startedAt: WAIT_STARTED_AT,
+                            dueAt: WAIT_STARTED_AT + 3_600_000,
+                            now: WAIT_STARTED_AT + 108_000,
+                        }}
                     />
                     <AgentWorkingStatus
-                        elapsedMs={288_000}
-                        label="Waiting until 8/1/2026, 10:15:00 AM"
                         phase="callingTools"
-                        remainingMs={42_000}
+                        wait={{
+                            startedAt: WAIT_STARTED_AT,
+                            dueAt: WAIT_STARTED_AT + 3_600_000,
+                            now: WAIT_STARTED_AT + 2_700_000,
+                        }}
+                    />
+                    <AgentWorkingStatus
+                        phase="callingTools"
+                        wait={{
+                            startedAt: WAIT_STARTED_AT,
+                            dueAt: WAIT_STARTED_AT + 300_000,
+                            now: WAIT_STARTED_AT + 258_000,
+                        }}
+                    />
+                    <AgentWorkingStatus
+                        phase="callingTools"
+                        wait={{
+                            startedAt: WAIT_STARTED_AT,
+                            dueAt: WAIT_STARTED_AT + 172_800_000,
+                            now: WAIT_STARTED_AT + 21_600_000,
+                        }}
                     />
                 </div>
             </Specimen>

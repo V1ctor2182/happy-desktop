@@ -2,6 +2,7 @@ import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Spinner } from "./Spinner";
 import { TypedText } from "./TypedText";
+import { WaitTimer } from "./WaitTimer";
 
 export type AgentWorkingPhase =
     | "working"
@@ -27,12 +28,23 @@ export interface AgentWorkingStatusProps {
     /** Current work projected by the owning product store. */
     readonly phase?: AgentWorkingPhase;
     /**
-     * Time left before a scheduled wait resumes, supplied by the owning surface
-     * clock. It sits after the label so a wait reads as a live countdown instead
-     * of an absolute deadline the reader has to subtract from.
+     * The scheduled wait this turn is sitting inside, measured against the
+     * owning surface's clock. While one is running it replaces the spinner, the
+     * agent's own "waiting until <time>" label, and the turn clock: a reader
+     * watching a wait wants how much longer, not three numbers to subtract.
      */
-    readonly remainingMs?: number;
+    readonly wait?: AgentWaitStatus;
     readonly style?: CSSProperties;
+}
+
+/** One scheduled wait, as both of its ends plus the clock it is measured against. */
+export interface AgentWaitStatus {
+    /** Epoch ms the wait began at. */
+    readonly startedAt: number;
+    /** Epoch ms the wait ends at. */
+    readonly dueAt: number;
+    /** Current time from the owning surface's clock. */
+    readonly now: number;
 }
 
 /** Fixed virtualized row height, including the status's 4px leading clearance. */
@@ -66,8 +78,8 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         "elapsedMs",
         "label",
         "phase",
-        "remainingMs",
         "style",
+        "wait",
     ]);
     const label = local.label ?? PHASE_LABELS[local.phase ?? "working"];
     const details: string[] = [];
@@ -91,38 +103,38 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                 className="happy2-agent-working-status__state"
                 data-happy2-ui="agent-working-status-state"
             >
-                <Spinner
-                    className="happy2-agent-working-status__spinner"
-                    label={label}
-                    size={14}
-                    tone="muted"
-                    variant="braille-2"
-                />
-                {local.elapsedMs === undefined ? null : (
+                {local.wait ? (
+                    <WaitTimer
+                        finishAt={local.wait.dueAt}
+                        now={local.wait.now}
+                        startedAt={local.wait.startedAt}
+                    />
+                ) : (
                     <>
-                        <span
-                            className="happy2-agent-working-status__timer"
-                            data-happy2-ui="agent-working-status-timer"
-                        >
-                            {elapsedFormat(local.elapsedMs)}
-                        </span>
-                        <span aria-hidden="true" className="happy2-agent-working-status__separator">
-                            ·
-                        </span>
-                    </>
-                )}
-                <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
-                {local.remainingMs === undefined ? null : (
-                    <>
-                        <span aria-hidden="true" className="happy2-agent-working-status__separator">
-                            ·
-                        </span>
-                        <span
-                            className="happy2-agent-working-status__countdown"
-                            data-happy2-ui="agent-working-status-countdown"
-                        >
-                            {`${elapsedFormat(local.remainingMs)} left`}
-                        </span>
+                        <Spinner
+                            className="happy2-agent-working-status__spinner"
+                            label={label}
+                            size={14}
+                            tone="muted"
+                            variant="braille-2"
+                        />
+                        {local.elapsedMs === undefined ? null : (
+                            <>
+                                <span
+                                    className="happy2-agent-working-status__timer"
+                                    data-happy2-ui="agent-working-status-timer"
+                                >
+                                    {elapsedFormat(local.elapsedMs)}
+                                </span>
+                                <span
+                                    aria-hidden="true"
+                                    className="happy2-agent-working-status__separator"
+                                >
+                                    ·
+                                </span>
+                            </>
+                        )}
+                        <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
                     </>
                 )}
             </span>
