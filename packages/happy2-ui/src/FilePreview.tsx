@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import { CodeBlock } from "./CodeBlock";
 import { fileTreeFamily } from "./FileTree";
 import { Icon, type IconName } from "./Icon";
 import { MarkdownDocument } from "./MarkdownDocument";
@@ -326,12 +327,18 @@ function FilePreviewBody(props: {
                 text={props.content.text}
             />
         );
+    // Source is highlighted by the same engine as the working-tree diff, and
+    // numbered, because a file read whole is a file whose lines get referred to.
+    // The header above already names it, so the renderer's own header is off.
     if (props.content.type === "text")
         return (
-            <div className="happy2-file-preview__scroll">
-                <pre className="happy2-file-preview__code" data-happy2-ui="file-preview-code">
-                    {props.content.text}
-                </pre>
+            <div className="happy2-file-preview__source" data-happy2-ui="file-preview-code">
+                <CodeBlock
+                    className="happy2-file-preview__source-renderer"
+                    lineNumbers
+                    name={props.name}
+                    text={props.content.text}
+                />
             </div>
         );
     return (

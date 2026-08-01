@@ -115,6 +115,7 @@ import {
 } from "happy2-ui";
 import { openExternalLink } from "./externalLink";
 import { NewSessionShortcut } from "./components/NewSessionShortcut";
+import { BlueprintView } from "./views/BlueprintView";
 
 export interface AppRigUpdate {
     readonly action: "refresh" | "restart";
@@ -279,6 +280,10 @@ export interface AppRigViewProps {
     friendsOpen?: boolean;
     /** Addresses friends. */
     onFriendsOpen?(): void;
+    /** Whether the URL addresses the component workbench, in a development build. */
+    blueprintOpen?: boolean;
+    /** Addresses the workbench. */
+    onBlueprintOpen?(): void;
 }
 
 /**
@@ -771,6 +776,13 @@ const USAGE_ITEM = "usage";
 const FRIENDS_ITEM = "friends";
 
 /**
+ * The pinned row that opens the component workbench. It exists only in a
+ * development build: it is a tool for the people building this window, not
+ * something the reader's own work ever passes through.
+ */
+const BLUEPRINT_ITEM = "blueprint";
+
+/**
  * The workspace window. It owns no product state: it subscribes to the directory
  * of Rigs, renders their projects as one sidebar, and hands the addressed Rig's
  * own stores to the surface below. A Rig that is still connecting, or one the
@@ -868,6 +880,19 @@ export function AppRigView(props: AppRigViewProps) {
                     kind: "action" as const,
                     label: "Friends",
                 },
+                // The component workbench is a development tool, so its row is
+                // present only while this window is being built and never in a
+                // shipped one.
+                ...(import.meta.env.DEV
+                    ? [
+                          {
+                              icon: "braces" as const,
+                              id: BLUEPRINT_ITEM,
+                              kind: "action" as const,
+                              label: "Blueprint",
+                          },
+                      ]
+                    : []),
             ]}
             activeItemId={
                 props.notesOpen
@@ -878,9 +903,11 @@ export function AppRigView(props: AppRigViewProps) {
                         ? USAGE_ITEM
                         : props.friendsOpen
                           ? FRIENDS_ITEM
-                          : props.groupId
-                            ? rigItemId(props.rigId, props.groupId)
-                            : ""
+                          : props.blueprintOpen
+                            ? BLUEPRINT_ITEM
+                            : props.groupId
+                              ? rigItemId(props.rigId, props.groupId)
+                              : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -990,6 +1017,10 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onFriendsOpen?.();
                     return;
                 }
+                if (id === BLUEPRINT_ITEM) {
+                    props.onBlueprintOpen?.();
+                    return;
+                }
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -1079,6 +1110,21 @@ export function AppRigView(props: AppRigViewProps) {
                     nobody. The surface is the same one it will render a real
                     list into. */}
                 <FriendsPage friends={[]} />
+            </AppShell>
+        );
+
+    // The workbench belongs to no machine and needs no connection: it renders the
+    // component pages themselves, so it is shown exactly like notes are.
+    if (props.blueprintOpen)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <BlueprintView />
             </AppShell>
         );
 

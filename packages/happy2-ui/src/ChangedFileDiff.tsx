@@ -1,6 +1,7 @@
 import { MultiFileDiff } from "@pierre/diffs/react";
 import type { CSSProperties } from "react";
 import { Button } from "./Button";
+import { CodeEditor } from "./CodeEditor";
 import { SegmentedControl } from "./SegmentedControl";
 
 /**
@@ -116,22 +117,15 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
 
             <div className="happy2-changed-file-diff__body" data-happy2-ui="changed-file-diff-body">
                 {mode === "edit" ? (
-                    <textarea
-                        aria-label={`Edit ${props.path}`}
+                    <CodeEditor
                         className="happy2-changed-file-diff__editor"
-                        data-happy2-ui="changed-file-diff-editor"
-                        onChange={(event) => props.onContentChange?.(event.target.value)}
-                        onKeyDown={(event) => {
-                            // The shortcut every editor has. Without it the only
-                            // way to save is to stop typing and reach for a
-                            // button, which is not how anyone edits a file.
-                            if ((event.metaKey || event.ctrlKey) && event.key === "s") {
-                                event.preventDefault();
-                                props.onSave?.();
-                            }
-                        }}
+                        name={props.path}
+                        // The shortcut every editor has. Without it the only way
+                        // to save is to stop typing and reach for a button,
+                        // which is not how anyone edits a file.
+                        onSave={() => props.onSave?.()}
+                        onValueChange={(content) => props.onContentChange?.(content)}
                         readOnly={props.saving === true}
-                        spellCheck={false}
                         value={props.newContent}
                     />
                 ) : (

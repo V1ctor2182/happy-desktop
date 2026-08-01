@@ -215,6 +215,18 @@
     background: var(--surface-pressed);
 }
 
+/* A fenced block is the shared code renderer, sunk into the page on the same
+   inset material the plain <pre> fallback above uses. It scrolls itself, so a
+   long line moves inside the block rather than widening the document. */
+.happy2-markdown-document__code .happy2-code-block {
+    overflow: hidden;
+    border-radius: var(--happy2-radius-sm);
+    --diffs-light-bg: var(--surface-pressed);
+    --diffs-dark-bg: var(--surface-pressed);
+    --diffs-font-size: 12.5px;
+    --diffs-gap-inline: 16px;
+}
+
 /* The <pre> is the scrollport, so the inset lives on the <code> inside it and
    survives horizontal scrolling instead of being clipped at the right edge. */
 .happy2-markdown-document__body pre code {

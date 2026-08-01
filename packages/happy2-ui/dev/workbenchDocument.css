@@ -1,0 +1,15 @@
+/* Document-level rules for the standalone Blueprint page. They stay out of
+   `workbench.css` so the same workbench can be mounted inside the application
+   without repainting the document around it. The explicit heights give the
+   shell's `min-height: 100%` a resolved containing block. */
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: #0a3b66;
+}

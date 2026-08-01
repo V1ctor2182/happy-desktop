@@ -9,10 +9,11 @@ import { AuthGate, type AuthCredentialStore, type AuthSession } from "./componen
 import { DesktopApp } from "./components/DesktopApp";
 import { OnboardingBoundary } from "./components/OnboardingBoundary";
 import { appRouterCreate, type AppRouter } from "./navigation/appRouter";
-import type {
-    DesktopInstanceStatus,
-    DesktopInstanceTarget,
-    DesktopInstanceUpdate,
+import {
+    CodeHighlightWorkers,
+    type DesktopInstanceStatus,
+    type DesktopInstanceTarget,
+    type DesktopInstanceUpdate,
 } from "happy2-ui";
 
 export interface AppDesktopRuntime {
@@ -89,28 +90,37 @@ export function App(props: AppProps) {
             state={session.state}
         />
     );
+    // Every code surface in the product — a file's source, a diff, a fenced
+    // block in a document — tokenizes through one worker pool started here, so
+    // opening a large file never costs the window a frame. The pool belongs to
+    // the process rather than to any one surface, which is why it is mounted
+    // above the router instead of inside whichever view happens to show code.
     if (props.serverUrl)
         return (
-            <AuthGate
-                cookieAuth={props.cookieAuth}
-                credentialStore={props.credentialStore}
-                serverUrl={props.serverUrl}
-                showWindowDragRegion={desktop}
-            >
-                {(session: AuthSession) => (
-                    <OnboardingBoundary session={session} showWindowDragRegion={desktop}>
-                        {renderWorkspace(session)}
-                    </OnboardingBoundary>
-                )}
-            </AuthGate>
+            <CodeHighlightWorkers>
+                <AuthGate
+                    cookieAuth={props.cookieAuth}
+                    credentialStore={props.credentialStore}
+                    serverUrl={props.serverUrl}
+                    showWindowDragRegion={desktop}
+                >
+                    {(session: AuthSession) => (
+                        <OnboardingBoundary session={session} showWindowDragRegion={desktop}>
+                            {renderWorkspace(session)}
+                        </OnboardingBoundary>
+                    )}
+                </AuthGate>
+            </CodeHighlightWorkers>
         );
     return (
-        <DesktopApp
-            appearance={resources.appearance}
-            desktopRuntime={props.desktopRuntime}
-            platform={props.platform}
-            router={resources.router}
-            state={resources.state!}
-        />
+        <CodeHighlightWorkers>
+            <DesktopApp
+                appearance={resources.appearance}
+                desktopRuntime={props.desktopRuntime}
+                platform={props.platform}
+                router={resources.router}
+                state={resources.state!}
+            />
+        </CodeHighlightWorkers>
     );
 }

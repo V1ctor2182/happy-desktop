@@ -1,9 +1,11 @@
+import { EditorView } from "@codemirror/view";
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/file-editor.css";
+import "./styles/code-editor.css";
 import { FileEditor } from "./FileEditor";
 import { createRenderer } from "./testing";
 
@@ -93,25 +95,17 @@ it("holds FileEditor header, code body, status bar, and dirty affordances", asyn
 
     /* ---- Code body: monospace ink on the code surface ------------------- */
 
-    const area = view.$('[data-testid="clean"] [data-happy2-ui="file-editor-area"]');
-    expect(area.element.tagName).toBe("TEXTAREA");
-    expect((area.element as HTMLTextAreaElement).value).toBe(content);
-    /* Engines quote font family names with spaces (`"happy2 Mono"`); normalize. */
-    expect(area.computedStyle("font-family").replace(/"/g, "")).toBe(fontMono);
-    expect(
-        area.computedStyles([
-            "font-size",
-            "line-height",
-            "background-color",
-            "white-space",
-            "resize",
-        ]),
-    ).toEqual({
+    const area = view.$('[data-testid="clean"] [data-happy2-ui="code-editor"]');
+    expect(area.element.textContent).toContain(content.split("\n")[0]);
+    /* Writing happens on the surface itself, not on a tinted code panel. */
+    expect(area.computedStyle("background-color")).toBe("rgb(255, 255, 255)");
+    /* The code type belongs to the editor's own content, not to its container.
+       Engines quote font family names with spaces (`"happy2 Mono"`); normalize. */
+    const editable = view.$('[data-testid="clean"] .cm-content');
+    expect(editable.computedStyle("font-family").replace(/"/g, "")).toBe(fontMono);
+    expect(editable.computedStyles(["font-size", "line-height"])).toEqual({
         "font-size": "13px",
         "line-height": "20px",
-        "background-color": "rgb(246, 248, 250)",
-        "white-space": "pre",
-        resize: "none",
     });
 
     /* ---- Status bar ----------------------------------------------------- */
@@ -187,10 +181,12 @@ it("routes edit, save, revert, and close intents and respects read-only", async 
     );
     await view.ready();
 
-    const area = view.$('[data-testid="live"] [data-happy2-ui="file-editor-area"]')
-        .element as HTMLTextAreaElement;
-    area.value = "hello world";
-    area.dispatchEvent(new Event("input", { bubbles: true }));
+    /* Editing goes through CodeMirror's own document, which is what the person
+       typing is editing; the change reaches the caller as the new whole text. */
+    const live = EditorView.findFromDOM(
+        view.$('[data-testid="live"] [data-happy2-ui="code-editor"]').element as HTMLElement,
+    )!;
+    live.dispatch({ changes: { from: live.state.doc.length, insert: " world" } });
     expect(changes).toEqual(["hello world"]);
 
     const button = (testid: string, label: string) =>
@@ -214,11 +210,13 @@ it("routes edit, save, revert, and close intents and respects read-only", async 
     );
     expect(saves).toBe(2);
 
-    /* Read-only: the textarea is locked and no Save/Revert render. */
-    const roArea = view.$('[data-testid="ro"] [data-happy2-ui="file-editor-area"]')
-        .element as HTMLTextAreaElement;
-    expect(roArea.readOnly).toBe(true);
-    expect(roArea.value).toBe("frozen");
+    /* Read-only: the editor refuses edits and no Save/Revert render. */
+    const readOnly = view.$('[data-testid="ro"] [data-happy2-ui="code-editor"]');
+    expect(readOnly.element.getAttribute("data-read-only")).toBe("");
+    expect(readOnly.element.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe(
+        "false",
+    );
+    expect(readOnly.element.textContent).toContain("frozen");
     expect(
         Array.from(
             view.container.querySelectorAll(

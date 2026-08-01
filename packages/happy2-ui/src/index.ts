@@ -2,6 +2,9 @@ import "./styles.css";
 
 export { happyLogoUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
+export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
+export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
+export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
 export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {

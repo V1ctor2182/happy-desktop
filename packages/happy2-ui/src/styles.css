@@ -72,6 +72,8 @@
 @import "./styles/html-preview.css";
 @import "./styles/file-editor.css";
 @import "./styles/changed-file-diff.css";
+@import "./styles/code-block.css";
+@import "./styles/code-editor.css";
 @import "./styles/document-editor.css";
 @import "./styles/document-surface.css";
 @import "./styles/document-delete-dialog.css";

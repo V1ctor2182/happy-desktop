@@ -4,9 +4,9 @@
  * A 56px surface header naming the file, then a body that fills whatever region
  * the preview was given. Visual media is centered on the inset surface with the
  * artwork contained rather than cropped, because a preview that crops has
- * answered a different question than the one asked. Text scrolls in a full-bleed
- * scrollport whose inner wrapper carries the reading measure, and a Markdown
- * document is handed to `MarkdownDocument`, which owns its own reading measure.
+ * answered a different question than the one asked. Source scrolls in a
+ * full-bleed scrollport around the Pierre renderer, and a Markdown document is
+ * handed to `MarkdownDocument`, which owns its own reading measure.
  * Colors and type are theme tokens only.
  */
 
@@ -131,29 +131,22 @@
     background: var(--surface);
 }
 
-/* Scrollport: edge-to-edge, no padding of its own. */
-.happy2-file-preview__scroll {
+/* Scrollport for the highlighted source: edge-to-edge, no padding of its own. */
+.happy2-file-preview__source {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     overflow: auto;
+    scrollbar-color: var(--divider) transparent;
 }
 
-.happy2-file-preview__code {
-    display: block;
+/* `CodeBlock` carries the type and material; the preview only says that the
+   file fills the pane it was given rather than the height of its own text. */
+.happy2-file-preview__source-renderer {
     flex: 0 0 auto;
-    width: 100%;
-    margin: 0;
-    padding: 16px 20px 32px;
-    color: var(--text);
-    font-family: var(--happy2-font-mono);
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 18px;
-    tab-size: 4;
-    white-space: pre;
+    min-height: 100%;
 }
 
 /* ---- Notices ---------------------------------------------------------- */

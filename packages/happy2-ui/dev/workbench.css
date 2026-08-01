@@ -1,32 +1,25 @@
-:root {
+/* Everything here is scoped to the workbench shell: the same stylesheet loads in
+   the standalone Blueprint page and inside the application's development-only
+   Blueprint screen, where document-level rules would repaint the whole app. */
+
+.workbench-shell {
+    min-width: 900px;
+    /* The shell is its own scroll container so an embedded workbench scrolls
+       inside the panel that hosts it, with the header still sticking to its top. */
+    height: 100%;
+    overflow: auto;
     color: #15283b;
     background: #0a3b66;
     font-family: "happy2 Manrope", sans-serif;
     font-synthesis: none;
 }
 
-* {
+.workbench-shell * {
     box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-    min-width: 900px;
-    min-height: 100%;
-    margin: 0;
-}
-
-body {
-    min-height: 100vh;
-}
-
-select {
+.workbench-shell select {
     font: inherit;
-}
-
-.workbench-shell {
-    min-height: 100vh;
 }
 
 .workbench-header {

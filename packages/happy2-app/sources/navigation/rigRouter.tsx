@@ -221,6 +221,17 @@ const friendsRoute = createRoute({
     path: "/friends",
 });
 
+/**
+ * The component workbench, addressed without a Rig because it renders component
+ * pages rather than anything a machine holds. The route is registered only in a
+ * development build, which is also the only build whose sidebar offers it.
+ */
+const blueprintRoute = createRoute({
+    component: RigBlueprintRoute,
+    getParentRoute: () => rootRoute,
+    path: "/blueprint",
+});
+
 const settingsIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/settings",
@@ -261,6 +272,7 @@ const routeTree = rootRoute.addChildren([
     inboxRoute,
     usageRoute,
     friendsRoute,
+    ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
     settingsSectionRoute,
 ]);
@@ -299,8 +311,22 @@ function RigFriendsRoute() {
     return <RigWorkspaceLayout friends />;
 }
 
+/**
+ * The workbench address renders the same window a conversation does: the shell
+ * and its sidebar stay, and only the content area changes.
+ */
+function RigBlueprintRoute() {
+    return <RigWorkspaceLayout blueprint />;
+}
+
 function RigWorkspaceLayout(
-    props: { friends?: boolean; inbox?: boolean; notes?: boolean; usage?: boolean } = {},
+    props: {
+        blueprint?: boolean;
+        friends?: boolean;
+        inbox?: boolean;
+        notes?: boolean;
+        usage?: boolean;
+    } = {},
 ) {
     // The router hooks resolve their types through the single global `Register`
     // declaration, which names the cloud router. Route definitions above are
@@ -336,6 +362,8 @@ function RigWorkspaceLayout(
             inboxOpen={props.inbox}
             usageOpen={props.usage}
             friendsOpen={props.friends}
+            blueprintOpen={props.blueprint}
+            onBlueprintOpen={() => void navigate({ to: "/blueprint" })}
             onFriendsOpen={() => void navigate({ to: "/friends" })}
             onInboxOpen={() =>
                 void navigate({

@@ -6,6 +6,7 @@ import {
     type ReactNode,
 } from "react";
 import { Button } from "./Button";
+import { CodeEditor } from "./CodeEditor";
 import { Icon } from "./Icon";
 import { SegmentedControl } from "./SegmentedControl";
 export type FileEditorProps = {
@@ -188,15 +189,16 @@ export function FileEditor(props: FileEditorProps) {
             {reading ? (
                 local.rendered
             ) : (
-                <textarea
+                <CodeEditor
                     className="happy2-file-editor__area"
-                    data-happy2-ui="file-editor-area"
-                    onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
+                    name={local.path}
+                    onSave={() => {
+                        if (canSave()) local.onSave?.();
+                    }}
+                    onValueChange={(value) => local.onValueChange?.(value)}
                     placeholder={local.placeholder}
                     readOnly={local.readOnly}
-                    spellCheck={false}
                     value={local.value}
-                    wrap="off"
                 />
             )}
             <footer className="happy2-file-editor__status" data-happy2-ui="file-editor-status">

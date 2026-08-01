@@ -111,32 +111,12 @@
  * 12px inset stays as the control's own text padding; the scroll behavior is the
  * UA default rather than an explicit `overflow` on this box.
  */
+/* The body is `CodeEditor`, which owns the code type, the gutter, and its own
+   scrollport; the editor surface only says how much of the pane it takes. */
 .happy2-file-editor__area {
-    display: block;
     flex: 1 1 0%;
     width: 100%;
     min-height: 0;
-    margin: 0;
-    padding: 12px;
-    border: none;
-    outline: none;
-    background: var(--diff-context-bg);
-    color: var(--text);
-    font-family: var(--happy2-font-mono);
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 20px;
-    tab-size: 4;
-    resize: none;
-    white-space: pre;
-}
-
-.happy2-file-editor__area::placeholder {
-    color: var(--text-secondary);
-}
-
-.happy2-file-editor__area:read-only {
-    color: var(--text-secondary);
 }
 
 /* ---- Status bar ------------------------------------------------------- */
