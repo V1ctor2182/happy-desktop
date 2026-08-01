@@ -14,7 +14,7 @@ export interface HtmlPreviewProxyHandle {
      * that site is read through, which is what makes a preview of a file on a
      * remote machine work like one on this machine.
      */
-    register(client: RigProxyClient): (sessionId: string, filePath: string) => string;
+    register(client: RigProxyClient): (groupId: string, filePath: string) => string;
     close(): void;
 }
 
@@ -84,7 +84,7 @@ const PREVIEW_SITE_LIMIT = 32;
 /** One folder of one checkout, as the site a document in it is served from. */
 interface PreviewSite {
     readonly client: RigProxyClient;
-    readonly sessionId: string;
+    readonly groupId: string;
     readonly directory: string;
 }
 
@@ -123,9 +123,9 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
     const siteSecret = randomBytes(32);
     const sites = new Map<string, PreviewSite>();
 
-    const siteName = (sessionId: string, directory: string): string =>
+    const siteName = (groupId: string, directory: string): string =>
         createHmac("sha256", siteSecret)
-            .update(`${sessionId}\u0000${directory}`)
+            .update(`${groupId}\u0000${directory}`)
             .digest("hex")
             .slice(0, 32);
 
@@ -170,13 +170,13 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                 port: address.port,
                 username,
                 password,
-                register: (client) => (sessionId, filePath) => {
+                register: (client) => (groupId, filePath) => {
                     const site = previewSite(filePath);
-                    const name = siteName(sessionId, site.directory);
+                    const name = siteName(groupId, site.directory);
                     // Re-inserted so insertion order stays use order and the
                     // oldest site nobody is looking at is the one that goes.
                     sites.delete(name);
-                    sites.set(name, { client, sessionId, directory: site.directory });
+                    sites.set(name, { client, groupId, directory: site.directory });
                     for (const stale of sites.keys()) {
                         if (sites.size <= PREVIEW_SITE_LIMIT) break;
                         sites.delete(stale);
@@ -254,11 +254,11 @@ async function serve(
     const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
     let bytes: Buffer;
     try {
-        const file = await workspaceFileLoad(site.client, site.sessionId, filePath);
+        const file = await workspaceFileLoad(site.client, site.groupId, filePath);
         bytes = Buffer.from(file.content, "base64");
     } catch {
-        // A file the checkout no longer holds and a file this session may not
-        // read are the same answer to a page: it is not there.
+        // A file the checkout no longer holds and a file this page may not
+        // read are the same answer: it is not there.
         refuse(response, 404, "Not found.");
         return;
     }

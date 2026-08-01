@@ -26,6 +26,8 @@ import {
     type RigSessionDraftStore,
 } from "./rigSessionDraftStore.js";
 import { rigUserError } from "./rigSupport.js";
+import { orderKeyAfter } from "../utils/orderKeyAfter.js";
+import { orderKeySequence } from "../utils/orderKeySequence.js";
 import type {
     RigSessionListSnapshot,
     RigSessionListStore,
@@ -165,7 +167,11 @@ export type RigFileTabKind = "file" | "diff" | "media" | "document";
 /** One workspace text file opened as a main-content document tab. */
 export interface RigFileTabSnapshot {
     readonly id: string;
-    readonly sessionId: RigSessionId;
+    /**
+     * The project or worktree the file lives in. That is the whole of its
+     * address: a file belongs to a checkout, not to whichever conversation was
+     * open when it was clicked, so a tab outlives every session in its group.
+     */
     readonly groupId: RigGroupId;
     readonly path: string;
     /** `All files` opens the file itself; `Changed` opens its Git diff. */
@@ -211,7 +217,7 @@ export type RigPanelFileKind = "text" | "media" | "document";
  * does not disturb the files the reader has open in the main content.
  */
 export interface RigPanelFileSnapshot {
-    readonly sessionId: RigSessionId;
+    readonly groupId: RigGroupId;
     /** Path as the transcript named it, which is what the host is asked to read. */
     readonly path: string;
     readonly kind: RigPanelFileKind;
@@ -232,6 +238,13 @@ export interface RigWorkspaceSnapshot {
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
     readonly fileTabs: readonly RigFileTabSnapshot[];
+    /**
+     * The addressed group's tab strip, by tab id, in the order it is shown. It
+     * covers everything the strip holds — sessions and files alike — because the
+     * reader arranges one strip, not one order per kind of thing in it. Empty
+     * while no group is addressed.
+     */
+    readonly tabOrder: readonly string[];
     readonly activeFileTabId?: string;
     /**
      * The file the panel's viewer is on, if any. It is separate from `fileTabs`
@@ -407,7 +420,7 @@ export interface RigWorkspaceStore {
      * The workspace's right-hand tool panel. It is a store of its own, not part of
      * the snapshot above, because a terminal in it repaints far faster than the
      * conversation does and must not drag the whole workspace through a render to
-     * do it. The workspace keeps it pointed at the open conversation.
+     * do it. The workspace keeps it pointed at the addressed group.
      */
     readonly panel: RigPanelStore;
 
@@ -441,10 +454,12 @@ export interface RigWorkspaceStore {
      */
     conversationArchive(conversationId: RigSessionId): Promise<void>;
     /**
-     * Moves one conversation after `afterId` inside its own group, or to the
-     * front of that group when null.
+     * Moves one tab of the addressed group directly after `afterId`, or to the
+     * front of the strip when null. The order is this client's own and takes
+     * effect at once: nothing is asked of the daemon, which orders sessions but
+     * cannot order a strip that also holds files.
      */
-    conversationReorder(conversationId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
+    tabReorder(tabId: string, afterId: string | null): void;
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     /**
@@ -471,19 +486,9 @@ export interface RigWorkspaceStore {
      * Previews one workspace file in the main-content tab strip. A new preview
      * replaces this group's previous preview without disturbing permanent tabs.
      */
-    filePreview(
-        sessionId: RigSessionId,
-        groupId: RigGroupId,
-        path: string,
-        kind: RigFileTabKind,
-    ): void;
+    filePreview(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /** Opens one workspace file permanently, promoting its preview when present. */
-    fileOpen(
-        sessionId: RigSessionId,
-        groupId: RigGroupId,
-        path: string,
-        kind: RigFileTabKind,
-    ): void;
+    fileOpen(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /**
      * Opens one workspace file in the panel's viewer, beside the conversation
      * that named it. This is what a link in a message and the file a tool call
@@ -491,7 +496,7 @@ export interface RigWorkspaceStore {
      * appears immediately with that read's loading state, and the main content
      * — the transcript the reader is following — is left exactly as it was.
      */
-    filePanelOpen(sessionId: RigSessionId, path: string, kind: RigPanelFileKind): void;
+    filePanelOpen(groupId: RigGroupId, path: string, kind: RigPanelFileKind): void;
     /** Closes the panel's file viewer and stops its pending read. */
     filePanelClose(): void;
     /** Selects one open file tab, or clears file selection when a session is selected. */
@@ -692,6 +697,8 @@ export function rigWorkspaceStoreCreate(
     };
     const panel: RigPanelStore = rigPanelStoreCreate({
         terminalOpen: (sessionId) => client.terminalOpen(sessionId),
+        memoryRead: (groupId) => client.memory.groupRead(groupId)?.panel,
+        memoryWrite: (groupId, memory) => client.memory.groupPanelWrite(groupId, memory),
     });
 
     const listeners = new Set<() => void>();
@@ -765,6 +772,8 @@ export function rigWorkspaceStoreCreate(
     let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
     let fileTabs: readonly RigFileTabSnapshot[] = [];
     let activeFileTabId: string | undefined;
+    /** The addressed group's tab strip, in the order the reader arranged it. */
+    let tabOrder: readonly string[] = [];
     let panelFile: RigPanelFileSnapshot | undefined;
     let panelFileGeneration = 0;
     let panelFileController: AbortController | undefined;
@@ -793,6 +802,7 @@ export function rigWorkspaceStoreCreate(
         list: list.get(),
         conversation,
         fileTabs,
+        tabOrder,
         groupResume,
         openInTargets,
         fileViewMode,
@@ -856,17 +866,48 @@ export function rigWorkspaceStoreCreate(
         };
     };
 
-    /** The sessions a group holds right now, or none while the list is not ready. */
-    const groupConversationIds = (groupId: RigGroupId): ReadonlySet<string> => {
+    /** The sessions a group holds right now, in list order, or none while it is not ready. */
+    const groupConversationIdList = (groupId: RigGroupId): readonly string[] => {
         const projects = list.get().projects;
-        if (projects.type !== "ready") return new Set();
+        if (projects.type !== "ready") return [];
         for (const project of projects.value) {
-            if (project.id === groupId)
-                return new Set(project.conversations.map((summary) => summary.id));
+            if (project.id === groupId) return project.conversations.map((summary) => summary.id);
             const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
-            if (worktree) return new Set(worktree.conversations.map((summary) => summary.id));
+            if (worktree) return worktree.conversations.map((summary) => summary.id);
         }
-        return new Set();
+        return [];
+    };
+
+    /** The sessions a group holds right now, or none while the list is not ready. */
+    const groupConversationIds = (groupId: RigGroupId): ReadonlySet<string> =>
+        new Set(groupConversationIdList(groupId));
+
+    /**
+     * One group's tab strip in the order it is shown. Tabs the reader has
+     * dragged carry a fractional order key and sort by it; everything else
+     * follows in the order it arrived, which is what puts a newly opened tab
+     * last without anything having to be written down for it.
+     *
+     * The keys are this client's own. The daemon orders sessions, but the strip
+     * holds sessions and files together and will hold more than that, so an
+     * order it can only see part of could never be the one on screen.
+     */
+    const groupTabOrderCompute = (groupId: RigGroupId | undefined): readonly string[] => {
+        if (groupId === undefined) return [];
+        const arrival = [
+            ...groupConversationIdList(groupId),
+            ...fileTabs.filter((tab) => tab.groupId === groupId).map((tab) => tab.id),
+        ];
+        const order = client.memory.groupRead(groupId)?.order;
+        if (!order) return arrival;
+        const keyed = arrival.filter((id) => order[id] !== undefined);
+        keyed.sort((left, right) => {
+            const leftKey = order[left]!;
+            const rightKey = order[right]!;
+            if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
+            return left < right ? -1 : 1;
+        });
+        return [...keyed, ...arrival.filter((id) => order[id] === undefined)];
     };
 
     /**
@@ -887,19 +928,15 @@ export function rigWorkspaceStoreCreate(
         const resolve = (groupId: RigGroupId, conversationIds: ReadonlySet<string>): void => {
             const memory = client.memory.groupRead(groupId);
             if (!memory) return;
-            for (const tabId of memory.history) {
+            // Only sessions answer this question. A file tab is reopened by
+            // `groupRestore` and shown over whatever conversation the group
+            // resumes on, so it is passed over here rather than standing in for
+            // a session it no longer belongs to.
+            for (const tabId of memory.history)
                 if (conversationIds.has(tabId)) {
                     next.set(groupId, tabId as RigSessionId);
                     return;
                 }
-                const file = memory.files.find(
-                    (candidate) => fileTabIdOf(groupId, candidate.path) === tabId,
-                );
-                if (file && conversationIds.has(file.sessionId)) {
-                    next.set(groupId, file.sessionId);
-                    return;
-                }
-            }
         };
         for (const project of projects.value) {
             resolve(project.id, new Set(project.conversations.map((summary) => summary.id)));
@@ -919,6 +956,14 @@ export function rigWorkspaceStoreCreate(
     const recompute = (): void => {
         const listSnapshot = list.get();
         groupResume = groupResumeCompute();
+        const nextTabOrder = groupTabOrderCompute(addressedGroupId);
+        // The strip keeps its identity across ticks that did not move anything,
+        // so a transcript frame does not re-render every tab in it.
+        if (
+            nextTabOrder.length !== tabOrder.length ||
+            nextTabOrder.some((id, index) => tabOrder[index] !== id)
+        )
+            tabOrder = nextTabOrder;
         const chat = chatStore?.get();
         const draft = composer?.getState();
         // A failed acquisition stays failed until something retries it; the
@@ -945,6 +990,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupComposer === groupComposerDraft &&
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
+            snapshot.tabOrder === tabOrder &&
             snapshot.activeFileTabId === activeFileTabId &&
             snapshot.panelFile === panelFile &&
             snapshot.groupResume === groupResume &&
@@ -966,6 +1012,7 @@ export function rigWorkspaceStoreCreate(
             list: listSnapshot,
             conversation,
             fileTabs,
+            tabOrder,
             groupResume,
             openInTargets,
             fileViewMode,
@@ -1022,11 +1069,16 @@ export function rigWorkspaceStoreCreate(
         if (restoring) return;
         memoryRevision += 1;
         const previous = client.memory.groupRead(groupId);
-        // A preview is a glance at a file, not a tab the reader put there, so it
-        // is not something to reopen a group with.
+        // A preview is remembered like any other tab: closing the window is not
+        // a decision to throw the file away, and it comes back as the preview it
+        // was rather than as a tab the reader never asked to keep.
         const files = fileTabs
-            .filter((tab) => tab.groupId === groupId && !tab.preview)
-            .map((tab) => ({ sessionId: tab.sessionId, path: tab.path, kind: tab.kind }));
+            .filter((tab) => tab.groupId === groupId)
+            .map((tab) => ({
+                path: tab.path,
+                kind: tab.kind,
+                ...(tab.preview ? { preview: true } : {}),
+            }));
         const conversationIds = groupConversationIds(groupId);
         const fileTabIds = new Set(files.map((file) => fileTabIdOf(groupId, file.path)));
         const known = (id: string): boolean =>
@@ -1039,15 +1091,10 @@ export function rigWorkspaceStoreCreate(
         // An unsent draft is remembered on its own account: a group with no tabs
         // and no files is still worth remembering when somebody has typed into
         // it and not sent it.
-        if (history.length === 0 && files.length === 0 && previous?.draft === undefined) {
-            client.memory.groupForget(groupId);
-            return;
-        }
-        client.memory.groupUpdate(groupId, {
+        client.memory.groupTabsWrite(groupId, {
             ...(activeTabId ? { activeTabId } : {}),
             history,
             files,
-            ...(previous?.draft === undefined ? {} : { draft: previous.draft }),
         });
     };
 
@@ -1058,11 +1105,7 @@ export function rigWorkspaceStoreCreate(
         if (!previous) return;
         const history = previous.history.filter((id) => id !== tabId);
         const files = previous.files.filter((file) => fileTabIdOf(groupId, file.path) !== tabId);
-        if (history.length === 0 && files.length === 0) {
-            client.memory.groupForget(groupId);
-            return;
-        }
-        client.memory.groupUpdate(groupId, {
+        client.memory.groupTabsWrite(groupId, {
             ...(previous.activeTabId && previous.activeTabId !== tabId
                 ? { activeTabId: previous.activeTabId }
                 : {}),
@@ -1088,9 +1131,8 @@ export function rigWorkspaceStoreCreate(
         restoring = true;
         try {
             for (const file of memory.files) {
-                if (!conversationIds.has(file.sessionId)) continue;
                 if (fileTabs.some((tab) => tab.id === fileTabIdOf(groupId, file.path))) continue;
-                fileTabOpen(file.sessionId, groupId, file.path, file.kind, false);
+                fileTabOpen(groupId, file.path, file.kind, file.preview === true);
             }
         } finally {
             restoring = false;
@@ -1125,7 +1167,7 @@ export function rigWorkspaceStoreCreate(
         generation: number,
         tab: RigFileTabSnapshot,
     ): void => {
-        void client.htmlPreviewOpen(tab.sessionId, tab.path).then(
+        void client.htmlPreviewOpen(tab.groupId, tab.path).then(
             (url) => {
                 if (disposed || fileLoadGenerations.get(tabId) !== generation) return;
                 fileTabs = fileTabs.map((candidate) =>
@@ -1172,15 +1214,10 @@ export function rigWorkspaceStoreCreate(
         recompute();
         const read =
             before.kind === "file" || before.kind === "document"
-                ? client.workspaceFileRead(before.sessionId, before.path, controller.signal)
+                ? client.workspaceFileRead(before.groupId, before.path, controller.signal)
                 : before.kind === "media"
-                  ? client.workspaceFileBytesRead(before.sessionId, before.path, controller.signal)
-                  : client.changedFileRead(
-                        before.sessionId,
-                        before.groupId,
-                        before.path,
-                        controller.signal,
-                    );
+                  ? client.workspaceFileBytesRead(before.groupId, before.path, controller.signal)
+                  : client.changedFileRead(before.groupId, before.path, controller.signal);
         if (before.kind === "document") filePreviewAddressResolve(tabId, generation, before);
         void read.then(
             (document) => {
@@ -1242,10 +1279,10 @@ export function rigWorkspaceStoreCreate(
         recompute();
         const read =
             file.kind === "text" || file.kind === "document"
-                ? client.workspaceFileRead(file.sessionId, file.path, controller.signal)
-                : client.workspaceFileBytesRead(file.sessionId, file.path, controller.signal);
+                ? client.workspaceFileRead(file.groupId, file.path, controller.signal)
+                : client.workspaceFileBytesRead(file.groupId, file.path, controller.signal);
         if (file.kind === "document")
-            void client.htmlPreviewOpen(file.sessionId, file.path).then(
+            void client.htmlPreviewOpen(file.groupId, file.path).then(
                 (url) => {
                     if (disposed || panelFileGeneration !== generation || !panelFile) return;
                     panelFile = { ...panelFile, previewUrl: url };
@@ -1293,7 +1330,6 @@ export function rigWorkspaceStoreCreate(
      * one preview; permanent tabs and previews in other groups keep their place.
      */
     const fileTabOpen = (
-        sessionId: RigSessionId,
         groupId: RigGroupId,
         path: string,
         kind: RigFileTabKind,
@@ -1305,12 +1341,11 @@ export function rigWorkspaceStoreCreate(
         if (existing) {
             const change = fileChangeFind(groupId, path);
             const revision = change?.revision ?? "";
-            if (existing.kind !== kind || existing.sessionId !== sessionId) {
+            if (existing.kind !== kind) {
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === id
                         ? {
                               ...tab,
-                              sessionId,
                               kind,
                               revision,
                               preview: preview && tab.preview,
@@ -1334,7 +1369,6 @@ export function rigWorkspaceStoreCreate(
         const revision = fileChangeFind(groupId, path)?.revision ?? "";
         const tab: RigFileTabSnapshot = {
             id,
-            sessionId,
             groupId,
             path,
             kind,
@@ -1455,25 +1489,21 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
-     * Places a draft's non-image attachments in the session's working directory
-     * and returns the text the turn should carry, which names them. Copies are
+     * Places a draft's non-image attachments in the group's checkout and returns
+     * the text the turn should carry, which names them. Copies are
      * written one at a time: their order in the draft is the order they take
      * names in, and two writes racing for the same name would settle it by luck.
      * A failed copy fails the send, which is the only place a reader is looking.
      */
     const attachmentsPlace = async (
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         text: string,
         attachments: readonly ComposerAttachment[],
     ): Promise<string> => {
         const paths: string[] = [];
         for (const attachment of attachments) {
             if (attachment.kind !== "workspaceFile") continue;
-            const written = await client.attachmentWrite(
-                sessionId,
-                attachment.name,
-                attachment.data,
-            );
+            const written = await client.attachmentWrite(groupId, attachment.name, attachment.data);
             paths.push(written.path);
         }
         return rigAttachmentTextAppend(text, paths);
@@ -1501,6 +1531,25 @@ export function rigWorkspaceStoreCreate(
         else held.set(key, attachments);
     };
 
+    /**
+     * The checkout one conversation runs in. Attachments land there and mentions
+     * are searched there, and both are properties of the directory rather than
+     * of the agent: a subagent addressed on its own still belongs to the project
+     * it was delegated inside, which is the group the reader has open.
+     */
+    const conversationGroupId = (conversationId: RigSessionId): RigGroupId | undefined => {
+        const projects = list.get().projects;
+        if (projects.type === "ready")
+            for (const project of projects.value) {
+                if (project.conversations.some((summary) => summary.id === conversationId))
+                    return project.id;
+                for (const worktree of project.worktrees)
+                    if (worktree.conversations.some((summary) => summary.id === conversationId))
+                        return worktree.id;
+            }
+        return addressedGroupId;
+    };
+
     const composerCreate = (conversationId: RigSessionId): ComposerStore => {
         const created: ComposerStore = composerStoreCreate(conversationId, {
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
@@ -1521,8 +1570,11 @@ export function rigWorkspaceStoreCreate(
                             store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
                         submitting(created, event.revision, async () => {
+                            const group = conversationGroupId(conversationId);
+                            if (!group)
+                                throw new Error("That conversation is no longer in a project.");
                             const text = await attachmentsPlace(
-                                conversationId,
+                                group,
                                 event.text,
                                 event.attachments,
                             );
@@ -1545,7 +1597,9 @@ export function rigWorkspaceStoreCreate(
                         const query = event.query;
                         if (query === undefined) return;
                         const target = composer;
-                        void withChatStore((store) => store.filesSearch(query, MENTION_LIMIT)).then(
+                        const group = conversationGroupId(conversationId);
+                        if (!group) return;
+                        void client.filesSearch(group, query, MENTION_LIMIT).then(
                             (files: readonly RigFileSearchResult[]) => {
                                 if (
                                     requestGeneration !== mentionGeneration ||
@@ -1666,7 +1720,7 @@ export function rigWorkspaceStoreCreate(
         // The panel shows the addressed conversation's tabs, so it learns the new
         // address in this same call stack — before the chat handle is acquired, so
         // a terminal is never briefly attributed to the conversation just left.
-        panel.conversationApply(conversationId);
+        panel.scopeApply(addressedGroupId, conversationId);
         // The panel's viewer showed a file out of the conversation being left,
         // named by a path that only means anything in that session's checkout.
         if (conversationId !== openId) panelFileRelease();
@@ -1735,7 +1789,7 @@ export function rigWorkspaceStoreCreate(
         ).then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
             output({ type: "conversationOpenRequested", location });
-            const placed = await attachmentsPlace(location.sessionId, text, attachments);
+            const placed = await attachmentsPlace(location.groupId, text, attachments);
             const acquired = await client.chat(location.sessionId);
             try {
                 await acquired.store.messageSend(placed, rigImageInputsOf(attachments));
@@ -1936,6 +1990,7 @@ export function rigWorkspaceStoreCreate(
             list: list.get(),
             conversation,
             fileTabs,
+            tabOrder,
             groupResume,
             openInTargets,
             fileViewMode,
@@ -1986,8 +2041,10 @@ export function rigWorkspaceStoreCreate(
         },
         groupOpen: (groupId) => {
             if (groupId !== addressedGroupId) fileSelectionReset();
-            openConversation(undefined);
+            // The panel belongs to this group, so it learns the address before
+            // the conversation is released rather than after.
             addressedGroupId = groupId;
+            openConversation(undefined);
             groupRestore(groupId);
             // The file scope belongs to the whole workspace, so "All files"
             // survives navigation. Apply it to the newly addressed checkout
@@ -2070,8 +2127,36 @@ export function rigWorkspaceStoreCreate(
             await list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
         },
-        conversationReorder: (conversationId, afterId) =>
-            list.conversationReorder(conversationId, afterId),
+        tabReorder(tabId, afterId) {
+            if (disposed || addressedGroupId === undefined) return;
+            const groupId = addressedGroupId;
+            if (!tabOrder.includes(tabId)) return;
+            if (afterId !== null && !tabOrder.includes(afterId)) return;
+            const stored = client.memory.groupRead(groupId)?.order ?? {};
+            // A tab can only be placed between two keys, so the strip as it
+            // stands is written down first: the tabs that already have keys keep
+            // them, and the ones that arrived since sort after the last of them
+            // exactly where they are already showing.
+            const keyed = tabOrder.filter((id) => stored[id] !== undefined);
+            const unkeyed = tabOrder.filter((id) => stored[id] === undefined);
+            const minted = orderKeySequence(
+                unkeyed.length,
+                keyed.length > 0 ? stored[keyed[keyed.length - 1]!]! : null,
+            );
+            const order: Record<string, string> = {};
+            for (const id of keyed) order[id] = stored[id]!;
+            unkeyed.forEach((id, index) => {
+                order[id] = minted[index]!;
+            });
+            order[tabId] = orderKeyAfter(
+                tabOrder.map((id) => ({ id, orderKey: order[id]! })),
+                tabId,
+                afterId,
+            );
+            client.memory.groupOrderWrite(groupId, order);
+            memoryRevision += 1;
+            recompute();
+        },
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
         projectArchive: (projectId) => list.projectArchive(projectId),
         async worktreeCreate(projectId) {
@@ -2086,15 +2171,12 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        filePanelOpen(sessionId, path, kind) {
+        filePanelOpen(groupId, path, kind) {
             if (disposed) return;
-            panelFileRevision =
-                addressedGroupId === undefined
-                    ? undefined
-                    : fileChangeFind(addressedGroupId, path)?.revision;
+            panelFileRevision = fileChangeFind(groupId, path)?.revision;
             panel.fileViewOpen();
             panelFileLoad({
-                sessionId,
+                groupId,
                 path,
                 kind,
                 document: { type: "loading" },
@@ -2107,10 +2189,8 @@ export function rigWorkspaceStoreCreate(
             panel.fileViewClose();
             recompute();
         },
-        filePreview: (sessionId, groupId, path, kind) =>
-            fileTabOpen(sessionId, groupId, path, kind, true),
-        fileOpen: (sessionId, groupId, path, kind) =>
-            fileTabOpen(sessionId, groupId, path, kind, false),
+        filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
+        fileOpen: (groupId, path, kind) => fileTabOpen(groupId, path, kind, false),
         fileSelect(tabId) {
             const selected =
                 tabId !== undefined ? fileTabs.find((tab) => tab.id === tabId) : undefined;
@@ -2272,7 +2352,7 @@ export function rigWorkspaceStoreCreate(
             try {
                 const expectedHash =
                     tab.document.type === "ready" ? (tab.document.value.hash ?? null) : null;
-                await client.workspaceFileWrite(tab.sessionId, tab.path, draft, expectedHash);
+                await client.workspaceFileWrite(tab.groupId, tab.path, draft, expectedHash);
                 // The draft is dropped on success, not kept as the new content:
                 // what the file now says is the checkout's answer, and the
                 // reload below is what asks for it. Keeping the draft would

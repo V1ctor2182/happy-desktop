@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { UserError } from "../types.js";
 import {
     createFakeRigTransport,
+    DEFAULT_PROJECT,
     fakeRigSession,
     fakeRigSummary,
     type FakeRigTransport,
@@ -21,6 +22,7 @@ import type { Loadable } from "../conversation/loadable.js";
 import type { RigProjectGroup } from "./rigProjectGroupProject.js";
 import type {
     RigEventId,
+    RigGroupId,
     RigSession,
     RigMessage,
     RigModelCatalog,
@@ -1189,28 +1191,27 @@ describe("rigChatStore actions", () => {
         unsubscribe();
     });
 
-    it("searches workspace files for mention candidates without mutating the snapshot", async () => {
+    it("searches a checkout's files for mention candidates", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("s1"));
-        fake.filesSet("s1" as RigSessionId, [
+        // The corpus belongs to the project, not to the session reading it: a
+        // mention names a file in the checkout, which outlives every agent in it.
+        fake.filesSet(DEFAULT_PROJECT.id as RigGroupId, [
             { fileName: "rigChatStore.ts", path: "packages/happy2-state/src/rig/rigChatStore.ts" },
             { fileName: "rigTypes.ts", path: "packages/happy2-state/src/rig/rigTypes.ts" },
             { fileName: "AppRigView.tsx", path: "packages/happy2-app/sources/AppRigView.tsx" },
         ]);
-        const { store, unsubscribe } = await chatReady(fake, "s1");
-        const before = store.get();
+        const client = rigClientCreate({ transport: fake.transport });
 
-        const hits = await store.filesSearch("rig", 5);
+        const hits = await client.filesSearch(DEFAULT_PROJECT.id as RigGroupId, "rig", 5);
         expect(hits.map((file) => file.fileName)).toEqual([
             "rigChatStore.ts",
             "rigTypes.ts",
             "AppRigView.tsx",
         ]);
-        const scoped = await store.filesSearch("types");
+        const scoped = await client.filesSearch(DEFAULT_PROJECT.id as RigGroupId, "types");
         expect(scoped.map((file) => file.fileName)).toEqual(["rigTypes.ts"]);
-        // A pure query: the durable snapshot reference is unchanged.
-        expect(store.get()).toBe(before);
-        unsubscribe();
+        client[Symbol.dispose]();
     });
 
     it("surfaces queued steering messages and reconciles them on session_updated", async () => {

@@ -461,7 +461,10 @@ function toolProject(element: Extract<ChatElement, { kind: "tool_call" }>): Conv
         ...(element.presentation
             ? { presentation: presentationProject(element.presentation) }
             : {}),
-        ...(element.permissionReview
+        // A review still running has only the action it is weighing: no
+        // verdict, no reason, no risk. The row states a decision, so it waits
+        // for one rather than painting a blank verdict beside the call.
+        ...(element.permissionReview?.status === "completed"
             ? {
                   review: {
                       action: element.permissionReview.action,

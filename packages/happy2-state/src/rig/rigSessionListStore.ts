@@ -82,14 +82,6 @@ export interface RigSessionListStore {
      * `mutationError` and the row returns on the following reconcile.
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
-    /**
-     * Moves one conversation directly after `afterId` inside its own group, or
-     * to the front of that group when `afterId` is null. The row moves at once —
-     * against a key minted the same way the host mints it, so the optimistic
-     * order is the one that lands — and a failure is recorded in `mutationError`
-     * with the following reconcile restoring the host's order.
-     */
-    conversationReorder(sessionId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
 
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
@@ -464,36 +456,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 publish();
                 try {
                     await deps.transport.sessionArchive(sessionId);
-                } finally {
-                    if (!disposed) await reconcile();
-                }
-            }),
-        conversationReorder: (sessionId, afterId) =>
-            mutate(async () => {
-                const moved = sessions.find((session) => session.id === sessionId);
-                if (moved === undefined) return;
-                // Only the moved row's key changes, and it is minted the same way
-                // the host mints it, so the optimistic order is exactly the one
-                // the reconcile confirms rather than a guess it has to undo.
-                const group = rigSessionGroupIdOf(moved);
-                // Only the rows the host places take part: a subagent has no key
-                // and no row, so it must not be counted as a neighbour when the
-                // moved row's new key is minted between two of them.
-                const orderKey = orderKeyAfter(
-                    sessions.flatMap((session) =>
-                        session.orderKey !== undefined && rigSessionGroupIdOf(session) === group
-                            ? [{ id: session.id, orderKey: session.orderKey }]
-                            : [],
-                    ),
-                    sessionId,
-                    afterId,
-                );
-                sessions = sessions.map((session) =>
-                    session.id === sessionId ? { ...session, orderKey } : session,
-                );
-                publish();
-                try {
-                    await deps.transport.sessionReorder(sessionId, afterId);
                 } finally {
                     if (!disposed) await reconcile();
                 }

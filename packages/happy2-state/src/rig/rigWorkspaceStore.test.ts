@@ -5,8 +5,8 @@ import {
     type RigConversationSnapshot,
     type RigWorkspaceStore,
 } from "./rigWorkspaceStore.js";
-import { createFakeRigTransport, fakeRigSession } from "../testing/fake-rig.js";
-import type { RigSessionId } from "./rigTypes.js";
+import { createFakeRigTransport, DEFAULT_PROJECT, fakeRigSession } from "../testing/fake-rig.js";
+import type { RigGroupId, RigSessionId } from "./rigTypes.js";
 
 /** Drains the deep chain of promise continuations behind async chat acquisition. */
 async function flush(): Promise<void> {
@@ -360,7 +360,7 @@ describe("rigWorkspaceStore", () => {
         const firstGate = fake.deferNext("filesSearch");
         workspace.composerTextUpdate("@a");
 
-        fake.filesSet("session-a" as RigSessionId, [
+        fake.filesSet(DEFAULT_PROJECT.id as RigGroupId, [
             { fileName: "ab-new.ts", path: "src/ab-new.ts" },
         ]);
         workspace.composerTextUpdate("@ab");
@@ -369,7 +369,7 @@ describe("rigWorkspaceStore", () => {
             conversationReady(workspace).composer.mentionCandidates.map((item) => item.id),
         ).toEqual(["src/ab-new.ts"]);
 
-        fake.filesSet("session-a" as RigSessionId, [
+        fake.filesSet(DEFAULT_PROJECT.id as RigGroupId, [
             { fileName: "a-new.ts", path: "src/a-new.ts" },
         ]);
         workspace.composerTextUpdate("@a");
@@ -378,7 +378,7 @@ describe("rigWorkspaceStore", () => {
             conversationReady(workspace).composer.mentionCandidates.map((item) => item.id),
         ).toEqual(["src/a-new.ts"]);
 
-        fake.filesSet("session-a" as RigSessionId, [
+        fake.filesSet(DEFAULT_PROJECT.id as RigGroupId, [
             { fileName: "a-stale.ts", path: "src/a-stale.ts" },
         ]);
         firstGate.release();
@@ -414,7 +414,7 @@ describe("rigWorkspaceStore", () => {
         const notificationsBefore = notifications;
         expect(conversationReady(workspace).conversationId).toBe("session-b");
 
-        fake.filesSet("session-a" as RigSessionId, [
+        fake.filesSet(DEFAULT_PROJECT.id as RigGroupId, [
             { fileName: "a-late.ts", path: "src/a-late.ts" },
         ]);
         searchGate.release();

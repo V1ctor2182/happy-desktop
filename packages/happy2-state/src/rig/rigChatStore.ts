@@ -437,12 +437,6 @@ export interface RigChatStore {
     /** Requests termination of one background terminal (`/stop`); rejects on failure. */
     backgroundProcessStop(processId: number): Promise<void>;
     /**
-     * Searches the session workspace for `@`-mention candidates. A pure query with
-     * no store mutation: results are transient composer typeahead, so the caller
-     * renders them without them entering the durable snapshot.
-     */
-    filesSearch(query: string, limit?: number): Promise<readonly RigFileSearchResult[]>;
-    /**
      * Reads the session's current usage snapshot for the `/usage` panel. Pure query
      * against the transport; does not mutate or cache durable snapshot state, so a
      * visible panel may poll it without disturbing the transcript.
@@ -2147,7 +2141,6 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 }
                 await deps.transport.backgroundProcessStop(sessionId, processId);
             }),
-        filesSearch: (query, limit) => deps.transport.filesSearch(sessionId, query, limit),
         usageGet: () =>
             transcriptSession?.usage
                 ? Promise.resolve(transcriptUsageProject(transcriptSession.usage))

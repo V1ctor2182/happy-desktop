@@ -314,9 +314,15 @@ export interface RigTransport {
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
 
-    /** Reads one existing text file from a project/worktree checkout. */
+    /**
+     * Reads one existing text file from a project/worktree checkout.
+     *
+     * A file belongs to the checkout, not to whatever conversation happens to be
+     * open over it, so every file operation here is addressed by the group. That
+     * is also what lets a project be read with no session in it at all.
+     */
     workspaceFileRead(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileDocument>;
@@ -327,7 +333,7 @@ export interface RigTransport {
      * that the file is text, so an image, a video, or a PDF arrives intact.
      */
     workspaceFileBytesRead(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileBytes>;
@@ -338,31 +344,30 @@ export interface RigTransport {
      * the root, and everything it references is fetched from there. The host
      * decides what a page may reach; this only asks for the address.
      */
-    htmlPreviewOpen(sessionId: RigSessionId, path: string): Promise<string>;
+    htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
 
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         content: string,
         expectedHash: string | null,
     ): Promise<void>;
 
     /**
-     * Copies an attached file into the session's working directory and answers
-     * with the path it landed on, relative to that directory. The name is a
+     * Copies an attached file into a project or worktree checkout and answers
+     * with the path it landed on, relative to that checkout. The name is a
      * request rather than a promise: nothing is ever overwritten, so a name that
      * is already taken lands beside its neighbour as a numbered variant.
      */
     attachmentWrite(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         name: string,
         content: string,
     ): Promise<{ readonly path: string }>;
 
     /** Reads one text file from a project/worktree changed-file list. */
     changedFileRead(
-        sessionId: RigSessionId,
         groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
@@ -389,15 +394,6 @@ export interface RigTransport {
      * back beyond completing.
      */
     sessionArchive(sessionId: RigSessionId): Promise<void>;
-    /**
-     * Moves one session directly after `afterId` within its own group, or to the
-     * front of that group when `afterId` is null. The host owns presentation
-     * order — `sessionsRead` already returns sessions in it — and mints the
-     * moved session's new key, so this reports one move rather than restating
-     * the whole arrangement; two clients dragging different rows therefore both
-     * land instead of overwriting each other.
-     */
-    sessionReorder(sessionId: RigSessionId, afterId: RigSessionId | null): Promise<void>;
 
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
@@ -503,12 +499,12 @@ export interface RigTransport {
     answerUserInput(sessionId: RigSessionId, input: RigUserInputAnswers): Promise<RigSession>;
 
     /**
-     * Searches the session workspace for files matching `query`, powering the
-     * composer's `@`-mention autocomplete. Bounded by `limit`; the daemon owns
-     * ranking. Returns quickly and is safe to call on each keystroke.
+     * Searches one project or worktree checkout for files matching `query`,
+     * powering the composer's `@`-mention autocomplete. Bounded by `limit`; the
+     * daemon owns ranking. Returns quickly and is safe to call on each keystroke.
      */
     filesSearch(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         query: string,
         limit?: number,
     ): Promise<readonly RigFileSearchResult[]>;

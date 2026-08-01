@@ -80,6 +80,24 @@ export interface RigDaemonFileWriteRequest {
 }
 
 /**
+ * Which checkout a file operation addresses: a project, or one workspace inside
+ * it. The daemon roots every file route in a checkout rather than in a session,
+ * so a file can be read and written with no agent running at all — and a session
+ * is never the thing that owns the bytes on disk.
+ */
+export interface RigFileScope {
+    readonly projectId: string;
+    readonly workspaceId?: string;
+}
+
+function fileScopePath(scope: RigFileScope): string {
+    const project = `/projects/${encodeURIComponent(scope.projectId)}`;
+    return scope.workspaceId === undefined
+        ? project
+        : `${project}/workspaces/${encodeURIComponent(scope.workspaceId)}`;
+}
+
+/**
  * Narrow client for the local Rig daemon routes consumed by Happy's main-process
  * projection. Rig intentionally exposes these routes over an authenticated Unix
  * socket; keeping the adapter here avoids depending on its private client modules.
@@ -339,27 +357,24 @@ export class RigDaemonClient {
     }
 
     searchFiles(
-        sessionId: string,
+        scope: RigFileScope,
         query: string,
         limit = 20,
     ): Promise<{
         readonly files: readonly { readonly fileName: string; readonly path: string }[];
     }> {
         const parameters = new URLSearchParams({ limit: String(limit), query });
-        return this.#requestJson(
-            "GET",
-            `/sessions/${encodeURIComponent(sessionId)}/files?${parameters.toString()}`,
-        );
+        return this.#requestJson("GET", `${fileScopePath(scope)}/files?${parameters.toString()}`);
     }
 
     readFile(
-        sessionId: string,
+        scope: RigFileScope,
         path: string,
         signal?: AbortSignal,
     ): Promise<RigDaemonFileResponse> {
         return this.#requestJson(
             "GET",
-            `/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`,
+            `${fileScopePath(scope)}/file?path=${encodeURIComponent(path)}`,
             undefined,
             undefined,
             signal,
@@ -367,10 +382,10 @@ export class RigDaemonClient {
     }
 
     writeFile(
-        sessionId: string,
+        scope: RigFileScope,
         request: RigDaemonFileWriteRequest,
     ): Promise<{ readonly hash: string }> {
-        return this.#requestJson("PUT", `/sessions/${encodeURIComponent(sessionId)}/file`, request);
+        return this.#requestJson("PUT", `${fileScopePath(scope)}/file`, request);
     }
 
     openHttpProxy(sessionId: string): Promise<Duplex> {

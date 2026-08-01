@@ -8,6 +8,7 @@ import type {
 import { fakeTerminalChannelCreate, type FakeTerminalChannel } from "./fake-terminal-channel.js";
 import type {
     RigFileSearchResult,
+    RigGroupId,
     RigImageInput,
     RigModelCatalog,
     RigModelSelection,
@@ -51,7 +52,6 @@ export type FakeRigOperation =
     | "subagentsRead"
     | "sessionCreate"
     | "sessionArchive"
-    | "sessionReorder"
     | "projectReorder"
     | "projectArchive"
     | "projectRename"
@@ -110,8 +110,8 @@ export interface FakeRigTransport {
     sessionSet(session: RigSession): void;
     sessionRemove(sessionId: RigSessionId): void;
     subagentsSet(sessionId: RigSessionId, subagents: readonly RigSubagentSummary[]): void;
-    /** Sets the file corpus `filesSearch` filters by substring for a session. */
-    filesSet(sessionId: RigSessionId, files: readonly RigFileSearchResult[]): void;
+    /** Sets the file corpus `filesSearch` filters by substring for a checkout. */
+    filesSet(groupId: RigGroupId, files: readonly RigFileSearchResult[]): void;
     /** Sets the usage snapshot `usageGet` returns for a session. */
     usageSet(sessionId: RigSessionId, usage: RigSessionUsage): void;
     /** Overrides the result `shellRun` returns for a session (defaults to exit 0). */
@@ -266,7 +266,7 @@ class FakeRigTransportModel implements FakeRigTransport {
     /** The project/worktree catalog this fake host reports; tests may replace it. */
     projects: RigProjectCatalog = { projects: [DEFAULT_PROJECT], worktrees: [] };
     private readonly subagents = new Map<RigSessionId, readonly RigSubagentSummary[]>();
-    private readonly files = new Map<RigSessionId, readonly RigFileSearchResult[]>();
+    private readonly files = new Map<RigGroupId, readonly RigFileSearchResult[]>();
     private readonly usage = new Map<RigSessionId, RigSessionUsage>();
     private readonly shellResults = new Map<RigSessionId, Partial<RigShellCommandResult>>();
     private readonly eventLog = new Map<RigSessionId, RigSessionEvent[]>();
@@ -306,8 +306,8 @@ class FakeRigTransportModel implements FakeRigTransport {
     sessionRemove(sessionId: RigSessionId): void {
         this.sessions.delete(sessionId);
     }
-    filesSet(sessionId: RigSessionId, files: readonly RigFileSearchResult[]): void {
-        this.files.set(sessionId, files);
+    filesSet(groupId: RigGroupId, files: readonly RigFileSearchResult[]): void {
+        this.files.set(groupId, files);
     }
     usageSet(sessionId: RigSessionId, usage: RigSessionUsage): void {
         this.usage.set(sessionId, usage);
@@ -401,7 +401,7 @@ class FakeRigTransportModel implements FakeRigTransport {
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
         workspaceFilesRead: () =>
             this.perform("workspaceFilesRead", {}, () => ({ paths: [], truncated: false })),
-        workspaceFileRead: (_sessionId, path) =>
+        workspaceFileRead: (_groupId, path) =>
             this.perform("workspaceFileRead", {}, () => ({
                 path,
                 content: `Workspace file at ${path}`,
@@ -410,7 +410,7 @@ class FakeRigTransportModel implements FakeRigTransport {
         // One byte behind a real URL, so a preview under test has something its
         // elements can actually fetch without the fake standing up a server or
         // pretending to hold an actual image.
-        workspaceFileBytesRead: (_sessionId, path) =>
+        workspaceFileBytesRead: (_groupId, path) =>
             this.perform("workspaceFileBytesRead", {}, () => ({
                 path,
                 contentType: "application/octet-stream",
@@ -420,23 +420,23 @@ class FakeRigTransportModel implements FakeRigTransport {
             })),
         // No server behind the fake, so the address it answers with is inert: a
         // surface under test cares that a document has somewhere to load from.
-        htmlPreviewOpen: (_sessionId, path) =>
+        htmlPreviewOpen: (_groupId, path) =>
             this.perform(
                 "htmlPreviewOpen",
                 {},
                 () => `https://html-preview.invalid/${encodeURI(path)}`,
             ),
         workspaceFileWrite: () => this.perform("workspaceFileWrite", {}, () => undefined),
-        // The fake has no working directory, so a copy lands under the name it
-        // asked for; a surface under test cares that the path came back at all.
-        attachmentWrite: (_sessionId, name) =>
+        // The fake has no checkout, so a copy lands under the name it asked
+        // for; a surface under test cares that the path came back at all.
+        attachmentWrite: (_groupId, name) =>
             this.perform("attachmentWrite", {}, () => ({ path: name })),
         // No host to open anything in, so the fake offers nothing and opening
         // is a no-op rather than a failure: a surface under test should render
         // the same whether or not a shell is there.
         openInTargetsRead: () => this.perform("openInTargetsRead", {}, () => ({ targets: [] })),
         openIn: () => this.perform("openIn", {}, () => undefined),
-        changedFileRead: (_sessionId, groupId, path) =>
+        changedFileRead: (groupId, path) =>
             this.perform("changedFileRead", {}, () => ({
                 path,
                 oldPath: path,
@@ -484,25 +484,6 @@ class FakeRigTransportModel implements FakeRigTransport {
                 };
                 this.sessions.set(sessionId, session);
                 return session;
-            }),
-        sessionReorder: (sessionId, afterId) =>
-            this.perform("sessionReorder", { sessionId, afterId }, () => {
-                const session = this.required(sessionId);
-                const group = session.worktreeId ?? session.projectId;
-                const peers = [...this.sessions.values()].filter(
-                    (candidate) => (candidate.worktreeId ?? candidate.projectId) === group,
-                );
-                const orderKey = orderKeyAfter(
-                    peers.flatMap((peer) =>
-                        peer.orderKey === undefined
-                            ? []
-                            : [{ id: peer.id, orderKey: peer.orderKey }],
-                    ),
-                    sessionId,
-                    afterId,
-                );
-                this.sessions.set(sessionId, { ...session, orderKey });
-                return undefined;
             }),
         worktreeCreate: (projectId, input) =>
             this.perform("worktreeCreate", {}, () => {
@@ -704,9 +685,9 @@ class FakeRigTransportModel implements FakeRigTransport {
                     ),
                 });
             }),
-        filesSearch: (sessionId, query: string, limit?: number) =>
-            this.perform("filesSearch", { sessionId, text: query }, () => {
-                const corpus = this.files.get(sessionId) ?? [];
+        filesSearch: (groupId, query: string, limit?: number) =>
+            this.perform("filesSearch", { text: query }, () => {
+                const corpus = this.files.get(groupId) ?? [];
                 const needle = query.trim().toLowerCase();
                 const matched = needle
                     ? corpus.filter(

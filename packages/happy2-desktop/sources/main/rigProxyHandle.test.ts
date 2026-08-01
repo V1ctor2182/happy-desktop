@@ -254,22 +254,35 @@ describe("rigProxyHandle", () => {
         expect(JSON.parse(captured.body)).toMatchObject({ id: "session-1", displayCwd: "~/work" });
     });
 
-    it("projects GET /sessions/:id/files with the query and limit", async () => {
+    it("searches a worktree's files by the group that owns it, not by a session", async () => {
         const searchFiles = vi.fn(async () => ({
             files: [{ fileName: "a.ts", path: "src/a.ts" }],
         }));
-        const client = clientStub({ searchFiles } as unknown as Partial<RigProxyClient>);
+        const listCatalog = vi.fn(async () => ({
+            projects: [{ id: "project-1", path: "/work" }],
+            workspaces: [{ id: "workspace-1", projectId: "project-1", path: "/work/wt" }],
+        }));
+        const client = clientStub({
+            listCatalog,
+            searchFiles,
+        } as unknown as Partial<RigProxyClient>);
         const captured = fakeResponse();
         const handled = await handle(
             client,
             "GET",
-            "/sessions/session-1/files",
+            "/workspace-file-search",
             getRequest(),
             captured,
-            new URLSearchParams({ q: "a", limit: "10" }),
+            new URLSearchParams({ group: "workspace-1", q: "a", limit: "10" }),
         );
         expect(handled).toBe(true);
-        expect(searchFiles).toHaveBeenCalledWith("session-1", "a", 10);
+        // A worktree resolves to its project plus itself, which is the scope the
+        // daemon's file routes are rooted in.
+        expect(searchFiles).toHaveBeenCalledWith(
+            { projectId: "project-1", workspaceId: "workspace-1" },
+            "a",
+            10,
+        );
         expect(JSON.parse(captured.body)).toEqual([{ fileName: "a.ts", path: "src/a.ts" }]);
     });
 
@@ -303,8 +316,10 @@ describe("rigProxyHandle", () => {
                 projects: [{ id: "project-1", path: root }],
                 workspaces: [],
             }));
-            const readFileFromSession = vi.fn(async (sessionId: string, path: string) => {
-                expect(sessionId).toBe("session-1");
+            // Read through the daemon by project scope, never off this machine's
+            // disk: the checkout may belong to a Rig running somewhere else.
+            const readProjectFile = vi.fn(async (scope: { projectId: string }, path: string) => {
+                expect(scope).toEqual({ projectId: "project-1" });
                 const content = await readFile(join(root, path));
                 return {
                     content: content.toString("base64"),
@@ -315,7 +330,7 @@ describe("rigProxyHandle", () => {
             await handle(
                 clientStub({
                     listCatalog,
-                    readFile: readFileFromSession,
+                    readFile: readProjectFile,
                 } as unknown as Partial<RigProxyClient>),
                 "GET",
                 "/changed-file",

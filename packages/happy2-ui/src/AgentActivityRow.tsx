@@ -596,6 +596,9 @@ function AgentToolActivity(props: {
         </>
     );
 
+    // `data-review` marks a call that went through a permission review. It sits
+    // on the row rather than on the review line so the mark survives the
+    // single-line variant, where that line is cut.
     return (
         <div
             className="happy2-agent-activity"
@@ -603,6 +606,7 @@ function AgentToolActivity(props: {
             data-failed={tool.failed || tool.status === "failed" ? "" : undefined}
             data-tone={tone}
             data-presentation={presentation?.type ?? "generic"}
+            data-review={tool.review ? "" : undefined}
             data-single-line={singleLine ? "" : undefined}
             data-expanded={expanded ? "" : undefined}
             data-happy2-ui="agent-activity-call"

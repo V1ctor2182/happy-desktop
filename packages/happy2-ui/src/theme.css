@@ -88,6 +88,10 @@
     --box-error-background: #fff0f0;
     --box-error-border: #ff3b30;
     --box-error-text: #ff3b30;
+    /* A reviewed action is worth noticing, not worth alarming over: a burnt
+       amber, muted well below the warning orange so a transcript full of
+       reviewed calls still reads as prose rather than as a wall of alerts. */
+    --review-accent: #a3690f;
 
     --status-connected: #34c759;
     --status-connecting: #007aff;
@@ -259,6 +263,7 @@
         --box-error-background: rgb(255 69 58 / 0.15);
         --box-error-border: #ff453a;
         --box-error-text: #ff6b6b;
+        --review-accent: #c8924e;
         --status-connected: #34c759;
         --status-connecting: #ffffff;
         --status-disconnected: #8e8e93;
@@ -407,6 +412,7 @@
     --box-error-background: rgb(255 69 58 / 0.15);
     --box-error-border: #ff453a;
     --box-error-text: #ff6b6b;
+    --review-accent: #c8924e;
     --status-connected: #34c759;
     --status-connecting: #ffffff;
     --status-disconnected: #8e8e93;

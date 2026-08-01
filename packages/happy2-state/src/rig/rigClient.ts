@@ -18,6 +18,7 @@ import {
 import type { RigTransport } from "./rigTransport.js";
 import type {
     RigChangedFileDocument,
+    RigFileSearchResult,
     RigGroupId,
     RigOpenInTargets,
     RigWorkspaceFileBytes,
@@ -85,9 +86,22 @@ export interface RigClient {
     instructions(): RigInstructionsStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
-    /** Reads one existing text file from a project/worktree checkout. */
+    /**
+     * Searches one checkout for `@`-mention candidates. A pure query: the result
+     * is transient composer typeahead and never enters a durable snapshot.
+     */
+    filesSearch(
+        groupId: RigGroupId,
+        query: string,
+        limit?: number,
+    ): Promise<readonly RigFileSearchResult[]>;
+    /**
+     * Reads one existing text file from a project/worktree checkout. A file
+     * belongs to the checkout rather than to any conversation open over it, so
+     * it is addressed by the group.
+     */
     workspaceFileRead(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileDocument>;
@@ -96,7 +110,7 @@ export interface RigClient {
      * Makes no claim that the file is text, so an image or a video arrives whole.
      */
     workspaceFileBytesRead(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileBytes>;
@@ -104,20 +118,20 @@ export interface RigClient {
      * Where one HTML document of a checkout is served as a page, for a viewer
      * that renders the document rather than its source.
      */
-    htmlPreviewOpen(sessionId: RigSessionId, path: string): Promise<string>;
+    htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         path: string,
         content: string,
         expectedHash: string | null,
     ): Promise<void>;
     /**
-     * Copies an attached file into a session's working directory, answering with
-     * the path it landed on relative to that directory.
+     * Copies an attached file into a project or worktree checkout, answering
+     * with the path it landed on relative to that checkout.
      */
     attachmentWrite(
-        sessionId: RigSessionId,
+        groupId: RigGroupId,
         name: string,
         content: string,
     ): Promise<{ readonly path: string }>;
@@ -127,7 +141,6 @@ export interface RigClient {
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
-        sessionId: RigSessionId,
         groupId: RigGroupId,
         path: string,
         signal?: AbortSignal,
@@ -228,19 +241,20 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         models,
         memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
-        changedFileRead: (sessionId, groupId, path, signal) =>
-            transport.changedFileRead(sessionId, groupId, path, signal),
+        changedFileRead: (groupId, path, signal) =>
+            transport.changedFileRead(groupId, path, signal),
         changedFilesRevert: (groupId, paths) => transport.changedFilesRevert(groupId, paths),
         workspaceFilesRead: (groupId) => transport.workspaceFilesRead(groupId),
-        workspaceFileRead: (sessionId, path, signal) =>
-            transport.workspaceFileRead(sessionId, path, signal),
-        workspaceFileBytesRead: (sessionId, path, signal) =>
-            transport.workspaceFileBytesRead(sessionId, path, signal),
-        htmlPreviewOpen: (sessionId, path) => transport.htmlPreviewOpen(sessionId, path),
-        workspaceFileWrite: (sessionId, path, content, expectedHash) =>
-            transport.workspaceFileWrite(sessionId, path, content, expectedHash),
-        attachmentWrite: (sessionId, name, content) =>
-            transport.attachmentWrite(sessionId, name, content),
+        filesSearch: (groupId, query, limit) => transport.filesSearch(groupId, query, limit),
+        workspaceFileRead: (groupId, path, signal) =>
+            transport.workspaceFileRead(groupId, path, signal),
+        workspaceFileBytesRead: (groupId, path, signal) =>
+            transport.workspaceFileBytesRead(groupId, path, signal),
+        htmlPreviewOpen: (groupId, path) => transport.htmlPreviewOpen(groupId, path),
+        workspaceFileWrite: (groupId, path, content, expectedHash) =>
+            transport.workspaceFileWrite(groupId, path, content, expectedHash),
+        attachmentWrite: (groupId, name, content) =>
+            transport.attachmentWrite(groupId, name, content),
         openInTargetsRead: () => transport.openInTargetsRead(),
         openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {

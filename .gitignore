@@ -1,4 +1,6 @@
 node_modules
+# pnpm falls back to a store inside the repo when the home one is unwritable.
+.pnpm-store
 .context
 .happy2
 .worktrees/

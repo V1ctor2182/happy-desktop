@@ -90,6 +90,7 @@ function workspace(): RigWorkspaceStore {
         },
         conversation: { type: "unloaded" as const },
         fileTabs: [],
+        tabOrder: [],
         openInTargets: [],
         fileViewMode: "unified" as const,
         fileScope: "changed" as const,

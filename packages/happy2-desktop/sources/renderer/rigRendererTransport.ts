@@ -162,17 +162,16 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         },
         workspaceFilesRead: (groupId) =>
             getJson<RigWorkspaceFiles>("/workspace-files", { group: groupId }),
-        workspaceFileRead: async (sessionId, path, signal) => {
-            const response = await fetch(url("/workspace-file", { session: sessionId, path }), {
+        workspaceFileRead: async (groupId, path, signal) => {
+            const response = await fetch(url("/workspace-file", { group: groupId, path }), {
                 signal,
             });
             return readJson<RigWorkspaceFileDocument>(response);
         },
-        workspaceFileBytesRead: async (sessionId, path, signal) => {
-            const response = await fetch(
-                url("/workspace-file-bytes", { session: sessionId, path }),
-                { signal },
-            );
+        workspaceFileBytesRead: async (groupId, path, signal) => {
+            const response = await fetch(url("/workspace-file-bytes", { group: groupId, path }), {
+                signal,
+            });
             const file = await readJson<Omit<RigWorkspaceFileBytes, "url">>(response);
             // The media URL is assembled here rather than in the proxy because
             // the capability prefix that makes it fetchable is this transport's
@@ -180,27 +179,27 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             // the edit that replaced it.
             return {
                 ...file,
-                url: url("/workspace-file-media", { session: sessionId, path, hash: file.hash }),
+                url: url("/workspace-file-media", { group: groupId, path, hash: file.hash }),
             };
         },
-        htmlPreviewOpen: async (sessionId, path) => {
+        htmlPreviewOpen: async (groupId, path) => {
             const preview = await getJson<{ readonly url: string }>("/html-preview", {
-                session: sessionId,
+                group: groupId,
                 path,
             });
             return preview.url;
         },
-        workspaceFileWrite: async (sessionId, path, content, expectedHash) => {
+        workspaceFileWrite: async (groupId, path, content, expectedHash) => {
             await postJson<Record<string, never>>("/workspace-file", {
-                session: sessionId,
+                group: groupId,
                 path,
                 content,
                 expectedHash,
             });
         },
-        attachmentWrite: (sessionId, name, content) =>
+        attachmentWrite: (groupId, name, content) =>
             postJson<{ readonly path: string }>("/attachment", {
-                session: sessionId,
+                group: groupId,
                 name,
                 content,
             }),
@@ -218,11 +217,10 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             await postJson<Record<string, never>>("/open-in", { group: groupId, target: targetId });
             openInRecentWrite(targetId);
         },
-        changedFileRead: async (sessionId, groupId, path, signal) => {
-            const response = await fetch(
-                url("/changed-file", { session: sessionId, group: groupId, path }),
-                { signal },
-            );
+        changedFileRead: async (groupId, path, signal) => {
+            const response = await fetch(url("/changed-file", { group: groupId, path }), {
+                signal,
+            });
             return readJson<RigChangedFileDocument>(response);
         },
         changedFilesRevert: async (groupId, paths) => {
@@ -235,8 +233,9 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         sessionRead: (sessionId) => getJson<RigSession>(`/sessions/${sessionId}`),
         subagentsRead: (sessionId) =>
             getJson<readonly RigSubagentSummary[]>(`/sessions/${sessionId}/subagents`),
-        filesSearch: (sessionId, query, limit) =>
-            getJson<readonly RigFileSearchResult[]>(`/sessions/${sessionId}/files`, {
+        filesSearch: (groupId, query, limit) =>
+            getJson<readonly RigFileSearchResult[]>("/workspace-file-search", {
+                group: groupId,
                 q: query,
                 limit: limit === undefined ? undefined : String(limit),
             }),
@@ -247,9 +246,6 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         sessionReset: (sessionId) => postJson<RigSession>(`/sessions/${sessionId}/reset`),
         sessionArchive: async (sessionId) => {
             await postJson<Record<string, never>>(`/sessions/${sessionId}/archive`);
-        },
-        sessionReorder: async (sessionId, afterId) => {
-            await postJson<Record<string, never>>(`/sessions/${sessionId}/reorder`, { afterId });
         },
         projectReorder: async (projectId, afterId) => {
             await postJson<Record<string, never>>(`/projects/${projectId}/reorder`, { afterId });

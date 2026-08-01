@@ -1,5 +1,6 @@
 import type { RigTerminalHandle, RigTerminalStore } from "./rigTerminalStore.js";
-import type { RigSessionId } from "./rigTypes.js";
+import type { RigGroupId, RigSessionId } from "./rigTypes.js";
+import type { RigPanelMemory } from "./rigWorkspaceMemory.js";
 
 declare const rigPanelTabIdBrand: unique symbol;
 
@@ -34,7 +35,7 @@ export interface RigBrowserUpdate {
 
 /**
  * The panel as the workspace renders it: whether it is showing at all, the tabs
- * belonging to the conversation currently addressed, and which of them is
+ * belonging to the project or worktree currently addressed, and which of them is
  * selected. A tab's live contents are deliberately absent — a terminal repaints
  * many times a second, and folding that into this snapshot would re-render the
  * whole workspace on every frame — so a tab body reads its own store through
@@ -92,9 +93,13 @@ export interface RigPanelStore {
     fileViewOpen(): void;
     /** Closes the file-viewer tab and returns to Files. */
     fileViewClose(): void;
-    /** Adds a terminal tab to the open conversation and selects it. */
+    /**
+     * Adds a terminal tab to the open group and selects it. The shell runs in
+     * the open session, so there has to be one; the tab itself belongs to the
+     * group and stays put as the reader moves between that group's sessions.
+     */
     terminalAdd(): void;
-    /** Adds a browser tab, optionally navigating it to one safe web URL, and selects it. */
+    /** Adds a browser tab to the open group, optionally at one safe web URL, and selects it. */
     browserAdd(url?: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
@@ -114,13 +119,16 @@ export interface RigPanelStore {
     terminal(tabId: RigPanelTabId): RigTerminalStore | undefined;
 
     /**
-     * Applies which conversation the workspace has open. This is authoritative
-     * input from the panel's owner, not a user action: navigation decides it, and
-     * the panel answers by showing that conversation's tabs. Tabs of other
-     * conversations keep running, so switching session tabs and coming back finds
-     * the same terminals.
+     * Applies what the workspace has open. This is authoritative input from the
+     * panel's owner, not a user action: navigation decides it, and the panel
+     * answers by showing that group's arrangement. The conversation comes along
+     * because a terminal is a process inside a session, so starting one needs to
+     * know which session asked for it.
+     *
+     * Tabs of other groups keep running, so moving between projects and coming
+     * back finds the same terminals.
      */
-    conversationApply(conversationId: RigSessionId | undefined): void;
+    scopeApply(groupId: RigGroupId | undefined, conversationId: RigSessionId | undefined): void;
 
     [Symbol.dispose](): void;
 }
@@ -128,13 +136,20 @@ export interface RigPanelStore {
 export interface RigPanelDeps {
     /** Opens one terminal in a session; the panel owns the returned lease. */
     readonly terminalOpen: (sessionId: RigSessionId) => RigTerminalHandle;
+    /**
+     * How one group's arrangement survives the window. Both are optional so the
+     * same store works standalone in a blueprint and in tests, where nothing is
+     * remembered and nothing needs to be.
+     */
+    readonly memoryRead?: (groupId: RigGroupId) => RigPanelMemory | undefined;
+    readonly memoryWrite?: (groupId: RigGroupId, memory: RigPanelMemory) => void;
 }
 
 interface Tab {
     readonly id: RigPanelTabId;
     readonly kind: RigPanelTabKind;
     label: string;
-    readonly conversationId: RigSessionId;
+    readonly groupId: RigGroupId;
     readonly terminal?: RigTerminalHandle;
     title?: string;
     url?: string;
@@ -143,21 +158,29 @@ interface Tab {
 const NO_TABS: readonly RigPanelTabSnapshot[] = [];
 
 /**
- * The workspace's right-hand panel. It is one store for the whole workspace
- * rather than one per conversation because whether the panel is showing is a
- * property of the window the user arranged, not of the session they happen to be
- * reading: switching session tabs must not fold the panel away and reopening it
- * must not lose the shell they were half-way through a command in.
+ * The workspace's right-hand panel. It belongs to the project or worktree the
+ * reader has open, not to the session they happen to be reading inside it: a
+ * terminal runs in the checkout, the files it lists are the checkout's, and a
+ * page opened out of one of them is still the same page after the reader moves
+ * to the next session in that project. Switching session tabs therefore leaves
+ * the panel exactly as it was, while moving to another project shows that
+ * project's own arrangement.
  *
- * Tabs, by contrast, belong to their conversation — a terminal runs in that
- * session's working directory and cannot be shown under another one — so they are
- * held per conversation and the snapshot projects only the addressed one's.
+ * That arrangement outlives the window: it is read back from the group's memory
+ * the first time the group is addressed, so a reopened app finds the panel where
+ * it was left. Terminals are the exception and are deliberately not restored —
+ * they are live processes, and there is nothing left to reattach to.
  */
 export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     const listeners = new Set<() => void>();
     const tabs: Tab[] = [];
-    /** Which live tool tab each conversation had selected, so returning to it lands there. */
-    const activeByConversation = new Map<RigSessionId, RigPanelTabId>();
+    /** Which live tool tab each group had selected, so returning to it lands there. */
+    const activeByGroup = new Map<RigGroupId, RigPanelTabId>();
+    /** Whether each group's panel was showing, and how wide, when it was left. */
+    const chromeByGroup = new Map<RigGroupId, { open: boolean; maximized: boolean }>();
+    /** Groups whose remembered arrangement has already been read back in this run. */
+    const restoredGroupIds = new Set<RigGroupId>();
+    let groupId: RigGroupId | undefined;
     let conversationId: RigSessionId | undefined;
     let open = false;
     let maximized = false;
@@ -176,7 +199,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     };
 
     const project = (): RigPanelSnapshot => {
-        const visible = tabs.filter((tab) => tab.conversationId === conversationId);
+        const visible = tabs.filter((tab) => tab.groupId === groupId);
         return {
             activeViewId,
             fileViewOpen: fileViewShown,
@@ -242,24 +265,41 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         for (const listener of listeners) listener();
     };
 
-    const terminalTabAdd = (session: RigSessionId): void => {
+    /**
+     * Writes the addressed group's arrangement down. Everything restorable is
+     * derived from the tabs themselves, so there is no second copy of the panel
+     * to keep in step with this one.
+     */
+    const remember = (): void => {
+        if (!groupId || !deps.memoryWrite) return;
+        const browsers = tabs.filter((tab) => tab.groupId === groupId && tab.kind === "browser");
+        const activeIndex = browsers.findIndex((tab) => tab.id === activeViewId);
+        deps.memoryWrite(groupId, {
+            open,
+            maximized,
+            browsers: browsers.map((tab) => ({ url: tab.url ?? "about:blank", label: tab.label })),
+            active: activeIndex >= 0 ? { type: "browser", index: activeIndex } : { type: "files" },
+        });
+    };
+
+    const terminalTabAdd = (group: RigGroupId, session: RigSessionId): void => {
         const id = `tab_${nextTabNumber}` as RigPanelTabId;
-        // Terminals are numbered across the workspace rather than per conversation
-        // so a label never silently means two different shells.
+        // Terminals are numbered across the workspace rather than per group so a
+        // label never silently means two different shells.
         const label = `Terminal ${nextTabNumber}`;
         nextTabNumber += 1;
         tabs.push({
             id,
             kind: "terminal",
             label,
-            conversationId: session,
+            groupId: group,
             terminal: deps.terminalOpen(session),
         });
-        activeByConversation.set(session, id);
+        activeByGroup.set(group, id);
         activeViewId = id;
     };
 
-    const browserTabAdd = (session: RigSessionId, candidate?: string): void => {
+    const browserTabAdd = (group: RigGroupId, candidate?: string, label?: string): void => {
         const url = candidate === undefined ? "about:blank" : browserUrl(candidate);
         if (!url) return;
         const id = `tab_${nextTabNumber}` as RigPanelTabId;
@@ -267,25 +307,44 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         tabs.push({
             id,
             kind: "browser",
-            label: browserLabel(url),
-            conversationId: session,
+            label: label ?? browserLabel(url),
+            groupId: group,
             url,
         });
-        activeByConversation.set(session, id);
+        activeByGroup.set(group, id);
         activeViewId = id;
+    };
+
+    /**
+     * Reads one group's remembered arrangement back, once, the first time it is
+     * addressed. Its pages return where they were left; its terminals do not,
+     * because the processes behind them ended with the previous run.
+     */
+    const groupRestore = (group: RigGroupId): void => {
+        if (restoredGroupIds.has(group)) return;
+        restoredGroupIds.add(group);
+        const memory = deps.memoryRead?.(group);
+        if (!memory) return;
+        for (const browser of memory.browsers) browserTabAdd(group, browser.url, browser.label);
+        const restored = tabs.filter((tab) => tab.groupId === group && tab.kind === "browser");
+        const active =
+            memory.active.type === "browser" ? restored[memory.active.index]?.id : undefined;
+        if (active) activeByGroup.set(group, active);
+        else activeByGroup.delete(group);
+        chromeByGroup.set(group, { open: memory.open, maximized: memory.maximized });
     };
 
     const tabDispose = (index: number): void => {
         const [removed] = tabs.splice(index, 1);
         removed?.terminal?.[Symbol.dispose]();
         if (!removed) return;
-        if (activeByConversation.get(removed.conversationId) !== removed.id) return;
-        const sibling = tabs.find((tab) => tab.conversationId === removed.conversationId);
+        if (activeByGroup.get(removed.groupId) !== removed.id) return;
+        const sibling = tabs.find((tab) => tab.groupId === removed.groupId);
         if (sibling) {
-            activeByConversation.set(removed.conversationId, sibling.id);
+            activeByGroup.set(removed.groupId, sibling.id);
             activeViewId = sibling.id;
         } else {
-            activeByConversation.delete(removed.conversationId);
+            activeByGroup.delete(removed.groupId);
             activeViewId = "files";
         }
     };
@@ -303,17 +362,20 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             // A folded-away panel keeps no expansion: reopening it should give
             // back the column it was docked at, not swallow the workspace.
             if (!open) maximized = false;
+            remember();
             recompute();
         },
         panelMaximizeToggle() {
             if (disposed || !open) return;
             maximized = !maximized;
+            remember();
             recompute();
         },
         filesSelect() {
             if (disposed) return;
             activeViewId = "files";
             open = true;
+            remember();
             recompute();
         },
         previewOpen(entryId) {
@@ -322,6 +384,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             previewConversationId = conversationId;
             activeViewId = "preview";
             open = true;
+            remember();
             recompute();
         },
         previewClose() {
@@ -329,6 +392,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             previewEntryId = undefined;
             previewConversationId = undefined;
             activeViewId = "files";
+            remember();
             recompute();
         },
         fileViewOpen() {
@@ -336,24 +400,28 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             fileViewShown = true;
             activeViewId = "file";
             open = true;
+            remember();
             recompute();
         },
         fileViewClose() {
             if (disposed) return;
             fileViewShown = false;
             if (activeViewId === "file") activeViewId = "files";
+            remember();
             recompute();
         },
         terminalAdd() {
-            if (disposed || !conversationId) return;
-            terminalTabAdd(conversationId);
+            if (disposed || !groupId || !conversationId) return;
+            terminalTabAdd(groupId, conversationId);
             open = true;
+            remember();
             recompute();
         },
         browserAdd(url) {
-            if (disposed || !conversationId) return;
-            browserTabAdd(conversationId, url);
+            if (disposed || !groupId) return;
+            browserTabAdd(groupId, url);
             open = true;
+            remember();
             recompute();
         },
         browserUpdate(tabId, update) {
@@ -369,14 +437,16 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             }
             if (update.title !== undefined) tab.title = update.title.trim() || undefined;
             tab.label = tab.title ? tab.title.slice(0, 80) : browserLabel(tab.url ?? "about:blank");
+            remember();
             recompute();
         },
         tabSelect(tabId) {
             if (disposed) return;
             const tab = tabs.find((candidate) => candidate.id === tabId);
             if (!tab) return;
-            activeByConversation.set(tab.conversationId, tab.id);
+            activeByGroup.set(tab.groupId, tab.id);
             activeViewId = tab.id;
+            remember();
             recompute();
         },
         tabClose(tabId) {
@@ -384,24 +454,35 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             const index = tabs.findIndex((candidate) => candidate.id === tabId);
             if (index < 0) return;
             tabDispose(index);
+            remember();
             recompute();
         },
 
         terminal: (tabId) => tabs.find((tab) => tab.id === tabId)?.terminal,
 
-        conversationApply(next) {
-            if (disposed || next === conversationId) return;
-            conversationId = next;
-            if (previewConversationId !== next) {
+        scopeApply(nextGroupId, nextConversationId) {
+            if (disposed) return;
+            conversationId = nextConversationId;
+            if (previewConversationId !== nextConversationId) {
                 previewEntryId = undefined;
                 previewConversationId = undefined;
             }
-            // A file was opened out of one conversation's transcript, and a
-            // path only means something inside the checkout that session runs
-            // in, so it does not travel to the next session.
+            if (nextGroupId === groupId) {
+                recompute();
+                return;
+            }
+            if (groupId) chromeByGroup.set(groupId, { open, maximized });
+            groupId = nextGroupId;
+            // A file was opened out of one checkout, and a path only means
+            // something inside that checkout, so it does not travel to the next
+            // project.
             fileViewShown = false;
+            if (nextGroupId) groupRestore(nextGroupId);
+            const chrome = nextGroupId ? chromeByGroup.get(nextGroupId) : undefined;
+            open = chrome?.open ?? false;
+            maximized = (chrome?.open ?? false) && (chrome?.maximized ?? false);
             activeViewId =
-                (next === undefined ? undefined : activeByConversation.get(next)) ?? "files";
+                (nextGroupId === undefined ? undefined : activeByGroup.get(nextGroupId)) ?? "files";
             recompute();
         },
 
@@ -409,7 +490,8 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             if (disposed) return;
             disposed = true;
             for (const tab of tabs.splice(0)) tab.terminal?.[Symbol.dispose]();
-            activeByConversation.clear();
+            activeByGroup.clear();
+            chromeByGroup.clear();
             listeners.clear();
         },
     };

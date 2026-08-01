@@ -243,7 +243,7 @@
 
 .happy2-agent-activity__review-title {
     font-weight: 600;
-    color: var(--box-warning-text);
+    color: var(--review-accent);
 }
 
 .happy2-agent-activity__review-risk[data-risk="high"] {
@@ -365,6 +365,21 @@
     flex: none;
     font-weight: 500;
     color: var(--text-secondary);
+}
+
+/* A call that went through a permission review is worth spotting in a scan
+   down the transcript, so its whole line turns amber: glyph, verb, subject,
+   and trailing status, not one word of it. Muted well below the warning
+   orange, because a review is a fact about the call rather than a failure and
+   a transcript where most calls were reviewed should still read as prose.
+   These follow the single-line rules because they must win over them at equal
+   specificity, and they yield to a failure, which is the louder fact. */
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__header,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__glyph,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__verb,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__text,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__status {
+    color: var(--review-accent);
 }
 
 .happy2-agent-activity[data-single-line] .happy2-agent-activity__text {

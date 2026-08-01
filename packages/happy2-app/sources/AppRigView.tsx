@@ -534,6 +534,22 @@ function sessionTabs(group: OpenGroup): TabItem[] {
     }));
 }
 
+/**
+ * The group's tabs in the order the workspace records. Tabs it has no position
+ * for follow in the order they arrived, so one opened this instant lands at the
+ * end of the strip instead of appearing somewhere in the middle of it.
+ */
+function tabsOrdered(items: readonly TabItem[], order: readonly string[]): TabItem[] {
+    const remaining = new Map(items.map((item) => [item.id, item]));
+    const placed = order.flatMap((id) => {
+        const item = remaining.get(id);
+        if (!item) return [];
+        remaining.delete(id);
+        return [item];
+    });
+    return [...placed, ...remaining.values()];
+}
+
 function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     // A tab of a picture says picture. Wearing the document glyph over every
     // open file made the strip a row of identical marks with only the name to
@@ -1370,10 +1386,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
-    // Workspace files belong to the project/worktree, not to the lifetime of a
-    // chat. The desktop transport accepts the group id as the file-addressing
-    // scope when there is no session to carry that scope.
-    const fileSessionId = (props.chatId ?? openGroup?.id) as RigSessionId | undefined;
     const openInRecent = workspace.openInTargets.find(
         (target) => target.id === workspace.openInRecentId,
     );
@@ -1397,6 +1409,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // Sessions without a list position are delegated children. They remain
     // readable by id, but their runner owns their input and configuration.
     const conversationReadOnly = detachedConversationId !== undefined;
+    // One strip, holding the group's sessions and its open files together in
+    // the single order the reader arranged. A detached subagent is addressed by
+    // id rather than listed, so it is not part of that order and follows it.
+    const groupTabs: TabItem[] = [
+        ...tabsOrdered(
+            openGroup ? [...sessionTabs(openGroup), ...groupFileTabs.map(fileTabItem)] : [],
+            workspace.tabOrder,
+        ),
+        ...(detachedConversationTab ? [detachedConversationTab] : []),
+    ];
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const desktop = props.platform === "desktop";
 
@@ -1461,9 +1483,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 return;
                             }
                             if (picking) props.workspace.fileSelectionReplace(path);
-                            if (openGroup && fileSessionId)
+                            if (openGroup)
                                 props.workspace.filePreview(
-                                    fileSessionId,
                                     openGroup.id,
                                     path,
                                     fileTabKind(path, workspace.fileScope),
@@ -1471,9 +1492,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }}
                         onRevert={() => props.workspace.fileRevertPromptOpen()}
                         onFileOpen={(path) => {
-                            if (openGroup && fileSessionId)
+                            if (openGroup)
                                 props.workspace.fileOpen(
-                                    fileSessionId,
                                     openGroup.id,
                                     path,
                                     fileTabKind(path, workspace.fileScope),
@@ -1484,8 +1504,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
                         onPanelFileOpen={(path) => {
-                            if (!fileSessionId) return;
-                            props.workspace.filePanelOpen(fileSessionId, path, panelFileKind(path));
+                            if (!openGroup) return;
+                            props.workspace.filePanelOpen(openGroup.id, path, panelFileKind(path));
                         }}
                         onScopeChange={(scope) => {
                             if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
@@ -1716,30 +1736,21 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
                                 if (file)
-                                    props.workspace.fileOpen(
-                                        file.sessionId,
-                                        file.groupId,
-                                        file.path,
-                                        file.kind,
-                                    );
+                                    props.workspace.fileOpen(file.groupId, file.path, file.kind);
                             }}
-                            {...(groupFileTabs.length === 0 && !detachedConversationTab
-                                ? {
-                                      onReorder: (chatIds: readonly string[]) => {
-                                          const move = sidebarReorderMove(
-                                              openGroup.conversations.map((summary) => summary.id),
-                                              chatIds,
-                                          );
-                                          if (!move) return;
-                                          void props.workspace
-                                              .conversationReorder(
-                                                  move.id as RigSessionId,
-                                                  move.afterId as RigSessionId | null,
-                                              )
-                                              .catch(() => undefined);
-                                      },
-                                  }
-                                : {})}
+                            onReorder={(tabIds: readonly string[]) => {
+                                // A detached subagent has no place in the
+                                // order, so it is taken out of both sides of
+                                // the comparison rather than dragged into one.
+                                const orderable = (ids: readonly string[]) =>
+                                    ids.filter((id) => id !== detachedConversationId);
+                                const move = sidebarReorderMove(
+                                    orderable(groupTabs.map((tab) => tab.id)),
+                                    orderable(tabIds),
+                                );
+                                if (!move) return;
+                                props.workspace.tabReorder(move.id, move.afterId);
+                            }}
                             onSelect={(tabId) => {
                                 if (groupFileTabs.some((tab) => tab.id === tabId)) {
                                     props.workspace.fileSelect(tabId);
@@ -1748,11 +1759,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 props.workspace.fileSelect(undefined);
                                 props.onChatSelect(openGroup.id, tabId);
                             }}
-                            tabs={[
-                                ...sessionTabs(openGroup),
-                                ...(detachedConversationTab ? [detachedConversationTab] : []),
-                                ...groupFileTabs.map(fileTabItem),
-                            ]}
+                            tabs={groupTabs}
                         >
                             {activeFile ? (
                                 <RigFileBody
@@ -1774,13 +1781,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     onCreate={() => groupConversationCreate(openGroup)}
                                     onChatSelect={props.onChatSelect}
                                     onFileOpen={(path) => {
-                                        if (!fileSessionId) return;
                                         const target = workspacePathRelative(
                                             path,
                                             openGroup.create.cwd,
                                         );
                                         props.workspace.filePanelOpen(
-                                            fileSessionId,
+                                            openGroup.id,
                                             target,
                                             panelFileKind(target),
                                         );
@@ -1977,7 +1983,6 @@ function RigFileBody(props: {
                                   onFileOpen={(href) => {
                                       const target = documentLinkResolve(file.path, href);
                                       workspace.fileOpen(
-                                          file.sessionId,
                                           file.groupId,
                                           target,
                                           fileTabKind(target, "all"),

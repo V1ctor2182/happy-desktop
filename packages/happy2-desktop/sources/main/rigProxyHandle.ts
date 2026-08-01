@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { readFile, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -15,6 +14,7 @@ import {
     rigDaemonConnectionUnavailable,
     RigDaemonHttpError,
     type RigDaemonClient,
+    type RigFileScope,
 } from "./rigDaemonClient";
 import type { EventId, GitChangedFile } from "./rigDaemonTypes";
 import { openInRun, openInTargetsRead } from "./openIn";
@@ -269,7 +269,7 @@ const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
 
 async function workspaceFileWrite(
     client: RigProxyClient,
-    sessionOrGroupId: string,
+    groupId: string,
     filePath: string,
     content: string,
     expectedHash: string | null,
@@ -277,20 +277,7 @@ async function workspaceFileWrite(
     const bytes = Buffer.from(content, "utf8");
     if (bytes.byteLength > CHANGED_FILE_MAX_BYTES)
         throw new Error("This file is too large to save from the editor.");
-    const catalog = await client.listCatalog();
-    const isGroup =
-        catalog.projects.some((candidate) => candidate.id === sessionOrGroupId) ||
-        catalog.workspaces.some((candidate) => candidate.id === sessionOrGroupId);
-    if (isGroup) {
-        const target = await workspacePathResolve(client, sessionOrGroupId, filePath);
-        const current = await readFile(target);
-        const currentHash = createHash("sha256").update(current).digest("hex");
-        if (expectedHash !== null && expectedHash !== currentHash)
-            throw new Error("This file changed since it was opened.");
-        await writeFile(target, bytes);
-        return;
-    }
-    await client.writeFile(sessionOrGroupId, {
+    await client.writeFile(await fileScopeResolve(client, groupId), {
         content: bytes.toString("base64"),
         expectedHash,
         path: filePath,
@@ -325,28 +312,29 @@ function attachmentNameNumbered(name: string, attempt: number): string {
 const ATTACHMENT_NAME_ATTEMPTS = 50;
 
 /**
- * Copies an attached file into the session's working directory. The daemon is
- * the only way to place bytes there — the machine running the agent may not be
- * this one — and it refuses to overwrite when no hash is given, which is exactly
- * the collision check this needs: a taken name simply moves to the next one.
+ * Copies an attached file into a checkout. The daemon is the only way to place
+ * bytes there — the machine holding the checkout may not be this one — and it
+ * refuses to overwrite when no hash is given, which is exactly the collision
+ * check this needs: a taken name simply moves to the next one.
  */
 async function attachmentWrite(
     client: RigProxyClient,
-    sessionId: string,
+    groupId: string,
     name: string,
     content: string,
 ): Promise<{ readonly path: string }> {
+    const scope = await fileScopeResolve(client, groupId);
     const wanted = attachmentNameSafe(name);
     for (let attempt = 1; attempt <= ATTACHMENT_NAME_ATTEMPTS; attempt += 1) {
         const path = attempt === 1 ? wanted : attachmentNameNumbered(wanted, attempt);
         try {
-            await client.writeFile(sessionId, { content, expectedHash: null, path });
+            await client.writeFile(scope, { content, expectedHash: null, path });
             return { path };
         } catch (error) {
             if (!(error instanceof RigDaemonHttpError) || error.statusCode !== 409) throw error;
         }
     }
-    throw new Error(`The working directory already holds every name for ${wanted}.`);
+    throw new Error(`The checkout already holds every name for ${wanted}.`);
 }
 
 function changedFileText(bytes: Buffer): string {
@@ -356,63 +344,43 @@ function changedFileText(bytes: Buffer): string {
     return bytes.toString("utf8");
 }
 
-/** Resolves a catalog group and a relative workspace path without escaping it. */
-async function workspacePathResolve(
-    client: RigProxyClient,
-    groupId: string,
-    filePath: string,
-): Promise<string> {
+/**
+ * Turns one group id — a project, or a worktree inside one — into the scope the
+ * daemon's file routes are rooted in.
+ *
+ * Every file operation goes through the daemon, never through this machine's
+ * own disk, because the checkout may be on another machine entirely: a remote
+ * Rig's files are only reachable through it. That also means a file needs no
+ * session behind it, which is what lets a project be read with nothing running.
+ */
+async function fileScopeResolve(client: RigProxyClient, groupId: string): Promise<RigFileScope> {
     const catalog = await client.listCatalog();
-    const root =
-        catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
-        catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
-    if (!root) throw new Error("That project or workspace is no longer available.");
-    const canonicalRoot = await realpath(root);
-    const target = await realpath(resolve(canonicalRoot, filePath));
-    const within = relative(canonicalRoot, target);
-    if (
-        within === "" ||
-        within === ".." ||
-        within.startsWith(`..${pathSeparator}`) ||
-        isAbsolute(within)
-    )
-        throw new Error("That file is outside the project or workspace.");
-    return target;
+    if (catalog.projects.some((candidate) => candidate.id === groupId))
+        return { projectId: groupId };
+    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
+    if (workspace) return { projectId: workspace.projectId, workspaceId: groupId };
+    throw new Error("That project or workspace is no longer available.");
 }
 
-const pathSeparator = process.platform === "win32" ? "\\" : "/";
-
 /**
- * Reads one file of a checkout as bytes, addressed either by the session working
- * in it or by the project/worktree itself. Exported because the HTML preview
- * server serves a document's assets through the same client and must reach them
- * exactly as every other file route here does, including on a remote machine.
+ * Reads one file of a checkout as bytes, addressed by the project or worktree
+ * holding it. Exported because the HTML preview server serves a document's
+ * assets through the same client and must reach them exactly as every other
+ * file route here does, including on a remote machine.
  */
 export async function workspaceFileLoad(
     client: RigProxyClient,
-    sessionOrGroupId: string,
+    groupId: string,
     filePath: string,
     signal?: AbortSignal,
 ): Promise<{ readonly content: string; readonly hash: string }> {
-    const catalog = await client.listCatalog();
-    const isGroup =
-        catalog.projects.some((candidate) => candidate.id === sessionOrGroupId) ||
-        catalog.workspaces.some((candidate) => candidate.id === sessionOrGroupId);
-    if (isGroup) {
-        const target = await workspacePathResolve(client, sessionOrGroupId, filePath);
-        const bytes = await readFile(target, { signal });
-        return {
-            content: bytes.toString("base64"),
-            hash: createHash("sha256").update(bytes).digest("hex"),
-        };
-    }
-    return client.readFile(sessionOrGroupId, filePath, signal);
+    return client.readFile(await fileScopeResolve(client, groupId), filePath, signal);
 }
 
 /** Reads one existing, non-binary text file without asking Git for a diff. */
 async function workspaceFileRead(
     client: RigProxyClient,
-    sessionId: string,
+    groupId: string,
     filePath: string,
     signal?: AbortSignal,
 ): Promise<{
@@ -420,7 +388,7 @@ async function workspaceFileRead(
     readonly content: string;
     readonly hash: string;
 }> {
-    const file = await workspaceFileLoad(client, sessionId, filePath, signal);
+    const file = await workspaceFileLoad(client, groupId, filePath, signal);
     return {
         path: filePath,
         content: changedFileText(Buffer.from(file.content, "base64")),
@@ -468,8 +436,8 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  */
 let previewHeld: { key: string; contentType: string; bytes: Buffer } | undefined;
 
-function previewKey(sessionId: string, filePath: string, hash?: string): string {
-    return `${sessionId}\u0000${filePath}\u0000${hash ?? ""}`;
+function previewKey(groupId: string, filePath: string, hash?: string): string {
+    return `${groupId}\u0000${filePath}\u0000${hash ?? ""}`;
 }
 
 /** The media type a file's extension implies, or the honest refusal to guess. */
@@ -490,19 +458,19 @@ function previewContentType(filePath: string): string {
  */
 async function workspaceFileBytesLoad(
     client: RigProxyClient,
-    sessionId: string,
+    groupId: string,
     filePath: string,
     hash?: string,
     signal?: AbortSignal,
 ): Promise<{ readonly contentType: string; readonly bytes: Buffer; readonly hash: string }> {
     const held = previewHeld;
-    if (held && hash !== undefined && held.key === previewKey(sessionId, filePath, hash))
+    if (held && hash !== undefined && held.key === previewKey(groupId, filePath, hash))
         return { contentType: held.contentType, bytes: held.bytes, hash };
-    const file = await workspaceFileLoad(client, sessionId, filePath, signal);
+    const file = await workspaceFileLoad(client, groupId, filePath, signal);
     const bytes = Buffer.from(file.content, "base64");
     if (bytes.byteLength > PREVIEW_MAX_BYTES) throw new Error("This file is too large to preview.");
     const contentType = previewContentType(filePath);
-    previewHeld = { key: previewKey(sessionId, filePath, file.hash), contentType, bytes };
+    previewHeld = { key: previewKey(groupId, filePath, file.hash), contentType, bytes };
     return { contentType, bytes, hash: file.hash };
 }
 
@@ -513,7 +481,7 @@ async function workspaceFileBytesLoad(
  */
 async function workspaceFileBytesRead(
     client: RigProxyClient,
-    sessionId: string,
+    groupId: string,
     filePath: string,
     signal?: AbortSignal,
 ): Promise<{
@@ -522,7 +490,7 @@ async function workspaceFileBytesRead(
     readonly size: number;
     readonly hash: string;
 }> {
-    const file = await workspaceFileBytesLoad(client, sessionId, filePath, undefined, signal);
+    const file = await workspaceFileBytesLoad(client, groupId, filePath, undefined, signal);
     return {
         path: filePath,
         contentType: file.contentType,
@@ -540,14 +508,14 @@ async function workspaceFileBytesRead(
  */
 async function workspaceFileMediaServe(
     client: RigProxyClient,
-    sessionId: string,
+    groupId: string,
     filePath: string,
     hash: string | undefined,
     request: IncomingMessage,
     response: ServerResponse,
     signal?: AbortSignal,
 ): Promise<void> {
-    const file = await workspaceFileBytesLoad(client, sessionId, filePath, hash, signal);
+    const file = await workspaceFileBytesLoad(client, groupId, filePath, hash, signal);
     const total = file.bytes.byteLength;
     const headers: Record<string, string> = {
         "content-type": file.contentType,
@@ -581,7 +549,6 @@ async function workspaceFileMediaServe(
 
 async function changedFileRead(
     client: RigProxyClient,
-    sessionId: string,
     groupId: string,
     filePath: string,
     signal?: AbortSignal,
@@ -597,26 +564,13 @@ async function changedFileRead(
         catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
         catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
     if (!root) throw new Error("That project or workspace is no longer available.");
-    const sessions = (await client.listSessions()).sessions;
-    const groupSession =
-        sessions.find(
-            (candidate) =>
-                candidate.id === sessionId &&
-                (candidate.workspaceId === groupId ||
-                    (candidate.workspaceId === undefined && candidate.projectId === groupId)),
-        ) ??
-        sessions.find(
-            (candidate) =>
-                candidate.workspaceId === groupId ||
-                (candidate.workspaceId === undefined && candidate.projectId === groupId),
-        );
     const git = await gitLineStatsRead(root);
     const change = git?.changes.find((candidate) => candidate.path === filePath);
     if (!change) throw new Error("That file is no longer changed.");
     let newContent = "";
     let hash: string | undefined;
     if (change.status !== "deleted") {
-        const file = await workspaceFileLoad(client, groupSession?.id ?? groupId, filePath, signal);
+        const file = await workspaceFileLoad(client, groupId, filePath, signal);
         newContent = changedFileText(Buffer.from(file.content, "base64"));
         hash = file.hash;
     }
@@ -777,7 +731,7 @@ export interface RigProxyHandleOptions {
      * on a host with no preview server — the browser development shell — and the
      * route then reports that this Rig cannot render a document.
      */
-    readonly htmlPreviewUrl?: (sessionId: string, filePath: string) => string;
+    readonly htmlPreviewUrl?: (groupId: string, filePath: string) => string;
 }
 
 /**
@@ -885,11 +839,24 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 );
                 return true;
             }
+            if (path === "/workspace-file-search") {
+                const limitParam = query.get("limit");
+                const limit = limitParam ? Number(limitParam) : undefined;
+                const files = (
+                    await client.searchFiles(
+                        await fileScopeResolve(client, query.get("group") ?? ""),
+                        query.get("q") ?? "",
+                        Number.isFinite(limit) ? limit : undefined,
+                    )
+                ).files.map((file) => ({ fileName: file.fileName, path: file.path }));
+                writeJson(response, 200, files);
+                return true;
+            }
             if (path === "/workspace-file") {
                 const document = await requestWithAbort(request, (signal) =>
                     workspaceFileRead(
                         client,
-                        query.get("session") ?? "",
+                        query.get("group") ?? "",
                         query.get("path") ?? "",
                         signal,
                     ),
@@ -901,7 +868,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 const document = await requestWithAbort(request, (signal) =>
                     workspaceFileBytesRead(
                         client,
-                        query.get("session") ?? "",
+                        query.get("group") ?? "",
                         query.get("path") ?? "",
                         signal,
                     ),
@@ -920,10 +887,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     return true;
                 }
                 writeJson(response, 200, {
-                    url: options.htmlPreviewUrl(
-                        query.get("session") ?? "",
-                        query.get("path") ?? "",
-                    ),
+                    url: options.htmlPreviewUrl(query.get("group") ?? "", query.get("path") ?? ""),
                 });
                 return true;
             }
@@ -931,7 +895,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 await requestWithAbort(request, (signal) =>
                     workspaceFileMediaServe(
                         client,
-                        query.get("session") ?? "",
+                        query.get("group") ?? "",
                         query.get("path") ?? "",
                         query.get("hash") ?? undefined,
                         request,
@@ -949,7 +913,6 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 const document = await requestWithAbort(request, (signal) =>
                     changedFileRead(
                         client,
-                        query.get("session") ?? "",
                         query.get("group") ?? "",
                         query.get("path") ?? "",
                         signal,
@@ -1008,20 +971,6 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     writeJson(response, 200, subagents);
                     return true;
                 }
-                if (segments[2] === "files" && segments.length === 3) {
-                    const search = query.get("q") ?? "";
-                    const limitParam = query.get("limit");
-                    const limit = limitParam ? Number(limitParam) : undefined;
-                    const files = (
-                        await client.searchFiles(
-                            sessionId,
-                            search,
-                            Number.isFinite(limit) ? limit : undefined,
-                        )
-                    ).files.map((file) => ({ fileName: file.fileName, path: file.path }));
-                    writeJson(response, 200, files);
-                    return true;
-                }
                 if (segments[2] === "usage" && segments.length === 3) {
                     writeJson(
                         response,
@@ -1076,7 +1025,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             const body = await bodyReadJson(request);
             await workspaceFileWrite(
                 client,
-                String(body.session ?? ""),
+                String(body.group ?? ""),
                 String(body.path ?? ""),
                 typeof body.content === "string" ? body.content : "",
                 typeof body.expectedHash === "string" ? body.expectedHash : null,
@@ -1105,7 +1054,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 200,
                 await attachmentWrite(
                     client,
-                    String(body.session ?? ""),
+                    String(body.group ?? ""),
                     String(body.name ?? ""),
                     typeof body.content === "string" ? body.content : "",
                 ),
