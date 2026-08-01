@@ -319,7 +319,9 @@ describe("agent-requested plugin installation", () => {
             status: "failed",
             lastError: "The server stopped before the plugin operation completed.",
         });
-    });
+        // One scenario walks a package through validation, approval, install, and
+        // a restart, which needs more than the default budget on a small runner.
+    }, 30_000);
 });
 
 class PluginDeveloperRuntime implements PluginMcpRuntime {
