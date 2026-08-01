@@ -128,6 +128,20 @@ function workingLabelProject(session: SessionState | undefined): string | undefi
         : label;
 }
 
+/**
+ * Epoch millis at which the agent's scheduled wait ends, while one is running.
+ *
+ * The daemon describes a wait with an absolute deadline it computed once
+ * ("Waiting until 11:17:06 AM"), and that sentence stops telling the reader
+ * anything the moment it is written. Projecting the deadline lets the surface
+ * count down against its own clock instead.
+ */
+function workingWaitDueAtProject(session: SessionState | undefined): number | undefined {
+    const dueAt = session?.activity.wait?.dueAt;
+    if (dueAt === undefined || !Number.isFinite(dueAt)) return undefined;
+    return dueAt;
+}
+
 function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {
     return {
         currentProviderId: usage.currentProviderId,
@@ -300,6 +314,8 @@ export interface RigChatSnapshot {
     readonly workingPhase: RigWorkingPhase;
     /** Display-ready activity text from the agent, when it describes its work. */
     readonly workingLabel?: string;
+    /** Epoch ms the agent's scheduled wait ends, so a surface can count down. */
+    readonly workingWaitDueAt?: number;
     /** Durable user-message id of the one turn currently running. */
     readonly activeTurnId?: string;
     readonly runId?: string;
@@ -861,6 +877,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             runStatus,
             workingPhase: workingPhaseProject(transcriptSession, transientStreamingPresentation),
             workingLabel: workingLabelProject(transcriptSession),
+            workingWaitDueAt: workingWaitDueAtProject(transcriptSession),
             activeTurnId,
             runId,
             runStartedAt,

@@ -26,6 +26,12 @@ export interface AgentWorkingStatusProps {
     readonly label?: string;
     /** Current work projected by the owning product store. */
     readonly phase?: AgentWorkingPhase;
+    /**
+     * Time left before a scheduled wait resumes, supplied by the owning surface
+     * clock. It sits after the label so a wait reads as a live countdown instead
+     * of an absolute deadline the reader has to subtract from.
+     */
+    readonly remainingMs?: number;
     readonly style?: CSSProperties;
 }
 
@@ -60,6 +66,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         "elapsedMs",
         "label",
         "phase",
+        "remainingMs",
         "style",
     ]);
     const label = local.label ?? PHASE_LABELS[local.phase ?? "working"];
@@ -105,6 +112,19 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                     </>
                 )}
                 <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
+                {local.remainingMs === undefined ? null : (
+                    <>
+                        <span aria-hidden="true" className="happy2-agent-working-status__separator">
+                            ·
+                        </span>
+                        <span
+                            className="happy2-agent-working-status__countdown"
+                            data-happy2-ui="agent-working-status-countdown"
+                        >
+                            {`${elapsedFormat(local.remainingMs)} left`}
+                        </span>
+                    </>
+                )}
             </span>
             {details.length > 0 ? (
                 <span

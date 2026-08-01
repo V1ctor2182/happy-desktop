@@ -2287,6 +2287,7 @@ function RigConversationSurface(props: {
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
+            workingRemainingMs={rigWaitRemainingMs(conversation, props.now)}
             viewerId={rigOwnerAuthor.id}
         />
     );
@@ -2446,6 +2447,19 @@ function RigPanelComposer(props: {
             />
         </FloatingConversationDock>
     );
+}
+
+/**
+ * Time left on the agent's scheduled wait, counted against the surface clock.
+ * The daemon's own label states the absolute deadline; this is what turns it
+ * into something that keeps changing while the reader watches it.
+ */
+function rigWaitRemainingMs(
+    conversation: { readonly running: boolean; readonly workingWaitDueAt?: number },
+    now: number,
+): number | undefined {
+    if (!conversation.running || conversation.workingWaitDueAt === undefined) return undefined;
+    return Math.max(0, conversation.workingWaitDueAt - now);
 }
 
 /**

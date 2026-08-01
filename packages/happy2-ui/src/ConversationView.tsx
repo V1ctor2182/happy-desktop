@@ -46,6 +46,8 @@ export type ConversationViewProps = {
     workingPhase?: AgentWorkingPhase;
     /** Humanized activity text from the agent, preferred over the phase word. */
     workingLabel?: string;
+    /** Time left on a scheduled wait in ms, counted down by the owner's clock. */
+    workingRemainingMs?: number;
     /** Subagents currently running under the active turn. */
     runningAgents?: number;
     /** Background tasks currently owned by the active turn. */
@@ -252,6 +254,7 @@ export function ConversationView(props: ConversationViewProps) {
                             elapsedMs={props.elapsedMs}
                             label={props.workingLabel}
                             phase={props.workingPhase}
+                            remainingMs={props.workingRemainingMs}
                         />
                     }
                     footerHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}

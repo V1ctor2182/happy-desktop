@@ -60,9 +60,30 @@ export function AgentWorkingStatusPage() {
                 </div>
             </Specimen>
             <Specimen
+                detail="A scheduled wait keeps its deadline and counts down beside it"
+                label="Wait countdown"
+                number="03"
+                stage="surface"
+            >
+                <div style={column}>
+                    <AgentWorkingStatus
+                        elapsedMs={3_960_000}
+                        label="Waiting until 8/1/2026, 11:17:06 AM"
+                        phase="callingTools"
+                        remainingMs={3_492_000}
+                    />
+                    <AgentWorkingStatus
+                        elapsedMs={288_000}
+                        label="Waiting until 8/1/2026, 10:15:00 AM"
+                        phase="callingTools"
+                        remainingMs={42_000}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
                 detail="Long counts truncate after the durable working clock"
                 label="Constrained"
-                number="03"
+                number="04"
                 stage="surface"
             >
                 <div style={{ ...column, width: "360px" }}>
