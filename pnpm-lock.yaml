@@ -225,8 +225,8 @@ importers:
         specifier: 0.0.98
         version: 0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
       '@slopus/rig-connect':
-        specifier: 0.0.14
-        version: 0.0.14
+        specifier: 0.0.17
+        version: 0.0.17
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -800,8 +800,8 @@ importers:
   packages/happy2-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.0.14
-        version: 0.0.14
+        specifier: 0.0.17
+        version: 0.0.17
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2739,8 +2739,8 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/rig-connect@0.0.14':
-    resolution: {integrity: sha512-EkWL2k0vCSLCyUhHVDnkJFCaU3aRYTB2ycO+k3trathMDIL9QuliPRN43Bfj7g15sSLRHQURyd7jvTorI/8cSA==}
+  '@slopus/rig-connect@0.0.17':
+    resolution: {integrity: sha512-0gBbR64Kcse+oUa2mCwELXs/QL+cdWLPu25vb/5zr2LxGOldJ0ee4/CJHMyKgofcnnxUk8Av70eYQsC/KpQ+xw==}
     engines: {node: '>=20'}
 
   '@slopus/rig@0.0.98':
@@ -8780,7 +8780,7 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/rig-connect@0.0.14': {}
+  '@slopus/rig-connect@0.0.17': {}
 
   '@slopus/rig@0.0.98(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)':
     dependencies:

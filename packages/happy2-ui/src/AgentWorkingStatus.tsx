@@ -18,6 +18,11 @@ export interface AgentWorkingStatusProps {
     readonly "data-testid"?: string;
     /** Elapsed time from request send, supplied by the owning surface clock. */
     readonly elapsedMs?: number;
+    /**
+     * Humanized activity text from the agent, shown instead of the phase word.
+     * Falls back to the phase label when the agent says nothing about its work.
+     */
+    readonly label?: string;
     /** Current work projected by the owning product store. */
     readonly phase?: AgentWorkingPhase;
     readonly style?: CSSProperties;
@@ -52,10 +57,11 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
         "className",
         "data-testid",
         "elapsedMs",
+        "label",
         "phase",
         "style",
     ]);
-    const label = PHASE_LABELS[local.phase ?? "working"];
+    const label = local.label ?? PHASE_LABELS[local.phase ?? "working"];
     const details: string[] = [];
     if (local.agents !== undefined && local.agents > 0)
         details.push(`${local.agents} ${local.agents === 1 ? "agent" : "agents"} running`);
@@ -98,7 +104,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                     </>
                 )}
                 <span
-                    key={local.phase ?? "working"}
+                    key={label}
                     className="happy2-changing-text"
                     data-happy2-ui="agent-working-status-phase"
                 >

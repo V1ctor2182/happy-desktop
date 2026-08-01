@@ -106,6 +106,8 @@ export interface RigConversationSnapshot {
     readonly composer: ComposerSnapshot;
     readonly running: boolean;
     readonly workingPhase: RigWorkingPhase;
+    /** Display-ready activity text from the agent, when it describes its work. */
+    readonly workingLabel?: string;
     readonly runStartedAt?: number;
     readonly turnElapsedMs?: number;
     readonly transcriptComplete: boolean;
@@ -755,6 +757,7 @@ export function rigWorkspaceStoreCreate(
             composer: draft,
             running: chat.runStatus === "running",
             workingPhase: chat.workingPhase,
+            ...(chat.workingLabel !== undefined ? { workingLabel: chat.workingLabel } : {}),
             ...(chat.runStartedAt !== undefined ? { runStartedAt: chat.runStartedAt } : {}),
             ...(chat.turnElapsedMs !== undefined ? { turnElapsedMs: chat.turnElapsedMs } : {}),
             transcriptComplete: chat.transcriptComplete,

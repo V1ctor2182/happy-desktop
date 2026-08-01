@@ -44,6 +44,8 @@ export type ConversationViewProps = {
     elapsedMs?: number;
     /** Current reader-facing phase of the active turn. */
     workingPhase?: AgentWorkingPhase;
+    /** Humanized activity text from the agent, preferred over the phase word. */
+    workingLabel?: string;
     /** Subagents currently running under the active turn. */
     runningAgents?: number;
     /** Background tasks currently owned by the active turn. */
@@ -241,6 +243,7 @@ export function ConversationView(props: ConversationViewProps) {
                             backgroundTasks={props.backgroundTasks}
                             className="happy2-conversation-turn-status"
                             elapsedMs={props.elapsedMs}
+                            label={props.workingLabel}
                             phase={props.workingPhase}
                         />
                     }

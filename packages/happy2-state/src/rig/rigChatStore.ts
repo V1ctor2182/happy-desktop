@@ -105,6 +105,20 @@ function workingPhaseProject(
     return "working";
 }
 
+/**
+ * Prefers the agent's own humanized activity text over the generic phase word.
+ *
+ * The daemon describes what it is doing right now — "Running Bash", or a tool's
+ * own status such as "Reading AGENTS.md" — so a status line says something more
+ * useful than "Calling tools". An idle session has nothing to say.
+ */
+function workingLabelProject(session: SessionState | undefined): string | undefined {
+    const activity = session?.activity;
+    if (activity === undefined || activity.kind === "idle") return undefined;
+    const label = activity.label.trim();
+    return label.length > 0 ? label : undefined;
+}
+
 function transcriptUsageProject(usage: SessionUsage): RigSessionUsage {
     return {
         currentProviderId: usage.currentProviderId,
@@ -275,6 +289,8 @@ export interface RigChatSnapshot {
     readonly streaming?: RigStreamingMessage;
     readonly runStatus: "idle" | "running";
     readonly workingPhase: RigWorkingPhase;
+    /** Display-ready activity text from the agent, when it describes its work. */
+    readonly workingLabel?: string;
     /** Durable user-message id of the one turn currently running. */
     readonly activeTurnId?: string;
     readonly runId?: string;
@@ -828,6 +844,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             streaming: transientStreamingPresentation,
             runStatus,
             workingPhase: workingPhaseProject(transcriptSession, transientStreamingPresentation),
+            workingLabel: workingLabelProject(transcriptSession),
             activeTurnId,
             runId,
             runStartedAt,

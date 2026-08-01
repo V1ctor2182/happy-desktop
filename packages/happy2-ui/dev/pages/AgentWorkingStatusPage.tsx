@@ -34,9 +34,35 @@ export function AgentWorkingStatusPage() {
                 </div>
             </Specimen>
             <Specimen
+                detail="The agent's own status text replaces the generic phase word"
+                label="Humanized activity"
+                number="02"
+                stage="surface"
+            >
+                <div style={column}>
+                    <AgentWorkingStatus
+                        elapsedMs={9_000}
+                        label="Reading AGENTS.md"
+                        phase="callingTools"
+                    />
+                    <AgentWorkingStatus
+                        agents={2}
+                        elapsedMs={41_000}
+                        label="Running 3 tools"
+                        phase="callingTools"
+                    />
+                    <AgentWorkingStatus
+                        backgroundTasks={1}
+                        elapsedMs={2_000}
+                        label="Waiting for permission"
+                        phase="working"
+                    />
+                </div>
+            </Specimen>
+            <Specimen
                 detail="Long counts truncate after the durable working clock"
                 label="Constrained"
-                number="02"
+                number="03"
                 stage="surface"
             >
                 <div style={{ ...column, width: "360px" }}>
