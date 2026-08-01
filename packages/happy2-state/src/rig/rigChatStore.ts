@@ -653,6 +653,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     const pendingMutationOrder: string[] = [];
     const PENDING_MUTATION_LIMIT = 2_048;
     /**
+     * How much base64 image data one chat keeps on behalf of messages it has
+     * sent. Comfortably several screenshots, and far short of what a window
+     * should hold on to for pictures the daemon already has.
+     */
+    const SENT_IMAGE_BUDGET_BYTES = 32 * 1024 * 1024;
+    /**
      * What the reader has picked but not yet sent. Absent means the pickers show
      * the session's own configuration; present means they show the choice, which
      * the next message applies. It is never seeded from the session — deriving
@@ -777,6 +783,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                   )
                 : rigConnectConversationProject({
                       elements: transcriptElements,
+                      sentImages,
                       sessionId,
                       showReasoning,
                       ephemeral: projectedEphemeral,
@@ -1673,6 +1680,36 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         }
     };
 
+    /**
+     * The images of messages this window has sent, by the identity the message
+     * carries.
+     *
+     * A sent message is shown from the prediction the protocol client made when
+     * it was submitted, and that prediction is text: the transcript element it
+     * appends has no images on it, and the daemon's own copy of the message is
+     * then folded into the element already there rather than replacing it. So
+     * nothing else in the transcript knows what was attached until it is rebuilt
+     * from scratch. What was sent is known here, at the moment of sending, which
+     * is why the pictures are kept here and handed to the projection.
+     *
+     * The budget bounds a long session of sending screenshots; the oldest are
+     * dropped first, and a transcript rebuilt from the daemon carries its own.
+     */
+    const sentImages = new Map<string, readonly RigImageInput[]>();
+    let sentImageBytes = 0;
+
+    const sentImagesRemember = (messageId: string, images: readonly RigImageInput[]): void => {
+        const bytes = images.reduce((total, image) => total + image.data.length, 0);
+        sentImages.set(messageId, images);
+        sentImageBytes += bytes;
+        for (const [oldest, held] of sentImages) {
+            if (sentImageBytes <= SENT_IMAGE_BUDGET_BYTES) break;
+            if (oldest === messageId) break;
+            sentImages.delete(oldest);
+            sentImageBytes -= held.reduce((total, image) => total + image.data.length, 0);
+        }
+    };
+
     const connectMutationTrack = (mutationId: string): void => {
         const rejectionWasVisible = mutationRejection !== undefined;
         mutationRejection = undefined;
@@ -1823,24 +1860,24 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         messageSend: (text, images) =>
             rejecting(async () => {
                 if (deps.connectActions) {
-                    connectMutationTrack(
-                        deps.connectActions.sendMessage(
-                            sessionId,
-                            images && images.length > 0
-                                ? {
-                                      text,
-                                      content: [
-                                          { type: "text", text },
-                                          ...images.map((image) => ({
-                                              type: "image" as const,
-                                              mediaType: image.mediaType,
-                                              data: image.data,
-                                          })),
-                                      ],
-                                  }
-                                : text,
-                        ),
+                    const mutationId = deps.connectActions.sendMessage(
+                        sessionId,
+                        images && images.length > 0
+                            ? {
+                                  text,
+                                  content: [
+                                      { type: "text", text },
+                                      ...images.map((image) => ({
+                                          type: "image" as const,
+                                          mediaType: image.mediaType,
+                                          data: image.data,
+                                      })),
+                                  ],
+                              }
+                            : text,
                     );
+                    if (images && images.length > 0) sentImagesRemember(mutationId, images);
+                    connectMutationTrack(mutationId);
                     output({
                         type: "messageSent",
                         sessionId,

@@ -1016,7 +1016,10 @@ export function rigWorkspaceStoreCreate(
             ...(previous?.history ?? []).filter((id) => id !== tabId && known(id)),
         ].slice(0, TAB_HISTORY_LIMIT);
         const activeTabId = tabId ?? previous?.activeTabId;
-        if (history.length === 0 && files.length === 0) {
+        // An unsent draft is remembered on its own account: a group with no tabs
+        // and no files is still worth remembering when somebody has typed into
+        // it and not sent it.
+        if (history.length === 0 && files.length === 0 && previous?.draft === undefined) {
             client.memory.groupForget(groupId);
             return;
         }
@@ -1024,6 +1027,7 @@ export function rigWorkspaceStoreCreate(
             ...(activeTabId ? { activeTabId } : {}),
             history,
             files,
+            ...(previous?.draft === undefined ? {} : { draft: previous.draft }),
         });
     };
 
@@ -1413,11 +1417,38 @@ export function rigWorkspaceStoreCreate(
         return rigAttachmentTextAppend(text, paths);
     };
 
+    /**
+     * What is attached to each group's unsent draft. Unlike the text it is not
+     * written to the host's storage: the bytes of a screenshot are not something
+     * to keep on disk on the chance that somebody comes back to the sentence
+     * they were writing. It outlives the composer rather than the window, so
+     * looking at another project and returning finds the draft as it was left.
+     */
+    const groupAttachments = new Map<RigGroupId, readonly ComposerAttachment[]>();
+
+    /** The same, for a conversation whose composer is rebuilt when it is reopened. */
+    const conversationAttachments = new Map<RigSessionId, readonly ComposerAttachment[]>();
+
+    const attachmentsRemember = <Key>(
+        held: Map<Key, readonly ComposerAttachment[]>,
+        key: Key,
+        target: ComposerStore,
+    ): void => {
+        const attachments = target.getState().attachments;
+        if (attachments.length === 0) held.delete(key);
+        else held.set(key, attachments);
+    };
+
     const composerCreate = (conversationId: RigSessionId): ComposerStore => {
         const created: ComposerStore = composerStoreCreate(conversationId, {
             capabilities: { shellMode: true, commands: rigComposerCommands, mentions: true },
+            attachments: conversationAttachments.get(conversationId) ?? [],
             output: (event) => {
                 switch (event.type) {
+                    case "attachmentAdded":
+                    case "attachmentRemoved":
+                        attachmentsRemember(conversationAttachments, conversationId, created);
+                        return;
                     case "textUpdated":
                         void withChatStore((store) =>
                             store.draftSet(event.text, nextDraftUpdatedAt(), draftOrigin),
@@ -1436,6 +1467,7 @@ export function rigWorkspaceStoreCreate(
                             await withChatStore((store) =>
                                 store.messageSend(text, rigImageInputsOf(event.attachments)),
                             );
+                            conversationAttachments.delete(conversationId);
                         });
                         return;
                     case "shellCommandSubmitted":
@@ -1528,6 +1560,14 @@ export function rigWorkspaceStoreCreate(
                     const state = acquired.store.get();
                     const currentComposer = composer;
                     if (!state.ready || !currentComposer) return;
+                    // A send in flight has already cleared the stored draft, and
+                    // that empty draft arrives back here while the message is
+                    // still going out. Reconciling it would count as a new
+                    // revision of the composer, and the confirmation that
+                    // follows — the thing that drops the text and its
+                    // attachments together — is refused for a revision that has
+                    // moved on. The send clears this composer itself.
+                    if (currentComposer.getState().submission.status === "pending") return;
                     const remoteUpdatedAt = state.draftUpdatedAt ?? 0;
                     const localUpdatedAt = currentComposer.getState().lastInteractionAt ?? 0;
                     if (remoteUpdatedAt < localUpdatedAt) return;
@@ -1896,15 +1936,41 @@ export function rigWorkspaceStoreCreate(
             openGroupId = groupId;
             const created: ComposerStore = composerStoreCreate(groupId, {
                 capabilities: { shellMode: false, commands: [], mentions: false },
+                text: client.memory.groupRead(groupId)?.draft ?? "",
+                attachments: groupAttachments.get(groupId) ?? [],
                 output: (event) => {
-                    if (event.type !== "textSubmitted") return;
-                    // The configuration is read now, not after the session has
-                    // been created: creation navigates, which releases this
-                    // group and its draft with it.
-                    const selection = groupDraft?.get().selection;
-                    submitting(created, event.revision, () =>
-                        groupSubmit(groupId, event.text, event.attachments, selection),
-                    );
+                    switch (event.type) {
+                        case "textUpdated":
+                            client.memory.groupDraftWrite(groupId, event.text);
+                            return;
+                        case "attachmentAdded":
+                        case "attachmentRemoved":
+                            attachmentsRemember(groupAttachments, groupId, created);
+                            return;
+                        case "textSubmitted": {
+                            // The configuration is read now, not after the
+                            // session has been created: creation navigates,
+                            // which releases this group and its draft with it.
+                            const selection = groupDraft?.get().selection;
+                            submitting(created, event.revision, async () => {
+                                await groupSubmit(
+                                    groupId,
+                                    event.text,
+                                    event.attachments,
+                                    selection,
+                                );
+                                // Sent, so there is nothing left to come back
+                                // to. Navigation releases this composer before
+                                // it can clear itself, which is why the group's
+                                // own record of the draft is cleared here.
+                                client.memory.groupDraftWrite(groupId, "");
+                                groupAttachments.delete(groupId);
+                            });
+                            return;
+                        }
+                        default:
+                            return;
+                    }
                 },
             });
             groupComposer = created;

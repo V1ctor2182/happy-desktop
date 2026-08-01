@@ -21,6 +21,17 @@ export interface RigConnectConversationInput {
     readonly expandedGroupIds: ReadonlySet<string>;
     /** Named senders for background-work news, matched by the description it quotes. */
     readonly subagents: readonly RigSubagentSummary[];
+    /**
+     * Images this window sent, by message identity. A message is shown from the
+     * prediction made when it was submitted, and that prediction is text alone,
+     * so what was attached to it is known only to the sender until the whole
+     * transcript is read again. These fill that gap and are ignored for any
+     * message that arrived carrying its own.
+     */
+    readonly sentImages?: ReadonlyMap<
+        string,
+        readonly { readonly mediaType: string; readonly data: string }[]
+    >;
 }
 
 /**
@@ -136,7 +147,11 @@ function rigConnectGroupProject(
                         text: notification?.text ?? element.text,
                         createdAt: element.createdAt,
                         author: notification?.author ?? rigOwnerAuthor,
-                        attachments: (element.attachments ?? []).map((attachment, index) => ({
+                        attachments: (
+                            element.attachments ??
+                            input.sentImages?.get(element.messageId) ??
+                            []
+                        ).map((attachment, index) => ({
                             kind: "inlineImage" as const,
                             id: `${element.id}:image:${String(index)}`,
                             mediaType: attachment.mediaType,

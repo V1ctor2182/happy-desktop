@@ -21,7 +21,22 @@ export interface RigGroupTabMemory {
     readonly history: readonly string[];
     /** The group's open file tabs, in strip order. */
     readonly files: readonly RigFileTabMemory[];
+    /**
+     * What was typed into the group's composer and never sent. It is kept here
+     * rather than in the daemon because the daemon has nowhere to keep it: the
+     * session this message would start does not exist yet, and creating one to
+     * hold a sentence would leave an empty session behind every time somebody
+     * began a thought and walked away from it.
+     */
+    readonly draft?: string;
 }
+
+/**
+ * How long an unsent group draft may be before it stops being remembered. A
+ * message is a message, not a document; this is far past anything anyone types
+ * into a composer and well inside what the host's storage will hold.
+ */
+export const RIG_GROUP_DRAFT_MAX_LENGTH = 100_000;
 
 /**
  * Everything one Rig's window remembers between runs about where the reader
@@ -50,6 +65,12 @@ export interface RigWorkspaceMemoryStore {
     groupUpdate(groupId: RigGroupId, memory: RigGroupTabMemory): void;
     /** Drops a group that no longer exists, with everything remembered about it. */
     groupForget(groupId: RigGroupId): void;
+    /**
+     * Records what is typed into a group's composer without disturbing its tabs.
+     * Empty text forgets the draft, so a group nobody has typed into carries no
+     * record of one.
+     */
+    groupDraftWrite(groupId: RigGroupId, draft: string): void;
 }
 
 const FILE_KINDS: readonly RigFileTabKind[] = ["file", "diff"];
@@ -77,8 +98,17 @@ function groupParse(value: unknown): RigGroupTabMemory | undefined {
           })
         : [];
     const activeTabId = typeof record.activeTabId === "string" ? record.activeTabId : undefined;
-    if (history.length === 0 && files.length === 0) return undefined;
-    return { ...(activeTabId ? { activeTabId } : {}), history, files };
+    const draft =
+        typeof record.draft === "string" && record.draft.length > 0
+            ? record.draft.slice(0, RIG_GROUP_DRAFT_MAX_LENGTH)
+            : undefined;
+    if (history.length === 0 && files.length === 0 && draft === undefined) return undefined;
+    return {
+        ...(activeTabId ? { activeTabId } : {}),
+        history,
+        files,
+        ...(draft === undefined ? {} : { draft }),
+    };
 }
 
 /**
@@ -124,6 +154,23 @@ export function rigWorkspaceMemoryStoreCreate(
         },
         groupForget(groupId) {
             if (!groups.delete(groupId)) return;
+            flush();
+        },
+        groupDraftWrite(groupId, draft) {
+            const previous = groups.get(groupId);
+            const next = draft.slice(0, RIG_GROUP_DRAFT_MAX_LENGTH);
+            if ((previous?.draft ?? "") === next) return;
+            if (next.length === 0) {
+                if (!previous) return;
+                const { draft: _dropped, ...rest } = previous;
+                // A group whose draft was the only thing worth remembering is
+                // forgotten with it rather than left as an empty record.
+                if (rest.history.length === 0 && rest.files.length === 0) groups.delete(groupId);
+                else groups.set(groupId, rest);
+                flush();
+                return;
+            }
+            groups.set(groupId, { ...(previous ?? { history: [], files: [] }), draft: next });
             flush();
         },
     };
