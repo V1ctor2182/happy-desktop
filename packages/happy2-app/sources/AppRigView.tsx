@@ -27,6 +27,7 @@ import type {
     RigInboxItem,
     RigInboxSnapshot,
     RigInboxStore,
+    RigProviderUsageStore,
     RigProjectGroup,
     RigProjectId,
     RigServiceTier,
@@ -43,6 +44,7 @@ import type {
 import {
     rigAgentAuthor,
     rigInboxStoreNoop,
+    rigProviderUsageStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
 } from "happy2-state";
@@ -85,6 +87,7 @@ import {
     SidebarFooter,
     SidebarUpdateAction,
     RigInboxPage,
+    RigProviderUsagePage,
     TabbedPane,
     TextField,
     TerminalPanel,
@@ -144,6 +147,12 @@ export interface AppRigSession {
      * than opening onto an empty queue that means nothing.
      */
     readonly inbox?: RigInboxStore;
+    /**
+     * How much of each provider account's plan this machine has spent. Absent
+     * when the machine reports no usage, which is why the Usage row is absent
+     * too rather than opening onto an account list that means nothing.
+     */
+    readonly providerUsage?: RigProviderUsageStore;
 }
 
 export interface AppRigAddSnapshot {
@@ -244,6 +253,10 @@ export interface AppRigViewProps {
     inboxOpen?: boolean;
     /** Addresses that inbox. */
     onInboxOpen?(): void;
+    /** Whether the URL addresses the addressed Rig's provider usage. */
+    usageOpen?: boolean;
+    /** Addresses that usage. */
+    onUsageOpen?(): void;
     /** Whether the URL addresses the account's friends. */
     friendsOpen?: boolean;
     /** Addresses friends. */
@@ -639,6 +652,13 @@ const NOTES_ITEM = "notes";
 const INBOX_ITEM = "inbox";
 
 /**
+ * The pinned row that opens the addressed Rig's provider usage. It sits after
+ * the inbox because both are about this machine: the inbox is what its agents
+ * are waiting on, and usage is what they have spent to get there.
+ */
+const USAGE_ITEM = "usage";
+
+/**
  * The pinned row that opens the people this account is connected to. It comes
  * last of the pinned rows because it is the only one that is not about this
  * machine's work: notes and the inbox are what there is to do here, and friends
@@ -675,6 +695,13 @@ export function AppRigView(props: AppRigViewProps) {
     const inboxStore = active?.session?.inbox ?? rigInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
     const inboxPending = inbox.pending.length;
+    // The usage surface is the only thing that reads this store, so it is
+    // subscribed here rather than inside the page for one reason: the
+    // subscription is what starts the daemon reading, and it has to stop when
+    // the reader looks at something else.
+    const usageStore =
+        (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
+    const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
@@ -715,6 +742,19 @@ export function AppRigView(props: AppRigViewProps) {
                           },
                       ]
                     : []),
+                // Usage belongs to the addressed machine for the same reason
+                // the inbox does: it is that machine's accounts that are being
+                // spent, so the row is absent while it cannot say.
+                ...(active?.session?.providerUsage
+                    ? [
+                          {
+                              icon: "zap" as const,
+                              id: USAGE_ITEM,
+                              kind: "action" as const,
+                              label: "Usage",
+                          },
+                      ]
+                    : []),
                 // Friends belong to the account rather than to a machine, so
                 // this row is always here: it opens whether or not any Rig is
                 // reachable.
@@ -730,11 +770,13 @@ export function AppRigView(props: AppRigViewProps) {
                     ? NOTES_ITEM
                     : props.inboxOpen
                       ? INBOX_ITEM
-                      : props.friendsOpen
-                        ? FRIENDS_ITEM
-                        : props.groupId
-                          ? rigItemId(props.rigId, props.groupId)
-                          : ""
+                      : props.usageOpen
+                        ? USAGE_ITEM
+                        : props.friendsOpen
+                          ? FRIENDS_ITEM
+                          : props.groupId
+                            ? rigItemId(props.rigId, props.groupId)
+                            : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -834,6 +876,10 @@ export function AppRigView(props: AppRigViewProps) {
                 }
                 if (id === INBOX_ITEM) {
                     props.onInboxOpen?.();
+                    return;
+                }
+                if (id === USAGE_ITEM) {
+                    props.onUsageOpen?.();
                     return;
                 }
                 if (id === FRIENDS_ITEM) {
@@ -951,6 +997,26 @@ export function AppRigView(props: AppRigViewProps) {
                     rigId={active.id}
                     snapshot={inbox}
                     store={active.session.inbox}
+                />
+            </AppShell>
+        );
+
+    // Usage belongs to the addressed machine, so it is shown only while that
+    // machine has readings to give.
+    if (props.usageOpen && active?.session?.providerUsage)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <RigProviderUsagePage
+                    {...(usage.error ? { error: usage.error } : {})}
+                    loading={usage.loading}
+                    providers={usage.providers}
+                    readingTime={usageReadingTime}
                 />
             </AppShell>
         );
@@ -1090,6 +1156,15 @@ function RigInboxSurface(props: {
             submissions={props.snapshot.submissions}
         />
     );
+}
+
+/**
+ * When a usage reading was taken, as an absolute local time. A reading is only
+ * as good as its age — a plan can be spent in the minutes since — so the card
+ * says when it was taken rather than implying it is live.
+ */
+function usageReadingTime(capturedAt: number): string {
+    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(capturedAt));
 }
 
 /** When a question was asked or settled, as an absolute local time. */

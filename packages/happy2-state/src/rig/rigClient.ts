@@ -34,6 +34,11 @@ import {
     type RigWorkspaceMemoryStore,
 } from "./rigWorkspaceMemory.js";
 import { rigInboxStoreCreate, type RigInboxSource, type RigInboxStore } from "./rigInboxStore.js";
+import {
+    rigProviderUsageStoreCreate,
+    type RigProviderUsageSource,
+    type RigProviderUsageStore,
+} from "./rigProviderUsageStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -62,6 +67,15 @@ export interface RigClient {
      * an inbox that is empty for the wrong reason.
      */
     inbox(): RigInboxStore | undefined;
+    /**
+     * The single provider-usage store for this Rig: how much of each account's
+     * plan its agents have spent. Materialized on first access and shared, so a
+     * second surface reading the same accounts costs no extra daemon reads.
+     * Unavailable when the host supplied no usage feed, so a surface can say the
+     * machine does not report usage rather than showing an account list that is
+     * empty for the wrong reason.
+     */
+    providerUsage(): RigProviderUsageStore | undefined;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /** Reads one existing text file from a project/worktree checkout. */
@@ -139,6 +153,11 @@ export interface RigClientDeps {
      * Omitted leaves the inbox unavailable rather than empty.
      */
     readonly inboxSource?: RigInboxSource;
+    /**
+     * Repeating read of each provider account's plan usage. Omitted leaves usage
+     * unavailable rather than empty.
+     */
+    readonly providerUsageSource?: RigProviderUsageSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -188,6 +207,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     const memory = rigWorkspaceMemoryStoreCreate(deps.workspaceMemoryPersistence);
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
+    let providerUsageStore: RigProviderUsageStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -262,6 +282,13 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                 },
             });
             return inboxStore;
+        },
+        providerUsage() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.providerUsageSource;
+            if (!source) return undefined;
+            providerUsageStore ??= rigProviderUsageStoreCreate({ source });
+            return providerUsageStore;
         },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -358,6 +385,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             sessionListStore = undefined;
             inboxStore?.[Symbol.dispose]();
             inboxStore = undefined;
+            providerUsageStore?.[Symbol.dispose]();
+            providerUsageStore = undefined;
             deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();

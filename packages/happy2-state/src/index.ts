@@ -331,6 +331,20 @@ export {
     type RigInboxSubmission,
 } from "./rig/rigInboxStore.js";
 export {
+    rigProviderUsageStoreCreate,
+    rigProviderUsageStoreNoop,
+    type RigProviderUsageCredits,
+    type RigProviderUsageEntry,
+    type RigProviderUsageReading,
+    type RigProviderUsageSnapshot,
+    type RigProviderUsageSource,
+    type RigProviderUsageSourceReading,
+    type RigProviderUsageStore,
+    type RigProviderUsageStoreDeps,
+    type RigProviderUsageWindow,
+    type RigProviderVendor,
+} from "./rig/rigProviderUsageStore.js";
+export {
     rigTerminalOpen,
     type RigTerminalDeps,
     type RigTerminalHandle,

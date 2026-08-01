@@ -198,6 +198,18 @@ const inboxRoute = createRoute({
 });
 
 /**
+ * One machine's provider usage. The Rig is in the address for the same reason
+ * the inbox carries it: the accounts being spent are that machine's, so the
+ * window's back and forward move between machines rather than between two views
+ * of one ambiguous total.
+ */
+const usageRoute = createRoute({
+    component: RigUsageRoute,
+    getParentRoute: () => rootRoute,
+    path: "/usage/$rigId",
+});
+
+/**
  * The account's friends, addressed without a Rig: who a person is connected to
  * does not belong to one machine, so no machine appears in the address.
  */
@@ -245,6 +257,7 @@ const routeTree = rootRoute.addChildren([
     notesIndexRoute,
     noteRoute,
     inboxRoute,
+    usageRoute,
     friendsRoute,
     settingsIndexRoute,
     settingsSectionRoute,
@@ -269,6 +282,14 @@ function RigInboxRoute() {
 }
 
 /**
+ * The usage address renders the same window a conversation does: the shell and
+ * its sidebar stay, and only the content area changes.
+ */
+function RigUsageRoute() {
+    return <RigWorkspaceLayout usage />;
+}
+
+/**
  * The friends address renders the same window a conversation does: the shell and
  * its sidebar stay, and only the content area changes.
  */
@@ -276,7 +297,9 @@ function RigFriendsRoute() {
     return <RigWorkspaceLayout friends />;
 }
 
-function RigWorkspaceLayout(props: { friends?: boolean; inbox?: boolean; notes?: boolean } = {}) {
+function RigWorkspaceLayout(
+    props: { friends?: boolean; inbox?: boolean; notes?: boolean; usage?: boolean } = {},
+) {
     // The router hooks resolve their types through the single global `Register`
     // declaration, which names the cloud router. Route definitions above are
     // still typed by `RigRouterContext` (loaders read it directly); only this
@@ -308,12 +331,19 @@ function RigWorkspaceLayout(props: { friends?: boolean; inbox?: boolean; notes?:
             notes={context.notes}
             notesOpen={props.notes}
             inboxOpen={props.inbox}
+            usageOpen={props.usage}
             friendsOpen={props.friends}
             onFriendsOpen={() => void navigate({ to: "/friends" })}
             onInboxOpen={() =>
                 void navigate({
                     params: { rigId: params.rigId ?? rigDefaultId(context) },
                     to: "/inbox/$rigId",
+                })
+            }
+            onUsageOpen={() =>
+                void navigate({
+                    params: { rigId: params.rigId ?? rigDefaultId(context) },
+                    to: "/usage/$rigId",
                 })
             }
             onNotesOpen={(noteId) =>

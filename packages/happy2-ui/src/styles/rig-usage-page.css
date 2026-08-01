@@ -1,0 +1,192 @@
+/*
+ * Provider usage: one card per provider account, each holding the windows that
+ * vendor reports. A reading column under a surface header, scrolling as one
+ * list. Layout is flexbox throughout; colors and type come only from theme
+ * roles.
+ */
+
+.happy2-rig-usage-page {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    font-family: var(--happy2-font-ui);
+}
+
+/* The header shares the column the cards are read in, so the title sits above
+ * them rather than out at the window's edge. */
+.happy2-rig-usage-page__header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    margin: 0 auto;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+}
+
+/* The scrollport is flush; spacing belongs to the content wrapper inside it. */
+.happy2-rig-usage-page__scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+}
+
+.happy2-rig-usage-page__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 0 auto;
+    padding: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+}
+
+.happy2-rig-usage-page__card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+}
+
+.happy2-rig-usage-page__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 24px;
+}
+
+.happy2-rig-usage-page__identity {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-rig-usage-page__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-usage-page__plan {
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-usage-page__card-meta {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+/* An account with nothing left says so in the one place colour is warranted. */
+.happy2-rig-usage-page__exhausted {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    background: var(--surface-selected);
+    border-radius: var(--happy2-radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--status-error);
+}
+
+.happy2-rig-usage-page__taken {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage-page__provider-error,
+.happy2-rig-usage-page__unread {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-usage-page__windows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Label, bar, and reading on one lane so the bars line up down the card. */
+.happy2-rig-usage-page__window,
+.happy2-rig-usage-page__credits {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 20px;
+}
+
+.happy2-rig-usage-page__window-label {
+    flex: 0 0 auto;
+    width: 64px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-usage-page__track {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: stretch;
+    overflow: hidden;
+    height: 6px;
+    background: var(--surface-selected);
+    border-radius: var(--happy2-radius-pill);
+}
+
+/* The fill is a width, not a transform: the track is a few pixels tall and a
+ * scaled fill would smear its rounded end. */
+.happy2-rig-usage-page__fill {
+    display: block;
+    min-width: 0;
+    background: var(--text-secondary);
+    border-radius: var(--happy2-radius-pill);
+}
+
+.happy2-rig-usage-page__window[data-tone="warning"] .happy2-rig-usage-page__fill {
+    background: var(--box-warning-text);
+}
+
+.happy2-rig-usage-page__window[data-tone="critical"] .happy2-rig-usage-page__fill {
+    background: var(--status-error);
+}
+
+.happy2-rig-usage-page__percent,
+.happy2-rig-usage-page__credits-value {
+    flex: 0 0 auto;
+    min-width: 44px;
+    font-size: 12px;
+    color: var(--text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-rig-usage-page__credits-value {
+    flex: 1 1 auto;
+    text-align: left;
+}

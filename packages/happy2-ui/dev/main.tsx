@@ -86,6 +86,7 @@ import { FloatingConversationDockPage } from "./pages/FloatingConversationDockPa
 import { RigSettingsBlueprintPage } from "./pages/RigSettingsPage";
 import { FriendsBlueprintPage } from "./pages/FriendsBlueprintPage";
 import { RigInboxBlueprintPage } from "./pages/RigInboxBlueprintPage";
+import { RigProviderUsageBlueprintPage } from "./pages/RigProviderUsageBlueprintPage";
 import { SettingsStorePage } from "./pages/SettingsStorePage";
 import { SecretRevealPage } from "./pages/SecretRevealPage";
 import { SegmentedControlPage } from "./pages/SegmentedControlPage";
@@ -547,6 +548,12 @@ const fullScreens: BlueprintPage[] = [
     },
     { id: "rig-inbox", label: "Rig inbox", number: "P-013", page: RigInboxBlueprintPage },
     { id: "friends", label: "Friends", number: "P-014", page: FriendsBlueprintPage },
+    {
+        id: "rig-provider-usage",
+        label: "Provider usage",
+        number: "P-015",
+        page: RigProviderUsageBlueprintPage,
+    },
 ];
 const pageNumberCompare = (left: BlueprintPage, right: BlueprintPage) =>
     left.number.localeCompare(right.number, undefined, { numeric: true });

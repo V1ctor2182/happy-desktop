@@ -17,6 +17,7 @@ import {
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
     type RigInboxStore,
+    type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy2-state";
 import {
@@ -27,6 +28,7 @@ import {
 import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
+import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -89,6 +91,8 @@ export interface RigSession {
     readonly workspace: RigWorkspaceStore;
     /** Every question this Rig's agents are waiting on, across all its sessions. */
     readonly inbox: RigInboxStore | undefined;
+    /** How much of each provider account's plan this machine's agents have spent. */
+    readonly providerUsage: RigProviderUsageStore | undefined;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
     readonly clock: RigClockStore;
 }
@@ -158,6 +162,10 @@ export function rigConnectionOpen(input: {
     // which happens once per connection, so it has to be watching before the
     // catalog loads rather than after a surface asks for it.
     const inboxSource = rigConnectInboxSourceCreate(rigConnect);
+    // Unlike the inbox this one is not opened here: usage is read on request
+    // rather than streamed, so its reader starts when a surface subscribes and
+    // stops when the last one leaves.
+    const providerUsageSource = rigConnectProviderUsageSourceCreate(rigConnect);
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -179,6 +187,7 @@ export function rigConnectionOpen(input: {
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.rigId),
         catalogSource,
         inboxSource,
+        providerUsageSource,
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -208,6 +217,7 @@ export function rigConnectionOpen(input: {
                         },
                     }),
                     inbox: client.inbox(),
+                    providerUsage: client.providerUsage(),
                     clock: rigClockStoreCreate(),
                 };
                 input.deps.changed();
