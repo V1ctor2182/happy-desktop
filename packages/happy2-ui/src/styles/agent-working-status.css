@@ -75,6 +75,18 @@
     font-variant-numeric: lining-nums tabular-nums;
 }
 
+/* The wait countdown stands in the phase slot, so it takes the same monospace
+   the typed phase label has. Its digits change every second and must not
+   change width while they do. */
+.happy2-agent-working-status__phase {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--happy2-font-mono);
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
 .happy2-agent-working-status__separator {
     flex: none;
     color: var(--input-placeholder);

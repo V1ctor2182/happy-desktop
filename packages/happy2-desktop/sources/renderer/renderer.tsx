@@ -20,7 +20,7 @@ import {
     type RigSettingsStore,
     type RigWindowStore,
 } from "happy2-state";
-import { ThemeScope, type BrowserContentRenderer } from "happy2-ui";
+import { ThemeScope, type BrowserContentRenderer, type HtmlPreviewRenderer } from "happy2-ui";
 import type {
     DesktopConfig,
     DesktopUpdateSnapshot,
@@ -39,10 +39,15 @@ import {
 } from "./localWebUpdateStore";
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
+import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
+);
+
+const desktopHtmlPreviewRender: HtmlPreviewRenderer = (props) => (
+    <DesktopHtmlPreviewView {...props} />
 );
 
 function desktopAction(operation: Promise<void>): void {
@@ -132,6 +137,7 @@ function RigBoundary(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
+    htmlPreview?: HtmlPreviewRenderer;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
@@ -146,6 +152,7 @@ function RigBoundary(props: {
             context={{
                 appearance: props.appearance,
                 browserContent: props.browserContent,
+                htmlPreview: props.htmlPreview,
                 ...(update
                     ? {
                           onUpdateApply: () => {
@@ -170,6 +177,7 @@ function RigBoundary(props: {
 function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
+    htmlPreview?: HtmlPreviewRenderer;
     bridge: HappyDesktopBridge;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
@@ -270,6 +278,7 @@ function DesktopRenderer(props: {
             appearance={props.appearance}
             bridge={props.bridge}
             browserContent={props.browserContent}
+            htmlPreview={props.htmlPreview}
             notes={props.notes}
             platform={props.platform}
             router={props.rigRouter}
@@ -333,6 +342,7 @@ if (bridge) {
                 <DesktopRenderer
                     appearance={appearance}
                     browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                    htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
                     bridge={desktopBridge}
                     notes={notes}
                     // Only the Electron window hides its title bar; the browser

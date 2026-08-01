@@ -295,3 +295,11 @@ export const desktopIpc = {
 
 /** Persistent, capability-isolated Chromium profile used only by embedded browser tabs. */
 export const happyBrowserPartition = "persist:happy2-browser";
+
+/**
+ * In-memory Chromium profile used only by rendered HTML file previews. It is
+ * deliberately not persistent and not the browser's: a previewed page keeps no
+ * cookies or storage between sessions, and can reach nothing the browser tabs
+ * are logged into.
+ */
+export const happyHtmlPreviewPartition = "happy2-html-preview";

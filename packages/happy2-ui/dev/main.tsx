@@ -115,7 +115,8 @@ import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
-import { WaitTimerPage } from "./pages/WaitTimerPage";
+import { WaitRingPage } from "./pages/WaitRingPage";
+import { HtmlPreviewFramePage } from "./pages/HtmlPreviewFramePage";
 import { ContextMeterPage } from "./pages/ContextMeterPage";
 import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
@@ -208,10 +209,10 @@ const components: BlueprintPage[] = [
         page: AgentActivityRowPage,
     },
     {
-        id: "wait-timer",
-        label: "Wait timer",
+        id: "wait-ring",
+        label: "Wait ring",
         number: "C-172",
-        page: WaitTimerPage,
+        page: WaitRingPage,
     },
     {
         id: "tool-call-preview",
@@ -245,6 +246,12 @@ const components: BlueprintPage[] = [
     },
     { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
+    {
+        id: "html-preview-frame",
+        label: "HTML preview frame",
+        number: "C-173",
+        page: HtmlPreviewFramePage,
+    },
     {
         id: "markdown-document",
         label: "Markdown document",

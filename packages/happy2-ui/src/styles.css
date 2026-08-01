@@ -69,6 +69,7 @@
 @import "./styles/file-browser.css";
 @import "./styles/markdown-document.css";
 @import "./styles/file-preview.css";
+@import "./styles/html-preview.css";
 @import "./styles/file-editor.css";
 @import "./styles/changed-file-diff.css";
 @import "./styles/document-editor.css";
@@ -123,7 +124,7 @@
 @import "./styles/rig-chat.css";
 @import "./styles/rig-connection-status.css";
 @import "./styles/agent-activity-row.css";
-@import "./styles/wait-timer.css";
+@import "./styles/wait-ring.css";
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";
 @import "./styles/conversation.css";

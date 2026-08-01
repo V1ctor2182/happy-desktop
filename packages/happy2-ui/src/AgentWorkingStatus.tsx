@@ -2,7 +2,7 @@ import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Spinner } from "./Spinner";
 import { TypedText } from "./TypedText";
-import { WaitTimer } from "./WaitTimer";
+import { WaitRing, waitFinishDateLabel, waitRemainingLabel } from "./WaitRing";
 
 export type AgentWorkingPhase =
     | "working"
@@ -67,6 +67,12 @@ function elapsedFormat(elapsedMs: number): string {
     return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
+/** The phase word a scheduled wait shows in place of "Thinking". */
+function waitLabel(wait: AgentWaitStatus): string {
+    const remaining = wait.dueAt - wait.now;
+    return remaining > 0 ? `Wait for ${waitRemainingLabel(remaining)}` : "Wait ending";
+}
+
 /** Live footer for one active agent turn: elapsed clock, phase, and fan-out. */
 export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
     const [local] = partitionComponentProps(props, [
@@ -103,39 +109,52 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                 className="happy2-agent-working-status__state"
                 data-happy2-ui="agent-working-status-state"
             >
+                {/* A wait takes the loader's box, because the share of a known
+                    interval already spent is the honest version of the same
+                    glyph. Everything else about the row is unchanged. */}
                 {local.wait ? (
-                    <WaitTimer
+                    <WaitRing
+                        className="happy2-agent-working-status__spinner"
                         finishAt={local.wait.dueAt}
                         now={local.wait.now}
+                        size={14}
                         startedAt={local.wait.startedAt}
                     />
                 ) : (
+                    <Spinner
+                        className="happy2-agent-working-status__spinner"
+                        label={label}
+                        size={14}
+                        tone="muted"
+                        variant="braille-2"
+                    />
+                )}
+                {local.elapsedMs === undefined ? null : (
                     <>
-                        <Spinner
-                            className="happy2-agent-working-status__spinner"
-                            label={label}
-                            size={14}
-                            tone="muted"
-                            variant="braille-2"
-                        />
-                        {local.elapsedMs === undefined ? null : (
-                            <>
-                                <span
-                                    className="happy2-agent-working-status__timer"
-                                    data-happy2-ui="agent-working-status-timer"
-                                >
-                                    {elapsedFormat(local.elapsedMs)}
-                                </span>
-                                <span
-                                    aria-hidden="true"
-                                    className="happy2-agent-working-status__separator"
-                                >
-                                    ·
-                                </span>
-                            </>
-                        )}
-                        <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
+                        <span
+                            className="happy2-agent-working-status__timer"
+                            data-happy2-ui="agent-working-status-timer"
+                        >
+                            {elapsedFormat(local.elapsedMs)}
+                        </span>
+                        <span aria-hidden="true" className="happy2-agent-working-status__separator">
+                            ·
+                        </span>
                     </>
+                )}
+                {/* Only the phase word gives way to the countdown. It is not
+                    TypedText: a value that changes every second would retype
+                    itself every second, and it is the same word each time. */}
+                {local.wait ? (
+                    <span
+                        className="happy2-agent-working-status__phase"
+                        data-happy2-ui="agent-working-status-phase"
+                        title={`Until ${waitFinishDateLabel(local.wait.dueAt)}`}
+                    >
+                        {waitLabel(local.wait)}
+                    </span>
+                ) : (
+                    <TypedText data-happy2-ui="agent-working-status-phase" value={label} />
                 )}
             </span>
             {details.length > 0 ? (

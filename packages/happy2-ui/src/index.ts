@@ -187,6 +187,8 @@ export {
     type FilePreviewProps,
 } from "./FilePreview";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
+export type { HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
+export { HtmlPreviewFrame, type HtmlPreviewFrameProps } from "./HtmlPreviewFrame";
 export {
     MarkdownDocument,
     markdownDocumentLinkPath,
@@ -319,7 +321,7 @@ export {
     type SpinnerTone,
     type SpinnerVariant,
 } from "./Spinner";
-export { WaitTimer, type WaitTimerProps, waitRemainingLabel } from "./WaitTimer";
+export { WaitRing, type WaitRingProps, waitFinishDateLabel, waitRemainingLabel } from "./WaitRing";
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {

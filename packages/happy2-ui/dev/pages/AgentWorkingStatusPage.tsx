@@ -63,13 +63,14 @@ export function AgentWorkingStatusPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="A scheduled wait replaces the spinner, the agent's absolute deadline, and the turn clock with one determinate ring counting down · hover names the day it ends on"
+                detail="A scheduled wait replaces only the loader and the phase word: the ring counts the interval down and the turn clock stays · hover names the day it ends on"
                 label="Wait countdown"
                 number="03"
                 stage="surface"
             >
                 <div style={column}>
                     <AgentWorkingStatus
+                        elapsedMs={132_000}
                         phase="callingTools"
                         wait={{
                             startedAt: WAIT_STARTED_AT,
@@ -78,6 +79,7 @@ export function AgentWorkingStatusPage() {
                         }}
                     />
                     <AgentWorkingStatus
+                        elapsedMs={2_724_000}
                         phase="callingTools"
                         wait={{
                             startedAt: WAIT_STARTED_AT,
@@ -86,6 +88,7 @@ export function AgentWorkingStatusPage() {
                         }}
                     />
                     <AgentWorkingStatus
+                        elapsedMs={282_000}
                         phase="callingTools"
                         wait={{
                             startedAt: WAIT_STARTED_AT,
@@ -94,6 +97,7 @@ export function AgentWorkingStatusPage() {
                         }}
                     />
                     <AgentWorkingStatus
+                        elapsedMs={21_624_000}
                         phase="callingTools"
                         wait={{
                             startedAt: WAIT_STARTED_AT,

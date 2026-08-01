@@ -73,7 +73,7 @@ export interface RigWorkspaceMemoryStore {
     groupDraftWrite(groupId: RigGroupId, draft: string): void;
 }
 
-const FILE_KINDS: readonly RigFileTabKind[] = ["file", "diff"];
+const FILE_KINDS: readonly RigFileTabKind[] = ["file", "diff", "document"];
 
 /** Reads one stored file tab, rejecting anything that is not the shape we wrote. */
 function fileTabParse(value: unknown): RigFileTabMemory | undefined {

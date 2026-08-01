@@ -156,9 +156,11 @@ export interface RigConversationSnapshot {
  * What a workspace tab shows: the file's text, its working-tree diff, or the
  * file itself rendered. `media` is what a picture, a video, or anything else
  * with no useful text opens as — its bytes reach the viewer whole rather than
- * being refused by a read that only knows how to return a string.
+ * being refused by a read that only knows how to return a string. `document` is
+ * a file that is both: an HTML page is text one edits and a page one looks at,
+ * so such a tab carries the file's text and an address the page loads from.
  */
-export type RigFileTabKind = "file" | "diff" | "media";
+export type RigFileTabKind = "file" | "diff" | "media" | "document";
 
 /** One workspace text file opened as a main-content document tab. */
 export interface RigFileTabSnapshot {
@@ -186,14 +188,22 @@ export interface RigFileTabSnapshot {
     readonly draft?: string;
     /** True while this tab's edit is being written back. */
     readonly saving: boolean;
+    /**
+     * Where this file is served as a page, for a `document` tab whose address
+     * has been resolved. Absent for every other kind, and until the host has
+     * answered — a page has nowhere to load from until then.
+     */
+    readonly previewUrl?: string;
 }
 
 /**
  * How the panel's file viewer reads one file: `text` for a document it shows as
- * characters, `media` for one whose bytes are fetched over a URL. The caller
- * decides, because what a file is worth showing as is a rendering question.
+ * characters, `media` for one whose bytes are fetched over a URL, `document` for
+ * an HTML file, which is read as text and additionally addressed as a page. The
+ * caller decides, because what a file is worth showing as is a rendering
+ * question.
  */
-export type RigPanelFileKind = "text" | "media";
+export type RigPanelFileKind = "text" | "media" | "document";
 
 /**
  * One workspace file opened beside a conversation rather than into a tab: the
@@ -207,6 +217,8 @@ export interface RigPanelFileSnapshot {
     readonly kind: RigPanelFileKind;
     readonly document: Loadable<RigWorkspaceFileDocument | RigWorkspaceFileBytes>;
     readonly loading: boolean;
+    /** Where a `document` file is served as a page, once the host has said. */
+    readonly previewUrl?: string;
 }
 
 /**
@@ -1098,6 +1110,36 @@ export function rigWorkspaceStoreCreate(
         fileLoadControllers.delete(tabId);
     };
 
+    /**
+     * Asks the host where one HTML file is served as a page and puts that
+     * address on its tab.
+     *
+     * It is a separate request from reading the file because the two answer
+     * different questions: the text is what the reader edits, the address is
+     * where the rendered page loads from, and the source view must not wait on
+     * the page. A failure leaves the tab without an address, which the surface
+     * shows as a document it can only offer as source.
+     */
+    const filePreviewAddressResolve = (
+        tabId: string,
+        generation: number,
+        tab: RigFileTabSnapshot,
+    ): void => {
+        void client.htmlPreviewOpen(tab.sessionId, tab.path).then(
+            (url) => {
+                if (disposed || fileLoadGenerations.get(tabId) !== generation) return;
+                fileTabs = fileTabs.map((candidate) =>
+                    candidate.id === tabId ? { ...candidate, previewUrl: url } : candidate,
+                );
+                recompute();
+            },
+            () => {
+                // The reader still has the file; only its rendered face is
+                // unavailable, and the surface says so without a failed tab.
+            },
+        );
+    };
+
     const fileLoad = (tabId: string, revision: string): void => {
         const before = fileTabs.find((tab) => tab.id === tabId);
         if (!before) return;
@@ -1119,7 +1161,7 @@ export function rigWorkspaceStoreCreate(
                       ...(tab.document.type === "ready" &&
                       (before.kind === "media"
                           ? "contentType" in tab.document.value
-                          : before.kind === "file"
+                          : before.kind === "file" || before.kind === "document"
                             ? "content" in tab.document.value
                             : "oldContent" in tab.document.value)
                           ? {}
@@ -1129,7 +1171,7 @@ export function rigWorkspaceStoreCreate(
         );
         recompute();
         const read =
-            before.kind === "file"
+            before.kind === "file" || before.kind === "document"
                 ? client.workspaceFileRead(before.sessionId, before.path, controller.signal)
                 : before.kind === "media"
                   ? client.workspaceFileBytesRead(before.sessionId, before.path, controller.signal)
@@ -1139,6 +1181,7 @@ export function rigWorkspaceStoreCreate(
                         before.path,
                         controller.signal,
                     );
+        if (before.kind === "document") filePreviewAddressResolve(tabId, generation, before);
         void read.then(
             (document) => {
                 if (
@@ -1198,9 +1241,20 @@ export function rigWorkspaceStoreCreate(
         panelFile = file;
         recompute();
         const read =
-            file.kind === "text"
+            file.kind === "text" || file.kind === "document"
                 ? client.workspaceFileRead(file.sessionId, file.path, controller.signal)
                 : client.workspaceFileBytesRead(file.sessionId, file.path, controller.signal);
+        if (file.kind === "document")
+            void client.htmlPreviewOpen(file.sessionId, file.path).then(
+                (url) => {
+                    if (disposed || panelFileGeneration !== generation || !panelFile) return;
+                    panelFile = { ...panelFile, previewUrl: url };
+                    recompute();
+                },
+                () => {
+                    // Only the rendered face is unavailable; the source remains.
+                },
+            );
         void read.then(
             (document) => {
                 if (disposed || panelFileGeneration !== generation || !panelFile) return;

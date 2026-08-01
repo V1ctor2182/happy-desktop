@@ -11,7 +11,15 @@ import { Spinner } from "./Spinner";
  * cannot render — an executable, an archive, a format nobody wrote a viewer for
  * — and says so with the file's own facts rather than a wall of mojibake.
  */
-export type FilePreviewKind = "image" | "video" | "audio" | "markdown" | "text" | "pdf" | "binary";
+export type FilePreviewKind =
+    | "image"
+    | "video"
+    | "audio"
+    | "markdown"
+    | "html"
+    | "text"
+    | "pdf"
+    | "binary";
 /** What the preview is looking at, once the caller has resolved the bytes. */
 export type FilePreviewContent =
     | { readonly type: "loading" }
@@ -43,6 +51,13 @@ export type FilePreviewProps = {
      * behind it.
      */
     onFileOpen?: (path: string) => void;
+    /**
+     * The file as a page rather than as characters, supplied by the host: an
+     * HTML document has a rendered face this surface cannot draw itself, since
+     * running a page is the embedder's job. Absent leaves such a file readable
+     * as source only, which is the honest state before its address is known.
+     */
+    rendered?: ReactNode;
     onClose?: () => void;
     closeLabel?: string;
 };
@@ -81,6 +96,8 @@ const EXTENSION_KIND: Record<string, FilePreviewKind> = {
     markdown: "markdown",
     md: "markdown",
     mdx: "markdown",
+    htm: "html",
+    html: "html",
     pdf: "pdf",
 };
 /** Kinds whose bytes are opaque: a preview asks the caller for a URL, not text. */
@@ -113,6 +130,7 @@ export function filePreviewKind(path: string): FilePreviewKind {
 const KIND_ICON: Record<FilePreviewKind, IconName> = {
     audio: "mic",
     binary: "doc",
+    html: "globe",
     image: "image",
     markdown: "doc",
     pdf: "doc",
@@ -143,6 +161,7 @@ export function FilePreview(props: FilePreviewProps) {
         "dimensions",
         "actions",
         "onFileOpen",
+        "rendered",
         "onClose",
         "closeLabel",
     ]);
@@ -180,7 +199,8 @@ export function FilePreview(props: FilePreviewProps) {
                     ) : null}
                 </span>
                 <span className="happy2-file-preview__actions">
-                    {kind === "markdown" && local.content.type === "text" ? (
+                    {(kind === "markdown" || local.rendered !== undefined) &&
+                    local.content.type === "text" ? (
                         <SegmentedControl
                             data-testid="file-preview-face"
                             onChange={(value) => setFace(value as MarkdownFace)}
@@ -209,6 +229,7 @@ export function FilePreview(props: FilePreviewProps) {
                     kind={kind}
                     name={name}
                     onFileOpen={local.onFileOpen}
+                    rendered={local.rendered}
                 />
             </div>
         </section>
@@ -225,6 +246,7 @@ function FilePreviewBody(props: {
     kind: FilePreviewKind;
     name: string;
     onFileOpen?: (path: string) => void;
+    rendered?: ReactNode;
 }) {
     if (props.content.type === "loading")
         return (
@@ -294,6 +316,9 @@ function FilePreviewBody(props: {
             />
         );
     }
+    // A page the host renders wins over every text view of the same bytes: it is
+    // what the reader asked for by opening the file at all.
+    if (props.rendered !== undefined && props.face === "rendered") return props.rendered;
     if (props.content.type === "text" && props.kind === "markdown" && props.face === "rendered")
         return (
             <MarkdownDocument

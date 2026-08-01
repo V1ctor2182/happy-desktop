@@ -1,0 +1,27 @@
+/* The region a rendered HTML document occupies. The page inside it is drawn by
+   the embedder, so this owns only the box: it fills whatever it is given and
+   lets nothing of the page escape it. */
+.happy2-html-preview {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    /* A document assumes paper under it. Without this a page that sets no
+       background of its own shows the app's surface through it. */
+    background: var(--page-canvas);
+}
+
+/* Whatever the host mounted — an Electron guest, an inert stand-in — is the
+   page, and the page is the whole region. */
+.happy2-html-preview > webview,
+.happy2-html-preview > iframe {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+}

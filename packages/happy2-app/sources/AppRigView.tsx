@@ -60,6 +60,8 @@ import {
     Banner,
     BrowserPanel,
     type BrowserContentRenderer,
+    HtmlPreviewFrame,
+    type HtmlPreviewRenderer,
     Button,
     ChannelHeader,
     ContextMeter,
@@ -229,6 +231,11 @@ export interface AppRigViewProps {
     onUpdateApply?: () => void;
     /** Native page renderer supplied only by the packaged Electron host. */
     browserContent?: BrowserContentRenderer;
+    /**
+     * Renders one HTML workspace file as a page. Supplied only by a host with an
+     * engine to run it in; without one an HTML file opens as its source.
+     */
+    htmlPreview?: HtmlPreviewRenderer;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -535,7 +542,14 @@ function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     return {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
-        icon: kind === "image" ? "image" : kind === "video" || kind === "audio" ? "play" : "doc",
+        icon:
+            tab.kind === "document"
+                ? "globe"
+                : kind === "image"
+                  ? "image"
+                  : kind === "video" || kind === "audio"
+                    ? "play"
+                    : "doc",
         preview: tab.preview,
     };
 }
@@ -553,12 +567,17 @@ function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
     const kind = filePreviewKind(path);
     if (kind === "image" || kind === "video" || kind === "audio" || kind === "pdf") return "media";
     if (kind === "binary") return "media";
+    // An HTML file is text that is also a page. It opens as the page, with its
+    // source a toggle away, even out of the changed list: someone opening a
+    // document wants to see the document.
+    if (kind === "html") return "document";
     return scope === "all" ? "file" : "diff";
 }
 
 /** How the panel's viewer should read one file: as characters, or as bytes. */
 function panelFileKind(path: string): RigPanelFileKind {
     const kind = filePreviewKind(path);
+    if (kind === "html") return "document";
     return kind === "markdown" || kind === "text" ? "text" : "media";
 }
 
@@ -1084,6 +1103,7 @@ export function AppRigView(props: AppRigViewProps) {
             <RigWorkspaceSurface
                 appearance={props.appearance}
                 browserContent={props.browserContent}
+                htmlPreview={props.htmlPreview}
                 chatId={props.chatId}
                 clock={active.session.clock}
                 connection={active.session.connection}
@@ -1266,6 +1286,7 @@ interface RigWorkspaceSurfaceProps {
     platform?: "desktop" | "web";
     windowState?: RigWindowStore;
     browserContent?: BrowserContentRenderer;
+    htmlPreview?: HtmlPreviewRenderer;
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
     sidebar: ReactNode;
     groupId?: string;
@@ -1417,6 +1438,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     <RigPanelBody
                         canStartTerminal={props.chatId !== undefined}
                         browserContent={props.browserContent}
+                        htmlPreview={props.htmlPreview}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
@@ -1736,6 +1758,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 <RigFileBody
                                     appearance={appearance.appearance}
                                     file={activeFile}
+                                    {...(props.htmlPreview
+                                        ? { htmlPreview: props.htmlPreview }
+                                        : {})}
                                     mode={workspace.fileViewMode}
                                     workspace={props.workspace}
                                 />
@@ -1894,6 +1919,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 function RigFileBody(props: {
     appearance: "dark" | "light";
     file: RigFileTabSnapshot;
+    htmlPreview?: HtmlPreviewRenderer;
     mode: RigFileViewMode;
     workspace: RigWorkspaceStore;
 }) {
@@ -1909,7 +1935,7 @@ function RigFileBody(props: {
             />
         );
     if (
-        file.kind === "file" &&
+        (file.kind === "file" || file.kind === "document") &&
         file.document.type === "ready" &&
         "content" in file.document.value
     ) {
@@ -1919,6 +1945,23 @@ function RigFileBody(props: {
         return (
             <FileEditor
                 dirty={dirty}
+                {...(file.kind === "document" && props.htmlPreview
+                    ? {
+                          rendered: (
+                              // The page is served from the file on disk, so the
+                              // rendered face shows what was saved; the source
+                              // face is where an unsaved edit lives until it is.
+                              <HtmlPreviewFrame>
+                                  {file.previewUrl
+                                      ? props.htmlPreview({
+                                            source: file.previewUrl,
+                                            revision: file.revision,
+                                        })
+                                      : undefined}
+                              </HtmlPreviewFrame>
+                          ),
+                      }
+                    : {})}
                 {...(filePreviewKind(file.path) === "markdown"
                     ? {
                           rendered: (
@@ -2632,6 +2675,7 @@ function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorks
 
 function RigPanelBody(props: {
     browserContent?: BrowserContentRenderer;
+    htmlPreview?: HtmlPreviewRenderer;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
@@ -2856,6 +2900,7 @@ function RigPanelBody(props: {
                 ) : props.panel.activeViewId === "file" ? (
                     panelFile ? (
                         <RigPanelFileView
+                            {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                             file={panelFile}
                             key={panelFile.path}
                             onClose={props.onPanelFileClose}
@@ -2903,6 +2948,7 @@ function panelFileIcon(path: string): "image" | "play" | "doc" {
  */
 function RigPanelFileView(props: {
     file: RigPanelFileSnapshot;
+    htmlPreview?: HtmlPreviewRenderer;
     onClose: () => void;
     onFileOpen: (path: string) => void;
 }) {
@@ -2921,6 +2967,17 @@ function RigPanelFileView(props: {
         <FilePreview
             closeLabel="Close file"
             content={content}
+            {...(file.kind === "document" && props.htmlPreview
+                ? {
+                      rendered: (
+                          <HtmlPreviewFrame>
+                              {file.previewUrl
+                                  ? props.htmlPreview({ source: file.previewUrl })
+                                  : undefined}
+                          </HtmlPreviewFrame>
+                      ),
+                  }
+                : {})}
             onClose={props.onClose}
             // A link inside the document is relative to the document holding it.
             onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}

@@ -40,6 +40,7 @@ export type FakeRigOperation =
     | "changedFilesRevert"
     | "workspaceFileRead"
     | "workspaceFileBytesRead"
+    | "htmlPreviewOpen"
     | "workspaceFileWrite"
     | "attachmentWrite"
     | "workspaceFilesRead"
@@ -417,6 +418,14 @@ class FakeRigTransportModel implements FakeRigTransport {
                 size: 1,
                 hash: "workspace-file-bytes-hash",
             })),
+        // No server behind the fake, so the address it answers with is inert: a
+        // surface under test cares that a document has somewhere to load from.
+        htmlPreviewOpen: (_sessionId, path) =>
+            this.perform(
+                "htmlPreviewOpen",
+                {},
+                () => `https://html-preview.invalid/${encodeURI(path)}`,
+            ),
         workspaceFileWrite: () => this.perform("workspaceFileWrite", {}, () => undefined),
         // The fake has no working directory, so a copy lands under the name it
         // asked for; a surface under test cares that the path came back at all.

@@ -31,6 +31,7 @@ import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtim
 import {
     desktopIpc,
     happyBrowserPartition,
+    happyHtmlPreviewPartition,
     type DesktopBrowserStatus,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
@@ -246,6 +247,42 @@ async function browserSessionConfigure(): Promise<void> {
     });
 }
 
+function htmlPreviewSessionGet() {
+    return electronSession.fromPartition(happyHtmlPreviewPartition, { cache: false });
+}
+
+/**
+ * Walls a previewed page off from everything but the loopback server that
+ * serves it.
+ *
+ * A workspace document runs its own scripts, and a page in a checkout may name
+ * any address in the world — a tracker, an exfiltration endpoint, a script it
+ * was told to load. Loopback is reached directly and everything else is sent to
+ * a proxy that does not exist, so a preview shows what the file itself contains
+ * and can neither call home nor read anything Happy is signed in to.
+ */
+async function htmlPreviewSessionConfigure(): Promise<void> {
+    const previewSession = htmlPreviewSessionGet();
+    await previewSession.setProxy({ mode: "fixed_servers", proxyRules: unavailableBrowserProxy });
+    previewSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
+        callback(false),
+    );
+    previewSession.setPermissionCheckHandler(() => false);
+    await previewSession.closeAllConnections();
+}
+
+/** Whether an address is one of this process's own loopback preview servers. */
+function htmlPreviewUrl(candidate: string): string | undefined {
+    try {
+        const parsed = new URL(candidate);
+        return parsed.protocol === "http:" && parsed.hostname === "127.0.0.1"
+            ? parsed.href
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 app.on("login", (event, _webContents, _details, authInfo, callback) => {
     if (!authInfo.isProxy || authInfo.host !== "127.0.0.1" || authInfo.port !== browserProxy?.port)
         return;
@@ -255,7 +292,11 @@ app.on("login", (event, _webContents, _details, authInfo, callback) => {
 
 function browserGuestAttach(window: BrowserWindow): void {
     window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
-        if (params.partition !== happyBrowserPartition || !browserWebUrl(params.src, true)) {
+        const previewGuest = params.partition === happyHtmlPreviewPartition;
+        const allowed = previewGuest
+            ? htmlPreviewUrl(params.src) !== undefined
+            : params.partition === happyBrowserPartition && browserWebUrl(params.src, true);
+        if (!allowed) {
             event.preventDefault();
             return;
         }
@@ -270,6 +311,21 @@ function browserGuestAttach(window: BrowserWindow): void {
         webPreferences.allowRunningInsecureContent = false;
     });
     window.webContents.on("did-attach-webview", (_event, guest) => {
+        if (guest.session === htmlPreviewSessionGet()) {
+            // A preview is one page of one file. Following a link out of it, or
+            // opening a window from it, is browsing, and browsing is the browser
+            // tab's job — so the guest stays on the document it was opened with.
+            guest.setWindowOpenHandler(({ url }) => {
+                browserOpenPublish(window, url);
+                return { action: "deny" };
+            });
+            const stayOnPreview = (event: Electron.Event, candidate: string) => {
+                if (htmlPreviewUrl(candidate) === undefined) event.preventDefault();
+            };
+            guest.on("will-navigate", stayOnPreview);
+            guest.on("will-redirect", stayOnPreview);
+            return;
+        }
         guest.setUserAgent(happyBrowserUserAgent);
         guest.setWindowOpenHandler(({ url }) => {
             browserOpenPublish(window, url);
@@ -471,6 +527,7 @@ void app
     .then(async () => {
         if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
         await browserSessionConfigure();
+        await htmlPreviewSessionConfigure();
         const desktopRoot = join(app.getPath("userData"), "desktop");
         desktopWindowStateStore = await DesktopWindowStateStore.create(
             join(desktopRoot, "window-state.json"),

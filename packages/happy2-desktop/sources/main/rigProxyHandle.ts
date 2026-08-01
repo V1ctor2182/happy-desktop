@@ -382,7 +382,13 @@ async function workspacePathResolve(
 
 const pathSeparator = process.platform === "win32" ? "\\" : "/";
 
-async function workspaceFileLoad(
+/**
+ * Reads one file of a checkout as bytes, addressed either by the session working
+ * in it or by the project/worktree itself. Exported because the HTML preview
+ * server serves a document's assets through the same client and must reach them
+ * exactly as every other file route here does, including on a remote machine.
+ */
+export async function workspaceFileLoad(
     client: RigProxyClient,
     sessionOrGroupId: string,
     filePath: string,
@@ -766,6 +772,12 @@ export interface RigProxyHandleOptions {
     readonly onConnectionError?: (error: unknown) => void;
     /** Home directory used to compute home-relative `displayCwd`s. Defaults to the OS home. */
     readonly homeDir?: string;
+    /**
+     * Where one HTML document of this Rig's checkouts is served as a page. Absent
+     * on a host with no preview server — the browser development shell — and the
+     * route then reports that this Rig cannot render a document.
+     */
+    readonly htmlPreviewUrl?: (sessionId: string, filePath: string) => string;
 }
 
 /**
@@ -895,6 +907,24 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     ),
                 );
                 writeJson(response, 200, document);
+                return true;
+            }
+            if (path === "/html-preview") {
+                // The address of the page, not the page: the viewer loads it in
+                // a guest of its own, and everything the document names is then
+                // fetched from the preview origin rather than through here.
+                if (!options.htmlPreviewUrl) {
+                    writeJson(response, 501, {
+                        error: "This Rig cannot show a rendered document.",
+                    });
+                    return true;
+                }
+                writeJson(response, 200, {
+                    url: options.htmlPreviewUrl(
+                        query.get("session") ?? "",
+                        query.get("path") ?? "",
+                    ),
+                });
                 return true;
             }
             if (path === "/workspace-file-media") {

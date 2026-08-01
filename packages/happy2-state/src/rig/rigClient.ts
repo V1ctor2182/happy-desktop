@@ -100,6 +100,11 @@ export interface RigClient {
         path: string,
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileBytes>;
+    /**
+     * Where one HTML document of a checkout is served as a page, for a viewer
+     * that renders the document rather than its source.
+     */
+    htmlPreviewOpen(sessionId: RigSessionId, path: string): Promise<string>;
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         sessionId: RigSessionId,
@@ -231,6 +236,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             transport.workspaceFileRead(sessionId, path, signal),
         workspaceFileBytesRead: (sessionId, path, signal) =>
             transport.workspaceFileBytesRead(sessionId, path, signal),
+        htmlPreviewOpen: (sessionId, path) => transport.htmlPreviewOpen(sessionId, path),
         workspaceFileWrite: (sessionId, path, content, expectedHash) =>
             transport.workspaceFileWrite(sessionId, path, content, expectedHash),
         attachmentWrite: (sessionId, name, content) =>

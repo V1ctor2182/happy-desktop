@@ -183,6 +183,13 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 url: url("/workspace-file-media", { session: sessionId, path, hash: file.hash }),
             };
         },
+        htmlPreviewOpen: async (sessionId, path) => {
+            const preview = await getJson<{ readonly url: string }>("/html-preview", {
+                session: sessionId,
+                path,
+            });
+            return preview.url;
+        },
         workspaceFileWrite: async (sessionId, path, content, expectedHash) => {
             await postJson<Record<string, never>>("/workspace-file", {
                 session: sessionId,

@@ -43,6 +43,11 @@
     --surface-pressed-overlay: transparent;
     --surface-high: #f8f8f8;
     --surface-highest: #f0f0f0;
+    /* The paper a rendered web page sits on. It is the browser's canvas rather
+       than one of our surfaces, so it stays white in both appearances: a page
+       that sets no background of its own was written expecting white, and
+       darkening it under black text would only make the page unreadable. */
+    --page-canvas: #ffffff;
     --divider: #eaeaea;
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;

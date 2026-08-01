@@ -332,6 +332,14 @@ export interface RigTransport {
         signal?: AbortSignal,
     ): Promise<RigWorkspaceFileBytes>;
 
+    /**
+     * Where one HTML document of a checkout is served as a page, so a viewer can
+     * load it the way a browser loads a site: the document's own directory is
+     * the root, and everything it references is fetched from there. The host
+     * decides what a page may reach; this only asks for the address.
+     */
+    htmlPreviewOpen(sessionId: RigSessionId, path: string): Promise<string>;
+
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         sessionId: RigSessionId,
