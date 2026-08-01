@@ -81,6 +81,9 @@ export type RigThinkingLevel =
     | "max"
     | "ultra";
 
+/** Happy's default reasoning level when the selected model offers it. */
+export const RIG_DEFAULT_THINKING_LEVEL: RigThinkingLevel = "medium";
+
 export type RigStopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
 
 export type RigTaskStatus = "pending" | "in_progress" | "completed";

@@ -1,4 +1,8 @@
-import type { RigPermissionMode, RigThinkingLevel } from "./rigTypes.js";
+import {
+    RIG_DEFAULT_THINKING_LEVEL,
+    type RigPermissionMode,
+    type RigThinkingLevel,
+} from "./rigTypes.js";
 
 declare const rigModelKeyBrand: unique symbol;
 
@@ -17,7 +21,7 @@ export interface RigSettingsSnapshot {
     /** Unset until the reader picks a model; the catalog's own default stands in. */
     readonly defaultProviderId?: string;
     readonly defaultModelId?: string;
-    readonly defaultEffort?: RigThinkingLevel;
+    readonly defaultEffort: RigThinkingLevel;
     /** Access granted to a new session before its composer overrides the choice. */
     readonly defaultPermissionMode: RigPermissionMode;
     /** Models switched off for this workspace. Absent from the set means enabled. */
@@ -56,6 +60,7 @@ export function rigSettingsStoreCreate(initial: RigSettingsInitial = {}): RigSet
     const listeners = new Set<() => void>();
     let snapshot: RigSettingsSnapshot = {
         ...initial,
+        defaultEffort: initial.defaultEffort ?? RIG_DEFAULT_THINKING_LEVEL,
         defaultPermissionMode: initial.defaultPermissionMode ?? "auto",
         disabledModels: EMPTY_DISABLED,
     };
@@ -74,10 +79,7 @@ export function rigSettingsStoreCreate(initial: RigSettingsInitial = {}): RigSet
         defaultModelUpdate(providerId, modelId) {
             if (snapshot.defaultProviderId === providerId && snapshot.defaultModelId === modelId)
                 return;
-            // The effort levels are the model's own, so a level chosen for the
-            // previous model cannot be carried onto a model that lacks it.
-            const { defaultEffort: _dropped, ...rest } = snapshot;
-            publish({ ...rest, defaultProviderId: providerId, defaultModelId: modelId });
+            publish({ ...snapshot, defaultProviderId: providerId, defaultModelId: modelId });
         },
         defaultEffortUpdate(effort) {
             if (snapshot.defaultEffort === effort) return;

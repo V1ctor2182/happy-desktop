@@ -34,6 +34,8 @@ export interface RigModelPreferenceDefault extends RigModelPreferenceIdentity {
 /** Complete machine-local model choices supplied by the desktop host. */
 export interface RigModelPreferenceDocument {
     readonly defaultSelection?: RigModelPreferenceDefault;
+    /** Reasoning level configured for new sessions before a model-specific fallback. */
+    readonly defaultEffort?: RigThinkingLevel;
     /** Access mode configured for a new session, independent of its model. */
     readonly defaultPermissionMode?: RigPermissionMode;
     readonly lastPickedModel?: RigModelPreferenceIdentity;
@@ -227,12 +229,21 @@ function selectionsFromDocument(
     current?: RigModelStoreReadySnapshot,
 ): Pick<RigModelStoreReadySnapshot, "defaultSelection" | "lastUsedSelection"> {
     const catalogDefault = rigSessionSelectionDefault(catalog);
+    const catalogDefaultModel = catalog.providers
+        .find((provider) => provider.id === catalogDefault.providerId)
+        ?.models.find((model) => model.id === catalogDefault.modelId);
+    const catalogDefaultEffort =
+        document.defaultEffort &&
+        catalogDefaultModel?.thinkingLevels.includes(document.defaultEffort)
+            ? document.defaultEffort
+            : catalogDefault.effort;
     const defaultPermissionMode =
         document.defaultPermissionMode ??
         current?.defaultSelection.permissionMode ??
         catalogDefault.permissionMode;
     const catalogSelection = {
         ...catalogDefault,
+        ...(catalogDefaultEffort !== undefined ? { effort: catalogDefaultEffort } : {}),
         permissionMode: defaultPermissionMode,
     };
     const defaultSelection =
@@ -241,6 +252,7 @@ function selectionsFromDocument(
             document.defaultSelection,
             document.preferences,
             defaultPermissionMode,
+            document.defaultEffort,
         ) ?? catalogSelection;
     const lastUsedSelection =
         preferenceSelection(
@@ -259,6 +271,7 @@ function preferenceSelection(
     identity: RigModelPreferenceIdentity | undefined,
     preferences: RigModelPreferences,
     permissionMode: RigSelection["permissionMode"],
+    defaultEffort?: RigThinkingLevel,
 ): RigSelection | undefined {
     if (!identity) return undefined;
     const provider = catalog.providers.find((candidate) => candidate.id === identity.providerId);
@@ -275,6 +288,8 @@ function preferenceSelection(
         preference?.effort && model.thinkingLevels.includes(preference.effort)
             ? preference.effort
             : undefined;
+    const supportedDefaultEffort =
+        defaultEffort && model.thinkingLevels.includes(defaultEffort) ? defaultEffort : undefined;
     const serviceTier =
         preference?.serviceTier && provider.serviceTiers.includes(preference.serviceTier)
             ? preference.serviceTier
@@ -282,7 +297,11 @@ function preferenceSelection(
     return {
         providerId: identity.providerId,
         modelId: identity.modelId,
-        effort: explicitEffort ?? rememberedEffort ?? model.defaultThinkingLevel,
+        effort:
+            explicitEffort ??
+            supportedDefaultEffort ??
+            rememberedEffort ??
+            model.defaultThinkingLevel,
         permissionMode,
         ...(serviceTier !== undefined ? { serviceTier } : {}),
     };

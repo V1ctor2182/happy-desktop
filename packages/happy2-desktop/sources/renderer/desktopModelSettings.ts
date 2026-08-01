@@ -7,6 +7,7 @@ import type {
     RigSettingsSnapshot,
     RigThinkingLevel,
 } from "happy2-state";
+import { RIG_DEFAULT_THINKING_LEVEL } from "happy2-state";
 import type {
     DesktopConfig,
     DesktopDefaultModel,
@@ -69,6 +70,7 @@ export function desktopModelSettingsCreate(
         initialSettings: settingsInitial(config),
         preferencePersistence,
         settingsChanged(snapshot) {
+            const nextEffort = snapshot.defaultEffort;
             const nextPermissionMode = snapshot.defaultPermissionMode;
             const nextDefault =
                 snapshot.defaultProviderId && snapshot.defaultModelId
@@ -80,6 +82,7 @@ export function desktopModelSettingsCreate(
                     : undefined;
             if (
                 defaultEqual(config.defaultModel, nextDefault) &&
+                config.defaultEffort === nextEffort &&
                 config.defaultPermissionMode === nextPermissionMode
             )
                 return;
@@ -107,6 +110,7 @@ export function desktopModelSettingsCreate(
                 ];
             }
             commit({
+                defaultEffort: nextEffort,
                 ...(nextDefault ? { defaultModel: nextDefault } : {}),
                 defaultPermissionMode: nextPermissionMode,
                 ...(nextDefault
@@ -127,7 +131,10 @@ export function desktopModelSettingsCreate(
 }
 
 function settingsInitial(config: DesktopConfig): RigSettingsInitial {
-    const effort = thinkingLevel(config.defaultModel?.effort);
+    const effort =
+        thinkingLevel(config.defaultEffort) ??
+        thinkingLevel(config.defaultModel?.effort) ??
+        RIG_DEFAULT_THINKING_LEVEL;
     return {
         ...(config.defaultModel
             ? {
@@ -135,7 +142,7 @@ function settingsInitial(config: DesktopConfig): RigSettingsInitial {
                   defaultModelId: config.defaultModel.modelId,
               }
             : {}),
-        ...(effort ? { defaultEffort: effort } : {}),
+        defaultEffort: effort,
         defaultPermissionMode: permissionMode(config.defaultPermissionMode),
     };
 }
@@ -159,6 +166,7 @@ function preferenceDocument(config: DesktopConfig): RigModelPreferenceDocument {
     }
     const defaultEffort = thinkingLevel(config.defaultModel?.effort);
     return {
+        defaultEffort: thinkingLevel(config.defaultEffort) ?? RIG_DEFAULT_THINKING_LEVEL,
         ...(config.defaultModel
             ? {
                   defaultSelection: {
@@ -197,6 +205,7 @@ function configFromPreferenceDocument(
             left.modelId.localeCompare(right.modelId),
     );
     return {
+        defaultEffort: document.defaultEffort ?? current.defaultEffort,
         ...(document.defaultSelection
             ? {
                   defaultModel: {

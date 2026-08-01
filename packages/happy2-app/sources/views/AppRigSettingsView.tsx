@@ -120,6 +120,10 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             (entry) =>
                 entry.provider.id === selection.providerId && entry.model.id === selection.modelId,
         );
+    const effort =
+        model?.model && !model.model.thinkingLevels.includes(settings.defaultEffort)
+            ? model.model.defaultThinkingLevel
+            : settings.defaultEffort;
     return (
         <RigSettingsShell
             activeCategoryId={props.section}
@@ -191,7 +195,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             ? rigModelKey(selection.providerId, selection.modelId)
                             : undefined
                     }
-                    effort={settings.defaultEffort ?? model?.model.defaultThinkingLevel}
+                    effort={effort}
                     effortOptions={(model?.model.thinkingLevels ?? []).map((level) => ({
                         label: rigThinkingLabel(level),
                         value: level,

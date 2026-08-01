@@ -27,6 +27,7 @@ export interface DesktopModelPreference extends DesktopModelIdentity {
  */
 export interface DesktopConfig {
     readonly defaultModel?: DesktopDefaultModel;
+    readonly defaultEffort: string;
     readonly defaultPermissionMode: DesktopPermissionMode;
     readonly lastPickedModel?: DesktopModelIdentity;
     readonly modelPreferences: readonly DesktopModelPreference[];

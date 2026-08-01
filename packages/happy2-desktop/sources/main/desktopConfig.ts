@@ -11,6 +11,7 @@ import type {
 } from "../shared/desktopContract";
 
 const CONFIG_VERSION = 1;
+const DEFAULT_EFFORT = "medium";
 const MAXIMUM_MODEL_PREFERENCES = 1_000;
 const MAXIMUM_VALUE_LENGTH = 500;
 const PERMISSION_MODES: ReadonlySet<string> = new Set([
@@ -23,6 +24,7 @@ const PERMISSION_MODES: ReadonlySet<string> = new Set([
 class InvalidDesktopConfigError extends Error {}
 
 export const desktopConfigEmpty: DesktopConfig = {
+    defaultEffort: DEFAULT_EFFORT,
     defaultPermissionMode: "auto",
     modelPreferences: [],
     version: CONFIG_VERSION,
@@ -105,6 +107,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
     )
         throw invalidConfigError();
     const allowed = new Set([
+        "defaultEffort",
         "defaultModel",
         "defaultPermissionMode",
         "lastPickedModel",
@@ -117,6 +120,12 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         candidate.defaultModel === undefined
             ? undefined
             : defaultModelParse(candidate.defaultModel);
+    const defaultEffort =
+        candidate.defaultEffort === undefined
+            ? (defaultModel?.effort ?? DEFAULT_EFFORT)
+            : preferenceValueValid(candidate.defaultEffort)
+              ? candidate.defaultEffort
+              : undefined;
     const defaultPermissionMode =
         candidate.defaultPermissionMode === undefined
             ? "auto"
@@ -127,6 +136,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
             : modelIdentityOnlyParse(candidate.lastPickedModel);
     if (
         (candidate.defaultModel !== undefined && !defaultModel) ||
+        !defaultEffort ||
         !defaultPermissionMode ||
         (candidate.lastPickedModel !== undefined && !lastPickedModel)
     )
@@ -143,6 +153,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         modelPreferences.push(preference);
     }
     return {
+        defaultEffort,
         ...(defaultModel ? { defaultModel } : {}),
         defaultPermissionMode,
         ...(lastPickedModel ? { lastPickedModel } : {}),
