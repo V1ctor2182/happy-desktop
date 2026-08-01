@@ -90,9 +90,12 @@ check("Escaping the folder", "GET /../package.json must not be served", async ()
     return { pass: response.status === 404, said: `HTTP ${response.status}` };
 });
 
+/* Read as ordinary cross-origin fetches rather than `no-cors`: an opaque
+   response reports status 0 whatever happened, so it cannot tell a refusal from
+   a page that answered. A readable response here is the failure. */
 check("Reaching the internet", "fetch('https://example.com') must fail", async () => {
     try {
-        const response = await fetch("https://example.com", { mode: "no-cors" });
+        const response = await fetch("https://example.com");
         return { pass: false, said: `answered HTTP ${response.status}` };
     } catch {
         return { pass: true, said: "refused before any socket" };
@@ -101,9 +104,7 @@ check("Reaching the internet", "fetch('https://example.com') must fail", async (
 
 check("Reaching another preview site", "a sibling origin must not answer", async () => {
     try {
-        const response = await fetch("http://not-a-real-site.localhost/index.html", {
-            mode: "no-cors",
-        });
+        const response = await fetch("http://not-a-real-site.localhost/index.html");
         return { pass: false, said: `answered HTTP ${response.status}` };
     } catch {
         return { pass: true, said: "refused" };
