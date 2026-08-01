@@ -114,7 +114,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                     glyph. Everything else about the row is unchanged. */}
                 {local.wait ? (
                     <WaitRing
-                        className="happy2-agent-working-status__spinner"
+                        className="happy2-agent-working-status__ring"
                         finishAt={local.wait.dueAt}
                         now={local.wait.now}
                         size={14}

@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RemoteRigAddRequest, RemoteRigSnapshot } from "../shared/desktopContract";
+import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import {
     remoteRigConnectorCreate,
@@ -51,16 +52,22 @@ export class RemoteRigManager implements AsyncDisposable {
         private readonly path: string,
         private readonly connector: RemoteRigConnector,
         private readonly rendererOrigin?: string,
+        private readonly htmlPreview?: HtmlPreviewProxyHandle,
     ) {}
 
     static async create(
         path: string,
-        options: { readonly connector?: RemoteRigConnector; readonly rendererOrigin?: string } = {},
+        options: {
+            readonly connector?: RemoteRigConnector;
+            readonly rendererOrigin?: string;
+            readonly htmlPreview?: HtmlPreviewProxyHandle;
+        } = {},
     ): Promise<RemoteRigManager> {
         const manager = new RemoteRigManager(
             path,
             options.connector ?? remoteRigConnectorCreate(dirname(path)),
             options.rendererOrigin,
+            options.htmlPreview,
         );
         for (const saved of await savedRead(path))
             manager.rigs.set(saved.id, {
@@ -176,6 +183,7 @@ export class RemoteRigManager implements AsyncDisposable {
             const proxy = await rigHttpProxyCreate({
                 client: connection.client,
                 ...(this.rendererOrigin ? { allowedOrigin: this.rendererOrigin } : {}),
+                ...(this.htmlPreview ? { htmlPreview: this.htmlPreview } : {}),
                 // The renderer's own connection loader reconnects the surfaces; the
                 // proxy only has to notice that this machine went away and reopen
                 // the daemon connection behind it.

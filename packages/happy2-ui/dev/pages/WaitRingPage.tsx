@@ -75,7 +75,7 @@ export function WaitRingPage() {
             </Specimen>
 
             <Specimen
-                detail="in the status footer the ring and countdown replace only the loader and the phase word · the turn clock stays · hover names the day the wait ends on"
+                detail="the ring and countdown replace only the loader and the phase word · the turn clock stays · hover names the day the wait ends on · C-154 shows the column it shares with the rows above it"
                 label="In the working status"
                 number="03"
                 stage="surface"

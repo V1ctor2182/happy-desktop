@@ -27,6 +27,7 @@ import {
     type LocalRigConnector,
 } from "./localRig";
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
+import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
 import type { Duplex } from "node:stream";
@@ -52,6 +53,8 @@ export interface DesktopRuntimeOptions {
      * origin the loopback Rig proxy answers cross-origin.
      */
     readonly rendererOrigin?: string;
+    /** The window's HTML preview proxy, so a Rig's documents can be published. */
+    readonly htmlPreview?: HtmlPreviewProxyHandle;
 }
 
 /** Owns the active local-Rig or remote-cloud topology and one immutable renderer snapshot. */
@@ -87,6 +90,7 @@ export class DesktopRuntime implements AsyncDisposable {
                     client: connection.client,
                     onConnectionError,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
+                    ...(options.htmlPreview ? { htmlPreview: options.htmlPreview } : {}),
                 }));
         const configuredActive = settings?.topologies.find(
             ({ id }) => id === settings.activeTopologyId,

@@ -77,6 +77,9 @@ function composer(overrides: Partial<ComposerSnapshot> = {}): ComposerSnapshot {
     };
 }
 
+/* Pinned so the countdown renders the same twice; the product ticks instead. */
+const WAIT_STARTED_AT = Date.parse("2026-08-01T09:00:00Z");
+
 export function ConversationViewPage() {
     return (
         <ComponentPage
@@ -121,6 +124,33 @@ export function ConversationViewPage() {
                         subtitle="~/happy2"
                         title="Fix token rotation race"
                         viewerId="rig:owner"
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the turn is inside a scheduled wait · the ring and countdown take the loader and phase word, keeping the glyph column and text column the activity rows above them set"
+                label="Waiting turn"
+                number="01b"
+                stage="app"
+            >
+                <div style={{ width: "980px", height: "660px", display: "flex" }}>
+                    <ConversationView
+                        composer={composer({ text: "" })}
+                        elapsedMs={228_000}
+                        entries={conversationEntries}
+                        onAbort={() => undefined}
+                        onComposerSend={() => undefined}
+                        onComposerValueChange={() => undefined}
+                        running
+                        subtitle="~/happy2"
+                        title="Fix token rotation race"
+                        viewerId="rig:owner"
+                        workingWait={{
+                            startedAt: WAIT_STARTED_AT,
+                            dueAt: WAIT_STARTED_AT + 3_600_000,
+                            now: WAIT_STARTED_AT + 1_654_000,
+                        }}
                     />
                 </div>
             </Specimen>

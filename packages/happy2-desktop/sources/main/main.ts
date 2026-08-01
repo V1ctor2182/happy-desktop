@@ -45,6 +45,7 @@ import {
 } from "./notesIpcValidation";
 import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
+import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 import { RemoteRigManager } from "./remoteRigManager";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
@@ -92,6 +93,7 @@ let notesStore: NotesStore;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
+let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
 let browserProxyOperation = Promise.resolve();
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
@@ -252,18 +254,26 @@ function htmlPreviewSessionGet() {
 }
 
 /**
- * Walls a previewed page off from everything but the loopback server that
- * serves it.
+ * Points the preview profile at Happy's own HTML preview proxy and walls it off
+ * from everything else.
  *
  * A workspace document runs its own scripts, and a page in a checkout may name
- * any address in the world — a tracker, an exfiltration endpoint, a script it
- * was told to load. Loopback is reached directly and everything else is sent to
- * a proxy that does not exist, so a preview shows what the file itself contains
- * and can neither call home nor read anything Happy is signed in to.
+ * any address in the world — a tracker, an endpoint it was told to call, a
+ * script from a CDN. Loopback is deliberately *not* bypassed, so every request
+ * such a page makes, including the one for the document itself, arrives at the
+ * preview proxy: it answers for the document's own folder and refuses the rest
+ * of the internet. A preview therefore shows what the file contains, and can
+ * neither call home nor reach anything Happy is signed in to.
  */
 async function htmlPreviewSessionConfigure(): Promise<void> {
     const previewSession = htmlPreviewSessionGet();
-    await previewSession.setProxy({ mode: "fixed_servers", proxyRules: unavailableBrowserProxy });
+    await previewSession.setProxy({
+        mode: "fixed_servers",
+        proxyBypassRules: "<-loopback>",
+        proxyRules: htmlPreviewProxy
+            ? `http://127.0.0.1:${String(htmlPreviewProxy.port)}`
+            : unavailableBrowserProxy,
+    });
     previewSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
         callback(false),
     );
@@ -271,11 +281,18 @@ async function htmlPreviewSessionConfigure(): Promise<void> {
     await previewSession.closeAllConnections();
 }
 
-/** Whether an address is one of this process's own loopback preview servers. */
+/**
+ * Whether an address is one of this process's own preview sites. The proxy
+ * publishes each document folder under `.localhost`, which is loopback by
+ * specification, so a page keeps the secure context it would have when served
+ * for real.
+ */
 function htmlPreviewUrl(candidate: string): string | undefined {
     try {
         const parsed = new URL(candidate);
-        return parsed.protocol === "http:" && parsed.hostname === "127.0.0.1"
+        return parsed.protocol === "http:" &&
+            parsed.port === "" &&
+            parsed.hostname.endsWith(".localhost")
             ? parsed.href
             : undefined;
     } catch {
@@ -284,10 +301,18 @@ function htmlPreviewUrl(candidate: string): string | undefined {
 }
 
 app.on("login", (event, _webContents, _details, authInfo, callback) => {
-    if (!authInfo.isProxy || authInfo.host !== "127.0.0.1" || authInfo.port !== browserProxy?.port)
+    if (!authInfo.isProxy || authInfo.host !== "127.0.0.1") return;
+    // Both loopback proxies this process runs are credentialed, and the
+    // credentials never leave it: the port says which one is asking.
+    if (authInfo.port === browserProxy?.port) {
+        event.preventDefault();
+        callback(browserProxy.username, browserProxy.password);
         return;
-    event.preventDefault();
-    callback(browserProxy.username, browserProxy.password);
+    }
+    if (authInfo.port === htmlPreviewProxy?.port) {
+        event.preventDefault();
+        callback(htmlPreviewProxy.username, htmlPreviewProxy.password);
+    }
 });
 
 function browserGuestAttach(window: BrowserWindow): void {
@@ -527,6 +552,7 @@ void app
     .then(async () => {
         if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
         await browserSessionConfigure();
+        htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
         const desktopRoot = join(app.getPath("userData"), "desktop");
         desktopWindowStateStore = await DesktopWindowStateStore.create(
@@ -549,12 +575,13 @@ void app
                 // call the loopback proxy cross-origin. Only their exact,
                 // build-owned origin receives CORS access.
                 ...(rendererOrigin ? { rendererOrigin } : {}),
+                ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
             },
         );
-        remoteRigManager = await RemoteRigManager.create(
-            join(desktopRoot, "remote-rigs.json"),
-            rendererOrigin ? { rendererOrigin } : {},
-        );
+        remoteRigManager = await RemoteRigManager.create(join(desktopRoot, "remote-rigs.json"), {
+            ...(rendererOrigin ? { rendererOrigin } : {}),
+            ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
+        });
         remoteRigManager.subscribe((rigs) => {
             const window = windowLifecycle.get();
             if (window && !window.isDestroyed())
@@ -744,6 +771,8 @@ app.on("before-quit", (event) => {
     ]).finally(() => {
         browserProxy?.close();
         browserProxy = undefined;
+        htmlPreviewProxy?.close();
+        htmlPreviewProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();
         quitting = true;
         app.quit();

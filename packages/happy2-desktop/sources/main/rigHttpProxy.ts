@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { HealthResponse } from "@slopus/rig/types";
 import type { RigDaemonHealth } from "happy2-state";
-import { htmlPreviewServerCreate, type HtmlPreviewServerHandle } from "./htmlPreviewServer";
+import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
 import { rigTerminalBridgeCreate, type RigTerminalClient } from "./rigTerminalBridge";
 
@@ -29,6 +29,12 @@ export interface RigHttpProxyOptions {
      * loads `file:` and passes nothing.
      */
     readonly allowedOrigin?: string;
+    /**
+     * The window's HTML preview proxy, if it has one. Registering this Rig's
+     * client with it is what lets a document of its checkouts be published as a
+     * site; without one this proxy reports that it cannot render a document.
+     */
+    readonly htmlPreview?: HtmlPreviewProxyHandle;
 }
 
 /** Projects Rig's protocol health into the minimal liveness shape the renderer loader consumes. */
@@ -54,14 +60,8 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * which cannot be a request/response at all. That is the only upgrade this server
  * answers, so any other upgrade attempt is refused rather than left hanging.
  */
-export async function rigHttpProxyCreate(
-    options: RigHttpProxyOptions,
-): Promise<RigHttpProxyHandle> {
-    // A previewed document runs its own scripts, so it is served from a separate
-    // loopback origin: same client, no share of this proxy's capability.
-    const htmlPreview: HtmlPreviewServerHandle = await htmlPreviewServerCreate({
-        client: options.client,
-    });
+export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
+    const htmlPreviewUrl = options.htmlPreview?.register(options.client);
     const capability = randomBytes(32).toString("base64url");
     const capabilityPrefix = `/${capability}`;
     let expectedHost: string | undefined;
@@ -137,7 +137,7 @@ export async function rigHttpProxyCreate(
             request,
             response,
             onConnectionError: options.onConnectionError,
-            htmlPreviewUrl: htmlPreview.previewUrl,
+            ...(htmlPreviewUrl ? { htmlPreviewUrl } : {}),
         }).then(
             (handled) => {
                 if (!handled && !response.headersSent) {
@@ -168,16 +168,12 @@ export async function rigHttpProxyCreate(
         if (!terminals.upgrade(request, socket, head)) socket.destroy();
     });
     return new Promise<RigHttpProxyHandle>((resolvePromise, reject) => {
-        const onError = (error: unknown) => {
-            htmlPreview.close();
-            reject(error as Error);
-        };
+        const onError = (error: unknown) => reject(error as Error);
         server.once("error", onError);
         server.listen(0, "127.0.0.1", () => {
             server.removeListener("error", onError);
             const address = server.address() as AddressInfo | null;
             if (!address) {
-                htmlPreview.close();
                 server.close();
                 reject(new Error("The Rig HTTP proxy did not bind a loopback port."));
                 return;
@@ -187,7 +183,6 @@ export async function rigHttpProxyCreate(
                 url: `http://${expectedHost}${capabilityPrefix}`,
                 close: () => {
                     terminals.close();
-                    htmlPreview.close();
                     server.close();
                 },
             });
