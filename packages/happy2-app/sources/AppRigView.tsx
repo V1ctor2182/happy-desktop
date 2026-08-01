@@ -31,6 +31,8 @@ import type {
     RigInboxStore,
     RigInstructionsStore,
     RigSecurityPolicyStore,
+    RigPluginApplication,
+    RigPluginApplicationStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
@@ -56,6 +58,7 @@ import type {
 import {
     rigAgentAuthor,
     rigInboxStoreNoop,
+    rigPluginApplicationStoreNoop,
     rigProviderUsageStoreNoop,
     rigSlotsStoreNoop,
     rigOwnerAuthor,
@@ -107,6 +110,8 @@ import {
     SlotEntries,
     type SlotVisualEntry,
     RigInboxPage,
+    RigPluginApplicationPage,
+    type RigPluginApplicationContentRenderer,
     RigProviderUsagePage,
     TabbedPane,
     TextField,
@@ -180,6 +185,12 @@ export interface AppRigSession {
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
     readonly securityPolicy?: RigSecurityPolicyStore;
+    /**
+     * Applications this machine's installed plugins contribute. Absent when the
+     * window cannot mount them at all, which is why the rows are absent too
+     * rather than opening onto a screen that cannot show anything.
+     */
+    readonly pluginApplications?: RigPluginApplicationStore;
 }
 
 export interface AppRigAddSnapshot {
@@ -297,6 +308,19 @@ export interface AppRigViewProps {
     blueprintOpen?: boolean;
     /** Addresses the workbench. */
     onBlueprintOpen?(): void;
+    /**
+     * Which local plugin application the URL addresses, by its stable identity.
+     * The generation is deliberately not in the address: a plugin that restarts
+     * keeps its place in the window while its code is replaced underneath.
+     */
+    pluginApplicationId?: string;
+    /** Addresses one of the addressed Rig's plugin applications. */
+    onPluginApplicationOpen?(applicationId: string): void;
+    /**
+     * Mounts a plugin's own isolated view. Absent in a window that cannot isolate
+     * one, which is why such a window offers no plugin rows at all.
+     */
+    pluginApplicationContent?: RigPluginApplicationContentRenderer;
 }
 
 /**
@@ -916,6 +940,36 @@ function slotActionRun(workspace: RigWorkspaceStore, action: RigSlotAction): Pro
 }
 
 /**
+ * Prefix that marks a pinned row as one a plugin contributed. The rest of the id
+ * is the application's own stable identity, so the row survives that plugin
+ * restarting and replacing its code — only what it opens onto is replaced.
+ */
+const PLUGIN_ITEM_PREFIX = "plugin:";
+
+function pluginItemId(applicationId: string): string {
+    return `${PLUGIN_ITEM_PREFIX}${applicationId}`;
+}
+
+function pluginItemParse(value: string): string | undefined {
+    return value.startsWith(PLUGIN_ITEM_PREFIX)
+        ? value.slice(PLUGIN_ITEM_PREFIX.length)
+        : undefined;
+}
+
+/**
+ * What the addressed application's surface should say. An address that no
+ * catalog names is `missing` rather than failed: nothing went wrong, the plugin
+ * that offered it is simply not running here any more.
+ */
+function pluginApplicationStatus(
+    application: RigPluginApplication | undefined,
+    loading: boolean,
+): "loading" | "ready" | "error" | "missing" {
+    if (application) return application.status;
+    return loading ? "loading" : "missing";
+}
+
+/**
  * The workspace window. It owns no product state: it subscribes to the directory
  * of Rigs, renders their projects as one sidebar, and hands the addressed Rig's
  * own stores to the surface below. A Rig that is still connecting, or one the
@@ -967,6 +1021,18 @@ export function AppRigView(props: AppRigViewProps) {
         if (!entry || entry.content.type !== "button" || !active?.session) return;
         void slotActionRun(active.session.workspace, entry.content.action).catch(() => undefined);
     };
+    // Plugin rows are pinned navigation, so this is subscribed whether or not a
+    // plugin application is open: the point of the rows is to be there while the
+    // reader is doing something else, and the catalog is what puts them there.
+    // A window that cannot mount a plugin view is handed the inert catalog, so
+    // it offers no rows rather than rows that open onto nothing.
+    const pluginStore =
+        (props.pluginApplicationContent ? active?.session?.pluginApplications : undefined) ??
+        rigPluginApplicationStoreNoop;
+    const plugins = useSyncExternalStore(pluginStore.subscribe, pluginStore.get, pluginStore.get);
+    const pluginApplication = props.pluginApplicationId
+        ? plugins.applications.find((application) => application.id === props.pluginApplicationId)
+        : undefined;
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
@@ -1029,10 +1095,12 @@ export function AppRigView(props: AppRigViewProps) {
                     kind: "action" as const,
                     label: "Friends",
                 },
-                // The component workbench is a development tool, so its row is
-                // present only while this window is being built and never in a
-                // shipped one.
-                ...(import.meta.env.DEV
+                // The component workbench is a development tool. Its row is a
+                // capability the host grants rather than an environment this
+                // component reads for itself: the router registers the workbench
+                // route, and hands down the way to open it, only in a build that
+                // has one. A host that offers no workbench shows no row.
+                ...(props.onBlueprintOpen
                     ? [
                           {
                               icon: "braces" as const,
@@ -1042,6 +1110,23 @@ export function AppRigView(props: AppRigViewProps) {
                           },
                       ]
                     : []),
+                // Whatever this machine's plugins contribute comes last of the
+                // pinned rows, in the order the daemon gives them: they are the
+                // only rows here the product did not choose, so they sit after
+                // everything it did.
+                ...plugins.applications.map((application) => ({
+                    icon: "plugin" as const,
+                    id: pluginItemId(application.id),
+                    kind: "action" as const,
+                    label: application.label,
+                    // An application whose bundle is still being prepared says so
+                    // here and cannot be opened yet: opening one is meant to read
+                    // nothing, so a row that would have to wait is a row that is
+                    // not ready. One whose code could not be prepared paints
+                    // muted for the same reason.
+                    ...(application.status === "loading" ? { status: "working" as const } : {}),
+                    ...(application.status === "error" ? { archived: true } : {}),
+                })),
             ]}
             activeItemId={
                 props.notesOpen
@@ -1054,9 +1139,11 @@ export function AppRigView(props: AppRigViewProps) {
                           ? FRIENDS_ITEM
                           : props.blueprintOpen
                             ? BLUEPRINT_ITEM
-                            : props.groupId
-                              ? rigItemId(props.rigId, props.groupId)
-                              : ""
+                            : props.pluginApplicationId
+                              ? pluginItemId(props.pluginApplicationId)
+                              : props.groupId
+                                ? rigItemId(props.rigId, props.groupId)
+                                : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -1182,6 +1269,19 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onBlueprintOpen?.();
                     return;
                 }
+                const pluginApplicationId = pluginItemParse(id);
+                if (pluginApplicationId !== undefined) {
+                    // Navigation waits for the whole bundle. A generation becomes
+                    // navigable only once its code is cached and still current,
+                    // which is what makes opening one instant; addressing one
+                    // before then would show a waiting screen instead.
+                    const offered = plugins.applications.find(
+                        (application) => application.id === pluginApplicationId,
+                    );
+                    if (offered?.status !== "ready") return;
+                    props.onPluginApplicationOpen?.(pluginApplicationId);
+                    return;
+                }
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -1286,6 +1386,37 @@ export function AppRigView(props: AppRigViewProps) {
             >
                 {desktop ? <WindowDragRegion /> : null}
                 <BlueprintView />
+            </AppShell>
+        );
+
+    // A plugin application belongs to the addressed machine. The address survives
+    // its plugin restarting, so the surface is shown whenever the URL names one
+    // and states for itself what became of it.
+    if (props.pluginApplicationId && props.pluginApplicationContent)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <RigPluginApplicationPage
+                    {...(pluginApplication?.error ? { error: pluginApplication.error } : {})}
+                    {...(pluginApplication?.status === "ready" && pluginApplication.source
+                        ? {
+                              content: props.pluginApplicationContent({
+                                  applicationId: pluginApplication.id,
+                                  generation: pluginApplication.generation,
+                                  source: pluginApplication.source,
+                                  title: pluginApplication.title,
+                              }),
+                          }
+                        : {})}
+                    pluginLabel={pluginApplication?.pluginId}
+                    status={pluginApplicationStatus(pluginApplication, plugins.loading)}
+                    title={pluginApplication?.title ?? "Application"}
+                />
             </AppShell>
         );
 

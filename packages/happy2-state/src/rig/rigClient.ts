@@ -46,6 +46,11 @@ import {
     type RigProviderUsageSource,
     type RigProviderUsageStore,
 } from "./rigProviderUsageStore.js";
+import {
+    rigPluginApplicationStoreCreate,
+    type RigPluginApplicationSource,
+    type RigPluginApplicationStore,
+} from "./rigPluginApplicationStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -83,6 +88,14 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
+    /**
+     * The single local plugin application catalog for this Rig. Materialized on
+     * first access and shared, so the navigation showing the rows and the surface
+     * showing one of them read the same list. Unavailable when the host cannot
+     * mount plugin applications at all, so a window can say that instead of
+     * showing a catalog that is empty for the wrong reason.
+     */
+    pluginApplications(): RigPluginApplicationStore | undefined;
     /**
      * This Rig's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -194,6 +207,11 @@ export interface RigClientDeps {
      * unavailable rather than empty.
      */
     readonly providerUsageSource?: RigProviderUsageSource;
+    /**
+     * The host's local plugin application catalog. Omitted leaves plugin
+     * applications unavailable rather than empty.
+     */
+    readonly pluginApplicationSource?: RigPluginApplicationSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -244,6 +262,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
+    let pluginApplicationStore: RigPluginApplicationStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
     const slotsStores = new Map<string, RigSlotsStore>();
@@ -345,6 +364,13 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
+        },
+        pluginApplications() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.pluginApplicationSource;
+            if (!source) return undefined;
+            pluginApplicationStore ??= rigPluginApplicationStoreCreate({ source });
+            return pluginApplicationStore;
         },
         instructions() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -454,6 +480,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
+            pluginApplicationStore?.[Symbol.dispose]();
+            pluginApplicationStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             for (const slots of slotsStores.values()) slots[Symbol.dispose]();
             slotsStores.clear();

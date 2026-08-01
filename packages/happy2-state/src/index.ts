@@ -361,6 +361,18 @@ export {
     type RigSecurityPolicyStoreDeps,
 } from "./rig/rigSecurityPolicyStore.js";
 export {
+    rigPluginApplicationStoreCreate,
+    rigPluginApplicationStoreNoop,
+    type RigPluginApplication,
+    type RigPluginApplicationSource,
+    type RigPluginApplicationSourceReading,
+    type RigPluginApplicationStatus,
+    type RigPluginApplicationStore,
+    type RigPluginApplicationStoreDeps,
+    type RigPluginApplicationsSnapshot,
+    type RigPluginCatalogConnection,
+} from "./rig/rigPluginApplicationStore.js";
+export {
     rigProviderUsageStoreCreate,
     rigProviderUsageStoreNoop,
     type RigProviderUsageCredits,

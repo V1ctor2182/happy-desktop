@@ -20,7 +20,12 @@ import {
     type RigSettingsStore,
     type RigWindowStore,
 } from "happy2-state";
-import { ThemeScope, type BrowserContentRenderer, type HtmlPreviewRenderer } from "happy2-ui";
+import {
+    ThemeScope,
+    type BrowserContentRenderer,
+    type HtmlPreviewRenderer,
+    type RigPluginApplicationContentRenderer,
+} from "happy2-ui";
 import type {
     DesktopConfig,
     DesktopUpdateSnapshot,
@@ -40,6 +45,7 @@ import {
 import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
+import { DesktopPluginApplicationView } from "./desktopPluginApplicationView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
@@ -49,6 +55,23 @@ const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
 const desktopHtmlPreviewRender: HtmlPreviewRenderer = (props) => (
     <DesktopHtmlPreviewView {...props} />
 );
+
+/**
+ * Mounts a plugin application against this window's bridge. A generation is a
+ * lifetime, so the frame is keyed by it: replaced plugin code is a new frame
+ * rather than a navigation inside the old one.
+ */
+function desktopPluginApplicationRenderCreate(
+    bridge: HappyDesktopBridge,
+): RigPluginApplicationContentRenderer {
+    return (props) => (
+        <DesktopPluginApplicationView
+            {...props}
+            bridge={bridge}
+            key={`${props.applicationId} ${props.generation}`}
+        />
+    );
+}
 
 function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
@@ -138,6 +161,7 @@ function RigBoundary(props: {
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    pluginApplicationContent?: RigPluginApplicationContentRenderer;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
@@ -153,6 +177,7 @@ function RigBoundary(props: {
                 appearance: props.appearance,
                 browserContent: props.browserContent,
                 htmlPreview: props.htmlPreview,
+                pluginApplicationContent: props.pluginApplicationContent,
                 ...(update
                     ? {
                           onUpdateApply: () => {
@@ -178,6 +203,7 @@ function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    pluginApplicationContent?: RigPluginApplicationContentRenderer;
     bridge: HappyDesktopBridge;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
@@ -279,6 +305,7 @@ function DesktopRenderer(props: {
             bridge={props.bridge}
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
+            pluginApplicationContent={props.pluginApplicationContent}
             notes={props.notes}
             platform={props.platform}
             router={props.rigRouter}
@@ -343,6 +370,11 @@ if (bridge) {
                     appearance={appearance}
                     browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                     htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                    pluginApplicationContent={
+                        browserLocal
+                            ? undefined
+                            : desktopPluginApplicationRenderCreate(desktopBridge)
+                    }
                     bridge={desktopBridge}
                     notes={notes}
                     // Only the Electron window hides its title bar; the browser

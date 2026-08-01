@@ -3,6 +3,7 @@ import type {
     DesktopNoteApplyRequest,
     DesktopNoteContent,
     DesktopNoteSummary,
+    DesktopPluginCatalog,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     HappyDesktopBridge,
@@ -37,6 +38,19 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
 export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
         browserProxyApply: async () => undefined,
+        // A browser window cannot isolate a plugin's code, so it offers none.
+        // The catalog is reported closed rather than loading, which is what a
+        // surface needs to say "not here" instead of waiting forever.
+        pluginApplicationsGet: async (): Promise<DesktopPluginCatalog> => ({
+            applications: [],
+            connection: "closed",
+            loading: false,
+        }),
+        pluginApplicationsSubscribe: () => () => undefined,
+        pluginAppRequest: async () => {
+            throw new Error("This window cannot host plugin applications.");
+        },
+        pluginAppCancel: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
         directoryPick: async () => undefined,

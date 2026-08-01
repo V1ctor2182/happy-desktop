@@ -45,6 +45,12 @@ export const McpAppMethod = {
     log: "notifications/message",
     /** View -> host connection health check (shared MCP `ping`). */
     ping: "ping",
+    /**
+     * Either side -> the other: the request named by `requestId` is abandoned
+     * (shared MCP `notifications/cancelled`). The receiver stops that work and
+     * sends no response for the id, because nobody is waiting for one.
+     */
+    cancelled: "notifications/cancelled",
     /** Host -> View request for graceful shutdown before the frame is removed. */
     resourceTeardown: "ui/resource-teardown",
     /** View -> host request to change its display mode (inline/fullscreen/pip). */

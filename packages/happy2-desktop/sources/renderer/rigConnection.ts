@@ -20,6 +20,7 @@ import {
     type RigInboxStore,
     type RigInstructionsStore,
     type RigSecurityPolicyStore,
+    type RigPluginApplicationStore,
     type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy2-state";
@@ -32,6 +33,7 @@ import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
+import { rigPluginApplicationSourceCreate } from "./rigPluginApplicationSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -78,6 +80,12 @@ export interface RigSession {
     readonly inbox: RigInboxStore | undefined;
     /** How much of each provider account's plan this machine's agents have spent. */
     readonly providerUsage: RigProviderUsageStore | undefined;
+    /**
+     * Applications this machine's installed plugins contribute. Absent in a
+     * window that cannot mount them, which is not the same as a machine that
+     * contributes none.
+     */
+    readonly pluginApplications: RigPluginApplicationStore | undefined;
     /** The machine-wide instructions every agent this Rig starts is given. */
     readonly instructions: RigInstructionsStore;
     /** The machine-wide policy its permission reviewer applies to agent actions. */
@@ -130,6 +138,12 @@ function healthProbe(rigHttpUrl: string): () => Promise<RigDaemonHealth> {
 export function rigConnectionOpen(input: {
     readonly host: RigHost;
     readonly deps: RigSessionDeps;
+    /**
+     * Whether this is the Rig running on this machine. Only that one may offer
+     * the locally installed plugins' applications, because the shell prepares
+     * them from this machine's own daemon.
+     */
+    readonly local: boolean;
     readonly modelPreferencePersistence: RigModelPreferencePersistence;
     /** Which Rig this is, so its tab and read memory is kept apart from the others'. */
     readonly rigId: string;
@@ -156,6 +170,20 @@ export function rigConnectionOpen(input: {
     // rather than streamed, so its reader starts when a surface subscribes and
     // stops when the last one leaves.
     const providerUsageSource = rigConnectProviderUsageSourceCreate(rigConnect);
+    // Plugin applications are prepared by the desktop shell rather than read
+    // here: mounting one safely needs an isolated origin and a cached bundle,
+    // which only the main process can provide. This side follows its catalog.
+    //
+    // The shell prepares exactly one machine's plugins — the daemon it starts
+    // and proxies itself — so the catalog belongs to this machine's Rig alone.
+    // Another machine's Rig is offered no catalog at all rather than this one's:
+    // its plugins live on that machine, its bundles are not cached here, and its
+    // generations mean nothing to this shell. Until a plugin catalog is keyed to
+    // the Rig it came from, a remote connection simply does not have the
+    // capability.
+    const pluginApplicationSource = input.local
+        ? rigPluginApplicationSourceCreate(window.happyDesktop)
+        : undefined;
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -178,6 +206,7 @@ export function rigConnectionOpen(input: {
         catalogSource,
         inboxSource,
         providerUsageSource,
+        ...(pluginApplicationSource ? { pluginApplicationSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -209,6 +238,7 @@ export function rigConnectionOpen(input: {
                     slots: (context) => client.slots(context),
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
+                    pluginApplications: client.pluginApplications(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),

@@ -22,7 +22,11 @@ import type {
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy2-state";
-import type { BrowserContentRenderer, HtmlPreviewRenderer } from "happy2-ui";
+import type {
+    BrowserContentRenderer,
+    HtmlPreviewRenderer,
+    RigPluginApplicationContentRenderer,
+} from "happy2-ui";
 import { AppRigView, type AppRigDirectoryStore, type AppRigUpdate } from "../AppRigView";
 import {
     AppRigSettingsView,
@@ -41,6 +45,11 @@ import {
 export interface RigRouterContext {
     /** Native Chromium guest renderer, present only in packaged Electron. */
     readonly browserContent?: BrowserContentRenderer;
+    /**
+     * Mounts a local plugin's own isolated view. Present only in packaged
+     * Electron, which is the only shell that can isolate one.
+     */
+    readonly pluginApplicationContent?: RigPluginApplicationContentRenderer;
     /** Renders one HTML workspace file as a page, in a host that has an engine. */
     readonly htmlPreview?: HtmlPreviewRenderer;
     readonly rigs: AppRigDirectoryStore;
@@ -212,6 +221,18 @@ const usageRoute = createRoute({
 });
 
 /**
+ * One application a locally installed plugin contributes. The Rig is in the
+ * address because the plugin is installed on that machine, and the application's
+ * stable identity follows it — not its generation, so the window stays where it
+ * is while that plugin restarts and its code is replaced.
+ */
+const pluginApplicationRoute = createRoute({
+    component: RigPluginApplicationRoute,
+    getParentRoute: () => rootRoute,
+    path: "/plugins/$rigId/$applicationId",
+});
+
+/**
  * The account's friends, addressed without a Rig: who a person is connected to
  * does not belong to one machine, so no machine appears in the address.
  */
@@ -271,6 +292,7 @@ const routeTree = rootRoute.addChildren([
     noteRoute,
     inboxRoute,
     usageRoute,
+    pluginApplicationRoute,
     friendsRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
@@ -319,12 +341,22 @@ function RigBlueprintRoute() {
     return <RigWorkspaceLayout blueprint />;
 }
 
+/**
+ * A plugin application renders the same window a conversation does: the shell
+ * and its sidebar stay, and only the content area changes, so opening one is not
+ * leaving the workspace.
+ */
+function RigPluginApplicationRoute() {
+    return <RigWorkspaceLayout pluginApplication />;
+}
+
 function RigWorkspaceLayout(
     props: {
         blueprint?: boolean;
         friends?: boolean;
         inbox?: boolean;
         notes?: boolean;
+        pluginApplication?: boolean;
         usage?: boolean;
     } = {},
 ) {
@@ -348,6 +380,7 @@ function RigWorkspaceLayout(
         groupId?: string;
         chatId?: string;
         noteId?: string;
+        applicationId?: string;
     };
     return (
         <AppRigView
@@ -363,7 +396,21 @@ function RigWorkspaceLayout(
             usageOpen={props.usage}
             friendsOpen={props.friends}
             blueprintOpen={props.blueprint}
-            onBlueprintOpen={() => void navigate({ to: "/blueprint" })}
+            // Offered only where the route exists, which is what puts the
+            // workbench row in a development sidebar and nowhere else.
+            {...(import.meta.env.DEV
+                ? { onBlueprintOpen: () => void navigate({ to: "/blueprint" }) }
+                : {})}
+            pluginApplicationContent={context.pluginApplicationContent}
+            {...(props.pluginApplication && params.applicationId
+                ? { pluginApplicationId: params.applicationId }
+                : {})}
+            onPluginApplicationOpen={(applicationId) =>
+                void navigate({
+                    params: { applicationId, rigId: params.rigId ?? rigDefaultId(context) },
+                    to: "/plugins/$rigId/$applicationId",
+                })
+            }
             onFriendsOpen={() => void navigate({ to: "/friends" })}
             onInboxOpen={() =>
                 void navigate({

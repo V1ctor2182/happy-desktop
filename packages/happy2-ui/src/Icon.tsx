@@ -61,6 +61,7 @@ export type IconName =
     | "panel-restore"
     | "trash"
     | "archive"
+    | "plugin"
     | "dot";
 export type IconProps = {
     name: IconName;
@@ -120,6 +121,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     doc: { set: "ionicons", name: "document-text-outline" },
     code: { set: "ionicons", name: "code-slash-outline" },
     braces: { set: "octicons", name: "code" },
+    // A locally installed plugin's own contribution: the piece that was added to
+    // this window rather than shipped in it.
+    plugin: { set: "ionicons", name: "extension-puzzle-outline" },
     image: { set: "ionicons", name: "image-outline" },
     play: { set: "ionicons", name: "play-outline" },
     // A filled square: the universal "end what is running now".

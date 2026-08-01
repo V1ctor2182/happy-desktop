@@ -3,6 +3,8 @@ import {
     desktopIpc,
     type DesktopBrowserStatus,
     type DesktopNoteApplyRequest,
+    type DesktopPluginAppRequest,
+    type DesktopPluginCatalog,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -23,6 +25,17 @@ const bridge: HappyDesktopBridge = {
             listener(status);
         ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
+    },
+    pluginApplicationsGet: () => ipcRenderer.invoke(desktopIpc.pluginApplicationsGet),
+    pluginAppRequest: (origin: string, requestId: string, request: DesktopPluginAppRequest) =>
+        ipcRenderer.invoke(desktopIpc.pluginAppRequest, { origin, request, requestId }),
+    pluginAppCancel: (origin: string, requestId: string) =>
+        ipcRenderer.invoke(desktopIpc.pluginAppCancel, { origin, requestId }),
+    pluginApplicationsSubscribe(listener: (catalog: DesktopPluginCatalog) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, catalog: DesktopPluginCatalog) =>
+            listener(catalog);
+        ipcRenderer.on(desktopIpc.pluginApplicationsChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.pluginApplicationsChanged, receive);
     },
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),

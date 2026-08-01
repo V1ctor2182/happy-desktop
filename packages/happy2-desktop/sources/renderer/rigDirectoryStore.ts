@@ -163,6 +163,7 @@ export function rigDirectoryStoreCreate(
         rig.url = rigHttpUrl;
         rig.connection = rigConnectionOpen({
             host,
+            local: rig.entry.kind === "local",
             rigId: id,
             rigHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence,

@@ -598,6 +598,21 @@ export {
     RigProviderUsagePage,
     type RigProviderUsagePageProps,
 } from "./pages/usage/RigProviderUsagePage";
+export {
+    RigPluginAppFrame,
+    RigPluginAppMethod,
+    rigPluginAppInitializeResult,
+    RIG_PLUGIN_APP_STORAGE_EXTENSION,
+    type RigPluginAppFrameProps,
+    type RigPluginAppRequestOptions,
+} from "./RigPluginAppFrame";
+export {
+    RigPluginApplicationPage,
+    type RigPluginApplicationContentProps,
+    type RigPluginApplicationContentRenderer,
+    type RigPluginApplicationPageProps,
+    type RigPluginApplicationPageStatus,
+} from "./pages/plugins/RigPluginApplicationPage";
 export { ProfilePage, type ProfilePageProps } from "./pages/profile/ProfilePage";
 export { CallsPage, type CallsPageProps } from "./pages/calls/CallsPage";
 export {

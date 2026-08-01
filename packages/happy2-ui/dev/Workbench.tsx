@@ -44,6 +44,7 @@ import { PluginUninstallDialogPage } from "./pages/PluginUninstallDialogPage";
 import { PluginPermissionCardPage } from "./pages/PluginPermissionCardPage";
 import { PluginDiagnosticsViewerPage } from "./pages/PluginDiagnosticsViewerPage";
 import { McpAppShellPage } from "./pages/McpAppShellPage";
+import { RigPluginApplicationBlueprintPage } from "./pages/RigPluginApplicationBlueprintPage";
 import { ComposerPage } from "./pages/ComposerPage";
 import { DataTablePage } from "./pages/DataTablePage";
 import { DiffSnippetPage } from "./pages/DiffSnippetPage";
@@ -579,6 +580,12 @@ const fullScreens: BlueprintPage[] = [
         label: "Provider usage",
         number: "P-015",
         page: RigProviderUsageBlueprintPage,
+    },
+    {
+        id: "rig-plugin-application",
+        label: "Plugin application",
+        number: "P-016",
+        page: RigPluginApplicationBlueprintPage,
     },
 ];
 const pageNumberCompare = (left: BlueprintPage, right: BlueprintPage) =>

@@ -35,6 +35,13 @@ import {
     type DesktopBrowserStatus,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
+import {
+    PluginApplicationHost,
+    pluginApplicationSchemeRegister,
+    pluginAppCancelParse,
+    pluginAppRequestParse,
+    pluginOriginHost,
+} from "./pluginApplicationHost";
 import { localRigConnectorCreate } from "./localRig";
 import { NotesStore } from "./notesStore";
 import {
@@ -81,6 +88,9 @@ const macosWindowChrome = {
 } as const;
 
 nativeTheme.themeSource = "system";
+// Chromium learns its schemes once, before it starts, so the bundle origin has
+// to be declared here rather than when the first plugin appears.
+pluginApplicationSchemeRegister();
 app.commandLine.appendSwitch("disable-quic");
 app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
 
@@ -90,6 +100,7 @@ let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let remoteRigManager: RemoteRigManager;
 let notesStore: NotesStore;
+let pluginApplications: PluginApplicationHost;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
@@ -433,6 +444,16 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     };
     window.webContents.on("will-navigate", preventUntrustedNavigation);
     window.webContents.on("will-redirect", preventUntrustedNavigation);
+    // A mounted plugin application is its own bundle and nothing else. Its frame
+    // may navigate inside the generation it was mounted for and nowhere else —
+    // not onto the web, and not onto the generation that replaced it.
+    window.webContents.on("will-frame-navigate", (details) => {
+        if (details.isMainFrame) return;
+        const leavingBundle = pluginOriginHost(details.frame?.url ?? "") !== undefined;
+        const enteringBundle = pluginOriginHost(details.url) !== undefined;
+        if (!leavingBundle && !enteringBundle) return;
+        if (!pluginApplications.originAllows(details.url)) details.preventDefault();
+    });
     const ownerId = window.webContents.id;
     const cleanup = () => {
         rigInstallManager?.closeOwner(ownerId);
@@ -554,6 +575,13 @@ void app
         await browserSessionConfigure();
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
+        pluginApplications = new PluginApplicationHost({
+            onChange: (catalog) => {
+                const window = windowLifecycle.get();
+                if (window && !window.isDestroyed())
+                    window.webContents.send(desktopIpc.pluginApplicationsChanged, catalog);
+            },
+        });
         const desktopRoot = join(app.getPath("userData"), "desktop");
         desktopWindowStateStore = await DesktopWindowStateStore.create(
             join(desktopRoot, "window-state.json"),
@@ -611,6 +639,15 @@ void app
                     snapshot.connectionId !== browserProxyConnectionId)
             )
                 void browserProxySerial(browserProxyFailClosed);
+            // Bundles belong to the daemon that served them, so the plugin
+            // subscription follows the active local Rig exactly: another machine,
+            // a reconnect onto a new proxy, or no local Rig at all retires every
+            // cached generation rather than carrying it across.
+            pluginApplications.endpointSet(
+                snapshot.phase === "ready" && snapshot.activeTarget.authentication === "rig"
+                    ? snapshot.activeTarget.rigHttpUrl
+                    : undefined,
+            );
             const previous = windowLifecycle.get();
             const window = windowSynchronize(snapshot);
             applicationMenuInstall(snapshot);
@@ -621,7 +658,32 @@ void app
             )
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
         });
+        // The runtime may already be ready by the time the subscription above is
+        // installed, and its first snapshot is not replayed.
+        {
+            const snapshot = runtime.get();
+            pluginApplications.endpointSet(
+                snapshot.phase === "ready" && snapshot.activeTarget.authentication === "rig"
+                    ? snapshot.activeTarget.rigHttpUrl
+                    : undefined,
+            );
+        }
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
+        ipcMain.handle(desktopIpc.pluginApplicationsGet, () => pluginApplications.get());
+        ipcMain.handle(desktopIpc.pluginAppRequest, (_event, raw: unknown) => {
+            const request = pluginAppRequestParse(raw);
+            if (!request) throw new Error("The plugin application request is invalid.");
+            return pluginApplications.appRequest(
+                request.origin,
+                request.requestId,
+                request.request,
+            );
+        });
+        ipcMain.handle(desktopIpc.pluginAppCancel, (_event, raw: unknown) => {
+            const cancellation = pluginAppCancelParse(raw);
+            if (!cancellation) throw new Error("The plugin application request is invalid.");
+            pluginApplications.appCancel(cancellation.origin, cancellation.requestId);
+        });
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),

@@ -216,8 +216,85 @@ export interface DesktopBrowserStatus {
     readonly statusText: string;
 }
 
+/**
+ * One local plugin application as the renderer is allowed to see it.
+ *
+ * The renderer never learns the daemon endpoint, its token, the plugin's folder
+ * on disk, or any address it could fetch itself. It receives an identity to
+ * navigate to, a label to draw, and — only once the whole bundle is cached and
+ * still current — the isolated origin its view may be pointed at. `generation`
+ * is carried through so a click, a mount, and an action all name the same code;
+ * a changed generation is a replacement, never an update in place.
+ */
+export interface DesktopPluginApplication {
+    /** Stable navigation identity: `<plugin folder>:<authored application id>`. */
+    readonly id: string;
+    /** Opaque identity of the running plugin process that declared this bundle. */
+    readonly generation: string;
+    readonly pluginId: string;
+    readonly title: string;
+    readonly label: string;
+    readonly order: number;
+    /**
+     * `loading` while the bundle is being prefetched, `ready` once every declared
+     * resource is cached, `error` when the bundle could not be completed. Only a
+     * `ready` application carries a `source`.
+     */
+    readonly status: "loading" | "ready" | "error";
+    readonly error?: string;
+    /** Entry address on this generation's isolated origin, present only when ready. */
+    readonly source?: string;
+}
+
+/** Where the catalog subscription itself is, so a surface can say why it is empty. */
+export type DesktopPluginConnectionState = "connecting" | "live" | "reconnecting" | "closed";
+
+export interface DesktopPluginCatalog {
+    /** Every contributed application in the daemon's navigation order. */
+    readonly applications: readonly DesktopPluginApplication[];
+    readonly connection: DesktopPluginConnectionState;
+    /** True until the first catalog has been received, so "none" is not claimed early. */
+    readonly loading: boolean;
+}
+
+/**
+ * One host operation a mounted plugin application asked for, as the MCP Apps
+ * host received it from that application's own frame.
+ *
+ * The set is closed and each member carries only what that operation takes.
+ * Which application and which generation is asking is never in here: it is the
+ * origin the message arrived on, which the browser stamps and a page cannot
+ * choose for itself.
+ */
+export type DesktopPluginAppRequest =
+    | { readonly kind: "toolCall"; readonly name: string; readonly arguments: unknown }
+    | { readonly kind: "resourceRead"; readonly uri: string }
+    | { readonly kind: "storageGet"; readonly key: string }
+    | { readonly kind: "storageSet"; readonly key: string; readonly value: unknown }
+    | { readonly kind: "storageDelete"; readonly key: string }
+    | { readonly kind: "storageList" };
+
 export interface HappyDesktopBridge {
     browserProxyApply(sessionId: string): Promise<void>;
+    /** The current plugin application catalog, without waiting for the next change. */
+    pluginApplicationsGet(): Promise<DesktopPluginCatalog>;
+    pluginApplicationsSubscribe(listener: (catalog: DesktopPluginCatalog) => void): () => void;
+    /**
+     * Performs one host operation for the plugin application mounted at `origin`.
+     * The window reads that origin from the message event the request arrived in,
+     * so the page never names which application it is.
+     */
+    pluginAppRequest(
+        origin: string,
+        requestId: string,
+        request: DesktopPluginAppRequest,
+    ): Promise<unknown>;
+    /**
+     * Withdraws the operation started under `requestId` for the application at
+     * `origin`. The window sends this when a View cancels its JSON-RPC request,
+     * so the work behind it stops instead of running on unwatched.
+     */
+    pluginAppCancel(origin: string, requestId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     directoryPick(): Promise<string | undefined>;
@@ -270,6 +347,12 @@ export const desktopIpc = {
     noteRename: "happy2:notes:rename",
     notesChanged: "happy2:notes:changed",
     notesList: "happy2:notes:list",
+    /** Withdraws one host operation the application's View no longer wants. */
+    pluginAppCancel: "happy2:plugins:app-cancel",
+    /** One host operation, on behalf of the application at the given origin. */
+    pluginAppRequest: "happy2:plugins:app-request",
+    pluginApplicationsChanged: "happy2:plugins:changed",
+    pluginApplicationsGet: "happy2:plugins:get",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
     remoteRigConnect: "happy2:remote-rig:connect",
@@ -295,6 +378,13 @@ export const desktopIpc = {
 
 /** Persistent, capability-isolated Chromium profile used only by embedded browser tabs. */
 export const happyBrowserPartition = "persist:happy2-browser";
+
+/**
+ * Scheme the main process serves cached plugin bundles on. Each generation gets
+ * its own opaque host under it, so two generations are two origins and nothing
+ * a replaced bundle left behind is reachable from the one that replaced it.
+ */
+export const happyPluginScheme = "happy-plugin";
 
 /**
  * In-memory Chromium profile used only by rendered HTML file previews. It is
