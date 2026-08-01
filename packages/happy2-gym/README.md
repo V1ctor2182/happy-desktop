@@ -50,6 +50,28 @@ rig.completeRun(rig.submittedRuns[0]!.runId, "Recovered reply");
 rig.resumeGlobalEventDelivery();
 ```
 
+## Scenarios that need the real Rig daemon
+
+Almost everything runs against the mock daemon above. A few scenarios start the
+bundled `@slopus/rig` binary instead, and that binary refuses to boot unless a
+coding assistant is signed in on the machine — without an authenticated
+inference provider it exits with "No inference providers are available". CI
+runners and release validation hold no such credentials, so guard those
+scenarios with the exported gate:
+
+```ts
+import { localRigIsUnavailable } from "happy2-gym";
+
+it.skipIf(localRigIsUnavailable)("starts the bundled Rig daemon", async () => {
+    // ...
+});
+```
+
+The gate is on whenever `CI` is set or `HAPPY2_SKIP_LOCAL_RIG_TESTS=1`, which
+`pnpm release` sets for its validation run. Use it only for a real daemon; a
+scenario that can be proven against `createMockRigDaemon` must keep running
+everywhere.
+
 ## Naming and organizing tests
 
 Put server end-to-end tests in `tests/server`. Give every test file a name that

@@ -4,6 +4,7 @@ export interface RunCommandOptions {
     allowFailure?: boolean;
     captureOutput?: boolean;
     cwd?: string;
+    env?: Readonly<Record<string, string>>;
 }
 
 export interface RunCommandResult {
@@ -19,6 +20,7 @@ export function runCommand(
 ): RunCommandResult {
     const result = spawnSync(command, arguments_, {
         cwd: options.cwd,
+        env: options.env === undefined ? process.env : { ...process.env, ...options.env },
         encoding: "utf8",
         stdio: options.captureOutput === true ? ["ignore", "pipe", "pipe"] : "inherit",
     });

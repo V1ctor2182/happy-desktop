@@ -119,7 +119,10 @@ async function release(): Promise<void> {
     }
 
     console.log("Validating the release...");
-    runCommand("pnpm", ["check"]);
+    // A release machine is not required to have a coding assistant signed in, so
+    // the scenarios that boot the real Rig daemon stand down here exactly as they
+    // do on a CI runner.
+    runCommand("pnpm", ["check"], { env: { HAPPY2_SKIP_LOCAL_RIG_TESTS: "1" } });
 
     if (!retryingRelease) {
         console.log(`Creating the ${releaseInput} release commit and tag...`);
