@@ -98,7 +98,17 @@ describe("ban channel ownership transfer", () => {
             await waitUntil(Date.parse(expiresAt));
             const expired = await asAdministrator.post("/v0/admin/expireBans", {});
             expect(expired.statusCode).toBe(200);
-            expect(expired.json().expired).toBeGreaterThanOrEqual(1);
+            // The server sweeps elapsed bans every second on its own, so it may
+            // already have closed this one and reported nothing here. Prove the
+            // ban is gone rather than which caller observed the transition.
+            expect(
+                (
+                    await database.execute({
+                        sql: "SELECT banned_at, ban_expires_at FROM accounts WHERE id = (SELECT account_id FROM users WHERE id = ?)",
+                        args: [expiringTarget.id],
+                    })
+                ).rows[0],
+            ).toMatchObject({ ban_expires_at: null, banned_at: null });
             await expect(channelState(database, expiryChatId)).resolves.toMatchObject({
                 owner_user_id: expirySuccessor.id,
             });
