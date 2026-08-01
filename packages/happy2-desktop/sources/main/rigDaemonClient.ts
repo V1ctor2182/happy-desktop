@@ -11,6 +11,7 @@ import type {
     GlobalEventQueueEntry,
     GlobalEventDelivery,
     GlobalCatalogResponse,
+    GlobalInstructionsResponse,
     HealthResponse,
     ModelCatalog,
     Project,
@@ -98,6 +99,20 @@ export class RigDaemonClient {
 
     models(): Promise<{ readonly catalog: ModelCatalog }> {
         return this.#requestJson("GET", "/models");
+    }
+
+    /**
+     * The machine-wide instructions every agent this Rig starts is given: the
+     * daemon's own `AGENTS.md`. A Rig that has never been given any answers with
+     * empty text rather than failing, so there is nothing to create first.
+     */
+    globalInstructions(): Promise<GlobalInstructionsResponse> {
+        return this.#requestJson("GET", "/config/instructions");
+    }
+
+    /** Replaces those instructions wholesale and answers with what was stored. */
+    setGlobalInstructions(instructions: string): Promise<GlobalInstructionsResponse> {
+        return this.#requestJson("PUT", "/config/instructions", { instructions });
     }
 
     /**

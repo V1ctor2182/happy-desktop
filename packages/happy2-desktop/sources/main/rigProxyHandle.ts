@@ -702,6 +702,8 @@ export type RigProxyClient = Pick<
     | "health"
     | "rawRequest"
     | "models"
+    | "globalInstructions"
+    | "setGlobalInstructions"
     | "listSessions"
     | "listCatalog"
     | "gitWatch"
@@ -801,6 +803,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             }
             if (path === "/models") {
                 writeJson(response, 200, rigCatalogProject((await client.models()).catalog));
+                return true;
+            }
+            if (path === "/instructions") {
+                writeJson(response, 200, await client.globalInstructions());
                 return true;
             }
             if (path === "/projects") {
@@ -1019,6 +1025,21 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 }
             }
             return false;
+        }
+
+        if (method === "PUT" && path === "/instructions") {
+            const body = await bodyReadJson(request);
+            // The daemon is the one that decides what fits: it answers a refused
+            // write with its own message, which travels back as an error status
+            // rather than being second-guessed here.
+            writeJson(
+                response,
+                200,
+                await client.setGlobalInstructions(
+                    typeof body.instructions === "string" ? body.instructions : "",
+                ),
+            );
+            return true;
         }
 
         if (method === "POST" && path === "/workspace-file") {

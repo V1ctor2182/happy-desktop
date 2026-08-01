@@ -331,6 +331,13 @@ export {
     type RigInboxSubmission,
 } from "./rig/rigInboxStore.js";
 export {
+    rigInstructionsStoreCreate,
+    RIG_INSTRUCTIONS_MAX_BYTES,
+    type RigInstructionsSnapshot,
+    type RigInstructionsStore,
+    type RigInstructionsStoreDeps,
+} from "./rig/rigInstructionsStore.js";
+export {
     rigProviderUsageStoreCreate,
     rigProviderUsageStoreNoop,
     type RigProviderUsageCredits,

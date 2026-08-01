@@ -110,6 +110,11 @@ export interface GlobalCatalogResponse {
     readonly workspaces: readonly ProjectWorkspace[];
 }
 
+/** The daemon's global `AGENTS.md`, empty when the machine has none yet. */
+export interface GlobalInstructionsResponse {
+    readonly instructions: string;
+}
+
 export interface GitRepositoryFacts {
     readonly ahead: number;
     readonly behind: number;

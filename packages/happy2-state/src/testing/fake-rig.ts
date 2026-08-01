@@ -33,6 +33,8 @@ import type {
 
 export type FakeRigOperation =
     | "modelsRead"
+    | "globalInstructionsRead"
+    | "globalInstructionsWrite"
     | "projectsRead"
     | "changedFileRead"
     | "changedFilesRevert"
@@ -250,6 +252,9 @@ function summaryOf(session: RigSession): RigSessionSummary {
 
 class FakeRigTransportModel implements FakeRigTransport {
     private catalog = DEFAULT_CATALOG;
+    /* The machine-wide instructions, kept as a real document: what is written
+       back is what the next read returns, exactly as the daemon behaves. */
+    private instructions = "";
     private readonly sessions = new Map<RigSessionId, RigSession>();
     /* Archived sessions stay readable by id and only drop out of the listing,
        which is exactly how the desktop host's durable archive behaves. */
@@ -385,6 +390,13 @@ class FakeRigTransportModel implements FakeRigTransport {
 
     readonly transport: RigTransport = {
         modelsRead: () => this.perform("modelsRead", {}, () => this.catalog),
+        globalInstructionsRead: () =>
+            this.perform("globalInstructionsRead", {}, () => this.instructions),
+        globalInstructionsWrite: (instructions) =>
+            this.perform("globalInstructionsWrite", {}, () => {
+                this.instructions = instructions;
+                return this.instructions;
+            }),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
         workspaceFilesRead: () =>
             this.perform("workspaceFilesRead", {}, () => ({ paths: [], truncated: false })),

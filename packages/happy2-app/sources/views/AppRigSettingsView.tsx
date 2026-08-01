@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
+    RigInstructionsSnapshot,
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
@@ -10,6 +11,7 @@ import type {
     RigWindowStore,
 } from "happy2-state";
 import {
+    RIG_INSTRUCTIONS_MAX_BYTES,
     rigModelKey,
     rigPermissionLabel,
     rigThinkingLabel,
@@ -17,6 +19,7 @@ import {
 } from "happy2-state";
 import {
     RigGeneralSettings,
+    RigInstructionsSettings,
     RigMachineSettings,
     RigProviderSettings,
     RigSettingsShell,
@@ -30,6 +33,7 @@ import type { AppRigDirectorySnapshot, AppRigDirectoryStore } from "../AppRigVie
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "machines", label: "Machines" },
     { icon: "globe", id: "providers", label: "Providers" },
 ];
@@ -43,6 +47,7 @@ export function rigSettingsCategoryExists(section: string): boolean {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     general: "How this window looks and what a new session starts with",
+    instructions: "What every agent on this machine is told before anything else",
     machines: "Every Rig this window works in, here and elsewhere",
     providers: "Every model provider this Rig daemon knows about",
 };
@@ -92,6 +97,15 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.settings.get,
         props.settings.get,
     );
+    // Subscribing is what starts the read, so the instructions are asked for
+    // only while this window is open, and only once however often it is.
+    const instructionsStore = directory.rigs.find((rig) => rig.kind === "local")?.session
+        ?.instructions;
+    const instructions = useSyncExternalStore(
+        instructionsStore?.subscribe ?? noSubscribe,
+        instructionsStore?.get ?? instructionsUnavailable,
+        instructionsStore?.get ?? instructionsUnavailable,
+    );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -120,7 +134,32 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             windowControls={props.platform === "desktop"}
             windowFullScreen={windowState.fullScreen}
         >
-            {props.section === "machines" ? (
+            {props.section === "instructions" ? (
+                <RigInstructionsSettings
+                    bytes={instructions.bytes}
+                    dirty={instructions.dirty}
+                    error={
+                        instructionsStore === undefined
+                            ? "This window is not connected to a Rig on this machine."
+                            : instructions.stored.type === "error"
+                              ? instructions.stored.error.message
+                              : undefined
+                    }
+                    loading={
+                        instructionsStore !== undefined &&
+                        instructions.stored.type !== "ready" &&
+                        instructions.stored.type !== "error"
+                    }
+                    maximumBytes={RIG_INSTRUCTIONS_MAX_BYTES}
+                    onRevert={() => instructionsStore?.revert()}
+                    onSave={() => instructionsStore?.save()}
+                    onValueChange={(value) => instructionsStore?.draftUpdate(value)}
+                    path={INSTRUCTIONS_PATH}
+                    saveError={instructions.saveError?.message}
+                    saving={instructions.saving}
+                    value={instructions.draft}
+                />
+            ) : props.section === "machines" ? (
                 <RigMachineSettings
                     draft={{
                         destination: directory.add.destination,
@@ -203,9 +242,25 @@ function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow
     }));
 }
 
+/**
+ * Where the daemon keeps its global instructions. The path is fixed by Rig
+ * itself and is shown rather than asked for, so it is plain what a save changes.
+ */
+const INSTRUCTIONS_PATH = "~/.rig/AGENTS.md";
+
 const noSubscribe = () => () => undefined;
 const UNLOADED = { type: "loading" } as const;
 const modelsUnloaded = () => UNLOADED;
+
+const INSTRUCTIONS_UNAVAILABLE: RigInstructionsSnapshot = {
+    stored: { type: "unloaded" },
+    draft: "",
+    dirty: false,
+    bytes: 0,
+    saving: false,
+};
+/** Stands in while no Rig on this machine is connected to read them from. */
+const instructionsUnavailable = () => INSTRUCTIONS_UNAVAILABLE;
 
 /** The chosen default, falling back to whatever the catalog itself defaults to. */
 function defaultSelection(

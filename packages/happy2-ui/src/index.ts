@@ -613,6 +613,10 @@ export {
     type RigGeneralSettingsProps,
 } from "./pages/settings/RigGeneralSettings";
 export {
+    RigInstructionsSettings,
+    type RigInstructionsSettingsProps,
+} from "./pages/settings/RigInstructionsSettings";
+export {
     RigMachineSettings,
     type RigMachineDraft,
     type RigMachineRow,

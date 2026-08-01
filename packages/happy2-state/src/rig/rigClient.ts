@@ -34,6 +34,7 @@ import {
     type RigWorkspaceMemoryStore,
 } from "./rigWorkspaceMemory.js";
 import { rigInboxStoreCreate, type RigInboxSource, type RigInboxStore } from "./rigInboxStore.js";
+import { rigInstructionsStoreCreate, type RigInstructionsStore } from "./rigInstructionsStore.js";
 import {
     rigProviderUsageStoreCreate,
     type RigProviderUsageSource,
@@ -76,6 +77,12 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
+    /**
+     * This Rig's own machine-wide instructions, as one editable document.
+     * Materialized on first access and shared, so the settings window and
+     * anything else showing them are looking at the same draft.
+     */
+    instructions(): RigInstructionsStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /** Reads one existing text file from a project/worktree checkout. */
@@ -208,6 +215,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
+    let instructionsStore: RigInstructionsStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -289,6 +297,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
+        },
+        instructions() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            instructionsStore ??= rigInstructionsStoreCreate({ transport });
+            return instructionsStore;
         },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -388,6 +401,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
+            instructionsStore?.[Symbol.dispose]();
+            instructionsStore = undefined;
             deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();

@@ -275,6 +275,21 @@ export interface RigTransport {
     modelsRead(): Promise<RigModelCatalog>;
 
     /**
+     * The machine-wide instructions every agent this host starts is given — the
+     * host's own `AGENTS.md`. A host that has never been given any answers with
+     * empty text, so there is no such thing as a missing document to create.
+     */
+    globalInstructionsRead(signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Replaces those instructions wholesale and answers with what was stored,
+     * which is what the surface then shows: the host is free to have normalized
+     * the text it was handed, and a refusal — text too large for it to keep —
+     * arrives as a failure carrying the host's own reason.
+     */
+    globalInstructionsWrite(instructions: string): Promise<string>;
+
+    /**
      * The host's project and worktree catalog: the durable groups the workspace
      * lists sessions under. Read alongside `sessionsRead` on every reconcile, so
      * a renamed project or a freshly created worktree lands with the sessions

@@ -29,6 +29,7 @@ import type {
     RigInboxItem,
     RigInboxSnapshot,
     RigInboxStore,
+    RigInstructionsStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
@@ -159,6 +160,8 @@ export interface AppRigSession {
      * too rather than opening onto an account list that means nothing.
      */
     readonly providerUsage?: RigProviderUsageStore;
+    /** This Rig's machine-wide instructions, as the settings window edits them. */
+    readonly instructions?: RigInstructionsStore;
 }
 
 export interface AppRigAddSnapshot {

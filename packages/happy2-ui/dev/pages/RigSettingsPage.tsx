@@ -1,5 +1,6 @@
 import {
     RigGeneralSettings,
+    RigInstructionsSettings,
     RigProviderSettings,
     RigSettingsShell,
     type RigProviderRow,
@@ -9,8 +10,18 @@ import { ComponentPage, FullScreenSpecimen } from "../kit";
 
 const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "globe", id: "providers", label: "Providers" },
 ];
+
+const instructions = `# House rules
+
+Ask before touching anything outside the working directory.
+
+- Small commits, present tense, no ceremony.
+- \`pnpm typecheck\` before you say a thing is done.
+- Never force-push \`main\`.
+`;
 
 const modelOptions = [
     { label: "Codex · GPT-5.6 Sol", value: "codex:openai/gpt-5.6-sol" },
@@ -158,9 +169,33 @@ export function RigSettingsBlueprintPage() {
                 </RigSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
+                detail="Instructions category: the machine's own AGENTS.md, opened on its rendered face with the room left beneath it"
+                label="Rig settings — instructions"
+                number="02"
+            >
+                <RigSettingsShell
+                    activeCategoryId="instructions"
+                    categories={categories}
+                    description="What every agent on this machine is told before anything else"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Instructions"
+                >
+                    <RigInstructionsSettings
+                        bytes={instructions.length}
+                        maximumBytes={32 * 1024}
+                        onRevert={noop}
+                        onSave={noop}
+                        onValueChange={noop}
+                        path="~/.rig/AGENTS.md"
+                        value={instructions}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
                 detail="Providers category: connected, unauthenticated, disabled, and model-less providers together"
                 label="Rig settings — providers"
-                number="02"
+                number="03"
             >
                 <RigSettingsShell
                     activeCategoryId="providers"
@@ -176,7 +211,7 @@ export function RigSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="The catalog has not arrived yet, so both the picker and the provider list say so"
                 label="Rig settings — loading"
-                number="03"
+                number="04"
             >
                 <RigSettingsShell
                     activeCategoryId="providers"
@@ -192,7 +227,7 @@ export function RigSettingsBlueprintPage() {
             <FullScreenSpecimen
                 detail="A failed catalog read is a loud alert rather than an empty provider list"
                 label="Rig settings — error"
-                number="04"
+                number="05"
             >
                 <RigSettingsShell
                     activeCategoryId="providers"

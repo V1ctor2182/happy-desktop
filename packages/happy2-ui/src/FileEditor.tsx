@@ -34,6 +34,12 @@ export type FileEditorProps = {
      * its text and shows no control.
      */
     rendered?: ReactNode;
+    /**
+     * Which face the editor opens on when it has both. Defaults to reading,
+     * which is right for a file being looked at; a document that is empty, or
+     * that was opened in order to be written, opens on its source instead.
+     */
+    initialFace?: "rendered" | "source";
     /** Right-aligned status-bar text (e.g. "Saved", "1.2 KB"). */
     status?: string;
     placeholder?: string;
@@ -57,7 +63,7 @@ function splitPath(path: string): {
  * Revert / Close), an optional alert banner for disk-change or conflict, a
  * monospace code body, and a status bar. Cmd/Ctrl+S saves. A file that can also
  * be read rather than edited — Markdown — supplies `rendered` and opens on that
- * face behind a Rendered / Source control. The app owns the draft, the
+ * face, or on `initialFace`, behind a Rendered / Source control. The app owns the draft, the
  * dirty/saving state, and the conflict-safe write — the editor only renders and
  * reports intent.
  */
@@ -77,6 +83,7 @@ export function FileEditor(props: FileEditorProps) {
         "readOnly",
         "banner",
         "rendered",
+        "initialFace",
         "status",
         "placeholder",
         "saveLabel",
@@ -86,7 +93,7 @@ export function FileEditor(props: FileEditorProps) {
     // A Markdown file opens as the document it is, and typing in it is the
     // deliberate second step. Which face is showing belongs to this reading of
     // the file, so it lives here rather than in product state.
-    const [face, setFace] = useState<"rendered" | "source">("rendered");
+    const [face, setFace] = useState<"rendered" | "source">(props.initialFace ?? "rendered");
     const reading = local.rendered !== undefined && face === "rendered";
     const parts = () => splitPath(local.path);
     const canSave = () => Boolean(local.dirty) && !local.saving && !local.readOnly;

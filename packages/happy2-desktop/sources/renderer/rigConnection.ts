@@ -16,6 +16,7 @@ import {
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
     type RigInboxStore,
+    type RigInstructionsStore,
     type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy2-state";
@@ -72,6 +73,8 @@ export interface RigSession {
     readonly inbox: RigInboxStore | undefined;
     /** How much of each provider account's plan this machine's agents have spent. */
     readonly providerUsage: RigProviderUsageStore | undefined;
+    /** The machine-wide instructions every agent this Rig starts is given. */
+    readonly instructions: RigInstructionsStore;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
     readonly clock: RigClockStore;
 }
@@ -198,6 +201,7 @@ export function rigConnectionOpen(input: {
                     }),
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
+                    instructions: client.instructions(),
                     clock: rigClockStoreCreate(),
                 };
                 input.deps.changed();
