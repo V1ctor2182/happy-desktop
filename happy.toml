@@ -1,0 +1,6 @@
+[workspace]
+setup_commands = ["pnpm install --frozen-lockfile"]
+
+[network]
+allowed_domains = ["registry.npmjs.org", "nodejs.org"]
+allowed_ports = [443]
