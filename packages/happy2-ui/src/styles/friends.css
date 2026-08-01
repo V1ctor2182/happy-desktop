@@ -40,6 +40,7 @@
  * without a breakpoint.
  */
 .happy2-friends__grid {
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- Wrapped tiles must share their row's height, which flexbox cannot express. */
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 12px;
