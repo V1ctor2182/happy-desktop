@@ -644,6 +644,18 @@
     opacity: 0.8;
 }
 
+/* A link to a workspace file is a real button so it reads as an in-app action
+   to assistive technology, but it sits in the text flow as a link does. */
+.happy2-message__md-file {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-align: left;
+}
+
 /* Inline code: mono, a touch smaller than the body, on a subtle raised fill. */
 .happy2-message__body--markdown code {
     font-family: var(--happy2-font-mono);

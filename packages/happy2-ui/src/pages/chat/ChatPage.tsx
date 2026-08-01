@@ -7,6 +7,7 @@ import {
     Button,
     ComposerModelControl,
     DocumentsPanel,
+    FilePreview,
     Lightbox,
     ModalOverlay,
     Sidebar,
@@ -1396,6 +1397,23 @@ export function ChatPage(props: ChatPageProps) {
                           />
                       </ModalOverlay>
                   ))(mediaModel.lightbox)
+                : null}
+            {mediaModel.document
+                ? ((attachment) => (
+                      <ModalOverlay onDismiss={mediaModel.closeDocument}>
+                          {/* An attached document is read at the width the
+                              modal system already reserves for content-heavy
+                              detail, rather than in a window of its own. */}
+                          <div className="happy2-chat-document-modal">
+                              <FilePreview
+                                  content={{ type: "text", text: attachment.text }}
+                                  onClose={mediaModel.closeDocument}
+                                  path={attachment.name}
+                                  size={attachment.size}
+                              />
+                          </div>
+                      </ModalOverlay>
+                  ))(mediaModel.document)
                 : null}
         </>
     );

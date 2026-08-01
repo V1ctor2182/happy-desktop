@@ -10,6 +10,7 @@ import type {
 } from "happy2-state";
 import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
+import { filePreviewKind } from "./FilePreview";
 import { Icon, type IconName } from "./Icon";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 import { ScrollingText } from "./ScrollingText";
@@ -21,6 +22,12 @@ export type AgentActivityRowProps = {
     activity: ConversationActivity;
     /** Opens a tool's complete body in an owner-provided detail surface. */
     onToolSelect?: (tool: ConversationToolCall) => void;
+    /**
+     * Opens the workspace file a tool call worked on, in the product's file
+     * viewer. A row whose tool names no single showable file offers nothing,
+     * and a surface with no workspace behind it passes nothing.
+     */
+    onFileOpen?: (path: string) => void;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
     /**
@@ -207,6 +214,37 @@ function fileName(path: string): string {
     return normalized.slice(normalized.lastIndexOf("/") + 1) || path;
 }
 
+/** Argument names the file-reading and file-writing tools carry a path under. */
+const FILE_PATH_ARGUMENTS = ["file_path", "filePath", "path", "notebook_path"] as const;
+
+/**
+ * The one workspace file a tool call is about, when it is about exactly one and
+ * Happy can show it. A multi-file edit has no single answer, and a tool whose
+ * subject is an archive or a binary would only open on "no preview", so both
+ * report nothing rather than offering a click that goes nowhere.
+ */
+function toolFilePath(tool: ConversationToolCall): string | undefined {
+    const presentation = tool.presentation;
+    const candidate =
+        presentation?.type === "fileDiff"
+            ? presentation.files.length === 1
+                ? presentation.files[0]!.path
+                : undefined
+            : argumentFilePath(tool.arguments);
+    if (candidate === undefined || candidate.trim().length === 0) return undefined;
+    return filePreviewKind(candidate) === "binary" ? undefined : candidate;
+}
+
+function argumentFilePath(argumentsValue: ConversationToolCall["arguments"]): string | undefined {
+    if (typeof argumentsValue !== "object" || argumentsValue === null) return undefined;
+    if (Array.isArray(argumentsValue)) return undefined;
+    for (const key of FILE_PATH_ARGUMENTS) {
+        const value = (argumentsValue as Record<string, ConversationJson>)[key];
+        if (typeof value === "string" && value.trim().length > 0) return value;
+    }
+    return undefined;
+}
+
 function diffCounts(file: ConversationFileDiff): { added: number; deleted: number } {
     if (file.added !== undefined || file.deleted !== undefined)
         return { added: file.added ?? 0, deleted: file.deleted ?? 0 };
@@ -332,6 +370,7 @@ function AgentToolActivity(props: {
     tool: ConversationToolCall;
     defaultExpanded?: boolean;
     onSelect?: (tool: ConversationToolCall) => void;
+    onFileOpen?: (path: string) => void;
     singleLine?: boolean;
     time?: string;
 }) {
@@ -381,6 +420,8 @@ function AgentToolActivity(props: {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = humanizeToolName(tool.toolName);
     }
+
+    const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
 
     const argsJson = presentation ? undefined : boundedJson(tool.arguments);
     const execOutput =
@@ -562,6 +603,24 @@ function AgentToolActivity(props: {
                         {header}
                     </button>
                 )}
+                {filePath !== undefined && props.onFileOpen ? (
+                    /* A sibling of the header for the same reason the copy
+                       action is one: the header is itself a button in every
+                       variant that opens something. */
+                    <button
+                        aria-label={`Open ${fileName(filePath)}`}
+                        className="happy2-agent-activity__open"
+                        data-happy2-ui="agent-activity-open"
+                        data-path={filePath}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            props.onFileOpen?.(filePath);
+                        }}
+                        type="button"
+                    >
+                        <Icon name="eye" size={14} />
+                    </button>
+                ) : null}
                 <CopyButton
                     data-happy2-ui="agent-activity-copy"
                     label="Copy tool detail"
@@ -895,6 +954,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                 <AgentToolActivity
                     defaultExpanded={props.defaultExpanded}
                     onSelect={props.onToolSelect}
+                    {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                     singleLine={props.singleLine}
                     time={props.time}
                     tool={activity.tool}

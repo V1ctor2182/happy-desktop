@@ -1,9 +1,10 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { fileTreeFamily } from "./FileTree";
 import { Icon, type IconName } from "./Icon";
-import { renderMessageMarkdown } from "./MessageMarkdown";
+import { MarkdownDocument } from "./MarkdownDocument";
+import { SegmentedControl } from "./SegmentedControl";
 import { Spinner } from "./Spinner";
 /**
  * How a file is shown. `binary` is the honest answer for something this surface
@@ -36,9 +37,23 @@ export type FilePreviewProps = {
     dimensions?: string;
     /** Trailing header controls, e.g. Download or Open in editor. */
     actions?: ReactNode;
+    /**
+     * Opens a file a rendered Markdown document links to. Absent leaves those
+     * links inert, which is the honest answer on a surface with no workspace
+     * behind it.
+     */
+    onFileOpen?: (path: string) => void;
     onClose?: () => void;
     closeLabel?: string;
 };
+
+/** Which face of a Markdown file is showing: the document, or what it is written in. */
+type MarkdownFace = "rendered" | "source";
+
+const MARKDOWN_FACES: readonly { value: MarkdownFace; label: string }[] = [
+    { value: "rendered", label: "Rendered" },
+    { value: "source", label: "Source" },
+];
 /** File extensions this surface can actually render, by how it renders them. */
 const EXTENSION_KIND: Record<string, FilePreviewKind> = {
     avif: "image",
@@ -127,9 +142,14 @@ export function FilePreview(props: FilePreviewProps) {
         "size",
         "dimensions",
         "actions",
+        "onFileOpen",
         "onClose",
         "closeLabel",
     ]);
+    // Which face of a Markdown file is showing is a property of looking at it,
+    // not of the file or the product, so it stays here and resets when the
+    // preview is replaced by a different file.
+    const [face, setFace] = useState<MarkdownFace>("rendered");
     const kind = local.kind ?? filePreviewKind(local.path);
     const name = local.path.slice(local.path.lastIndexOf("/") + 1);
     const directory = local.path.slice(0, local.path.lastIndexOf("/") + 1);
@@ -160,6 +180,15 @@ export function FilePreview(props: FilePreviewProps) {
                     ) : null}
                 </span>
                 <span className="happy2-file-preview__actions">
+                    {kind === "markdown" && local.content.type === "text" ? (
+                        <SegmentedControl
+                            data-testid="file-preview-face"
+                            onChange={(value) => setFace(value as MarkdownFace)}
+                            segments={[...MARKDOWN_FACES]}
+                            size="small"
+                            value={face}
+                        />
+                    ) : null}
                     {local.actions}
                     {local.onClose ? (
                         <Button
@@ -174,7 +203,13 @@ export function FilePreview(props: FilePreviewProps) {
                 </span>
             </header>
             <div className="happy2-file-preview__body" data-happy2-ui="file-preview-body">
-                <FilePreviewBody content={local.content} kind={kind} name={name} />
+                <FilePreviewBody
+                    content={local.content}
+                    face={face}
+                    kind={kind}
+                    name={name}
+                    onFileOpen={local.onFileOpen}
+                />
             </div>
         </section>
     );
@@ -186,8 +221,10 @@ export function FilePreview(props: FilePreviewProps) {
  */
 function FilePreviewBody(props: {
     content: FilePreviewContent;
+    face: MarkdownFace;
     kind: FilePreviewKind;
     name: string;
+    onFileOpen?: (path: string) => void;
 }) {
     if (props.content.type === "loading")
         return (
@@ -257,20 +294,12 @@ function FilePreviewBody(props: {
             />
         );
     }
-    if (props.content.type === "text" && props.kind === "markdown")
+    if (props.content.type === "text" && props.kind === "markdown" && props.face === "rendered")
         return (
-            <div className="happy2-file-preview__scroll">
-                {/* The shared markdown body class is what styles rendered
-                    Markdown everywhere in the product; a viewer that restyled
-                    its own headings and lists would drift away from the prose
-                    the same document produces in a message. */}
-                <article
-                    className="happy2-file-preview__prose happy2-message__body--markdown"
-                    data-happy2-ui="file-preview-prose"
-                >
-                    {renderMessageMarkdown(props.content.text)}
-                </article>
-            </div>
+            <MarkdownDocument
+                {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+                text={props.content.text}
+            />
         );
     if (props.content.type === "text")
         return (

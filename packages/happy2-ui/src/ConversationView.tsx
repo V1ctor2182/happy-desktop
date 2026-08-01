@@ -110,6 +110,13 @@ export type ConversationViewProps = {
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens one tool entry in the workspace's replaceable Preview tab. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
+    /**
+     * Opens a workspace file the transcript names — the file a tool call worked
+     * on, or one a message links to — in the product's own file viewer. Absent
+     * leaves those affordances out entirely, because a transcript with no
+     * workspace behind it has nothing to open.
+     */
+    onFileOpen?: (path: string) => void;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -299,6 +306,7 @@ export function ConversationView(props: ConversationViewProps) {
                                 onImageOpen={props.onImageOpen}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onToolSelect={props.onToolSelect}
+                                {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                 onTraceToggle={props.onTraceToggle}
                                 /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is

@@ -4,8 +4,9 @@
  * A 56px surface header naming the file, then a body that fills whatever region
  * the preview was given. Visual media is centered on the inset surface with the
  * artwork contained rather than cropped, because a preview that crops has
- * answered a different question than the one asked. Text and Markdown scroll in
- * a full-bleed scrollport whose inner wrapper carries the reading measure.
+ * answered a different question than the one asked. Text scrolls in a full-bleed
+ * scrollport whose inner wrapper carries the reading measure, and a Markdown
+ * document is handed to `MarkdownDocument`, which owns its own reading measure.
  * Colors and type are theme tokens only.
  */
 
@@ -138,19 +139,6 @@
     min-width: 0;
     min-height: 0;
     overflow: auto;
-}
-
-.happy2-file-preview__prose {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    width: 100%;
-    max-width: var(--happy2-chat-measure);
-    margin: 0 auto;
-    padding: 20px 24px 40px;
-    color: var(--text);
-    font-size: 14px;
-    line-height: 22px;
 }
 
 .happy2-file-preview__code {

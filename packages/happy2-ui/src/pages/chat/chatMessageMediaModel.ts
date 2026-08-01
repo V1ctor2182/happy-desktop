@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from "react";
 import type { DeepReadonly, FileSummary } from "happy2-state";
 import { thumbHashToDataURL } from "thumbhash";
+import { filePreviewKind } from "../../FilePreview.js";
 import type { MessageImage } from "./ChatPageComponents.js";
 import type { ChatPageActions } from "./ChatPage.js";
 import type { LiveChatMessage } from "./chatPageModels.js";
@@ -12,6 +13,12 @@ export function useChatMessageMediaModel(
         url: string;
         caption?: string;
         detail?: string;
+    }>();
+    /** The attached document being read, rather than downloaded. */
+    const [openDocument, setOpenDocument] = useState<{
+        name: string;
+        size: string;
+        text: string;
     }>();
     const [urls] = useState(() => new Map<string, string>());
     const [loading] = useState(() => new Set<string>());
@@ -64,12 +71,34 @@ export function useChatMessageMediaModel(
     const files = (message: LiveChatMessage) =>
         attachmentFiles(message)
             .filter((file) => !imageFiles(message).some((image) => image.id === file.id))
-            .map((file) => ({
+            .map((file) => {
+                const name = file.originalName ?? "Attachment";
+                return {
+                    name,
+                    kind: file.kind,
+                    size: formatBytes(file.size),
+                    // An attached Markdown file is something to read. Handing it
+                    // to the browser as a download made the one attachment Happy
+                    // can render the only one it refused to show.
+                    onOpen:
+                        filePreviewKind(name) === "markdown"
+                            ? () => void documentOpen(file)
+                            : () => void download(file),
+                };
+            });
+
+    async function documentOpen(file: DeepReadonly<FileSummary>) {
+        try {
+            const contents = await actions.fileDownload(file.id);
+            setOpenDocument({
                 name: file.originalName ?? "Attachment",
-                kind: file.kind,
                 size: formatBytes(file.size),
-                onOpen: () => void download(file),
-            }));
+                text: new TextDecoder().decode(contents),
+            });
+        } catch (error) {
+            onError(error);
+        }
+    }
     async function imageOpen(message: LiveChatMessage, imageId: string) {
         const file = imageFiles(message).find((candidate) => candidate.id === imageId);
         if (!file) return;
@@ -96,7 +125,15 @@ export function useChatMessageMediaModel(
         },
         [urls],
     );
-    return { lightbox, closeLightbox: () => setLightbox(undefined), images, files, imageOpen };
+    return {
+        lightbox,
+        closeLightbox: () => setLightbox(undefined),
+        document: openDocument,
+        closeDocument: () => setOpenDocument(undefined),
+        images,
+        files,
+        imageOpen,
+    };
 }
 
 /** Decodes the URL-safe base64 ThumbHash persisted with an uploaded image. */

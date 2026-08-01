@@ -165,6 +165,12 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     images?: MessageImage[];
     /** Opens an image (by id) — wire to a web-modal lightbox, never a new tab. */
     onImageOpen?: (id: string) => void;
+    /**
+     * Opens a workspace file this message links to, in the product's own file
+     * viewer. Absent leaves such links inert, which is what a surface with no
+     * workspace behind it can honestly offer.
+     */
+    onFileOpen?: (path: string) => void;
     /** Makes the avatar and author name clickable to open the author's profile.
      *  Only the leading message of a group renders an avatar/name, so grouped
      *  follow-ups intentionally carry no profile affordance. */
@@ -259,6 +265,7 @@ export function Message(props: MessageProps) {
         "imageUrl",
         "images",
         "onImageOpen",
+        "onFileOpen",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -412,7 +419,11 @@ export function Message(props: MessageProps) {
             >
                 {ownAutomatedLine}
                 {typeof local.body === "string"
-                    ? renderMessageMarkdown(local.body, inlineIncomingHoverMeta ?? undefined)
+                    ? renderMessageMarkdown(
+                          local.body,
+                          inlineIncomingHoverMeta ?? undefined,
+                          local.onFileOpen,
+                      )
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box
                     so generation-state changes cannot collapse the message row. */}

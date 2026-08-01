@@ -182,6 +182,27 @@ export interface RigFileTabSnapshot {
 }
 
 /**
+ * How the panel's file viewer reads one file: `text` for a document it shows as
+ * characters, `media` for one whose bytes are fetched over a URL. The caller
+ * decides, because what a file is worth showing as is a rendering question.
+ */
+export type RigPanelFileKind = "text" | "media";
+
+/**
+ * One workspace file opened beside a conversation rather than into a tab: the
+ * file a transcript named, read on its own so following a link out of the chat
+ * does not disturb the files the reader has open in the main content.
+ */
+export interface RigPanelFileSnapshot {
+    readonly sessionId: RigSessionId;
+    /** Path as the transcript named it, which is what the host is asked to read. */
+    readonly path: string;
+    readonly kind: RigPanelFileKind;
+    readonly document: Loadable<RigWorkspaceFileDocument | RigWorkspaceFileBytes>;
+    readonly loading: boolean;
+}
+
+/**
  * Combined, immutable projection of the whole local workspace: the conversation
  * list plus the open conversation. A single subscription fans out both, so a
  * React surface reads the entire workspace through one `useSyncExternalStore`
@@ -193,6 +214,12 @@ export interface RigWorkspaceSnapshot {
     readonly conversation: Loadable<RigConversationSnapshot>;
     readonly fileTabs: readonly RigFileTabSnapshot[];
     readonly activeFileTabId?: string;
+    /**
+     * The file the panel's viewer is on, if any. It is separate from `fileTabs`
+     * because it is a glance out of the transcript with the panel's lifetime,
+     * not a document the reader put in the main content.
+     */
+    readonly panelFile?: RigPanelFileSnapshot;
     /**
      * The session focusing each project or worktree should land on: the tab it
      * was left on, or the one behind that in its tab history when the reader has
@@ -438,6 +465,16 @@ export interface RigWorkspaceStore {
         path: string,
         kind: RigFileTabKind,
     ): void;
+    /**
+     * Opens one workspace file in the panel's viewer, beside the conversation
+     * that named it. This is what a link in a message and the file a tool call
+     * worked on resolve to: the file is read for showing, the panel's viewer tab
+     * appears immediately with that read's loading state, and the main content
+     * — the transcript the reader is following — is left exactly as it was.
+     */
+    filePanelOpen(sessionId: RigSessionId, path: string, kind: RigPanelFileKind): void;
+    /** Closes the panel's file viewer and stops its pending read. */
+    filePanelClose(): void;
     /** Selects one open file tab, or clears file selection when a session is selected. */
     fileSelect(tabId: string | undefined): void;
     fileClose(tabId: string): void;
@@ -709,6 +746,15 @@ export function rigWorkspaceStoreCreate(
     let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
     let fileTabs: readonly RigFileTabSnapshot[] = [];
     let activeFileTabId: string | undefined;
+    let panelFile: RigPanelFileSnapshot | undefined;
+    let panelFileGeneration = 0;
+    let panelFileController: AbortController | undefined;
+    /**
+     * The working-tree revision the viewer's file was read at, so an agent
+     * editing the file the reader is looking at replaces what is on screen
+     * rather than leaving them reading a stale copy.
+     */
+    let panelFileRevision: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
     const fileLoadControllers = new Map<string, AbortController>();
     /** The group the URL currently names, so tab memory knows what it describes. */
@@ -880,6 +926,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
             snapshot.activeFileTabId === activeFileTabId &&
+            snapshot.panelFile === panelFile &&
             snapshot.groupResume === groupResume &&
             snapshot.openInTargets === openInTargets &&
             snapshot.openInRecentId === openInRecentId &&
@@ -912,6 +959,7 @@ export function rigWorkspaceStoreCreate(
             workspaceFilesLoading,
             ...(create ? { create } : {}),
             ...(activeFileTabId ? { activeFileTabId } : {}),
+            ...(panelFile ? { panelFile } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
             ...(rename ? { rename } : {}),
@@ -1124,6 +1172,57 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
+     * Reads the file the panel's viewer is on. One file is being looked at, so
+     * one read is in flight: opening another aborts the previous one and its
+     * answer is discarded by generation, which is what stops a slow first file
+     * from landing on top of the second.
+     */
+    const panelFileLoad = (file: RigPanelFileSnapshot): void => {
+        const generation = panelFileGeneration + 1;
+        panelFileGeneration = generation;
+        panelFileController?.abort();
+        const controller = new AbortController();
+        panelFileController = controller;
+        panelFile = file;
+        recompute();
+        const read =
+            file.kind === "text"
+                ? client.workspaceFileRead(file.sessionId, file.path, controller.signal)
+                : client.workspaceFileBytesRead(file.sessionId, file.path, controller.signal);
+        void read.then(
+            (document) => {
+                if (disposed || panelFileGeneration !== generation || !panelFile) return;
+                panelFileController = undefined;
+                panelFile = {
+                    ...panelFile,
+                    document: { type: "ready", value: document },
+                    loading: false,
+                };
+                recompute();
+            },
+            (error: unknown) => {
+                if (disposed || panelFileGeneration !== generation || !panelFile) return;
+                panelFileController = undefined;
+                panelFile = {
+                    ...panelFile,
+                    document: { type: "error", error: rigUserError(error) },
+                    loading: false,
+                };
+                recompute();
+            },
+        );
+    };
+
+    /** Stops the panel viewer's pending read and forgets the file it was on. */
+    const panelFileRelease = (): void => {
+        panelFileGeneration += 1;
+        panelFileController?.abort();
+        panelFileController = undefined;
+        panelFile = undefined;
+        panelFileRevision = undefined;
+    };
+
+    /**
      * Opens a file with preview or permanent lifetime. Each group has at most
      * one preview; permanent tabs and previews in other groups keep their place.
      */
@@ -1199,6 +1298,13 @@ export function rigWorkspaceStoreCreate(
         for (const tab of fileTabs) {
             const change = fileChangeFind(tab.groupId, tab.path);
             if (change && change.revision !== tab.revision) fileLoad(tab.id, change.revision);
+        }
+        if (panelFile && addressedGroupId !== undefined) {
+            const change = fileChangeFind(addressedGroupId, panelFile.path);
+            if (change && change.revision !== panelFileRevision) {
+                panelFileRevision = change.revision;
+                panelFileLoad({ ...panelFile, loading: true });
+            }
         }
     };
 
@@ -1459,6 +1565,9 @@ export function rigWorkspaceStoreCreate(
         // address in this same call stack — before the chat handle is acquired, so
         // a terminal is never briefly attributed to the conversation just left.
         panel.conversationApply(conversationId);
+        // The panel's viewer showed a file out of the conversation being left,
+        // named by a path that only means anything in that session's checkout.
+        if (conversationId !== openId) panelFileRelease();
         if (conversationId === openId) {
             // Re-addressing the same conversation is how a failed acquisition is
             // retried, which is what a repeated navigation to it should do.
@@ -1717,6 +1826,7 @@ export function rigWorkspaceStoreCreate(
         fileLoadControllers.clear();
         for (const tab of fileTabs)
             fileLoadGenerations.set(tab.id, (fileLoadGenerations.get(tab.id) ?? 0) + 1);
+        panelFileRelease();
         releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };
@@ -1848,6 +1958,27 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
+        filePanelOpen(sessionId, path, kind) {
+            if (disposed) return;
+            panelFileRevision =
+                addressedGroupId === undefined
+                    ? undefined
+                    : fileChangeFind(addressedGroupId, path)?.revision;
+            panel.fileViewOpen();
+            panelFileLoad({
+                sessionId,
+                path,
+                kind,
+                document: { type: "loading" },
+                loading: true,
+            });
+        },
+        filePanelClose() {
+            if (disposed) return;
+            panelFileRelease();
+            panel.fileViewClose();
+            recompute();
+        },
         filePreview: (sessionId, groupId, path, kind) =>
             fileTabOpen(sessionId, groupId, path, kind, true),
         fileOpen: (sessionId, groupId, path, kind) =>

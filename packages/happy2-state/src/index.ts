@@ -378,6 +378,8 @@ export {
     rigWorkspaceStoreCreate,
     type RigFileTabKind,
     type RigFileTabSnapshot,
+    type RigPanelFileKind,
+    type RigPanelFileSnapshot,
     type RigCreateGroupOption,
     type RigCreateSnapshot,
     type RigFileLayout,

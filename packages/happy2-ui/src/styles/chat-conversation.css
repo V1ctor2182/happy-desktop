@@ -56,3 +56,19 @@
 .happy2-chat-conversation .happy2-message[data-grouped].happy2-message--after-trace-steps {
     padding-top: 8px;
 }
+
+/*
+ * An attached document, read inside the chat rather than downloaded. It takes
+ * the large modal width and a bounded height so a long document scrolls inside
+ * the card instead of growing the overlay past the window.
+ */
+.happy2-chat-document-modal {
+    display: flex;
+    width: 640px;
+    max-width: 100%;
+    height: min(720px, 100cqh - 48px);
+    overflow: hidden;
+    border-radius: var(--happy2-radius-shell);
+    background: var(--surface);
+    box-shadow: 0 24px 64px var(--shadow-elevated);
+}

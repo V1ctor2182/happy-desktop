@@ -17,6 +17,7 @@ export { EmptyState } from "../../EmptyState.js";
 export { FileAttachment } from "../../FileAttachment.js";
 export { FileEditor } from "../../FileEditor.js";
 export { FilePanel } from "../../FilePanel.js";
+export { FilePreview } from "../../FilePreview.js";
 export { FormRow } from "../../FormRow.js";
 export { InfoPanel, type InfoPanelProfile } from "../../InfoPanel.js";
 export { Lightbox } from "../../Lightbox.js";

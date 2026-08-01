@@ -1,11 +1,13 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    useState,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type ReactNode,
 } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { SegmentedControl } from "./SegmentedControl";
 export type FileEditorProps = {
     className?: string;
     "data-testid"?: string;
@@ -25,6 +27,13 @@ export type FileEditorProps = {
     readOnly?: boolean;
     /** Alert slot between header and body — a disk-change or conflict Banner. */
     banner?: ReactNode;
+    /**
+     * The file read rather than edited — a rendered Markdown document. Supplying
+     * it makes this editor open on the reading face, with a Rendered / Source
+     * control that swaps in the text area; a file with no rendering is simply
+     * its text and shows no control.
+     */
+    rendered?: ReactNode;
     /** Right-aligned status-bar text (e.g. "Saved", "1.2 KB"). */
     status?: string;
     placeholder?: string;
@@ -46,9 +55,11 @@ function splitPath(path: string): {
  * C-054 FileEditor — a props-only text editor surface for one workspace file.
  * A 56px surface header (name, directory subtitle, unsaved marker, Save /
  * Revert / Close), an optional alert banner for disk-change or conflict, a
- * monospace code body, and a status bar. Cmd/Ctrl+S saves. The app owns the
- * draft, the dirty/saving state, and the conflict-safe write — the editor only
- * renders and reports intent.
+ * monospace code body, and a status bar. Cmd/Ctrl+S saves. A file that can also
+ * be read rather than edited — Markdown — supplies `rendered` and opens on that
+ * face behind a Rendered / Source control. The app owns the draft, the
+ * dirty/saving state, and the conflict-safe write — the editor only renders and
+ * reports intent.
  */
 export function FileEditor(props: FileEditorProps) {
     const [local] = partitionComponentProps(props, [
@@ -65,12 +76,18 @@ export function FileEditor(props: FileEditorProps) {
         "saving",
         "readOnly",
         "banner",
+        "rendered",
         "status",
         "placeholder",
         "saveLabel",
         "revertLabel",
         "closeLabel",
     ]);
+    // A Markdown file opens as the document it is, and typing in it is the
+    // deliberate second step. Which face is showing belongs to this reading of
+    // the file, so it lives here rather than in product state.
+    const [face, setFace] = useState<"rendered" | "source">("rendered");
+    const reading = local.rendered !== undefined && face === "rendered";
     const parts = () => splitPath(local.path);
     const canSave = () => Boolean(local.dirty) && !local.saving && !local.readOnly;
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -118,6 +135,17 @@ export function FileEditor(props: FileEditorProps) {
                     ) : null}
                 </span>
                 <span className="happy2-file-editor__actions" data-happy2-ui="file-editor-actions">
+                    {local.rendered === undefined ? null : (
+                        <SegmentedControl
+                            onChange={(value) => setFace(value as "rendered" | "source")}
+                            segments={[
+                                { value: "rendered", label: "Rendered" },
+                                { value: "source", label: "Source" },
+                            ]}
+                            size="small"
+                            value={face}
+                        />
+                    )}
                     {local.dirty && !local.readOnly ? (
                         <Button
                             disabled={local.saving}
@@ -150,16 +178,20 @@ export function FileEditor(props: FileEditorProps) {
                     {local.banner}
                 </div>
             ) : null}
-            <textarea
-                className="happy2-file-editor__area"
-                data-happy2-ui="file-editor-area"
-                onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
-                placeholder={local.placeholder}
-                readOnly={local.readOnly}
-                spellCheck={false}
-                value={local.value}
-                wrap="off"
-            />
+            {reading ? (
+                local.rendered
+            ) : (
+                <textarea
+                    className="happy2-file-editor__area"
+                    data-happy2-ui="file-editor-area"
+                    onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
+                    placeholder={local.placeholder}
+                    readOnly={local.readOnly}
+                    spellCheck={false}
+                    value={local.value}
+                    wrap="off"
+                />
+            )}
             <footer className="happy2-file-editor__status" data-happy2-ui="file-editor-status">
                 <span className="happy2-file-editor__path" data-happy2-ui="file-editor-path">
                     {local.path}

@@ -48,10 +48,19 @@ export interface RigPanelSnapshot {
      */
     readonly maximized: boolean;
     readonly tabs: readonly RigPanelTabSnapshot[];
-    /** The permanent files view, transient tool preview, or one live tool tab. */
-    readonly activeViewId: "files" | "preview" | RigPanelTabId;
+    /**
+     * The permanent files view, the transient tool preview, the transient file
+     * viewer, or one live tool tab.
+     */
+    readonly activeViewId: "files" | "preview" | "file" | RigPanelTabId;
     /** Conversation entry selected into the replaceable Preview tab. */
     readonly previewEntryId?: string;
+    /**
+     * A workspace file is open in the transient viewer tab. Which file it is
+     * belongs to the workspace store, which reads it; this only says the tab
+     * exists, so the two never disagree about the file being shown.
+     */
+    readonly fileViewOpen: boolean;
 }
 
 export interface RigPanelStore {
@@ -75,6 +84,14 @@ export interface RigPanelStore {
     previewOpen(entryId: string): void;
     /** Closes the transient Preview tab and returns to Files. */
     previewClose(): void;
+    /**
+     * Shows the transient file-viewer tab and opens the panel. The workspace
+     * store calls this as it starts reading the file, so the tab appears with
+     * the file's own loading state rather than after it.
+     */
+    fileViewOpen(): void;
+    /** Closes the file-viewer tab and returns to Files. */
+    fileViewClose(): void;
     /** Adds a terminal tab to the open conversation and selects it. */
     terminalAdd(): void;
     /** Adds a browser tab, optionally navigating it to one safe web URL, and selects it. */
@@ -147,10 +164,12 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
     let previewEntryId: string | undefined;
     let previewConversationId: RigSessionId | undefined;
+    let fileViewShown = false;
     let nextTabNumber = 1;
     let disposed = false;
     let snapshot: RigPanelSnapshot = {
         activeViewId: "files",
+        fileViewOpen: false,
         maximized: false,
         open: false,
         tabs: NO_TABS,
@@ -160,6 +179,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const visible = tabs.filter((tab) => tab.conversationId === conversationId);
         return {
             activeViewId,
+            fileViewOpen: fileViewShown,
             maximized,
             open,
             tabs: visible.map(
@@ -184,6 +204,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             next.maximized === snapshot.maximized &&
             next.activeViewId === snapshot.activeViewId &&
             next.previewEntryId === snapshot.previewEntryId &&
+            next.fileViewOpen === snapshot.fileViewOpen &&
             next.tabs.length === snapshot.tabs.length &&
             next.tabs.every((tab, index) => {
                 const before = snapshot.tabs[index];
@@ -202,6 +223,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         // tab that actually changed.
         snapshot = {
             activeViewId: next.activeViewId,
+            fileViewOpen: next.fileViewOpen,
             maximized: next.maximized,
             open: next.open,
             tabs: next.tabs.map((tab, index) => {
@@ -309,6 +331,19 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             activeViewId = "files";
             recompute();
         },
+        fileViewOpen() {
+            if (disposed) return;
+            fileViewShown = true;
+            activeViewId = "file";
+            open = true;
+            recompute();
+        },
+        fileViewClose() {
+            if (disposed) return;
+            fileViewShown = false;
+            if (activeViewId === "file") activeViewId = "files";
+            recompute();
+        },
         terminalAdd() {
             if (disposed || !conversationId) return;
             terminalTabAdd(conversationId);
@@ -361,6 +396,10 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                 previewEntryId = undefined;
                 previewConversationId = undefined;
             }
+            // A file was opened out of one conversation's transcript, and a
+            // path only means something inside the checkout that session runs
+            // in, so it does not travel to the next session.
+            fileViewShown = false;
             activeViewId =
                 (next === undefined ? undefined : activeByConversation.get(next)) ?? "files";
             recompute();

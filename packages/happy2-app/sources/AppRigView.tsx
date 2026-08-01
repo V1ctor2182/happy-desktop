@@ -20,6 +20,8 @@ import type {
     RigModelSelection,
     NotesSessionStore,
     NoteSummary,
+    RigPanelFileKind,
+    RigPanelFileSnapshot,
     RigPanelSnapshot,
     RigPanelStore,
     RigPanelTabId,
@@ -67,9 +69,11 @@ import {
     FileBrowser,
     FileEditor,
     FilePreview,
+    type FilePreviewContent,
     filePreviewKind,
     FloatingConversationDock,
     Lightbox,
+    MarkdownDocument,
     Checkbox,
     Modal,
     ModalOverlay,
@@ -545,6 +549,43 @@ function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
     if (kind === "image" || kind === "video" || kind === "audio" || kind === "pdf") return "media";
     if (kind === "binary") return "media";
     return scope === "all" ? "file" : "diff";
+}
+
+/** How the panel's viewer should read one file: as characters, or as bytes. */
+function panelFileKind(path: string): RigPanelFileKind {
+    const kind = filePreviewKind(path);
+    return kind === "markdown" || kind === "text" ? "text" : "media";
+}
+
+/**
+ * One path as the checkout addresses it. A transcript names files the way the
+ * agent saw them, which is usually an absolute path on the machine running the
+ * session; the host reads paths inside the checkout, so its root is stripped
+ * when the path is under it and the path is otherwise passed through unchanged.
+ */
+function workspacePathRelative(path: string, root: string | undefined): string {
+    const normalized = path.replaceAll("\\", "/");
+    if (root === undefined) return normalized;
+    const base = root.replaceAll("\\", "/").replace(/\/+$/u, "");
+    return base.length > 0 && normalized.startsWith(`${base}/`)
+        ? normalized.slice(base.length + 1)
+        : normalized;
+}
+
+/**
+ * A link inside a rendered document, resolved against the document holding it.
+ * `../DESIGN.md` in `docs/guide.md` is `DESIGN.md`, which is the file the reader
+ * asked for; an absolute path names itself.
+ */
+function documentLinkResolve(from: string, href: string): string {
+    if (href.startsWith("/")) return href;
+    const segments = from.split("/").slice(0, -1);
+    for (const segment of href.split("/")) {
+        if (segment === "" || segment === ".") continue;
+        if (segment === "..") segments.pop();
+        else segments.push(segment);
+    }
+    return segments.join("/");
 }
 
 /** Resolves an addressed group id against the list, matching projects and worktrees alike. */
@@ -1402,6 +1443,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }}
                         onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
                         onPanelClose={() => props.workspace.panel.panelToggle()}
+                        {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
+                        onPanelFileClose={() => props.workspace.filePanelClose()}
+                        onPanelFileOpen={(path) => {
+                            if (!fileSessionId) return;
+                            props.workspace.filePanelOpen(fileSessionId, path, panelFileKind(path));
+                        }}
                         onScopeChange={(scope) => {
                             if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
                         }}
@@ -1684,6 +1731,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     now={now}
                                     onCreate={() => groupConversationCreate(openGroup)}
                                     onChatSelect={props.onChatSelect}
+                                    onFileOpen={(path) => {
+                                        if (!fileSessionId) return;
+                                        const target = workspacePathRelative(
+                                            path,
+                                            openGroup.create.cwd,
+                                        );
+                                        props.workspace.filePanelOpen(
+                                            fileSessionId,
+                                            target,
+                                            panelFileKind(target),
+                                        );
+                                    }}
                                     readOnly={conversationReadOnly}
                                     workspace={props.workspace}
                                 />
@@ -1839,9 +1898,36 @@ function RigFileBody(props: {
     ) {
         const content = file.document.value.content;
         const dirty = file.draft !== undefined && file.draft !== content;
+        const text = file.draft ?? content;
         return (
             <FileEditor
                 dirty={dirty}
+                {...(filePreviewKind(file.path) === "markdown"
+                    ? {
+                          rendered: (
+                              <MarkdownDocument
+                                  /* A document opened in the main content
+                                     follows its own links there: the reader is
+                                     reading, and the file behind the link is the
+                                     next thing to read, so it lands beside this
+                                     one in the tab strip rather than in the
+                                     panel the transcript uses. Whatever it is —
+                                     another document, a picture — opens as the
+                                     file itself, never as its diff. */
+                                  onFileOpen={(href) => {
+                                      const target = documentLinkResolve(file.path, href);
+                                      workspace.fileOpen(
+                                          file.sessionId,
+                                          file.groupId,
+                                          target,
+                                          fileTabKind(target, "all"),
+                                      );
+                                  }}
+                                  text={text}
+                              />
+                          ),
+                      }
+                    : {})}
                 onRevert={() => workspace.fileDraftRevert(file.id)}
                 onSave={() => {
                     void workspace.fileDraftSave(file.id).catch(() => undefined);
@@ -1851,7 +1937,7 @@ function RigFileBody(props: {
                 readOnly={file.saving}
                 saving={file.saving}
                 status={file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}
-                value={file.draft ?? content}
+                value={text}
             />
         );
     }
@@ -1967,6 +2053,7 @@ function RigConversationBody(props: {
     now: number;
     onCreate: () => void;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
+    onFileOpen: (path: string) => void;
     readOnly: boolean;
     workspace: RigWorkspaceStore;
 }) {
@@ -1979,6 +2066,7 @@ function RigConversationBody(props: {
                 groupId={props.groupId}
                 now={props.now}
                 onChatSelect={props.onChatSelect}
+                onFileOpen={props.onFileOpen}
                 readOnly={props.readOnly}
                 workspace={props.workspace}
             />
@@ -2028,6 +2116,8 @@ function RigConversationSurface(props: {
     groupId: string;
     now: number;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
+    /** Opens a file the transcript names, in the panel beside it. */
+    onFileOpen: (path: string) => void;
     readOnly: boolean;
     workspace: RigWorkspaceStore;
 }) {
@@ -2139,6 +2229,7 @@ function RigConversationSurface(props: {
             onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
             onComposerSend={() => workspace.composerTextSubmit()}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+            onFileOpen={(path) => props.onFileOpen(path)}
             onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
             onToolSelect={(entryId, tool) => {
                 const subagent = subagentForTool(tool, conversation.subagents);
@@ -2511,6 +2602,11 @@ function RigPanelBody(props: {
     onRevert: () => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
+    /** The file the viewer tab is on, read out of the transcript beside it. */
+    panelFile?: RigPanelFileSnapshot;
+    onPanelFileClose: () => void;
+    /** Follows a link inside the viewed document to another file. */
+    onPanelFileOpen: (path: string) => void;
     onScopeChange: (scope: RigFileScope) => void;
     onToggle: (path: string) => void;
     panel: RigPanelSnapshot;
@@ -2549,8 +2645,22 @@ function RigPanelBody(props: {
     const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
     const count = entries.length;
     const activeToolTab = props.panel.tabs.find((tab) => tab.id === props.panel.activeViewId);
+    const panelFile = props.panelFile;
     const tabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
+        ...(props.panel.fileViewOpen && panelFile
+            ? [
+                  {
+                      closable: true,
+                      icon: panelFileIcon(panelFile.path),
+                      id: "file",
+                      label: panelFile.path.split("/").at(-1) ?? panelFile.path,
+                      // The viewer holds whatever the transcript last pointed
+                      // at, so it is marked as the replaceable tab it is.
+                      preview: true,
+                  } satisfies TabItem,
+              ]
+            : []),
         ...(props.panel.previewEntryId
             ? [
                   {
@@ -2627,12 +2737,14 @@ function RigPanelBody(props: {
                 closeLabel="Close tab"
                 onClose={(tabId) => {
                     if (tabId === "preview") props.store.previewClose();
+                    else if (tabId === "file") props.onPanelFileClose();
                     else props.store.tabClose(tabId as RigPanelTabId);
                 }}
                 onSelect={(tabId) => {
                     if (tabId === "files") props.store.filesSelect();
                     else if (tabId === "preview" && props.panel.previewEntryId)
                         props.store.previewOpen(props.panel.previewEntryId);
+                    else if (tabId === "file") props.store.fileViewOpen();
                     else props.store.tabSelect(tabId as RigPanelTabId);
                 }}
                 tabs={tabs}
@@ -2698,6 +2810,22 @@ function RigPanelBody(props: {
                             title="Preview unavailable"
                         />
                     )
+                ) : props.panel.activeViewId === "file" ? (
+                    panelFile ? (
+                        <RigPanelFileView
+                            file={panelFile}
+                            key={panelFile.path}
+                            onClose={props.onPanelFileClose}
+                            onFileOpen={props.onPanelFileOpen}
+                        />
+                    ) : (
+                        <EmptyState
+                            description="The file this conversation pointed at is no longer open."
+                            icon="doc"
+                            size="panel"
+                            title="No file open"
+                        />
+                    )
                 ) : activeToolTab?.kind === "terminal" ? (
                     <RigTerminalTab
                         key={activeToolTab.id}
@@ -2714,6 +2842,50 @@ function RigPanelBody(props: {
                 )}
             </TabbedPane>
         </>
+    );
+}
+
+/** The glyph a viewer tab wears: what sort of file is being looked at. */
+function panelFileIcon(path: string): "image" | "play" | "doc" {
+    const kind = filePreviewKind(path);
+    if (kind === "image") return "image";
+    return kind === "video" || kind === "audio" ? "play" : "doc";
+}
+
+/**
+ * The panel's file viewer: one workspace file the transcript pointed at, shown
+ * beside the conversation that named it. A document arrives as text and renders
+ * as Markdown or source; a picture, a video, or a PDF arrives as a URL the
+ * viewer fetches, exactly as a file opened from the Files listing does.
+ */
+function RigPanelFileView(props: {
+    file: RigPanelFileSnapshot;
+    onClose: () => void;
+    onFileOpen: (path: string) => void;
+}) {
+    const { file } = props;
+    const content: FilePreviewContent =
+        file.document.type === "error"
+            ? { type: "error", message: file.document.error.message }
+            : file.document.type !== "ready" || file.loading
+              ? { type: "loading" }
+              : "content" in file.document.value
+                ? { type: "text", text: file.document.value.content }
+                : file.document.value.contentType === "application/octet-stream"
+                  ? { type: "unavailable" }
+                  : { type: "url", url: file.document.value.url };
+    return (
+        <FilePreview
+            closeLabel="Close file"
+            content={content}
+            onClose={props.onClose}
+            // A link inside the document is relative to the document holding it.
+            onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
+            path={file.path}
+            {...(file.document.type === "ready" && "size" in file.document.value
+                ? { size: fileSizeFormat(file.document.value.size) }
+                : {})}
+        />
     );
 }
 

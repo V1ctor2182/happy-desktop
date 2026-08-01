@@ -57,6 +57,7 @@ import { FileBrowserPage } from "./pages/FileBrowserPage";
 import { FileEditorPage } from "./pages/FileEditorPage";
 import { FilePanelPage } from "./pages/FilePanelPage";
 import { FilePreviewPage } from "./pages/FilePreviewPage";
+import { MarkdownDocumentPage } from "./pages/MarkdownDocumentPage";
 import { FileTreePage } from "./pages/FileTreePage";
 import { FormRowPage } from "./pages/FormRowPage";
 import { IconPage } from "./pages/IconPage";
@@ -237,6 +238,12 @@ const components: BlueprintPage[] = [
     },
     { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
+    {
+        id: "markdown-document",
+        label: "Markdown document",
+        number: "C-171",
+        page: MarkdownDocumentPage,
+    },
     {
         id: "avatar-brutalist",
         label: "Avatar brutalist",

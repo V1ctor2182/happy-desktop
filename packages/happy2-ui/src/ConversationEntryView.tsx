@@ -39,6 +39,8 @@ export type ConversationEntryViewProps = {
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens this entry's tool call in an owner-provided preview surface. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
+    /** Opens a workspace file named by a tool call or linked from a message. */
+    onFileOpen?: (path: string) => void;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -129,6 +131,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                         ? (tool) => props.onToolSelect?.(entry.id, tool)
                         : undefined
                 }
+                {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                 singleLine={entry.activity.kind === "tool"}
                 time={props.activityAuthor ? undefined : time}
             />
@@ -271,6 +274,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     ? (imageId: string) => props.onImageOpen?.(message.id, imageId)
                     : undefined
             }
+            {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}

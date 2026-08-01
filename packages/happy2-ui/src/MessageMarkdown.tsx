@@ -8,6 +8,8 @@ import {
 } from "react";
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { filePreviewKind } from "./FilePreview";
+import { markdownDocumentLinkPath } from "./MarkdownDocument";
 /**
  * Agent generation lifecycle for a streamed reply. This is deliberately kept
  * separate from `MessageDeliveryState`: delivery describes an *outgoing* message
@@ -37,6 +39,13 @@ function safeHref(value: unknown): string | undefined {
     return NAVIGABLE_SCHEMES.has(scheme[1]!.toLowerCase()) ? trimmed : undefined;
 }
 const MarkdownLinkContext = createContext(false);
+/**
+ * Opens a file a message links to, when the surface hosting the transcript has
+ * a workspace to open it in. A link to `docs/plan.md` is a link to something
+ * Happy can show; without this it stays inert rather than becoming a navigation
+ * the app cannot honour.
+ */
+const MarkdownFileOpenContext = createContext<((path: string) => void) | undefined>(undefined);
 const MarkdownTrailingContext = createContext<{
     endOffset: number;
     node: ReactNode;
@@ -82,6 +91,23 @@ const MarkdownImage = ({ alt, src }: MarkdownImageProps) => {
  */
 const MarkdownLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
     const safe = safeHref(href);
+    const onFileOpen = useContext(MarkdownFileOpenContext);
+    const path = safe === undefined ? markdownDocumentLinkPath(href) : undefined;
+    // Only a file this product can actually show is offered as a click. An
+    // archive or an executable stays plain text rather than promising a preview
+    // that would open on "no preview".
+    if (path !== undefined && onFileOpen !== undefined && filePreviewKind(path) !== "binary")
+        return (
+            <button
+                className="happy2-message__md-link happy2-message__md-file"
+                data-happy2-ui="message-md-file"
+                data-path={path}
+                onClick={() => onFileOpen(path)}
+                type="button"
+            >
+                <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
+            </button>
+        );
     return (
         <a
             className="happy2-message__md-link"
@@ -180,18 +206,26 @@ const markdownComponents: Components = {
  * no raw-HTML plugin is present; block nodes are emitted as direct siblings so
  * the message body's spacing rules remain authoritative. Optional trailing
  * content is injected into the final paragraph's inline flow so it cannot wrap
- * independently at the paragraph boundary.
+ * independently at the paragraph boundary. `onFileOpen` turns a link that names
+ * a workspace file into a click that opens Happy's own viewer instead of an
+ * inert anchor.
  */
-export function renderMessageMarkdown(text: string, trailing?: ReactNode): ReactNode {
+export function renderMessageMarkdown(
+    text: string,
+    trailing?: ReactNode,
+    onFileOpen?: (path: string) => void,
+): ReactNode {
     return (
         <MarkdownTrailingContext.Provider
             value={
                 trailing === undefined ? null : { endOffset: text.trimEnd().length, node: trailing }
             }
         >
-            <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                {text}
-            </Markdown>
+            <MarkdownFileOpenContext.Provider value={onFileOpen}>
+                <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                    {text}
+                </Markdown>
+            </MarkdownFileOpenContext.Provider>
         </MarkdownTrailingContext.Provider>
     );
 }

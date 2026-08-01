@@ -186,6 +186,11 @@ export {
     type FilePreviewProps,
 } from "./FilePreview";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
+export {
+    MarkdownDocument,
+    markdownDocumentLinkPath,
+    type MarkdownDocumentProps,
+} from "./MarkdownDocument";
 export { Icon, type IconName, iconNames, type IconProps } from "./Icon";
 export {
     Ionicon,

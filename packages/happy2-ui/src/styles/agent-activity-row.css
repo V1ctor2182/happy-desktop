@@ -39,6 +39,43 @@
     opacity: 1;
 }
 
+/* Opening the file the tool worked on: the same quiet, hover-revealed action
+   as the copy beside it, so the row keeps one trailing control group. */
+.happy2-agent-activity__open {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-agent-activity__open:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
+
+.happy2-agent-activity__open:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-agent-activity-row:hover .happy2-agent-activity__open,
+.happy2-agent-activity-row:focus-within .happy2-agent-activity__open {
+    opacity: 1;
+}
+
 .happy2-agent-activity__header {
     display: flex;
     flex-direction: row;
