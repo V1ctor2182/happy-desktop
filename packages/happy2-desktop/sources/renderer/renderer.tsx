@@ -33,6 +33,7 @@ import type {
     HappyDesktopBridge,
 } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
+import { dockUnreadPublish } from "./dockUnread";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import { rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
@@ -368,6 +369,10 @@ if (bridge) {
             materialized = current;
             void rigRouter.invalidate();
         });
+        // What is waiting for the person is a fact about the whole window, not
+        // about the screen that happens to be open, so the Dock is marked from
+        // the same directory the sidebar reads rather than from any one Rig.
+        dockUnreadPublish(rigs, (count) => desktopBridge.dockUnreadSet(count));
         // This window renders the Rig tree directly rather than through `App`, so
         // it has to start the highlighting pool itself: without this the file
         // viewer and every diff in the primary desktop surface tokenize on the

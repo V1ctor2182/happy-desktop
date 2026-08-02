@@ -318,6 +318,13 @@ export interface HappyDesktopBridge {
     pluginAppCancel(origin: string, requestId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
+    /**
+     * Reports how many conversations are waiting for the person, for the mark on
+     * the Dock icon. One-way and fire-and-forget: the window states what it is
+     * showing and the shell paints it, so nothing above this line has to wait on
+     * or reconcile with the operating system.
+     */
+    dockUnreadSet(count: number): void;
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
@@ -358,6 +365,8 @@ export const desktopIpc = {
     browserOpenRequested: "happy2:browser:open-requested",
     browserStatusChanged: "happy2:browser:status-changed",
     directoryPick: "happy2:directory:pick",
+    /** Renderer → main only: the number of conversations waiting for the person. */
+    dockUnreadSet: "happy2:dock:unread-set",
     desktopConfigGet: "happy2:desktop-config:get",
     desktopConfigWrite: "happy2:desktop-config:write",
     applicationMenuOpen: "happy2:application-menu:open",

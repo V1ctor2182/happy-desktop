@@ -57,6 +57,9 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.pluginApplicationsChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.pluginApplicationsChanged, receive);
     },
+    // `send`, not `invoke`: the shell has nothing to answer, and a badge that
+    // made the window await the operating system would be a worse badge.
+    dockUnreadSet: (count: number) => ipcRenderer.send(desktopIpc.dockUnreadSet, count),
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),

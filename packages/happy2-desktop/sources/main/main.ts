@@ -25,6 +25,7 @@ import {
     rendererNavigationAllowed,
 } from "./navigation";
 import { desktopFlavor } from "./desktopFlavor";
+import { dockBadgeApply, dockBadgeClear, dockUnreadCountRead } from "./dockBadge";
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
@@ -525,6 +526,12 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     const ownerId = window.webContents.id;
     const cleanup = () => {
         rigInstallManager?.closeOwner(ownerId);
+        // The mark on the Dock belongs to the window that reported it. This one
+        // is going away — reloaded, gone, or replaced — so it takes its own mark
+        // with it, unless another window is already presenting and has set its
+        // own; wiping that would leave the icon lying about the live window.
+        const presenting = windowLifecycle.get();
+        if (!presenting || presenting.webContents.id === ownerId) dockBadgeClear();
     };
     window.webContents.on("render-process-gone", cleanup);
     window.webContents.on("destroyed", cleanup);
@@ -588,6 +595,13 @@ function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): Browser
             localWindowCreate(bounds ?? restoredBounds),
         );
     const target = desktopWindowTarget(snapshot);
+    // A cloud window is deliberately given no bridge, so it can never report a
+    // count and can never take one down. The local window it replaces is
+    // destroyed only once the cloud window is on screen, by which point the
+    // lifecycle already names the replacement and that window's own teardown
+    // rightly declines to repaint over it — so the count it was showing is
+    // retired here instead, when the destination is known.
+    if (target.kind === "cloud") dockBadgeClear();
     return windowLifecycle.synchronize(target.key, (bounds) =>
         target.kind === "cloud"
             ? remoteWindowCreate(target.url, bounds ?? restoredBounds)
@@ -811,6 +825,16 @@ void app
         ipcMain.handle(desktopIpc.noteRemove, (_event, id: unknown) =>
             notesStore.remove(noteIdValidate(id)),
         );
+        // One-way: the window states what is waiting and the shell marks the
+        // icon. Only the window this shell is currently presenting may do so, so
+        // a superseded renderer still shutting down cannot repaint over the one
+        // that replaced it, and a malformed count is dropped rather than guessed.
+        ipcMain.on(desktopIpc.dockUnreadSet, (event, raw: unknown) => {
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender) return;
+            const count = dockUnreadCountRead(raw);
+            if (count !== undefined) dockBadgeApply(count);
+        });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {

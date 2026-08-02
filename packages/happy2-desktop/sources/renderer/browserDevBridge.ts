@@ -53,6 +53,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         pluginAppCancel: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
+        // A browser tab has no Dock icon to mark, so the count goes nowhere
+        // rather than the window branching on where it is running.
+        dockUnreadSet: () => undefined,
         directoryPick: async () => undefined,
         desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
         desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),
