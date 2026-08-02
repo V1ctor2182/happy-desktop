@@ -9,7 +9,6 @@ import type {
     RigFileTabSnapshot,
     RigConnectionStore,
     RigConversationSnapshot,
-    RigCreateSnapshot,
     RigFileLayout,
     RigWorkspaceFiles,
     RigFileScope,
@@ -97,7 +96,6 @@ import {
     FloatingConversationDock,
     Lightbox,
     MarkdownDocument,
-    Checkbox,
     Modal,
     ModalOverlay,
     FriendsPage,
@@ -110,6 +108,7 @@ import {
     fileTreeVisibleFiles,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
+    RigCreateSessionDialog,
     RigProjectSettingsDialog,
     RigSessionControls,
     RigUsagePanel,
@@ -1374,13 +1373,26 @@ export function AppRigView(props: AppRigViewProps) {
                 const rig = rigOf(row.rigId);
                 return rig ? rowMenuItems(rig.projects, { ...item, id: row.id }) : [];
             }}
-            onCompose={() => active?.session?.workspace.createOpen()}
+            // Create is the window's, not a screen's: the dialog is mounted
+            // beside whatever is showing, so this row answers from every route.
+            // It is offered only while there is a machine to start a session on,
+            // because a Create that opened nothing would be worse than no row.
+            {...(active?.session?.workspace
+                ? { onCompose: () => active.session?.workspace.createOpen() }
+                : {})}
             // A section with nothing in it offers the one act that would fill
             // it: starting work here, or connecting the machine that holds it.
             onSectionAction={(sectionId) => {
                 const rig = rigOf(sectionId.slice("rig:".length));
-                if (rig?.status === "connected") rig.session?.workspace.createOpen();
-                else props.onSettingsOpen();
+                if (rig?.status !== "connected") {
+                    props.onSettingsOpen();
+                    return;
+                }
+                // The dialog belongs to the machine the window is addressing, so
+                // a section belonging to another one is addressed first:
+                // otherwise this would open a dialog nothing is showing.
+                if (rig.id !== active?.id) props.onChatSelect(rig.id, undefined);
+                rig.session?.workspace.createOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const row = rigItemParse(item.id);
@@ -1535,220 +1547,227 @@ export function AppRigView(props: AppRigViewProps) {
         />
     );
 
-    // Naming a row belongs to the sidebar rather than to whatever is beside it,
-    // so it travels with the sidebar onto every route: a cog that answered on
-    // the workspace and did nothing on the inbox would not be a control.
-    const naming = active?.session?.workspace ? (
-        <RigNamingDialogs projects={active.projects} workspace={active.session.workspace} />
-    ) : null;
+    // Which screen the window is showing. It is a value rather than a set of
+    // early returns because the window's own dialogs are mounted beside it: a
+    // surface that answers on one route and not another is not a window-level
+    // surface at all.
+    const routeContent = (): ReactNode => {
+        // The notes surface is the window's, not a Rig's, so it is shown whatever the
+        // addressed machine is doing — including while none of them is reachable.
+        if (props.notesOpen && props.notes)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <RigNotesSurface
+                        noteId={props.noteId}
+                        notes={props.notes}
+                        onOpen={(id) => props.onNotesOpen?.(id)}
+                        theme={appearance.appearance}
+                    />
+                </AppShell>
+            );
 
-    // The notes surface is the window's, not a Rig's, so it is shown whatever the
-    // addressed machine is doing — including while none of them is reachable.
-    if (props.notesOpen && props.notes)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <RigNotesSurface
-                    noteId={props.noteId}
-                    notes={props.notes}
-                    onOpen={(id) => props.onNotesOpen?.(id)}
-                    theme={appearance.appearance}
-                />
-            </AppShell>
-        );
-
-    // Friends belong to the account rather than to a machine, so like notes the
-    // surface is shown whatever the addressed machine is doing.
-    if (props.friendsOpen)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                {/* No connection model exists yet, so the gallery is handed
+        // Friends belong to the account rather than to a machine, so like notes the
+        // surface is shown whatever the addressed machine is doing.
+        if (props.friendsOpen)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    {/* No connection model exists yet, so the gallery is handed
                     nobody. The surface is the same one it will render a real
                     list into. */}
-                <FriendsPage friends={[]} />
-            </AppShell>
-        );
+                    <FriendsPage friends={[]} />
+                </AppShell>
+            );
 
-    // The workbench belongs to no machine and needs no connection: it renders the
-    // component pages themselves, so it is shown exactly like notes are.
-    if (props.blueprintOpen)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <BlueprintView />
-            </AppShell>
-        );
+        // The workbench belongs to no machine and needs no connection: it renders the
+        // component pages themselves, so it is shown exactly like notes are.
+        if (props.blueprintOpen)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <BlueprintView />
+                </AppShell>
+            );
 
-    // The packages this machine has are read whatever the addressed machine is
-    // doing, because the reading is not one machine's to give yet: the daemon
-    // reports the applications a plugin contributes but not the packages behind
-    // them, so the catalog is a placeholder and says so on its own face.
-    if (props.pluginsOpen)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <RigPluginCatalogPage entries={RIG_PLUGIN_CATALOG_PLACEHOLDER} />
-            </AppShell>
-        );
+        // The packages this machine has are read whatever the addressed machine is
+        // doing, because the reading is not one machine's to give yet: the daemon
+        // reports the applications a plugin contributes but not the packages behind
+        // them, so the catalog is a placeholder and says so on its own face.
+        if (props.pluginsOpen)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <RigPluginCatalogPage entries={RIG_PLUGIN_CATALOG_PLACEHOLDER} />
+                </AppShell>
+            );
 
-    // A plugin application belongs to the addressed machine. The address survives
-    // its plugin restarting, so the surface is shown whenever the URL names one
-    // and states for itself what became of it.
-    if (props.pluginApplicationId && props.pluginApplicationContent)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <RigPluginApplicationPage
-                    {...(pluginApplication?.error ? { error: pluginApplication.error } : {})}
-                    {...(pluginApplication?.status === "ready" && pluginApplication.source
-                        ? {
-                              content: props.pluginApplicationContent({
-                                  applicationId: pluginApplication.id,
-                                  generation: pluginApplication.generation,
-                                  source: pluginApplication.source,
-                                  title: pluginApplication.title,
-                              }),
-                          }
-                        : {})}
-                    pluginLabel={pluginApplication?.pluginId}
-                    status={pluginApplicationStatus(pluginApplication, plugins.loading)}
-                    title={pluginApplication?.title ?? "Application"}
-                />
-            </AppShell>
-        );
+        // A plugin application belongs to the addressed machine. The address survives
+        // its plugin restarting, so the surface is shown whenever the URL names one
+        // and states for itself what became of it.
+        if (props.pluginApplicationId && props.pluginApplicationContent)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <RigPluginApplicationPage
+                        {...(pluginApplication?.error ? { error: pluginApplication.error } : {})}
+                        {...(pluginApplication?.status === "ready" && pluginApplication.source
+                            ? {
+                                  content: props.pluginApplicationContent({
+                                      applicationId: pluginApplication.id,
+                                      generation: pluginApplication.generation,
+                                      source: pluginApplication.source,
+                                      title: pluginApplication.title,
+                                  }),
+                              }
+                            : {})}
+                        pluginLabel={pluginApplication?.pluginId}
+                        status={pluginApplicationStatus(pluginApplication, plugins.loading)}
+                        title={pluginApplication?.title ?? "Application"}
+                    />
+                </AppShell>
+            );
 
-    // The inbox belongs to the addressed machine, so it is shown only while that
-    // machine has stores to answer through.
-    if (props.inboxOpen && active?.session?.inbox)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <RigInboxSurface
-                    onOpenSession={(rigId, groupId, chatId) =>
-                        props.onChatSelect(rigId, groupId, chatId)
-                    }
-                    projects={active.projects}
-                    rigId={active.id}
-                    snapshot={inbox}
-                    store={active.session.inbox}
-                />
-            </AppShell>
-        );
+        // The inbox belongs to the addressed machine, so it is shown only while that
+        // machine has stores to answer through.
+        if (props.inboxOpen && active?.session?.inbox)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <RigInboxSurface
+                        onOpenSession={(rigId, groupId, chatId) =>
+                            props.onChatSelect(rigId, groupId, chatId)
+                        }
+                        projects={active.projects}
+                        rigId={active.id}
+                        snapshot={inbox}
+                        store={active.session.inbox}
+                    />
+                </AppShell>
+            );
 
-    // Usage belongs to the addressed machine, so it is shown only while that
-    // machine has readings to give.
-    if (props.usageOpen && active?.session?.providerUsage)
-        return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
-                {desktop ? <WindowDragRegion /> : null}
-                {naming}
-                <RigProviderUsageSurface
+        // Usage belongs to the addressed machine, so it is shown only while that
+        // machine has readings to give.
+        if (props.usageOpen && active?.session?.providerUsage)
+            return (
+                <AppShell
+                    sidebarCollapsible
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    sidebar={sidebar}
+                >
+                    {desktop ? <WindowDragRegion /> : null}
+                    <RigProviderUsageSurface
+                        clock={active.session.clock}
+                        {...(usage.error ? { error: usage.error } : {})}
+                        loading={usage.loading}
+                        providers={usage.providers}
+                    />
+                </AppShell>
+            );
+
+        if (active?.session)
+            return (
+                <RigWorkspaceSurface
+                    appearance={props.appearance}
+                    browserContent={props.browserContent}
+                    htmlPreview={props.htmlPreview}
+                    mediaWindow={props.mediaWindow}
+                    chatId={props.chatId}
                     clock={active.session.clock}
-                    {...(usage.error ? { error: usage.error } : {})}
-                    loading={usage.loading}
-                    providers={usage.providers}
+                    connection={active.session.connection}
+                    groupId={props.groupId}
+                    key={active.id}
+                    onChatSelect={(groupId, chatId, replace) =>
+                        props.onChatSelect(active.id, groupId, chatId, replace)
+                    }
+                    platform={props.platform}
+                    projects={active.projects}
+                    sidebar={sidebar}
+                    slots={slots}
+                    slotAction={slotAction}
+                    windowState={props.windowState}
+                    workspace={active.session.workspace}
+                />
+            );
+        // The addressed machine has no live stores yet — it is still connecting, the
+        // reader disconnected it, or it could not be reached. The sidebar stays, so
+        // the other machines' work is one click away; connecting this one is a
+        // settings act, which is where the control points.
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                <EmptyState
+                    action={{
+                        label: "Open settings",
+                        icon: "settings",
+                        onClick: props.onSettingsOpen,
+                    }}
+                    description={
+                        active
+                            ? (active.message ??
+                              (active.connected
+                                  ? `Connecting to ${active.label}…`
+                                  : `${active.label} is disconnected.`))
+                            : "Connect a machine to start working."
+                    }
+                    icon={active?.status === "error" ? "shield" : "link"}
+                    size="panel"
+                    title={active ? active.label : "No machine"}
                 />
             </AppShell>
         );
+    };
 
-    if (active?.session)
-        return (
-            <RigWorkspaceSurface
-                appearance={props.appearance}
-                browserContent={props.browserContent}
-                htmlPreview={props.htmlPreview}
-                mediaWindow={props.mediaWindow}
-                chatId={props.chatId}
-                clock={active.session.clock}
-                connection={active.session.connection}
-                groupId={props.groupId}
-                key={active.id}
-                onChatSelect={(groupId, chatId, replace) =>
-                    props.onChatSelect(active.id, groupId, chatId, replace)
-                }
-                platform={props.platform}
-                projects={active.projects}
-                sidebar={sidebar}
-                slots={slots}
-                slotAction={slotAction}
-                windowState={props.windowState}
-                workspace={active.session.workspace}
-            />
-        );
-    // The addressed machine has no live stores yet — it is still connecting, the
-    // reader disconnected it, or it could not be reached. The sidebar stays, so
-    // the other machines' work is one click away; connecting this one is a
-    // settings act, which is where the control points.
     return (
-        <AppShell
-            sidebarCollapsible
-            windowControls={desktop}
-            windowFullScreen={windowState.fullScreen}
-            sidebar={sidebar}
-        >
-            {desktop ? <WindowDragRegion /> : null}
-            {naming}
-            <EmptyState
-                action={{
-                    label: "Open settings",
-                    icon: "settings",
-                    onClick: props.onSettingsOpen,
-                }}
-                description={
-                    active
-                        ? (active.message ??
-                          (active.connected
-                              ? `Connecting to ${active.label}…`
-                              : `${active.label} is disconnected.`))
-                        : "Connect a machine to start working."
-                }
-                icon={active?.status === "error" ? "shield" : "link"}
-                size="panel"
-                title={active ? active.label : "No machine"}
-            />
-        </AppShell>
+        <>
+            {routeContent()}
+            {/* The window's own dialogs, mounted once beside whatever screen is
+                showing rather than inside one of them. Naming a row belongs to
+                the sidebar, and Create belongs to the window: both are reached
+                from chrome that is on every route, so a cog or a Create that
+                answered on the workspace and did nothing on the inbox would not
+                be a control. Being outside the screen is also what lets a task
+                being written survive the route notifications underneath it. */}
+            {active?.session?.workspace ? (
+                <RigWindowDialogs projects={active.projects} workspace={active.session.workspace} />
+            ) : null}
+        </>
     );
 }
 
@@ -2605,21 +2624,23 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
-                    {/* No project is open, so there is nowhere for a session to be
-                        started: the only move from here is picking a project, and
-                        offering a button that cannot answer that would misdirect. */}
+                    {/* No project is open, so there is nowhere in front of the
+                        reader for a session to be started — but Create asks
+                        where, so it answers from here as readily as anywhere
+                        else, and it is the only move this screen has. */}
                     <EmptyState
-                        description="Pick one in the sidebar to see its sessions."
+                        action={{
+                            label: "Create",
+                            icon: "plus",
+                            onClick: () => props.workspace.createOpen(),
+                        }}
+                        description="Pick one in the sidebar, or start a session in any of them."
                         icon="files"
                         size="panel"
                         title="No project open"
                     />
                 </>
             )}
-            {workspace.create ? (
-                <RigCreateDialog create={workspace.create} workspace={props.workspace} />
-            ) : null}
-            <RigNamingDialogs projects={props.projects} workspace={props.workspace} />
             {/* Reverting is the one act in the file panel that destroys work
                 nothing else can give back, so what is about to happen is said
                 in full — how many files, and that HEAD is where they land —
@@ -3396,21 +3417,18 @@ function rigTurnElapsedMs(
  * and in the desktop window it gives that edge a lane to drag the window by.
  */
 /**
- * Where a row is named. Naming is a sidebar act — the row it is about may not be
- * the group that is open, and may not be on the surface that is showing at all —
- * so this hangs off the window rather than off the workspace, and every route
- * that shows the sidebar mounts it. Without that, the cog on a project row would
- * be a control that answers on some pages and not others.
+ * The dialogs that belong to the window rather than to a screen: naming a row,
+ * and Create. Both are reached from chrome that is on every route — the cog on a
+ * sidebar row, the Create row above it — so they are mounted once beside the
+ * screen instead of inside one of them, and they answer the same way wherever
+ * the reader happens to be. Being outside the screen is also what keeps a task
+ * being written alive while the surface behind it changes.
  *
- * A project opens its settings dialog rather than a bare field: it has an
- * identity and a checkout worth stating, and its name is the one thing about it
- * the daemon takes a new value for, so the name belongs inside that surface. A
- * worktree has nothing but its name, and gets the field.
- *
- * It subscribes to the workspace itself so the routes that do not render a
- * workspace surface still see the draft change as it is typed.
+ * One subscription serves both: this is a single window-level adapter onto one
+ * materialized store, so the routes that render no workspace surface still see
+ * a draft change as it is typed.
  */
-function RigNamingDialogs(props: {
+function RigWindowDialogs(props: {
     projects: readonly RigProjectGroup[];
     workspace: RigWorkspaceStore;
 }) {
@@ -3419,21 +3437,39 @@ function RigNamingDialogs(props: {
         props.workspace.get,
         props.workspace.get,
     );
-    const rename = workspace.rename;
+    return (
+        <>
+            {rigNamingDialog(workspace.rename, props.projects, props.workspace)}
+            {rigCreateDialog(workspace.create, props.workspace)}
+        </>
+    );
+}
+
+/**
+ * Where a row is named. A project opens its settings dialog rather than a bare
+ * field: it has an identity and a checkout worth stating, and its name is the
+ * one thing about it the daemon takes a new value for, so the name belongs
+ * inside that surface. A worktree has nothing but its name, and gets the field.
+ */
+function rigNamingDialog(
+    rename: RigWorkspaceSnapshot["rename"],
+    projects: readonly RigProjectGroup[],
+    store: RigWorkspaceStore,
+): ReactNode {
     if (!rename) return null;
     if (rename.worktreeId)
         return (
-            <ModalOverlay onDismiss={() => props.workspace.renameCancel()}>
+            <ModalOverlay onDismiss={() => store.renameCancel()}>
                 <Modal
                     footer={
                         <>
-                            <Button onClick={() => props.workspace.renameCancel()} variant="ghost">
+                            <Button onClick={() => store.renameCancel()} variant="ghost">
                                 Cancel
                             </Button>
                             <Button
                                 disabled={rename.submitting}
                                 onClick={() => {
-                                    void props.workspace.renameSubmit().catch(() => undefined);
+                                    void store.renameSubmit().catch(() => undefined);
                                 }}
                                 variant="primary"
                             >
@@ -3441,7 +3477,7 @@ function RigNamingDialogs(props: {
                             </Button>
                         </>
                     }
-                    onClose={() => props.workspace.renameCancel()}
+                    onClose={() => store.renameCancel()}
                     size="small"
                     title={`Rename ${rename.currentName}`}
                 >
@@ -3450,9 +3486,9 @@ function RigNamingDialogs(props: {
                         fullWidth
                         label="Name"
                         onSubmit={() => {
-                            void props.workspace.renameSubmit().catch(() => undefined);
+                            void store.renameSubmit().catch(() => undefined);
                         }}
-                        onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
+                        onValueChange={(value) => store.renameDraftUpdate(value)}
                         value={rename.draft}
                     />
                 </Modal>
@@ -3462,7 +3498,7 @@ function RigNamingDialogs(props: {
     // open. The dialog stays up on what the rename itself carries — the reader
     // still has an edit in front of them, and dismissing it is what clears the
     // draft — and simply drops the section it can no longer state.
-    const project = props.projects.find((candidate) => candidate.id === rename.projectId);
+    const project = projects.find((candidate) => candidate.id === rename.projectId);
     return (
         <RigProjectSettingsDialog
             draft={rename.draft}
@@ -3482,10 +3518,10 @@ function RigNamingDialogs(props: {
                   }
                 : {})}
             name={rename.currentName}
-            onClose={() => props.workspace.renameCancel()}
-            onDraftChange={(value) => props.workspace.renameDraftUpdate(value)}
+            onClose={() => store.renameCancel()}
+            onDraftChange={(value) => store.renameDraftUpdate(value)}
             onSubmit={() => {
-                void props.workspace.renameSubmit().catch(() => undefined);
+                void store.renameSubmit().catch(() => undefined);
             }}
             submitting={rename.submitting}
         />
@@ -3493,101 +3529,43 @@ function RigNamingDialogs(props: {
 }
 
 /**
- * The create dialog: what to do, where to do it, and how the session that does
- * it is configured — all decided before anything is started, so a task never
- * has to be filed into a session that was configured wrong and corrected after.
+ * Create, as the window's own surface. The store owns what is being written, so
+ * this is only a projection of `workspace.create` into the shared dialog and its
+ * callbacks back into the same store — including the task, which lives there so
+ * that closing the dialog puts it down rather than destroying it.
  */
-function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorkspaceStore }) {
-    const { create, workspace } = props;
-    const submittable = create.text.trim().length > 0 && create.groupId !== undefined;
+function rigCreateDialog(
+    create: RigWorkspaceSnapshot["create"],
+    store: RigWorkspaceStore,
+): ReactNode {
+    if (!create) return null;
     return (
-        <ModalOverlay onDismiss={() => workspace.createCancel()}>
-            <Modal
-                footer={
-                    <>
-                        {/* Filing several tasks at once should not mean
-                            reopening this between each one. */}
-                        <Checkbox
-                            checked={create.keepOpen}
-                            // The footer right-aligns its actions; this is a
-                            // setting rather than an action, so it takes the
-                            // free space and sits at the other end.
-                            className="happy2-rig-create__keep-open"
-                            label="Keep open for the next task"
-                            onChange={(checked) => workspace.createKeepOpenUpdate(checked)}
-                        />
-                        <Button onClick={() => workspace.createCancel()} variant="ghost">
-                            Cancel
-                        </Button>
-                        <Button
-                            disabled={!submittable || create.submitting}
-                            onClick={() => {
-                                void workspace.createSubmit().catch(() => undefined);
-                            }}
-                            variant="primary"
-                        >
-                            Create
-                        </Button>
-                    </>
-                }
-                icon="spark"
-                onClose={() => workspace.createCancel()}
-                title="Create"
-            >
-                <div className="happy2-rig-create">
-                    <TextField
-                        disabled={create.submitting}
-                        fullWidth
-                        label="Task"
-                        multiline
-                        onValueChange={(value) => workspace.createTextUpdate(value)}
-                        placeholder="What should the agent do?"
-                        rows={4}
-                        value={create.text}
-                    />
-                    <div className="happy2-rig-create__row">
-                        <RigControlMenu
-                            items={create.groups.map((group) => ({
-                                id: group.id,
-                                kind: "item" as const,
-                                label: group.label,
-                                // A worktree is named under the project it
-                                // belongs to, so a bare name is never ambiguous.
-                                ...(group.nested ? { icon: "branch" as const } : {}),
-                            }))}
-                            label="Project"
-                            onSelect={(id: string) => workspace.createGroupUpdate(id as RigGroupId)}
-                            value={
-                                create.groups.find((group) => group.id === create.groupId)?.label ??
-                                "Choose a project"
-                            }
-                        />
-                        {create.draft ? (
-                            <RigSessionControls
-                                menus={create.draft.menus}
-                                onEffortChange={(effort?: RigThinkingLevel) =>
-                                    workspace.createEffortUpdate(effort)
-                                }
-                                onModelChange={(selection: RigModelSelection) =>
-                                    workspace.createModelUpdate(selection)
-                                }
-                                onPermissionModeChange={(mode: RigPermissionMode) =>
-                                    workspace.createPermissionModeUpdate(mode)
-                                }
-                                onServiceTierChange={(tier?: RigServiceTier) =>
-                                    workspace.createServiceTierUpdate(tier)
-                                }
-                            />
-                        ) : null}
-                    </div>
-                    {create.error ? (
-                        <p className="happy2-rig-create__error" role="alert">
-                            {create.error}
-                        </p>
-                    ) : null}
-                </div>
-            </Modal>
-        </ModalOverlay>
+        <RigCreateSessionDialog
+            destinations={create.groups.map((group) => ({
+                displayPath: group.displayPath,
+                id: group.id,
+                label: group.label,
+                ...(group.parentLabel === undefined ? {} : { parentLabel: group.parentLabel }),
+            }))}
+            destinationsLoading={create.groupsLoading}
+            {...(create.groupId === undefined ? {} : { destinationId: create.groupId })}
+            {...(create.draft ? { menus: create.draft.menus } : {})}
+            {...(create.error === undefined ? {} : { error: create.error })}
+            keepOpen={create.keepOpen}
+            onClose={() => store.createCancel()}
+            onDestinationSelect={(id) => store.createGroupUpdate(id as RigGroupId)}
+            onEffortChange={(effort) => store.createEffortUpdate(effort)}
+            onKeepOpenChange={(keepOpen) => store.createKeepOpenUpdate(keepOpen)}
+            onModelChange={(selection) => store.createModelUpdate(selection)}
+            onPermissionModeChange={(mode) => store.createPermissionModeUpdate(mode)}
+            onServiceTierChange={(tier) => store.createServiceTierUpdate(tier)}
+            onSubmit={() => {
+                void store.createSubmit().catch(() => undefined);
+            }}
+            onTextChange={(text) => store.createTextUpdate(text)}
+            submitting={create.submitting}
+            text={create.text}
+        />
     );
 }
 

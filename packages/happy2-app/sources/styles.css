@@ -46,36 +46,6 @@ body {
 }
 
 /*
- * The create dialog body: the task, then where and how it runs. The task gets
- * the room because it is the thing being decided; the rest is one row of
- * pickers under it.
- */
-.happy2-rig-create {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.happy2-rig-create__row {
-    display: flex;
-    align-items: flex-end;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.happy2-rig-create__error {
-    margin: 0;
-    color: var(--status-error);
-    font-family: var(--happy2-font-ui);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy2-rig-create__keep-open {
-    margin-right: auto;
-}
-
-/*
  * The revert confirmation body: what happens, then the files it happens to.
  * The list is bounded and scrolls, because a selection of forty files is
  * exactly the case where reading them before agreeing matters most.

@@ -364,8 +364,18 @@ function panelFileKindOfTab(kind: RigFileTabKind): RigPanelFileKind | undefined 
 export interface RigCreateSnapshot {
     /** The group it will start in; the last one used, until changed. */
     readonly groupId?: RigGroupId;
-    /** Every project and worktree it could start in, in list order. */
+    /**
+     * Every project and worktree it could start in, in list order. Kept current
+     * while the dialog is open: it may be opened from a route that has not read
+     * the machine's projects yet, and a list frozen at that moment would never
+     * offer anywhere to run.
+     */
     readonly groups: readonly RigCreateGroupOption[];
+    /**
+     * True while this machine's project list is still being read, which is what
+     * tells an empty list apart from a machine that has nothing to offer.
+     */
+    readonly groupsLoading: boolean;
     /** The first message. An empty one is not a task, and cannot be submitted. */
     readonly text: string;
     /** Model, effort, access mode, tier, plus the menus behind them. */
@@ -387,6 +397,13 @@ export interface RigCreateGroupOption {
     readonly label: string;
     /** True for a worktree, which is listed under the project it belongs to. */
     readonly nested: boolean;
+    /**
+     * The project a worktree belongs to, so its bare name is never ambiguous
+     * across projects. Absent on a project itself.
+     */
+    readonly parentLabel?: string;
+    /** Where a session started here runs, as the host presents the path. */
+    readonly displayPath: string;
 }
 
 /**
@@ -693,7 +710,9 @@ export interface RigWorkspaceStore {
     openIn(groupId: RigGroupId, targetId: string): Promise<void>;
     /**
      * Opens the create dialog, on the group last created in — or the one given,
-     * when it is being opened from somewhere that already knows where.
+     * when it is being opened from somewhere that already knows where. A task
+     * that was written and then dismissed is offered back: closing the dialog is
+     * how it is put down, not how it is thrown away.
      */
     createOpen(groupId?: RigGroupId): void;
     /** Chooses which project or worktree the session will start in. */
@@ -707,7 +726,12 @@ export interface RigWorkspaceStore {
     createServiceTierUpdate(serviceTier?: RigServiceTier): void;
     /** Chooses whether the dialog stays open for another task. */
     createKeepOpenUpdate(keepOpen: boolean): void;
-    /** Closes the dialog, discarding what was typed. */
+    /**
+     * Closes the dialog, keeping what was typed for the next time it is opened.
+     * The task is the only copy of a piece of writing, and the dialog can be
+     * dismissed by a stray click on the backdrop, so it is put down rather than
+     * destroyed; starting the session is what clears it.
+     */
     createCancel(): void;
     /** Starts the session and sends the first message. */
     createSubmit(): Promise<void>;
@@ -841,6 +865,19 @@ export function rigWorkspaceStoreCreate(
     let createDraftGeneration = 0;
     /** The group the last created session started in, offered as the next default. */
     let lastCreateGroupId: RigGroupId | undefined;
+    /**
+     * A task written into the dialog and then put down. The dialog closes on a
+     * stray backdrop click as readily as on Cancel, so the writing outlives the
+     * surface it was written on; starting the session is what clears it.
+     */
+    let createTextKept = "";
+    /**
+     * Counts the dialogs that have been opened. A start is slow enough to be
+     * dismissed and a second one opened while it is still in flight, and the
+     * one that comes back must not close, clear, or put its error on a dialog
+     * someone is now writing in.
+     */
+    let createInstance = 0;
     let workspaceFiles: RigWorkspaceFiles | undefined;
     let workspaceFilesLoading = false;
     let workspaceFilesGroupId: RigGroupId | undefined;
@@ -1076,12 +1113,105 @@ export function rigWorkspaceStoreCreate(
         return next;
     };
 
+    /**
+     * Every project and worktree a session could start in, in the order the
+     * sidebar lists them, with worktrees under the project they belong to.
+     */
+    const createGroupsRead = (): readonly RigCreateGroupOption[] => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return [];
+        const options: RigCreateGroupOption[] = [];
+        for (const project of projects.value) {
+            options.push({
+                displayPath: project.displayPath,
+                id: project.id,
+                label: project.name,
+                nested: false,
+            });
+            for (const worktree of project.worktrees)
+                options.push({
+                    displayPath: worktree.displayPath,
+                    id: worktree.id,
+                    label: worktree.name,
+                    nested: true,
+                    parentLabel: project.name,
+                });
+        }
+        return options;
+    };
+
+    /** True while the machine has not yet said which projects it holds. */
+    const createGroupsLoading = (): boolean => list.get().projects.type === "loading";
+
+    /** Same options in the same order, field for field. */
+    const createGroupsEqual = (
+        left: readonly RigCreateGroupOption[],
+        right: readonly RigCreateGroupOption[],
+    ): boolean =>
+        left.length === right.length &&
+        left.every((option, index) => {
+            const other = right[index];
+            return (
+                other !== undefined &&
+                option.id === other.id &&
+                option.label === other.label &&
+                option.nested === other.nested &&
+                option.parentLabel === other.parentLabel &&
+                option.displayPath === other.displayPath
+            );
+        });
+
+    /**
+     * Where a session starts when the reader has not said: the group last
+     * created in, then the one currently open, then whatever is listed first.
+     * Opening the dialog should not usually require answering "where", because
+     * usually it is where it was last time.
+     */
+    const createGroupDefault = (groups: readonly RigCreateGroupOption[]): RigGroupId | undefined =>
+        (groups.some((group) => group.id === lastCreateGroupId) ? lastCreateGroupId : undefined) ??
+        (groups.some((group) => group.id === openGroupId) ? openGroupId : undefined) ??
+        groups[0]?.id;
+
+    /**
+     * Keeps the open dialog's destinations current with the machine's list. The
+     * dialog is a window-level surface that can be opened before the projects
+     * have been read, and a project can be archived from another window while it
+     * is open, so both the options and the chosen one are reconciled here rather
+     * than captured when it opened.
+     */
+    const createGroupsReconcile = (): void => {
+        if (!create) return;
+        const groups = createGroupsRead();
+        const groupsLoading = createGroupsLoading();
+        const chosen =
+            create.groupId !== undefined && groups.some((group) => group.id === create?.groupId)
+                ? create.groupId
+                : createGroupDefault(groups);
+        if (
+            createGroupsEqual(groups, create.groups) &&
+            groupsLoading === create.groupsLoading &&
+            chosen === create.groupId
+        )
+            return;
+        const { groupId: _dropped, ...rest } = create;
+        create = {
+            ...rest,
+            groups,
+            groupsLoading,
+            ...(chosen === undefined ? {} : { groupId: chosen }),
+        };
+    };
+
     // Rebuilds the combined snapshot only when a component snapshot actually
     // changed, so `get()` stays referentially stable across no-op ticks.
     const recompute = (): void => {
         if (composing > 0) return;
         const listSnapshot = list.get();
         groupResume = groupResumeCompute();
+        // The create dialog outlives the surface it was opened from, so the
+        // places it can start a session are read here rather than captured when
+        // it opened.
+        createGroupsReconcile();
         const nextTabOrder = groupTabOrderCompute(addressedGroupId);
         // The strip keeps its identity across ticks that did not move anything,
         // so a transcript frame does not re-render every tab in it.
@@ -2020,22 +2150,6 @@ export function rigWorkspaceStoreCreate(
         });
     };
 
-    /**
-     * Every project and worktree a session could start in, in the order the
-     * sidebar lists them, with worktrees under the project they belong to.
-     */
-    const createGroupsRead = (): readonly RigCreateGroupOption[] => {
-        const projects = list.get().projects;
-        if (projects.type !== "ready") return [];
-        const options: RigCreateGroupOption[] = [];
-        for (const project of projects.value) {
-            options.push({ id: project.id, label: project.name, nested: false });
-            for (const worktree of project.worktrees)
-                options.push({ id: worktree.id, label: worktree.name, nested: true });
-        }
-        return options;
-    };
-
     const createRelease = (): void => {
         unsubscribeCreateDraft?.();
         unsubscribeCreateDraft = undefined;
@@ -2814,21 +2928,29 @@ export function rigWorkspaceStoreCreate(
             return client.openIn(groupId, targetId);
         },
         createOpen(groupId) {
+            // Asking for the dialog while it is already open — a second Create,
+            // or the row action behind it — must not throw away what is being
+            // written into it. Only the addressed group is taken from the
+            // second ask, since that is the one thing it can be more specific
+            // about than the dialog already is.
+            if (create) {
+                if (groupId !== undefined && groupId !== create.groupId) {
+                    create = { ...create, groupId };
+                    recompute();
+                }
+                return;
+            }
             const groups = createGroupsRead();
-            // The group last created in, then the one currently open, then
-            // whatever is first: opening the dialog should not usually require
-            // answering where, because usually it is where it was last time.
-            const chosen =
-                groupId ??
-                (groups.some((group) => group.id === lastCreateGroupId)
-                    ? lastCreateGroupId
-                    : undefined) ??
-                (groups.some((group) => group.id === openGroupId) ? openGroupId : undefined) ??
-                groups[0]?.id;
+            const chosen = groupId ?? createGroupDefault(groups);
+            createInstance += 1;
             create = {
                 ...(chosen ? { groupId: chosen } : {}),
                 groups,
-                text: "",
+                groupsLoading: createGroupsLoading(),
+                // What was written the last time this was put down without
+                // starting anything. Usually empty; only a session actually
+                // starting clears it.
+                text: createTextKept,
                 keepOpen: false,
                 submitting: false,
             };
@@ -2856,6 +2978,10 @@ export function rigWorkspaceStoreCreate(
         },
         createCancel() {
             if (!create) return;
+            // Put down rather than thrown away: the backdrop and Escape close
+            // this as readily as Cancel does, and the task is the only copy of
+            // something the reader wrote.
+            createTextKept = create.text;
             createRelease();
             create = undefined;
             recompute();
@@ -2868,11 +2994,20 @@ export function rigWorkspaceStoreCreate(
             // A dialog with nothing to say and nowhere to run is not a session
             // waiting to be started; it is an unfinished form.
             if (text.length === 0 || groupId === undefined) return;
+            const instance = createInstance;
             create = { ...pending, submitting: true, error: undefined };
             recompute();
             try {
                 await groupSubmit(groupId, text, [], createDraft?.get().selection);
                 lastCreateGroupId = groupId;
+                // Dismissed and opened again while this was in flight: the
+                // dialog on screen is a different one, holding a task of its
+                // own, and this start has nothing to say to it.
+                if (instance !== createInstance) return;
+                // The task has been filed, so there is nothing left to offer
+                // back the next time the dialog opens — including when it was
+                // dismissed while this was still in flight.
+                createTextKept = "";
                 if (create?.keepOpen) {
                     // Cleared rather than reopened: the configuration and the
                     // group are what someone filing several tasks wants to keep,
@@ -2885,7 +3020,10 @@ export function rigWorkspaceStoreCreate(
             } catch (error) {
                 // The dialog stays open holding what was typed. It is the only
                 // copy of the task, and a session that failed to start is one
-                // the reader will want to try again rather than retype.
+                // the reader will want to try again rather than retype. A
+                // dialog opened since is a different task, and this failure is
+                // not its failure to report.
+                if (instance !== createInstance) return;
                 if (create)
                     create = {
                         ...create,

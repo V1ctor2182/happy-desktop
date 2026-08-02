@@ -317,6 +317,11 @@ export {
     RigProjectSettingsDialog,
     type RigProjectSettingsDialogProps,
 } from "./RigProjectSettingsDialog";
+export {
+    RigCreateSessionDialog,
+    type RigCreateSessionDestination,
+    type RigCreateSessionDialogProps,
+} from "./RigCreateSessionDialog";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
 export {
     SearchField,
