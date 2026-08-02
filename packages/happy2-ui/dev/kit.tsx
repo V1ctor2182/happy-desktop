@@ -47,8 +47,12 @@ export function FullScreenSpecimen(props: {
                 <strong>{props.label}</strong>
                 <small>{props.detail}</small>
             </header>
+            {/* The stage owns the scrolling and spans its whole region; the gutter
+                around the viewport belongs to the inset so it survives scrolling. */}
             <div className="full-screen-stage">
-                <div className="full-screen-viewport">{props.children}</div>
+                <div className="full-screen-inset">
+                    <div className="full-screen-viewport">{props.children}</div>
+                </div>
             </div>
         </article>
     );
@@ -63,13 +67,15 @@ export function ComponentPage(props: {
     return (
         <main className="component-page">
             <header className="component-title">
-                <div className="component-number">{props.number}</div>
-                <div>
+                <div className="component-title-mark">
+                    <span className="component-number">{props.number}</span>
+                </div>
+                <div className="component-title-text">
                     <p>Component plan</p>
                     <h1>{props.title}</h1>
                     <span>{props.summary}</span>
                 </div>
-                <dl>
+                <dl className="component-title-meta">
                     <div>
                         <dt>Framework</dt>
                         <dd>React</dd>

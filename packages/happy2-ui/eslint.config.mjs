@@ -96,6 +96,24 @@ export default defineConfig(
         },
     },
     {
+        /* The workbench is held to the same colour and layout contract as the
+           components it presents: it is where they are reviewed, so a private
+           palette there is exactly as wrong as one in a component. Its drafting
+           ink is mixed locally from theme roles, which the reference rule cannot
+           follow through a custom property, so that one rule stays off here. */
+        files: ["dev/**/*.css"],
+        language: "css/css",
+        languageOptions: { tolerant: true },
+        plugins: { css, "happy2-layout": layoutPolicy, "happy2-theme": themePolicy },
+        rules: {
+            "happy2-layout/require-layout-exception-reason": "error",
+            "happy2-layout/scrollport-no-spacing": "error",
+            "happy2-layout/use-flex-layout": "error",
+            "happy2-theme/no-direct-color": "error",
+            "happy2-theme/theme-color-variables-only": "error",
+        },
+    },
+    {
         files: ["**/*.test.tsx"],
         rules: {
             "happy2-layout/use-flex-layout": "off",

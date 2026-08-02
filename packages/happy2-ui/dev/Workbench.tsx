@@ -1,5 +1,8 @@
 import { Fragment, useLayoutEffect, useState, type ReactNode } from "react";
 import "../src/index";
+import { Icon } from "../src/Icon";
+import { SegmentedControl } from "../src/SegmentedControl";
+import { ThemeScope, type ThemeMode } from "../src/ThemeScope";
 import "./workbench.css";
 import { AgentDeskPage } from "./pages/AgentDeskPage";
 import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
@@ -622,6 +625,10 @@ export interface WorkbenchProps {
 export function Workbench(props: WorkbenchProps = {}) {
     const hashAddressed = props.hashAddressed ?? true;
     const [active, setActive] = useState(hashAddressed ? componentFromHash() : "icon");
+    /* "system" applies no theme class, so the workbench keeps whatever appearance
+       its host already has — the OS scheme standalone, the app's own selection
+       when embedded — until a reviewer deliberately pins light or dark. */
+    const [appearance, setAppearance] = useState<ThemeMode>("system");
     const syncHash = () => setActive(componentFromHash());
     // eslint-disable-next-line happy2-react/no-layout-effect -- the standalone Blueprint route is driven by the browser hash, so this mounted workbench owns one hashchange listener with complete cleanup
     useLayoutEffect(() => {
@@ -633,60 +640,100 @@ export function Workbench(props: WorkbenchProps = {}) {
         if (hashAddressed) window.location.hash = id;
         setActive(id);
     };
+    const brandContent = (
+        <>
+            <span>
+                <Icon name="star" size={14} />
+            </span>
+            <strong>happy2-ui</strong>
+            <i>component plans</i>
+        </>
+    );
     return (
-        <div className="workbench-shell">
-            <header className="workbench-header">
-                <a
-                    aria-label="happy2-ui home"
-                    className="workbench-brand"
-                    href={hashAddressed ? "#icon" : undefined}
-                    onClick={hashAddressed ? undefined : () => selectComponent("icon")}
-                >
-                    <span>R</span>
-                    <strong>happy2-ui</strong>
-                    <i>component plans</i>
-                </a>
-                <div className="header-axis" aria-hidden="true">
-                    <span>0</span>
-                    <i />
-                    <span>1200</span>
-                </div>
-                <label className="component-select">
-                    <span>ComponentType</span>
-                    <select
-                        aria-label="Open component page"
-                        value={active}
-                        onInput={(event) => selectComponent(event.currentTarget.value)}
+        <ThemeScope mode={appearance}>
+            <div className="workbench-shell">
+                <header className="workbench-header">
+                    {/* Standalone, the mark is the address of the first page. Embedded,
+                        the address belongs to the app's router, so the same mark has to
+                        be a real button rather than an anchor with no href, which no
+                        keyboard could reach. */}
+                    {hashAddressed ? (
+                        <a aria-label="happy2-ui home" className="workbench-brand" href="#icon">
+                            {brandContent}
+                        </a>
+                    ) : (
+                        <button
+                            aria-label="happy2-ui home"
+                            className="workbench-brand"
+                            onClick={() => selectComponent("icon")}
+                            type="button"
+                        >
+                            {brandContent}
+                        </button>
+                    )}
+                    <div className="header-axis" aria-hidden="true">
+                        <i />
+                        <span>16 px minor · 80 px major</span>
+                        <i />
+                    </div>
+                    <div
+                        aria-label="Blueprint appearance"
+                        className="workbench-appearance"
+                        role="group"
                     >
-                        <optgroup label="Components">
-                            {componentOptions.map((component) => (
-                                <option key={component.id} value={component.id}>
-                                    {component.number} · {component.label}
-                                </option>
-                            ))}
-                        </optgroup>
-                        {fullScreenOptions.length > 0 ? (
-                            <optgroup label="Full screens">
-                                {fullScreenOptions.map((screen) => (
-                                    <option key={screen.id} value={screen.id}>
-                                        {screen.number} · {screen.label}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        ) : null}
-                    </select>
-                    <b aria-hidden="true">⌄</b>
-                </label>
-            </header>
-            <div className="blueprint-field">
-                {pages.map(({ id, page: Page }) =>
-                    active === id ? (
-                        <Fragment key={id}>
-                            <Page />
-                        </Fragment>
-                    ) : null,
-                )}
+                        <span>Appearance</span>
+                        <SegmentedControl
+                            onChange={(value) => setAppearance(value as ThemeMode)}
+                            segments={[
+                                { value: "system", label: "Auto" },
+                                { value: "light", label: "Light", icon: "sun" },
+                                { value: "dark", label: "Dark", icon: "moon" },
+                            ]}
+                            size="small"
+                            value={appearance}
+                        />
+                    </div>
+                    <label className="component-select">
+                        <span>Page</span>
+                        <span className="component-select-field">
+                            <select
+                                aria-label="Open component page"
+                                value={active}
+                                onInput={(event) => selectComponent(event.currentTarget.value)}
+                            >
+                                <optgroup label="Components">
+                                    {componentOptions.map((component) => (
+                                        <option key={component.id} value={component.id}>
+                                            {component.number} · {component.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                                {fullScreenOptions.length > 0 ? (
+                                    <optgroup label="Full screens">
+                                        {fullScreenOptions.map((screen) => (
+                                            <option key={screen.id} value={screen.id}>
+                                                {screen.number} · {screen.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ) : null}
+                            </select>
+                            <span className="component-select-chevron">
+                                <Icon name="chevron-down" size={14} />
+                            </span>
+                        </span>
+                    </label>
+                </header>
+                <div className="blueprint-field">
+                    {pages.map(({ id, page: Page }) =>
+                        active === id ? (
+                            <Fragment key={id}>
+                                <Page />
+                            </Fragment>
+                        ) : null,
+                    )}
+                </div>
             </div>
-        </div>
+        </ThemeScope>
     );
 }

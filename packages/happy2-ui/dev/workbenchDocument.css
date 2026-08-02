@@ -10,6 +10,9 @@ body,
     margin: 0;
 }
 
+/* Only ever seen behind overscroll: the shell paints the canvas itself. It
+   follows the system appearance rather than the header's override, which scopes
+   its theme to the shell. */
 body {
-    background: #0a3b66;
+    background: var(--groupped-background);
 }

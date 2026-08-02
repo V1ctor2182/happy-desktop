@@ -276,8 +276,11 @@ export function VectorIconPage() {
                 detail="Same glyphs over chrome-dark and paper-light — the font baseline and box must hold on both"
                 stage="chrome"
             >
+                {/* Both appearances are pinned, so the pair proves the same two
+                    surfaces whichever appearance the workbench is showing. */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div
+                        className="happy2-theme-dark"
                         style={{
                             display: "flex",
                             gap: "12px",
@@ -293,14 +296,15 @@ export function VectorIconPage() {
                         ))}
                     </div>
                     <div
+                        className="happy2-theme-light"
                         style={{
                             display: "flex",
                             gap: "12px",
                             padding: "12px 16px",
                             borderRadius: "8px",
-                            background: "#f4f2ee",
-                            border: "1px solid rgb(0 0 0 / 0.08)",
-                            color: "#3c3844",
+                            background: "var(--surface)",
+                            border: "1px solid var(--divider)",
+                            color: "var(--text-secondary)",
                         }}
                     >
                         {OCTICON_SAMPLE.slice(0, 12).map((name) => (

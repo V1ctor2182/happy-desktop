@@ -544,7 +544,7 @@ export function PluginCatalogPanelPage() {
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            background: "rgb(0 0 0 / 0.48)",
+                            background: "var(--overlay-panel)",
                         }}
                     >
                         <PluginUninstallDialog

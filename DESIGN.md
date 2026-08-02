@@ -277,6 +277,18 @@ scale, zoom, crop, or otherwise shrink a component to fit the workbench. Expand
 the card or allow the workbench to scroll around the actual target viewport
 instead.
 
+The workbench itself is drawn in the same neutral language as the product: its
+chrome, canvas, specimen frames, controls, and annotations resolve to theme roles
+only — a colour of its own there is as much a defect as one in a component, and
+ESLint holds `dev/**/*.css` to the same contract as component CSS. Drafting ink
+for grids, rules, and ticks is mixed from `--text` so the drawing inverts with
+the appearance instead of being defined twice. A specimen stage paints the real
+Happy surface its component sits on (`app`, `chrome`, or `surface`), so a
+component is always reviewed against its true background and its footprint reads
+as the interruption in the stage grid. The header's appearance control scopes
+`ThemeScope` to the workbench: it defaults to the ambient appearance and pins
+light or dark for review without touching the host application.
+
 The blueprint must stay deterministic and screenshot-safe. Avoid entrance
 animations, backdrop-filter compositing, time-dependent content, network-loaded
 assets, and system-font dependencies in measurement fixtures.
