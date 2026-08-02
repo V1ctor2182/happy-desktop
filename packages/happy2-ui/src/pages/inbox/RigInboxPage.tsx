@@ -4,6 +4,8 @@ import { AvatarBrutalist } from "../../AvatarBrutalist";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
+import { Icon } from "../../Icon";
+import { SURFACE_HEADER_HEIGHT } from "../../InfoPanel";
 import { RigUserInputPrompt, type RigUserInputAnswerMap } from "../../RigUserInputPrompt";
 import { Toolbar } from "../../Toolbar";
 
@@ -38,6 +40,15 @@ export type RigInboxAnswerMap = RigUserInputAnswerMap;
  * working top to bottom unblocks the agent that has waited longest; answered
  * questions stay below as a record of what was decided.
  *
+ * A waiting question is one block: the session that asked heads it and the
+ * question it asked fills it, because the two are the same fact and reading
+ * them as separate objects is what made this screen hard to scan. An answered
+ * one keeps no container at all — it is a record, not work, so it is a line
+ * with what was decided under it and a rule between it and the next.
+ *
+ * Colour is spent only where it distinguishes: green on a settled question,
+ * and the ordinary danger tone when a send failed. Nothing else is coloured.
+ *
  * It renders exactly what it is handed and reports each answer upward. It holds
  * no queue of its own, so an answered question leaves only when the owner says
  * the Rig resolved it.
@@ -45,6 +56,7 @@ export type RigInboxAnswerMap = RigUserInputAnswerMap;
 export function RigInboxPage(props: RigInboxPageProps) {
     const submissions = props.submissions;
     const pendingCount = props.pending.length;
+    const answeredCount = props.answered.length;
 
     return (
         <div
@@ -55,7 +67,8 @@ export function RigInboxPage(props: RigInboxPageProps) {
         >
             <div className="happy2-rig-inbox__header" data-happy2-ui="rig-inbox-header">
                 <Toolbar
-                    subtitle={inboxSubtitle(pendingCount, props.answered.length, props.loading)}
+                    height={SURFACE_HEADER_HEIGHT}
+                    subtitle={inboxSubtitle(pendingCount, answeredCount, props.loading)}
                     title="Inbox"
                 />
             </div>
@@ -67,7 +80,7 @@ export function RigInboxPage(props: RigInboxPageProps) {
                         </Banner>
                     ) : null}
 
-                    {pendingCount === 0 && props.answered.length === 0 ? (
+                    {pendingCount === 0 && answeredCount === 0 ? (
                         <EmptyState
                             description={
                                 props.loading
@@ -76,6 +89,14 @@ export function RigInboxPage(props: RigInboxPageProps) {
                             }
                             icon={props.loading ? "clock" : "check-circle"}
                             title={props.loading ? "Loading inbox…" : "Nothing to decide"}
+                        />
+                    ) : null}
+
+                    {pendingCount > 0 ? (
+                        <SectionLabel
+                            count={pendingCount}
+                            label="Waiting"
+                            testid="rig-inbox-section-waiting"
                         />
                     ) : null}
 
@@ -91,22 +112,40 @@ export function RigInboxPage(props: RigInboxPageProps) {
                         />
                     ))}
 
-                    {pendingCount === 0 && props.answered.length > 0 ? (
-                        <EmptyState
-                            description="Everything this Rig asked has an answer."
-                            icon="check-circle"
-                            title="All caught up"
+                    {/* Caught up is a state of the queue, not of the screen: the
+                        record below still has to be reachable and is read down
+                        the same left edge, so this is one line in that column
+                        rather than a centred medallion claiming the panel. */}
+                    {pendingCount === 0 && answeredCount > 0 ? (
+                        <p
+                            className="happy2-rig-inbox__caught-up"
+                            data-happy2-ui="rig-inbox-caught-up"
+                        >
+                            <span aria-hidden="true" className="happy2-rig-inbox__caught-up-mark">
+                                <Icon name="check-circle" size={16} />
+                            </span>
+                            <strong className="happy2-rig-inbox__caught-up-title">
+                                All caught up
+                            </strong>
+                            <span className="happy2-rig-inbox__caught-up-detail">
+                                Everything this Rig asked has an answer.
+                            </span>
+                        </p>
+                    ) : null}
+
+                    {answeredCount > 0 ? (
+                        <SectionLabel
+                            count={answeredCount}
+                            label="Answered"
+                            testid="rig-inbox-section"
                         />
                     ) : null}
 
-                    {props.answered.length > 0 ? (
-                        <>
-                            <h2
-                                className="happy2-rig-inbox__section"
-                                data-happy2-ui="rig-inbox-section"
-                            >
-                                Answered
-                            </h2>
+                    {answeredCount > 0 ? (
+                        <div
+                            className="happy2-rig-inbox__records"
+                            data-happy2-ui="rig-inbox-records"
+                        >
                             {props.answered.map((item) => (
                                 <InboxAnsweredItem
                                     item={item}
@@ -118,11 +157,25 @@ export function RigInboxPage(props: RigInboxPageProps) {
                                     time={props.itemTime?.(item)}
                                 />
                             ))}
-                        </>
+                        </div>
                     ) : null}
                 </div>
             </div>
         </div>
+    );
+}
+
+/**
+ * The name of a run of items and how many are in it. The count belongs beside
+ * the name rather than only in the header, because the two groups are read at
+ * different points in a long queue.
+ */
+function SectionLabel(props: { count: number; label: string; testid: string }) {
+    return (
+        <h2 className="happy2-rig-inbox__section" data-happy2-ui={props.testid}>
+            <span className="happy2-rig-inbox__section-label">{props.label}</span>
+            <span className="happy2-rig-inbox__section-count">{props.count}</span>
+        </h2>
     );
 }
 
@@ -139,7 +192,12 @@ interface InboxItemHeaderProps {
     time?: string;
 }
 
-function InboxItemHeader(props: InboxItemHeaderProps) {
+/**
+ * Who asked, where from, when, and the way back to the conversation. The mark
+ * and the title lead because the session is what a question has to be matched
+ * to; the time and the way out close the line.
+ */
+function InboxItemHeader(props: InboxItemHeaderProps & { status?: string }) {
     const title = props.item.sessionTitle ?? "Untitled session";
     return (
         <div className="happy2-rig-inbox__item-header" data-happy2-ui="rig-inbox-item-header">
@@ -159,6 +217,18 @@ function InboxItemHeader(props: InboxItemHeaderProps) {
                 ) : null}
             </span>
             <span className="happy2-rig-inbox__item-meta">
+                {/* Spoken as well as shown: the answer leaves on its own after
+                    the form is submitted, so someone who is not watching this
+                    line still hears that the send is under way. */}
+                {props.status ? (
+                    <span
+                        className="happy2-rig-inbox__item-status"
+                        data-happy2-ui="rig-inbox-item-status"
+                        role="status"
+                    >
+                        {props.status}
+                    </span>
+                ) : null}
                 {props.time ? (
                     <span className="happy2-rig-inbox__item-time">{props.time}</span>
                 ) : null}
@@ -195,6 +265,7 @@ function InboxPendingItem(props: InboxPendingItemProps) {
                 item={props.item}
                 {...(props.location === undefined ? {} : { location: props.location })}
                 {...(props.onOpenSession ? { onOpenSession: props.onOpenSession } : {})}
+                {...(submission?.type === "pending" ? { status: "Sending…" } : {})}
                 {...(props.time === undefined ? {} : { time: props.time })}
             />
             <RigUserInputPrompt
@@ -205,11 +276,18 @@ function InboxPendingItem(props: InboxPendingItemProps) {
                     requestId: props.item.requestId,
                     questions: props.item.questions,
                 }}
+                variant="flat"
             />
         </article>
     );
 }
 
+/**
+ * A settled question. There is nothing to do with it, so it is drawn as a
+ * record rather than as a form: the question in secondary type with what was
+ * decided under it, and a check that says the decision was made without
+ * repeating the word on every row.
+ */
 function InboxAnsweredItem(props: InboxItemHeaderProps) {
     return (
         <article
@@ -230,7 +308,16 @@ function InboxAnsweredItem(props: InboxItemHeaderProps) {
                     return (
                         <div className="happy2-rig-inbox__answer" key={question.id}>
                             <dt className="happy2-rig-inbox__answer-question">
-                                {question.question}
+                                {/* The mark hangs in the column the session's
+                                    own avatar occupies, so the question and the
+                                    decision under it keep the title's left edge
+                                    whether or not anything was recorded. */}
+                                <span aria-hidden="true" className="happy2-rig-inbox__answer-mark">
+                                    {chosen.length > 0 ? <Icon name="check" size={12} /> : null}
+                                </span>
+                                <span className="happy2-rig-inbox__answer-text">
+                                    {question.question}
+                                </span>
                             </dt>
                             <dd className="happy2-rig-inbox__answer-value">
                                 {chosen.length > 0 ? (

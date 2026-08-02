@@ -291,6 +291,7 @@ export {
     RigUserInputPrompt,
     type RigUserInputAnswerMap,
     type RigUserInputPromptProps,
+    type RigUserInputPromptVariant,
 } from "./RigUserInputPrompt";
 export {
     RigControlMenu,

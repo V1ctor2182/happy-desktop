@@ -11,26 +11,42 @@
     flex-direction: column;
     gap: 12px;
     width: 100%;
-    padding: 16px;
     box-sizing: border-box;
+    font-family: var(--happy2-font-ui);
+}
+
+/* A question in a transcript draws its own container, because it has to hold
+   itself apart from the messages above and below it. A host that already gives
+   the question a block of its own asks for `flat` and supplies that container. */
+.happy2-rig-input[data-variant="card"] {
+    padding: 16px;
     background: var(--surface-high);
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-md);
-    font-family: var(--happy2-font-ui);
 }
 
 .happy2-rig-input__questions {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
+    width: 100%;
 }
 
+/*
+ * A fieldset is sized by its own contents rather than by its flex parent, so
+ * without this the option rows would stop at the longest label and leave the
+ * rest of the measure empty. Zeroing the intrinsic minimum lets the ordinary
+ * stretch apply and the options run the full width of the column.
+ */
 .happy2-rig-input__question {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
+    width: 100%;
+    min-inline-size: 0;
     border: none;
 }
 
@@ -39,27 +55,47 @@
     flex-direction: column;
     gap: 2px;
     padding: 0;
+    width: 100%;
+}
+
+/* What the question is about, and how many of its options may be taken, on one
+   line above the question, so the rule is read before the options are. */
+.happy2-rig-input__eyebrow {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
 }
 
 .happy2-rig-input__header {
     font-family: var(--happy2-font-mono);
     font-size: 11px;
     font-weight: 700;
+    line-height: 16px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-secondary);
 }
 
+.happy2-rig-input__rule {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-secondary);
+}
+
 .happy2-rig-input__prompt {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
+    line-height: 20px;
+    letter-spacing: -0.01em;
     color: var(--text);
 }
 
 .happy2-rig-input__options {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
+    width: 100%;
 }
 
 .happy2-rig-input__option {
@@ -67,10 +103,20 @@
     flex-direction: row;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px 10px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 12px;
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-sm);
+    background: var(--surface);
     cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease;
+}
+
+.happy2-rig-input__option:hover {
+    background: var(--surface-pressed);
 }
 
 .happy2-rig-input__option[data-selected] {
@@ -78,8 +124,24 @@
     background: var(--surface-selected);
 }
 
+/* While an answer is in flight the options are frozen rather than removed, so
+   what was chosen stays readable if the send fails and has to be retried. */
+.happy2-rig-input__option[data-disabled] {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.happy2-rig-input__option[data-disabled]:hover {
+    background: var(--surface);
+}
+
+.happy2-rig-input__option[data-disabled][data-selected]:hover {
+    background: var(--surface-selected);
+}
+
 .happy2-rig-input__option-body {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
@@ -87,11 +149,13 @@
 
 .happy2-rig-input__option-label {
     font-size: 14px;
+    line-height: 20px;
     color: var(--text);
 }
 
 .happy2-rig-input__option-description {
     font-size: 12px;
+    line-height: 16px;
     color: var(--text-secondary);
 }
 
@@ -99,6 +163,7 @@
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
+    width: 100%;
 }
 
 /* ---- Session controls / control menu --------------------------------------- */

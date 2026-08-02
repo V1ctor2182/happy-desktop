@@ -37,6 +37,17 @@ const pending: readonly RigInboxItem[] = [
                     },
                 ],
             },
+            {
+                id: "notify",
+                header: "Notify",
+                question: "Who should hear about it when it lands?",
+                multiSelect: true,
+                required: false,
+                options: [
+                    { label: "On-call", description: "Pages whoever is holding the rota." },
+                    { label: "Release channel", description: "Posts once, after the migration." },
+                ],
+            },
         ],
     }),
     item("two", {
@@ -79,10 +90,39 @@ const answered: readonly RigInboxItem[] = [
             },
         ],
     }),
+    item("four", {
+        sessionTitle: "Vendor the Octicons glyphmap",
+        status: "answered",
+        resolvedAt: 1_700_000_200_000,
+        answers: { source: ["Regenerate from upstream", "Check the map into the repo"] },
+        questions: [
+            {
+                id: "source",
+                header: "Source",
+                question: "Where should the name map come from?",
+                multiSelect: true,
+                required: true,
+                options: [
+                    { label: "Regenerate from upstream", description: "Matches Happy exactly." },
+                    { label: "Check the map into the repo", description: "No build-time step." },
+                ],
+            },
+        ],
+    }),
 ];
 
 const submissions: ReadonlyMap<RigInboxItemId, RigInboxSubmission> = new Map([
     ["two" as RigInboxItemId, { type: "pending" } as RigInboxSubmission],
+]);
+
+const failed: ReadonlyMap<RigInboxItemId, RigInboxSubmission> = new Map([
+    [
+        "one" as RigInboxItemId,
+        {
+            type: "failed",
+            error: { name: "UserError", message: "The Rig refused the answer: the session ended." },
+        } as RigInboxSubmission,
+    ],
 ]);
 
 const location = (candidate: RigInboxItem): string =>
@@ -96,11 +136,11 @@ export function RigInboxBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-013"
-            summary="The queue of questions a Rig's agents are waiting on: pending first in the order they were asked, answered below as a record. Answers are given in place."
+            summary="The queue of questions a Rig's agents are waiting on: pending first in the order they were asked, answered below as a record. A waiting question is one outlined block headed by the session that asked; a settled one drops the outline and keeps only what was decided."
             title="RigInboxPage"
         >
             <FullScreenSpecimen
-                detail="Two waiting questions and one answered; the second answer is in flight."
+                detail="Two waiting questions and two answered; the second answer is in flight, and the first question carries a required and an optional part."
                 label="Queue with history"
                 number="01"
             >
@@ -116,7 +156,7 @@ export function RigInboxBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Everything asked has an answer, so the queue reads as caught up."
+                detail="Everything asked has an answer, so the queue says so inline and leaves the record reachable."
                 label="Caught up"
                 number="02"
             >
@@ -146,6 +186,22 @@ export function RigInboxBlueprintPage() {
                     itemTime={time}
                     onAnswer={() => undefined}
                     pending={pending}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="An answer the Rig refused; the selections are retained inside the question so the retry sends the same thing."
+                label="Answer not sent"
+                number="05"
+            >
+                <RigInboxPage
+                    answered={[]}
+                    itemLocation={location}
+                    itemTime={time}
+                    onAnswer={() => undefined}
+                    onOpenSession={() => undefined}
+                    pending={pending}
+                    submissions={failed}
                 />
             </FullScreenSpecimen>
         </ComponentPage>

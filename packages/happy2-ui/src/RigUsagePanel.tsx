@@ -5,6 +5,7 @@ import type {
     RigUsageQuota,
     RigUsageQuotaWindow,
 } from "happy2-state";
+import { USAGE_CRITICAL_PERCENT, usagePercentClamp, usageWindowTone } from "./usageTone";
 
 export type RigUsagePanelProps = {
     /** The projected usage snapshot; omit while the first load is in flight. */
@@ -31,8 +32,8 @@ function formatCost(value: number): string {
 }
 
 const QUOTA_LABELS: Record<RigUsageQuotaWindow["kind"], string> = {
-    fiveHour: "5-hour",
-    weekly: "Weekly",
+    fiveHour: "5 hours",
+    weekly: "Week",
 };
 
 /** Formats an epoch-millis reset time as a short local day/time. */
@@ -71,32 +72,38 @@ function QuotaRow(props: { quota: RigUsageQuota }) {
             {quota.windows.length === 0 ? (
                 <span className="happy2-rig-usage__quota-empty">No limits reported</span>
             ) : (
-                quota.windows.map((window) => (
-                    <span
-                        className="happy2-rig-usage__quota-window"
-                        data-happy2-ui="rig-usage-quota-window"
-                        key={window.kind}
-                    >
-                        <span className="happy2-rig-usage__quota-label">
-                            {QUOTA_LABELS[window.kind]}
-                        </span>
-                        <span className="happy2-rig-usage__quota-bar" aria-hidden="true">
+                quota.windows.map((window) => {
+                    const percent = usagePercentClamp(window.usedPercent);
+                    return (
+                        <span
+                            className="happy2-rig-usage__quota-window"
+                            data-happy2-ui="rig-usage-quota-window"
+                            data-tone={usageWindowTone(percent)}
+                            key={window.kind}
+                        >
+                            <span className="happy2-rig-usage__quota-label">
+                                {QUOTA_LABELS[window.kind]}
+                            </span>
+                            <span className="happy2-rig-usage__quota-bar" aria-hidden="true">
+                                <span
+                                    className="happy2-rig-usage__quota-fill"
+                                    data-full={percent >= USAGE_CRITICAL_PERCENT ? "" : undefined}
+                                    style={{ width: `${String(percent)}%` }}
+                                />
+                            </span>
                             <span
-                                className="happy2-rig-usage__quota-fill"
-                                data-full={window.usedPercent >= 90 ? "" : undefined}
-                                style={{
-                                    width: `${Math.min(100, Math.max(0, window.usedPercent))}%`,
-                                }}
-                            />
+                                aria-label={`${String(Math.round(percent))}% of ${QUOTA_LABELS[window.kind]} used`}
+                                className="happy2-rig-usage__quota-percent"
+                                role="img"
+                            >
+                                {Math.round(percent)}%
+                            </span>
+                            <span className="happy2-rig-usage__quota-reset">
+                                resets {formatReset(window.resetsAt)}
+                            </span>
                         </span>
-                        <span className="happy2-rig-usage__quota-percent">
-                            {Math.round(window.usedPercent)}%
-                        </span>
-                        <span className="happy2-rig-usage__quota-reset">
-                            resets {formatReset(window.resetsAt)}
-                        </span>
-                    </span>
-                ))
+                    );
+                })
             )}
         </div>
     );
@@ -109,6 +116,11 @@ function QuotaRow(props: { quota: RigUsageQuota }) {
  * driven by a `RigSessionUsage` snapshot plus loading/error flags, so the owning
  * surface fetches (and polls while visible) and passes the result down. Holds no
  * state and starts no work of its own.
+ *
+ * A rate-limit window is drawn with the same grammar the provider-usage page
+ * uses — name, measure, share, reset, in fixed columns, and monochrome until
+ * the share is worth colouring — so the same limit read here and read there is
+ * recognisably the same reading rather than two unrelated charts.
  */
 export function RigUsagePanel(props: RigUsagePanelProps) {
     const { usage } = props;

@@ -95,60 +95,10 @@
     gap: 12px;
 }
 
-.happy2-rig-input {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--divider);
-    border-radius: 8px;
-    background: var(--surface-high);
-}
-
-.happy2-rig-input__question,
-.happy2-rig-input__heading {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 100%;
-}
-
-.happy2-rig-input__heading strong {
-    color: var(--text);
-    font-size: 13px;
-}
-
-.happy2-rig-input__heading span {
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-
-.happy2-rig-input__options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.happy2-rig-input__options button {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 120px;
-    padding: 8px 10px;
-    border: 1px solid var(--divider);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    text-align: left;
-}
-
-.happy2-rig-input__options button[aria-pressed="true"] {
-    border-color: var(--text-link);
-    box-shadow: inset 0 0 0 1px var(--text-link);
-}
-
-.happy2-rig-input__options small {
-    color: var(--text-secondary);
-    font-size: 11px;
-}
+/*
+ * The user-input prompt is styled once, in rig-chat.css. An older button-based
+ * prompt (`__heading`, `__options button[aria-pressed]`) used to be described
+ * here too; nothing renders that markup any more, and because this file is
+ * imported first its container declarations silently overrode the prompt's own
+ * `flat` variant. It is deleted rather than kept as a duplicate.
+ */

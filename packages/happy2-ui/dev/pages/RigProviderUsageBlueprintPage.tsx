@@ -13,6 +13,7 @@ const providers: readonly RigProviderUsageEntry[] = [
             exhausted: false,
             fiveHour: { usedPercent: 42, resetsAt: 1_700_007_200_000 },
             weekly: { usedPercent: 81, resetsAt: 1_700_400_000_000 },
+            monthly: { usedPercent: 34, resetsAt: 1_702_000_000_000 },
         },
     },
     {
@@ -35,6 +36,22 @@ const providers: readonly RigProviderUsageEntry[] = [
     },
 ];
 
+/** A configured account the daemon has not reached yet: neither read nor failed. */
+const unread: readonly RigProviderUsageEntry[] = [
+    {
+        providerId: "claude",
+        checkedAt: 1_700_000_000_000,
+        usage: {
+            vendor: "claude",
+            capturedAt: 1_700_000_000_000,
+            planName: "Pro",
+            exhausted: false,
+            fiveHour: { usedPercent: 8, resetsAt: 1_700_012_000_000 },
+        },
+    },
+    { providerId: "codex" },
+];
+
 const time = (capturedAt: number) =>
     capturedAt >= 1_700_000_000_000 ? "just now" : "10 minutes ago";
 
@@ -43,11 +60,11 @@ export function RigProviderUsageBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-015"
-            summary="How much of each provider account's plan this machine has spent: one section per account, carrying the windows that vendor reports and whatever credit is left once they are gone. A window's share runs the full width of the column and stays the ink of the text until it is worth colouring."
+            summary="How much of each provider account's plan this machine has spent: one section per account, carrying the windows that vendor reports and whatever credit is left once they are gone. A window is one row — name, measure, share, reset — and every measure starts and ends on the same two edges so two accounts can be compared by eye. One dot per account says which of the six states it is in."
             title="RigProviderUsagePage"
         >
             <FullScreenSpecimen
-                detail="Three accounts, separated by a rule rather than boxed: one with room, one spent with credits behind it, one that could not be read."
+                detail="Three accounts, separated by a rule rather than boxed: one with room across three windows, one spent with credits behind it, one that could not be read."
                 label="Accounts"
                 number="01"
             >
@@ -83,6 +100,18 @@ export function RigProviderUsageBlueprintPage() {
                     currentTime={1_700_000_000_000}
                     error={{ name: "UserError", message: "The Rig stopped reporting usage." }}
                     providers={providers}
+                    readingTime={time}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A configured account with no reading behind it yet, beside one that has been read."
+                label="Unread account"
+                number="05"
+            >
+                <RigProviderUsagePage
+                    currentTime={1_700_000_000_000}
+                    providers={unread}
                     readingTime={time}
                 />
             </FullScreenSpecimen>

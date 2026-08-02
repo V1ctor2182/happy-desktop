@@ -1,7 +1,16 @@
 /*
- * The Rig inbox: the queue of questions agents are waiting on. A column of
- * cards under a surface header, scrolling as one list. Layout is flexbox
- * throughout; colors and type come only from theme roles.
+ * The Rig inbox: the queue of questions agents are waiting on, read down one
+ * column under a surface header.
+ *
+ * A waiting question is one outlined block — the session that asked heads it,
+ * the question fills it — because reading the two as separate objects is what
+ * made the queue hard to scan. An answered question drops the outline: it is a
+ * record rather than work, so it is a line with what was decided under it and a
+ * rule between it and the next. The column, its measure, the header height, and
+ * the section labels match the provider-usage surface, so the two Rig reading
+ * screens are the same object with different content.
+ *
+ * Layout is flexbox throughout; colors and type come only from theme roles.
  */
 
 .happy2-rig-inbox {
@@ -24,6 +33,9 @@
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
+    /* The toolbar insets its own title by 16px, so the strip carries the
+       remaining 8px that puts that title over the column below it. */
+    padding: 0 8px;
 }
 
 /* The scrollport is flush; spacing belongs to the content wrapper inside it. */
@@ -45,15 +57,21 @@
     flex-direction: column;
     gap: 16px;
     margin: 0 auto;
-    padding: 16px;
+    padding: 8px 24px 48px;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
 }
 
+/* ---- Section label ---------------------------------------------------- */
+
+/* Names a run of items and says how many are in it, since the two groups are
+   reached at different points in a long queue. The extra space above it comes
+   from its own padding so it stays one child in the column's flow. */
 .happy2-rig-inbox__section {
     display: flex;
-    align-items: center;
+    align-items: baseline;
+    gap: 8px;
     margin: 0;
     padding-top: 8px;
     font-family: var(--happy2-font-mono);
@@ -64,11 +82,80 @@
     color: var(--text-secondary);
 }
 
+.happy2-rig-inbox__section-count {
+    color: var(--text);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Caught up -------------------------------------------------------- */
+
+/* Said on one line in the reading column rather than as a centred block: the
+   record it introduces is right underneath and shares this left edge. */
+.happy2-rig-inbox__caught-up {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-inbox__caught-up-mark {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--success);
+}
+
+.happy2-rig-inbox__caught-up-title {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.happy2-rig-inbox__caught-up-detail {
+    min-width: 0;
+}
+
+/* ---- Item ------------------------------------------------------------- */
+
 .happy2-rig-inbox__item {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+    box-sizing: border-box;
     width: 100%;
+}
+
+/* A waiting question is an outline rather than a fill: it groups the session
+   line with the form under it without turning the queue into stacked slabs. */
+.happy2-rig-inbox__item[data-status="pending"] {
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+}
+
+/* The run of records is its own flex parent and owns the space between them, so
+   the rule below is a fixed edge every record carries rather than spacing
+   conjured between particular siblings. */
+.happy2-rig-inbox__records {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* Records are told apart by a rule above each, not by a box around each; the
+   first one's rule closes the section label the same way. */
+.happy2-rig-inbox__item[data-status="answered"] {
+    gap: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
 }
 
 .happy2-rig-inbox__item-header {
@@ -87,10 +174,16 @@
     min-width: 0;
 }
 
+.happy2-rig-inbox__item-avatar {
+    flex: 0 0 auto;
+}
+
 .happy2-rig-inbox__item-title {
     overflow: hidden;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
+    line-height: 20px;
+    letter-spacing: -0.01em;
     color: var(--text);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -99,6 +192,7 @@
 .happy2-rig-inbox__item-location {
     overflow: hidden;
     font-size: 12px;
+    line-height: 20px;
     color: var(--text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -111,42 +205,78 @@
     gap: 8px;
 }
 
+/* An answer already on its way says so where the question is being watched,
+   rather than only by greying the options out. It is progress, not a state
+   worth an alarm colour, so it is secondary ink set in the weight of a label. */
+.happy2-rig-inbox__item-status {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 20px;
+    color: var(--text-secondary);
+}
+
 .happy2-rig-inbox__item-time {
     font-size: 12px;
+    line-height: 20px;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
 
-/* An answered question keeps its record quieter than a live one. */
+/* ---- Answered record -------------------------------------------------- */
+
+/*
+ * A record keeps the session title's left edge: the check hangs back in the
+ * 20px column the avatar occupies above it, so the question and the decision
+ * under it both start where the title starts and the whole item reads as one
+ * left-aligned block.
+ */
 .happy2-rig-inbox__answers {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin: 0;
-    padding: 12px 16px;
     box-sizing: border-box;
     width: 100%;
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
 }
 
 .happy2-rig-inbox__answer {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    width: 100%;
 }
 
 .happy2-rig-inbox__answer-question {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 20px;
     color: var(--text-secondary);
+}
+
+/* The one place this screen is coloured: a settled decision, said once per
+   answer instead of repeating the word "answered" on every row. */
+.happy2-rig-inbox__answer-mark {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--success);
+}
+
+.happy2-rig-inbox__answer-text {
+    min-width: 0;
 }
 
 .happy2-rig-inbox__answer-value {
     margin: 0;
-    font-size: 13px;
+    padding-left: 28px;
+    font-size: 14px;
     font-weight: 600;
+    line-height: 20px;
     color: var(--text);
 }
 

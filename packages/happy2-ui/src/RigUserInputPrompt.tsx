@@ -6,6 +6,15 @@ import { Checkbox } from "./Checkbox";
 
 export type RigUserInputAnswerMap = Record<string, string[]>;
 
+/**
+ * Whether the prompt draws its own container. `card` is the standalone form a
+ * transcript needs, because a question there has to separate itself from the
+ * messages around it. `flat` drops the fill, border, and padding for a host
+ * that already gives the question a container — the inbox, where the asking
+ * session's line and the question it asked are one block.
+ */
+export type RigUserInputPromptVariant = "card" | "flat";
+
 export type RigUserInputPromptProps = {
     request: RigUserInputRequest;
     onAnswer: (requestId: string, answers: RigUserInputAnswerMap) => void;
@@ -13,10 +22,22 @@ export type RigUserInputPromptProps = {
     pending?: boolean;
     /** Last failed answer submission; retry resubmits the retained selections. */
     error?: UserError;
+    /** Defaults to `card`; see `RigUserInputPromptVariant`. */
+    variant?: RigUserInputPromptVariant;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
 };
+
+/**
+ * How many of a question's options may be taken, said beside its name so the
+ * rule is read before the options rather than discovered by clicking one. An
+ * optional question says so too: nothing under it is holding the submit back.
+ */
+function selectionRule(question: { multiSelect: boolean; required: boolean }): string {
+    const count = question.multiSelect ? "Choose any" : "Choose one";
+    return question.required ? count : `${count} · optional`;
+}
 
 function toggleValue(current: readonly string[], value: string, multiSelect: boolean): string[] {
     if (multiSelect)
@@ -32,6 +53,10 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
  * accumulate. The local selection map is the component's only state; submit calls
  * `onAnswer(requestId, { [questionId]: string[] })` with the chosen option labels.
  * Submit is blocked until every `required` question has at least one selection.
+ *
+ * Each question states its own selection rule beside its name, so a person can
+ * tell a single choice from an accumulating one, and an optional question from
+ * the one actually holding the submit, without trying an option to find out.
  */
 export function RigUserInputPrompt(props: RigUserInputPromptProps) {
     const { request } = props;
@@ -53,6 +78,7 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
             className={["happy2-rig-input", props.className].filter(Boolean).join(" ")}
             data-happy2-ui="rig-user-input"
             data-testid={props["data-testid"]}
+            data-variant={props.variant ?? "card"}
             style={props.style}
         >
             <div className="happy2-rig-input__questions">
@@ -66,11 +92,19 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
                             key={question.id}
                         >
                             <legend className="happy2-rig-input__legend">
-                                <span
-                                    className="happy2-rig-input__header"
-                                    data-happy2-ui="rig-user-input-header"
-                                >
-                                    {question.header}
+                                <span className="happy2-rig-input__eyebrow">
+                                    <span
+                                        className="happy2-rig-input__header"
+                                        data-happy2-ui="rig-user-input-header"
+                                    >
+                                        {question.header}
+                                    </span>
+                                    <span
+                                        className="happy2-rig-input__rule"
+                                        data-happy2-ui="rig-user-input-rule"
+                                    >
+                                        {selectionRule(question)}
+                                    </span>
                                 </span>
                                 <span className="happy2-rig-input__prompt">
                                     {question.question}
@@ -80,6 +114,7 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
                                 {question.options.map((option) => (
                                     <label
                                         className="happy2-rig-input__option"
+                                        data-disabled={props.pending ? "" : undefined}
                                         data-happy2-ui="rig-user-input-option"
                                         data-selected={
                                             selected.includes(option.label) ? "" : undefined
