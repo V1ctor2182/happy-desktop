@@ -1,6 +1,9 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties } from "react";
-import { Icon, type IconName } from "./Icon";
+import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
+import { Icon } from "./Icon";
+import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
+import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 /** Git working-tree state of a file, mirrored from the workspace API. */
 export type FileTreeGitStatus =
     | "added"
@@ -16,34 +19,34 @@ export type FileTreeGitStatus =
  */
 export type FileTreeNode = {
     /** Stable identity, typically the full path. */
-    id: string;
+    readonly id: string;
     /** Row label — usually the last path segment. */
-    name: string;
+    readonly name: string;
     /**
      * Where the row's name lives, shown dimmed after it. A flat listing needs the
      * containing directory to tell two `index.ts` apart, but the name is what is
      * being looked for, so the two are separate rather than one long path that
      * loses its tail to an ellipsis.
      */
-    directory?: string;
-    kind: "file" | "directory";
-    gitStatus?: FileTreeGitStatus;
+    readonly directory?: string;
+    readonly kind: "file" | "directory";
+    readonly gitStatus?: FileTreeGitStatus;
     /** Lines the file gained and lost, shown beside its status. */
-    addedLines?: number;
-    deletedLines?: number;
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
     /** Directory only: whether its children row-group is shown. */
-    expanded?: boolean;
+    readonly expanded?: boolean;
     /** Directory only: a page request is in flight. */
-    loading?: boolean;
+    readonly loading?: boolean;
     /** Directory only: more children exist beyond those loaded. */
-    hasMore?: boolean;
-    children?: FileTreeNode[];
+    readonly hasMore?: boolean;
+    readonly children?: readonly FileTreeNode[];
 };
 /**
- * What was held down when a row was clicked. A listing where several files can
+ * What was held down when a row was chosen. A listing where several files can
  * be picked has to tell "open this one" apart from "add this one" and "take
- * everything from there to here", and the keys are the only difference between
- * the three. The tree reports them and decides nothing.
+ * everything from there to here", and the modifiers are the only difference
+ * between the three. The tree reports them and decides nothing.
  */
 export type FileTreeSelectModifiers = {
     /** Command on macOS, Control elsewhere: add or remove this one row. */
@@ -55,7 +58,9 @@ export type FileTreeProps = {
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
-    nodes: FileTreeNode[];
+    nodes: readonly FileTreeNode[];
+    /** Names the tree for assistive technology. */
+    label?: string;
     /** Currently selected entry id, if any. */
     selectedId?: string;
     /**
@@ -65,14 +70,27 @@ export type FileTreeProps = {
      */
     selectedIds?: ReadonlySet<string>;
     onSelect?: (id: string, modifiers: FileTreeSelectModifiers) => void;
-    /** File activated with a double click; directories continue to toggle. */
+    /** File activated with a double click or Enter; directories toggle instead. */
     onOpen?: (id: string) => void;
-    /** Directory expand/collapse request. */
-    onToggle?: (id: string) => void;
+    /**
+     * Directory disclosure request. `expanded` is the state being asked for, so
+     * the caller can record what the reader decided rather than having to work
+     * out what the row was showing at the time.
+     */
+    onToggle?: (id: string, expanded: boolean) => void;
     /** Directory paging request (the "Show more" affordance). */
     onLoadMore?: (id: string) => void;
     /** Per-depth indentation step. Defaults to 16px. */
     indent?: number;
+    /**
+     * Draws only the rows on screen and owns its own scrolling.
+     *
+     * A checkout listing runs to tens of thousands of rows, and every one of
+     * them costs a layout box, an icon glyph, and a paint whether or not it is
+     * anywhere near the viewport. Off for a listing that is always short, where
+     * the plain column keeps the surrounding surface in charge of scrolling.
+     */
+    virtualize?: boolean;
     /** Whole-tree initial loading state (before any node is known). */
     loading?: boolean;
     loadingLabel?: string;
@@ -103,6 +121,8 @@ const GIT_STATUS: Record<
 };
 const BASE_PADDING = 8;
 const DEFAULT_INDENT = 16;
+/** Every drawn row is this tall, which is also what the virtualizer measures. */
+const ROW_HEIGHT = 28;
 /**
  * The kind of thing a file is, which is what its row's icon and icon colour say.
  * A column of identically grey documents makes the reader parse every name to
@@ -123,22 +143,40 @@ export type FileTreeFamily =
     | "config"
     | "directory"
     | "other";
-/** Glyph for each family. Colour is the family's own, applied in CSS. */
-const FAMILY_ICON: Record<FileTreeFamily, IconName> = {
-    archive: "archive",
-    audio: "mic",
-    code: "code",
-    config: "settings",
-    data: "braces",
-    directory: "files",
-    image: "image",
-    other: "doc",
-    prose: "doc",
-    secret: "shield",
-    shell: "terminal",
-    style: "braces",
-    video: "play",
+/**
+ * The glyph each family wears, from the same two icon families the rest of the
+ * product draws from. Every one is distinct: a colour alone cannot carry the
+ * difference between a stylesheet and a JSON file for a reader who does not see
+ * the difference between violet and amber, and two families that shared the
+ * brace glyph were telling everyone else the same thing twice. Colour is the
+ * family's own and lives in CSS.
+ */
+const FAMILY_GLYPH: Record<Exclude<FileTreeFamily, "directory">, IoniconName> = {
+    archive: "archive-outline",
+    audio: "musical-notes-outline",
+    code: "code-slash-outline",
+    config: "cog-outline",
+    data: "list-outline",
+    image: "image-outline",
+    other: "document-outline",
+    prose: "document-text-outline",
+    secret: "key-outline",
+    shell: "terminal-outline",
+    style: "color-palette-outline",
+    video: "film-outline",
 };
+/**
+ * A file's icon. A directory wears the folder it is — open when its contents
+ * are showing, so the row still says which way it is wherever the chevron is
+ * out of the reader's eye.
+ */
+function FileTreeFamilyIcon(props: { family: FileTreeFamily; expanded?: boolean }) {
+    if (props.family === "directory")
+        return (
+            <Ionicon name={props.expanded ? "folder-open-outline" : "folder-outline"} size={14} />
+        );
+    return <Ionicon name={FAMILY_GLYPH[props.family]} size={14} />;
+}
 /**
  * File-type vocabulary, keyed by lowercase extension. This is a visual decision
  * the tree owns (like its git-status letters), derived purely from the file name
@@ -281,17 +319,22 @@ const FILENAME_FAMILY: Record<string, FileTreeFamily> = {
  * Pick a file's family from its name. Directories are their own family; files
  * resolve by a special-cased bare name first, then by extension, then fall back
  * to the neutral `other`.
+ *
+ * A leading-dot name is read from its first segment rather than its last, so
+ * `.env.local` and `.env.production` are the settings files they obviously are
+ * instead of unrecognised things ending in `local` and `production`.
  */
 export function fileTreeFamily(node: Pick<FileTreeNode, "kind" | "name">): FileTreeFamily {
     if (node.kind === "directory") return "directory";
     const name = node.name.toLowerCase();
     const special = FILENAME_FAMILY[name];
     if (special) return special;
-    const dot = name.lastIndexOf(".");
-    // No dot, or a leading-dot dotfile with no further extension (e.g. ".env"
-    // reads "env"; ".gitignore" reads "gitignore" and is special-cased above).
-    const ext = dot > 0 ? name.slice(dot + 1) : dot === 0 ? name.slice(1) : "";
-    return EXTENSION_FAMILY[ext] ?? "other";
+    const segments = name.split(".");
+    if (name.startsWith(".")) {
+        const leading = EXTENSION_FAMILY[segments[1] ?? ""];
+        if (leading) return leading;
+    }
+    return (segments.length > 1 ? EXTENSION_FAMILY[segments.at(-1)!] : undefined) ?? "other";
 }
 /**
  * The dimmed directory a file lives in, printed ahead of its name so the row
@@ -319,6 +362,36 @@ function FileTreePath(props: { path: string }) {
     );
 }
 /**
+ * A row's own label.
+ *
+ * A directory chain with nothing to choose between its levels is drawn as one
+ * `a/b/c` row, which makes that row's name a path — and a path cut at its end
+ * loses the one segment that says which directory this actually is, leaving
+ * every row under `packages/happy2-ui/src/components/…` reading the same. The
+ * leading run gives way first and the last segment is held at full length,
+ * exactly as a file's directory does beside it.
+ */
+function FileTreeName(props: { name: string }) {
+    const cut = props.name.lastIndexOf("/");
+    if (cut === -1)
+        return (
+            <span className="happy2-file-tree__name" data-happy2-ui="file-tree-name">
+                {props.name}
+            </span>
+        );
+    return (
+        <span
+            className="happy2-file-tree__name"
+            data-happy2-ui="file-tree-name"
+            data-joined=""
+            title={props.name}
+        >
+            <span className="happy2-file-tree__name-head">{props.name.slice(0, cut + 1)}</span>
+            <span className="happy2-file-tree__name-tail">{props.name.slice(cut + 1)}</span>
+        </span>
+    );
+}
+/**
  * What one file did to the diff. A side that changed nothing is left out rather
  * than printed as a zero the reader has to read before learning there is nothing
  * to learn, and a file with no counts at all — a binary, or a listing with no Git
@@ -339,154 +412,167 @@ function FileTreeStat(props: { added?: number; deleted?: number }) {
         </span>
     );
 }
-function FileTreeRow(props: {
-    node: FileTreeNode;
-    depth: number;
+/**
+ * The rows the arrow keys stop on. A directory still loading its children has
+ * nothing to do and nothing to say, so the note it draws is passed over.
+ */
+function rowStops(row: FileTreeRow): boolean {
+    return row.kind !== "loading";
+}
+interface FileTreeRowViewProps {
+    row: FileTreeRow;
     indent: number;
-    selectedId?: string;
-    selectedIds?: ReadonlySet<string>;
+    active: boolean;
+    selected: boolean;
+    picked: boolean;
+    /** Whether this listing offers a selection at all. */
+    selectable: boolean;
+    moreLabel: string;
+    onElement: (element: HTMLDivElement | null) => void;
     onSelect?: (id: string, modifiers: FileTreeSelectModifiers) => void;
     onOpen?: (id: string) => void;
-    onToggle?: (id: string) => void;
+    onToggle?: (id: string, expanded: boolean) => void;
     onLoadMore?: (id: string) => void;
-    moreLabel: string;
-}) {
-    const node = () => props.node;
-    const directory = () => node().kind === "directory";
-    const selected = () => props.selectedId === node().id;
-    const picked = () => props.selectedIds?.has(node().id) ?? false;
-    const status = () => (node().gitStatus ? GIT_STATUS[node().gitStatus!] : undefined);
-    const padLeft = () => BASE_PADDING + props.depth * props.indent;
-    return (
-        <>
+    onFocusRow: (id: string) => void;
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+}
+/**
+ * One drawn row, whatever the tree is currently doing with it.
+ *
+ * The row itself is the treeitem and the only thing in it that takes focus. It
+ * held two nested buttons before, which put three tab stops on every line of a
+ * twenty-thousand-row listing and left the row — the thing with the state, the
+ * level, and the selection — unreachable from the keyboard at all. The chevron
+ * is now a target for the pointer only; the keyboard discloses with the arrow
+ * keys, which is what a reader of a tree already reaches for.
+ */
+function FileTreeRowView(props: FileTreeRowViewProps) {
+    // Pulled apart up front so the element callback is a plain local: handed
+    // to `ref` straight off the props object, it makes every other property
+    // read on that object look like a ref read during render.
+    const { row, onElement, onFocusRow, onKeyDown, onLoadMore, onOpen, onSelect, onToggle } = props;
+    const node = row.node;
+    const directory = node.kind === "directory";
+    const status = node.gitStatus ? GIT_STATUS[node.gitStatus] : undefined;
+    const family = fileTreeFamily(node);
+    const paddingLeft = `${String(BASE_PADDING + row.depth * props.indent)}px`;
+    const activate = (modifiers: FileTreeSelectModifiers) => {
+        if (row.kind === "more") {
+            onLoadMore?.(node.id);
+            return;
+        }
+        // A directory has nothing to select: choosing one anywhere along its row
+        // discloses it, which is what its chevron does and what the whole row
+        // looks like it should do. Reporting it as a selection asked the caller
+        // to open a folder as though it were a file.
+        if (directory) onToggle?.(node.id, !node.expanded);
+        else onSelect?.(node.id, modifiers);
+    };
+    if (row.kind === "loading")
+        return (
             <div
-                className="happy2-file-tree__row"
-                data-happy2-ui="file-tree-row"
-                data-family={fileTreeFamily(node())}
-                data-kind={node().kind}
-                data-path={node().id}
-                data-selected={selected() ? "" : undefined}
-                data-picked={picked() ? "" : undefined}
-                data-status={node().gitStatus}
-                data-tone={status()?.tone}
-                data-expanded={directory() && node().expanded ? "" : undefined}
-                style={{ paddingLeft: `${padLeft()}px` }}
+                className="happy2-file-tree__loading"
+                data-happy2-ui="file-tree-loading"
+                data-row={row.id}
+                ref={onElement}
+                style={{ paddingLeft }}
             >
-                <span className="happy2-file-tree__disc" data-happy2-ui="file-tree-disc">
-                    {directory() ? (
-                        <button
-                            aria-expanded={node().expanded ? "true" : "false"}
-                            aria-label={`${node().expanded ? "Collapse" : "Expand"} ${node().name}`}
-                            className="happy2-file-tree__chevron"
-                            data-happy2-ui="file-tree-chevron"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                props.onToggle?.(node().id);
-                            }}
-                            type="button"
-                        >
-                            <Icon
-                                name={node().expanded ? "chevron-down" : "chevron-right"}
-                                size={12}
-                            />
-                        </button>
-                    ) : null}
-                </span>
-                <button
-                    aria-current={selected() ? "true" : undefined}
-                    className="happy2-file-tree__entry"
-                    data-happy2-ui="file-tree-entry"
-                    // A directory has nothing to select: clicking one anywhere
-                    // along its row discloses it, which is what its chevron
-                    // does and what the whole row looks like it should do.
-                    // Reporting it as a selection asked the caller to open a
-                    // folder as though it were a file.
-                    onClick={(event) =>
-                        directory()
-                            ? props.onToggle?.(node().id)
-                            : props.onSelect?.(node().id, {
-                                  // Control-click is the same act as Command-click
-                                  // on the platforms that have no Command key; on
-                                  // macOS it is the context menu, which never
-                                  // reaches a plain click handler.
-                                  toggle: event.metaKey || event.ctrlKey,
-                                  extend: event.shiftKey,
-                              })
-                    }
-                    onDoubleClick={() => {
-                        if (!directory()) props.onOpen?.(node().id);
-                    }}
-                    type="button"
-                >
-                    <span className="happy2-file-tree__icon" data-happy2-ui="file-tree-icon">
-                        <Icon name={FAMILY_ICON[fileTreeFamily(node())]} size={14} />
-                    </span>
-                    <span className="happy2-file-tree__label" data-happy2-ui="file-tree-label">
-                        {node().directory ? <FileTreePath path={node().directory!} /> : null}
-                        <span className="happy2-file-tree__name" data-happy2-ui="file-tree-name">
-                            {node().name}
-                        </span>
-                    </span>
-                    <FileTreeStat added={node().addedLines} deleted={node().deletedLines} />
-                    {status()
-                        ? ((entry) => (
-                              <span
-                                  aria-label={entry.label}
-                                  className="happy2-file-tree__status"
-                                  data-happy2-ui="file-tree-status"
-                                  title={entry.label}
-                              >
-                                  {entry.letter}
-                              </span>
-                          ))(status()!)
-                        : null}
-                </button>
+                Loading…
             </div>
-            {directory() && node().expanded ? (
-                node().loading ? (
-                    <div
-                        className="happy2-file-tree__loading"
-                        data-happy2-ui="file-tree-loading"
-                        style={{
-                            paddingLeft: `${BASE_PADDING + (props.depth + 1) * props.indent}px`,
-                        }}
-                    >
-                        Loading…
-                    </div>
-                ) : (
-                    <>
-                        {(node().children ?? []).map((child) => (
-                            <FileTreeRow
-                                depth={props.depth + 1}
-                                key={child.id}
-                                indent={props.indent}
-                                moreLabel={props.moreLabel}
-                                node={child}
-                                onLoadMore={props.onLoadMore}
-                                onOpen={props.onOpen}
-                                onSelect={props.onSelect}
-                                onToggle={props.onToggle}
-                                selectedId={props.selectedId}
-                                selectedIds={props.selectedIds}
-                            />
-                        ))}
-                        {node().hasMore ? (
-                            <button
-                                className="happy2-file-tree__more"
-                                data-happy2-ui="file-tree-more"
-                                onClick={() => props.onLoadMore?.(node().id)}
-                                style={{
-                                    paddingLeft: `${BASE_PADDING + (props.depth + 1) * props.indent}px`,
+        );
+    return (
+        <div
+            aria-current={props.selected ? "true" : undefined}
+            aria-expanded={directory && row.kind === "entry" ? node.expanded === true : undefined}
+            aria-label={row.kind === "more" ? props.moreLabel : undefined}
+            aria-level={row.depth + 1}
+            aria-posinset={row.posInSet}
+            // Being read and being picked are two different facts about a row,
+            // and a reader can be reading one file while four are marked. The
+            // one open in the viewer is the current row; the marked ones are the
+            // selection, which only exists in a listing that offers one. In a
+            // listing that does, every file says whether it is in the selection
+            // — an absent `aria-selected` means "cannot be picked", which is
+            // true of the directories and false of every file.
+            aria-selected={
+                props.selectable && row.kind === "entry" && !directory ? props.picked : undefined
+            }
+            aria-setsize={row.setSize}
+            className={row.kind === "more" ? "happy2-file-tree__more" : "happy2-file-tree__row"}
+            data-family={row.kind === "entry" ? family : undefined}
+            data-happy2-ui={row.kind === "more" ? "file-tree-more" : "file-tree-row"}
+            data-kind={row.kind === "entry" ? node.kind : undefined}
+            data-path={row.kind === "entry" ? node.id : undefined}
+            data-row={row.id}
+            data-selected={props.selected ? "" : undefined}
+            data-picked={props.picked ? "" : undefined}
+            data-status={row.kind === "entry" ? node.gitStatus : undefined}
+            data-tone={row.kind === "entry" ? status?.tone : undefined}
+            data-expanded={directory && node.expanded ? "" : undefined}
+            onClick={(event) =>
+                activate({
+                    // Control-click is the same act as Command-click on the
+                    // platforms that have no Command key; on macOS it is the
+                    // context menu, which never reaches a plain click handler.
+                    toggle: event.metaKey || event.ctrlKey,
+                    extend: event.shiftKey,
+                })
+            }
+            onDoubleClick={() => {
+                if (row.kind === "entry" && !directory) onOpen?.(node.id);
+            }}
+            onFocus={() => onFocusRow(row.id)}
+            onKeyDown={onKeyDown}
+            ref={onElement}
+            role="treeitem"
+            style={{ paddingLeft }}
+            tabIndex={props.active ? 0 : -1}
+        >
+            {row.kind === "more" ? (
+                props.moreLabel
+            ) : (
+                <>
+                    <span className="happy2-file-tree__disc" data-happy2-ui="file-tree-disc">
+                        {directory ? (
+                            <span
+                                aria-hidden="true"
+                                className="happy2-file-tree__chevron"
+                                data-happy2-ui="file-tree-chevron"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onToggle?.(node.id, !node.expanded);
                                 }}
-                                type="button"
                             >
-                                {props.moreLabel}
-                            </button>
+                                <Icon
+                                    name={node.expanded ? "chevron-down" : "chevron-right"}
+                                    size={12}
+                                />
+                            </span>
                         ) : null}
-                    </>
-                )
-            ) : null}
-        </>
+                    </span>
+                    <span className="happy2-file-tree__entry" data-happy2-ui="file-tree-entry">
+                        <span className="happy2-file-tree__icon" data-happy2-ui="file-tree-icon">
+                            <FileTreeFamilyIcon family={family} expanded={node.expanded} />
+                        </span>
+                        <span className="happy2-file-tree__label" data-happy2-ui="file-tree-label">
+                            {node.directory ? <FileTreePath path={node.directory} /> : null}
+                            <FileTreeName name={node.name} />
+                        </span>
+                        <FileTreeStat added={node.addedLines} deleted={node.deletedLines} />
+                        {status ? (
+                            <span
+                                aria-label={status.label}
+                                className="happy2-file-tree__status"
+                                data-happy2-ui="file-tree-status"
+                                title={status.label}
+                            >
+                                {status.letter}
+                            </span>
+                        ) : null}
+                    </span>
+                </>
+            )}
+        </div>
     );
 }
 /**
@@ -495,7 +581,14 @@ function FileTreeRow(props: {
  * (caller-materialized) children; files are leaves that show a type icon
  * resolved from their name plus an optional git-status decoration. Selection,
  * hover, per-directory loading, and a "Show more" paging affordance are all
- * driven by props — the tree never fetches or holds state.
+ * driven by props — the tree never fetches and holds no product state.
+ *
+ * The keyboard is the desktop contract: one row at a time carries the tab stop,
+ * the arrow keys walk the rows that are actually drawn, and Left and Right
+ * close and open a directory or step to its parent and its first child. The row
+ * the reader left off on is remembered as the tab stop and survives every
+ * ordinary update, because a listing that sends the focus back to the top each
+ * time its store notifies is a listing nobody can use without the mouse.
  */
 export function FileTree(props: FileTreeProps) {
     const [local] = partitionComponentProps(props, [
@@ -503,6 +596,7 @@ export function FileTree(props: FileTreeProps) {
         "data-testid",
         "style",
         "nodes",
+        "label",
         "selectedId",
         "selectedIds",
         "onSelect",
@@ -510,49 +604,253 @@ export function FileTree(props: FileTreeProps) {
         "onToggle",
         "onLoadMore",
         "indent",
+        "virtualize",
         "loading",
         "loadingLabel",
         "emptyLabel",
         "moreLabel",
     ]);
-    const indent = () => local.indent ?? DEFAULT_INDENT;
+    const indent = local.indent ?? DEFAULT_INDENT;
+    const virtualized = local.virtualize === true;
+    const moreLabel = local.moreLabel ?? "Show more…";
+    const model = fileTreeRowModel(local.nodes);
+    const scrollElement = useRef<HTMLDivElement>(null);
+    /**
+     * The row the reader last stood on. Local, because where the keyboard is in
+     * a list is a property of this rendering of it and of nothing else: it must
+     * not be mirrored into product state, and it must not be recomputed from
+     * one, or every notification would drag the focus somewhere.
+     */
+    const [focusedRow, focusedRowSet] = useState<string | undefined>(undefined);
+    /**
+     * A row that has been asked for but is not drawn yet. Moving to a row a
+     * long way down a virtualized listing has to scroll it into existence
+     * first, and the row's own ref is what says it now exists.
+     */
+    const pendingFocus = useRef<string | undefined>(undefined);
+    /**
+     * Which row holds the tab stop. The reader's own position wins while it
+     * still exists; otherwise the tab stop follows what is selected, and failing
+     * that it is the first row, so tabbing into a listing always lands
+     * somewhere useful. Derived on every render rather than stored, so a row
+     * disappearing cannot leave the tree with no way in.
+     */
+    const activeRow =
+        focusedRow !== undefined && model.indexById.has(focusedRow)
+            ? focusedRow
+            : local.selectedId !== undefined && model.indexById.has(local.selectedId)
+              ? local.selectedId
+              : model.rows.find(rowStops)?.id;
+    const activeIndex = activeRow === undefined ? undefined : model.indexById.get(activeRow);
+    // TanStack Virtual deliberately owns mutable measurement functions. Keep
+    // this leaf outside compiler memoization while the row components remain
+    // normal compiler-eligible React children.
+    // eslint-disable-next-line react-hooks/incompatible-library
+    const virtualizer = useVirtualizer({
+        count: virtualized ? model.rows.length : 0,
+        estimateSize: () => ROW_HEIGHT,
+        getItemKey: (index) => model.rows[index]?.id ?? index,
+        getScrollElement: () => scrollElement.current,
+        initialRect: { width: 0, height: 480 },
+        overscan: 8,
+        // The row holding the tab stop is drawn even when it has been scrolled
+        // out of the window. It is the tree's only tab stop, and a virtualizer
+        // that unmounts it takes the listing out of the tab order entirely: the
+        // reader would tab from the mode switches straight past every file.
+        rangeExtractor: (range) => {
+            const drawn = defaultRangeExtractor(range);
+            if (activeIndex === undefined || drawn.includes(activeIndex)) return drawn;
+            return [...drawn, activeIndex].sort((left, right) => left - right);
+        },
+        useFlushSync: false,
+    });
+    /**
+     * One ref for every row, so a row that arrives because it was scrolled to
+     * takes the focus the moment it exists. It is created once: a fresh closure
+     * per row would detach and reattach on every render, which is a lot of work
+     * to do to twenty rows sixty times a second and an easy way to steal the
+     * focus back from wherever it has since gone.
+     */
+    const rowAttach = useCallback((element: HTMLDivElement | null) => {
+        if (!element || pendingFocus.current === undefined) return;
+        if (element.dataset.row !== pendingFocus.current) return;
+        pendingFocus.current = undefined;
+        // The scroll the row was waiting on takes a frame or two, and the
+        // reader may have spent them tabbing to the mode switches. Focus is
+        // only taken back if it never left: a listing that yanks the focus out
+        // of the control someone has just moved to is worse than one that
+        // forgets where it was.
+        const focused = element.ownerDocument.activeElement;
+        const inside = element.closest('[role="tree"]')?.contains(focused) === true;
+        if (focused !== null && focused !== element.ownerDocument.body && !inside) return;
+        element.focus();
+    }, []);
+    const rowFocus = (id: string): void => {
+        focusedRowSet(id);
+        const index = model.indexById.get(id);
+        if (index === undefined) return;
+        // The drawn rows are read and compared rather than selected for: a row
+        // id is a path, and a selector cannot ask for one. `CSS.escape` turns
+        // the separator the synthetic rows are built with into a replacement
+        // character, and a path may hold anything a filesystem allows, so the
+        // match has to be made against the attribute's actual value.
+        const drawn = [...(scrollElement.current?.querySelectorAll("[data-row]") ?? [])].find(
+            (element) => element instanceof HTMLElement && element.dataset.row === id,
+        );
+        if (drawn instanceof HTMLElement) {
+            drawn.focus();
+            return;
+        }
+        pendingFocus.current = id;
+        virtualizer.scrollToIndex(index, { align: "auto" });
+    };
+    /** The next row in this direction that the keyboard is allowed to stop on. */
+    const rowStep = (from: number, step: number): FileTreeRow | undefined => {
+        for (let index = from + step; index >= 0 && index < model.rows.length; index += step) {
+            const row = model.rows[index]!;
+            if (rowStops(row)) return row;
+        }
+        return undefined;
+    };
+    const keyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if (activeRow === undefined) return;
+        const index = model.indexById.get(activeRow);
+        if (index === undefined) return;
+        const row = model.rows[index]!;
+        const node = row.node;
+        const directory = row.kind === "entry" && node.kind === "directory";
+        /**
+         * The key is spent whether or not there is anywhere to go: at the top
+         * and the bottom of the listing an unconsumed arrow key falls through
+         * to the scrollport, and the tree would answer "you are already at the
+         * end" by scrolling the panel behind it.
+         */
+        const moveTo = (target: FileTreeRow | undefined): void => {
+            event.preventDefault();
+            if (target) rowFocus(target.id);
+        };
+        switch (event.key) {
+            case "ArrowDown":
+                moveTo(rowStep(index, 1));
+                return;
+            case "ArrowUp":
+                moveTo(rowStep(index, -1));
+                return;
+            case "Home":
+                moveTo(model.rows.find(rowStops));
+                return;
+            case "End":
+                moveTo(rowStep(model.rows.length, -1));
+                return;
+            case "ArrowRight":
+                // Open what is closed; step into what is already open. The same
+                // key does both because they are the same intent — go further in
+                // — and a reader holding it down walks down the branch.
+                event.preventDefault();
+                if (!directory) return;
+                if (node.expanded !== true) {
+                    local.onToggle?.(node.id, true);
+                    return;
+                }
+                moveTo(rowStep(index, 1));
+                return;
+            case "ArrowLeft":
+                event.preventDefault();
+                if (directory && node.expanded === true) {
+                    local.onToggle?.(node.id, false);
+                    return;
+                }
+                if (row.parentId !== undefined) {
+                    const parent = model.indexById.get(row.parentId);
+                    if (parent !== undefined) moveTo(model.rows[parent]);
+                }
+                return;
+            case "Enter":
+                event.preventDefault();
+                if (row.kind === "more") local.onLoadMore?.(node.id);
+                else if (directory) local.onToggle?.(node.id, node.expanded !== true);
+                else local.onOpen?.(node.id);
+                return;
+            case " ":
+                event.preventDefault();
+                if (row.kind === "more") local.onLoadMore?.(node.id);
+                else if (directory) local.onToggle?.(node.id, node.expanded !== true);
+                else local.onSelect?.(node.id, { toggle: false, extend: event.shiftKey });
+                return;
+            default:
+        }
+    };
+    const rowView = (row: FileTreeRow) => (
+        <FileTreeRowView
+            active={activeRow === row.id}
+            indent={indent}
+            key={row.id}
+            moreLabel={moreLabel}
+            onFocusRow={focusedRowSet}
+            onKeyDown={keyDown}
+            onLoadMore={local.onLoadMore}
+            onOpen={local.onOpen}
+            onSelect={local.onSelect}
+            onToggle={local.onToggle}
+            picked={local.selectedIds?.has(row.node.id) === true && row.kind === "entry"}
+            row={row}
+            onElement={rowAttach}
+            selectable={local.selectedIds !== undefined}
+            selected={local.selectedId === row.node.id && row.kind === "entry"}
+        />
+    );
     return (
         <div
+            aria-label={local.label ?? "Files"}
+            aria-multiselectable={local.selectedIds ? true : undefined}
             className={["happy2-file-tree", local.className].filter(Boolean).join(" ")}
             data-happy2-ui="file-tree"
             data-testid={local["data-testid"]}
+            data-virtualized={virtualized ? "" : undefined}
+            ref={scrollElement}
             role="tree"
+            // The rows carry the tab stop between them; the tree itself is only
+            // reachable on purpose, never by tabbing past the listing into it.
+            tabIndex={-1}
             style={local.style}
         >
-            {!local.loading ? (
-                local.nodes.length > 0 ? (
-                    local.nodes.map((node) => (
-                        <FileTreeRow
-                            depth={0}
-                            key={node.id}
-                            indent={indent()}
-                            moreLabel={local.moreLabel ?? "Show more…"}
-                            node={node}
-                            onLoadMore={local.onLoadMore}
-                            onOpen={local.onOpen}
-                            onSelect={local.onSelect}
-                            onToggle={local.onToggle}
-                            selectedId={local.selectedId}
-                            selectedIds={local.selectedIds}
-                        />
-                    ))
-                ) : (
-                    <div className="happy2-file-tree__status-line" data-happy2-ui="file-tree-empty">
-                        {local.emptyLabel ?? "No files to show."}
-                    </div>
-                )
-            ) : (
+            {local.loading ? (
                 <div
                     className="happy2-file-tree__status-line"
                     data-happy2-ui="file-tree-status-line"
                 >
                     {local.loadingLabel ?? "Loading files…"}
                 </div>
+            ) : model.rows.length === 0 ? (
+                <div className="happy2-file-tree__status-line" data-happy2-ui="file-tree-empty">
+                    {local.emptyLabel ?? "No files to show."}
+                </div>
+            ) : virtualized ? (
+                <div className="happy2-file-tree__virtual" data-happy2-ui="file-tree-virtual">
+                    {/* The rows leave the flow so the listing can be as tall as
+                        all of them while only the drawn ones exist; this box is
+                        what holds that height open. */}
+                    <div
+                        className="happy2-file-tree__virtual-sizer"
+                        style={{ height: `${String(virtualizer.getTotalSize())}px` }}
+                    >
+                        {virtualizer.getVirtualItems().map((item) => {
+                            const row = model.rows[item.index];
+                            return row ? (
+                                <div
+                                    className="happy2-file-tree__virtual-row"
+                                    key={item.key}
+                                    style={{ transform: `translateY(${String(item.start)}px)` }}
+                                >
+                                    {rowView(row)}
+                                </div>
+                            ) : null;
+                        })}
+                    </div>
+                </div>
+            ) : (
+                model.rows.map(rowView)
             )}
         </div>
     );

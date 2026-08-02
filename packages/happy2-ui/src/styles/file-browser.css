@@ -203,20 +203,11 @@
 
 /* ---- Body ------------------------------------------------------------- */
 
-/* Scrollport: edge-to-edge, no padding of its own. */
+/* The region the listing fills. The tree inside it owns the scrolling and the
+   inset, so this is only the box that says how much room it has. */
 .happy2-file-browser__body {
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-}
-
-/* Inner content wrapper carries the tree inset. */
-.happy2-file-browser__body-content {
-    display: flex;
-    flex: 1 0 auto;
-    flex-direction: column;
-    padding: 0 6px 6px;
 }

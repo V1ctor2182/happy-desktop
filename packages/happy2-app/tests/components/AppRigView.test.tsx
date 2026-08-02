@@ -96,6 +96,7 @@ function workspace(): RigWorkspaceStore {
         fileScope: "changed" as const,
         fileLayout: "flat" as const,
         fileTreeExpanded: new Set<string>(),
+        fileTreeCollapsed: new Set<string>(),
         workspaceFilesLoading: false,
     };
     return {

@@ -62,6 +62,13 @@ const collapsedNodes: FileTreeNode[] = [
     { id: "package.json", name: "package.json", kind: "file" },
 ];
 
+/** Enough rows that drawing all of them would be the wrong thing to do. */
+const manyNodes: FileTreeNode[] = Array.from({ length: 2000 }, (_, index) => ({
+    id: `src/module-${String(index)}.ts`,
+    name: `module-${String(index)}.ts`,
+    kind: "file" as const,
+}));
+
 function frame(children: ReturnType<typeof FileTree>, width = 320) {
     return (
         <div
@@ -114,11 +121,33 @@ export function FileTreePage() {
                 {frame(<FileTree nodes={collapsedNodes} onToggle={() => {}} />)}
             </Specimen>
 
-            <Specimen detail="Initial load" label="Loading" number="03" stage="surface">
+            <Specimen
+                detail="Owns its own scrolling and draws only the rows on screen; 2,000 rows, ~24 in the DOM"
+                label="Virtualized"
+                number="03"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        background: "var(--surface)",
+                        border: "1px solid var(--divider)",
+                        borderRadius: "10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "320px",
+                        overflow: "hidden",
+                        width: "320px",
+                    }}
+                >
+                    <FileTree nodes={manyNodes} onSelect={() => {}} virtualize />
+                </div>
+            </Specimen>
+
+            <Specimen detail="Initial load" label="Loading" number="04" stage="surface">
                 {frame(<FileTree loading nodes={[]} />)}
             </Specimen>
 
-            <Specimen detail="Nothing to show" label="Empty" number="04" stage="surface">
+            <Specimen detail="Nothing to show" label="Empty" number="05" stage="surface">
                 {frame(<FileTree nodes={[]} />)}
             </Specimen>
         </ComponentPage>

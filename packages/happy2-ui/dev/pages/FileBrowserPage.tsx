@@ -1,6 +1,11 @@
-import { type ReactNode } from "react";
-import { FileBrowser } from "../../src/FileBrowser";
-import { fileTreeBuild, fileTreeFlatten, type FileTreeBuildEntry } from "../../src/fileTreeBuild";
+import { useState, type ReactNode } from "react";
+import { FileBrowser, type FileBrowserLayout, type FileBrowserScope } from "../../src/FileBrowser";
+import {
+    fileTreeBuild,
+    fileTreeFlatten,
+    type FileTreeBuildEntry,
+    type FileTreeExpansion,
+} from "../../src/fileTreeBuild";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const changed: FileTreeBuildEntry[] = [
     {
@@ -55,6 +60,52 @@ const everything: FileTreeBuildEntry[] = [
     { path: "package.json" },
     { path: "README.md" },
 ];
+/**
+ * Names chosen to prove the order rather than to look like a repository: a
+ * capital and a lowercase spelling of one word, a run of numbers that reads
+ * wrong when compared character by character, and a name long enough to need
+ * the whole row.
+ */
+const awkward: FileTreeBuildEntry[] = [
+    { path: "release/v9/notes.md" },
+    { path: "release/v10/notes.md" },
+    { path: "release/v2/notes.md" },
+    { path: "release/V1/notes.md" },
+    { path: "Makefile" },
+    { path: "makefile.local" },
+    { path: "zebra.ts" },
+    { path: "Apple.ts" },
+    { path: "apple.ts" },
+    { path: "img/photo-2.png" },
+    { path: "img/photo-10.png" },
+    { path: "img/photo-1.png" },
+    {
+        path: "packages/happy2-ui/src/components/experimental/very-long-component-name-that-will-not-fit.tsx",
+    },
+];
+/**
+ * A checkout the size of a real one, built from a fixed recipe so the specimen
+ * is the same on every run. Five thousand rows is the point of the listing: it
+ * must cost the same to draw as fifty.
+ */
+const bulk: FileTreeBuildEntry[] = (() => {
+    const areas = ["packages", "services", "vendor", "docs", "tools"];
+    const kinds = ["ts", "tsx", "css", "json", "md", "png", "sh", "yaml", "mp4", "pem"];
+    const entries: FileTreeBuildEntry[] = [];
+    for (let index = 0; index < 5000; index += 1) {
+        const area = areas[index % areas.length]!;
+        const module = `module-${String((index * 7) % 40)}`;
+        // The case alternates on purpose so the listing has to tie-break, and
+        // the index keeps every path distinct: two rows with one path would be
+        // two rows with one identity.
+        const leaf = `${index % 3 === 0 ? "Item" : "item"}-${String(index)}`;
+        entries.push({
+            path: `${area}/${module}/src/${leaf}.${kinds[index % kinds.length]!}`,
+            ...(index % 97 === 0 ? { gitStatus: "modified" as const, addedLines: index % 40 } : {}),
+        });
+    }
+    return entries;
+})();
 const totals = changed.reduce(
     (sum, entry) => ({
         added: sum.added + (entry.addedLines ?? 0),
@@ -62,6 +113,12 @@ const totals = changed.reduce(
     }),
     { added: 0, deleted: 0 },
 );
+/** The tree as it stands before the reader has opened or closed anything. */
+const untouched: FileTreeExpansion = {
+    opened: new Set(),
+    closed: new Set(),
+    defaultDepth: 1,
+};
 function panelFrame(children: ReactNode, height = 480, width = 320) {
     return (
         <div
@@ -69,6 +126,8 @@ function panelFrame(children: ReactNode, height = 480, width = 320) {
                 background: "var(--surface)",
                 border: "1px solid var(--divider)",
                 borderRadius: "10px",
+                display: "flex",
+                flexDirection: "column",
                 height: `${height}px`,
                 overflow: "hidden",
                 width: `${width}px`,
@@ -78,11 +137,57 @@ function panelFrame(children: ReactNode, height = 480, width = 320) {
         </div>
     );
 }
+/**
+ * A listing wired to its own state, so the specimen answers the keyboard the
+ * way the product does: the arrow keys walk it, Left and Right disclose,
+ * Enter opens, and the switches change what is listed without moving the row
+ * the reader is standing on.
+ */
+function LiveBrowser(props: { entries: FileTreeBuildEntry[]; height?: number; width?: number }) {
+    const [scope, scopeSet] = useState<FileBrowserScope>("all");
+    const [layout, layoutSet] = useState<FileBrowserLayout>("tree");
+    const [opened, openedSet] = useState<ReadonlySet<string>>(new Set());
+    const [closed, closedSet] = useState<ReadonlySet<string>>(new Set());
+    const [selectedId, selectedIdSet] = useState<string | undefined>(undefined);
+    const expansion: FileTreeExpansion = { opened, closed, defaultDepth: 1 };
+    const nodes =
+        layout === "tree"
+            ? fileTreeBuild(props.entries, expansion)
+            : fileTreeFlatten(props.entries);
+    return panelFrame(
+        <FileBrowser
+            count={props.entries.length}
+            layout={layout}
+            nodes={nodes}
+            onLayoutChange={layoutSet}
+            onScopeChange={scopeSet}
+            onSelect={(id) => selectedIdSet(id)}
+            onToggle={(path, expanded) => {
+                openedSet((current) => {
+                    const next = new Set(current);
+                    if (expanded) next.add(path);
+                    else next.delete(path);
+                    return next;
+                });
+                closedSet((current) => {
+                    const next = new Set(current);
+                    if (expanded) next.delete(path);
+                    else next.add(path);
+                    return next;
+                });
+            }}
+            scope={scope}
+            {...(selectedId ? { selectedId } : {})}
+        />,
+        props.height ?? 480,
+        props.width ?? 320,
+    );
+}
 export function FileBrowserPage() {
     return (
         <ComponentPage
             number="C-168"
-            summary="The file listing of a workspace panel: one 32px flat control row carrying the scope switch, the listing's own totals, and the layout switch, over a full-bleed FileTree scrollport with no rule between them."
+            summary="The file listing of a workspace panel: one 32px flat control row carrying the scope switch, the listing's own totals, and the layout switch, over a virtualized FileTree scrollport with no rule between them."
             title="FileBrowser"
         >
             <Specimen
@@ -103,12 +208,12 @@ export function FileBrowserPage() {
                             selectedId="packages/happy2-ui/src/FileTree.tsx"
                         />,
                     )}
-                    <DimensionRule label="320 px panel · 32 px control row" />
+                    <DimensionRule label="320 px panel · 32 px control row · 28 px row" />
                 </div>
             </Specimen>
 
             <Specimen
-                detail="Directories nest; the path travels with the name only when flat"
+                detail="Nothing has been opened by hand: the top level stands open, one level down"
                 label="Changed files, tree"
                 number="02"
                 stage="surface"
@@ -119,15 +224,7 @@ export function FileBrowserPage() {
                         count={changed.length}
                         deletedLines={totals.deleted}
                         layout="tree"
-                        nodes={fileTreeBuild(
-                            changed,
-                            new Set([
-                                "packages/happy2-ui/src",
-                                "packages/happy2-ui/src/styles",
-                                "packages/happy2-app/sources",
-                                "docs/notes",
-                            ]),
-                        )}
+                        nodes={fileTreeBuild(changed, untouched)}
                         scope="changed"
                     />,
                 )}
@@ -214,6 +311,50 @@ export function FileBrowserPage() {
                         260,
                     )}
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="v2 before v10, Apple beside apple, folders ahead of files, and the same order flat as nested"
+                label="Ordering"
+                number="07"
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: "12px" }}>
+                    {panelFrame(
+                        <FileBrowser
+                            count={awkward.length}
+                            layout="tree"
+                            nodes={fileTreeBuild(awkward, untouched)}
+                            scope="all"
+                        />,
+                    )}
+                    {panelFrame(
+                        <FileBrowser
+                            count={awkward.length}
+                            layout="flat"
+                            nodes={fileTreeFlatten(awkward)}
+                            scope="all"
+                        />,
+                    )}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Arrow keys walk it, Left and Right disclose, Enter opens; both switches keep the row you are on"
+                label="Live"
+                number="08"
+                stage="surface"
+            >
+                <LiveBrowser entries={everything} />
+            </Specimen>
+
+            <Specimen
+                detail="5,000 files — only the rows on screen exist, and the scrollbar still tells the truth about the rest"
+                label="Whole checkout"
+                number="09"
+                stage="surface"
+            >
+                <LiveBrowser entries={bulk} height={480} width={360} />
             </Specimen>
         </ComponentPage>
     );

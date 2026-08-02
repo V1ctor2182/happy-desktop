@@ -273,10 +273,13 @@ export { ConversationEntryView, type ConversationEntryViewProps } from "./Conver
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
     fileTreeBuild,
+    fileTreeExpanded,
     fileTreeFlatten,
     fileTreeVisibleFiles,
     type FileTreeBuildEntry,
+    type FileTreeExpansion,
 } from "./fileTreeBuild";
+export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSort";
 export {
     ConversationStatus,
     ConversationView,

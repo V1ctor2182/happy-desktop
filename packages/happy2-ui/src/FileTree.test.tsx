@@ -130,14 +130,18 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
 
     /* ---- Disclosure: directories carry a chevron; files never do -------- */
 
+    /* The row is the treeitem and the only tab stop on the line, so the state
+       and the label belong to it; the chevron is a pointer target the reader
+       using a keyboard reaches through the arrow keys instead. */
     const srcChevron = view.$(sel('[data-path="src/"] [data-happy2-ui="file-tree-chevron"]'));
-    expect(srcChevron.element.tagName).toBe("BUTTON");
-    expect(srcChevron.element.getAttribute("aria-expanded")).toBe("true");
+    expect(srcChevron.element.tagName).toBe("SPAN");
+    expect(srcChevron.element.getAttribute("aria-hidden")).toBe("true");
+    expect(row("src/").element.getAttribute("role")).toBe("treeitem");
+    expect(row("src/").element.getAttribute("aria-expanded")).toBe("true");
     expect(row("src/").element.getAttribute("data-expanded")).toBe("");
     expect(srcChevron.bounds().width).toBe(16);
 
-    const docsChevron = view.$(sel('[data-path="docs/"] [data-happy2-ui="file-tree-chevron"]'));
-    expect(docsChevron.element.getAttribute("aria-expanded")).toBe("false");
+    expect(row("docs/").element.getAttribute("aria-expanded")).toBe("false");
     expect(row("docs/").element.getAttribute("data-expanded")).toBeNull();
 
     expect(
@@ -154,25 +158,29 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
 
     /* ---- Kind icon: directories use the folder glyph, files resolve by type - */
 
-    const iconName = (path: string) =>
+    const iconGlyph = (path: string) =>
         view
             .$(
                 sel(
-                    `[data-path="${CSS.escape(path)}"] [data-happy2-ui="file-tree-icon"] [data-name]`,
+                    `[data-path="${CSS.escape(path)}"] [data-happy2-ui="file-tree-icon"] [data-glyph]`,
                 ),
             )
-            .element.getAttribute("data-name");
+            .element.getAttribute("data-glyph");
 
-    expect(iconName("src/"), "directory").toBe("files");
-    expect(iconName("docs/"), "directory").toBe("files");
-    expect(iconName("src/index.ts"), ".ts is code").toBe("code");
-    expect(iconName("src/theme.css"), ".css is braces").toBe("braces");
+    /* A folder says which way it is standing, so the row still reads as open
+       where the chevron is out of the reader's eye. */
+    expect(iconGlyph("src/"), "open directory").toBe("folder-open-outline");
+    expect(iconGlyph("docs/"), "shut directory").toBe("folder-outline");
+    /* Every family owns a glyph nothing else uses: colour alone cannot carry
+       the difference between a stylesheet and a source file. */
+    expect(iconGlyph("src/index.ts"), ".ts is code").toBe("code-slash-outline");
+    expect(iconGlyph("src/theme.css"), ".css is a palette").toBe("color-palette-outline");
     /* Configuration is its own family: `.env` is not read the way a stylesheet
-       or a JSON document is, and its colour says so. */
-    expect(iconName(".env"), ".env is settings").toBe("settings");
-    expect(iconName("src/logo.png"), ".png is image").toBe("image");
-    expect(iconName("notes.md"), ".md is doc").toBe("doc");
-    expect(iconName("README.md"), "README.md is doc").toBe("doc");
+       or a JSON document is, and its glyph and colour say so. */
+    expect(iconGlyph(".env"), ".env is settings").toBe("cog-outline");
+    expect(iconGlyph("src/logo.png"), ".png is image").toBe("image-outline");
+    expect(iconGlyph("notes.md"), ".md is prose").toBe("document-text-outline");
+    expect(iconGlyph("README.md"), "README.md is prose").toBe("document-text-outline");
 
     /* ---- Directory typography ------------------------------------------ */
 
@@ -258,8 +266,13 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
 
     /* ---- Paging affordance: a "Show more" row indented one level deeper -- */
 
+    /* Paging is a row of the same tree on the same 28px grid, not a control
+       floating beside it: the arrow keys reach it and the virtualizer counts
+       it like every other row. */
     const more = view.$(sel('[data-happy2-ui="file-tree-more"]'));
-    expect(more.element.tagName).toBe("BUTTON");
+    expect(more.element.tagName).toBe("DIV");
+    expect(more.element.getAttribute("role")).toBe("treeitem");
+    expect(more.bounds().height).toBe(28);
     expect(more.element.textContent).toBe("Show more…");
     expect(more.computedStyle("padding-left")).toBe("24px");
     expect(more.computedStyle("color")).toBe("rgb(43, 172, 204)");

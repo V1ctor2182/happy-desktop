@@ -1,19 +1,32 @@
 import type { ClientWorkspace } from "happy2-state";
 import type { FileTreeNode } from "./ChatPageComponents.js";
+import { fileNameCompare } from "../../fileTreeSort.js";
+
+/**
+ * A node while it is still being assembled. A drawn node is readonly, because
+ * the tree caches the row model it builds from one and a node that changes
+ * underneath that cache is a listing that disagrees with itself; this builder
+ * is the one writer, and it hands the finished tree over as readonly.
+ */
+type WorkspaceNodeDraft = {
+    -readonly [Key in keyof FileTreeNode as Key extends "children"
+        ? never
+        : Key]: FileTreeNode[Key];
+} & { children?: WorkspaceNodeDraft[] };
 
 export function workspaceNodes(
     workspace: ClientWorkspace,
     expanded: ReadonlySet<string>,
     loading: ReadonlySet<string>,
-): FileTreeNode[] {
+): readonly FileTreeNode[] {
     const statusByPath = new Map(workspace.gitStatus.map((entry) => [entry.path, entry.status]));
     const incomplete = new Set(
         workspace.directories
             .filter((directory) => !directory.complete)
             .map((directory) => directory.directory),
     );
-    const roots: FileTreeNode[] = [];
-    const directories = new Map<string, FileTreeNode>();
+    const roots: WorkspaceNodeDraft[] = [];
+    const directories = new Map<string, WorkspaceNodeDraft>();
     for (const path of workspace.paths) {
         const directory = path.endsWith("/");
         const segments = (directory ? path.slice(0, -1) : path).split("/");
@@ -47,10 +60,13 @@ export function workspaceNodes(
         node.loading = loading.has(path);
         node.hasMore = incomplete.has(path);
     }
-    const sort = (nodes: FileTreeNode[]) => {
+    const sort = (nodes: WorkspaceNodeDraft[]) => {
+        // The same ordering the file browser lists a checkout in: directories
+        // first, then names compared the way a person reads them, so `v2` comes
+        // before `v10` and one listing never disagrees with the other.
         nodes.sort((left, right) =>
             left.kind === right.kind
-                ? left.name.localeCompare(right.name)
+                ? fileNameCompare(left.name, right.name)
                 : left.kind === "directory"
                   ? -1
                   : 1,

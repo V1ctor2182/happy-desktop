@@ -2,7 +2,7 @@ import { FilePanel, type FileTreeNode } from "./ChatPageComponents.js";
 
 export interface ChatWorkspacePanelProps {
     loading: boolean;
-    nodes: FileTreeNode[];
+    nodes: readonly FileTreeNode[];
     note?: string;
     selectedId?: string;
     subtitle?: string;

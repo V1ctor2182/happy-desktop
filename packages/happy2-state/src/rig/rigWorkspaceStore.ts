@@ -296,8 +296,18 @@ export interface RigWorkspaceSnapshot {
     readonly fileScope: RigFileScope;
     /** Whether the panel nests paths into folders or lists them whole. */
     readonly fileLayout: RigFileLayout;
-    /** Directories the reader has opened in the tree, by full path. */
+    /**
+     * Directories the reader opened in the tree, by full path.
+     *
+     * What is recorded is the decision, not the shape it produced: the tree
+     * stands part way open on its own, so "absent from this set" has to mean
+     * "nothing was said about it" rather than "closed" — otherwise every
+     * listing that redrew would reopen the directories the reader deliberately
+     * shut.
+     */
     readonly fileTreeExpanded: ReadonlySet<string>;
+    /** Directories the reader closed, including ones that open on their own. */
+    readonly fileTreeCollapsed: ReadonlySet<string>;
     /**
      * Changed files picked for one act on all of them at once. A listing is
      * where a reader decides that four of these eleven files were a mistake, so
@@ -535,8 +545,14 @@ export interface RigWorkspaceStore {
     fileScopeUpdate(groupId: RigGroupId, scope: RigFileScope): void;
     /** Chooses whether the panel nests paths into folders. */
     fileLayoutUpdate(layout: RigFileLayout): void;
-    /** Opens or closes one directory in the tree. */
-    fileTreeToggle(path: string): void;
+    /**
+     * Records that the reader wants one directory open or closed.
+     *
+     * The wanted state is passed rather than derived, because whether a
+     * directory was open is a question about the drawn tree — where depth
+     * decides what has not been spoken for — and the store does not build one.
+     */
+    fileTreeExpandedUpdate(path: string, expanded: boolean): void;
     /**
      * Picks one changed file, replacing whatever was picked before, and makes it
      * the row a later range extends from. This is the plain click, so a listing
@@ -765,6 +781,7 @@ export function rigWorkspaceStoreCreate(
     let fileScope: RigFileScope = "changed";
     let fileLayout: RigFileLayout = "flat";
     let fileTreeExpanded: ReadonlySet<string> = new Set();
+    let fileTreeCollapsed: ReadonlySet<string> = new Set();
     let fileSelection: ReadonlySet<string> = new Set();
     /** The row a range extends from: the last one picked without extending. */
     let fileSelectionAnchor: string | undefined;
@@ -831,6 +848,7 @@ export function rigWorkspaceStoreCreate(
         fileScope,
         fileLayout,
         fileTreeExpanded,
+        fileTreeCollapsed,
         fileSelection,
         workspaceFilesLoading,
     };
@@ -1023,6 +1041,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileScope === fileScope &&
             snapshot.fileLayout === fileLayout &&
             snapshot.fileTreeExpanded === fileTreeExpanded &&
+            snapshot.fileTreeCollapsed === fileTreeCollapsed &&
             snapshot.fileSelection === fileSelection &&
             snapshot.fileRevert === fileRevert &&
             snapshot.workspaceFiles === workspaceFiles &&
@@ -1041,6 +1060,7 @@ export function rigWorkspaceStoreCreate(
             fileScope,
             fileLayout,
             fileTreeExpanded,
+            fileTreeCollapsed,
             fileSelection,
             ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
@@ -1066,6 +1086,19 @@ export function rigWorkspaceStoreCreate(
         fileSelection = new Set();
         fileSelectionAnchor = undefined;
         fileRevert = undefined;
+    };
+
+    /**
+     * Forgets which directories were opened and which were closed. These are
+     * remembered by path for the same reason a selection is, and they stop
+     * meaning anything at the same moment: `src` in one checkout is not `src`
+     * in the next. Carrying them over would not merely open the wrong folders —
+     * a directory closed here would arrive in another repository already
+     * closed, and the listing there would open half shut for no stated reason.
+     */
+    const fileTreeExpansionReset = (): void => {
+        fileTreeExpanded = new Set();
+        fileTreeCollapsed = new Set();
     };
 
     const fileChangeFind = (groupId: RigGroupId, path: string): RigGitChangedFile | undefined => {
@@ -2019,6 +2052,7 @@ export function rigWorkspaceStoreCreate(
             fileScope,
             fileLayout,
             fileTreeExpanded,
+            fileTreeCollapsed,
             fileSelection,
             ...(fileRevert ? { fileRevert } : {}),
             ...(workspaceFiles ? { workspaceFiles } : {}),
@@ -2080,7 +2114,10 @@ export function rigWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
-            if (groupId !== addressedGroupId) fileSelectionReset();
+            if (groupId !== addressedGroupId) {
+                fileSelectionReset();
+                fileTreeExpansionReset();
+            }
             releaseGroup();
             if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
@@ -2097,7 +2134,10 @@ export function rigWorkspaceStoreCreate(
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
-            if (groupId !== addressedGroupId) fileSelectionReset();
+            if (groupId !== addressedGroupId) {
+                fileSelectionReset();
+                fileTreeExpansionReset();
+            }
             // The panel belongs to this group, so it learns the address before
             // the conversation is released rather than after.
             addressedGroupId = groupId;
@@ -2345,10 +2385,23 @@ export function rigWorkspaceStoreCreate(
             fileLayout = layout;
             recompute();
         },
-        fileTreeToggle(path) {
-            const next = new Set(fileTreeExpanded);
-            if (!next.delete(path)) next.add(path);
-            fileTreeExpanded = next;
+        fileTreeExpandedUpdate(path, expanded) {
+            // Asking for what has already been decided is not a change, and
+            // publishing a snapshot for it redraws the workspace over nothing.
+            if (expanded ? fileTreeExpanded.has(path) : fileTreeCollapsed.has(path)) return;
+            // Both sets are rewritten, because a decision replaces the opposite
+            // one: a directory the reader reopens is no longer one they closed.
+            const opened = new Set(fileTreeExpanded);
+            const closed = new Set(fileTreeCollapsed);
+            if (expanded) {
+                opened.add(path);
+                closed.delete(path);
+            } else {
+                opened.delete(path);
+                closed.add(path);
+            }
+            fileTreeExpanded = opened;
+            fileTreeCollapsed = closed;
             recompute();
         },
         fileSelectionReplace(path) {

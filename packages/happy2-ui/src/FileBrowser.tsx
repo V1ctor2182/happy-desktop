@@ -15,7 +15,7 @@ export type FileBrowserProps = {
     layout: FileBrowserLayout;
     onLayoutChange?: (layout: FileBrowserLayout) => void;
     /** Rows to list. Passed straight through to FileTree. */
-    nodes: FileTreeNode[];
+    nodes: readonly FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
     /**
      * Files picked as a set. Passing it is what makes the listing a place where
@@ -185,21 +185,24 @@ export function FileBrowser(props: FileBrowserProps) {
                     {local.note}
                 </div>
             ) : null}
+            {/* The tree does its own scrolling here, because a checkout listing
+                draws only the rows on screen and nothing outside it can know
+                how tall the rest would have been. */}
             <div className="happy2-file-browser__body" data-happy2-ui="file-browser-body">
-                <div className="happy2-file-browser__body-content">
-                    <FileTree
-                        emptyLabel={local.emptyLabel}
-                        loading={local.loading}
-                        loadingLabel={local.loadingLabel}
-                        nodes={local.nodes}
-                        onLoadMore={local.onLoadMore}
-                        onOpen={local.onOpen}
-                        onSelect={local.onSelect}
-                        onToggle={local.onToggle}
-                        selectedId={local.selectedId}
-                        selectedIds={local.selectedIds}
-                    />
-                </div>
+                <FileTree
+                    emptyLabel={local.emptyLabel}
+                    label={local.scope === "all" ? "All files" : "Changed files"}
+                    loading={local.loading}
+                    loadingLabel={local.loadingLabel}
+                    nodes={local.nodes}
+                    onLoadMore={local.onLoadMore}
+                    onOpen={local.onOpen}
+                    onSelect={local.onSelect}
+                    onToggle={local.onToggle}
+                    selectedId={local.selectedId}
+                    selectedIds={local.selectedIds}
+                    virtualize
+                />
             </div>
         </section>
     );

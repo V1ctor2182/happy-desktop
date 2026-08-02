@@ -15,7 +15,7 @@ export type FilePanelProps = {
     onClose?: () => void;
     closeLabel?: string;
     /** The workspace tree. Passed straight through to FileTree. */
-    nodes: FileTreeNode[];
+    nodes: readonly FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
     onSelect?: FileTreeProps["onSelect"];
     onOpen?: FileTreeProps["onOpen"];

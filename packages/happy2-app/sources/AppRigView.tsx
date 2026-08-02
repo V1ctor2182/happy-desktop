@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import type {
     AppearanceStore,
     ConversationEntry,
@@ -105,6 +105,7 @@ import {
     fileTreeBuild,
     fileTreeFlatten,
     fileTreeVisibleFiles,
+    type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigProjectSettingsDialog,
     RigSessionControls,
@@ -2016,6 +2017,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
+                        collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
                         // A plain click still opens the file and makes it the
                         // only thing picked; the modifier clicks build a set to
@@ -2062,7 +2064,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         onScopeChange={(scope) => {
                             if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
                         }}
-                        onToggle={(path) => props.workspace.fileTreeToggle(path)}
+                        onToggle={(path, expanded) =>
+                            props.workspace.fileTreeExpandedUpdate(path, expanded)
+                        }
                         panel={panel}
                         previewTool={previewTool}
                         scope={workspace.fileScope}
@@ -3411,6 +3415,20 @@ function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorks
     );
 }
 
+/**
+ * One changed file as a listing entry. Under "All files" the changed ones keep
+ * their status marks, so the work in progress stays findable inside the whole
+ * tree rather than becoming indistinguishable from everything around it.
+ */
+function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
+    return {
+        path: change.path,
+        gitStatus: change.status,
+        ...(change.addedLines === undefined ? {} : { addedLines: change.addedLines }),
+        ...(change.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),
+    };
+}
+
 function RigPanelBody(props: {
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
@@ -3418,6 +3436,7 @@ function RigPanelBody(props: {
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
+    collapsed: ReadonlySet<string>;
     layout: RigFileLayout;
     onFileOpen: (path: string) => void;
     onFileSelect: (
@@ -3434,7 +3453,7 @@ function RigPanelBody(props: {
     /** Follows a link inside the viewed document to another file. */
     onPanelFileOpen: (path: string) => void;
     onScopeChange: (scope: RigFileScope) => void;
-    onToggle: (path: string) => void;
+    onToggle: (path: string, expanded: boolean) => void;
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
     scope: RigFileScope;
@@ -3448,24 +3467,33 @@ function RigPanelBody(props: {
     webappRevisions: ReadonlyMap<string, number>;
 }) {
     const all = props.scope === "all";
-    // Under "All files" the changed ones keep their status marks, so the work in
-    // progress stays findable inside the whole tree rather than becoming
-    // indistinguishable from everything around it.
-    const changeEntry = (change: OpenGroup["changes"][number]): FileTreeBuildEntry => ({
-        path: change.path,
-        gitStatus: change.status,
-        ...(change.addedLines === undefined ? {} : { addedLines: change.addedLines }),
-        ...(change.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),
-    });
-    const changesByPath = new Map(props.changes.map((change) => [change.path, change]));
-    const entries: FileTreeBuildEntry[] = all
-        ? (props.workspaceFiles?.paths ?? []).map((path: string) => {
-              const change = changesByPath.get(path);
-              return change ? changeEntry(change) : { path };
-          })
-        : props.changes.map(changeEntry);
-    const nodes: FileTreeNode[] =
-        props.layout === "tree" ? fileTreeBuild(entries, props.expanded) : fileTreeFlatten(entries);
+    // A checkout can hold twenty thousand paths, and putting them in reading
+    // order costs a locale comparison per step. That is affordable once per
+    // listing and not affordable once per keystroke elsewhere in the window, so
+    // the entries are held against the two store values they are actually built
+    // from. Everything downstream is then a walk rather than a sort.
+    const workspacePaths = props.workspaceFiles?.paths;
+    const entries: FileTreeBuildEntry[] = useMemo(() => {
+        const changesByPath = new Map(props.changes.map((change) => [change.path, change]));
+        return all
+            ? (workspacePaths ?? []).map((path: string) => {
+                  const change = changesByPath.get(path);
+                  return change ? changeEntry(change) : { path };
+              })
+            : props.changes.map(changeEntry);
+    }, [all, props.changes, workspacePaths]);
+    // The whole checkout lands showing its top level and what is directly
+    // inside it. A column of shut folders makes the reader open three of them
+    // before the listing says anything a flat list would not have said sooner.
+    const expansion: FileTreeExpansion = useMemo(
+        () => ({ opened: props.expanded, closed: props.collapsed, defaultDepth: 1 }),
+        [props.expanded, props.collapsed],
+    );
+    const nodes: FileTreeNode[] = useMemo(
+        () =>
+            props.layout === "tree" ? fileTreeBuild(entries, expansion) : fileTreeFlatten(entries),
+        [entries, expansion, props.layout],
+    );
     const loading = all && props.workspaceFilesLoading;
     // The listing's own total, summed from the rows it is about to draw, so the
     // number over the list and the numbers in it can never disagree.
