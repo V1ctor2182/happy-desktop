@@ -225,15 +225,17 @@ it("lists one row per project and its sessions as tabs", () => {
     // The shared sidebar renders its compose row ("New session") and the pinned
     // window actions ahead of the list, so the project rows follow them.
     const rows = [...container.querySelectorAll('[data-happy2-ui="sidebar-item"]')];
+    // Vitest runs in development, where the Blueprint workbench row is present.
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
         "new-chat",
         "friends",
+        "blueprint",
         "local/prj_one",
     ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[2]?.textContent).toContain("happy2");
-    expect(rows[2]?.textContent).not.toContain("~/happy2");
+    expect(rows[3]?.textContent).toContain("happy2");
+    expect(rows[3]?.textContent).not.toContain("~/happy2");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy2-ui="tab"]')];
