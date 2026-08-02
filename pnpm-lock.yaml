@@ -703,8 +703,8 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.116
-        version: 0.0.116(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)
+        specifier: 0.0.117
+        version: 0.0.117(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
@@ -2910,11 +2910,6 @@ packages:
   '@slopus/rig-connect@0.0.24':
     resolution: {integrity: sha512-fjs3qt2Gt+Q6gUDpN3U8jxrkvn0reCttrMNPIoxnYLsAs/rd/j5vEsYCeuQ89K+1k1faCmR3/b4sL+md+3tS1w==}
     engines: {node: '>=20'}
-
-  '@slopus/rig@0.0.116':
-    resolution: {integrity: sha512-jDoAadTjYr7wJTWll2zu/rZNYem/rvWnPzcNOcjzZZEvXvgdeiXDAxvkgwC3Vta+ZvlOoh9pBPZknV2i/5s4FA==}
-    engines: {node: '>=24'}
-    hasBin: true
 
   '@slopus/rig@0.0.117':
     resolution: {integrity: sha512-xf31B03u0kDs48p1j7dwATGHaKr252S9e0GvqAFHiadj9IRNVp8bm7eZCJIqwPKx9+yo+gtkC7IfdXFjt7/cbw==}
@@ -9381,40 +9376,6 @@ snapshots:
   '@slopus/rig-connect@0.0.24':
     dependencies:
       '@sinclair/typebox': 0.34.52
-
-  '@slopus/rig@0.0.116(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)':
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0)(zod@4.4.3)
-      '@anthropic-ai/sandbox-runtime': 0.0.64
-      '@anthropic-ai/sdk': 0.110.0(zod@4.4.3)
-      '@ff-labs/fff-node': 0.9.6
-      '@lydell/node-pty': 1.2.0-beta.12
-      '@mariozechner/clipboard': 0.3.9
-      '@modelcontextprotocol/sdk': 1.30.0
-      '@pydantic/monty': 0.0.18(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)
-      '@sinclair/typebox': 0.34.52
-      '@slopus/ghostty-wasm': 1.3.6
-      '@types/node': 24.13.3
-      '@vscode/ripgrep': 1.18.0
-      better-sqlite3: 13.0.2
-      sharp: 0.35.3(@types/node@24.13.3)
-      ssh2: 1.17.0
-      typescript-7: typescript@7.0.2
-      zod: 4.4.3
-    optionalDependencies:
-      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.220
-      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.220
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - '@emnapi/core'
-      - '@emnapi/runtime'
-      - supports-color
 
   '@slopus/rig@0.0.117(@emnapi/core@2.0.0-alpha.3)(@emnapi/runtime@2.0.0-alpha.3)':
     dependencies:
