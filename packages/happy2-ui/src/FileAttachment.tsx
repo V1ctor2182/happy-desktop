@@ -13,6 +13,10 @@ export type FileAttachmentProps = {
     name: string;
     /** Human size string, e.g. "283 KB". */
     size?: string;
+    /** Image shown in the file-kind tile instead of its generic glyph. */
+    thumbnailUrl?: string;
+    /** Low-resolution data URL painted behind the thumbnail until it loads. */
+    thumbnailPlaceholderUrl?: string;
     kind?: FileAttachmentKind;
     /** Larger Slack-like card used for attachments in a chat message list. */
     variant?: FileAttachmentVariant;
@@ -41,6 +45,8 @@ export function FileAttachment(props: FileAttachmentProps) {
         "style",
         "name",
         "size",
+        "thumbnailUrl",
+        "thumbnailPlaceholderUrl",
         "kind",
         "variant",
         "onOpen",
@@ -60,11 +66,29 @@ export function FileAttachment(props: FileAttachmentProps) {
             video: "Video",
         }[kind()];
     };
+    const tile = (size: 16 | 20) => (
+        <span className="happy2-file-attachment__icon" data-happy2-ui="file-attachment-icon">
+            {local.thumbnailUrl ? (
+                <img
+                    alt=""
+                    className="happy2-file-attachment__thumbnail"
+                    data-happy2-ui="file-attachment-thumbnail"
+                    draggable={false}
+                    src={local.thumbnailUrl}
+                    style={
+                        local.thumbnailPlaceholderUrl
+                            ? { backgroundImage: `url("${local.thumbnailPlaceholderUrl}")` }
+                            : undefined
+                    }
+                />
+            ) : (
+                <Icon name={kindIcons[kind()]} size={size} />
+            )}
+        </span>
+    );
     const compactInner = (
         <>
-            <span className="happy2-file-attachment__icon" data-happy2-ui="file-attachment-icon">
-                <Icon name={kindIcons[kind()]} size={16} />
-            </span>
+            {tile(16)}
             <span className="happy2-file-attachment__name" data-happy2-ui="file-attachment-name">
                 {local.name}
             </span>
@@ -80,9 +104,7 @@ export function FileAttachment(props: FileAttachmentProps) {
     );
     const chatInner = (
         <>
-            <span className="happy2-file-attachment__icon" data-happy2-ui="file-attachment-icon">
-                <Icon name={kindIcons[kind()]} size={20} />
-            </span>
+            {tile(20)}
             <span className="happy2-file-attachment__copy" data-happy2-ui="file-attachment-copy">
                 <span
                     className="happy2-file-attachment__name"

@@ -207,7 +207,7 @@ export function rigConnectionOpen(input: {
         inboxSource,
         providerUsageSource,
         ...(pluginApplicationSource ? { pluginApplicationSource } : {}),
-        transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect),
+        transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
             mutationListeners.add(listener);

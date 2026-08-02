@@ -45,6 +45,29 @@ export type ConversationAttachment =
           readonly width?: number;
           readonly height?: number;
           readonly detail?: "high" | "original";
+      }
+    | {
+          readonly kind: "linked";
+          /** Stable identity supplied by the producer. */
+          readonly id: string;
+          readonly attachmentKind: "audio" | "file" | "image" | "url" | "video" | "webapp";
+          readonly name: string;
+          readonly source: string;
+          readonly description?: string;
+          readonly mediaType?: string;
+          readonly bytes?: number;
+          readonly width?: number;
+          readonly height?: number;
+          readonly durationMs?: number;
+          readonly thumbhash?: string;
+          /** Fetchable thumbnail for a linked card, such as an imported webapp icon. */
+          readonly thumbnailUrl?: string;
+          /** Capability-scoped HTTP(S) address the host may open or download. */
+          readonly openUrl?: string;
+          /** Imported webapp identity, opened through the owning Rig rather than as a URL. */
+          readonly webapp?: string;
+          readonly webappPath?: string;
+          readonly webappQuery?: Readonly<Record<string, string>>;
       };
 
 /**

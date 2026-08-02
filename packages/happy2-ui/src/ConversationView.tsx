@@ -14,7 +14,7 @@ import {
 } from "./AgentWorkingStatus";
 import { ChannelHeader } from "./ChannelHeader";
 import { ConversationDock } from "./ConversationDock";
-import { ConversationEntryView } from "./ConversationEntryView";
+import { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 import {
     conversationAgentRowStartsGroup,
     conversationEntryResumesAfterActivity,
@@ -113,6 +113,8 @@ export type ConversationViewProps = {
     onComposerAttachmentRemove?: (attachmentId: string) => void;
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
+    /** Opens or downloads one linked transcript attachment. */
+    onAttachmentOpen?: ConversationEntryViewProps["onAttachmentOpen"];
     /** Opens one tool entry in the workspace's replaceable Preview tab. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /**
@@ -310,6 +312,7 @@ export function ConversationView(props: ConversationViewProps) {
                                           : entry.id
                                 }
                                 onImageOpen={props.onImageOpen}
+                                onAttachmentOpen={props.onAttachmentOpen}
                                 onRequestAnswer={props.onRequestAnswer}
                                 onToolSelect={props.onToolSelect}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}

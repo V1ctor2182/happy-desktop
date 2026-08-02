@@ -238,6 +238,25 @@ function attachmentEqual(
             left.detail === right.detail &&
             left.data === right.data
         );
+    if (left.kind === "linked" && right.kind === "linked")
+        return (
+            left.id === right.id &&
+            left.attachmentKind === right.attachmentKind &&
+            left.name === right.name &&
+            left.source === right.source &&
+            left.description === right.description &&
+            left.mediaType === right.mediaType &&
+            left.bytes === right.bytes &&
+            left.width === right.width &&
+            left.height === right.height &&
+            left.durationMs === right.durationMs &&
+            left.thumbhash === right.thumbhash &&
+            left.thumbnailUrl === right.thumbnailUrl &&
+            left.openUrl === right.openUrl &&
+            left.webapp === right.webapp &&
+            left.webappPath === right.webappPath &&
+            JSON.stringify(left.webappQuery) === JSON.stringify(right.webappQuery)
+        );
     return false;
 }
 

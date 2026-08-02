@@ -201,6 +201,91 @@ function rigConnectGroupProject(
                     }),
                 });
                 break;
+            case "agent_attachments": {
+                const attachments: ConversationMessageProjection["attachments"] =
+                    element.attachments.map((attachment) => {
+                        if (attachment.kind === "url")
+                            return {
+                                kind: "linked",
+                                id: attachment.id,
+                                attachmentKind: "url",
+                                name: attachment.title,
+                                source: attachment.source,
+                                ...(attachment.description
+                                    ? { description: attachment.description }
+                                    : {}),
+                                openUrl: attachment.source,
+                            };
+                        if (attachment.kind === "webapp")
+                            return {
+                                kind: "linked",
+                                id: attachment.id,
+                                attachmentKind: "webapp",
+                                name: attachment.name,
+                                source: attachment.webapp,
+                                description: attachment.description,
+                                webapp: attachment.webapp,
+                                thumbhash: attachment.thumbhash,
+                                thumbnailUrl: attachment.image,
+                                ...(attachment.path ? { webappPath: attachment.path } : {}),
+                                ...(attachment.query ? { webappQuery: attachment.query } : {}),
+                            };
+                        return {
+                            kind: "linked",
+                            id: attachment.id,
+                            attachmentKind: attachment.kind,
+                            name: attachment.name,
+                            source: attachment.source,
+                            mediaType: attachment.mediaType,
+                            bytes: attachment.bytes,
+                            ...(attachment.kind === "image" || attachment.kind === "video"
+                                ? { width: attachment.width, height: attachment.height }
+                                : {}),
+                            ...(attachment.kind === "audio" || attachment.kind === "video"
+                                ? { durationMs: attachment.duration }
+                                : {}),
+                            ...(attachment.kind === "image"
+                                ? { thumbhash: attachment.thumbhash }
+                                : attachment.kind === "video"
+                                  ? {
+                                        thumbhash: attachment.preview.thumbhash,
+                                        thumbnailUrl: attachment.preview.path,
+                                    }
+                                  : {}),
+                            ...(attachment.downloadUrl ? { openUrl: attachment.downloadUrl } : {}),
+                        };
+                    });
+                let targetIndex = entries.length - 1;
+                while (targetIndex >= 0) {
+                    const candidate = entries[targetIndex];
+                    if (candidate?.kind === "message" && candidate.message.sender?.kind === "agent")
+                        break;
+                    targetIndex -= 1;
+                }
+                const target = targetIndex < 0 ? undefined : entries[targetIndex];
+                if (target?.kind === "message") {
+                    entries[targetIndex] = {
+                        ...target,
+                        message: { ...target.message, attachments },
+                    };
+                } else
+                    entries.push({
+                        kind: "message",
+                        source: "server",
+                        delivery: "sent",
+                        message: messageProject({
+                            id: element.messageId,
+                            sessionId: input.sessionId,
+                            sequence,
+                            text: "",
+                            createdAt: element.createdAt,
+                            author: rigAgentAuthor,
+                            attachments,
+                            generationStatus: "complete",
+                        }),
+                    });
+                break;
+            }
             case "thinking":
                 if (input.showReasoning)
                     entries.push({

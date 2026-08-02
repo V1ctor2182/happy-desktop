@@ -2830,6 +2830,19 @@ function RigConversationSurface(props: {
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
             onFileOpen={(path) => props.onFileOpen(path)}
             onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
+            onAttachmentOpen={(attachment) => {
+                if (attachment.attachmentKind === "webapp" && attachment.webapp) {
+                    swallow(
+                        workspace.webappOpen(
+                            attachment.webapp,
+                            attachment.webappPath,
+                            attachment.webappQuery,
+                        ),
+                    );
+                    return;
+                }
+                if (attachment.openUrl) openExternalLink(attachment.openUrl);
+            }}
             onToolSelect={(entryId, tool) => {
                 const subagent = subagentForTool(tool, conversation.subagents);
                 if (subagent) {

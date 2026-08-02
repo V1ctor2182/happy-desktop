@@ -462,7 +462,11 @@ export interface RigWorkspaceStore {
     /** Starts the new conversation described by a slot action and optionally submits its prompt. */
     chatStart(input: RigWorkspaceNewChatInput): Promise<void>;
     /** Opens one imported Rig webapp in the addressed group's isolated panel. */
-    webappOpen(name: string): Promise<void>;
+    webappOpen(
+        name: string,
+        path?: string,
+        query?: Readonly<Record<string, string>>,
+    ): Promise<void>;
     conversationCreate(input: RigSessionCreateInput): Promise<void>;
     conversationFork(conversationId: RigSessionId): Promise<void>;
     /**
@@ -2193,9 +2197,18 @@ export function rigWorkspaceStoreCreate(
                 );
             }
         },
-        async webappOpen(name) {
-            const url = await client.webappPreviewOpen(name);
-            panel.webappOpen(name, url);
+        async webappOpen(name, path, query) {
+            const previewUrl = await client.webappPreviewOpen(name);
+            const url = new URL(previewUrl);
+            if (path) {
+                const basePath = url.pathname.endsWith("/")
+                    ? url.pathname.slice(0, -1)
+                    : url.pathname;
+                url.pathname = `${basePath}/${path.replace(/^\/+/u, "")}`;
+            }
+            if (query)
+                for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+            panel.webappOpen(name, url.href);
         },
         // Anything the caller names wins over the connection's last selection.
         conversationCreate: (input) => {

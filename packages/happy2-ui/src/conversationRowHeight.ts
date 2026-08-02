@@ -82,6 +82,9 @@ const MEDIA_SINGLE_MIN_W = 240;
 /** Box for a lone image whose format hid its dimensions: 240 × 4:3. */
 const MEDIA_FALLBACK_W = 240;
 const MEDIA_FALLBACK_H = 180;
+/** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
+const ATTACHMENT_CARD_HEIGHT = 64;
+const ATTACHMENT_CARD_GAP = 4;
 /** Collapsed `.happy2-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
 /** Tool-first Message: 16px top inset + 20px identity row, then no lower chrome. */
@@ -304,20 +307,35 @@ export function conversationRowHeight(
     const images = message.attachments.filter(
         (attachment) =>
             attachment.kind === "inlineImage" ||
-            attachment.file.kind === "photo" ||
-            attachment.file.kind === "gif",
+            (attachment.kind === "file" &&
+                (attachment.file.kind === "photo" || attachment.file.kind === "gif")) ||
+            (attachment.kind === "linked" &&
+                attachment.attachmentKind === "image" &&
+                attachment.openUrl !== undefined),
     );
     if (images.length > 0)
         height += messageMediaHeight(
             images.map((attachment) =>
                 attachment.kind === "inlineImage"
                     ? { width: attachment.width, height: attachment.height }
-                    : { width: attachment.file.width, height: attachment.file.height },
+                    : attachment.kind === "file"
+                      ? { width: attachment.file.width, height: attachment.file.height }
+                      : { width: attachment.width, height: attachment.height },
             ),
             width,
             treatment,
             hasBody,
         );
+    const cards = message.attachments.filter(
+        (attachment) =>
+            attachment.kind === "linked" &&
+            (attachment.attachmentKind !== "image" || attachment.openUrl === undefined),
+    ).length;
+    if (cards > 0)
+        height +=
+            (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+            cards * ATTACHMENT_CARD_HEIGHT +
+            (cards - 1) * ATTACHMENT_CARD_GAP;
     return height;
 }
 /**

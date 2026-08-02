@@ -7,6 +7,7 @@
 
 .happy2-file-attachment,
 .happy2-file-attachment__icon,
+.happy2-file-attachment__thumbnail,
 .happy2-file-attachment__copy,
 .happy2-file-attachment__name,
 .happy2-file-attachment__size,
@@ -55,6 +56,21 @@ button.happy2-file-attachment {
     display: flex;
     flex: none;
     color: var(--text-secondary);
+}
+
+.happy2-file-attachment__thumbnail {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: inherit;
+    background-position: center;
+    background-size: cover;
+    object-fit: cover;
+}
+
+.happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__thumbnail {
+    width: 100%;
+    height: 100%;
 }
 
 .happy2-file-attachment__name {

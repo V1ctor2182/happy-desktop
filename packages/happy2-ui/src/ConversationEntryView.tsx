@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
+import { thumbHashToDataURL } from "thumbhash";
 import type {
     AgentTurnTraceSummary,
     ConversationAttachment,
@@ -17,6 +18,9 @@ import {
     type ConversationRequestDecision,
 } from "./ConversationRequestView";
 import { type RigUserInputAnswerMap } from "./RigUserInputPrompt";
+import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
+
+type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "linked" }>;
 
 export type ConversationEntryViewProps = {
     entry: ConversationEntry;
@@ -37,6 +41,8 @@ export type ConversationEntryViewProps = {
     attachmentUrl?: (fileId: string) => string;
     /** Opens an attached image full size. */
     onImageOpen?: (messageId: string, attachmentId: string) => void;
+    /** Opens or downloads one linked attachment through the owning product surface. */
+    onAttachmentOpen?: (attachment: ConversationLinkedAttachment) => void;
     /** Opens this entry's tool call in an owner-provided preview surface. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** Opens a workspace file named by a tool call or linked from a message. */
@@ -243,6 +249,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
     const author = message.sender;
     const own = author !== undefined && author.id === props.viewerId;
     const images = imagesOf(message.attachments, props.attachmentUrl);
+    const linked = message.attachments.filter(
+        (attachment): attachment is ConversationLinkedAttachment =>
+            attachment.kind === "linked" &&
+            (attachment.attachmentKind !== "image" || attachment.openUrl === undefined),
+    );
     const trace = message.agentTrace;
     const traceCollapsible = traceSettled(trace);
     const traceRow = traceControl(trace, props.traceOpen, props.onTraceToggle);
@@ -278,7 +289,31 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}
-        />
+        >
+            {linked.map((attachment) => (
+                <FileAttachment
+                    aria-label={`Open ${attachment.name}`}
+                    key={attachment.id}
+                    kind={linkedAttachmentFileKind(attachment.attachmentKind)}
+                    name={attachment.name}
+                    onOpen={
+                        props.onAttachmentOpen
+                            ? () => props.onAttachmentOpen?.(attachment)
+                            : undefined
+                    }
+                    size={
+                        attachment.bytes === undefined
+                            ? attachment.description
+                            : fileSizeFormat(attachment.bytes)
+                    }
+                    thumbnailPlaceholderUrl={
+                        attachment.thumbhash ? thumbhashDataUrl(attachment.thumbhash) : undefined
+                    }
+                    thumbnailUrl={attachment.thumbnailUrl}
+                    variant="chat"
+                />
+            ))}
+        </Message>
     );
 }
 
@@ -303,6 +338,20 @@ function imagesOf(
             });
             continue;
         }
+        if (attachment.kind === "linked") {
+            if (attachment.attachmentKind !== "image" || !attachment.openUrl) continue;
+            images.push({
+                id: attachment.id,
+                url: attachment.openUrl,
+                alt: attachment.name,
+                ...(attachment.thumbhash
+                    ? { placeholderUrl: thumbhashDataUrl(attachment.thumbhash) }
+                    : {}),
+                ...(attachment.width !== undefined ? { width: attachment.width } : {}),
+                ...(attachment.height !== undefined ? { height: attachment.height } : {}),
+            });
+            continue;
+        }
         if (!attachmentUrl) continue;
         const file = attachment.file;
         if (file.kind !== "photo" && file.kind !== "gif") continue;
@@ -315,6 +364,30 @@ function imagesOf(
         });
     }
     return images;
+}
+
+function linkedAttachmentFileKind(
+    kind: ConversationLinkedAttachment["attachmentKind"],
+): FileAttachmentKind {
+    if (kind === "audio" || kind === "video") return kind;
+    if (kind === "image") return "photo";
+    return "file";
+}
+
+function fileSizeFormat(bytes: number): string {
+    if (bytes < 1024) return `${String(bytes)} B`;
+    if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 102.4) / 10)} KB`;
+    return `${String(Math.round(bytes / (102.4 * 1024)) / 10)} MB`;
+}
+
+function thumbhashDataUrl(hash: string): string | undefined {
+    try {
+        const normalized = hash.replace(/-/gu, "+").replace(/_/gu, "/");
+        const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
+        return thumbHashToDataURL(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+    } catch {
+        return undefined;
+    }
 }
 
 function messageTime(value: string): string | undefined {

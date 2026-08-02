@@ -557,12 +557,24 @@ function openImageResolve(
     for (const entry of entries) {
         if (entry.kind !== "message" || entry.message.id !== messageId) continue;
         for (const attachment of entry.message.attachments) {
-            if (attachment.kind !== "inlineImage" || attachment.id !== attachmentId) continue;
-            return {
-                id: attachment.id,
-                url: `data:${attachment.mediaType};base64,${attachment.data}`,
-                alt: "Attached image",
-            };
+            if (attachment.kind === "file") continue;
+            if (attachment.id !== attachmentId) continue;
+            if (attachment.kind === "inlineImage")
+                return {
+                    id: attachment.id,
+                    url: `data:${attachment.mediaType};base64,${attachment.data}`,
+                    alt: "Attached image",
+                };
+            if (
+                attachment.kind === "linked" &&
+                attachment.attachmentKind === "image" &&
+                attachment.openUrl
+            )
+                return {
+                    id: attachment.id,
+                    url: attachment.openUrl,
+                    alt: attachment.name,
+                };
         }
         return undefined;
     }
