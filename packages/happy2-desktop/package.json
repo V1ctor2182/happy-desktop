@@ -41,8 +41,8 @@
     },
     "devDependencies": {
         "@slopus/ghostty-web": "0.1.0",
-        "@slopus/rig": "0.0.0-canary.191.a02e00d",
-        "@slopus/rig-connect": "0.0.0-canary.191.a02e00d",
+        "@slopus/rig": "0.0.117",
+        "@slopus/rig-connect": "0.0.24",
         "@tailwindcss/vite": "^4.3.2",
         "@tanstack/react-router": "^1.170.18",
         "@types/node": "^26.1.1",
