@@ -310,6 +310,30 @@ const MIN_LINES = 1;
 const MAX_LINES = 8;
 
 /**
+ * How far an edge fade may reach into the draft. It is a ceiling, never a fixed
+ * band: a fade is only ever as tall as the line fragment the scrollport is
+ * already cutting, so a line that is entirely visible — with its selection and
+ * its caret — is never painted over.
+ */
+const MAX_FADE = 10;
+
+/**
+ * Points inside the card that already belong to something: a control, a link,
+ * an editable area, an attachment chip whose name stays selectable, or a
+ * popover that owns its own pointer and keyboard interaction. Everything else
+ * in the card is the draft's own dead space.
+ */
+const SURFACE_CLAIMED_TARGETS =
+    '[data-happy2-ui="composer-popover"], [data-happy2-ui="composer-emoji-popover"], [data-happy2-ui="context-chips-chip"], button, input, textarea, select, a, [contenteditable], [tabindex], [role="button"], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]';
+
+/**
+ * Below the card the composer stops being one input surface. The footer row
+ * carries the session's own controls and agent-authored status text, which
+ * stays selectable and never hands the caret to the draft.
+ */
+const FOOTER_TARGETS = '[data-happy2-ui="composer-audience"], [data-happy2-ui="composer-footer"]';
+
+/**
  * Controls that make words out of characters: text entry, and the list and menu
  * roles whose typeahead selects by what is typed. Focus here is the reader
  * writing somewhere else, so the composer never takes a character from them.
@@ -379,6 +403,7 @@ function typingIsUnclaimed(event: KeyboardEvent, textarea: HTMLTextAreaElement):
 export function Composer(props: ComposerProps) {
     const composerEl = useRef<HTMLDivElement>(null);
     const fileInputEl = useRef<HTMLInputElement>(null);
+    const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
     const wasBusy = useRef(Boolean(props.disabled || props.pending));
     const [mentionStart, setMentionStart] = useState<number | null>(null);
@@ -441,6 +466,35 @@ export function Composer(props: ComposerProps) {
         if (!props.audience) return;
         props.onAudienceChange?.(props.audience === "agents" ? "people" : "agents");
     };
+    /*
+     * Sizes the two edge fades from the scrolled draft itself. Every line box is
+     * exactly LINE_HEIGHT tall, so what the scrollport cuts at each end is the
+     * remainder of the offset: none of it at a line-aligned position — which is
+     * where the draft rests after typing or an arrow key, and where both fades
+     * collapse to nothing — and up to a line elsewhere. A fade covers that
+     * fragment and stops, capped so a badly cut line is softened rather than
+     * erased, which is what keeps whole lines, selections, and the caret out of
+     * it entirely.
+     *
+     * The measurement is written straight to the wrapper because it comes from
+     * the committed textarea, like the auto-grown height above: only the browser
+     * knows where the viewport sits, and a scroll gesture must not re-render the
+     * composer on every frame to say so.
+     */
+    const draftFadeSync = (el: HTMLTextAreaElement) => {
+        const wrapper = inputEl.current;
+        if (!wrapper) return;
+        // How much of the first visible line the top edge has taken, and how
+        // much of the next line the bottom edge is showing. Either being zero
+        // means that end cuts nothing and gets no fade.
+        const cutAbove = el.scrollTop % LINE_HEIGHT;
+        const shownBelow = (el.scrollTop + el.clientHeight) % LINE_HEIGHT;
+        const hasBelow = el.scrollHeight - el.clientHeight - el.scrollTop > 0.5;
+        const top = cutAbove > 0.5 ? Math.min(LINE_HEIGHT - cutAbove, MAX_FADE) : 0;
+        const bottom = hasBelow && shownBelow > 0.5 ? Math.min(shownBelow, MAX_FADE) : 0;
+        wrapper.style.setProperty("--happy2-composer-fade-top", `${top}px`);
+        wrapper.style.setProperty("--happy2-composer-fade-bottom", `${bottom}px`);
+    };
     /* Start as one line, then grow up to eight lines for longer drafts. */
     // eslint-disable-next-line happy2-react/no-layout-effect -- textarea auto-growth must read the committed scrollHeight and write its live DOM height before the browser paints the new draft
     useLayoutEffect(() => {
@@ -451,6 +505,9 @@ export function Composer(props: ComposerProps) {
         const maxHeight = LINE_HEIGHT * MAX_LINES;
         el.style.height = `${minHeight}px`;
         el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
+        // The new height is what decides what the scrollport cuts, so the fades
+        // are settled in the same pass that resized the control.
+        draftFadeSync(el);
     }, [props.value]);
     const closeMention = () => {
         setMentionStart(null);
@@ -730,22 +787,26 @@ export function Composer(props: ComposerProps) {
      * dead padding. Keep native and semantic controls in charge of their own
      * pointer interactions, but direct every other point in the card to the
      * editable control. Popovers are visually adjacent to the card but own
-     * their separate keyboard interactions.
+     * their separate keyboard interactions, and the footer row below the card
+     * is not part of the input surface at all.
      *
      * It runs on mousedown and suppresses that event's default, which is the
      * whole point: pressing a plain <div> otherwise hands focus to the nearest
      * focusable ancestor — the document body — right after this handler asked
      * for the textarea, so the card looked inert everywhere but the text itself.
-     * Only dead space is defaulted away; interactive targets return first and
-     * keep their own press behavior.
+     * Only dead space is defaulted away; claimed targets return first and keep
+     * their own press behavior, including the text selection that starts inside
+     * the textarea and the footer.
      */
     const focusTextareaFromSurface = (event: ReactMouseEvent<HTMLDivElement>) => {
+        // Composing is the primary button's job. A secondary or middle press is
+        // the platform's — a context menu, a paste — and taking its default
+        // away would answer a question that was not asked here.
+        if (event.button !== 0) return;
         const target = event.target;
         if (!(target instanceof Element)) return;
-        const interactive = target.closest(
-            '[data-happy2-ui="composer-popover"], button, input, textarea, select, a, [contenteditable], [tabindex], [role="button"], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]',
-        );
-        if (interactive && event.currentTarget.contains(interactive)) return;
+        const claimed = target.closest(`${SURFACE_CLAIMED_TARGETS}, ${FOOTER_TARGETS}`);
+        if (claimed && event.currentTarget.contains(claimed)) return;
         const textarea = textareaEl.current;
         if (!textarea || textarea.disabled) return;
         event.preventDefault();
@@ -779,7 +840,11 @@ export function Composer(props: ComposerProps) {
                         />
                     </div>
                 ) : null}
-                <div className="happy2-composer__input" data-happy2-ui="composer-input">
+                <div
+                    className="happy2-composer__input"
+                    data-happy2-ui="composer-input"
+                    ref={inputEl}
+                >
                     <textarea
                         className="happy2-composer__textarea"
                         data-happy2-ui="composer-textarea"
@@ -794,11 +859,25 @@ export function Composer(props: ComposerProps) {
                         onInput={onInput}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
+                        onScroll={(event) => draftFadeSync(event.currentTarget)}
                         onSelect={rememberSelection}
                         placeholder={props.placeholder}
                         ref={textareaEl}
                         rows={MIN_LINES}
                         value={props.value}
+                    />
+                    {/* Decorative edge fades: the draft dissolves into the card
+                        where it runs past the visible lines, so a clipped line
+                        is never cut on a hard edge. */}
+                    <div
+                        aria-hidden="true"
+                        className="happy2-composer__fade happy2-composer__fade--top"
+                        data-happy2-ui="composer-fade-top"
+                    />
+                    <div
+                        aria-hidden="true"
+                        className="happy2-composer__fade happy2-composer__fade--bottom"
+                        data-happy2-ui="composer-fade-bottom"
                     />
                 </div>
                 <div className="happy2-composer__toolbar" data-happy2-ui="composer-toolbar">

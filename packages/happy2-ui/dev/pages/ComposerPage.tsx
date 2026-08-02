@@ -55,6 +55,16 @@ const EMOJI: EmojiItem[] = [
     { char: "🙏", id: "pray", name: "folded hands" },
 ];
 const noop = () => {};
+const LONG_DRAFT = [
+    "Reproduced the flake: the refresh token is registered before the handshake resolves,",
+    "so the first request after a cold start races the token that is still being written.",
+    "Moved registration behind the handshake promise and added a jittered retry.",
+    "Device farm is green on all three targets, twenty runs each.",
+    "Remaining question is the desktop client, which keeps its own session cache.",
+    "I would rather invalidate that cache on every handshake than special-case the race.",
+    "Follow-up: the telemetry for refused refreshes still reports the old reason code.",
+    "Scroll this draft with a trackpad to watch each cut line dissolve at the edge.",
+].join("\n");
 const INITIAL_ATTACHMENTS: ComposerAttachment[] = [
     { kind: "file", id: "refresh.ts", name: "refresh.ts", size: 4096 },
     { kind: "file", id: "handshake.md", name: "handshake.md", size: 12800 },
@@ -99,6 +109,19 @@ function ModelControlFixture() {
             onValueChange={noop}
             placeholder="Message #launch-week"
             value=""
+        />
+    );
+}
+/* A draft long enough to scroll, so the edge fades can be watched live. */
+function DraftFixture() {
+    const [value, setValue] = useState(LONG_DRAFT);
+    return (
+        <Composer
+            hint="Enter to send"
+            onAttachFile={noop}
+            onSend={noop}
+            onValueChange={setValue}
+            value={value}
         />
     );
 }
@@ -302,6 +325,28 @@ export function ComposerPage() {
                                 "Fix is up — moved token registration behind the handshake promise.\nAdded a cold-start retry with jittered backoff.\nDevice farm run is green on all three targets."
                             }
                         />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="draft past the eight-line cap · scroll it: each end fades only the line fragment the scrollport is cutting, and nothing at a line boundary · light and dark"
+                    label="Overflowing draft"
+                    number="CP-12"
+                    stage="app"
+                >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <div style={{ width: "640px", padding: "24px 20px" }}>
+                            <DraftFixture />
+                        </div>
+                        <div
+                            className="happy2-theme-dark"
+                            style={{
+                                width: "640px",
+                                padding: "24px 20px",
+                                background: "var(--groupped-background)",
+                            }}
+                        >
+                            <DraftFixture />
+                        </div>
                     </div>
                 </Specimen>
                 <Specimen

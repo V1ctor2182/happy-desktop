@@ -36,6 +36,11 @@
     display: flex;
     flex-direction: column;
     background: var(--input-background);
+    /* The whole card is the input: every point that is not a control presses
+     * into the draft (see focusTextareaFromSurface), so the pointer says so
+     * across the padding and the action lane instead of only over the text.
+     * Controls declare their own pointer/not-allowed cursor. */
+    cursor: text;
     /* No resting hairline (matches the original unified panel). The 1px border
      * stays in the box model — layout is unchanged — but is transparent until
      * focus/agents paint it. overflow is intentionally NOT hidden: the mention
@@ -74,12 +79,100 @@
     padding: 8px 20px 0;
 }
 
+.happy2-composer[data-disabled] .happy2-composer__surface {
+    cursor: not-allowed;
+}
+
+.happy2-composer[data-pending] .happy2-composer__surface {
+    cursor: wait;
+}
+
+/* A popover is chrome to choose from, not text to write in; it keeps the
+ * ordinary pointer instead of inheriting the card's caret. */
+.happy2-composer__popover {
+    cursor: default;
+}
+
 /* The textarea owns the vertical hit area instead of leaving its surrounding
- * inset as inert wrapper space. */
+ * inset as inert wrapper space. The insets are named because the draft's edge
+ * fades are placed against the text box they produce. */
 .happy2-composer__input {
+    /* Measured from the scrolled draft by the component; zero whenever that end
+     * of the scrollport cuts nothing. */
+    --happy2-composer-fade-top: 0px;
+    --happy2-composer-fade-bottom: 0px;
+    --happy2-composer-input-top: 20px;
+    --happy2-composer-input-side: 19px;
+    --happy2-composer-input-bottom: 24px;
+    position: relative;
     box-sizing: border-box;
-    padding: 20px 19px 24px;
-    cursor: text;
+    padding: var(--happy2-composer-input-top) var(--happy2-composer-input-side)
+        var(--happy2-composer-input-bottom);
+}
+
+/*
+ * Edge fades. A draft longer than the eight visible lines otherwise ends on the
+ * hard edge of the scrollport, with a half line sliced through the middle of its
+ * glyphs. These carry the card's own fill over that boundary so the clipped line
+ * dissolves into it instead.
+ *
+ * Absolutely positioned because they are overlays over the scrolling text rather
+ * than boxes in the flow. They cover exactly the text column — no wider, so the
+ * card's 16px corners stay untouched.
+ *
+ * Their height is not a fixed band: the component measures the fragment of a
+ * line each end is cutting and never gives a fade more than that, so a whole
+ * line — its ink, its selection highlight, the caret sitting in it — is never
+ * painted over, and a draft resting on a line boundary shows no fade at all.
+ * A 14px fixed band was tried first and visibly washed out the last complete
+ * line at 2× in both schemes.
+ */
+.happy2-composer__fade {
+    position: absolute;
+    left: var(--happy2-composer-input-side);
+    right: var(--happy2-composer-input-side);
+    background: var(--input-background);
+    pointer-events: none;
+}
+
+.happy2-composer__fade--top {
+    top: var(--happy2-composer-input-top);
+    height: var(--happy2-composer-fade-top);
+    /* Eased alpha stencil, solid on the cut edge and gone within the band; a
+     * linear ramp reads as a grey bar with a visible end. */
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        black 0,
+        color-mix(in srgb, black 62%, transparent) 30%,
+        color-mix(in srgb, black 22%, transparent) 58%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        black 0,
+        color-mix(in srgb, black 62%, transparent) 30%,
+        color-mix(in srgb, black 22%, transparent) 58%,
+        transparent 100%
+    );
+}
+
+.happy2-composer__fade--bottom {
+    bottom: var(--happy2-composer-input-bottom);
+    height: var(--happy2-composer-fade-bottom);
+    -webkit-mask-image: linear-gradient(
+        to top,
+        black 0,
+        color-mix(in srgb, black 62%, transparent) 30%,
+        color-mix(in srgb, black 22%, transparent) 58%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to top,
+        black 0,
+        color-mix(in srgb, black 62%, transparent) 30%,
+        color-mix(in srgb, black 22%, transparent) 58%,
+        transparent 100%
+    );
 }
 
 .happy2-composer__textarea {
