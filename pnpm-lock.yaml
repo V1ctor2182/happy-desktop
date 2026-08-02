@@ -30,8 +30,8 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.114
-        version: 0.0.114(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.116
+        version: 0.0.116(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
@@ -222,8 +222,8 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.0.114
-        version: 0.0.114(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.116
+        version: 0.0.116(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/rig-connect':
         specifier: 0.0.22
         version: 0.0.22
@@ -703,8 +703,8 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.114
-        version: 0.0.114(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.116
+        version: 0.0.116(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
@@ -2905,8 +2905,8 @@ packages:
     resolution: {integrity: sha512-EfEnT7CMEDfKNJWBOashfxcp8RF8Qe3+K+zC7H32GqaydYp8F8Jd388o2F5I9p0dO+0wV6IKkzU86I1NgeFX3w==}
     engines: {node: '>=20'}
 
-  '@slopus/rig@0.0.114':
-    resolution: {integrity: sha512-zpXPsBwGHLG4rfaYdJfWEmP0kNbljuKEnxNpK8LFRY0/sechQnoUkr2k10U7HEeVNSL1Uf7LOwoQmgky09Jb4g==}
+  '@slopus/rig@0.0.116':
+    resolution: {integrity: sha512-jDoAadTjYr7wJTWll2zu/rZNYem/rvWnPzcNOcjzZZEvXvgdeiXDAxvkgwC3Vta+ZvlOoh9pBPZknV2i/5s4FA==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -9294,7 +9294,7 @@ snapshots:
     dependencies:
       '@sinclair/typebox': 0.34.52
 
-  '@slopus/rig@0.0.114(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
+  '@slopus/rig@0.0.116(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64

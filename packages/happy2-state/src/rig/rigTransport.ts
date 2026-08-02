@@ -290,6 +290,15 @@ export interface RigTransport {
     globalInstructionsWrite(instructions: string): Promise<string>;
 
     /**
+     * The machine-wide security policy its permission reviewer applies — the
+     * host's own `SECURITY.md`, or empty text when it has not been configured.
+     */
+    globalSecurityPolicyRead(signal?: AbortSignal): Promise<string>;
+
+    /** Replaces that policy wholesale and answers with what the host stored. */
+    globalSecurityPolicyWrite(policy: string): Promise<string>;
+
+    /**
      * The host's project and worktree catalog: the durable groups the workspace
      * lists sessions under. Read alongside `sessionsRead` on every reconcile, so
      * a renamed project or a freshly created worktree lands with the sessions

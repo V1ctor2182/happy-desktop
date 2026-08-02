@@ -169,26 +169,49 @@ export function RigSettingsBlueprintPage() {
                 </RigSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Instructions category: the machine's own AGENTS.md, opened on its rendered face with the room left beneath it"
+                detail="Instructions category: the machine's AGENTS.md and SECURITY.md as peer editable files"
                 label="Rig settings — instructions"
                 number="02"
             >
                 <RigSettingsShell
                     activeCategoryId="instructions"
                     categories={categories}
-                    description="What every agent on this machine is told before anything else"
+                    description="Machine-wide agent guidance and permission-review policy"
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Instructions"
                 >
                     <RigInstructionsSettings
-                        bytes={instructions.length}
-                        maximumBytes={32 * 1024}
-                        onRevert={noop}
-                        onSave={noop}
-                        onValueChange={noop}
-                        path="~/Happy/Config/AGENTS.md"
-                        value={instructions}
+                        documents={[
+                            {
+                                bytes: instructions.length,
+                                description:
+                                    "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
+                                id: "agents",
+                                label: "AGENTS.md",
+                                maximumBytes: 32 * 1024,
+                                onRevert: noop,
+                                onSave: noop,
+                                onValueChange: noop,
+                                path: "~/Happy/Config/AGENTS.md",
+                                placeholder: "Anything every agent on this machine should know…",
+                                value: instructions,
+                            },
+                            {
+                                bytes: 0,
+                                description:
+                                    "Applied when this machine reviews whether an agent action is allowed.",
+                                id: "security",
+                                label: "SECURITY.md",
+                                maximumBytes: 32 * 1024,
+                                onRevert: noop,
+                                onSave: noop,
+                                onValueChange: noop,
+                                path: "~/Happy/Config/SECURITY.md",
+                                placeholder: "Rules for deciding which agent actions are allowed…",
+                                value: "",
+                            },
+                        ]}
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>

@@ -37,6 +37,10 @@ import {
 import { rigInboxStoreCreate, type RigInboxSource, type RigInboxStore } from "./rigInboxStore.js";
 import { rigInstructionsStoreCreate, type RigInstructionsStore } from "./rigInstructionsStore.js";
 import {
+    rigSecurityPolicyStoreCreate,
+    type RigSecurityPolicyStore,
+} from "./rigSecurityPolicyStore.js";
+import {
     rigProviderUsageStoreCreate,
     type RigProviderUsageSource,
     type RigProviderUsageStore,
@@ -84,6 +88,8 @@ export interface RigClient {
      * anything else showing them are looking at the same draft.
      */
     instructions(): RigInstructionsStore;
+    /** This Rig's machine-wide permission-review policy, as one editable document. */
+    securityPolicy(): RigSecurityPolicyStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /**
@@ -234,6 +240,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
+    let securityPolicyStore: RigSecurityPolicyStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -322,6 +329,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (disposed) throw new Error("The Rig client is disposed.");
             instructionsStore ??= rigInstructionsStoreCreate({ transport });
             return instructionsStore;
+        },
+        securityPolicy() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            securityPolicyStore ??= rigSecurityPolicyStoreCreate({ transport });
+            return securityPolicyStore;
         },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -423,6 +435,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             providerUsageStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             instructionsStore = undefined;
+            securityPolicyStore?.[Symbol.dispose]();
+            securityPolicyStore = undefined;
             deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();

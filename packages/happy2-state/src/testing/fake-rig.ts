@@ -36,6 +36,8 @@ export type FakeRigOperation =
     | "modelsRead"
     | "globalInstructionsRead"
     | "globalInstructionsWrite"
+    | "globalSecurityPolicyRead"
+    | "globalSecurityPolicyWrite"
     | "projectsRead"
     | "changedFileRead"
     | "changedFilesRevert"
@@ -256,6 +258,7 @@ class FakeRigTransportModel implements FakeRigTransport {
     /* The machine-wide instructions, kept as a real document: what is written
        back is what the next read returns, exactly as the daemon behaves. */
     private instructions = "";
+    private securityPolicy = "";
     private readonly sessions = new Map<RigSessionId, RigSession>();
     /* Archived sessions stay readable by id and only drop out of the listing,
        which is exactly how the desktop host's durable archive behaves. */
@@ -397,6 +400,13 @@ class FakeRigTransportModel implements FakeRigTransport {
             this.perform("globalInstructionsWrite", {}, () => {
                 this.instructions = instructions;
                 return this.instructions;
+            }),
+        globalSecurityPolicyRead: () =>
+            this.perform("globalSecurityPolicyRead", {}, () => this.securityPolicy),
+        globalSecurityPolicyWrite: (policy) =>
+            this.perform("globalSecurityPolicyWrite", {}, () => {
+                this.securityPolicy = policy;
+                return this.securityPolicy;
             }),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
         workspaceFilesRead: () =>

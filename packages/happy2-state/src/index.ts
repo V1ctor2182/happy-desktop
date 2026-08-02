@@ -339,6 +339,13 @@ export {
     type RigInstructionsStoreDeps,
 } from "./rig/rigInstructionsStore.js";
 export {
+    rigSecurityPolicyStoreCreate,
+    RIG_SECURITY_POLICY_MAX_BYTES,
+    type RigSecurityPolicySnapshot,
+    type RigSecurityPolicyStore,
+    type RigSecurityPolicyStoreDeps,
+} from "./rig/rigSecurityPolicyStore.js";
+export {
     rigProviderUsageStoreCreate,
     rigProviderUsageStoreNoop,
     type RigProviderUsageCredits,

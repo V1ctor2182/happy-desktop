@@ -621,6 +621,7 @@ export {
 } from "./pages/settings/RigGeneralSettings";
 export {
     RigInstructionsSettings,
+    type RigInstructionDocument,
     type RigInstructionsSettingsProps,
 } from "./pages/settings/RigInstructionsSettings";
 export {

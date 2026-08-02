@@ -1,13 +1,21 @@
+import { useState } from "react";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { FileEditor } from "../../FileEditor";
 import { MarkdownDocument } from "../../MarkdownDocument";
 import { Spinner } from "../../Spinner";
+import { Tabs } from "../../Tabs";
 import { RigSettingsSection } from "./RigSettingsShell";
 
-export type RigInstructionsSettingsProps = {
+export type RigInstructionDocument = {
+    /** Stable identity for switching between the peer global documents. */
+    id: string;
+    label: string;
     /** Where the machine keeps them, shown so it is clear what is being edited. */
     path: string;
+    /** What this document controls. */
+    description: string;
+    placeholder: string;
     /** The draft: what the editor holds, which is not yet what the machine holds. */
     value: string;
     /** Unsaved edits exist. */
@@ -28,9 +36,13 @@ export type RigInstructionsSettingsProps = {
     onRevert: () => void;
 };
 
+export type RigInstructionsSettingsProps = {
+    documents: readonly RigInstructionDocument[];
+};
+
 /**
- * The Instructions category: the one document every agent on this machine is
- * given before anything else.
+ * The Instructions category: the machine-wide agent instructions and security
+ * policy, edited as peer Markdown documents.
  *
  * It is a file rather than a form, so it is edited as one — the same editor a
  * workspace file opens in, reading as Markdown and writing as text. The size
@@ -39,60 +51,58 @@ export type RigInstructionsSettingsProps = {
  * that has quietly stopped working.
  */
 export function RigInstructionsSettings(props: RigInstructionsSettingsProps) {
-    const oversize = props.bytes > props.maximumBytes;
-    // Nothing was read, so there is nothing to edit: an editor here would be a
-    // text area that saves into a machine this window cannot reach.
-    if (props.error)
-        return (
-            <Banner tone="danger" title="Instructions unavailable">
-                {props.error}
-            </Banner>
-        );
+    const [activeId, setActiveId] = useState(props.documents[0]?.id ?? "");
+    const active =
+        props.documents.find((document) => document.id === activeId) ?? props.documents[0];
+    if (!active) return null;
+    const oversize = active.bytes > active.maximumBytes;
     return (
-        <>
-            <RigSettingsSection
-                description="Given to every agent this machine starts, on top of whatever a project's own AGENTS.md says."
-                rows="cards"
-                title="Global instructions"
-            >
-                {props.loading ? (
-                    <Box className="happy2-rig-settings__pending">
-                        <Spinner size={16} />
-                        <span>Reading the instructions…</span>
-                    </Box>
-                ) : (
-                    <Box className="happy2-rig-settings__editor">
-                        <FileEditor
-                            banner={
-                                props.saveError ? (
-                                    <Banner tone="danger" title="Not saved">
-                                        {props.saveError}
-                                    </Banner>
-                                ) : oversize ? (
-                                    <Banner tone="warning" title="Too long to keep">
-                                        {`These instructions are ${bytesLabel(props.bytes)}, and this machine keeps at most ${bytesLabel(props.maximumBytes)}.`}
-                                    </Banner>
-                                ) : undefined
-                            }
-                            dirty={props.dirty}
-                            onRevert={props.onRevert}
-                            onSave={props.onSave}
-                            onValueChange={props.onValueChange}
-                            // A machine with no instructions yet has nothing to
-                            // read, so it opens straight into the text area
-                            // rather than onto a blank page with no cursor in it.
-                            initialFace={props.value.trim().length > 0 ? "rendered" : "source"}
-                            path={props.path}
-                            placeholder="Anything every agent on this machine should know…"
-                            rendered={<MarkdownDocument text={props.value} />}
-                            saving={props.saving}
-                            status={`${bytesLabel(props.bytes)} of ${bytesLabel(props.maximumBytes)}`}
-                            value={props.value}
-                        />
-                    </Box>
-                )}
-            </RigSettingsSection>
-        </>
+        <RigSettingsSection description={active.description} rows="cards" title="Global files">
+            <Tabs
+                activeId={active.id}
+                onSelect={setActiveId}
+                size="small"
+                tabs={props.documents.map(({ id, label }) => ({ id, label }))}
+            />
+            {active.error ? (
+                <Banner tone="danger" title={`${active.label} unavailable`}>
+                    {active.error}
+                </Banner>
+            ) : active.loading ? (
+                <Box className="happy2-rig-settings__pending">
+                    <Spinner size={16} />
+                    <span>{`Reading ${active.label}…`}</span>
+                </Box>
+            ) : (
+                <Box className="happy2-rig-settings__editor">
+                    <FileEditor
+                        banner={
+                            active.saveError ? (
+                                <Banner tone="danger" title="Not saved">
+                                    {active.saveError}
+                                </Banner>
+                            ) : oversize ? (
+                                <Banner tone="warning" title="Too long to keep">
+                                    {`${active.label} is ${bytesLabel(active.bytes)}, and this machine keeps at most ${bytesLabel(active.maximumBytes)}.`}
+                                </Banner>
+                            ) : undefined
+                        }
+                        dirty={active.dirty}
+                        initialFace={active.value.trim().length > 0 ? "rendered" : "source"}
+                        key={active.id}
+                        onRevert={active.onRevert}
+                        onSave={active.onSave}
+                        onValueChange={active.onValueChange}
+                        path={active.path}
+                        placeholder={active.placeholder}
+                        rendered={<MarkdownDocument text={active.value} />}
+                        saving={active.saving}
+                        status={`${bytesLabel(active.bytes)} of ${bytesLabel(active.maximumBytes)}`}
+                        value={active.value}
+                    />
+                </Box>
+            )}
+        </RigSettingsSection>
     );
 }
 

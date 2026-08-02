@@ -143,6 +143,18 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             });
             return (await readJson<{ instructions: string }>(response)).instructions;
         },
+        globalSecurityPolicyRead: async (signal) => {
+            const response = await fetch(url("/security-policy"), { signal });
+            return (await readJson<{ policy: string }>(response)).policy;
+        },
+        globalSecurityPolicyWrite: async (policy) => {
+            const response = await fetch(url("/security-policy"), {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ policy }),
+            });
+            return (await readJson<{ policy: string }>(response)).policy;
+        },
         projectsRead: async () => {
             const catalog = await getJson<RigProjectCatalog>("/projects");
             // The proxy leaves avatar urls origin-relative because only this side

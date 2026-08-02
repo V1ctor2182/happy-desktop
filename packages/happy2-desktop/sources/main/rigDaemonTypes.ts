@@ -127,6 +127,11 @@ export interface GlobalInstructionsResponse {
     readonly instructions: string;
 }
 
+/** The daemon's global `SECURITY.md`, empty when the machine has no policy yet. */
+export interface GlobalSecurityPolicyResponse {
+    readonly policy: string;
+}
+
 export interface GitRepositoryFacts {
     readonly ahead: number;
     readonly behind: number;

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
     RigInstructionsSnapshot,
+    RigSecurityPolicySnapshot,
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
@@ -12,6 +13,7 @@ import type {
 } from "happy2-state";
 import {
     RIG_INSTRUCTIONS_MAX_BYTES,
+    RIG_SECURITY_POLICY_MAX_BYTES,
     rigModelKey,
     rigPermissionLabel,
     rigThinkingLabel,
@@ -47,7 +49,7 @@ export function rigSettingsCategoryExists(section: string): boolean {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     general: "How this window looks and what a new session starts with",
-    instructions: "What every agent on this machine is told before anything else",
+    instructions: "Machine-wide agent guidance and permission-review policy",
     machines: "Every Rig this window works in, here and elsewhere",
     providers: "Every model provider this Rig daemon knows about",
 };
@@ -106,6 +108,13 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         instructionsStore?.get ?? instructionsUnavailable,
         instructionsStore?.get ?? instructionsUnavailable,
     );
+    const securityPolicyStore = directory.rigs.find((rig) => rig.kind === "local")?.session
+        ?.securityPolicy;
+    const securityPolicy = useSyncExternalStore(
+        securityPolicyStore?.subscribe ?? noSubscribe,
+        securityPolicyStore?.get ?? securityPolicyUnavailable,
+        securityPolicyStore?.get ?? securityPolicyUnavailable,
+    );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -140,28 +149,46 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         >
             {props.section === "instructions" ? (
                 <RigInstructionsSettings
-                    bytes={instructions.bytes}
-                    dirty={instructions.dirty}
-                    error={
-                        instructionsStore === undefined
-                            ? "This window is not connected to a Rig on this machine."
-                            : instructions.stored.type === "error"
-                              ? instructions.stored.error.message
-                              : undefined
-                    }
-                    loading={
-                        instructionsStore !== undefined &&
-                        instructions.stored.type !== "ready" &&
-                        instructions.stored.type !== "error"
-                    }
-                    maximumBytes={RIG_INSTRUCTIONS_MAX_BYTES}
-                    onRevert={() => instructionsStore?.revert()}
-                    onSave={() => instructionsStore?.save()}
-                    onValueChange={(value) => instructionsStore?.draftUpdate(value)}
-                    path={INSTRUCTIONS_PATH}
-                    saveError={instructions.saveError?.message}
-                    saving={instructions.saving}
-                    value={instructions.draft}
+                    documents={[
+                        {
+                            bytes: instructions.bytes,
+                            description:
+                                "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
+                            dirty: instructions.dirty,
+                            error: documentError(instructionsStore, instructions),
+                            id: "agents",
+                            label: "AGENTS.md",
+                            loading: documentLoading(instructionsStore, instructions),
+                            maximumBytes: RIG_INSTRUCTIONS_MAX_BYTES,
+                            onRevert: () => instructionsStore?.revert(),
+                            onSave: () => instructionsStore?.save(),
+                            onValueChange: (value) => instructionsStore?.draftUpdate(value),
+                            path: INSTRUCTIONS_PATH,
+                            placeholder: "Anything every agent on this machine should know…",
+                            saveError: instructions.saveError?.message,
+                            saving: instructions.saving,
+                            value: instructions.draft,
+                        },
+                        {
+                            bytes: securityPolicy.bytes,
+                            description:
+                                "Applied when this machine reviews whether an agent action is allowed.",
+                            dirty: securityPolicy.dirty,
+                            error: documentError(securityPolicyStore, securityPolicy),
+                            id: "security",
+                            label: "SECURITY.md",
+                            loading: documentLoading(securityPolicyStore, securityPolicy),
+                            maximumBytes: RIG_SECURITY_POLICY_MAX_BYTES,
+                            onRevert: () => securityPolicyStore?.revert(),
+                            onSave: () => securityPolicyStore?.save(),
+                            onValueChange: (value) => securityPolicyStore?.draftUpdate(value),
+                            path: SECURITY_POLICY_PATH,
+                            placeholder: "Rules for deciding which agent actions are allowed…",
+                            saveError: securityPolicy.saveError?.message,
+                            saving: securityPolicy.saving,
+                            value: securityPolicy.draft,
+                        },
+                    ]}
                 />
             ) : props.section === "machines" ? (
                 <RigMachineSettings
@@ -251,6 +278,7 @@ function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow
  * itself and is shown rather than asked for, so it is plain what a save changes.
  */
 const INSTRUCTIONS_PATH = "~/Happy/Config/AGENTS.md";
+const SECURITY_POLICY_PATH = "~/Happy/Config/SECURITY.md";
 
 const noSubscribe = () => () => undefined;
 const UNLOADED = { type: "loading" } as const;
@@ -265,6 +293,28 @@ const INSTRUCTIONS_UNAVAILABLE: RigInstructionsSnapshot = {
 };
 /** Stands in while no Rig on this machine is connected to read them from. */
 const instructionsUnavailable = () => INSTRUCTIONS_UNAVAILABLE;
+const SECURITY_POLICY_UNAVAILABLE: RigSecurityPolicySnapshot = INSTRUCTIONS_UNAVAILABLE;
+const securityPolicyUnavailable = () => SECURITY_POLICY_UNAVAILABLE;
+
+function documentError(
+    store: { get(): RigInstructionsSnapshot } | undefined,
+    snapshot: RigInstructionsSnapshot,
+): string | undefined {
+    return store === undefined
+        ? "This window is not connected to a Rig on this machine."
+        : snapshot.stored.type === "error"
+          ? snapshot.stored.error.message
+          : undefined;
+}
+
+function documentLoading(
+    store: { get(): RigInstructionsSnapshot } | undefined,
+    snapshot: RigInstructionsSnapshot,
+): boolean {
+    return (
+        store !== undefined && snapshot.stored.type !== "ready" && snapshot.stored.type !== "error"
+    );
+}
 
 /** The chosen default, falling back to whatever the catalog itself defaults to. */
 function defaultSelection(

@@ -12,6 +12,7 @@ import type {
     GlobalEventDelivery,
     GlobalCatalogResponse,
     GlobalInstructionsResponse,
+    GlobalSecurityPolicyResponse,
     HealthResponse,
     ModelCatalog,
     Project,
@@ -131,6 +132,16 @@ export class RigDaemonClient {
     /** Replaces those instructions wholesale and answers with what was stored. */
     setGlobalInstructions(instructions: string): Promise<GlobalInstructionsResponse> {
         return this.#requestJson("PUT", "/config/instructions", { instructions });
+    }
+
+    /** Reads the policy this Rig's permission reviewer applies to agent actions. */
+    globalSecurityPolicy(): Promise<GlobalSecurityPolicyResponse> {
+        return this.#requestJson("GET", "/config/security");
+    }
+
+    /** Replaces that security policy wholesale and answers with what was stored. */
+    setGlobalSecurityPolicy(policy: string): Promise<GlobalSecurityPolicyResponse> {
+        return this.#requestJson("PUT", "/config/security", { policy });
     }
 
     /**

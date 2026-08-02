@@ -17,6 +17,7 @@ import {
     type RigWorkspaceMemoryPersistence,
     type RigInboxStore,
     type RigInstructionsStore,
+    type RigSecurityPolicyStore,
     type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy2-state";
@@ -75,6 +76,8 @@ export interface RigSession {
     readonly providerUsage: RigProviderUsageStore | undefined;
     /** The machine-wide instructions every agent this Rig starts is given. */
     readonly instructions: RigInstructionsStore;
+    /** The machine-wide policy its permission reviewer applies to agent actions. */
+    readonly securityPolicy: RigSecurityPolicyStore;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
     readonly clock: RigClockStore;
 }
@@ -202,6 +205,7 @@ export function rigConnectionOpen(input: {
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
                     instructions: client.instructions(),
+                    securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),
                 };
                 input.deps.changed();

@@ -30,6 +30,7 @@ import type {
     RigInboxSnapshot,
     RigInboxStore,
     RigInstructionsStore,
+    RigSecurityPolicyStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
@@ -167,6 +168,8 @@ export interface AppRigSession {
     readonly providerUsage?: RigProviderUsageStore;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
+    /** This Rig's machine-wide permission-review policy. */
+    readonly securityPolicy?: RigSecurityPolicyStore;
 }
 
 export interface AppRigAddSnapshot {

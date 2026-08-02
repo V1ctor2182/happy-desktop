@@ -12,14 +12,14 @@ import { rigUserError } from "./rigSupport.js";
  */
 export const RIG_INSTRUCTIONS_MAX_BYTES = 32 * 1024;
 
-export interface RigInstructionsSnapshot {
-    /** The instructions as this Rig last confirmed them. */
+export interface RigGlobalDocumentSnapshot {
+    /** The document as this Rig last confirmed it. */
     readonly stored: Loadable<string>;
     /** What the editor holds. It follows `stored` until someone types. */
     readonly draft: string;
     /** The draft says something the Rig has not been told yet. */
     readonly dirty: boolean;
-    /** How many bytes the draft would occupy, against `RIG_INSTRUCTIONS_MAX_BYTES`. */
+    /** How many UTF-8 bytes the draft would occupy. */
     readonly bytes: number;
     /** A write is in flight. */
     readonly saving: boolean;
@@ -28,14 +28,14 @@ export interface RigInstructionsSnapshot {
 }
 
 /**
- * The one Rig-wide `AGENTS.md`, as an editor reads and writes it.
+ * One Rig-wide Markdown configuration document, as an editor reads and writes it.
  *
  * Loading is a consequence of being watched rather than something a surface
  * asks for: the first subscriber starts the read, so a settings window that is
  * never opened never touches the daemon and one that is opened twice reads once.
  */
-export interface RigInstructionsStore {
-    get(): RigInstructionsSnapshot;
+export interface RigGlobalDocumentStore {
+    get(): RigGlobalDocumentSnapshot;
     subscribe(listener: () => void): () => void;
     /** Types into the draft without telling the Rig anything yet. */
     draftUpdate(text: string): void;
@@ -50,7 +50,15 @@ export interface RigInstructionsStoreDeps {
     readonly transport: Pick<RigTransport, "globalInstructionsRead" | "globalInstructionsWrite">;
 }
 
-const EMPTY: RigInstructionsSnapshot = {
+export type RigInstructionsSnapshot = RigGlobalDocumentSnapshot;
+export type RigInstructionsStore = RigGlobalDocumentStore;
+
+interface RigGlobalDocumentStoreDeps {
+    readonly read: (signal?: AbortSignal) => Promise<string>;
+    readonly write: (value: string) => Promise<string>;
+}
+
+const EMPTY: RigGlobalDocumentSnapshot = {
     stored: { type: "unloaded" },
     draft: "",
     dirty: false,
@@ -63,7 +71,16 @@ function byteLength(text: string): number {
 }
 
 export function rigInstructionsStoreCreate(deps: RigInstructionsStoreDeps): RigInstructionsStore {
-    const store = createStore<RigInstructionsSnapshot>()(() => EMPTY);
+    return rigGlobalDocumentStoreCreate({
+        read: (signal) => deps.transport.globalInstructionsRead(signal),
+        write: (value) => deps.transport.globalInstructionsWrite(value),
+    });
+}
+
+export function rigGlobalDocumentStoreCreate(
+    deps: RigGlobalDocumentStoreDeps,
+): RigGlobalDocumentStore {
+    const store = createStore<RigGlobalDocumentSnapshot>()(() => EMPTY);
     let disposed = false;
     let controller: AbortController | undefined;
 
@@ -73,14 +90,14 @@ export function rigInstructionsStoreCreate(deps: RigInstructionsStoreDeps): RigI
      * losing it would be the one unrecoverable thing this surface could do — so
      * the confirmed text only takes the draft over when there is nothing to lose.
      */
-    const settle = (instructions: string): void => {
+    const settle = (confirmed: string): void => {
         const state = store.getState();
-        const draft = state.dirty ? state.draft : instructions;
+        const draft = state.dirty ? state.draft : confirmed;
         store.setState(
             {
-                stored: { type: "ready", value: instructions },
+                stored: { type: "ready", value: confirmed },
                 draft,
-                dirty: draft !== instructions,
+                dirty: draft !== confirmed,
                 bytes: byteLength(draft),
                 saving: false,
             },
@@ -92,10 +109,10 @@ export function rigInstructionsStoreCreate(deps: RigInstructionsStoreDeps): RigI
         if (disposed || store.getState().stored.type !== "unloaded") return;
         store.setState({ stored: { type: "loading" } }, false);
         controller = new AbortController();
-        void deps.transport.globalInstructionsRead(controller.signal).then(
-            (instructions) => {
+        void deps.read(controller.signal).then(
+            (confirmed) => {
                 if (disposed) return;
-                settle(instructions);
+                settle(confirmed);
             },
             (error: unknown) => {
                 if (disposed || controller?.signal.aborted) return;
@@ -137,19 +154,19 @@ export function rigInstructionsStoreCreate(deps: RigInstructionsStoreDeps): RigI
             const { saveError: _cleared, ...rest } = state;
             store.setState({ ...rest, saving: true }, true);
             const sent = state.draft;
-            void deps.transport.globalInstructionsWrite(sent).then(
-                (instructions) => {
+            void deps.write(sent).then(
+                (confirmed) => {
                     if (disposed) return;
                     // What comes back is what the Rig kept, and the draft that
                     // produced it is no longer unsaved even if someone has typed
                     // past it since.
                     const current = store.getState();
-                    const draft = current.draft === sent ? instructions : current.draft;
+                    const draft = current.draft === sent ? confirmed : current.draft;
                     store.setState(
                         {
-                            stored: { type: "ready", value: instructions },
+                            stored: { type: "ready", value: confirmed },
                             draft,
-                            dirty: draft !== instructions,
+                            dirty: draft !== confirmed,
                             bytes: byteLength(draft),
                             saving: false,
                         },

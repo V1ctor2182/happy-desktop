@@ -664,6 +664,8 @@ export type RigProxyClient = Pick<
     | "models"
     | "globalInstructions"
     | "setGlobalInstructions"
+    | "globalSecurityPolicy"
+    | "setGlobalSecurityPolicy"
     | "listSessions"
     | "listCatalog"
     | "gitWatch"
@@ -773,6 +775,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             }
             if (path === "/instructions") {
                 writeJson(response, 200, await client.globalInstructions());
+                return true;
+            }
+            if (path === "/security-policy") {
+                writeJson(response, 200, await client.globalSecurityPolicy());
                 return true;
             }
             if (path === "/projects") {
@@ -1016,6 +1022,18 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 200,
                 await client.setGlobalInstructions(
                     typeof body.instructions === "string" ? body.instructions : "",
+                ),
+            );
+            return true;
+        }
+
+        if (method === "PUT" && path === "/security-policy") {
+            const body = await bodyReadJson(request);
+            writeJson(
+                response,
+                200,
+                await client.setGlobalSecurityPolicy(
+                    typeof body.policy === "string" ? body.policy : "",
                 ),
             );
             return true;
