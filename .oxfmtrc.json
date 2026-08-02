@@ -1,5 +1,6 @@
 {
     "$schema": "./node_modules/oxfmt/configuration_schema.json",
+    "ignorePatterns": ["packages/happy2-ui/src/assets/animations/*.json"],
     "tabWidth": 4,
     "useTabs": false
 }

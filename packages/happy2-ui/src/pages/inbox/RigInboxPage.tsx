@@ -82,6 +82,11 @@ export function RigInboxPage(props: RigInboxPageProps) {
 
                     {pendingCount === 0 && answeredCount === 0 ? (
                         <EmptyState
+                            // The mark belongs to the settled reading only. While
+                            // the inbox is still being read nothing is known yet,
+                            // and celebrating an emptiness that may not be there
+                            // would be a lie told in gold.
+                            animation={props.loading ? undefined : "sparkles"}
                             description={
                                 props.loading
                                     ? "Reading what this Rig's agents are waiting on."

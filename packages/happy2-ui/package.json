@@ -7,7 +7,8 @@
         ".": "./src/index.ts",
         "./blueprint": "./dev/Workbench.tsx",
         "./styles.css": "./src/styles.css",
-        "./testing": "./src/testing/index.ts"
+        "./testing": "./src/testing/index.ts",
+        "./vite": "./vite/lottiePlugin.ts"
     },
     "scripts": {
         "dev": "vite --host 127.0.0.1",
@@ -35,6 +36,7 @@
         "@fontsource-variable/figtree": "^5.2.10",
         "@fontsource-variable/jetbrains-mono": "^5.2.8",
         "@lezer/highlight": "^1.2.3",
+        "@lottiefiles/dotlottie-web": "0.78.2",
         "@mantine/core": "^9.4.1",
         "@mantine/hooks": "^9.4.1",
         "@pierre/diffs": "^1.2.12",

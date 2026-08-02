@@ -66,6 +66,7 @@ import { FilePanelPage } from "./pages/FilePanelPage";
 import { FilePreviewPage } from "./pages/FilePreviewPage";
 import { ImageViewerPage } from "./pages/ImageViewerPage";
 import { VideoViewerPage } from "./pages/VideoViewerPage";
+import { LottieMarkPage } from "./pages/LottieMarkPage";
 import { MarkdownDocumentPage } from "./pages/MarkdownDocumentPage";
 import { FileTreePage } from "./pages/FileTreePage";
 import { FormRowPage } from "./pages/FormRowPage";
@@ -259,6 +260,7 @@ const components: BlueprintPage[] = [
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
     { id: "image-viewer", label: "Image viewer", number: "C-235", page: ImageViewerPage },
     { id: "video-viewer", label: "Video viewer", number: "C-236", page: VideoViewerPage },
+    { id: "lottie-mark", label: "Lottie mark", number: "C-237", page: LottieMarkPage },
     { id: "code-block", label: "Code block", number: "C-174", page: CodeBlockPage },
     { id: "code-editor", label: "Code editor", number: "C-175", page: CodeEditorPage },
     {

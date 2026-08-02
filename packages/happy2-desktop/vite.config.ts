@@ -5,6 +5,7 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { createRequire } from "node:module";
 import { defineConfig, type Plugin } from "vite";
 import { appRouterPlugin } from "happy2-app/vite";
+import { lottieLocalWasmPlugin } from "happy2-ui/vite";
 import { browserLocalRigPlugin } from "./sources/main/browserDevServer";
 
 const require = createRequire(import.meta.url);
@@ -51,6 +52,10 @@ export default defineConfig({
         tailwindcss(),
         react(),
         babel({ presets: [reactCompilerPreset()] }),
+        // Happy2-ui's empty-state marks are drawn by a WASM Lottie renderer that
+        // ships hardcoded CDN URLs for its binary. This cuts them out so the
+        // renderer can only ever load the copy bundled here.
+        lottieLocalWasmPlugin(),
         browserLocalRigPlugin(),
         ...(localWebBuild ? [localWebVersionPlugin(localWebBuild)] : []),
     ],

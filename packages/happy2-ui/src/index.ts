@@ -368,6 +368,7 @@ export {
     type EmptyStateProps,
     type EmptyStateSize,
 } from "./EmptyState";
+export { LottieMark, type LottieMarkName, type LottieMarkProps } from "./LottieMark";
 export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
 export { Toolbar, type ToolbarProps, type ToolbarSearch } from "./Toolbar";

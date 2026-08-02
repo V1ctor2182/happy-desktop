@@ -19,6 +19,12 @@ export function HomePage(props: HomePageProps) {
                     const state = snapshot.notifications;
                     return state.type === "ready" ? state.value : [];
                 })();
+                /*
+                 * Every state other than `ready` projects to an empty list, so an
+                 * empty page here means either "nothing needs you" or "we do not
+                 * know yet". Only the first of those is worth celebrating.
+                 */
+                const settled = snapshot.notifications.type === "ready";
                 const stats: StatTileProps[] = (() => {
                     const unread = notifications.filter((item) => !item.readAt).length;
                     const mentions = notifications.filter(
@@ -105,6 +111,7 @@ export function HomePage(props: HomePageProps) {
                                 />
                             ) : (
                                 <EmptyState
+                                    animation={settled ? "sparkles" : undefined}
                                     description="Nothing needs your attention right now."
                                     icon="home"
                                     title="You’re all caught up"

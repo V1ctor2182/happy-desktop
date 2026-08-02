@@ -119,6 +119,7 @@ export function ActivityPage(props: ActivityPageProps) {
                                         icon: "bell",
                                         onClick: () => setFilter("all"),
                                     }}
+                                    animation="sparkles"
                                     description="No unread notifications right now."
                                     icon="check-circle"
                                     title="You're all caught up"

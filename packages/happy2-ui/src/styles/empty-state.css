@@ -62,6 +62,50 @@
     height: 40px;
 }
 
+/*
+ * An animated medallion stacks the mark over the glyph inside the same box. The
+ * glyph is what the reader sees first and what they keep if the worker runtime
+ * never arrives; the mark fades in over it once it has painted a real frame, so
+ * the medallion is never empty and never blinks.
+ *
+ * Absolute placement is the one thing flexbox cannot express here: two children
+ * have to occupy one 48px box rather than sit beside each other.
+ */
+.happy2-empty-state__media[data-animated] {
+    position: relative;
+}
+
+.happy2-empty-state__mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+}
+
+.happy2-empty-state__mark[data-painted="true"] {
+    opacity: 1;
+}
+
+/* The glyph steps aside once the mark is really painting, rather than showing
+   through it. */
+.happy2-empty-state__media[data-animated]:has(.happy2-empty-state__mark[data-painted="true"])
+    .happy2-icon {
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+}
+
+/* Someone who asked for less movement gets no cross-fade either: the mark is a
+   still frame, so it should simply be there. */
+@media (prefers-reduced-motion: reduce) {
+    .happy2-empty-state__mark,
+    .happy2-empty-state__media[data-animated]:has(.happy2-empty-state__mark[data-painted="true"])
+        .happy2-icon {
+        transition: none;
+    }
+}
+
 .happy2-empty-state__title {
     max-width: 360px;
     margin: 16px 0 0;

@@ -4,9 +4,15 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { playwright } from "@vitest/browser-playwright";
 import { configDefaults, defineConfig } from "vitest/config";
+import { lottieLocalWasmPlugin } from "./vite/lottiePlugin";
 
 export default defineConfig({
-    plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
+    plugins: [
+        tailwindcss(),
+        react(),
+        babel({ presets: [reactCompilerPreset()] }),
+        lottieLocalWasmPlugin(),
+    ],
     build: {
         lib: {
             entry: resolve(import.meta.dirname, "src/index.ts"),

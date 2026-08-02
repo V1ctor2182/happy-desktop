@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { LottieMark, type LottieMarkName } from "./LottieMark";
 export type EmptyStateSize = "panel" | "inline";
 export type EmptyStateAction = {
     label: string;
@@ -17,11 +18,26 @@ export type EmptyStateProps = {
     description?: string;
     action?: EmptyStateAction;
     size?: EmptyStateSize;
+    /**
+     * Draws a small animated mark over the medallion glyph instead of leaving
+     * the glyph alone. Reserved for the states where the absence is the good
+     * outcome — a caught-up inbox, a quiet home — never for a search that found
+     * nothing, which is a miss and should not be congratulated.
+     *
+     * The glyph stays required and stays rendered underneath: it is what the
+     * reader sees before the runtime loads, and what they keep if it cannot
+     * load at all.
+     */
+    animation?: LottieMarkName;
 };
 /* Icon size for the medallion, per empty-state size. Both land the glyph box on
  * an integer inset inside the medallion (48→14, 40→11) so the composed icon
  * stays optically centered without a bespoke nudge. */
 const mediaIconSize: Record<EmptyStateSize, 18 | 20> = { panel: 20, inline: 18 };
+/* The mark fills more of the medallion than the glyph does, because sparkles
+ * carry their own generous padding inside a 512 box. Still a mark, not a hero:
+ * 36 and 30 sit inside the 48 and 40 medallions with the rhythm unchanged. */
+const markSize: Record<EmptyStateSize, 30 | 36> = { panel: 36, inline: 30 };
 const actionSize: Record<EmptyStateSize, "small" | "medium"> = { panel: "medium", inline: "small" };
 /**
  * C-024 EmptyState — centered icon medallion + title + optional description +
@@ -32,6 +48,7 @@ const actionSize: Record<EmptyStateSize, "small" | "medium"> = { panel: "medium"
 export function EmptyState(props: EmptyStateProps) {
     const [local] = partitionComponentProps(props, [
         "action",
+        "animation",
         "className",
         "data-testid",
         "description",
@@ -49,8 +66,19 @@ export function EmptyState(props: EmptyStateProps) {
             data-testid={local["data-testid"]}
             style={local.style}
         >
-            <span className="happy2-empty-state__media" data-happy2-ui="empty-state-media">
+            <span
+                className="happy2-empty-state__media"
+                data-animated={local.animation === undefined ? undefined : ""}
+                data-happy2-ui="empty-state-media"
+            >
                 <Icon name={local.icon} size={mediaIconSize[size()]} />
+                {local.animation === undefined ? null : (
+                    <LottieMark
+                        className="happy2-empty-state__mark"
+                        name={local.animation}
+                        size={markSize[size()]}
+                    />
+                )}
             </span>
             <h2 className="happy2-empty-state__title" data-happy2-ui="empty-state-title">
                 {local.title}

@@ -3,9 +3,17 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
+import { lottieLocalWasmPlugin } from "happy2-ui/vite";
 
 export default defineConfig({
-    plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
+    plugins: [
+        tailwindcss(),
+        react(),
+        babel({ presets: [reactCompilerPreset()] }),
+        // Gym tests run real happy2-ui pages in a real browser, so they bundle
+        // the Lottie renderer and need its CDN URLs removed like anything else.
+        lottieLocalWasmPlugin(),
+    ],
     test: {
         include: ["tests/**/*.gym.test.tsx"],
         setupFiles: ["tests/gymSetup.ts"],
