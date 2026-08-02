@@ -245,7 +245,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
-let securityPolicyStore: RigSecurityPolicyStore | undefined;
+    let securityPolicyStore: RigSecurityPolicyStore | undefined;
     const slotsStores = new Map<string, RigSlotsStore>();
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
