@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { UserError, type ComposerStore } from "happy2-state";
 import {
     adminStoreFixtureCreate,
@@ -221,7 +222,11 @@ it("owns one subscription, routes safe actions, and rebinds cleanly when store i
         "first:first updated",
     );
     expect(childMounts).toBe(1);
-    setStore(second.store);
+    // The swap is dispatched from outside React, so it is scheduled concurrently rather than
+    // flushed like the discrete click above. Commit it synchronously: under a loaded three-browser
+    // run one animation frame is not enough for WebKit to rebind the boundary before the
+    // subscription assertions below.
+    flushSync(() => setStore(second.store));
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     expect(first.counts.active).toBe(0);
     expect(second.counts).toEqual({ active: 1, total: 1 });
