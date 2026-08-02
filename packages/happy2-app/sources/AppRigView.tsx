@@ -1943,45 +1943,55 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 ) : undefined
                             }
                             composerFooterControl={
-                                <ComposerFooterBar
-                                    leading={
-                                        <>
-                                            {workspace.groupSessionDraft ? (
-                                                <RigSessionControls
-                                                    fields={["permission", "tier"]}
-                                                    menuPlacement="above"
-                                                    variant="ghost"
-                                                    menus={workspace.groupSessionDraft.menus}
-                                                    onEffortChange={(effort?: RigThinkingLevel) =>
-                                                        props.workspace.sessionEffortUpdate(effort)
-                                                    }
-                                                    onModelChange={(selection: RigModelSelection) =>
-                                                        props.workspace.sessionModelUpdate(
-                                                            selection,
-                                                        )
-                                                    }
-                                                    onPermissionModeChange={(
-                                                        mode: RigPermissionMode,
-                                                    ) =>
-                                                        props.workspace.sessionPermissionModeUpdate(
-                                                            mode,
-                                                        )
-                                                    }
-                                                    onServiceTierChange={(tier?: RigServiceTier) =>
-                                                        props.workspace.sessionServiceTierUpdate(
-                                                            tier,
-                                                        )
-                                                    }
+                                workspace.groupSessionDraft || slotViews.statusLine.length > 0 ? (
+                                    <ComposerFooterBar
+                                        leading={
+                                            <>
+                                                {workspace.groupSessionDraft ? (
+                                                    <RigSessionControls
+                                                        fields={["permission", "tier"]}
+                                                        menuPlacement="above"
+                                                        variant="ghost"
+                                                        menus={workspace.groupSessionDraft.menus}
+                                                        onEffortChange={(
+                                                            effort?: RigThinkingLevel,
+                                                        ) =>
+                                                            props.workspace.sessionEffortUpdate(
+                                                                effort,
+                                                            )
+                                                        }
+                                                        onModelChange={(
+                                                            selection: RigModelSelection,
+                                                        ) =>
+                                                            props.workspace.sessionModelUpdate(
+                                                                selection,
+                                                            )
+                                                        }
+                                                        onPermissionModeChange={(
+                                                            mode: RigPermissionMode,
+                                                        ) =>
+                                                            props.workspace.sessionPermissionModeUpdate(
+                                                                mode,
+                                                            )
+                                                        }
+                                                        onServiceTierChange={(
+                                                            tier?: RigServiceTier,
+                                                        ) =>
+                                                            props.workspace.sessionServiceTierUpdate(
+                                                                tier,
+                                                            )
+                                                        }
+                                                    />
+                                                ) : null}
+                                                <SlotEntries
+                                                    entries={slotViews.statusLine}
+                                                    onAction={props.slotAction}
+                                                    placement="status-line"
                                                 />
-                                            ) : null}
-                                            <SlotEntries
-                                                entries={slotViews.statusLine}
-                                                onAction={props.slotAction}
-                                                placement="status-line"
-                                            />
-                                        </>
-                                    }
-                                />
+                                            </>
+                                        }
+                                    />
+                                ) : undefined
                             }
                             onComposerAttachmentRemove={(attachmentId) =>
                                 props.workspace.composerAttachmentRemove(attachmentId)

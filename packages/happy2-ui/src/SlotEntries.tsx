@@ -26,7 +26,15 @@ export interface SlotEntriesProps {
 
 function SlotInspection(props: { readonly entry: SlotVisualEntry }) {
     return (
-        <details className="happy2-slot-entry__inspection">
+        <details
+            className="happy2-slot-entry__inspection"
+            onBlur={(event) => {
+                // A <details> disclosure stays open on its own; close it when
+                // focus leaves so the popover never lingers over the surface.
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                    event.currentTarget.open = false;
+            }}
+        >
             <summary
                 aria-label={`Inspect contribution by ${props.entry.author}`}
                 title={`${props.entry.author}\n${props.entry.description}\n${props.entry.purpose}`}

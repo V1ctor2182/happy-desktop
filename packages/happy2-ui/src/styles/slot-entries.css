@@ -90,16 +90,16 @@
 
 .happy2-slot-entry__details {
     position: absolute;
-    z-index: 20;
-    top: calc(100% + 6px);
+    z-index: 30;
+    top: calc(100% + 8px);
     right: 0;
     display: flex;
     flex-direction: column;
     gap: 5px;
     width: 240px;
     padding: 10px 12px;
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    border: 1px solid var(--modal-border);
+    border-radius: 14px;
     background: var(--surface);
     box-shadow: 0 8px 24px var(--shadow-color);
     color: var(--text-secondary);
@@ -126,6 +126,14 @@
 .happy2-slot-entries[data-placement="status-line"] {
     max-width: 320px;
     color: var(--text-secondary);
+}
+
+/* The status line and the composer bar sit at the bottom of the window, so
+   their inspection popovers open upward to stay on screen. */
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__details,
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-entry__details {
+    top: auto;
+    bottom: calc(100% + 8px);
 }
 
 .happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__markdown,
