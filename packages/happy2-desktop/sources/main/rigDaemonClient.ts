@@ -435,12 +435,17 @@ export class RigDaemonClient {
         return this.#requestJson("PUT", `${fileScopePath(scope)}/file`, request);
     }
 
-    openHttpProxy(sessionId: string): Promise<Duplex> {
+    async openHttpProxy(sessionId: string): Promise<Duplex> {
+        const { session } = await this.getSession(sessionId);
+        const path = `${fileScopePath({
+            projectId: session.projectId,
+            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+        })}/proxy`;
         return new Promise((resolvePromise, reject) => {
             const request = httpRequest({
                 headers: { authorization: `Bearer ${this.#token}` },
                 method: "CONNECT",
-                path: `/sessions/${encodeURIComponent(sessionId)}/proxy`,
+                path,
                 socketPath: this.socketPath,
             });
             request.once("connect", (response, socket, head) => {
