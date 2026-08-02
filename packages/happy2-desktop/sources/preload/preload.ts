@@ -37,6 +37,7 @@ const identity = buildIdentityRead();
 
 const bridge: HappyDesktopBridge = {
     ...(identity ? { buildIdentity: identity } : {}),
+    appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
     browserProxyApply: (sessionId) => ipcRenderer.invoke(desktopIpc.browserProxyApply, sessionId),
     browserOpenSubscribe(listener: (url: string) => void) {
         const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);

@@ -102,6 +102,20 @@ function desktopAction(operation: Promise<void>): void {
     void operation.catch(() => undefined);
 }
 
+/**
+ * Publishes Happy's selected appearance source to Chromium. Electron applies it
+ * process-wide, which is the boundary shared by browser guests, HTML previews,
+ * plugin frames, and the separate media-preview window.
+ */
+function desktopAppearanceSynchronize(
+    appearance: AppearanceStore,
+    bridge: HappyDesktopBridge,
+): void {
+    const publish = () => bridge.appearanceSet(appearance.get().mode);
+    publish();
+    appearance.subscribe(publish);
+}
+
 interface WorkspaceUpdate {
     readonly action: "install" | "refresh";
     readonly snapshot: AppRigUpdate;
@@ -386,6 +400,7 @@ if (mediaPreviewBridge) {
         // Appearance is chosen for the window, not for one connection, so the store is
         // created here beside the router and outlives both.
         const appearance = appearanceStoreCreate();
+        desktopAppearanceSynchronize(appearance, desktopBridge);
         const modelSettings = desktopModelSettingsCreate(desktopBridge, config);
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed

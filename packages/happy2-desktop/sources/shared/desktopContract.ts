@@ -1,5 +1,8 @@
 export type DesktopMode = "local" | "cloud";
 
+/** Appearance source the Electron shell applies to every local renderer and guest. */
+export type DesktopAppearanceMode = "dark" | "light" | "system";
+
 /** Access granted to a newly created local Rig session. */
 export type DesktopPermissionMode = "auto" | "workspace_write" | "read_only" | "full_access";
 
@@ -312,6 +315,12 @@ export interface HappyDesktopBridge {
      * whole life: the shell has it before the first frame and it never changes.
      */
     readonly buildIdentity?: DesktopBuildIdentity;
+    /**
+     * Makes Chromium's preferred color scheme follow Happy's selection, so
+     * previews, browser guests, plugin frames, and auxiliary windows agree with
+     * the application tree instead of independently following macOS.
+     */
+    appearanceSet(mode: DesktopAppearanceMode): void;
     browserProxyApply(sessionId: string): Promise<void>;
     /** The current plugin application catalog, without waiting for the next change. */
     pluginApplicationsGet(): Promise<DesktopPluginCatalog>;
@@ -401,6 +410,8 @@ export interface HappyMediaPreviewBridge {
 }
 
 export const desktopIpc = {
+    /** Renderer → main only: the appearance source inherited by local web contents. */
+    appearanceSet: "happy2:appearance:set",
     browserProxyApply: "happy2:browser:proxy-apply",
     browserOpenRequested: "happy2:browser:open-requested",
     browserStatusChanged: "happy2:browser:status-changed",

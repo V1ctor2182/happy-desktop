@@ -37,6 +37,9 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
  */
 export function browserDevBridgeCreate(): HappyDesktopBridge {
     return {
+        // A normal browser exposes no native preferred-color-scheme override;
+        // the application tree itself is already controlled by ThemeScope.
+        appearanceSet: () => undefined,
         browserProxyApply: async () => undefined,
         // A browser window cannot isolate a plugin's code, so it offers none.
         // The catalog is reported closed rather than loading, which is what a

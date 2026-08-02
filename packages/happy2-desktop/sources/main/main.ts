@@ -113,7 +113,9 @@ const windowTitle =
     buildIdentity && buildIdentity.label !== "dev"
         ? `${applicationName} — ${buildIdentity.label}`
         : applicationName;
-const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
+function windowBackgroundColor(): string {
+    return nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
+}
 const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
     ? new URL(process.env.VITE_DEV_SERVER_URL).origin
     : undefined;
@@ -440,7 +442,7 @@ function windowOptions(
     webPreferences: BrowserWindowConstructorOptions["webPreferences"],
 ): BrowserWindowConstructorOptions {
     return {
-        backgroundColor: windowBackgroundColor,
+        backgroundColor: windowBackgroundColor(),
         title: windowTitle,
         width: bounds?.width ?? 1100,
         height: bounds?.height ?? 760,
@@ -666,7 +668,7 @@ function mediaPreviewWindowCreate(): BrowserWindow {
           ? address(developmentUrl)
           : address(pathToFileURL(rendererPath).toString());
     const window = new BrowserWindow({
-        backgroundColor: windowBackgroundColor,
+        backgroundColor: windowBackgroundColor(),
         title: windowTitle,
         width: 1100,
         height: 760,
@@ -775,7 +777,12 @@ function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): Browser
     // lifecycle already names the replacement and that window's own teardown
     // rightly declines to repaint over it — so the count it was showing is
     // retired here instead, when the destination is known.
-    if (target.kind === "cloud") dockBadgeClear();
+    if (target.kind === "cloud") {
+        dockBadgeClear();
+        // A local window's explicit selection must not leak into a hosted
+        // window, whose appearance is owned by that deployment.
+        nativeTheme.themeSource = "system";
+    }
     return windowLifecycle.synchronize(target.key, (bounds) =>
         target.kind === "cloud"
             ? remoteWindowCreate(target.url, bounds ?? restoredBounds)
@@ -982,6 +989,19 @@ void app
         });
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
+        });
+        // `nativeTheme` is Chromium's preferred-color-scheme source for every
+        // WebContents in this process, including webview guests and nested
+        // frames. Only the currently presented local window may choose it.
+        ipcMain.on(desktopIpc.appearanceSet, (event, raw: unknown) => {
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender) return;
+            if (raw !== "dark" && raw !== "light" && raw !== "system") return;
+            nativeTheme.themeSource = raw;
+            const background = windowBackgroundColor();
+            presenting.setBackgroundColor(background);
+            if (mediaPreviewWindow && !mediaPreviewWindow.isDestroyed())
+                mediaPreviewWindow.setBackgroundColor(background);
         });
         ipcMain.handle(desktopIpc.notesList, () => notesStore.list());
         ipcMain.handle(desktopIpc.noteCreate, (_event, title: unknown) => {
