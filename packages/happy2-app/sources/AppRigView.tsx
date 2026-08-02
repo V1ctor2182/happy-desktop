@@ -119,6 +119,8 @@ import {
     type SlotVisualEntry,
     RigInboxPage,
     RigPluginApplicationPage,
+    RIG_PLUGIN_CATALOG_PLACEHOLDER,
+    RigPluginCatalogPage,
     type RigPluginApplicationContentRenderer,
     RigProviderUsagePage,
     TabbedPane,
@@ -346,6 +348,15 @@ export interface AppRigViewProps {
     blueprintOpen?: boolean;
     /** Addresses the workbench. */
     onBlueprintOpen?(): void;
+    /**
+     * Whether the URL addresses this machine's plugin packages — what is
+     * installed, what is waiting, and what is on offer. It is a separate reading
+     * from `pluginApplicationId`, which addresses one application a package
+     * contributes: this is the package, that is the destination inside it.
+     */
+    pluginsOpen?: boolean;
+    /** Addresses that catalog. */
+    onPluginsOpen?(): void;
     /**
      * Which local plugin application the URL addresses, by its stable identity.
      * The generation is deliberately not in the address: a plugin that restarts
@@ -935,6 +946,21 @@ const FRIENDS_ITEM = "friends";
  */
 const BLUEPRINT_ITEM = "blueprint";
 
+/**
+ * The pinned row that opens this machine's plugin packages. It is deliberately
+ * not the same row as any of the applications those packages contribute:
+ * managing what is installed and using what it installed are different errands,
+ * and a person doing either would not expect to arrive at the other.
+ *
+ * It starts directly above the contributed rows, which reads as the relationship
+ * — this row is the packages, those are what they add. But that is only where it
+ * starts: every pinned row can be reordered and the order is kept, so what
+ * carries the distinction is the label and the glyph rather than the adjacency.
+ * A package wears the shipping box; an application wears the puzzle piece it put
+ * into this window.
+ */
+const PLUGINS_ITEM = "plugins";
+
 function slotsContext(
     projects: readonly RigProjectGroup[],
     groupId: string | undefined,
@@ -1193,6 +1219,19 @@ export function AppRigView(props: AppRigViewProps) {
                   },
               ]
             : []),
+        // The packages themselves, starting above what they contribute. The
+        // row is always here, including on a machine with no plugins at all:
+        // what is on offer is as much a reading as what is installed, and a
+        // machine with nothing installed is the one most likely to want it.
+        // Its glyph is the box a package ships in, not the puzzle piece the
+        // contributed rows wear, so the two stay told apart wherever the
+        // reader has since dragged them.
+        {
+            icon: "package" as const,
+            id: PLUGINS_ITEM,
+            kind: "action" as const,
+            label: "Plugins",
+        },
         // Whatever this machine's plugins contribute comes last of the
         // pinned rows, in the order the daemon gives them: they are the
         // only rows here the product did not choose, so they sit after
@@ -1226,11 +1265,13 @@ export function AppRigView(props: AppRigViewProps) {
                           ? FRIENDS_ITEM
                           : props.blueprintOpen
                             ? BLUEPRINT_ITEM
-                            : props.pluginApplicationId
-                              ? pluginItemId(props.pluginApplicationId)
-                              : props.groupId
-                                ? rigItemId(props.rigId, props.groupId)
-                                : ""
+                            : props.pluginsOpen
+                              ? PLUGINS_ITEM
+                              : props.pluginApplicationId
+                                ? pluginItemId(props.pluginApplicationId)
+                                : props.groupId
+                                  ? rigItemId(props.rigId, props.groupId)
+                                  : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -1370,6 +1411,10 @@ export function AppRigView(props: AppRigViewProps) {
                 }
                 if (id === BLUEPRINT_ITEM) {
                     props.onBlueprintOpen?.();
+                    return;
+                }
+                if (id === PLUGINS_ITEM) {
+                    props.onPluginsOpen?.();
                     return;
                 }
                 const pluginApplicationId = pluginItemParse(id);
@@ -1521,6 +1566,24 @@ export function AppRigView(props: AppRigViewProps) {
                 {desktop ? <WindowDragRegion /> : null}
                 {naming}
                 <BlueprintView />
+            </AppShell>
+        );
+
+    // The packages this machine has are read whatever the addressed machine is
+    // doing, because the reading is not one machine's to give yet: the daemon
+    // reports the applications a plugin contributes but not the packages behind
+    // them, so the catalog is a placeholder and says so on its own face.
+    if (props.pluginsOpen)
+        return (
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {desktop ? <WindowDragRegion /> : null}
+                {naming}
+                <RigPluginCatalogPage entries={RIG_PLUGIN_CATALOG_PLACEHOLDER} />
             </AppShell>
         );
 

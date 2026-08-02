@@ -242,6 +242,23 @@ const usageRoute = createRoute({
 });
 
 /**
+ * One machine's plugin packages: what is installed on it, what is waiting to be
+ * updated, and what is on offer. The Rig is in the address for the same reason
+ * the inbox and usage carry it — the packages are that machine's, so the window's
+ * back and forward move between machines rather than between two views of one
+ * ambiguous list.
+ *
+ * It sits directly above the application address below it, which is the
+ * relationship between the two: this reading is the packages, and that one is a
+ * destination one of them contributes.
+ */
+const pluginsRoute = createRoute({
+    component: RigPluginsRoute,
+    getParentRoute: () => rootRoute,
+    path: "/plugins/$rigId",
+});
+
+/**
  * One application a locally installed plugin contributes. The Rig is in the
  * address because the plugin is installed on that machine, and the application's
  * stable identity follows it — not its generation, so the window stays where it
@@ -313,6 +330,7 @@ const routeTree = rootRoute.addChildren([
     noteRoute,
     inboxRoute,
     usageRoute,
+    pluginsRoute,
     pluginApplicationRoute,
     friendsRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
@@ -363,6 +381,15 @@ function RigBlueprintRoute() {
 }
 
 /**
+ * The plugin catalog renders the same window a conversation does: the shell and
+ * its sidebar stay, and only the content area changes, so managing what is
+ * installed is not leaving the workspace.
+ */
+function RigPluginsRoute() {
+    return <RigWorkspaceLayout plugins />;
+}
+
+/**
  * A plugin application renders the same window a conversation does: the shell
  * and its sidebar stay, and only the content area changes, so opening one is not
  * leaving the workspace.
@@ -378,6 +405,7 @@ function RigWorkspaceLayout(
         inbox?: boolean;
         notes?: boolean;
         pluginApplication?: boolean;
+        plugins?: boolean;
         usage?: boolean;
     } = {},
 ) {
@@ -425,6 +453,13 @@ function RigWorkspaceLayout(
             {...(import.meta.env.DEV
                 ? { onBlueprintOpen: () => void navigate({ to: "/blueprint" }) }
                 : {})}
+            pluginsOpen={props.plugins}
+            onPluginsOpen={() =>
+                void navigate({
+                    params: { rigId: params.rigId ?? rigDefaultId(context) },
+                    to: "/plugins/$rigId",
+                })
+            }
             pluginApplicationContent={context.pluginApplicationContent}
             {...(props.pluginApplication && params.applicationId
                 ? { pluginApplicationId: params.applicationId }

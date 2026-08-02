@@ -1,0 +1,607 @@
+/*
+ * The plugin catalog: an index of packages, not a storefront.
+ *
+ * A package is a row, and rows are told apart by the hairline between them
+ * rather than by a card around each. The only shape on the page is the rule that
+ * separates the index from the detail column beside it, which is the same
+ * treatment the usage and inbox screens use — the three Rig reading screens are
+ * one object with different content.
+ *
+ * State lives in the left margin. A 2px rule is painted there only for a row
+ * that wants something, so the outstanding work reads as marks down one edge
+ * instead of a column of badges to compare. Colour appears in exactly two
+ * places: the accent for an update waiting and the warning tone for a plugin
+ * that stopped. Everything else is the neutral surface language.
+ *
+ * The two panes are one column at a narrow width and two side by side once the
+ * surface can hold both, decided by a container query rather than a measured
+ * width, so the page has no layout effect and no breakpoint of the window. At
+ * the narrow size the index and the detail take turns: `data-view` says which
+ * one has the surface, and the way back is only present while it is needed.
+ *
+ * Layout is flexbox throughout; every colour, radius, and family comes from a
+ * theme role.
+ */
+
+.happy2-rig-plugin-catalog {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    font-family: var(--happy2-font-ui);
+    /* The two-pane decision is about the space this surface was given, not the
+       window: the same page is narrow beside a wide sidebar and wide without
+       one. */
+    container-type: inline-size;
+    container-name: plugin-catalog;
+}
+
+.happy2-rig-plugin-catalog__header {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    width: 100%;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Search and the filter share one row and wrap onto two when the surface is too
+   narrow to hold both, which is the whole of this row's responsive behaviour. */
+.happy2-rig-plugin-catalog__filters {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 16px;
+}
+
+.happy2-rig-plugin-catalog__search {
+    flex: 1 1 160px;
+    min-width: 0;
+    max-width: 280px;
+}
+
+/*
+ * The one strip that says what this catalog is, and what a pressed control would
+ * have done.
+ *
+ * Its sentence wraps rather than truncating. This is the screen's honest
+ * disclosure — that nothing here changes the machine, and that a pressed control
+ * changed nothing — so an ellipsis in the middle of it would cut away the half
+ * that matters. It costs a second line in the narrow window and is worth it.
+ */
+.happy2-rig-plugin-catalog__notice {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-rig-plugin-catalog__notice-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 16px;
+}
+
+.happy2-rig-plugin-catalog__notice-line[data-tone="framing"] {
+    background: var(--groupped-background);
+    color: var(--text-secondary);
+}
+
+/* A pressed control is the one thing on this strip worth the reader's eye, so the
+   sentence it leaves is the ink of the page rather than its quieter frame. It sits
+   under the standing disclosure rather than replacing it. */
+.happy2-rig-plugin-catalog__notice-line[data-tone="preview"] {
+    border-top: 1px solid var(--divider);
+    background: var(--surface);
+    color: var(--text);
+}
+
+/*
+ * The live region stays mounted with nothing in it so a later sentence is an
+ * announced change rather than a new region appearing. Empty, it must take no
+ * room and draw no line.
+ */
+.happy2-rig-plugin-catalog__notice-line[data-open="false"] {
+    min-height: 0;
+    padding: 0;
+    border-top: 0;
+}
+
+.happy2-rig-plugin-catalog__notice-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy2-rig-plugin-catalog__body {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+/* The index owns its own scrolling and is flush: the spacing belongs to the rows
+   inside it. */
+.happy2-rig-plugin-catalog__index {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.happy2-rig-plugin-catalog__index-empty {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 24px 16px;
+}
+
+.happy2-rig-plugin-catalog__rows {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy2-rig-plugin-catalog__row-item {
+    display: flex;
+    flex: 0 0 auto;
+    width: 100%;
+}
+
+/*
+ * One package. The row is 56px: a 40px stack of two lines between 8px of
+ * padding, which is the standard two-line row height the rest of the app uses.
+ */
+.happy2-rig-plugin-catalog__row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 56px;
+    margin: 0;
+    /* The left inset is the margin rule's 2px plus the 10px that puts the glyph
+       where an unmarked row's glyph also sits, so a marked row and an unmarked
+       one line up. */
+    padding: 8px 16px 8px 10px;
+    border: none;
+    border-bottom: 1px solid var(--divider);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy2-rig-plugin-catalog__row:hover {
+    background: var(--surface-high);
+}
+
+.happy2-rig-plugin-catalog__row[aria-current="true"] {
+    background: var(--surface-selected);
+}
+
+.happy2-rig-plugin-catalog__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    /* Inward, because a row runs to both edges of the index and an outward ring
+       would be clipped by the scrollport. */
+    outline-offset: -2px;
+}
+
+/* The margin mark. It occupies its 2px on every row so nothing moves when a row
+   has something to say; only its colour arrives. */
+.happy2-rig-plugin-catalog__rail {
+    display: block;
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: 2px;
+    border-radius: var(--happy2-radius-pill);
+    background: transparent;
+}
+
+.happy2-rig-plugin-catalog__row[data-state="update"] .happy2-rig-plugin-catalog__rail {
+    background: var(--radio-active);
+}
+
+.happy2-rig-plugin-catalog__row[data-state="attention"] .happy2-rig-plugin-catalog__rail {
+    background: var(--box-warning-text);
+}
+
+.happy2-rig-plugin-catalog__row-glyph {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+/* A package that is off is drawn quieter throughout rather than marked: it is
+   not asking for anything, it is simply not running. */
+.happy2-rig-plugin-catalog__row[data-state="disabled"] {
+    color: var(--text-secondary);
+}
+
+.happy2-rig-plugin-catalog__row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy2-rig-plugin-catalog__row-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The name takes what the row has and gives way last: it is the one thing a
+   reader is scanning for, so the version beside it is what shortens first. */
+.happy2-rig-plugin-catalog__row-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The version is set in figures beside the name, the way a reference lists an
+   edition: tabular so a column of them does not shuffle. */
+.happy2-rig-plugin-catalog__row-version {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-plugin-catalog__row[data-state="update"] .happy2-rig-plugin-catalog__row-version {
+    color: var(--radio-active);
+}
+
+.happy2-rig-plugin-catalog__row-meta {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The state as a word, not a pill: twenty pills down a column is a decoration,
+   twenty words is a column that can be read. */
+.happy2-rig-plugin-catalog__row-state {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    line-height: 16px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.happy2-rig-plugin-catalog__row[data-state="update"] .happy2-rig-plugin-catalog__row-state {
+    color: var(--radio-active);
+}
+
+.happy2-rig-plugin-catalog__row[data-state="attention"] .happy2-rig-plugin-catalog__row-state {
+    color: var(--box-warning-text);
+}
+
+/*
+ * The detail column. At a narrow width it takes the whole surface when a row is
+ * chosen; once there is room it stands beside the index behind one hairline.
+ */
+.happy2-rig-plugin-catalog__detail {
+    display: none;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy2-rig-plugin-catalog__detail-scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+}
+
+/*
+ * This column is out of the tab order, so the only focus it ever takes is the
+ * one handed to it when the index that held the focused row was hidden. A ring
+ * drawn around the whole column would report a landing the reader did not make;
+ * the column arriving is already the answer to where they are.
+ */
+.happy2-rig-plugin-catalog__detail-scroll:focus {
+    outline: none;
+}
+
+.happy2-rig-plugin-catalog__detail-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 560px;
+    padding: 16px 16px 32px;
+}
+
+.happy2-rig-plugin-catalog__detail-empty {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* The way back points the way it goes. */
+.happy2-rig-plugin-catalog__back {
+    flex: 0 0 auto;
+}
+
+.happy2-rig-plugin-catalog__back .happy2-button__icon {
+    transform: rotate(180deg);
+}
+
+.happy2-rig-plugin-catalog__detail-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.happy2-rig-plugin-catalog__detail-glyph {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy2-rig-plugin-catalog__detail-identity {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy2-rig-plugin-catalog__detail-name {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-plugin-catalog__detail-origin {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-plugin-catalog__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* A plugin that stopped says so in the warning tone, once, above its own prose. */
+.happy2-rig-plugin-catalog__attention {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    color: var(--box-warning-text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy2-rig-plugin-catalog__summary {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy2-rig-plugin-catalog__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-rig-plugin-catalog__section-title {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+/* Surfaces and capabilities are set as a run of terms separated by middots, not
+   as chips: a chip is a control, and none of these is one. */
+.happy2-rig-plugin-catalog__terms {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy2-rig-plugin-catalog__apps {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-rig-plugin-catalog__changes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding-left: 16px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy2-rig-plugin-catalog__trust {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-rig-plugin-catalog__trust[data-verified="true"] {
+    color: var(--success);
+}
+
+.happy2-rig-plugin-catalog__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+}
+
+/* One fact per line, label left and value right, so the ledger reads down two
+   edges rather than as prose. */
+.happy2-rig-plugin-catalog__fact {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.happy2-rig-plugin-catalog__fact dt {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-rig-plugin-catalog__fact dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 18px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Narrow: the panes take turns ------------------------------------- */
+
+/* With a row chosen, the detail column has the surface and the index steps
+   aside — removed from the layout, so nothing in it is left in the tab order
+   behind a pane the reader cannot see. */
+.happy2-rig-plugin-catalog[data-view="detail"] .happy2-rig-plugin-catalog__index {
+    display: none;
+}
+
+.happy2-rig-plugin-catalog[data-view="detail"] .happy2-rig-plugin-catalog__detail {
+    display: flex;
+    flex: 1 1 auto;
+}
+
+/* ---- Wide: both panes at once ----------------------------------------- */
+
+@container plugin-catalog (min-width: 680px) {
+    /* The index is what this screen is for, so it takes the larger share of the
+       width rather than a fixed column: at the 1030px this page gets beside the
+       sidebar in the 1280px reference window that is 412px, and it stops growing
+       once a row is wider than a row needs to be. */
+    .happy2-rig-plugin-catalog__index {
+        flex: 0 0 clamp(320px, 40%, 480px);
+        border-right: 1px solid var(--divider);
+    }
+
+    /* The index never steps aside here: there is room for both, so choosing a row
+       fills the column beside it rather than replacing the list. */
+    .happy2-rig-plugin-catalog[data-view="detail"] .happy2-rig-plugin-catalog__index {
+        display: flex;
+    }
+
+    .happy2-rig-plugin-catalog__detail {
+        display: flex;
+        flex: 1 1 auto;
+    }
+
+    /* Nothing to go back to when the list never left. */
+    .happy2-rig-plugin-catalog__back {
+        display: none;
+    }
+
+    .happy2-rig-plugin-catalog__detail-content {
+        padding: 24px 24px 40px;
+    }
+}

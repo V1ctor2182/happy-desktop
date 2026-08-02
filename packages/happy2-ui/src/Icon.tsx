@@ -62,6 +62,7 @@ export type IconName =
     | "trash"
     | "archive"
     | "plugin"
+    | "package"
     | "dot";
 export type IconProps = {
     name: IconName;
@@ -124,6 +125,10 @@ const glyphs: Record<IconName, IconGlyph> = {
     // A locally installed plugin's own contribution: the piece that was added to
     // this window rather than shipped in it.
     plugin: { set: "ionicons", name: "extension-puzzle-outline" },
+    // The shipped thing a contribution arrives in: a version of some code that
+    // can be installed, updated, or removed. Distinct from the puzzle piece on
+    // purpose, so managing packages never wears the glyph of using one.
+    package: { set: "ionicons", name: "cube-outline" },
     image: { set: "ionicons", name: "image-outline" },
     play: { set: "ionicons", name: "play-outline" },
     // A filled square: the universal "end what is running now".

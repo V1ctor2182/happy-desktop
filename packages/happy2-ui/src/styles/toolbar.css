@@ -57,9 +57,16 @@
     min-width: 0;
 }
 
+/*
+ * Every declaration a heading element would otherwise bring its own value for
+ * is stated here, so titleLevel changes what the title is called and nothing
+ * about how it sits: the box keeps its 20px line and its place on the grid
+ * whether it renders as a span or as an h1.
+ */
 .happy2-toolbar__title {
     display: block;
     min-width: 0;
+    margin: 0;
     color: var(--text);
     font-size: 15px;
     font-weight: 700;

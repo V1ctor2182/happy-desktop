@@ -8,6 +8,8 @@ export type SegmentedControlSegment = {
     icon?: IconName;
 };
 export type SegmentedControlProps = {
+    /** What the segments choose between, for anyone who cannot see the group. */
+    "aria-label"?: string;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -33,6 +35,7 @@ const iconSizes: Record<SegmentedControlSize, 14 | 16 | 18> = {
  */
 export function SegmentedControl(props: SegmentedControlProps) {
     const [local] = partitionComponentProps(props, [
+        "aria-label",
         "className",
         "data-testid",
         "disabled",
@@ -50,6 +53,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
     };
     return (
         <div
+            aria-label={local["aria-label"]}
             className={["happy2-segmented-control", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-full-width={local.fullWidth ? "" : undefined}

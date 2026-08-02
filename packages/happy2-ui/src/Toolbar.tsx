@@ -16,6 +16,13 @@ export type ToolbarProps = {
     trailing?: ReactNode;
     search?: ToolbarSearch;
     height?: number;
+    /**
+     * Names the title as a heading at this level. A toolbar over a section is
+     * usually a label rather than a heading, which is why the default stays a
+     * span; when the toolbar heads a whole screen it is that screen's heading,
+     * and the headings below it need something to sit under.
+     */
+    titleLevel?: 1 | 2 | 3;
 };
 /**
  * C-026 Toolbar — panel/section header bar. A default 48px strip that sits at
@@ -35,6 +42,7 @@ export function Toolbar(props: ToolbarProps) {
         "trailing",
         "search",
         "height",
+        "titleLevel",
     ]);
     const hasHeading = () => local.title !== undefined || local.subtitle !== undefined;
     const hasActions = () => local.search !== undefined || local.trailing !== undefined;
@@ -57,11 +65,20 @@ export function Toolbar(props: ToolbarProps) {
             ) : null}
             {hasHeading() ? (
                 <div className="happy2-toolbar__heading" data-happy2-ui="toolbar-heading">
-                    {local.title !== undefined ? (
-                        <span className="happy2-toolbar__title" data-happy2-ui="toolbar-title">
-                            <span className="happy2-toolbar__title-ink">{local.title}</span>
-                        </span>
-                    ) : null}
+                    {local.title !== undefined
+                        ? ((
+                              Title = local.titleLevel === undefined
+                                  ? ("span" as const)
+                                  : (`h${String(local.titleLevel)}` as "h1" | "h2" | "h3"),
+                          ) => (
+                              <Title
+                                  className="happy2-toolbar__title"
+                                  data-happy2-ui="toolbar-title"
+                              >
+                                  <span className="happy2-toolbar__title-ink">{local.title}</span>
+                              </Title>
+                          ))()
+                        : null}
                     {local.subtitle !== undefined ? (
                         <span
                             className="happy2-toolbar__subtitle"

@@ -630,6 +630,15 @@ export {
     type RigPluginApplicationPageProps,
     type RigPluginApplicationPageStatus,
 } from "./pages/plugins/RigPluginApplicationPage";
+export { RIG_PLUGIN_CATALOG_PLACEHOLDER } from "./pages/plugins/RigPluginCatalogPage.fixtures";
+export {
+    RigPluginCatalogPage,
+    type RigPluginCatalogPageProps,
+    type RigPluginEntry,
+    type RigPluginFact,
+    type RigPluginOrigin,
+    type RigPluginState,
+} from "./pages/plugins/RigPluginCatalogPage";
 export { ProfilePage, type ProfilePageProps } from "./pages/profile/ProfilePage";
 export { CallsPage, type CallsPageProps } from "./pages/calls/CallsPage";
 export {
