@@ -137,10 +137,13 @@
     color: var(--status-error);
 }
 
+/* The name of what the agent did. It is a label, not a link, and it is the
+   first word of the row: weight carries it, so it reads at full contrast
+   instead of in the interactive colour it never responded to. */
 .happy2-agent-activity__verb {
     flex: none;
     font-weight: 600;
-    color: var(--text-link);
+    color: var(--text);
 }
 
 /* A command or path longer than the row scrolls sideways (see ScrollingText)

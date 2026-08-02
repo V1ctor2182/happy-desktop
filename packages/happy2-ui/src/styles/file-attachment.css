@@ -112,6 +112,9 @@ button.happy2-file-attachment {
     background: var(--surface-high);
 }
 
+/* One tint for every kind of file, so the hue said nothing about the file and
+   nothing about the chip being clickable — it is the same neutral icon chip as
+   every other leading glyph. */
 .happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__icon {
     width: 40px;
     height: 40px;
@@ -119,7 +122,7 @@ button.happy2-file-attachment {
     justify-content: center;
     background: var(--surface-selected);
     border-radius: var(--happy2-radius-sm);
-    color: var(--text-link);
+    color: var(--text-secondary);
 }
 
 .happy2-file-attachment[data-variant="chat"] .happy2-file-attachment__copy {

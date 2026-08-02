@@ -219,7 +219,7 @@ it("holds EventCard geometry, transition lane, and optical centering", async () 
     expect(arrow.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(to.textMetrics().text).toBe("In review");
     expect(to.computedStyles(["color", "font-size", "font-weight"])).toEqual({
-        color: "rgb(43, 172, 204)",
+        color: "rgb(0, 0, 0)",
         "font-size": "12px",
         "font-weight": "600",
     });

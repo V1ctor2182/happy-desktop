@@ -85,7 +85,7 @@ button.happy2-friends__row:active {
 }
 
 button.happy2-friends__row:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 

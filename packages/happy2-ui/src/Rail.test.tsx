@@ -343,12 +343,12 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
         "flex-direction": "column",
     });
 
-    /* Active state: selected system fill, Happy link-color icon, solid label. */
+    /* Active state: selected system fill, ink glyph, solid label. */
     expect(active.element.getAttribute("aria-current")).toBe("page");
     expect(inbox.element.getAttribute("aria-current")).toBeNull();
     expect(active.computedStyles(["background-color", "color"])).toEqual({
         "background-color": "rgb(234, 234, 234)",
-        color: "rgb(43, 172, 204)",
+        color: "rgb(0, 0, 0)",
     });
     expect(
         view
@@ -483,7 +483,7 @@ it("holds Rail geometry, states, and optical alignment", { timeout: 240_000 }, a
     );
     expect(count12.element.textContent).toBe("12");
     expect(count12.computedStyles(["background-color", "border-radius", "color"])).toEqual({
-        "background-color": "rgb(0, 122, 255)",
+        "background-color": "rgb(0, 0, 0)",
         "border-radius": "4px",
         color: "rgb(255, 255, 255)",
     });

@@ -376,15 +376,18 @@
     box-decoration-break: clone;
 }
 
+/* A bare link in a plain message is the same thing as a link inside a Markdown
+   one, and this file has already decided how those look: body-text colour,
+   underlined, no second brand colour. It was the only link in the transcript
+   painting itself system blue. */
 .happy2-message__link {
-    color: var(--radio-active);
-    text-decoration: none;
+    color: var(--text);
+    text-decoration: underline;
     cursor: pointer;
 }
 
 .happy2-message__link:hover {
-    color: var(--radio-active);
-    text-decoration: underline;
+    opacity: 0.8;
 }
 
 /* ---- Bubbles ---------------------------------------------------------- */

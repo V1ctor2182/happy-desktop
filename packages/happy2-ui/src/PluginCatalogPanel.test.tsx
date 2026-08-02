@@ -362,7 +362,7 @@ it("holds PluginCatalogPanel layout, capability badges, installation health, and
     );
     expect(runTaskName.textMetrics().text).toBe("run-task");
     expect(runTaskName.textMetrics().font.size).toBe(12);
-    expect(runTaskName.computedStyle("color")).toBe("rgb(43, 172, 204)");
+    expect(runTaskName.computedStyle("color")).toBe("rgb(0, 0, 0)");
     expect(runTaskName.computedStyle("font-family")).toContain("happy2 Mono");
     const runTaskDescription = view.$(
         `${card("task-runner")} [data-skill-name="run-task"] [data-happy2-ui="plugin-catalog-skill-description"]`,

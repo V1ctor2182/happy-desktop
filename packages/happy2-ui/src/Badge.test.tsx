@@ -800,7 +800,7 @@ it("holds Badge family geometry, colors, and behavior", async () => {
             ]),
             id,
         ).toEqual({
-            "background-color": tone === "accent" ? "rgb(0, 122, 255)" : "rgb(245, 245, 245)",
+            "background-color": tone === "accent" ? "rgb(0, 0, 0)" : "rgb(245, 245, 245)",
             "border-radius": "999px",
             color: tone === "accent" ? "rgb(255, 255, 255)" : "rgb(73, 69, 79)",
             "font-family": mono,

@@ -776,8 +776,8 @@ it("holds Message anatomy, segment styling, and affordances", async () => {
     expect((await code.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     const link = view.$('[data-testid="m1"] [data-happy2-ui="message-link"]');
     expect(link.computedStyles(["color", "text-decoration-line"])).toEqual({
-        color: "rgb(0, 122, 255)",
-        "text-decoration-line": "none",
+        color: "rgb(0, 0, 0)",
+        "text-decoration-line": "underline",
     });
     expect((await link.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     /* ---- Reactions row --------------------------------------------------- */

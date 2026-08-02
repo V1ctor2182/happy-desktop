@@ -61,8 +61,13 @@
     background: transparent;
 }
 
+/* The splitter idiom the shell and the column handles already use: a line
+   inside the grab lane thickens under the pointer, rather than the whole lane
+   filling with a colour. Drawn in secondary ink because this handle has no
+   hairline of its own at rest, so the hover state is the only thing a person
+   has to see. */
 .happy2-terminal-panel__resize:hover {
-    background: var(--text-link);
+    box-shadow: inset 0 2px 0 0 var(--text-secondary);
 }
 
 .happy2-terminal-panel__header {

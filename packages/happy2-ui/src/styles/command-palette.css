@@ -68,7 +68,7 @@
     line-height: 40px;
     letter-spacing: -0.01em;
     font-synthesis: none;
-    caret-color: var(--text-link);
+    caret-color: var(--radio-active);
 }
 
 .happy2-command-palette__input::placeholder {

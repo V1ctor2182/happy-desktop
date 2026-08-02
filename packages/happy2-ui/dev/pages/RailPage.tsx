@@ -54,14 +54,14 @@ export function RailPage() {
                         <DimensionRule label="otter brand 34 × 34" />
                         <DimensionRule label="items 60 × 52 · radius 8" />
                         <DimensionRule label="icon 20 px + label 10/700" />
-                        <DimensionRule label="primary + disc 40 × 40 · accent" />
+                        <DimensionRule label="primary + disc 40 × 40 · ink badge" />
                         <DimensionRule label="footer avatar · 20 px left / right / bottom" />
                     </div>
                 </div>
             </Specimen>
 
             <Specimen
-                detail="Inactive muted · active accent-soft bg + accent-strong icon + solid label · unread CountBadge overlaps icon top-right"
+                detail="Inactive muted · active selected bg + full-contrast icon and label · unread CountBadge overlaps icon top-right"
                 label="Item states"
                 number="02"
                 stage="chrome"
@@ -89,7 +89,7 @@ export function RailPage() {
                             paddingTop: "8px",
                         }}
                     >
-                        <DimensionRule label="active = accent-soft · aria-current" />
+                        <DimensionRule label="active = selected fill · aria-current" />
                         <DimensionRule label="badge 18 px pill · +13/-7 overlap" />
                     </div>
                 </div>

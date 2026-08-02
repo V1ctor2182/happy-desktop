@@ -204,7 +204,10 @@
     font-family: var(--happy2-font-mono);
     font-size: 12px;
     line-height: 18px;
-    color: var(--text-link);
+    /* The mono face and the description beside it already separate the name
+       from its prose; nothing here is clickable, so nothing is tinted as if
+       it were. */
+    color: var(--text);
 }
 
 .happy2-plugin-catalog-panel__skill-description {

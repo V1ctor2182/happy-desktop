@@ -161,7 +161,7 @@
     line-height: 30px;
     letter-spacing: 0;
     font-synthesis: none;
-    caret-color: var(--text-link);
+    caret-color: var(--radio-active);
 }
 
 .happy2-search-field__input::placeholder {

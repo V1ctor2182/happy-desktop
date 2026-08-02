@@ -164,7 +164,7 @@ it("holds McpAppShell layout, states, chips, frame geometry, and failure actions
         spinner.computedStyles(["border-radius", "border-top-color", "border-top-width"]),
     ).toEqual({
         "border-radius": "999px",
-        "border-top-color": "rgb(43, 172, 204)",
+        "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
     });
 

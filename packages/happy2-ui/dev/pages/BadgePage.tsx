@@ -66,7 +66,7 @@ export function BadgePage() {
             </Specimen>
 
             <Specimen
-                detail="18px round pill · min-width 18 · mono 11/700 lining tabular numerals · accent and neutral tones"
+                detail="18px round pill · min-width 18 · mono 11/700 lining tabular numerals · ink and neutral tones"
                 label="CountBadge"
                 number="03"
                 stage="chrome"
@@ -87,7 +87,7 @@ export function BadgePage() {
             </Specimen>
 
             <Specimen
-                detail="24px pill · fixed 18px system-emoji slot + mono 11/700 lining/tabular count · active = accent"
+                detail="24px pill · fixed 18px system-emoji slot + mono 11/700 lining/tabular count · active = accent chip"
                 label="ReactionChip"
                 number="04"
                 stage="app"

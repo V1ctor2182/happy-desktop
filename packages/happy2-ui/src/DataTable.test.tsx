@@ -259,7 +259,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
         checkBox.computedStyles(["background-color", "border-radius"]),
         "checked checkbox fill",
     ).toEqual({
-        "background-color": "rgb(43, 172, 204)",
+        "background-color": "rgb(0, 122, 255)",
         "border-radius": "6px",
     });
     const boxLeft = boxBounds.x - selectTdBounds.x;
@@ -287,7 +287,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
         '[data-happy2-ui="data-table-select-all"] [data-happy2-ui="data-table-check-box"]',
     );
     expect(headerBox.computedStyle("background-color"), "indeterminate fill").toBe(
-        "rgb(43, 172, 204)",
+        "rgb(0, 122, 255)",
     );
     const bar = view.$('[data-happy2-ui="data-table-select-all"] .happy2-data-table__check-bar');
     expect(bar.bounds().width, "indeterminate bar width").toBe(8);

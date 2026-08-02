@@ -213,7 +213,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
 
     const recommended = part(view, "selected", "setup-option-recommended");
     expect(recommended.computedStyles(["color", "text-transform"])).toEqual({
-        color: "rgb(43, 172, 204)",
+        color: "rgb(73, 69, 79)",
         "text-transform": "uppercase",
     });
 
@@ -293,7 +293,7 @@ it("holds SetupOptionCard layout, typography, selection, and status geometry", a
         ]),
     ).toEqual({
         "border-radius": "999px",
-        "border-top-color": "rgb(43, 172, 204)",
+        "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
         "box-sizing": "border-box",
     });

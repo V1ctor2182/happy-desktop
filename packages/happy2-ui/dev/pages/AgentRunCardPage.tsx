@@ -130,7 +130,7 @@ export function AgentRunCardPage() {
             </Specimen>
 
             <Specimen
-                detail="3px brand-gradient progress strip at 62% · warning RUNNING badge · accent working dot, faint pending dots"
+                detail="3px accent progress strip at 62% · warning RUNNING badge · accent working dot, faint pending dots"
                 label="Working"
                 number="03"
                 stage="app"

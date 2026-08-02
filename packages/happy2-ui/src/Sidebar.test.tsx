@@ -705,7 +705,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     const unreadBadge = view.$(
         '[data-testid="full"] [data-item-id="eng-core"] [data-happy2-ui="count-badge"]',
     );
-    expect(unreadBadge.computedStyle("background-color")).toBe("rgb(0, 122, 255)");
+    expect(unreadBadge.computedStyle("background-color")).toBe("rgb(0, 0, 0)");
     expect((await unreadBadge.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     /* Action row: muted plus row. */

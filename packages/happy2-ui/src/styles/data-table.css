@@ -174,10 +174,13 @@
     color: var(--button-primary-tint);
 }
 
+/* A ticked box is a ticked box: this one is the same control as Checkbox and
+   fills with the same system colour, rather than inventing a second answer to
+   the same question one screen away. */
 .happy2-data-table__check[data-checked] .happy2-data-table__check-box,
 .happy2-data-table__check[data-indeterminate] .happy2-data-table__check-box {
     border-color: transparent;
-    background: var(--text-link);
+    background: var(--radio-active);
 }
 
 .happy2-data-table__check-bar {
@@ -188,7 +191,7 @@
 }
 
 .happy2-data-table__check:focus-visible {
-    outline: var(--radio-active);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 

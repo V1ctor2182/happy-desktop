@@ -35,8 +35,10 @@
     border-bottom: 1px solid var(--divider);
 }
 
+/* The header's leading glyph. It is decoration on a title, and the desk below
+   it spends its colour on run state, which is the part worth looking at. */
 .happy2-agent-desk__spark {
-    color: var(--text-link);
+    color: var(--text-secondary);
     translate: 0 var(--happy2-agent-desk-spark-ty, 0px);
 }
 
@@ -195,7 +197,7 @@
 
 .happy2-agent-desk__queued:focus-visible,
 .happy2-agent-desk__done:focus-visible {
-    outline: var(--radio-active);
+    outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 

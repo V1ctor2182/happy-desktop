@@ -268,7 +268,7 @@
 }
 
 .happy2-approval-card__toggle:focus-visible {
-    outline: var(--radio-active);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 

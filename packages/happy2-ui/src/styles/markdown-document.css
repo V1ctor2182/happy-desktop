@@ -192,7 +192,7 @@
     width: 13px;
     height: 13px;
     margin: 0 7px 0 0;
-    accent-color: var(--text-link);
+    accent-color: var(--radio-active);
     vertical-align: baseline;
 }
 

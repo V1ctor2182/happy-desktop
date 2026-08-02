@@ -121,9 +121,13 @@
     display: block;
 }
 
+/* A count that wants to be noticed. What it counts is the information; the
+   hue never was, and system blue made a ten-pixel number the loudest thing in
+   the sidebar while reading at 4:1 against its own fill. Ink on paper is
+   louder still and legible in both appearances. */
 .happy2-count-badge[data-tone="accent"] {
-    background: var(--radio-active);
-    color: var(--button-primary-tint);
+    background: var(--text);
+    color: var(--surface);
 }
 
 .happy2-count-badge[data-tone="neutral"] {

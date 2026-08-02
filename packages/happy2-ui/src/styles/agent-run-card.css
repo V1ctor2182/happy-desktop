@@ -50,9 +50,12 @@
     background-color: var(--groupped-background);
 }
 
+/* A colour is not an image: as `background-image` this declaration was dropped
+   and the strip painted nothing at all. It fills the way every other progress
+   bar in the app does. */
 .happy2-agent-run-card__progress-fill {
     height: 3px;
-    background-image: var(--text-link);
+    background-color: var(--text-link);
 }
 
 /* ---- Header ----------------------------------------------------------- */
@@ -122,7 +125,7 @@
 }
 
 .happy2-agent-run-card__toggle:focus-visible {
-    outline: var(--radio-active);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 

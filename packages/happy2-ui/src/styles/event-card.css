@@ -45,7 +45,7 @@
 }
 
 .happy2-event-card[data-clickable]:focus-visible {
-    outline: var(--radio-active);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
@@ -120,9 +120,12 @@
     transform: translateY(var(--happy2-event-fromto-optical-y, 0px));
 }
 
+/* Where the thing ended up. The pair already reads as a change — the arrow and
+   the quieter "from" say so — and this is the half a person actually needs, so
+   it is the one at full contrast rather than the one in an accent. */
 .happy2-event-card__to {
     display: block;
-    color: var(--text-link);
+    color: var(--text);
     font-size: 12px;
     font-weight: 600;
     line-height: 16px;

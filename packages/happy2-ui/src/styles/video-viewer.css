@@ -51,7 +51,7 @@
 }
 
 .happy2-video-viewer__frame:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
@@ -87,7 +87,7 @@
 }
 
 .happy2-video-viewer__surface:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
@@ -232,7 +232,7 @@
 }
 
 .happy2-video-viewer__timeline:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
     border-radius: var(--happy2-radius-pill);
 }
@@ -340,7 +340,7 @@ button.happy2-video-viewer__total:hover {
 }
 
 button.happy2-video-viewer__total:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 
@@ -367,7 +367,7 @@ button.happy2-video-viewer__total:focus-visible {
 }
 
 .happy2-video-viewer__level:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--radio-active);
     outline-offset: 2px;
 }
 

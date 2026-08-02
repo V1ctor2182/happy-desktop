@@ -327,11 +327,11 @@ export function PluginCatalogPanelPage() {
     return (
         <ComponentPage
             number="C-066"
-            summary="Administrator plugin catalog: cards with a 40px icon slot, mono version, capability badges, an accent mono name and description for every Agent Skill the package provides, a per-installation management block (health, its own update check/Update, Retry, Logs, and Uninstall), and a controlled install dialog collecting declared variables (masked secrets) plus an optional ready container-image selection."
+            summary="Administrator plugin catalog: cards with a 40px icon slot, mono version, capability badges, a mono name and description for every Agent Skill the package provides, a per-installation management block (health, its own update check/Update, Retry, Logs, and Uninstall), and a controlled install dialog collecting declared variables (masked secrets) plus an optional ready container-image selection."
             title="PluginCatalogPanel"
         >
             <Specimen
-                detail="card 16px padding · icon 40px radius 8 · name 14/600 · mono version 12px · accent mono skill name + description rows · per-installation blocks with health, update check, and actions"
+                detail="card 16px padding · icon 40px radius 8 · name 14/600 · mono version 12px · mono skill name + description rows · per-installation blocks with health, update check, and actions"
                 label="Catalog — installed, update available, and installable"
                 number="01"
                 stage="app"

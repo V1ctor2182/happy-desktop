@@ -92,9 +92,12 @@
     outline-offset: 2px;
 }
 
+/* The selected fill already says which destination is open; tinting the glyph
+   on top of it said the same thing a second time, in a colour that read weaker
+   against that fill than the label beside it. */
 .happy2-rail__item[data-active] {
     background: var(--surface-selected);
-    color: var(--text-link);
+    color: var(--text);
 }
 
 .happy2-rail__item-icon {

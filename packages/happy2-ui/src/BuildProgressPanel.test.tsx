@@ -347,7 +347,7 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
         spinner.computedStyles(["border-radius", "border-top-color", "border-top-width"]),
     ).toEqual({
         "border-radius": "999px",
-        "border-top-color": "rgb(43, 172, 204)",
+        "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
     });
     /* Static ring paints an unclipped, geometrically centered contour. */

@@ -18,7 +18,7 @@ export function EventCardPage() {
             title="EventCard"
         >
             <Specimen
-                detail="44px row · radius 8 · 24px inset chip · from muted → to accent-strong · mono time"
+                detail="44px row · radius 8 · 24px inset chip · from muted → to full-contrast · mono time"
                 label="Status transition"
                 number="01"
                 stage="app"

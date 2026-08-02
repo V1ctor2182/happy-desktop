@@ -108,15 +108,16 @@
 }
 
 /*
- * Static progress ring: one accent arc on a strong hairline track. Un-animated
- * so fixtures and screenshots stay deterministic.
+ * Static progress ring: one ink arc on a strong hairline track.
+ * Neutral rather than accent-coloured so the loading chrome stays quiet.
+ * Un-animated so fixtures and screenshots stay deterministic.
  */
 .happy2-plugin-app-view__spinner {
     flex: none;
     width: 18px;
     height: 18px;
     border: 2px solid var(--divider);
-    border-top-color: var(--text-link);
+    border-top-color: var(--text);
     border-radius: var(--happy2-radius-pill);
 }
 

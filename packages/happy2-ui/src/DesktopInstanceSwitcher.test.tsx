@@ -70,12 +70,12 @@ it("keeps local and cloud instance identity distinct and keyboard selectable", a
         view
             .$('[data-kind="local"] [data-happy2-ui="instance-switcher-target-icon"]')
             .computedStyles(["color"]),
-    ).toEqual({ color: "rgb(43, 172, 204)" });
+    ).toEqual({ color: "rgb(0, 0, 0)" });
     expect(
         view
             .$('[data-kind="cloud"] [data-happy2-ui="instance-switcher-target-icon"]')
             .computedStyles(["color"]),
-    ).toEqual({ color: "rgb(0, 122, 255)" });
+    ).toEqual({ color: "rgb(0, 0, 0)" });
 
     buttons[1]!.click();
     expect(select).toHaveBeenCalledWith("cloud:happy");

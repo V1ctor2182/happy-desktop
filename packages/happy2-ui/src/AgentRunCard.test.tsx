@@ -357,7 +357,7 @@ it("holds the working and queued status treatments at 680 and 440", async () => 
         '[data-testid="run-working"] [data-happy2-ui="agent-run-card-progress-fill"]',
     );
     expect(fill.bounds()).toEqual({ x: 13, y: 13, width: 339, height: 3 });
-    expect(fill.computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
+    expect(fill.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
     const workingBadge = view.$('[data-testid="run-working"] [data-happy2-ui="badge"]');
     expect(workingBadge.element.textContent).toBe("RUNNING");
     expect(workingBadge.computedStyles(["background-color", "color"])).toEqual({

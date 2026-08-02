@@ -138,9 +138,9 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         "padding-right": "14px",
     });
 
-    // Spark icon: accent color, 16px glyph box that paints in the 47px lane.
+    // Spark icon: secondary ink, 16px glyph box that paints in the 47px lane.
     const spark = view.$(".happy2-agent-desk__spark");
-    expect(spark.computedStyle("color")).toBe("rgb(43, 172, 204)");
+    expect(spark.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(spark.bounds()).toMatchObject({ width: 16, height: 16 });
     expect((await spark.visibleMetrics()).pixelCount, "spark ink").toBeGreaterThan(0);
 
