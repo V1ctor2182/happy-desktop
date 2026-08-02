@@ -56,9 +56,9 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
     const menu = view.$('[data-testid="actions"]');
     expect(menu.element.getAttribute("role")).toBe("menu");
     expect(menu.element.hasAttribute("data-has-icons")).toBe(true);
-    /* default 220px card; height is the sum of 6+6 list padding, 5 rows @32,
-     * and the 1px separator with 5px margins, plus the 1px border top+bottom. */
-    expect(menu.bounds()).toEqual({ x: 24, y: 24, width: 220, height: 185 });
+    /* default 220px card; height is the sum of 4+4 list padding, 5 rows @28,
+     * and the 1px separator with 4px margins, plus the 1px border top+bottom. */
+    expect(menu.bounds()).toEqual({ x: 24, y: 24, width: 220, height: 159 });
     expect(
         menu.computedStyles([
             "background-color",
@@ -86,7 +86,7 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
     expect(list.computedStyles(["display", "flex-direction", "padding"])).toEqual({
         display: "flex",
         "flex-direction": "column",
-        padding: "6px",
+        padding: "4px",
     });
 
     /* ---- Row grid -------------------------------------------------------- */
@@ -97,7 +97,7 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
     for (const id of rowIds) {
         const row = item(id);
         expect(row.element.getAttribute("role"), `${id} role`).toBe("menuitem");
-        expect(row.bounds().height, `${id} height`).toBe(32);
+        expect(row.bounds().height, `${id} height`).toBe(28);
         expect(
             row.computedStyles([
                 "align-items",
@@ -111,32 +111,34 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
         ).toEqual({
             "align-items": "center",
             "background-color": "rgba(0, 0, 0, 0)",
-            "border-radius":
-                id === "copy" ? "3px 3px 6px 6px" : id === "delete" ? "6px 6px 3px 3px" : "6px",
+            /* One radius on every corner of every row: the 10px card radius
+             * minus the 5px border-box inset, so each row parallels the card
+             * and edge rows need no per-corner exception. */
+            "border-radius": "5px",
             cursor: "pointer",
             display: "flex",
-            padding: "0px 10px",
+            padding: "0px 8px",
         });
     }
 
-    /* Deterministic vertical rhythm: 32px rows, +11px across the separator. */
-    expect(item("copy").bounds().y).toBe(31);
-    expect(item("star").bounds().y).toBe(63);
-    expect(item("view").bounds().y).toBe(95);
-    expect(item("edit").bounds().y).toBe(138);
-    expect(item("delete").bounds().y).toBe(170);
-    /* Each item's border-box is inset by the 6px list padding on both sides. */
-    expect(item("copy").offsets()).toMatchObject({ top: 6, left: 6, right: 6 });
+    /* Deterministic vertical rhythm: 28px rows, +9px across the separator. */
+    expect(item("copy").bounds().y).toBe(29);
+    expect(item("star").bounds().y).toBe(57);
+    expect(item("view").bounds().y).toBe(85);
+    expect(item("edit").bounds().y).toBe(122);
+    expect(item("delete").bounds().y).toBe(150);
+    /* Each item's border-box is inset by the 4px list padding on both sides. */
+    expect(item("copy").offsets()).toMatchObject({ top: 4, left: 4, right: 4 });
 
-    /* Separator: 1px hairline spanning the padded inner width (220-2-12=206),
-     * 5px of breathing room above and below. */
+    /* Separator: 1px hairline spanning the padded inner width (220-2-8=210),
+     * 4px of breathing room above and below. */
     const separator = view.$('[data-testid="actions"] [data-happy2-ui="menu-separator"]');
     expect(separator.element.getAttribute("role")).toBe("separator");
-    expect(separator.bounds()).toMatchObject({ width: 206, height: 1, y: 132 });
+    expect(separator.bounds()).toMatchObject({ width: 210, height: 1, y: 117 });
     expect(separator.computedStyle("background-color")).toBe("rgb(234, 234, 234)");
     expect(separator.computedStyles(["margin-top", "margin-bottom"])).toEqual({
-        "margin-top": "5px",
-        "margin-bottom": "5px",
+        "margin-top": "4px",
+        "margin-bottom": "4px",
     });
 
     /* ---- Leading icon gutter --------------------------------------------- */
@@ -147,8 +149,8 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
         );
         expect(slot.bounds().width, `${id} slot`).toBe(16);
         expect(slot.bounds().height, `${id} slot`).toBe(16);
-        /* 16px glyph centered in the 32px row starts 8px down, 10px in. */
-        expect(slot.offsets(), `${id} slot offset`).toMatchObject({ top: 8, left: 10 });
+        /* 16px glyph centered in the 28px row starts 6px down, 8px in. */
+        expect(slot.offsets(), `${id} slot offset`).toMatchObject({ top: 6, left: 8 });
     }
     expect(
         view
@@ -176,8 +178,8 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
             lineHeight: 16,
         });
         /* Left-aligned label: horizontal position is deterministic, not a
-         * centroid target — 10px padding + 16px gutter + 8px gap = 34px. */
-        expect(el.offsets().left, `${id} label left`).toBe(34);
+         * centroid target — 8px padding + 16px gutter + 8px gap = 32px. */
+        expect(el.offsets().left, `${id} label left`).toBe(32);
         expect((await el.visibleMetrics()).pixelCount, `${id} label ink`).toBeGreaterThan(0);
         const baseline = metrics.baseline.fromSurfaceTop - item(id).bounds().y;
         sharedBaseline ??= baseline;
@@ -207,8 +209,8 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
             `[data-testid="actions"] [data-item-id="${id}"] [data-happy2-ui="key-cap"]`,
         );
         expect(cap.bounds().height, `${id} keycap height`).toBe(18);
-        /* Trailing edge sits on the row's 10px right padding. */
-        expect(cap.offsets().right, `${id} keycap right`).toBe(10);
+        /* Trailing edge sits on the row's 8px right padding. */
+        expect(cap.offsets().right, `${id} keycap right`).toBe(8);
         expect((await cap.visibleMetrics()).pixelCount, `${id} keycap ink`).toBeGreaterThan(0);
     }
     /* The no-shortcut row renders no KeyCap. */
@@ -313,17 +315,17 @@ it("holds Menu section labels, disabled items, and text-only alignment", async (
     expect(
         view.container.querySelector('[data-testid="text"] [data-happy2-ui="menu-item-icon"]'),
     ).toBeNull();
-    /* Labels sit flush on the 10px row padding when there is no gutter. */
+    /* Labels sit flush on the 8px row padding when there is no gutter. */
     const rename = view.$(
         '[data-testid="text"] [data-item-id="rename"] [data-happy2-ui="menu-item-label"]',
     );
-    expect(rename.offsets().left).toBe(10);
+    expect(rename.offsets().left).toBe(8);
     expect(rename.textMetrics().font).toMatchObject({ family: FIGTREE, size: 13, weight: "500" });
     /* Even without a gutter the trailing KeyCap still right-aligns. */
     const dupCap = view.$(
         '[data-testid="text"] [data-item-id="duplicate"] [data-happy2-ui="key-cap"]',
     );
-    expect(dupCap.offsets().right).toBe(10);
+    expect(dupCap.offsets().right).toBe(8);
     /* Danger still paints red in a text-only menu. */
     expect(view.$('[data-testid="text"] [data-item-id="leave"]').computedStyle("color")).toBe(
         "rgb(244, 67, 54)",

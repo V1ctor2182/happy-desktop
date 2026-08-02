@@ -1,13 +1,16 @@
 /*
  * C-027 Menu — dropdown / context-menu popover on the high surface.
  *
- * Contract: high card with a 1px modal hairline, 10px card
- * radius and a soft drop shadow, default 220px wide. Inside, a 6px-padded list
- * of 32px item rows (10px side padding, 6px control radius), optional 24px mono
- * section labels, and 1px separators with 5px vertical breathing room. Item
- * labels are 13px Figtree; a 16px leading icon gutter (+8px gap) is reserved
- * for every row when any item declares an icon, so labels line up. Shortcuts
- * reuse KeyCap; danger rows paint in --text-destructive.
+ * Contract: high card with a 1px modal hairline, 10px card radius and a close,
+ * subtle drop shadow, default 220px wide. Inside, a 4px-padded list of 28px
+ * item rows (8px side padding), optional 24px mono section labels, and 1px
+ * separators with 4px vertical breathing room. Every row corner is 5px — the
+ * card's 10px radius minus the uniform 5px border-box inset (1px border + 4px
+ * padding) — so each row is the true parallel curve of the card and no edge
+ * row needs a per-corner exception. Item labels are 13px Figtree; a 16px
+ * leading icon gutter (+8px gap) is reserved for every row when any item
+ * declares an icon, so labels line up. Shortcuts reuse KeyCap; danger rows
+ * paint in --text-destructive.
  */
 
 .happy2-menu,
@@ -21,7 +24,7 @@
     background: var(--surface-high);
     border: 1px solid var(--modal-border);
     border-radius: var(--happy2-radius-md);
-    box-shadow: 0 12px 32px var(--shadow-floating);
+    box-shadow: 0 4px 16px var(--shadow-subtle);
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
@@ -33,7 +36,7 @@
     display: flex;
     flex: none;
     flex-direction: column;
-    padding: 6px;
+    padding: 4px;
 }
 
 /* ---- Item rows -------------------------------------------------------- */
@@ -44,11 +47,14 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    height: 32px;
+    height: 28px;
     margin: 0;
-    padding: 0 10px;
+    padding: 0 8px;
     border: none;
-    border-radius: var(--happy2-radius-sm);
+    /* 10px card radius minus the 5px border-box inset (1px border + 4px list
+     * padding): the true parallel curve, worn on every corner of every row so
+     * edge rows and middle rows round identically. */
+    border-radius: 5px;
     background: transparent;
     color: var(--text);
     font-family: var(--happy2-font-ui);
@@ -59,18 +65,6 @@
     transition:
         background-color 120ms ease,
         color 120ms ease;
-}
-
-/* Edge rows occupy the card's corner field: 10px outer radius minus the 7px
- * border-box inset (1px border + 6px list padding) leaves a 3px inner arc. */
-.happy2-menu__item:first-child {
-    border-top-left-radius: 3px;
-    border-top-right-radius: 3px;
-}
-
-.happy2-menu__item:last-child {
-    border-bottom-right-radius: 3px;
-    border-bottom-left-radius: 3px;
 }
 
 .happy2-menu__item:hover {
@@ -147,7 +141,7 @@
     display: block;
     flex: none;
     height: 24px;
-    padding: 0 10px;
+    padding: 0 8px;
     overflow: hidden;
     color: var(--text-secondary);
     font-family: var(--happy2-font-mono);
@@ -165,6 +159,6 @@
 .happy2-menu__separator {
     flex: none;
     height: 1px;
-    margin: 5px 0;
+    margin: 4px 0;
     background: var(--divider);
 }

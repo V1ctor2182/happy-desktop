@@ -1,14 +1,17 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    useLayoutEffect,
     useRef,
     useState,
     type CSSProperties,
+    type MouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
 import { CountBadge } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
+import { Menu, type MenuItem } from "./Menu";
 import { Spinner } from "./Spinner";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
@@ -129,6 +132,9 @@ export type TabsProps = {
      * order.
      */
     onReorder?: (ids: readonly string[]) => void;
+    /** Returns the context-menu actions available for one tab. Empty means no menu. */
+    tabMenuItems?: (tab: TabItem) => MenuItem[];
+    onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
 };
 const iconSizes: Record<TabsSize, 14 | 16 | 18> = {
     small: 14,
@@ -204,7 +210,10 @@ function tabShift(drag: TabDrag, index: number): number {
  * and with `onReorder` the tabs can be dragged into a different order: the
  * dragged tab follows the pointer while its neighbours slide aside, and the new
  * order is reported once on release. Dragging a tab never selects it — a drag
- * rearranges the bar, and only a press that stays put chooses a tab.
+ * rearranges the bar, and only a press that stays put chooses a tab. With
+ * `tabMenuItems` a right click on a tab opens a context menu of the actions the
+ * owner returns for it — archive this one, the ones beside it, all of them —
+ * clamped to the viewport and dismissed by a click elsewhere or Escape.
  */
 export function Tabs(props: TabsProps) {
     const [local, rest] = partitionComponentProps(props, [
@@ -216,10 +225,64 @@ export function Tabs(props: TabsProps) {
         "onDoubleClick",
         "onReorder",
         "onSelect",
+        "onTabMenuSelect",
+        "tabMenuItems",
         "tabs",
         "size",
     ]);
     const size = () => local.size ?? "medium";
+    // The context menu is local UI state: it exists between the right click
+    // that opened it and the dismissal or selection that closes it, and never
+    // becomes product state.
+    const menuRoot = useRef<HTMLDivElement>(null);
+    const [tabMenu, setTabMenu] = useState<{
+        tab: TabItem;
+        items: MenuItem[];
+        x: number;
+        y: number;
+    }>();
+    // eslint-disable-next-line happy2-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
+    useLayoutEffect(() => {
+        if (!tabMenu) return;
+        const bounds = menuRoot.current?.getBoundingClientRect();
+        if (bounds) {
+            const x = Math.max(8, Math.min(tabMenu.x, window.innerWidth - bounds.width - 8));
+            const y = Math.max(8, Math.min(tabMenu.y, window.innerHeight - bounds.height - 8));
+            if (x !== tabMenu.x || y !== tabMenu.y) {
+                setTabMenu({ ...tabMenu, x, y });
+                return;
+            }
+        }
+        const close = (event: Event) => {
+            if (!menuRoot.current?.contains(event.target as Node)) setTabMenu(undefined);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setTabMenu(undefined);
+        };
+        const dismiss = () => setTabMenu(undefined);
+        document.addEventListener("pointerdown", close);
+        document.addEventListener("keydown", closeOnEscape);
+        window.addEventListener("resize", dismiss);
+        return () => {
+            document.removeEventListener("pointerdown", close);
+            document.removeEventListener("keydown", closeOnEscape);
+            window.removeEventListener("resize", dismiss);
+        };
+    }, [tabMenu]);
+    const openTabMenu = (tab: TabItem, event: MouseEvent<HTMLButtonElement>) => {
+        const items = local.tabMenuItems?.(tab) ?? [];
+        if (!items.some((entry) => entry.kind === "item")) {
+            setTabMenu(undefined);
+            return;
+        }
+        event.preventDefault();
+        setTabMenu({
+            items,
+            tab,
+            x: event.clientX,
+            y: event.clientY,
+        });
+    };
     // The drag is local UI state: it exists only between pointer-down and
     // pointer-up and never becomes the order, which the owner keeps owning. The
     // ref is what the handlers read, so a pointer event that arrives before
@@ -319,6 +382,7 @@ export function Tabs(props: TabsProps) {
                             }
                             local.onSelect(tab.id);
                         }}
+                        onContextMenu={(event) => openTabMenu(tab, event)}
                         onDoubleClick={() => local.onDoubleClick?.(tab.id)}
                         onPointerCancel={dragEnd}
                         onPointerDown={(event) => dragStart(event, index)}
@@ -382,6 +446,24 @@ export function Tabs(props: TabsProps) {
                     </button>
                 );
             })}
+            {tabMenu ? (
+                <div
+                    className="happy2-tabs__menu"
+                    data-happy2-ui="tabs-menu"
+                    ref={menuRoot}
+                    style={{ left: tabMenu.x, top: tabMenu.y }}
+                >
+                    <Menu
+                        items={tabMenu.items}
+                        onSelect={(actionId) => {
+                            const tab = tabMenu.tab;
+                            setTabMenu(undefined);
+                            local.onTabMenuSelect?.(tab, actionId);
+                        }}
+                        width={216}
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }

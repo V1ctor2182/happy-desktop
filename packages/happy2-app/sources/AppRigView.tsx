@@ -566,6 +566,49 @@ function tabsOrdered(items: readonly TabItem[], order: readonly string[]): TabIt
     return [...placed, ...remaining.values()];
 }
 
+/** The tab action ids the strip's context menu dispatches back to this surface. */
+const TAB_MENU_CLOSE = "close";
+const TAB_MENU_CLOSE_OTHERS = "close-others";
+const TAB_MENU_CLOSE_LEFT = "close-left";
+const TAB_MENU_CLOSE_RIGHT = "close-right";
+const TAB_MENU_CLOSE_ALL = "close-all";
+
+/**
+ * The context menu one tab offers: the usual sweeps — this tab, the others,
+ * everything to one side, the whole strip. Closing a session tab archives the
+ * session, so a session tab's menu says "archive", while a file tab, whose
+ * closing throws nothing away, says "close". A sweep still applies each tab's
+ * own close semantics whatever the word on the item that started it. A sweep
+ * with nothing to act on stays visible but disabled, so the menu keeps one
+ * shape wherever it opens.
+ */
+function tabStripMenu(verb: "Archive" | "Close", left: number, right: number): MenuItem[] {
+    return [
+        { kind: "item", id: TAB_MENU_CLOSE, label: `${verb} tab` },
+        { kind: "separator" },
+        {
+            kind: "item",
+            id: TAB_MENU_CLOSE_OTHERS,
+            label: `${verb} other tabs`,
+            disabled: left + right === 0,
+        },
+        {
+            kind: "item",
+            id: TAB_MENU_CLOSE_LEFT,
+            label: `${verb} tabs to the left`,
+            disabled: left === 0,
+        },
+        {
+            kind: "item",
+            id: TAB_MENU_CLOSE_RIGHT,
+            label: `${verb} tabs to the right`,
+            disabled: right === 0,
+        },
+        { kind: "separator" },
+        { kind: "item", id: TAB_MENU_CLOSE_ALL, label: `${verb} all tabs` },
+    ];
+}
+
 function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     // A tab of a picture says picture. Wearing the document glyph over every
     // open file made the strip a row of identical marks with only the name to
@@ -1476,6 +1519,36 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
     ];
+    // Closing a tab archives the session behind it, while a file tab simply
+    // closes. The close control and every context-menu sweep funnel through
+    // this one routine, so a sweep behaves exactly like closing each tab by
+    // hand. Navigation happens once, up front: when the addressed session is
+    // among the closed, the surface addresses what will remain — preferring
+    // the tab the sweep was asked to keep — before anything leaves the list,
+    // so it never sits on a session that has just gone.
+    const groupTabsClose = (tabIds: readonly string[], keepId?: string) => {
+        if (!openGroup) return;
+        const targets = new Set(tabIds);
+        const rest = openGroup.conversations.filter((summary) => !targets.has(summary.id));
+        if (props.chatId && targets.has(props.chatId)) {
+            const next =
+                keepId !== undefined && rest.some((summary) => summary.id === keepId)
+                    ? keepId
+                    : rest[0]?.id;
+            props.onChatSelect(rest.length > 0 ? openGroup.id : undefined, next, true);
+        }
+        for (const tabId of tabIds) {
+            if (groupFileTabs.some((tab) => tab.id === tabId)) {
+                props.workspace.fileClose(tabId);
+                continue;
+            }
+            void props.workspace.conversationArchive(tabId as RigSessionId).catch(() => undefined);
+        }
+    };
+    // The strip in the order it is drawn, without the detached subagent: it is
+    // addressed rather than listed, so a sweep over "the tabs beside this one"
+    // never reaches it.
+    const sweepableTabs = groupTabs.filter((entry) => entry.id !== detachedConversationId);
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const desktop = props.platform === "desktop";
 
@@ -1758,10 +1831,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             activeId={activeFile?.id ?? props.chatId ?? ""}
                             closeLabel="Close tab"
                             onClose={(tabId) => {
-                                if (groupFileTabs.some((tab) => tab.id === tabId)) {
-                                    props.workspace.fileClose(tabId);
-                                    return;
-                                }
+                                // A detached subagent's tab is an address, not a
+                                // member of the list: closing it only steps back to
+                                // the sessions that are listed.
                                 if (tabId === detachedConversationId) {
                                     props.onChatSelect(
                                         openGroup.conversations.length > 0
@@ -1772,23 +1844,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     );
                                     return;
                                 }
-                                // Closing the addressed session addresses what is left
-                                // first, so the surface never sits on a session that has
-                                // just left the list. The address it replaces is gone,
-                                // so it does not belong in history either.
-                                if (tabId === props.chatId) {
-                                    const rest = openGroup.conversations.filter(
-                                        (summary) => summary.id !== tabId,
-                                    );
-                                    props.onChatSelect(
-                                        rest.length > 0 ? openGroup.id : undefined,
-                                        rest[0]?.id,
-                                        true,
-                                    );
-                                }
-                                void props.workspace
-                                    .conversationArchive(tabId as RigSessionId)
-                                    .catch(() => undefined);
+                                groupTabsClose([tabId]);
                             }}
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
@@ -1815,6 +1871,37 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 }
                                 props.workspace.fileSelect(undefined);
                                 props.onChatSelect(openGroup.id, tabId);
+                            }}
+                            tabMenuItems={(tab) => {
+                                const index = sweepableTabs.findIndex(
+                                    (entry) => entry.id === tab.id,
+                                );
+                                // The detached subagent's tab is not in the sweepable
+                                // order, so it offers no menu — its runner owns it.
+                                if (index < 0) return [];
+                                const verb = groupFileTabs.some((entry) => entry.id === tab.id)
+                                    ? "Close"
+                                    : "Archive";
+                                return tabStripMenu(verb, index, sweepableTabs.length - index - 1);
+                            }}
+                            onTabMenuSelect={(tab, actionId) => {
+                                const ids = sweepableTabs.map((entry) => entry.id);
+                                const index = ids.indexOf(tab.id);
+                                if (index < 0) return;
+                                if (actionId === TAB_MENU_CLOSE) {
+                                    groupTabsClose([tab.id]);
+                                } else if (actionId === TAB_MENU_CLOSE_OTHERS) {
+                                    groupTabsClose(
+                                        ids.filter((id) => id !== tab.id),
+                                        tab.id,
+                                    );
+                                } else if (actionId === TAB_MENU_CLOSE_LEFT) {
+                                    groupTabsClose(ids.slice(0, index), tab.id);
+                                } else if (actionId === TAB_MENU_CLOSE_RIGHT) {
+                                    groupTabsClose(ids.slice(index + 1), tab.id);
+                                } else if (actionId === TAB_MENU_CLOSE_ALL) {
+                                    groupTabsClose(ids);
+                                }
                             }}
                             tabs={groupTabs}
                         >

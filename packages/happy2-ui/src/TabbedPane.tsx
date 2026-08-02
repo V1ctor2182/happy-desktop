@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
+import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
 
 export type TabbedPaneProps = {
@@ -19,6 +20,9 @@ export type TabbedPaneProps = {
     closeLabel?: string;
     /** Commits a drag with the tab ids in their new order; supplying it makes tabs draggable. */
     onReorder?: (ids: readonly string[]) => void;
+    /** Returns the context-menu actions available for one tab. Empty means no menu. */
+    tabMenuItems?: (tab: TabItem) => MenuItem[];
+    onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
     size?: TabsSize;
     /**
      * Controls that ride directly after the last tab, such as an "add tab"
@@ -55,8 +59,10 @@ export function TabbedPane(props: TabbedPaneProps) {
         "onDoubleClick",
         "onReorder",
         "onSelect",
+        "onTabMenuSelect",
         "size",
         "style",
+        "tabMenuItems",
         "tabs",
     ]);
     return (
@@ -81,7 +87,9 @@ export function TabbedPane(props: TabbedPaneProps) {
                             onDoubleClick={local.onDoubleClick}
                             onReorder={local.onReorder}
                             onSelect={local.onSelect}
+                            onTabMenuSelect={local.onTabMenuSelect}
                             size={local.size ?? "small"}
+                            tabMenuItems={local.tabMenuItems}
                             tabs={local.tabs}
                         />
                         {local.actions ? (

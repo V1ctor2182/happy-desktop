@@ -46,12 +46,12 @@ export function MenuPage() {
     return (
         <ComponentPage
             number="C-027"
-            summary="Dropdown / context-menu popover — 220px raised card, 32px item rows, icon gutter, KeyCap shortcuts, mono section labels, danger items, and 1px separators."
+            summary="Dropdown / context-menu popover — 220px raised card, 28px item rows, icon gutter, KeyCap shortcuts, mono section labels, danger items, and 1px separators."
             title="Menu"
         >
             <div className="specimen-grid">
                 <Specimen
-                    detail="220px card · 32px rows · icon gutter · ⌘ shortcuts · danger"
+                    detail="220px card · 28px rows · icon gutter · ⌘ shortcuts · danger"
                     label="Context menu"
                     number="M-01"
                     stage="app"
@@ -78,7 +78,7 @@ export function MenuPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="no icons — labels sit on the 10px edge, no gutter reserved"
+                    detail="no icons — labels sit on the 8px edge, no gutter reserved"
                     label="Text only"
                     number="M-03"
                     stage="app"

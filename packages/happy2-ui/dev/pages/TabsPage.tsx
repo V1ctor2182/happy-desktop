@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { type MenuItem } from "../../src/Menu";
 import { type TabItem, Tabs, type TabsSize } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 const inboxTabs: TabItem[] = [
@@ -26,11 +27,22 @@ const adminTabs: TabItem[] = [
     { id: "audit", label: "Audit log" },
     { id: "backups", label: "Backups" },
 ];
+/** The sweeps a document strip typically offers, for the context-menu fixture. */
+const sweepMenu = (tab: TabItem): MenuItem[] => [
+    { kind: "item", id: "close", label: "Close tab" },
+    { kind: "separator" },
+    { kind: "item", id: "close-others", label: "Close other tabs" },
+    { kind: "item", id: "close-left", label: "Close tabs to the left", disabled: tab.id === "all" },
+    { kind: "item", id: "close-right", label: "Close tabs to the right" },
+    { kind: "separator" },
+    { kind: "item", id: "close-all", label: "Close all tabs" },
+];
 function Bar(props: {
     active: string;
     onClose?: (id: string) => void;
     onReorder?: (ids: readonly string[]) => void;
     size?: TabsSize;
+    tabMenuItems?: (tab: TabItem) => MenuItem[];
     tabs: TabItem[];
     width?: number;
 }) {
@@ -41,7 +53,9 @@ function Bar(props: {
                 onClose={props.onClose}
                 onReorder={props.onReorder}
                 onSelect={() => {}}
+                onTabMenuSelect={() => {}}
                 size={props.size}
+                tabMenuItems={props.tabMenuItems}
                 tabs={props.tabs}
             />
         </div>
@@ -112,6 +126,21 @@ export function TabsPage() {
                 >
                     <Stack rule="threshold 4 · shift = dragged width · ease 140ms">
                         <Bar active="unread" onReorder={() => {}} tabs={inboxTabs} />
+                    </Stack>
+                </Specimen>
+                <Specimen
+                    detail="right-click a tab for the owner's sweeps — close it, its neighbours, or the strip"
+                    label="Context menu"
+                    number="T-11"
+                    stage="app"
+                >
+                    <Stack rule="Menu width 216 · fixed · clamped to viewport">
+                        <Bar
+                            active="unread"
+                            onClose={() => {}}
+                            tabMenuItems={sweepMenu}
+                            tabs={inboxTabs}
+                        />
                     </Stack>
                 </Specimen>
             </div>
