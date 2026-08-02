@@ -409,6 +409,9 @@ class FakeRigTransportModel implements FakeRigTransport {
                 return this.securityPolicy;
             }),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
+        slotsRead: () => Promise.resolve([]),
+        webappsRead: () => Promise.resolve([]),
+        webappPreviewOpen: (name) => Promise.resolve(`https://webapp.invalid/${name}`),
         workspaceFilesRead: () =>
             this.perform("workspaceFilesRead", {}, () => ({ paths: [], truncated: false })),
         workspaceFileRead: (_groupId, path) =>

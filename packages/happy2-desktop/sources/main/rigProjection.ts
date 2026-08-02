@@ -45,6 +45,8 @@ import type {
     RigSessionId,
     RigSessionSummary,
     RigSessionUsage,
+    RigSlotAction,
+    RigSlotEntry,
     RigShellCommandResult,
     RigUsageGroup,
     RigUsageQuotaWindow,
@@ -58,7 +60,9 @@ import type {
     RigUserInputRequest,
     RigWorktree,
     RigWorktreeId,
+    RigWebapp,
 } from "happy2-state";
+import type { SlotAction, SlotEntry, Webapp } from "./rigDaemonTypes";
 
 /**
  * Pure projections from Rig's raw `@slopus/rig` protocol types into the closed,
@@ -498,6 +502,10 @@ export function rigGlobalEventProject(
     const event = entry.event;
     if ("live" in entry) {
         const live = entry.event as import("./rigDaemonTypes").GlobalLiveEvent;
+        if (live.type === "slots_changed") return { type: "slots_changed" };
+        if (live.type === "webapps_changed") return { type: "webapps_changed" };
+        if (live.type !== "project_git_changed" && live.type !== "workspace_git_changed")
+            return undefined;
         return {
             type: "git_changed",
             projectId: live.projectId as RigProjectId,
@@ -550,6 +558,75 @@ export function rigGlobalEventProject(
         return { cursor: entry.cursor, type: "catalog_changed" };
     }
     return undefined;
+}
+
+/** Projects one durable Rig slot entry into the framework-neutral product shape. */
+export function rigSlotEntryProject(entry: SlotEntry): RigSlotEntry {
+    return {
+        id: entry.id,
+        slot: entry.slot,
+        scope: entry.scope,
+        ...(entry.projectId ? { projectId: entry.projectId as RigProjectId } : {}),
+        ...(entry.workspaceId ? { workspaceId: entry.workspaceId as RigWorktreeId } : {}),
+        ...(entry.sessionId ? { sessionId: entry.sessionId as RigSessionId } : {}),
+        content:
+            entry.content.type === "text"
+                ? { type: "text", markdown: entry.content.markdown }
+                : {
+                      type: "button",
+                      label: entry.content.label,
+                      action: rigSlotActionProject(entry.content.action),
+                  },
+        authorSessionId: entry.authorSessionId,
+        description: entry.description,
+        purpose: entry.purpose,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+    };
+}
+
+function rigSlotActionProject(action: SlotAction): RigSlotAction {
+    switch (action.type) {
+        case "send-current-chat":
+            return { type: action.type, message: action.message };
+        case "open-webapp":
+            return { type: action.type, webapp: action.webapp };
+        case "send-chat":
+        case "draft-chat":
+            return {
+                type: action.type,
+                sessionId: action.sessionId as RigSessionId,
+                message: action.message,
+            };
+        case "new-chat":
+            return {
+                type: action.type,
+                ...(action.projectId ? { projectId: action.projectId as RigProjectId } : {}),
+                ...(action.workspaceId ? { workspaceId: action.workspaceId as RigWorktreeId } : {}),
+                ...(action.model ? { model: action.model } : {}),
+                ...(action.effort ? { effort: action.effort as RigThinkingLevel } : {}),
+                ...(action.prompt ? { prompt: action.prompt } : {}),
+            };
+    }
+}
+
+/** Projects one versioned webapp and its revision history into product state. */
+export function rigWebappProject(webapp: Webapp): RigWebapp {
+    return {
+        name: webapp.name,
+        description: webapp.description,
+        purpose: webapp.purpose,
+        authorSessionId: webapp.authorSessionId,
+        ...(webapp.sourceDescription ? { sourceDescription: webapp.sourceDescription } : {}),
+        currentVersion: webapp.currentVersion,
+        versions: webapp.versions.map((version) => ({
+            version: version.version,
+            changeDescription: version.changeDescription,
+            createdAt: version.createdAt,
+        })),
+        createdAt: webapp.createdAt,
+        updatedAt: webapp.updatedAt,
+    };
 }
 
 // ---------------------------------------------------------------------------

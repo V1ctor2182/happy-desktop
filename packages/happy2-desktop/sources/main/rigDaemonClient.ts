@@ -14,6 +14,8 @@ import type {
     GlobalInstructionsResponse,
     GlobalSecurityPolicyResponse,
     HealthResponse,
+    ListSlotEntriesResponse,
+    ListWebappsResponse,
     ModelCatalog,
     Project,
     ProjectAssetResponse,
@@ -24,6 +26,7 @@ import type {
     RunShellCommandResponse,
     SessionEvent,
     SessionSummary,
+    SlotName,
     SubagentSummary,
 } from "./rigDaemonTypes";
 
@@ -207,6 +210,39 @@ export class RigDaemonClient {
      */
     listCatalog(): Promise<GlobalCatalogResponse> {
         return this.#requestJson("GET", "/catalog");
+    }
+
+    /** Reads the entries Rig resolves for one currently viewed product context. */
+    listSlots(filters: {
+        readonly slot?: SlotName;
+        readonly projectId?: string;
+        readonly workspaceId?: string;
+        readonly sessionId?: string;
+    }): Promise<ListSlotEntriesResponse> {
+        const query = new URLSearchParams();
+        if (filters.slot) query.set("slot", filters.slot);
+        if (filters.projectId) query.set("projectId", filters.projectId);
+        if (filters.workspaceId) query.set("workspaceId", filters.workspaceId);
+        if (filters.sessionId) query.set("sessionId", filters.sessionId);
+        const suffix = query.size > 0 ? `?${query.toString()}` : "";
+        return this.#requestJson("GET", `/slots${suffix}`);
+    }
+
+    /** Reads Rig's global catalog of imported, versioned webapps. */
+    listWebapps(): Promise<ListWebappsResponse> {
+        return this.#requestJson("GET", "/webapps");
+    }
+
+    /** Reads one static file from a webapp's current version. */
+    getWebappFile(name: string, filePath: string): Promise<ProjectAssetResponse> {
+        const encodedPath = filePath
+            .split("/")
+            .filter(Boolean)
+            .map((segment) => encodeURIComponent(segment))
+            .join("/");
+        return this.#requestBuffer(
+            `/webapps/${encodeURIComponent(name)}/files/${encodedPath || "index.html"}`,
+        );
     }
 
     gitWatch(

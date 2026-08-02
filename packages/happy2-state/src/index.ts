@@ -1,4 +1,19 @@
 export {
+    rigSlotsStoreCreate,
+    rigSlotsStoreNoop,
+    type RigSlotAction,
+    type RigSlotContent,
+    type RigSlotEntry,
+    type RigSlotName,
+    type RigSlotScope,
+    type RigSlotsContext,
+    type RigSlotsSnapshot,
+    type RigSlotsStore,
+    type RigSlotsStoreOptions,
+    type RigWebapp,
+    type RigWebappVersion,
+} from "./rig/rigSlotsStore.js";
+export {
     TransportError,
     type ClientTransport,
     type HttpRequest,
@@ -403,6 +418,7 @@ export {
     type RigRenameSnapshot,
     type RigConversationSnapshot,
     type RigWorkspaceDeps,
+    type RigWorkspaceNewChatInput,
     type RigWorkspaceOutput,
     type RigWorkspaceSnapshot,
     type RigWorkspaceStore,

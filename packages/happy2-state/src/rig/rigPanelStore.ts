@@ -8,7 +8,7 @@ declare const rigPanelTabIdBrand: unique symbol;
 export type RigPanelTabId = string & { readonly [rigPanelTabIdBrand]: true };
 
 /** What a panel tab holds beside the conversation. */
-export type RigPanelTabKind = "terminal" | "browser";
+export type RigPanelTabKind = "terminal" | "browser" | "webapp";
 
 interface RigPanelTabSnapshotBase {
     readonly id: RigPanelTabId;
@@ -23,6 +23,11 @@ export type RigPanelTabSnapshot =
     | (RigPanelTabSnapshotBase & {
           readonly kind: "browser";
           /** Last committed main-frame location, restored if the surface remounts. */
+          readonly url: string;
+      })
+    | (RigPanelTabSnapshotBase & {
+          readonly kind: "webapp";
+          /** Isolated preview origin of the webapp's current version. */
           readonly url: string;
       });
 
@@ -101,6 +106,8 @@ export interface RigPanelStore {
     terminalAdd(): void;
     /** Adds a browser tab to the open group, optionally at one safe web URL, and selects it. */
     browserAdd(url?: string): void;
+    /** Opens a named Rig webapp in the open group's isolated preview surface. */
+    webappOpen(name: string, url: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
     tabSelect(tabId: RigPanelTabId): void;
@@ -207,7 +214,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open,
             tabs: visible.map(
                 (tab): RigPanelTabSnapshot =>
-                    tab.kind === "browser"
+                    tab.kind === "browser" || tab.kind === "webapp"
                         ? {
                               id: tab.id,
                               kind: tab.kind,
@@ -236,8 +243,8 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                     before.id === tab.id &&
                     before.kind === tab.kind &&
                     before.label === tab.label &&
-                    (before.kind !== "browser" ||
-                        (tab.kind === "browser" && before.url === tab.url))
+                    (before.kind === "terminal" ||
+                        (tab.kind !== "terminal" && before.url === tab.url))
                 );
             })
         )
@@ -255,8 +262,8 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                     before.id === tab.id &&
                     before.kind === tab.kind &&
                     before.label === tab.label &&
-                    (before.kind !== "browser" ||
-                        (tab.kind === "browser" && before.url === tab.url))
+                    (before.kind === "terminal" ||
+                        (tab.kind !== "terminal" && before.url === tab.url))
                     ? before
                     : tab;
             }),
@@ -311,6 +318,23 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             groupId: group,
             url,
         });
+        activeByGroup.set(group, id);
+        activeViewId = id;
+    };
+
+    const webappTabOpen = (group: RigGroupId, name: string, url: string): void => {
+        const existing = tabs.find(
+            (tab) => tab.groupId === group && tab.kind === "webapp" && tab.label === name,
+        );
+        if (existing) {
+            existing.url = url;
+            activeByGroup.set(group, existing.id);
+            activeViewId = existing.id;
+            return;
+        }
+        const id = `tab_${nextTabNumber}` as RigPanelTabId;
+        nextTabNumber += 1;
+        tabs.push({ id, kind: "webapp", label: name, groupId: group, url });
         activeByGroup.set(group, id);
         activeViewId = id;
     };
@@ -420,6 +444,13 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         browserAdd(url) {
             if (disposed || !groupId) return;
             browserTabAdd(groupId, url);
+            open = true;
+            remember();
+            recompute();
+        },
+        webappOpen(name, url) {
+            if (disposed || !groupId) return;
+            webappTabOpen(groupId, name, url);
             open = true;
             remember();
             recompute();

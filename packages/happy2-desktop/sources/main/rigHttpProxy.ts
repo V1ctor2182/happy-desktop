@@ -61,7 +61,7 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * answers, so any other upgrade attempt is refused rather than left hanging.
  */
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
-    const htmlPreviewUrl = options.htmlPreview?.register(options.client);
+    const preview = options.htmlPreview?.register(options.client);
     const capability = randomBytes(32).toString("base64url");
     const capabilityPrefix = `/${capability}`;
     let expectedHost: string | undefined;
@@ -137,7 +137,9 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             request,
             response,
             onConnectionError: options.onConnectionError,
-            ...(htmlPreviewUrl ? { htmlPreviewUrl } : {}),
+            ...(preview
+                ? { htmlPreviewUrl: preview.workspace, webappPreviewUrl: preview.webapp }
+                : {}),
         }).then(
             (handled) => {
                 if (!handled && !response.headersSent) {

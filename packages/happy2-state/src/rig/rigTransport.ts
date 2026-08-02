@@ -256,7 +256,9 @@ export type RigGlobalEvent =
           readonly type: "git_changed";
           readonly projectId: RigProjectId;
           readonly worktreeId?: RigWorktreeId;
-      };
+      }
+    | { readonly type: "slots_changed" }
+    | { readonly type: "webapps_changed" };
 
 export interface RigEventObserver<Event> {
     event(value: Event): void;
@@ -354,6 +356,17 @@ export interface RigTransport {
      * decides what a page may reach; this only asks for the address.
      */
     htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
+
+    /** Reads the slot entries Rig resolves against one addressed route context. */
+    slotsRead(
+        context: import("./rigSlotsStore.js").RigSlotsContext,
+    ): Promise<readonly import("./rigSlotsStore.js").RigSlotEntry[]>;
+
+    /** Reads every imported webapp and its version history from this Rig. */
+    webappsRead(): Promise<readonly import("./rigSlotsStore.js").RigWebapp[]>;
+
+    /** Resolves one webapp's current version into the host's isolated preview site. */
+    webappPreviewOpen(name: string): Promise<string>;
 
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(

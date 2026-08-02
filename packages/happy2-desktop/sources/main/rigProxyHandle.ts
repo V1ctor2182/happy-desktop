@@ -28,8 +28,10 @@ import {
     rigSessionSummaryProject,
     rigSessionUsageProject,
     rigShellResultProject,
+    rigSlotEntryProject,
     rigSubagentProject,
     rigTerminalProject,
+    rigWebappProject,
     rigWorktreeProject,
 } from "./rigProjection";
 
@@ -668,6 +670,9 @@ export type RigProxyClient = Pick<
     | "setGlobalSecurityPolicy"
     | "listSessions"
     | "listCatalog"
+    | "listSlots"
+    | "listWebapps"
+    | "getWebappFile"
     | "gitWatch"
     | "getProject"
     | "getProjectAsset"
@@ -734,6 +739,8 @@ export interface RigProxyHandleOptions {
      * route then reports that this Rig cannot render a document.
      */
     readonly htmlPreviewUrl?: (groupId: string, filePath: string) => string;
+    /** Where one named Rig webapp is published inside the isolated preview profile. */
+    readonly webappPreviewUrl?: (name: string) => string;
 }
 
 /**
@@ -773,6 +780,46 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 writeJson(response, 200, rigCatalogProject((await client.models()).catalog));
                 return true;
             }
+            if (path === "/slots") {
+                const slot = query.get("slot");
+                const entries = (
+                    await client.listSlots({
+                        ...(slot === "status-line" ||
+                        slot === "above-composer" ||
+                        slot === "title" ||
+                        slot === "sidebar"
+                            ? { slot }
+                            : {}),
+                        ...(query.get("projectId") ? { projectId: query.get("projectId")! } : {}),
+                        ...(query.get("workspaceId")
+                            ? { workspaceId: query.get("workspaceId")! }
+                            : {}),
+                        ...(query.get("sessionId") ? { sessionId: query.get("sessionId")! } : {}),
+                    })
+                ).entries.map(rigSlotEntryProject);
+                writeJson(response, 200, entries);
+                return true;
+            }
+            if (path === "/webapps") {
+                writeJson(
+                    response,
+                    200,
+                    (await client.listWebapps()).webapps.map(rigWebappProject),
+                );
+                return true;
+            }
+            if (path === "/webapp-preview") {
+                if (!options.webappPreviewUrl) {
+                    writeJson(response, 501, {
+                        error: "This Rig cannot show an imported webapp.",
+                    });
+                    return true;
+                }
+                writeJson(response, 200, {
+                    url: options.webappPreviewUrl(query.get("name") ?? ""),
+                });
+                return true;
+            }
             if (path === "/instructions") {
                 writeJson(response, 200, await client.globalInstructions());
                 return true;
@@ -807,7 +854,8 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 for (const event of watched.snapshots) {
                     if (event.type === "project_git_changed")
                         projectChanges.set(event.projectId, event.data.git.changedFiles);
-                    else workspaceChanges.set(event.workspaceId, event.data.git.changedFiles);
+                    else if (event.type === "workspace_git_changed")
+                        workspaceChanges.set(event.workspaceId, event.data.git.changedFiles);
                 }
                 const [projectStats, workspaceStats] = await Promise.all([
                     Promise.all(projects.map((project) => gitLineStatsRead(project.path))),

@@ -14,7 +14,10 @@ export interface HtmlPreviewProxyHandle {
      * that site is read through, which is what makes a preview of a file on a
      * remote machine work like one on this machine.
      */
-    register(client: RigProxyClient): (groupId: string, filePath: string) => string;
+    register(client: RigProxyClient): {
+        readonly workspace: (groupId: string, filePath: string) => string;
+        readonly webapp: (name: string) => string;
+    };
     close(): void;
 }
 
@@ -81,12 +84,19 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  */
 const PREVIEW_SITE_LIMIT = 32;
 
-/** One folder of one checkout, as the site a document in it is served from. */
-interface PreviewSite {
-    readonly client: RigProxyClient;
-    readonly groupId: string;
-    readonly directory: string;
-}
+/** One isolated preview origin, backed by a workspace folder or a Rig webapp. */
+type PreviewSite =
+    | {
+          readonly kind: "workspace";
+          readonly client: RigProxyClient;
+          readonly groupId: string;
+          readonly directory: string;
+      }
+    | {
+          readonly kind: "webapp";
+          readonly client: RigProxyClient;
+          readonly name: string;
+      };
 
 /**
  * Serves a workspace document as a site of its own.
@@ -123,11 +133,8 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
     const siteSecret = randomBytes(32);
     const sites = new Map<string, PreviewSite>();
 
-    const siteName = (groupId: string, directory: string): string =>
-        createHmac("sha256", siteSecret)
-            .update(`${groupId}\u0000${directory}`)
-            .digest("hex")
-            .slice(0, 32);
+    const siteName = (...parts: readonly string[]): string =>
+        createHmac("sha256", siteSecret).update(parts.join("\u0000")).digest("hex").slice(0, 32);
 
     const server = createServer((request, response) => {
         if (request.headers["proxy-authorization"] !== authorization) {
@@ -170,22 +177,47 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                 port: address.port,
                 username,
                 password,
-                register: (client) => (groupId, filePath) => {
-                    const site = previewSite(filePath);
-                    const name = siteName(groupId, site.directory);
-                    // Re-inserted so insertion order stays use order and the
-                    // oldest site nobody is looking at is the one that goes.
-                    sites.delete(name);
-                    sites.set(name, { client, groupId, directory: site.directory });
-                    for (const stale of sites.keys()) {
-                        if (sites.size <= PREVIEW_SITE_LIMIT) break;
-                        sites.delete(stale);
-                    }
-                    const page = site.name
-                        .split("/")
-                        .map((segment) => encodeURIComponent(segment))
-                        .join("/");
-                    return `http://${name}.localhost/${page}`;
+                register: (client) => {
+                    // The registration separates identically named projects and
+                    // webapps reached through different local/remote Rig clients.
+                    const registration = randomBytes(16).toString("hex");
+                    const remember = (name: string, site: PreviewSite): void => {
+                        // Re-inserted so insertion order stays use order and the
+                        // oldest site nobody is looking at is the one that goes.
+                        sites.delete(name);
+                        sites.set(name, site);
+                        for (const stale of sites.keys()) {
+                            if (sites.size <= PREVIEW_SITE_LIMIT) break;
+                            sites.delete(stale);
+                        }
+                    };
+                    return {
+                        workspace: (groupId, filePath) => {
+                            const site = previewSite(filePath);
+                            const name = siteName(
+                                registration,
+                                "workspace",
+                                groupId,
+                                site.directory,
+                            );
+                            remember(name, {
+                                kind: "workspace",
+                                client,
+                                groupId,
+                                directory: site.directory,
+                            });
+                            const page = site.name
+                                .split("/")
+                                .map((segment) => encodeURIComponent(segment))
+                                .join("/");
+                            return `http://${name}.localhost/${page}`;
+                        },
+                        webapp: (webappName) => {
+                            const name = siteName(registration, "webapp", webappName);
+                            remember(name, { kind: "webapp", client, name: webappName });
+                            return `http://${name}.localhost/`;
+                        },
+                    };
                 },
                 close: () => {
                     sites.clear();
@@ -251,11 +283,15 @@ async function serve(
         refuse(response, 404, "Not found.");
         return;
     }
-    const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
     let bytes: Buffer;
     try {
-        const file = await workspaceFileLoad(site.client, site.groupId, filePath);
-        bytes = Buffer.from(file.content, "base64");
+        if (site.kind === "webapp") {
+            bytes = (await site.client.getWebappFile(site.name, within)).bytes;
+        } else {
+            const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
+            const file = await workspaceFileLoad(site.client, site.groupId, filePath);
+            bytes = Buffer.from(file.content, "base64");
+        }
     } catch {
         // A file the checkout no longer holds and a file this page may not
         // read are the same answer: it is not there.

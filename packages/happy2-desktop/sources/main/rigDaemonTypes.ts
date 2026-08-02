@@ -142,6 +142,69 @@ export interface GitChangeSnapshot {
     readonly changedFiles: number;
 }
 
+export type SlotName = "status-line" | "above-composer" | "title" | "sidebar";
+
+export type SlotScope = "everywhere" | "project" | "workspace" | "session";
+
+export type SlotAction =
+    | { readonly type: "send-current-chat"; readonly message: string }
+    | { readonly type: "open-webapp"; readonly webapp: string }
+    | { readonly type: "send-chat"; readonly sessionId: string; readonly message: string }
+    | { readonly type: "draft-chat"; readonly sessionId: string; readonly message: string }
+    | {
+          readonly type: "new-chat";
+          readonly projectId?: string;
+          readonly workspaceId?: string;
+          readonly model?: string;
+          readonly effort?: string;
+          readonly prompt?: string;
+      };
+
+export type SlotContent =
+    | { readonly type: "text"; readonly markdown: string }
+    | { readonly type: "button"; readonly label: string; readonly action: SlotAction };
+
+export interface SlotEntry {
+    readonly id: string;
+    readonly slot: SlotName;
+    readonly scope: SlotScope;
+    readonly projectId?: string;
+    readonly workspaceId?: string;
+    readonly sessionId?: string;
+    readonly content: SlotContent;
+    readonly authorSessionId: string;
+    readonly description: string;
+    readonly purpose: string;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+}
+
+export interface WebappVersion {
+    readonly version: number;
+    readonly changeDescription: string;
+    readonly createdAt: number;
+}
+
+export interface Webapp {
+    readonly name: string;
+    readonly description: string;
+    readonly purpose: string;
+    readonly authorSessionId: string;
+    readonly sourceDescription?: string;
+    readonly currentVersion: number;
+    readonly versions: readonly WebappVersion[];
+    readonly createdAt: number;
+    readonly updatedAt: number;
+}
+
+export interface ListSlotEntriesResponse {
+    readonly entries: readonly SlotEntry[];
+}
+
+export interface ListWebappsResponse {
+    readonly webapps: readonly Webapp[];
+}
+
 export type GlobalLiveEvent =
     | {
           readonly type: "project_git_changed";
@@ -153,6 +216,18 @@ export type GlobalLiveEvent =
           readonly projectId: string;
           readonly workspaceId: string;
           readonly data: { readonly git: GitChangeSnapshot };
+      }
+    | {
+          readonly type: "slots_changed";
+          readonly data: { readonly entries: readonly SlotEntry[] };
+      }
+    | {
+          readonly type: "webapps_changed";
+          readonly data: { readonly webapps: readonly Webapp[] };
+      }
+    | {
+          readonly type: "plugins_changed" | "presence_changed" | "remote_terminals_changed";
+          readonly data: unknown;
       };
 
 export type GlobalEventDelivery =

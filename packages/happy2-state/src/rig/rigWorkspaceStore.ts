@@ -412,6 +412,14 @@ export interface RigWorkspaceDeps {
     readonly output?: (event: RigWorkspaceOutput) => void;
 }
 
+export interface RigWorkspaceNewChatInput {
+    readonly projectId?: RigProjectId;
+    readonly workspaceId?: RigWorktreeId;
+    readonly model?: string;
+    readonly effort?: RigThinkingLevel;
+    readonly prompt?: string;
+}
+
 export interface RigWorkspaceStore {
     get(): RigWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
@@ -445,6 +453,16 @@ export interface RigWorkspaceStore {
     conversationListRetry(): void;
     /** Retries a failed acquisition for the currently open conversation. */
     conversationRetry(): void;
+    /** Sends agent-authored slot text to the conversation currently addressed. */
+    messageSendCurrent(message: string): Promise<void>;
+    /** Sends agent-authored slot text to one explicitly addressed conversation. */
+    messageSend(sessionId: RigSessionId, message: string): Promise<void>;
+    /** Replaces one explicitly addressed conversation's composer draft. */
+    draftUpdate(sessionId: RigSessionId, message: string): Promise<void>;
+    /** Starts the new conversation described by a slot action and optionally submits its prompt. */
+    chatStart(input: RigWorkspaceNewChatInput): Promise<void>;
+    /** Opens one imported Rig webapp in the addressed group's isolated panel. */
+    webappOpen(name: string): Promise<void>;
     conversationCreate(input: RigSessionCreateInput): Promise<void>;
     conversationFork(conversationId: RigSessionId): Promise<void>;
     /**
@@ -2010,6 +2028,41 @@ export function rigWorkspaceStoreCreate(
     const withChat = <T>(run: (store: RigChatStore) => Promise<T>): Promise<T> =>
         chatStore ? run(chatStore) : noOpenConversation();
 
+    const withAddressedChat = async <T>(
+        sessionId: RigSessionId,
+        run: (store: RigChatStore) => Promise<T>,
+    ): Promise<T> => {
+        if (sessionId === openId && chatStore) return run(chatStore);
+        const acquired = await client.chat(sessionId);
+        try {
+            return await run(acquired.store);
+        } finally {
+            acquired[Symbol.dispose]();
+        }
+    };
+
+    const slotGroupFind = (input: RigWorkspaceNewChatInput): RigGroupId | undefined => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready")
+            return (addressedGroupId ?? openGroupId) as RigGroupId | undefined;
+        if (input.workspaceId) {
+            for (const project of projects.value) {
+                if (input.projectId && project.id !== input.projectId) continue;
+                const worktree = project.worktrees.find(
+                    (candidate) => candidate.id === input.workspaceId,
+                );
+                if (worktree) return worktree.id;
+            }
+            return undefined;
+        }
+        if (input.projectId) {
+            return projects.value.some((project) => project.id === input.projectId)
+                ? (input.projectId as RigProjectId)
+                : undefined;
+        }
+        return addressedGroupId ?? openGroupId;
+    };
+
     return {
         get: () => snapshot,
         panel,
@@ -2111,6 +2164,38 @@ export function rigWorkspaceStoreCreate(
             }
             if (conversation.type === "ready" && conversation.value.session.type === "error")
                 chatStore?.sessionRetry();
+        },
+        messageSendCurrent: (message) => withChat((store) => store.messageSend(message, [])),
+        messageSend: (sessionId, message) =>
+            withAddressedChat(sessionId, (store) => store.messageSend(message, [])),
+        draftUpdate: (sessionId, message) =>
+            withAddressedChat(sessionId, (store) =>
+                store.draftSet(message, nextDraftUpdatedAt(), draftOrigin),
+            ),
+        async chatStart(input) {
+            const groupId = slotGroupFind(input);
+            if (!groupId) throw new Error("That project or workspace is no longer listed.");
+            const start = groupStartFind(groupId);
+            if (!start) throw new Error("That project or workspace is not ready.");
+            const create: RigSessionCreateInput = {
+                ...start.create,
+                ...(input.model ? { modelId: input.model } : {}),
+                ...(input.effort ? { effort: input.effort } : {}),
+            };
+            const location = start.worktreeId
+                ? await list.worktreeSessionStart(start.worktreeId, create)
+                : await list.sessionCreate(create);
+            if (!location) throw new Error("The conversation could not be started.");
+            output({ type: "conversationOpenRequested", location });
+            if (input.prompt?.trim()) {
+                await withAddressedChat(location.sessionId, (store) =>
+                    store.messageSend(input.prompt!, []),
+                );
+            }
+        },
+        async webappOpen(name) {
+            const url = await client.webappPreviewOpen(name);
+            panel.webappOpen(name, url);
         },
         // Anything the caller names wins over the connection's last selection.
         conversationCreate: (input) => {

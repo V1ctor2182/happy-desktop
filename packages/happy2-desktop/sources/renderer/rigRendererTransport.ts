@@ -24,12 +24,15 @@ import type {
     RigSessionSummary,
     RigSessionUsage,
     RigShellCommandResult,
+    RigSlotEntry,
+    RigSlotsContext,
     RigSubagentSummary,
     RigTerminal,
     RigTerminalId,
     RigThinkingLevel,
     RigTransport,
     RigUserInputAnswers,
+    RigWebapp,
     RigWorktree,
 } from "happy2-state";
 
@@ -199,6 +202,17 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
                 group: groupId,
                 path,
             });
+            return preview.url;
+        },
+        slotsRead: (context: RigSlotsContext) =>
+            getJson<readonly RigSlotEntry[]>("/slots", {
+                projectId: context.projectId,
+                workspaceId: context.workspaceId,
+                sessionId: context.sessionId,
+            }),
+        webappsRead: () => getJson<readonly RigWebapp[]>("/webapps"),
+        webappPreviewOpen: async (name) => {
+            const preview = await getJson<{ readonly url: string }>("/webapp-preview", { name });
             return preview.url;
         },
         workspaceFileWrite: async (groupId, path, content, expectedHash) => {
