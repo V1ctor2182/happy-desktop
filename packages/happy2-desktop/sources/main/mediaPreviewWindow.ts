@@ -1,6 +1,6 @@
-import type { DesktopImagePreview } from "../shared/desktopContract";
+import type { DesktopMediaPreview } from "../shared/desktopContract";
 
-/** The one route a picture window may ever be pointed at. */
+/** The one route a preview window may ever be pointed at. */
 const MEDIA_ROUTE = "/workspace-file-media";
 /** Longer than any workspace path worth putting in a window title. */
 const PATH_MAX = 1024;
@@ -9,7 +9,7 @@ const PATH_MAX = 1024;
  * Whether an address is one this process is allowed to point a privileged window
  * at.
  *
- * The renderer names the picture, and the renderer is where a page could one day
+ * The renderer names the file, and the renderer is where a page could one day
  * name something else, so the address is checked against the Rig proxies this
  * process is actually running rather than trusted. It must be the media route on
  * one of those proxies exactly — not merely something under the capability
@@ -17,7 +17,7 @@ const PATH_MAX = 1024;
  * to load and no business authenticating to. Credentials in the address are
  * refused outright: an address that carries a login is not one of ours.
  */
-export function imagePreviewAddressAllowed(
+export function mediaPreviewAddressAllowed(
     candidate: string,
     bases: readonly (string | undefined)[],
 ): boolean {
@@ -44,20 +44,20 @@ export function imagePreviewAddressAllowed(
 }
 
 /**
- * The picture a request is for, or nothing when it is not one this process will
+ * The file a request is for, or nothing when it is not one this process will
  * open a window onto.
  *
  * A request is only the address, and the file it names is read back out of that
- * address rather than accepted alongside it. The window's title is then the
- * picture it is actually showing by construction, instead of a second, separately
- * supplied claim about it that could disagree.
+ * address rather than accepted alongside it. The window's title, and the viewer
+ * it mounts, are then the file it is actually showing by construction, instead
+ * of a second, separately supplied claim about it that could disagree.
  */
-export function imagePreviewResolve(
+export function mediaPreviewResolve(
     raw: unknown,
     bases: readonly (string | undefined)[],
-): DesktopImagePreview | undefined {
+): DesktopMediaPreview | undefined {
     if (typeof raw !== "string" || raw === "") return undefined;
-    if (!imagePreviewAddressAllowed(raw, bases)) return undefined;
+    if (!mediaPreviewAddressAllowed(raw, bases)) return undefined;
     const path = new URL(raw).searchParams.get("path");
     if (path === null || path === "" || path.length > PATH_MAX) return undefined;
     // A control character in a window title is exactly the sort of thing a title
@@ -67,19 +67,19 @@ export function imagePreviewResolve(
 }
 
 /** What the preview window calls itself: the file's own name. */
-export function imagePreviewTitle(path: string): string {
+export function mediaPreviewTitle(path: string): string {
     const name = path.slice(path.lastIndexOf("/") + 1);
     return name === "" ? path : name;
 }
 
 /**
- * Whether the picture window may go to an address. It may go exactly one place:
- * the document it was opened with. A picture has no links in it, so any
- * navigation at all is something other than looking at the picture — and this
- * window carries a preload, so where it may go is a security question rather
- * than a question of behaviour.
+ * Whether the preview window may go to an address. It may go exactly one place:
+ * the document it was opened with. Neither a picture nor a recording has a link
+ * in it, so any navigation at all is something other than looking at the file —
+ * and this window carries a preload, so where it may go is a security question
+ * rather than a question of behaviour.
  */
-export function imagePreviewNavigationAllowed(candidate: string, document: string): boolean {
+export function mediaPreviewNavigationAllowed(candidate: string, document: string): boolean {
     try {
         const to = new URL(candidate);
         const here = new URL(document);

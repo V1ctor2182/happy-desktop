@@ -1,10 +1,10 @@
-import type { HappyDesktopBridge, HappyImagePreviewBridge } from "../shared/desktopContract";
+import type { HappyDesktopBridge, HappyMediaPreviewBridge } from "../shared/desktopContract";
 
 declare global {
     interface Window {
         happyDesktop?: HappyDesktopBridge;
-        /** Present only in the window that shows one picture, and never beside `happyDesktop`. */
-        happyImagePreview?: HappyImagePreviewBridge;
+        /** Present only in the window that shows one file, and never beside `happyDesktop`. */
+        happyMediaPreview?: HappyMediaPreviewBridge;
     }
 }
 

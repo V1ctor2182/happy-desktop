@@ -27,11 +27,11 @@ import {
     ThemeScope,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
-    type ImageWindowOpener,
+    type MediaWindowOpener,
     type RigPluginApplicationContentRenderer,
 } from "happy2-ui";
 import {
-    imagePreviewView,
+    mediaPreviewView,
     type DesktopConfig,
     type DesktopUpdateSnapshot,
     type HappyDesktopBridge,
@@ -55,20 +55,20 @@ import { DesktopPluginApplicationView } from "./desktopPluginApplicationView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import {
-    DesktopImagePreviewWindow,
-    desktopImagePreviewEscapeBind,
-    desktopImagePreviewStoreCreate,
-} from "./desktopImagePreview";
+    DesktopMediaPreviewWindow,
+    desktopMediaPreviewEscapeBind,
+    desktopMediaPreviewStoreCreate,
+} from "./desktopMediaPreview";
 
 /**
- * Hands one workspace picture to the shell to show in a window of its own. The
+ * Hands one workspace file to the shell to show in a window of its own. The
  * shell decides whether the address is one of its Rigs' and refuses otherwise,
  * so a failure here is reported rather than retried against another route.
  */
-function desktopImageWindowOpen(bridge: HappyDesktopBridge): ImageWindowOpener {
+function desktopMediaWindowOpen(bridge: HappyDesktopBridge): MediaWindowOpener {
     return (request) => {
-        void bridge.imagePreviewOpen(request.url).catch((error: unknown) => {
-            console.error("Could not open the picture in its own window.", error);
+        void bridge.mediaPreviewOpen(request.url).catch((error: unknown) => {
+            console.error("Could not open the file in its own window.", error);
         });
     };
 }
@@ -186,7 +186,7 @@ function RigBoundary(props: {
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     pluginApplicationContent?: RigPluginApplicationContentRenderer;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
@@ -207,7 +207,7 @@ function RigBoundary(props: {
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
                 htmlPreview: props.htmlPreview,
-                imageWindow: props.imageWindow,
+                mediaWindow: props.mediaWindow,
                 pluginApplicationContent: props.pluginApplicationContent,
                 ...(update
                     ? {
@@ -235,7 +235,7 @@ function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     pluginApplicationContent?: RigPluginApplicationContentRenderer;
     bridge: HappyDesktopBridge;
     navigationOrder: RigNavigationOrderStore;
@@ -339,7 +339,7 @@ function DesktopRenderer(props: {
             bridge={props.bridge}
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
-            imageWindow={props.imageWindow}
+            mediaWindow={props.mediaWindow}
             pluginApplicationContent={props.pluginApplicationContent}
             navigationOrder={props.navigationOrder}
             notes={props.notes}
@@ -359,20 +359,20 @@ const browserLocal =
     document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 const root = createRoot(document.getElementById("root")!);
-// The picture window is this same document, launched with the reduced bridge and
+// The preview window is this same document, launched with the reduced bridge and
 // loaded with the view it should mount. Deciding it here rather than after a
-// round trip means the first frame is already the picture instead of the whole
+// round trip means the first frame is already the file instead of the whole
 // application appearing for a beat.
-const imagePreviewBridge =
-    new URLSearchParams(location.search).get(imagePreviewView.key) === imagePreviewView.value
-        ? window.happyImagePreview
+const mediaPreviewBridge =
+    new URLSearchParams(location.search).get(mediaPreviewView.key) === mediaPreviewView.value
+        ? window.happyMediaPreview
         : undefined;
-if (imagePreviewBridge) {
-    const previewBridge = imagePreviewBridge;
-    desktopImagePreviewEscapeBind(previewBridge);
+if (mediaPreviewBridge) {
+    const previewBridge = mediaPreviewBridge;
+    desktopMediaPreviewEscapeBind(previewBridge);
     root.render(
         <DesktopAppearance appearance={appearanceStoreCreate()}>
-            <DesktopImagePreviewWindow store={desktopImagePreviewStoreCreate(previewBridge)} />
+            <DesktopMediaPreviewWindow store={desktopMediaPreviewStoreCreate(previewBridge)} />
         </DesktopAppearance>,
     );
 } else if (bridge) {
@@ -442,8 +442,8 @@ if (imagePreviewBridge) {
                                 : desktopPluginApplicationRenderCreate(desktopBridge)
                         }
                         bridge={desktopBridge}
-                        imageWindow={
-                            browserLocal ? undefined : desktopImageWindowOpen(desktopBridge)
+                        mediaWindow={
+                            browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
                         navigationOrder={navigationOrder}
                         notes={notes}

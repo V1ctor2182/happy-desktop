@@ -8,6 +8,7 @@ import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { SegmentedControl } from "./SegmentedControl";
 import { Spinner } from "./Spinner";
+import { VideoViewer } from "./VideoViewer";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 /**
  * How a file is shown. `binary` is the honest answer for something this surface
@@ -45,18 +46,20 @@ export type FilePreviewProps = {
     /** Human-readable size, shown beside the name. */
     size?: string;
     /**
-     * Intrinsic pixel size of an image, shown beside its size. Absent lets the
-     * picture state its own once it decodes, which is the only place that fact
-     * exists for a file the caller only holds an address for.
+     * Intrinsic pixel size of an image or a recording's frames, shown beside its
+     * size. Absent lets the file state its own once it decodes, which is the
+     * only place that fact exists for a file the caller only holds an address
+     * for.
      */
     dimensions?: string;
     /** Trailing header controls, e.g. Download or Open in editor. */
     actions?: ReactNode;
     /**
-     * Shows this picture in a window of the host's own. Present only where such
-     * a window exists, so the control is absent rather than inert in a browser.
+     * Shows this picture or recording in a window of the host's own. Present
+     * only where such a window exists, so the control is absent rather than
+     * inert in a browser.
      */
-    onImageWindowOpen?: () => void;
+    onMediaWindowOpen?: () => void;
     /**
      * Opens a file a rendered Markdown document links to. Absent leaves those
      * links inert, which is the honest answer on a surface with no workspace
@@ -112,8 +115,13 @@ const EXTENSION_KIND: Record<string, FilePreviewKind> = {
     html: "html",
     pdf: "pdf",
 };
-/** Kinds whose bytes are opaque: a preview asks the caller for a URL, not text. */
-const URL_KINDS = new Set<FilePreviewKind>(["image", "video", "audio", "pdf"]);
+/**
+ * Kinds whose bytes are opaque and that have no viewer of their own here: a
+ * preview asks the caller for a URL and hands that address straight to the
+ * element which can render it. Pictures and recordings are also opaque, but they
+ * are answered further up by the viewers built for them.
+ */
+const URL_KINDS = new Set<FilePreviewKind>(["audio", "pdf"]);
 /**
  * What the preview should do with a file, from its name.
  *
@@ -173,7 +181,7 @@ export function FilePreview(props: FilePreviewProps) {
         "dimensions",
         "actions",
         "onFileOpen",
-        "onImageWindowOpen",
+        "onMediaWindowOpen",
         "rendered",
         "onClose",
         "closeLabel",
@@ -182,9 +190,9 @@ export function FilePreview(props: FilePreviewProps) {
     // not of the file or the product, so it stays here and resets when the
     // preview is replaced by a different file.
     const [face, setFace] = useState<MarkdownFace>("rendered");
-    // What the picture turned out to be, keyed by the address it was measured
+    // What the file turned out to be, keyed by the address it was measured
     // from, so neither a different file nor a new revision of this one ever
-    // wears the previous picture's dimensions.
+    // wears the previous one's dimensions.
     const [measured, setMeasured] = useState<{ source: string; dimensions: string }>();
     const kind = local.kind ?? filePreviewKind(local.path);
     const name = local.path.slice(local.path.lastIndexOf("/") + 1);
@@ -249,13 +257,13 @@ export function FilePreview(props: FilePreviewProps) {
                     kind={kind}
                     name={name}
                     onFileOpen={local.onFileOpen}
-                    onImageMeasure={(size) =>
+                    onMediaMeasure={(size) =>
                         setMeasured({
                             source,
                             dimensions: `${String(size.width)} × ${String(size.height)}`,
                         })
                     }
-                    onImageWindowOpen={local.onImageWindowOpen}
+                    onMediaWindowOpen={local.onMediaWindowOpen}
                     rendered={local.rendered}
                 />
             </div>
@@ -273,8 +281,8 @@ function FilePreviewBody(props: {
     kind: FilePreviewKind;
     name: string;
     onFileOpen?: (path: string) => void;
-    onImageMeasure: (size: { readonly width: number; readonly height: number }) => void;
-    onImageWindowOpen?: () => void;
+    onMediaMeasure: (size: { readonly width: number; readonly height: number }) => void;
+    onMediaWindowOpen?: () => void;
     rendered?: ReactNode;
 }) {
     // A picture is handed to the shared viewer in every state, including the
@@ -284,12 +292,12 @@ function FilePreviewBody(props: {
         return (
             <ImageViewer
                 actions={
-                    props.onImageWindowOpen ? (
+                    props.onMediaWindowOpen ? (
                         <>
                             <Button
                                 aria-label="Open in a new window"
                                 iconOnly
-                                onClick={props.onImageWindowOpen}
+                                onClick={props.onMediaWindowOpen}
                                 size="small"
                                 variant="ghost"
                             >
@@ -301,7 +309,30 @@ function FilePreviewBody(props: {
                 }
                 content={props.content}
                 name={props.name}
-                onNaturalSize={props.onImageMeasure}
+                onNaturalSize={props.onMediaMeasure}
+            />
+        );
+    // And a recording likewise, for the same reason: one video surface, whether
+    // it is playing, still opening, or a format nothing here can decode.
+    if (props.kind === "video" && props.content.type !== "text")
+        return (
+            <VideoViewer
+                actions={
+                    props.onMediaWindowOpen ? (
+                        <Button
+                            aria-label="Open in a new window"
+                            iconOnly
+                            onClick={props.onMediaWindowOpen}
+                            size="small"
+                            variant="ghost"
+                        >
+                            <Ionicon name="open-outline" size={14} />
+                        </Button>
+                    ) : undefined
+                }
+                content={props.content}
+                name={props.name}
+                onNaturalSize={props.onMediaMeasure}
             />
         );
     if (props.content.type === "loading")
@@ -327,18 +358,6 @@ function FilePreviewBody(props: {
         );
     if (props.content.type === "url" && URL_KINDS.has(props.kind)) {
         const url = props.content.url;
-        if (props.kind === "video")
-            return (
-                <div className="happy2-file-preview__stage" data-happy2-ui="file-preview-stage">
-                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a workspace file has no caption track to offer */}
-                    <video
-                        className="happy2-file-preview__video"
-                        controls
-                        data-happy2-ui="file-preview-video"
-                        src={url}
-                    />
-                </div>
-            );
         if (props.kind === "audio")
             return (
                 <div className="happy2-file-preview__stage" data-happy2-ui="file-preview-stage">

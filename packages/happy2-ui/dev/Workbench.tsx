@@ -64,6 +64,7 @@ import { FileEditorPage } from "./pages/FileEditorPage";
 import { FilePanelPage } from "./pages/FilePanelPage";
 import { FilePreviewPage } from "./pages/FilePreviewPage";
 import { ImageViewerPage } from "./pages/ImageViewerPage";
+import { VideoViewerPage } from "./pages/VideoViewerPage";
 import { MarkdownDocumentPage } from "./pages/MarkdownDocumentPage";
 import { FileTreePage } from "./pages/FileTreePage";
 import { FormRowPage } from "./pages/FormRowPage";
@@ -256,6 +257,7 @@ const components: BlueprintPage[] = [
     { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
     { id: "image-viewer", label: "Image viewer", number: "C-235", page: ImageViewerPage },
+    { id: "video-viewer", label: "Video viewer", number: "C-236", page: VideoViewerPage },
     { id: "code-block", label: "Code block", number: "C-174", page: CodeBlockPage },
     { id: "code-editor", label: "Code editor", number: "C-175", page: CodeEditorPage },
     {

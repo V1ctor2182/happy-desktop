@@ -71,6 +71,7 @@
 @import "./styles/markdown-document.css";
 @import "./styles/file-preview.css";
 @import "./styles/image-viewer.css";
+@import "./styles/video-viewer.css";
 @import "./styles/html-preview.css";
 @import "./styles/file-editor.css";
 @import "./styles/changed-file-diff.css";

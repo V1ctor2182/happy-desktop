@@ -2,10 +2,10 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
     buildIdentityArgument,
     desktopIpc,
-    imagePreviewArgument,
+    mediaPreviewArgument,
     type DesktopBrowserStatus,
     type DesktopBuildIdentity,
-    type DesktopImagePreview,
+    type DesktopMediaPreview,
     type DesktopNoteApplyRequest,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
@@ -13,7 +13,7 @@ import {
     type DesktopStartRequest,
     type DesktopWindowState,
     type HappyDesktopBridge,
-    type HappyImagePreviewBridge,
+    type HappyMediaPreviewBridge,
     type RemoteRigSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
@@ -63,7 +63,7 @@ const bridge: HappyDesktopBridge = {
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.
     dockUnreadSet: (count: number) => ipcRenderer.send(desktopIpc.dockUnreadSet, count),
-    imagePreviewOpen: (url: string) => ipcRenderer.invoke(desktopIpc.imagePreviewOpen, url),
+    mediaPreviewOpen: (url: string) => ipcRenderer.invoke(desktopIpc.mediaPreviewOpen, url),
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
@@ -127,25 +127,25 @@ const bridge: HappyDesktopBridge = {
     },
 };
 
-const imagePreview: HappyImagePreviewBridge = {
-    imagePreviewGet: () => ipcRenderer.invoke(desktopIpc.imagePreviewGet),
-    imagePreviewClose: () => ipcRenderer.invoke(desktopIpc.imagePreviewClose),
-    imagePreviewSubscribe(listener: (preview: DesktopImagePreview | undefined) => void) {
+const mediaPreview: HappyMediaPreviewBridge = {
+    mediaPreviewGet: () => ipcRenderer.invoke(desktopIpc.mediaPreviewGet),
+    mediaPreviewClose: () => ipcRenderer.invoke(desktopIpc.mediaPreviewClose),
+    mediaPreviewSubscribe(listener: (preview: DesktopMediaPreview | undefined) => void) {
         const receive = (
             _event: Electron.IpcRendererEvent,
-            preview: DesktopImagePreview | undefined,
+            preview: DesktopMediaPreview | undefined,
         ) => listener(preview);
-        ipcRenderer.on(desktopIpc.imagePreviewChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.imagePreviewChanged, receive);
+        ipcRenderer.on(desktopIpc.mediaPreviewChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.mediaPreviewChanged, receive);
     },
 };
 
 /*
  * A window gets one bridge or the other, never both, and which one is settled by
  * how the window was launched rather than by what the page it loads says about
- * itself. The picture window therefore has no route to the application's
+ * itself. The preview window therefore has no route to the application's
  * capabilities at all, instead of having them and being asked not to use them.
  */
-if (process.argv.includes(imagePreviewArgument))
-    contextBridge.exposeInMainWorld("happyImagePreview", imagePreview);
+if (process.argv.includes(mediaPreviewArgument))
+    contextBridge.exposeInMainWorld("happyMediaPreview", mediaPreview);
 else contextBridge.exposeInMainWorld("happyDesktop", bridge);

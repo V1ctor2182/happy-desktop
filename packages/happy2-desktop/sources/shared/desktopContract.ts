@@ -220,12 +220,17 @@ export interface DesktopNoteApplyRequest {
 }
 
 /**
- * One picture a window of its own is showing, as that window is allowed to see
- * it: an address on one of this process's own Rig proxies, and the workspace
- * path read back out of it. Never a daemon endpoint, a token, or a path on disk
- * the window could read for itself.
+ * One file a window of its own is showing, as that window is allowed to see it:
+ * an address on one of this process's own Rig proxies, and the workspace path
+ * read back out of it. Never a daemon endpoint, a token, or a path on disk the
+ * window could read for itself.
+ *
+ * Whether it is a picture or a recording is not carried here either. The window
+ * decides that from the path it was given, which came out of the address this
+ * process already validated — a separately supplied kind would be a second claim
+ * about one file, and the only thing a second claim can do is disagree.
  */
-export interface DesktopImagePreview {
+export interface DesktopMediaPreview {
     readonly url: string;
     readonly path: string;
 }
@@ -337,11 +342,11 @@ export interface HappyDesktopBridge {
      */
     dockUnreadSet(count: number): void;
     /**
-     * Shows the picture at one address in a window outside this one, reusing the
+     * Shows the file at one address in a window outside this one, reusing the
      * preview window if it is already open. Rejected unless the address is the
      * media route of a Rig proxy this process is currently running.
      */
-    imagePreviewOpen(url: string): Promise<void>;
+    mediaPreviewOpen(url: string): Promise<void>;
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
@@ -378,20 +383,21 @@ export interface HappyDesktopBridge {
 }
 
 /**
- * The whole capability of the window that shows one picture.
+ * The whole capability of the window that shows one file.
  *
  * It is deliberately not `HappyDesktopBridge`: a window whose only job is to
- * show a picture has no business reading notes, writing preferences, choosing a
- * topology, or hosting a plugin, so it is handed a bridge that cannot do any of
- * them rather than the application's and a promise not to use it.
+ * show one picture or play one recording has no business reading notes, writing
+ * preferences, choosing a topology, or hosting a plugin, so it is handed a
+ * bridge that cannot do any of them rather than the application's and a promise
+ * not to use it.
  */
-export interface HappyImagePreviewBridge {
+export interface HappyMediaPreviewBridge {
     /** What this window was opened for; it has not been sent anything yet. */
-    imagePreviewGet(): Promise<DesktopImagePreview | undefined>;
-    /** Fires when the window is pointed at a different picture. */
-    imagePreviewSubscribe(listener: (preview: DesktopImagePreview | undefined) => void): () => void;
+    mediaPreviewGet(): Promise<DesktopMediaPreview | undefined>;
+    /** Fires when the window is pointed at a different file. */
+    mediaPreviewSubscribe(listener: (preview: DesktopMediaPreview | undefined) => void): () => void;
     /** Closes this window from inside it. */
-    imagePreviewClose(): Promise<void>;
+    mediaPreviewClose(): Promise<void>;
 }
 
 export const desktopIpc = {
@@ -399,10 +405,10 @@ export const desktopIpc = {
     browserOpenRequested: "happy2:browser:open-requested",
     browserStatusChanged: "happy2:browser:status-changed",
     directoryPick: "happy2:directory:pick",
-    imagePreviewChanged: "happy2:image-preview:changed",
-    imagePreviewClose: "happy2:image-preview:close",
-    imagePreviewGet: "happy2:image-preview:get",
-    imagePreviewOpen: "happy2:image-preview:open",
+    mediaPreviewChanged: "happy2:media-preview:changed",
+    mediaPreviewClose: "happy2:media-preview:close",
+    mediaPreviewGet: "happy2:media-preview:get",
+    mediaPreviewOpen: "happy2:media-preview:open",
     /** Renderer → main only: the number of conversations waiting for the person. */
     dockUnreadSet: "happy2:dock:unread-set",
     desktopConfigGet: "happy2:desktop-config:get",
@@ -464,15 +470,15 @@ export const happyHtmlPreviewPartition = "happy2-html-preview";
 
 /**
  * Query the preview window is loaded with, so the renderer entry mounts only the
- * picture instead of the whole application. It is a property of the window's own
+ * file instead of the whole application. It is a property of the window's own
  * address rather than something asked for over the bridge, so the first frame is
  * already the right one.
  */
-export const imagePreviewView = { key: "view", value: "image-preview" } as const;
+export const mediaPreviewView = { key: "view", value: "media-preview" } as const;
 
 /**
- * Launch argument that tells the preload it is loading the picture window, so
+ * Launch argument that tells the preload it is loading the preview window, so
  * the reduced bridge is chosen before the page exists rather than inferred from
  * an address the page could later change.
  */
-export const imagePreviewArgument = "--happy2-image-preview";
+export const mediaPreviewArgument = "--happy2-media-preview";

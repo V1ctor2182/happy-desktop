@@ -76,7 +76,7 @@ import {
     type BrowserContentRenderer,
     HtmlPreviewFrame,
     type HtmlPreviewRenderer,
-    type ImageWindowOpener,
+    type MediaWindowOpener,
     Button,
     ChannelHeader,
     ContextMeter,
@@ -90,6 +90,7 @@ import {
     FileEditor,
     FilePreview,
     type FilePreviewContent,
+    type FilePreviewKind,
     filePreviewKind,
     FloatingConversationDock,
     Lightbox,
@@ -293,10 +294,11 @@ export interface AppRigViewProps {
      */
     htmlPreview?: HtmlPreviewRenderer;
     /**
-     * Shows one workspace picture in a window of the host's own. Supplied only
-     * by a host that has such a window; without one a picture stays in place.
+     * Shows one workspace picture or recording in a window of the host's own.
+     * Supplied only by a host that has such a window; without one the file stays
+     * in place.
      */
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -1605,7 +1607,7 @@ export function AppRigView(props: AppRigViewProps) {
                 appearance={props.appearance}
                 browserContent={props.browserContent}
                 htmlPreview={props.htmlPreview}
-                imageWindow={props.imageWindow}
+                mediaWindow={props.mediaWindow}
                 chatId={props.chatId}
                 clock={active.session.clock}
                 connection={active.session.connection}
@@ -1798,7 +1800,7 @@ interface RigWorkspaceSurfaceProps {
     windowState?: RigWindowStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
     sidebar: ReactNode;
     slots: RigSlotsSnapshot;
@@ -2013,7 +2015,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         canStartTerminal={props.chatId !== undefined}
                         browserContent={props.browserContent}
                         htmlPreview={props.htmlPreview}
-                        imageWindow={props.imageWindow}
+                        mediaWindow={props.mediaWindow}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
@@ -2389,8 +2391,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     {...(props.htmlPreview
                                         ? { htmlPreview: props.htmlPreview }
                                         : {})}
-                                    {...(props.imageWindow
-                                        ? { imageWindow: props.imageWindow }
+                                    {...(props.mediaWindow
+                                        ? { mediaWindow: props.mediaWindow }
                                         : {})}
                                     mode={workspace.fileViewMode}
                                     workspace={props.workspace}
@@ -2511,7 +2513,7 @@ function RigFileBody(props: {
     appearance: "dark" | "light";
     file: RigFileTabSnapshot;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     mode: RigFileViewMode;
     workspace: RigWorkspaceStore;
 }) {
@@ -2520,7 +2522,7 @@ function RigFileBody(props: {
         return (
             <RigFilePreview
                 document={file.document}
-                {...(props.imageWindow ? { imageWindow: props.imageWindow } : {})}
+                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 key={file.id}
                 loading={file.loading}
                 onRetry={() => workspace.fileRetry(file.id)}
@@ -2657,7 +2659,7 @@ function RigFileBody(props: {
  */
 function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     loading: boolean;
     onRetry: () => void;
     path: string;
@@ -2679,13 +2681,13 @@ function RigFilePreview(props: {
     // <img> that will only ever show a broken-image glyph.
     const kind = filePreviewKind(props.path);
     const showable = value.contentType !== "application/octet-stream" && kind !== "binary";
-    const imageWindow = props.imageWindow;
+    const mediaWindow = props.mediaWindow;
     return (
         <FilePreview
             content={showable ? { type: "url", url: value.url } : { type: "unavailable" }}
-            {...(imageWindow && showable && kind === "image"
+            {...(mediaWindow && showable && mediaWindowShowable(kind)
                 ? {
-                      onImageWindowOpen: () => imageWindow({ path: props.path, url: value.url }),
+                      onMediaWindowOpen: () => mediaWindow({ path: props.path, url: value.url }),
                   }
                 : {})}
             path={props.path}
@@ -3432,7 +3434,7 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 function RigPanelBody(props: {
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
@@ -3670,7 +3672,7 @@ function RigPanelBody(props: {
                     panelFile ? (
                         <RigPanelFileView
                             {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
-                            {...(props.imageWindow ? { imageWindow: props.imageWindow } : {})}
+                            {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                             file={panelFile}
                             key={panelFile.path}
                             onClose={props.onPanelFileClose}
@@ -3714,6 +3716,16 @@ function RigPanelBody(props: {
     );
 }
 
+/**
+ * Whether a file is one the shell's separate window has a viewer for. Pictures
+ * and recordings are; a document, a listing, or an archive is not, and offering
+ * to open one in a window that could only say so again would be a control that
+ * does nothing.
+ */
+function mediaWindowShowable(kind: FilePreviewKind): boolean {
+    return kind === "image" || kind === "video";
+}
+
 /** The glyph a viewer tab wears: what sort of file is being looked at. */
 function panelFileIcon(path: string): "image" | "play" | "doc" {
     const kind = filePreviewKind(path);
@@ -3730,12 +3742,12 @@ function panelFileIcon(path: string): "image" | "play" | "doc" {
 function RigPanelFileView(props: {
     file: RigPanelFileSnapshot;
     htmlPreview?: HtmlPreviewRenderer;
-    imageWindow?: ImageWindowOpener;
+    mediaWindow?: MediaWindowOpener;
     onClose: () => void;
     onFileOpen: (path: string) => void;
 }) {
     const { file } = props;
-    const imageWindow = props.imageWindow;
+    const mediaWindow = props.mediaWindow;
     const content: FilePreviewContent =
         file.document.type === "error"
             ? { type: "error", message: file.document.error.message }
@@ -3764,9 +3776,11 @@ function RigPanelFileView(props: {
             onClose={props.onClose}
             // A link inside the document is relative to the document holding it.
             onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
-            {...(imageWindow && content.type === "url" && filePreviewKind(file.path) === "image"
+            {...(mediaWindow &&
+            content.type === "url" &&
+            mediaWindowShowable(filePreviewKind(file.path))
                 ? {
-                      onImageWindowOpen: () => imageWindow({ path: file.path, url: content.url }),
+                      onMediaWindowOpen: () => mediaWindow({ path: file.path, url: content.url }),
                   }
                 : {})}
             path={file.path}
