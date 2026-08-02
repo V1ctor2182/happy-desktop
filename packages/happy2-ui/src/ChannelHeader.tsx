@@ -36,6 +36,8 @@ export type ChannelHeaderProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     starred?: boolean;
     style?: CSSProperties;
     title: string;
+    /** Compact agent-authored content attached to the named project/workspace. */
+    titleAccessory?: ReactNode;
     titleLabel?: string;
     topic?: string;
 };
@@ -63,6 +65,7 @@ export function ChannelHeader(props: ChannelHeaderProps) {
         "starred",
         "style",
         "title",
+        "titleAccessory",
         "titleLabel",
         "topic",
     ]);
@@ -160,6 +163,14 @@ export function ChannelHeader(props: ChannelHeaderProps) {
                     </>
                 ) : null}
             </div>
+            {local.titleAccessory ? (
+                <div
+                    className="happy2-channel-header__title-accessory"
+                    data-happy2-ui="channel-header-title-accessory"
+                >
+                    {local.titleAccessory}
+                </div>
+            ) : null}
             <div className="happy2-channel-header__meta" data-happy2-ui="channel-header-meta">
                 {local.memberCount !== undefined
                     ? ((_) => {

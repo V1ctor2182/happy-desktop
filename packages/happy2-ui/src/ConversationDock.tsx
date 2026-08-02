@@ -12,6 +12,8 @@ export type ConversationDockProps = {
     disabled?: boolean;
     /** Controls rendered inside the composer toolbar, beside the send control. */
     composerControls?: ReactNode;
+    /** Agent-authored contribution bar immediately above the composer card. */
+    composerAboveControl?: ReactNode;
     /** Accessory rendered below the composer card. */
     composerFooterControl?: ReactNode;
     composerPlaceholder?: string;
@@ -104,6 +106,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     {composer.submission.error.message}
                 </Banner>
             ) : null}
+            {props.composerAboveControl}
             <div className="happy2-conversation__dock-inner">
                 <Composer
                     attachmentMultiple

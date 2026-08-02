@@ -38,6 +38,11 @@ import type {
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
+    RigSlotAction,
+    RigSlotEntry,
+    RigSlotsContext,
+    RigSlotsSnapshot,
+    RigSlotsStore,
     RigSubagentSummary,
     RigTerminalStore,
     RigThinkingLevel,
@@ -52,6 +57,7 @@ import {
     rigAgentAuthor,
     rigInboxStoreNoop,
     rigProviderUsageStoreNoop,
+    rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
 } from "happy2-state";
@@ -98,6 +104,8 @@ import {
     Sidebar,
     SidebarFooter,
     SidebarUpdateAction,
+    SlotEntries,
+    type SlotVisualEntry,
     RigInboxPage,
     RigProviderUsagePage,
     TabbedPane,
@@ -154,6 +162,8 @@ export interface AppRigSession {
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
+    /** Materializes the reactive slot surface for one immutable route context. */
+    readonly slots?: (context: RigSlotsContext) => RigSlotsStore;
     /**
      * Every question this Rig's agents are waiting on. Absent when the machine
      * offers no question feed, which is why the inbox row is absent too rather
@@ -828,6 +838,83 @@ const FRIENDS_ITEM = "friends";
  */
 const BLUEPRINT_ITEM = "blueprint";
 
+function slotsContext(
+    projects: readonly RigProjectGroup[],
+    groupId: string | undefined,
+    sessionId: string | undefined,
+): RigSlotsContext {
+    for (const project of projects) {
+        if (project.id === groupId)
+            return {
+                projectId: project.id,
+                ...(sessionId ? { sessionId: sessionId as RigSessionId } : {}),
+            };
+        const workspace = project.worktrees.find((candidate) => candidate.id === groupId);
+        if (workspace)
+            return {
+                projectId: project.id,
+                workspaceId: workspace.id,
+                ...(sessionId ? { sessionId: sessionId as RigSessionId } : {}),
+            };
+    }
+    return sessionId ? { sessionId: sessionId as RigSessionId } : {};
+}
+
+function slotAuthor(projects: readonly RigProjectGroup[], authorSessionId: string): string {
+    for (const project of projects) {
+        const projectSession = project.conversations.find(
+            (conversation) => conversation.id === authorSessionId,
+        );
+        if (projectSession) return projectSession.title ?? "Agent session";
+        for (const worktree of project.worktrees) {
+            const session = worktree.conversations.find(
+                (conversation) => conversation.id === authorSessionId,
+            );
+            if (session) return session.title ?? "Agent session";
+        }
+    }
+    return `Agent ${authorSessionId.slice(0, 8)}`;
+}
+
+function slotVisualEntries(
+    entries: readonly RigSlotEntry[],
+    projects: readonly RigProjectGroup[],
+    webapps: ReadonlySet<string>,
+    hasCurrentChat: boolean,
+): readonly SlotVisualEntry[] {
+    return entries.map((entry) => ({
+        id: entry.id,
+        author: slotAuthor(projects, entry.authorSessionId),
+        description: entry.description,
+        purpose: entry.purpose,
+        ...(entry.content.type === "button" &&
+        ((entry.content.action.type === "send-current-chat" && !hasCurrentChat) ||
+            (entry.content.action.type === "open-webapp" &&
+                !webapps.has(entry.content.action.webapp)))
+            ? { disabled: true }
+            : {}),
+        content:
+            entry.content.type === "text"
+                ? { type: "text" as const, markdown: entry.content.markdown }
+                : { type: "button" as const, label: entry.content.label },
+    }));
+}
+
+function slotActionRun(workspace: RigWorkspaceStore, action: RigSlotAction): Promise<void> {
+    switch (action.type) {
+        case "send-current-chat":
+            return workspace.messageSendCurrent(action.message);
+        case "send-chat":
+            return workspace.messageSend(action.sessionId, action.message);
+        case "draft-chat":
+            return workspace.draftUpdate(action.sessionId, action.message);
+        case "new-chat":
+            return workspace.chatStart(action);
+        case "open-webapp":
+            return workspace.webappOpen(action.webapp);
+    }
+}
+
 /**
  * The workspace window. It owns no product state: it subscribes to the directory
  * of Rigs, renders their projects as one sidebar, and hands the addressed Rig's
@@ -864,6 +951,22 @@ export function AppRigView(props: AppRigViewProps) {
     const usageStore =
         (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
     const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
+    const slotsStore =
+        active?.session?.slots?.(slotsContext(active.projects, props.groupId, props.chatId)) ??
+        rigSlotsStoreNoop;
+    const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
+    const webapps = new Set(slots.webapps.map((webapp) => webapp.name));
+    const slotEntries = [
+        ...slots.statusLine,
+        ...slots.aboveComposer,
+        ...slots.title,
+        ...slots.sidebar,
+    ];
+    const slotAction = (entryId: string): void => {
+        const entry = slotEntries.find((candidate) => candidate.id === entryId);
+        if (!entry || entry.content.type !== "button" || !active?.session) return;
+        void slotActionRun(active.session.workspace, entry.content.action).catch(() => undefined);
+    };
     const desktop = props.platform === "desktop";
     const sidebarUpdate = props.update ? (
         <SidebarUpdateAction
@@ -962,6 +1065,18 @@ export function AppRigView(props: AppRigViewProps) {
             // lane as the rows beneath it — rather than leaving the window's
             // top-left corner empty.
             brand={desktop ? windowState.fullScreen : true}
+            bodyAccessory={
+                <SlotEntries
+                    entries={slotVisualEntries(
+                        slots.sidebar,
+                        active?.projects ?? [],
+                        webapps,
+                        props.chatId !== undefined,
+                    )}
+                    onAction={slotAction}
+                    placement="sidebar"
+                />
+            }
             composeLabel="Create"
             footer={
                 <SidebarFooter
@@ -1233,6 +1348,8 @@ export function AppRigView(props: AppRigViewProps) {
                 }
                 platform={props.platform}
                 sidebar={sidebar}
+                slots={slots}
+                slotAction={slotAction}
                 windowState={props.windowState}
                 workspace={active.session.workspace}
             />
@@ -1408,9 +1525,17 @@ interface RigWorkspaceSurfaceProps {
     htmlPreview?: HtmlPreviewRenderer;
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
     sidebar: ReactNode;
+    slots: RigSlotsSnapshot;
+    slotAction(entryId: string): void;
     groupId?: string;
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
+}
+
+interface RigSlotViews {
+    readonly statusLine: readonly SlotVisualEntry[];
+    readonly aboveComposer: readonly SlotVisualEntry[];
+    readonly title: readonly SlotVisualEntry[];
 }
 
 /**
@@ -1484,6 +1609,22 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
+    const webapps = new Set(props.slots.webapps.map((webapp) => webapp.name));
+    const slotViews: RigSlotViews = {
+        statusLine: slotVisualEntries(
+            props.slots.statusLine,
+            rows,
+            webapps,
+            props.chatId !== undefined,
+        ),
+        aboveComposer: slotVisualEntries(
+            props.slots.aboveComposer,
+            rows,
+            webapps,
+            props.chatId !== undefined,
+        ),
+        title: slotVisualEntries(props.slots.title, rows, webapps, props.chatId !== undefined),
+    };
     const openGroup = openGroupFind(rows, props.groupId);
     const groupFileTabs = openGroup
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
@@ -1567,6 +1708,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 onChatSelect={props.onChatSelect}
                 projects={rows}
                 readOnly={conversationReadOnly}
+                slotAction={props.slotAction}
+                slots={slotViews}
                 workspace={props.workspace}
             />
         ) : undefined;
@@ -1652,6 +1795,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
                         workspaceFilesLoading={workspace.workspaceFilesLoading}
+                        webappRevisions={
+                            new Map(
+                                props.slots.webapps.map((webapp) => [
+                                    webapp.name,
+                                    webapp.currentVersion,
+                                ]),
+                            )
+                        }
                     />
                 ) : undefined
             }
@@ -1739,6 +1890,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
+                        titleAccessory={
+                            <SlotEntries
+                                entries={slotViews.title}
+                                onAction={props.slotAction}
+                                placement="title"
+                            />
+                        }
                     />
                     {/* Cmd+T opens a tab, and here a tab is a session in the
                         project that is already open. */}
@@ -1753,6 +1911,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         <ConversationView
                             agentAuthor={rigAgentAuthor}
                             composer={workspace.groupComposer}
+                            composerAboveControl={
+                                <SlotEntries
+                                    entries={slotViews.aboveComposer}
+                                    onAction={props.slotAction}
+                                    placement="above-composer"
+                                />
+                            }
                             composerFocusOnType={composerClaimsTyping}
                             composerPlaceholder={composerPlaceholder(openGroup.name)}
                             entries={NO_ENTRIES}
@@ -1778,26 +1943,45 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 ) : undefined
                             }
                             composerFooterControl={
-                                workspace.groupSessionDraft ? (
-                                    <RigSessionControls
-                                        fields={["permission", "tier"]}
-                                        menuPlacement="above"
-                                        variant="ghost"
-                                        menus={workspace.groupSessionDraft.menus}
-                                        onEffortChange={(effort?: RigThinkingLevel) =>
-                                            props.workspace.sessionEffortUpdate(effort)
-                                        }
-                                        onModelChange={(selection: RigModelSelection) =>
-                                            props.workspace.sessionModelUpdate(selection)
-                                        }
-                                        onPermissionModeChange={(mode: RigPermissionMode) =>
-                                            props.workspace.sessionPermissionModeUpdate(mode)
-                                        }
-                                        onServiceTierChange={(tier?: RigServiceTier) =>
-                                            props.workspace.sessionServiceTierUpdate(tier)
-                                        }
-                                    />
-                                ) : undefined
+                                <ComposerFooterBar
+                                    leading={
+                                        <>
+                                            {workspace.groupSessionDraft ? (
+                                                <RigSessionControls
+                                                    fields={["permission", "tier"]}
+                                                    menuPlacement="above"
+                                                    variant="ghost"
+                                                    menus={workspace.groupSessionDraft.menus}
+                                                    onEffortChange={(effort?: RigThinkingLevel) =>
+                                                        props.workspace.sessionEffortUpdate(effort)
+                                                    }
+                                                    onModelChange={(selection: RigModelSelection) =>
+                                                        props.workspace.sessionModelUpdate(
+                                                            selection,
+                                                        )
+                                                    }
+                                                    onPermissionModeChange={(
+                                                        mode: RigPermissionMode,
+                                                    ) =>
+                                                        props.workspace.sessionPermissionModeUpdate(
+                                                            mode,
+                                                        )
+                                                    }
+                                                    onServiceTierChange={(tier?: RigServiceTier) =>
+                                                        props.workspace.sessionServiceTierUpdate(
+                                                            tier,
+                                                        )
+                                                    }
+                                                />
+                                            ) : null}
+                                            <SlotEntries
+                                                entries={slotViews.statusLine}
+                                                onAction={props.slotAction}
+                                                placement="status-line"
+                                            />
+                                        </>
+                                    }
+                                />
                             }
                             onComposerAttachmentRemove={(attachmentId) =>
                                 props.workspace.composerAttachmentRemove(attachmentId)
@@ -1939,6 +2123,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         );
                                     }}
                                     readOnly={conversationReadOnly}
+                                    slotAction={props.slotAction}
+                                    slots={slotViews}
                                     workspace={props.workspace}
                                 />
                             )}
@@ -2268,6 +2454,8 @@ function RigConversationBody(props: {
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    slotAction(entryId: string): void;
+    slots: RigSlotViews;
     workspace: RigWorkspaceStore;
 }) {
     const conversation = props.conversation;
@@ -2282,6 +2470,8 @@ function RigConversationBody(props: {
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
                 readOnly={props.readOnly}
+                slotAction={props.slotAction}
+                slots={props.slots}
                 workspace={props.workspace}
             />
         );
@@ -2334,6 +2524,8 @@ function RigConversationSurface(props: {
     /** Opens a file the transcript names, in the panel beside it. */
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    slotAction(entryId: string): void;
+    slots: RigSlotViews;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -2360,6 +2552,13 @@ function RigConversationSurface(props: {
         <ConversationView
             agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
+            composerAboveControl={
+                <SlotEntries
+                    entries={props.slots.aboveComposer}
+                    onAction={props.slotAction}
+                    placement="above-composer"
+                />
+            }
             composerDisabled={props.readOnly}
             composerFocusOnType={!props.readOnly && props.focusOnType}
             composerPlaceholder={
@@ -2401,25 +2600,32 @@ function RigConversationSurface(props: {
             composerFooterControl={
                 <ComposerFooterBar
                     leading={
-                        <RigSessionControls
-                            disabled={props.readOnly}
-                            fields={["permission", "tier"]}
-                            menuPlacement="above"
-                            variant="ghost"
-                            menus={conversation.menus}
-                            onEffortChange={(effort?: RigThinkingLevel) =>
-                                workspace.sessionEffortUpdate(effort)
-                            }
-                            onModelChange={(selection: RigModelSelection) =>
-                                workspace.sessionModelUpdate(selection)
-                            }
-                            onPermissionModeChange={(mode: RigPermissionMode) =>
-                                workspace.sessionPermissionModeUpdate(mode)
-                            }
-                            onServiceTierChange={(tier?: RigServiceTier) =>
-                                workspace.sessionServiceTierUpdate(tier)
-                            }
-                        />
+                        <>
+                            <RigSessionControls
+                                disabled={props.readOnly}
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                variant="ghost"
+                                menus={conversation.menus}
+                                onEffortChange={(effort?: RigThinkingLevel) =>
+                                    workspace.sessionEffortUpdate(effort)
+                                }
+                                onModelChange={(selection: RigModelSelection) =>
+                                    workspace.sessionModelUpdate(selection)
+                                }
+                                onPermissionModeChange={(mode: RigPermissionMode) =>
+                                    workspace.sessionPermissionModeUpdate(mode)
+                                }
+                                onServiceTierChange={(tier?: RigServiceTier) =>
+                                    workspace.sessionServiceTierUpdate(tier)
+                                }
+                            />
+                            <SlotEntries
+                                entries={props.slots.statusLine}
+                                onAction={props.slotAction}
+                                placement="status-line"
+                            />
+                        </>
                     }
                     /* How much of the window this session has spent, at the far
                        end of the same row as the access mode and the speed: the
@@ -2565,6 +2771,8 @@ function RigPanelComposer(props: {
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
+    slotAction(entryId: string): void;
+    slots: RigSlotViews;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -2573,6 +2781,13 @@ function RigPanelComposer(props: {
         <FloatingConversationDock>
             <ConversationDock
                 composer={conversation.composer}
+                composerAboveControl={
+                    <SlotEntries
+                        entries={props.slots.aboveComposer}
+                        onAction={props.slotAction}
+                        placement="above-composer"
+                    />
+                }
                 disabled={props.readOnly}
                 // This dock only exists while it covers the workspace column's
                 // composer, so it is the surface the reader writes into.
@@ -2598,25 +2813,32 @@ function RigPanelComposer(props: {
                 composerFooterControl={
                     <ComposerFooterBar
                         leading={
-                            <RigSessionControls
-                                disabled={props.readOnly}
-                                fields={["permission", "tier"]}
-                                menuPlacement="above"
-                                variant="ghost"
-                                menus={conversation.menus}
-                                onEffortChange={(effort?: RigThinkingLevel) =>
-                                    workspace.sessionEffortUpdate(effort)
-                                }
-                                onModelChange={(selection: RigModelSelection) =>
-                                    workspace.sessionModelUpdate(selection)
-                                }
-                                onPermissionModeChange={(mode: RigPermissionMode) =>
-                                    workspace.sessionPermissionModeUpdate(mode)
-                                }
-                                onServiceTierChange={(tier?: RigServiceTier) =>
-                                    workspace.sessionServiceTierUpdate(tier)
-                                }
-                            />
+                            <>
+                                <RigSessionControls
+                                    disabled={props.readOnly}
+                                    fields={["permission", "tier"]}
+                                    menuPlacement="above"
+                                    variant="ghost"
+                                    menus={conversation.menus}
+                                    onEffortChange={(effort?: RigThinkingLevel) =>
+                                        workspace.sessionEffortUpdate(effort)
+                                    }
+                                    onModelChange={(selection: RigModelSelection) =>
+                                        workspace.sessionModelUpdate(selection)
+                                    }
+                                    onPermissionModeChange={(mode: RigPermissionMode) =>
+                                        workspace.sessionPermissionModeUpdate(mode)
+                                    }
+                                    onServiceTierChange={(tier?: RigServiceTier) =>
+                                        workspace.sessionServiceTierUpdate(tier)
+                                    }
+                                />
+                                <SlotEntries
+                                    entries={props.slots.statusLine}
+                                    onAction={props.slotAction}
+                                    placement="status-line"
+                                />
+                            </>
                         }
                         trailing={
                             <>
@@ -2857,6 +3079,8 @@ function RigPanelBody(props: {
     store: RigPanelStore;
     workspaceFiles?: RigWorkspaceFiles;
     workspaceFilesLoading: boolean;
+    /** Current version per imported webapp, used to live-reload an already open page. */
+    webappRevisions: ReadonlyMap<string, number>;
 }) {
     const all = props.scope === "all";
     // Under "All files" the changed ones keep their status marks, so the work in
@@ -3072,6 +3296,17 @@ function RigPanelBody(props: {
                         store={props.store}
                         tabId={activeToolTab.id}
                     />
+                ) : activeToolTab?.kind === "webapp" ? (
+                    <HtmlPreviewFrame>
+                        {props.htmlPreview
+                            ? props.htmlPreview({
+                                  source: activeToolTab.url,
+                                  revision: String(
+                                      props.webappRevisions.get(activeToolTab.label) ?? 0,
+                                  ),
+                              })
+                            : undefined}
+                    </HtmlPreviewFrame>
                 ) : activeToolTab?.kind === "browser" ? null : (
                     <EmptyState
                         description="Select Files, a preview, or a live tool tab."

@@ -129,6 +129,7 @@
 @import "./styles/wait-ring.css";
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";
+@import "./styles/slot-entries.css";
 @import "./styles/conversation.css";
 @import "./styles/chat-conversation.css";
 @import "./styles/rig-usage.css";

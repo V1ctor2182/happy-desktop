@@ -16,6 +16,13 @@
     box-sizing: border-box;
 }
 
+.happy2-channel-header__title-accessory {
+    display: flex;
+    flex: 0 1 360px;
+    align-items: center;
+    min-width: 0;
+}
+
 .happy2-channel-header {
     display: flex;
     align-items: center;

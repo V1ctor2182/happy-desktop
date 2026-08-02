@@ -119,6 +119,7 @@ import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
 import { WaitRingPage } from "./pages/WaitRingPage";
 import { HtmlPreviewFramePage } from "./pages/HtmlPreviewFramePage";
 import { ContextMeterPage } from "./pages/ContextMeterPage";
+import { SlotEntriesPage } from "./pages/SlotEntriesPage";
 import { ConversationEntryViewPage } from "./pages/ConversationEntryViewPage";
 import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
@@ -297,6 +298,7 @@ const components: BlueprintPage[] = [
         number: "C-159",
         page: ContextMeterPage,
     },
+    { id: "slot-entries", label: "Slot entries", number: "C-176", page: SlotEntriesPage },
     {
         id: "rig-usage-panel",
         label: "Rig usage panel",

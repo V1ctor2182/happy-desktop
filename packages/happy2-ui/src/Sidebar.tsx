@@ -110,6 +110,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * `onItemSelect` like any other row and are never active.
      */
     actions?: SidebarItem[];
+    /** Agent-authored menu content between the pinned actions and project sections. */
+    bodyAccessory?: ReactNode;
     /**
      * Renders the product lockup — the logo and the word "Happy" — instead of a
      * custom title row.
@@ -586,6 +588,7 @@ export function Sidebar(props: SidebarProps) {
         "actions",
         "activeItemId",
         "brand",
+        "bodyAccessory",
         "className",
         "composeLabel",
         "footer",
@@ -956,6 +959,7 @@ export function Sidebar(props: SidebarProps) {
                             onSelect={() => local.onItemSelect(action.id)}
                         />
                     ))}
+                    {local.bodyAccessory}
                     {local.sections.map((section) => (
                         <section
                             className="happy2-sidebar__section"

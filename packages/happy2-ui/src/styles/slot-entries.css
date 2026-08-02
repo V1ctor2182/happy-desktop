@@ -1,0 +1,178 @@
+.happy2-slot-entries,
+.happy2-slot-entries * {
+    box-sizing: border-box;
+}
+
+.happy2-slot-entries {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-slot-entries__items {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy2-slot-entry {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.happy2-slot-entry__spark {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy2-slot-entry__content {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+}
+
+.happy2-slot-entry__markdown {
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-slot-entry__markdown > * {
+    margin: 0;
+}
+
+.happy2-slot-entry__markdown a {
+    color: var(--text-link);
+}
+
+.happy2-slot-entry__inspection {
+    position: relative;
+    display: flex;
+    flex: none;
+}
+
+.happy2-slot-entry__inspection > summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--happy2-radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    list-style: none;
+}
+
+.happy2-slot-entry__inspection > summary::-webkit-details-marker {
+    display: none;
+}
+
+.happy2-slot-entry__inspection > summary:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy2-slot-entry__inspection > summary:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-slot-entry__details {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 6px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 240px;
+    padding: 10px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    background: var(--surface);
+    box-shadow: 0 8px 24px var(--shadow-color);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-slot-entry__details strong {
+    color: var(--text);
+    font-weight: 650;
+}
+
+.happy2-slot-entries__switcher {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy2-slot-entries[data-placement="status-line"] {
+    max-width: 320px;
+    color: var(--text-secondary);
+}
+
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__markdown,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-entry__markdown {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__markdown > *,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-entry__markdown > * {
+    display: inline;
+}
+
+.happy2-slot-entries[data-placement="above-composer"] {
+    width: 100%;
+    max-width: var(--happy2-chat-measure);
+    margin: 0 auto;
+    padding: 8px 20px 8px 12px;
+    border-top: 1px solid var(--divider);
+    background: var(--surface-high);
+}
+
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-entry {
+    min-height: 28px;
+}
+
+.happy2-slot-entries[data-placement="title"] {
+    flex: 0 1 360px;
+    margin-left: 4px;
+    padding-left: 10px;
+    border-left: 1px solid var(--divider);
+}
+
+.happy2-slot-entries[data-placement="sidebar"] {
+    width: 100%;
+    padding: 8px;
+    color: inherit;
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-entry {
+    align-items: flex-start;
+    padding: 8px;
+    border-radius: var(--happy2-radius-md);
+    background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-entry__details {
+    right: 0;
+}

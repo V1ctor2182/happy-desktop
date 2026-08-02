@@ -79,6 +79,8 @@ export type ConversationViewProps = {
      * message being written, so they sit with the input rather than the header.
      */
     composerControls?: ReactNode;
+    /** Agent-authored contribution bar immediately above the composer. */
+    composerAboveControl?: ReactNode;
     /** Controlled accessory below the composer card, aligned with cloud audience routing. */
     composerFooterControl?: ReactNode;
     /**
@@ -330,6 +332,7 @@ export function ConversationView(props: ConversationViewProps) {
 
             <ConversationDock
                 composer={composer}
+                composerAboveControl={props.composerAboveControl}
                 composerControls={props.composerControls}
                 disabled={props.composerDisabled}
                 composerFooterControl={props.composerFooterControl}
