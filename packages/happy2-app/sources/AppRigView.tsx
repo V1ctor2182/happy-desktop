@@ -76,6 +76,7 @@ import {
     type BrowserContentRenderer,
     HtmlPreviewFrame,
     type HtmlPreviewRenderer,
+    type ImageWindowOpener,
     Button,
     ChannelHeader,
     ContextMeter,
@@ -290,6 +291,11 @@ export interface AppRigViewProps {
      * engine to run it in; without one an HTML file opens as its source.
      */
     htmlPreview?: HtmlPreviewRenderer;
+    /**
+     * Shows one workspace picture in a window of the host's own. Supplied only
+     * by a host that has such a window; without one a picture stays in place.
+     */
+    imageWindow?: ImageWindowOpener;
     /**
      * The addressed group — a project or one of its worktrees — and conversation,
      * read from the route by the caller. This surface never decides what is
@@ -1598,6 +1604,7 @@ export function AppRigView(props: AppRigViewProps) {
                 appearance={props.appearance}
                 browserContent={props.browserContent}
                 htmlPreview={props.htmlPreview}
+                imageWindow={props.imageWindow}
                 chatId={props.chatId}
                 clock={active.session.clock}
                 connection={active.session.connection}
@@ -1790,6 +1797,7 @@ interface RigWorkspaceSurfaceProps {
     windowState?: RigWindowStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
     sidebar: ReactNode;
     slots: RigSlotsSnapshot;
@@ -2004,6 +2012,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         canStartTerminal={props.chatId !== undefined}
                         browserContent={props.browserContent}
                         htmlPreview={props.htmlPreview}
+                        imageWindow={props.imageWindow}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
@@ -2376,6 +2385,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     {...(props.htmlPreview
                                         ? { htmlPreview: props.htmlPreview }
                                         : {})}
+                                    {...(props.imageWindow
+                                        ? { imageWindow: props.imageWindow }
+                                        : {})}
                                     mode={workspace.fileViewMode}
                                     workspace={props.workspace}
                                 />
@@ -2495,6 +2507,7 @@ function RigFileBody(props: {
     appearance: "dark" | "light";
     file: RigFileTabSnapshot;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     mode: RigFileViewMode;
     workspace: RigWorkspaceStore;
 }) {
@@ -2503,6 +2516,7 @@ function RigFileBody(props: {
         return (
             <RigFilePreview
                 document={file.document}
+                {...(props.imageWindow ? { imageWindow: props.imageWindow } : {})}
                 key={file.id}
                 loading={file.loading}
                 onRetry={() => workspace.fileRetry(file.id)}
@@ -2639,6 +2653,7 @@ function RigFileBody(props: {
  */
 function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
+    imageWindow?: ImageWindowOpener;
     loading: boolean;
     onRetry: () => void;
     path: string;
@@ -2659,13 +2674,16 @@ function RigFilePreview(props: {
     // A format with no viewer is stated as such rather than rendered as an
     // <img> that will only ever show a broken-image glyph.
     const kind = filePreviewKind(props.path);
+    const showable = value.contentType !== "application/octet-stream" && kind !== "binary";
+    const imageWindow = props.imageWindow;
     return (
         <FilePreview
-            content={
-                value.contentType === "application/octet-stream" || kind === "binary"
-                    ? { type: "unavailable" }
-                    : { type: "url", url: value.url }
-            }
+            content={showable ? { type: "url", url: value.url } : { type: "unavailable" }}
+            {...(imageWindow && showable && kind === "image"
+                ? {
+                      onImageWindowOpen: () => imageWindow({ path: props.path, url: value.url }),
+                  }
+                : {})}
             path={props.path}
             size={fileSizeFormat(value.size)}
         />
@@ -3396,6 +3414,7 @@ function RigCreateDialog(props: { create: RigCreateSnapshot; workspace: RigWorks
 function RigPanelBody(props: {
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     expanded: ReadonlySet<string>;
@@ -3623,6 +3642,7 @@ function RigPanelBody(props: {
                     panelFile ? (
                         <RigPanelFileView
                             {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+                            {...(props.imageWindow ? { imageWindow: props.imageWindow } : {})}
                             file={panelFile}
                             key={panelFile.path}
                             onClose={props.onPanelFileClose}
@@ -3682,10 +3702,12 @@ function panelFileIcon(path: string): "image" | "play" | "doc" {
 function RigPanelFileView(props: {
     file: RigPanelFileSnapshot;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     onClose: () => void;
     onFileOpen: (path: string) => void;
 }) {
     const { file } = props;
+    const imageWindow = props.imageWindow;
     const content: FilePreviewContent =
         file.document.type === "error"
             ? { type: "error", message: file.document.error.message }
@@ -3714,6 +3736,11 @@ function RigPanelFileView(props: {
             onClose={props.onClose}
             // A link inside the document is relative to the document holding it.
             onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
+            {...(imageWindow && content.type === "url" && filePreviewKind(file.path) === "image"
+                ? {
+                      onImageWindowOpen: () => imageWindow({ path: file.path, url: content.url }),
+                  }
+                : {})}
             path={file.path}
             {...(file.document.type === "ready" && "size" in file.document.value
                 ? { size: fileSizeFormat(file.document.value.size) }

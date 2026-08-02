@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
+import { ImageViewer } from "./ImageViewer";
 export type LightboxProps = {
     className?: string;
     "data-testid"?: string;
@@ -22,7 +23,13 @@ export type LightboxProps = {
  * centering layer (no scrim, no fixed positioning) so it renders as a
  * screenshot-safe specimen; a consuming app portals it over its own backdrop.
  * The measured card is the inner `data-happy2-ui="lightbox-dialog"`: an optional
- * caption/detail + actions header and a contained image on the code surface.
+ * caption/detail + actions header above the shared `ImageViewer`.
+ *
+ * The picture inside is the same viewer the file preview and the separate
+ * preview window use, so an image opened from a conversation zooms, pans, and
+ * answers the keyboard exactly as one opened from Files does. The card is
+ * therefore a fixed viewing room rather than a box that shrinks to each
+ * picture: a frame that resized per image would move its own controls.
  */
 export function Lightbox(props: LightboxProps) {
     const [local, rest] = partitionComponentProps(props, [
@@ -88,12 +95,9 @@ export function Lightbox(props: LightboxProps) {
                     </header>
                 ) : null}
                 <div className="happy2-lightbox__frame" data-happy2-ui="lightbox-frame">
-                    <img
-                        alt={local.alt ?? local.caption ?? ""}
-                        className="happy2-lightbox__image"
-                        data-happy2-ui="lightbox-image"
-                        draggable={false}
-                        src={local.imageUrl}
+                    <ImageViewer
+                        content={{ type: "url", url: local.imageUrl }}
+                        name={local.alt ?? local.caption ?? "Image"}
                     />
                 </div>
             </div>

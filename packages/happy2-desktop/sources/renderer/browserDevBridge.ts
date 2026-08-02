@@ -56,6 +56,11 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // A browser tab has no Dock icon to mark, so the count goes nowhere
         // rather than the window branching on where it is running.
         dockUnreadSet: () => undefined,
+        // A browser tab has no window of its own to open a picture in, so it
+        // offers none and the control is absent rather than present and broken.
+        imagePreviewOpen: async () => {
+            throw new Error("This window cannot open a separate picture window.");
+        },
         directoryPick: async () => undefined,
         desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
         desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),

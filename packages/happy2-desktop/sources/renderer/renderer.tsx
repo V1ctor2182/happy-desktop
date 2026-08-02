@@ -27,12 +27,14 @@ import {
     ThemeScope,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
+    type ImageWindowOpener,
     type RigPluginApplicationContentRenderer,
 } from "happy2-ui";
-import type {
-    DesktopConfig,
-    DesktopUpdateSnapshot,
-    HappyDesktopBridge,
+import {
+    imagePreviewView,
+    type DesktopConfig,
+    type DesktopUpdateSnapshot,
+    type HappyDesktopBridge,
 } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { dockUnreadPublish } from "./dockUnread";
@@ -52,6 +54,24 @@ import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { DesktopPluginApplicationView } from "./desktopPluginApplicationView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
+import {
+    DesktopImagePreviewWindow,
+    desktopImagePreviewEscapeBind,
+    desktopImagePreviewStoreCreate,
+} from "./desktopImagePreview";
+
+/**
+ * Hands one workspace picture to the shell to show in a window of its own. The
+ * shell decides whether the address is one of its Rigs' and refuses otherwise,
+ * so a failure here is reported rather than retried against another route.
+ */
+function desktopImageWindowOpen(bridge: HappyDesktopBridge): ImageWindowOpener {
+    return (request) => {
+        void bridge.imagePreviewOpen(request.url).catch((error: unknown) => {
+            console.error("Could not open the picture in its own window.", error);
+        });
+    };
+}
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
@@ -166,6 +186,7 @@ function RigBoundary(props: {
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     pluginApplicationContent?: RigPluginApplicationContentRenderer;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
@@ -186,6 +207,7 @@ function RigBoundary(props: {
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
                 htmlPreview: props.htmlPreview,
+                imageWindow: props.imageWindow,
                 pluginApplicationContent: props.pluginApplicationContent,
                 ...(update
                     ? {
@@ -213,6 +235,7 @@ function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
+    imageWindow?: ImageWindowOpener;
     pluginApplicationContent?: RigPluginApplicationContentRenderer;
     bridge: HappyDesktopBridge;
     navigationOrder: RigNavigationOrderStore;
@@ -316,6 +339,7 @@ function DesktopRenderer(props: {
             bridge={props.bridge}
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
+            imageWindow={props.imageWindow}
             pluginApplicationContent={props.pluginApplicationContent}
             navigationOrder={props.navigationOrder}
             notes={props.notes}
@@ -335,7 +359,23 @@ const browserLocal =
     document.querySelector('meta[name="happy2-browser-local"]')?.getAttribute("content") === "1";
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 const root = createRoot(document.getElementById("root")!);
-if (bridge) {
+// The picture window is this same document, launched with the reduced bridge and
+// loaded with the view it should mount. Deciding it here rather than after a
+// round trip means the first frame is already the picture instead of the whole
+// application appearing for a beat.
+const imagePreviewBridge =
+    new URLSearchParams(location.search).get(imagePreviewView.key) === imagePreviewView.value
+        ? window.happyImagePreview
+        : undefined;
+if (imagePreviewBridge) {
+    const previewBridge = imagePreviewBridge;
+    desktopImagePreviewEscapeBind(previewBridge);
+    root.render(
+        <DesktopAppearance appearance={appearanceStoreCreate()}>
+            <DesktopImagePreviewWindow store={desktopImagePreviewStoreCreate(previewBridge)} />
+        </DesktopAppearance>,
+    );
+} else if (bridge) {
     const desktopBridge = bridge;
     const start = (config: DesktopConfig): void => {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
@@ -402,6 +442,9 @@ if (bridge) {
                                 : desktopPluginApplicationRenderCreate(desktopBridge)
                         }
                         bridge={desktopBridge}
+                        imageWindow={
+                            browserLocal ? undefined : desktopImageWindowOpen(desktopBridge)
+                        }
                         navigationOrder={navigationOrder}
                         notes={notes}
                         // Only the Electron window hides its title bar; the browser

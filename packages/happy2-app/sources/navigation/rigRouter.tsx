@@ -26,6 +26,7 @@ import type {
 import type {
     BrowserContentRenderer,
     HtmlPreviewRenderer,
+    ImageWindowOpener,
     RigPluginApplicationContentRenderer,
 } from "happy2-ui";
 import {
@@ -58,6 +59,11 @@ export interface RigRouterContext {
     readonly pluginApplicationContent?: RigPluginApplicationContentRenderer;
     /** Renders one HTML workspace file as a page, in a host that has an engine. */
     readonly htmlPreview?: HtmlPreviewRenderer;
+    /**
+     * Shows one workspace picture in a window outside this one. Present only in
+     * a shell that has separate windows to open, which is packaged Electron.
+     */
+    readonly imageWindow?: ImageWindowOpener;
     readonly rigs: AppRigDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
     readonly buildIdentity?: AppBuildIdentity;
@@ -402,6 +408,7 @@ function RigWorkspaceLayout(
             browserContent={context.browserContent}
             buildIdentity={context.buildIdentity}
             htmlPreview={context.htmlPreview}
+            imageWindow={context.imageWindow}
             chatId={params.chatId}
             groupId={params.groupId}
             noteId={params.noteId}

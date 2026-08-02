@@ -2,9 +2,10 @@
  * C-169 FilePreview — one file, shown rather than downloaded.
  *
  * A 56px surface header naming the file, then a body that fills whatever region
- * the preview was given. Visual media is centered on the inset surface with the
- * artwork contained rather than cropped, because a preview that crops has
- * answered a different question than the one asked. Source scrolls in a
+ * the preview was given. A picture is handed to the shared ImageViewer, which
+ * brings its own frame and controls; video and audio are centered on the inset
+ * stage with the artwork contained rather than cropped, because a preview that
+ * crops has answered a different question than the one asked. Source scrolls in a
  * full-bleed scrollport around the Pierre renderer, and a Markdown document is
  * handed to `MarkdownDocument`, which owns its own reading measure.
  * Colors and type are theme tokens only.
@@ -107,7 +108,6 @@
     background: var(--groupped-background);
 }
 
-.happy2-file-preview__image,
 .happy2-file-preview__video {
     display: block;
     max-width: 100%;

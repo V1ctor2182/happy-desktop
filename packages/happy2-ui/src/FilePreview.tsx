@@ -4,9 +4,11 @@ import { Button } from "./Button";
 import { CodeBlock } from "./CodeBlock";
 import { fileTreeFamily } from "./FileTree";
 import { Icon, type IconName } from "./Icon";
+import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
 import { SegmentedControl } from "./SegmentedControl";
 import { Spinner } from "./Spinner";
+import { Ionicon } from "./vectorIcons/VectorIcon";
 /**
  * How a file is shown. `binary` is the honest answer for something this surface
  * cannot render — an executable, an archive, a format nobody wrote a viewer for
@@ -42,10 +44,19 @@ export type FilePreviewProps = {
     content: FilePreviewContent;
     /** Human-readable size, shown beside the name. */
     size?: string;
-    /** Intrinsic pixel size of an image, shown beside its size. */
+    /**
+     * Intrinsic pixel size of an image, shown beside its size. Absent lets the
+     * picture state its own once it decodes, which is the only place that fact
+     * exists for a file the caller only holds an address for.
+     */
     dimensions?: string;
     /** Trailing header controls, e.g. Download or Open in editor. */
     actions?: ReactNode;
+    /**
+     * Shows this picture in a window of the host's own. Present only where such
+     * a window exists, so the control is absent rather than inert in a browser.
+     */
+    onImageWindowOpen?: () => void;
     /**
      * Opens a file a rendered Markdown document links to. Absent leaves those
      * links inert, which is the honest answer on a surface with no workspace
@@ -162,6 +173,7 @@ export function FilePreview(props: FilePreviewProps) {
         "dimensions",
         "actions",
         "onFileOpen",
+        "onImageWindowOpen",
         "rendered",
         "onClose",
         "closeLabel",
@@ -170,10 +182,17 @@ export function FilePreview(props: FilePreviewProps) {
     // not of the file or the product, so it stays here and resets when the
     // preview is replaced by a different file.
     const [face, setFace] = useState<MarkdownFace>("rendered");
+    // What the picture turned out to be, keyed by the address it was measured
+    // from, so neither a different file nor a new revision of this one ever
+    // wears the previous picture's dimensions.
+    const [measured, setMeasured] = useState<{ source: string; dimensions: string }>();
     const kind = local.kind ?? filePreviewKind(local.path);
     const name = local.path.slice(local.path.lastIndexOf("/") + 1);
     const directory = local.path.slice(0, local.path.lastIndexOf("/") + 1);
-    const meta = [local.dimensions, local.size].filter(Boolean).join(" · ");
+    const source = local.content.type === "url" ? local.content.url : local.path;
+    const dimensions =
+        local.dimensions ?? (measured?.source === source ? measured.dimensions : undefined);
+    const meta = [dimensions, local.size].filter(Boolean).join(" · ");
     return (
         <section
             className={["happy2-file-preview", local.className].filter(Boolean).join(" ")}
@@ -230,6 +249,13 @@ export function FilePreview(props: FilePreviewProps) {
                     kind={kind}
                     name={name}
                     onFileOpen={local.onFileOpen}
+                    onImageMeasure={(size) =>
+                        setMeasured({
+                            source,
+                            dimensions: `${String(size.width)} × ${String(size.height)}`,
+                        })
+                    }
+                    onImageWindowOpen={local.onImageWindowOpen}
                     rendered={local.rendered}
                 />
             </div>
@@ -247,8 +273,37 @@ function FilePreviewBody(props: {
     kind: FilePreviewKind;
     name: string;
     onFileOpen?: (path: string) => void;
+    onImageMeasure: (size: { readonly width: number; readonly height: number }) => void;
+    onImageWindowOpen?: () => void;
     rendered?: ReactNode;
 }) {
+    // A picture is handed to the shared viewer in every state, including the
+    // ones that have no picture: its loading, failed, and unviewable notices are
+    // the ones a reader already knows from every other place an image opens.
+    if (props.kind === "image" && props.content.type !== "text")
+        return (
+            <ImageViewer
+                actions={
+                    props.onImageWindowOpen ? (
+                        <>
+                            <Button
+                                aria-label="Open in a new window"
+                                iconOnly
+                                onClick={props.onImageWindowOpen}
+                                size="small"
+                                variant="ghost"
+                            >
+                                <Ionicon name="open-outline" size={14} />
+                            </Button>
+                            <span className="happy2-image-viewer__divider" />
+                        </>
+                    ) : undefined
+                }
+                content={props.content}
+                name={props.name}
+                onNaturalSize={props.onImageMeasure}
+            />
+        );
     if (props.content.type === "loading")
         return (
             <div className="happy2-file-preview__notice" data-happy2-ui="file-preview-loading">
@@ -272,18 +327,6 @@ function FilePreviewBody(props: {
         );
     if (props.content.type === "url" && URL_KINDS.has(props.kind)) {
         const url = props.content.url;
-        if (props.kind === "image")
-            return (
-                <div className="happy2-file-preview__stage" data-happy2-ui="file-preview-stage">
-                    <img
-                        alt={props.name}
-                        className="happy2-file-preview__image"
-                        data-happy2-ui="file-preview-image"
-                        draggable={false}
-                        src={url}
-                    />
-                </div>
-            );
         if (props.kind === "video")
             return (
                 <div className="happy2-file-preview__stage" data-happy2-ui="file-preview-stage">

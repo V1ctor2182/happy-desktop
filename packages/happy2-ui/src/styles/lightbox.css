@@ -6,8 +6,7 @@
  * consuming app portals it over its own backdrop. The measured card is the
  * inner .happy2-lightbox__dialog: a raised surface with a 14px shell radius, a
  * strong hairline, an elevated shadow, an optional caption/actions header, and
- * a contained image on the code surface. The dialog shrinks to the image's
- * natural size, capped by the frame's max-width / max-height.
+ * the shared ImageViewer filling the frame beneath it.
  */
 
 .happy2-lightbox,
@@ -15,8 +14,7 @@
 .happy2-lightbox__header,
 .happy2-lightbox__caption,
 .happy2-lightbox__tools,
-.happy2-lightbox__frame,
-.happy2-lightbox__image {
+.happy2-lightbox__frame {
     box-sizing: border-box;
 }
 
@@ -30,11 +28,18 @@
     font-synthesis: none;
 }
 
+/* A fixed viewing room, not a box that shrinks to each picture: the viewer
+   inside carries controls, and a card that resized per image would move them.
+   The card hosts itself directly on ModalOverlay rather than through the Modal
+   collapse, so it bounds its own height against the window less that overlay's
+   documented 24px gutter on each side, which stays a whole number of pixels at
+   every integer window size. */
 .happy2-lightbox__dialog {
     display: flex;
     flex: none;
     flex-direction: column;
-    max-width: 880px;
+    width: min(880px, calc(100vw - 48px));
+    height: min(620px, calc(100vh - 48px));
     overflow: hidden;
     background: var(--surface-high);
     border: 1px solid var(--divider);
@@ -95,20 +100,9 @@
 
 .happy2-lightbox__frame {
     display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    justify-content: center;
+    flex: 1 1 0%;
+    align-items: stretch;
+    justify-content: stretch;
+    min-width: 0;
     min-height: 0;
-    max-height: 620px;
-    background: var(--diff-context-bg);
-}
-
-.happy2-lightbox__image {
-    display: block;
-    max-width: 100%;
-    max-height: 620px;
-    object-fit: contain;
-    -webkit-user-drag: none;
-    -webkit-user-select: none;
-    user-select: none;
 }

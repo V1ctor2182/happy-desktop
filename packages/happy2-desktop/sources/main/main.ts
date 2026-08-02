@@ -34,9 +34,18 @@ import {
     desktopIpc,
     happyBrowserPartition,
     happyHtmlPreviewPartition,
+    imagePreviewArgument,
+    imagePreviewView,
     type DesktopBrowserStatus,
+    type DesktopImagePreview,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
+import {
+    imagePreviewAddressAllowed,
+    imagePreviewNavigationAllowed,
+    imagePreviewResolve,
+    imagePreviewTitle,
+} from "./imagePreviewWindow";
 import {
     PluginApplicationHost,
     pluginApplicationSchemeRegister,
@@ -141,6 +150,14 @@ let browserProxyConnectionId: number | undefined;
 let browserProxyOperation = Promise.resolve();
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
 const unavailableBrowserProxy = "http://127.0.0.1:9";
+/*
+ * The one window a picture is shown in outside the application. There is exactly
+ * one because a reader looking at a picture is looking at a picture: opening
+ * another points this window at the new one rather than accumulating windows
+ * nobody asked for and nobody will close.
+ */
+let imagePreviewWindow: BrowserWindow | undefined;
+let imagePreviewSubject: DesktopImagePreview | undefined;
 
 function browserSessionGet() {
     return electronSession.fromPartition(happyBrowserPartition, { cache: true });
@@ -585,6 +602,163 @@ function remoteWindowCreate(url: string, bounds?: DesktopWindowBounds) {
     return { load: () => window.loadURL(url), window };
 }
 
+/**
+ * Every Rig proxy this process is currently running. A picture may be shown in a
+ * window of its own only if its address is on one of them, which is what keeps a
+ * privileged window pointed at this machine's own Rigs and nothing else.
+ */
+function imagePreviewBases(): readonly (string | undefined)[] {
+    const snapshot = runtime.get();
+    return [
+        snapshot.phase === "ready" && snapshot.activeTarget.authentication === "rig"
+            ? snapshot.activeTarget.rigHttpUrl
+            : undefined,
+        ...(remoteRigManager?.get() ?? []).map((rig) => rig.rigHttpUrl),
+    ];
+}
+
+/**
+ * Keeps the preview window named after the file rather than after the bundle.
+ * Every page in this build carries the same `<title>`, which Chromium would
+ * otherwise hand to the window and put one generic name on a window whose whole
+ * job is to say which picture it is showing.
+ */
+function imagePreviewNameHold(window: BrowserWindow): void {
+    const hold = () => {
+        if (window.isDestroyed()) return;
+        window.setTitle(
+            imagePreviewSubject ? imagePreviewTitle(imagePreviewSubject.path) : windowTitle,
+        );
+    };
+    window.on("page-title-updated", (event) => {
+        event.preventDefault();
+        hold();
+    });
+    window.webContents.on("did-finish-load", hold);
+    window.webContents.on("did-navigate", hold);
+    hold();
+}
+
+/**
+ * The window one picture is shown in, outside the application window.
+ *
+ * It is the same renderer document, loaded with the view it should mount, so it
+ * inherits the page's Content-Security-Policy, context isolation, and sandbox
+ * rather than being a second, laxer boundary. It is launched with the argument
+ * that makes the preload hand it the picture bridge instead of the
+ * application's, so it can ask this process for the picture, close itself, and
+ * nothing else. It hosts no plugin bundle and no browser guest, opens no window,
+ * and cannot leave the one document it was opened with.
+ */
+function imagePreviewWindowCreate(): BrowserWindow {
+    const hostedOrigin =
+        desktopFlavor.kind === "local-web" ? desktopFlavor.rendererOrigin : undefined;
+    const developmentUrl = hostedOrigin ? undefined : process.env.VITE_DEV_SERVER_URL;
+    const rendererPath = join(dirname, "renderer", "index.html");
+    const address = (base: string): string => {
+        const url = new URL(base);
+        url.searchParams.set(imagePreviewView.key, imagePreviewView.value);
+        return url.toString();
+    };
+    const rendererUrl = hostedOrigin
+        ? address(`${hostedOrigin}/?desktop=1&mode=local`)
+        : developmentUrl
+          ? address(developmentUrl)
+          : address(pathToFileURL(rendererPath).toString());
+    const window = new BrowserWindow({
+        backgroundColor: windowBackgroundColor,
+        title: windowTitle,
+        width: 1100,
+        height: 760,
+        minWidth: 480,
+        minHeight: 360,
+        ...(applicationIconPath ? { icon: applicationIconPath } : {}),
+        show: false,
+        webPreferences: {
+            additionalArguments: [imagePreviewArgument],
+            contextIsolation: true,
+            nodeIntegration: false,
+            preload: join(dirname, "preload.cjs"),
+            sandbox: true,
+        },
+    });
+    imagePreviewNameHold(window);
+    // A picture window opens no windows and goes nowhere: a link inside it would
+    // be a link inside a picture, which does not exist.
+    window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    const stay = (event: Electron.Event, candidate: string) => {
+        if (!imagePreviewNavigationAllowed(candidate, rendererUrl)) event.preventDefault();
+    };
+    window.webContents.on("will-navigate", stay);
+    window.webContents.on("will-redirect", stay);
+    window.once("ready-to-show", () => {
+        if (window.isDestroyed()) return;
+        // Maximized rather than macOS full screen: full screen would take the
+        // picture to a Space of its own and hide the window it was opened from,
+        // which is the opposite of looking at a file beside the work it belongs to.
+        window.maximize();
+        window.show();
+    });
+    window.on("closed", () => {
+        if (imagePreviewWindow === window) {
+            imagePreviewWindow = undefined;
+            imagePreviewSubject = undefined;
+        }
+    });
+    // A window that never loaded is not a window showing a picture. It is
+    // retired rather than shown empty, so the next open builds a live one instead
+    // of reusing a blank frame that would answer nothing it is sent.
+    const failed = () => {
+        if (imagePreviewWindow === window) {
+            imagePreviewWindow = undefined;
+            imagePreviewSubject = undefined;
+        }
+        if (!window.isDestroyed()) window.destroy();
+    };
+    window.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
+        // Only the document failing counts, and only when it failed rather than
+        // was superseded: an aborted load (-3) is a load that was replaced.
+        if (isMainFrame && code !== -3) failed();
+    });
+    // A renderer that died leaves a frame that can still be raised and sent
+    // pictures, and would answer none of them. It retires on the same path as a
+    // document that never arrived.
+    window.webContents.on("render-process-gone", failed);
+    void window.loadURL(rendererUrl).catch(failed);
+    return window;
+}
+
+/** Points the preview window at `preview`, opening it the first time. */
+function imagePreviewShow(preview: DesktopImagePreview): void {
+    imagePreviewSubject = preview;
+    const existing = imagePreviewWindow;
+    if (existing && !existing.isDestroyed()) {
+        existing.setTitle(imagePreviewTitle(preview.path));
+        if (!existing.webContents.isDestroyed())
+            existing.webContents.send(desktopIpc.imagePreviewChanged, preview);
+        if (existing.isMinimized()) existing.restore();
+        existing.show();
+        existing.focus();
+        return;
+    }
+    imagePreviewWindow = imagePreviewWindowCreate();
+}
+
+/**
+ * Retires the preview window once the address behind it can no longer be served.
+ * The picture is addressed on a Rig proxy, so a Rig that goes away takes the
+ * window with it rather than leaving a frame around a request that will now fail.
+ */
+function imagePreviewRevalidate(): void {
+    const window = imagePreviewWindow;
+    if (!window || window.isDestroyed()) return;
+    const subject = imagePreviewSubject;
+    if (subject && imagePreviewAddressAllowed(subject.url, imagePreviewBases())) return;
+    imagePreviewSubject = undefined;
+    imagePreviewWindow = undefined;
+    window.destroy();
+}
+
 function windowSynchronize(snapshot: ReturnType<DesktopRuntime["get"]>): BrowserWindow {
     const restoredBounds = desktopWindowStateStore.restore(
         screen.getAllDisplays(),
@@ -701,6 +875,7 @@ void app
             const window = windowLifecycle.get();
             if (window && !window.isDestroyed())
                 window.webContents.send(desktopIpc.remoteRigChanged, rigs);
+            imagePreviewRevalidate();
         });
         // Notes live in the user's home rather than in this app's private data
         // directory: the Markdown beside each note is meant to be found by an
@@ -735,6 +910,7 @@ void app
                     ? snapshot.activeTarget.rigHttpUrl
                     : undefined,
             );
+            imagePreviewRevalidate();
             const previous = windowLifecycle.get();
             const window = windowSynchronize(snapshot);
             applicationMenuInstall(snapshot);
@@ -835,6 +1011,31 @@ void app
             const count = dockUnreadCountRead(raw);
             if (count !== undefined) dockBadgeApply(count);
         });
+        ipcMain.handle(desktopIpc.imagePreviewOpen, (event, raw: unknown) => {
+            // Only the window this shell is presenting opens a picture window, so
+            // a superseded renderer still shutting down cannot put one on screen
+            // after the window that asked for it is gone.
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender)
+                throw new Error("This window cannot open a picture window.");
+            // The renderer names the picture; this process decides whether that
+            // name is one of its own Rig's, so a window is never opened onto an
+            // address this build is not already serving.
+            const preview = imagePreviewResolve(raw, imagePreviewBases());
+            if (!preview) throw new Error("That picture is not served by a Rig in this window.");
+            imagePreviewShow(preview);
+        });
+        ipcMain.handle(desktopIpc.imagePreviewGet, (event) =>
+            imagePreviewWindow &&
+            !imagePreviewWindow.isDestroyed() &&
+            imagePreviewWindow.webContents === event.sender
+                ? imagePreviewSubject
+                : undefined,
+        );
+        ipcMain.handle(desktopIpc.imagePreviewClose, (event) => {
+            const window = BrowserWindow.fromWebContents(event.sender);
+            if (window && window === imagePreviewWindow) window.close();
+        });
         ipcMain.handle(desktopIpc.directoryPick, async (event) => {
             const owner = BrowserWindow.fromWebContents(event.sender);
             const options: OpenDialogOptions = {
@@ -933,6 +1134,11 @@ app.on("before-quit", (event) => {
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();
+        // The picture window belongs to this application, not to the desktop, so
+        // it goes when the application does rather than keeping it alive.
+        if (imagePreviewWindow && !imagePreviewWindow.isDestroyed()) imagePreviewWindow.destroy();
+        imagePreviewWindow = undefined;
+        imagePreviewSubject = undefined;
         quitting = true;
         app.quit();
     });

@@ -2,8 +2,10 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
     buildIdentityArgument,
     desktopIpc,
+    imagePreviewArgument,
     type DesktopBrowserStatus,
     type DesktopBuildIdentity,
+    type DesktopImagePreview,
     type DesktopNoteApplyRequest,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
@@ -11,6 +13,7 @@ import {
     type DesktopStartRequest,
     type DesktopWindowState,
     type HappyDesktopBridge,
+    type HappyImagePreviewBridge,
     type RemoteRigSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
@@ -60,6 +63,7 @@ const bridge: HappyDesktopBridge = {
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.
     dockUnreadSet: (count: number) => ipcRenderer.send(desktopIpc.dockUnreadSet, count),
+    imagePreviewOpen: (url: string) => ipcRenderer.invoke(desktopIpc.imagePreviewOpen, url),
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
@@ -123,4 +127,25 @@ const bridge: HappyDesktopBridge = {
     },
 };
 
-contextBridge.exposeInMainWorld("happyDesktop", bridge);
+const imagePreview: HappyImagePreviewBridge = {
+    imagePreviewGet: () => ipcRenderer.invoke(desktopIpc.imagePreviewGet),
+    imagePreviewClose: () => ipcRenderer.invoke(desktopIpc.imagePreviewClose),
+    imagePreviewSubscribe(listener: (preview: DesktopImagePreview | undefined) => void) {
+        const receive = (
+            _event: Electron.IpcRendererEvent,
+            preview: DesktopImagePreview | undefined,
+        ) => listener(preview);
+        ipcRenderer.on(desktopIpc.imagePreviewChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.imagePreviewChanged, receive);
+    },
+};
+
+/*
+ * A window gets one bridge or the other, never both, and which one is settled by
+ * how the window was launched rather than by what the page it loads says about
+ * itself. The picture window therefore has no route to the application's
+ * capabilities at all, instead of having them and being asked not to use them.
+ */
+if (process.argv.includes(imagePreviewArgument))
+    contextBridge.exposeInMainWorld("happyImagePreview", imagePreview);
+else contextBridge.exposeInMainWorld("happyDesktop", bridge);

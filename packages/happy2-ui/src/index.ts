@@ -200,8 +200,10 @@ export {
     type FilePreviewKind,
     type FilePreviewProps,
 } from "./FilePreview";
+export { ImageViewer, type ImageViewerContent, type ImageViewerProps } from "./ImageViewer";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
 export type { HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
+export type { ImageWindowOpener, ImageWindowRequest } from "./imageWindow";
 export { HtmlPreviewFrame, type HtmlPreviewFrameProps } from "./HtmlPreviewFrame";
 export {
     MarkdownDocument,

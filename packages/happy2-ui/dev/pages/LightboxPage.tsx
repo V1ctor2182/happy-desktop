@@ -25,7 +25,7 @@ export function LightboxPage() {
     return (
         <ComponentPage
             number="C-046"
-            summary="Full image preview inside a web modal (never a new browser tab). A transparent centering layer wraps a raised card with an optional caption/actions header and a contained image on the code surface."
+            summary="Full image preview inside a web modal (never a new browser tab). A transparent centering layer wraps a raised card with an optional caption/actions header above the shared ImageViewer, so a picture opened from a conversation zooms and pans exactly as one opened from Files."
             title="Lightbox"
         >
             <Specimen
@@ -51,7 +51,7 @@ export function LightboxPage() {
                         imageUrl={demoImage(640, 400, "#8b7cf7", "#f472b6")}
                         onClose={() => {}}
                     />
-                    <DimensionRule label="14 px shell radius · 52 px header · frame max 620 px" />
+                    <DimensionRule label="14 px shell radius · 52 px header · 880 × 620 px card · 40 px tool bar" />
                 </div>
             </Specimen>
 
