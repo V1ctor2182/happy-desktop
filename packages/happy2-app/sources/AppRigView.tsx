@@ -117,6 +117,7 @@ import {
     SidebarFooter,
     SidebarUpdateAction,
     SlotEntries,
+    type SlotActionIntent,
     type SlotVisualEntry,
     RigInboxPage,
     RigPluginApplicationPage,
@@ -1027,28 +1028,65 @@ function slotAuthor(projects: readonly RigProjectGroup[], authorSessionId: strin
     return `Agent ${authorSessionId.slice(0, 8)}`;
 }
 
+/**
+ * Which of the four kinds of act a button performs, in the vocabulary the slot
+ * component paints. Sending to this chat and sending to a named one are one
+ * kind: the reader is told a message will be sent, and the details say where.
+ */
+function slotActionIntent(action: RigSlotAction): SlotActionIntent {
+    switch (action.type) {
+        case "send-current-chat":
+        case "send-chat":
+            return "send";
+        case "draft-chat":
+            return "draft";
+        case "new-chat":
+            return "new-chat";
+        case "open-webapp":
+            return "open";
+    }
+}
+
+/** Why an action cannot run in this context, or nothing when it can. */
+function slotUnavailable(
+    action: RigSlotAction,
+    webapps: ReadonlySet<string>,
+    hasCurrentChat: boolean,
+): string | undefined {
+    if (action.type === "send-current-chat" && !hasCurrentChat)
+        return "No chat is open here to send this message to.";
+    if (action.type === "open-webapp" && !webapps.has(action.webapp))
+        return `This Rig is not serving a webapp named “${action.webapp}”.`;
+    return undefined;
+}
+
 function slotVisualEntries(
     entries: readonly RigSlotEntry[],
     projects: readonly RigProjectGroup[],
     webapps: ReadonlySet<string>,
     hasCurrentChat: boolean,
 ): readonly SlotVisualEntry[] {
-    return entries.map((entry) => ({
-        id: entry.id,
-        author: slotAuthor(projects, entry.authorSessionId),
-        description: entry.description,
-        purpose: entry.purpose,
-        ...(entry.content.type === "button" &&
-        ((entry.content.action.type === "send-current-chat" && !hasCurrentChat) ||
-            (entry.content.action.type === "open-webapp" &&
-                !webapps.has(entry.content.action.webapp)))
-            ? { disabled: true }
-            : {}),
-        content:
-            entry.content.type === "text"
-                ? { type: "text" as const, markdown: entry.content.markdown }
-                : { type: "button" as const, label: entry.content.label },
-    }));
+    return entries.map((entry) => {
+        const unavailable =
+            entry.content.type === "button"
+                ? slotUnavailable(entry.content.action, webapps, hasCurrentChat)
+                : undefined;
+        return {
+            id: entry.id,
+            author: slotAuthor(projects, entry.authorSessionId),
+            description: entry.description,
+            purpose: entry.purpose,
+            ...(unavailable ? { disabled: true, disabledReason: unavailable } : {}),
+            content:
+                entry.content.type === "text"
+                    ? { type: "text" as const, markdown: entry.content.markdown }
+                    : {
+                          type: "button" as const,
+                          label: entry.content.label,
+                          intent: slotActionIntent(entry.content.action),
+                      },
+        };
+    });
 }
 
 function slotActionRun(workspace: RigWorkspaceStore, action: RigSlotAction): Promise<void> {

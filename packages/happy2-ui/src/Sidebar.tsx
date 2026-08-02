@@ -1228,7 +1228,14 @@ export function Sidebar(props: SidebarProps) {
                             })}
                         </div>
                     ) : null}
-                    {local.bodyAccessory}
+                    {local.bodyAccessory ? (
+                        <div
+                            className="happy2-sidebar__body-accessory"
+                            data-happy2-ui="sidebar-body-accessory"
+                        >
+                            {local.bodyAccessory}
+                        </div>
+                    ) : null}
                     {local.sections.map((section) => (
                         <section
                             className="happy2-sidebar__section"

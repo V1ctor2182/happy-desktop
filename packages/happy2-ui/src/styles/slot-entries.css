@@ -1,3 +1,14 @@
+/*
+ * C-176 Slot entries — agent-authored contributions in Happy's four durable
+ * slots.
+ *
+ * One component, four intentionally different treatments: a quiet single line
+ * beside the session controls, a bounded card above the composer, a compact
+ * line attached to the surface title, and menu rows in the sidebar's own
+ * rhythm. Authorship and intent are always one press away and never permanently
+ * occupy the compact chrome.
+ */
+
 .happy2-slot-entries,
 .happy2-slot-entries * {
     box-sizing: border-box;
@@ -9,178 +20,606 @@
     min-width: 0;
     color: var(--text);
     font-family: var(--happy2-font-ui);
+    font-synthesis: none;
 }
 
-.happy2-slot-entries__items {
+.happy2-slot-entries__list {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
-    gap: 6px;
     min-width: 0;
 }
 
-.happy2-slot-entry {
+/* Said out loud when the reader switches contributions, never drawn: the
+   position and the contribution's own description, in a region that is already
+   on the page before it changes. */
+.happy2-slot-entries__live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.happy2-slot-item {
     position: relative;
     display: flex;
-    align-items: center;
-    gap: 7px;
+    flex-direction: column;
     min-width: 0;
 }
 
-.happy2-slot-entry__spark {
+.happy2-slot-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-slot-row__glyph {
     display: flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
     color: var(--text-secondary);
 }
 
-.happy2-slot-entry__content {
-    display: flex;
+.happy2-slot-row__text {
     flex: 1 1 auto;
-    align-items: center;
-    min-width: 0;
-}
-
-.happy2-slot-entry__markdown {
     min-width: 0;
     overflow: hidden;
     color: inherit;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
 }
 
-.happy2-slot-entry__markdown > * {
+.happy2-slot-row__text > * {
     margin: 0;
 }
 
-.happy2-slot-entry__markdown a {
-    color: var(--text-link);
+.happy2-slot-row__text code {
+    overflow-wrap: anywhere;
 }
 
-.happy2-slot-entry__inspection {
-    position: relative;
+.happy2-slot-row__text a {
+    color: var(--text-link);
+    text-decoration: none;
+}
+
+.happy2-slot-row__text a:hover {
+    text-decoration: underline;
+}
+
+.happy2-slot-row__text a:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* The action keeps its own width, but its lane takes the free space so the
+   inspect control lands on the same trailing edge as a text row's does. */
+.happy2-slot-row__control {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+/*
+ * An author writes the label, so it can be any length: the control keeps its own
+ * shape and cuts the label rather than growing past the lane it was given.
+ */
+.happy2-slot-row__control > .happy2-button {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.happy2-slot-row__control .happy2-button__content {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.happy2-slot-row__control .happy2-button__label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Inspect trigger --------------------------------------------------- */
+
+.happy2-slot-row__inspect {
     display: flex;
     flex: none;
-}
-
-.happy2-slot-entry__inspection > summary {
-    display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: none;
     border-radius: var(--happy2-radius-sm);
+    background: transparent;
     color: var(--text-secondary);
+    appearance: none;
     cursor: pointer;
-    list-style: none;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
 }
 
-.happy2-slot-entry__inspection > summary::-webkit-details-marker {
-    display: none;
-}
-
-.happy2-slot-entry__inspection > summary:hover {
+.happy2-slot-row__inspect:hover {
     background: var(--surface-ripple);
     color: var(--text);
 }
 
-.happy2-slot-entry__inspection > summary:focus-visible {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 1px;
+.happy2-slot-row__inspect:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
 }
 
-.happy2-slot-entry__details {
+/* ---- Details ----------------------------------------------------------- */
+
+.happy2-slot-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--happy2-z-overlay) - 1);
+    border: none;
+    background: transparent;
+    cursor: default;
+}
+
+/* The compact placements have no room to grow, so their details leave the flow
+   and hang off the item they belong to. */
+.happy2-slot-popover {
     position: absolute;
-    z-index: 30;
-    top: calc(100% + 8px);
-    right: 0;
+    left: 0;
+    z-index: var(--happy2-z-overlay);
     display: flex;
+    width: 288px;
+    max-width: 100vw;
+}
+
+.happy2-slot-details {
+    display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: 5px;
-    width: 240px;
-    padding: 10px 12px;
-    border: 1px solid var(--modal-border);
-    border-radius: 14px;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
     background: var(--surface);
-    box-shadow: 0 8px 24px var(--shadow-color);
-    color: var(--text-secondary);
-    font-size: 12px;
+    text-align: left;
+}
+
+.happy2-slot-popover .happy2-slot-details {
+    border-color: var(--modal-border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px var(--shadow-floating);
+}
+
+.happy2-slot-details__author {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 650;
     line-height: 16px;
 }
 
-.happy2-slot-entry__details strong {
-    color: var(--text);
-    font-weight: 650;
-}
-
-.happy2-slot-entries__switcher {
+.happy2-slot-details__author-glyph {
     display: flex;
     flex: none;
-    align-items: center;
-    gap: 2px;
-    margin-left: 4px;
-    color: var(--text-secondary);
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-}
-
-.happy2-slot-entries[data-placement="status-line"] {
-    max-width: 320px;
     color: var(--text-secondary);
 }
 
-/* The status line and the composer bar sit at the bottom of the window, so
-   their inspection popovers open upward to stay on screen. */
-.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__details,
-.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-entry__details {
-    top: auto;
-    bottom: calc(100% + 8px);
-}
-
-.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__markdown,
-.happy2-slot-entries[data-placement="title"] .happy2-slot-entry__markdown {
+.happy2-slot-details__author-name {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-slot-entries[data-placement="status-line"] .happy2-slot-entry__markdown > *,
-.happy2-slot-entries[data-placement="title"] .happy2-slot-entry__markdown > * {
+.happy2-slot-details__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+}
+
+.happy2-slot-details__fact {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-slot-details__fact dt {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 14px;
+    text-transform: uppercase;
+}
+
+.happy2-slot-details__fact dd {
+    margin: 0;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Switch ------------------------------------------------------------ */
+
+.happy2-slot-switch {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    color: var(--text-secondary);
+}
+
+.happy2-slot-switch__step {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    appearance: none;
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+.happy2-slot-switch__step:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy2-slot-switch__step:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+}
+
+.happy2-slot-switch__count {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    font-family: var(--happy2-font-mono);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 600;
+    line-height: 14px;
+}
+
+/* ---- Status line ------------------------------------------------------- */
+
+/*
+ * A settings row is not the place for an agent to talk at length: one line,
+ * bounded, in the same secondary ink as the controls beside it, and shrinking
+ * before it ever pushes on the composer's own geometry.
+ */
+.happy2-slot-entries[data-placement="status-line"] {
+    flex: 0 1 auto;
+    gap: 4px;
+    max-width: 280px;
+    min-width: 0;
+    height: 24px;
+    color: var(--text-secondary);
+}
+
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-row,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-row {
+    gap: 6px;
+}
+
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-row__text,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-row__text {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* One line means one line: a list or a paragraph inside a compact contribution
+   is laid out inline so it cannot open a second row in the chrome. */
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-row__text > *,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-row__text > * {
     display: inline;
 }
 
+/*
+ * The inspect control keeps its lane at all times — the line never reflows when
+ * a pointer arrives — but stays invisible until the reader is actually at this
+ * contribution, by hover or by keyboard. Compact chrome states the contribution,
+ * not the machinery around it.
+ */
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-row__inspect {
+    width: 20px;
+    height: 20px;
+    opacity: 0;
+}
+
+.happy2-slot-entries[data-placement="status-line"]:hover .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="title"]:hover .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="status-line"]
+    .happy2-slot-item[data-open]
+    .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-item[data-open] .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-row__inspect:focus,
+.happy2-slot-entries[data-placement="title"] .happy2-slot-row__inspect:focus {
+    opacity: 1;
+}
+
+/* The status line and the composer sit at the bottom of the window, so their
+   details open upward to stay on screen. */
+.happy2-slot-entries[data-placement="status-line"] .happy2-slot-popover {
+    bottom: calc(100% + 6px);
+}
+
+.happy2-slot-entries[data-placement="title"] .happy2-slot-popover {
+    top: calc(100% + 6px);
+}
+
+/* ---- Title ------------------------------------------------------------- */
+
+/*
+ * Attached to the surface title across a hairline, on the header's own baseline.
+ * It fills the lane the header reserves for it — a lane whose width does not
+ * depend on what is in it, so switching between contributions, or one arriving,
+ * never moves the title beside it. The cap only matters where no header sets one.
+ */
+.happy2-slot-entries[data-placement="title"] {
+    flex: 1 1 auto;
+    gap: 4px;
+    max-width: 360px;
+    min-width: 0;
+    height: 24px;
+    padding-left: 12px;
+    border-left: 1px solid var(--divider);
+    color: var(--text-secondary);
+}
+
+/* ---- Above the composer ------------------------------------------------ */
+
+/*
+ * The roomy placement: a card of its own above the composer, holding every
+ * contribution in durable order. It is bounded in height and scrolls rather than
+ * growing into the message being written.
+ *
+ * The root stays an unpainted layout box because the conversation dock insets
+ * every child it stacks — the composer included — by the measure's own padding.
+ * Painting the card here would put its border outside the composer's edges; the
+ * card is therefore the list, which sits inside that inset and lines up exactly
+ * with the composer beneath it.
+ */
 .happy2-slot-entries[data-placement="above-composer"] {
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
-    max-width: var(--happy2-chat-measure);
-    margin: 0 auto;
-    padding: 8px 20px 8px 12px;
-    border-top: 1px solid var(--divider);
+}
+
+/* The card, and the scrollport that bounds it: edge to edge, no spacing of its
+   own, so every row's inset belongs to the row. */
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-entries__list {
+    flex: 1 1 auto;
+    width: 100%;
+    max-height: 176px;
+    overflow-y: auto;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
     background: var(--surface-high);
 }
 
-.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-entry {
-    min-height: 28px;
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-item {
+    padding: 10px 12px;
 }
 
-.happy2-slot-entries[data-placement="title"] {
-    flex: 0 1 360px;
-    margin-left: 4px;
-    padding-left: 10px;
-    border-left: 1px solid var(--divider);
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-item + .happy2-slot-item {
+    border-top: 1px solid var(--divider);
 }
 
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-row {
+    align-items: flex-start;
+    min-height: 22px;
+}
+
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-row__text {
+    overflow-wrap: anywhere;
+}
+
+/* Rows in the card top-align, so the glyph is centred against the first line of
+   whatever the row holds: one line of text, or the 28px control. */
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-row__glyph,
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row__glyph {
+    height: 18px;
+}
+
+.happy2-slot-entries[data-placement="above-composer"]
+    .happy2-slot-row[data-content="button"]
+    .happy2-slot-row__glyph {
+    height: 28px;
+}
+
+/*
+ * The card is where a reader goes looking, so the inspection control is present
+ * rather than summoned — but muted, so a column of them never competes with the
+ * contributions themselves.
+ */
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-row__inspect {
+    opacity: 0.55;
+}
+
+.happy2-slot-entries[data-placement="above-composer"]
+    .happy2-slot-row:hover
+    .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="above-composer"]
+    .happy2-slot-item[data-open]
+    .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="above-composer"] .happy2-slot-row__inspect:focus {
+    opacity: 1;
+}
+
+/* ---- Sidebar ----------------------------------------------------------- */
+
+/*
+ * Menu rows, in the sidebar's own rhythm: the same 32px row, the same inset, the
+ * same hover and focus as the rows the product itself puts there. The heading is
+ * what marks them as someone else's — an agent added these to this window.
+ */
 .happy2-slot-entries[data-placement="sidebar"] {
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
-    padding: 8px;
     color: inherit;
 }
 
-.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-entry {
-    align-items: flex-start;
-    padding: 8px;
-    border-radius: var(--happy2-radius-md);
-    background: color-mix(in srgb, currentColor 7%, transparent);
+.happy2-slot-entries__heading {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 24px;
+    text-transform: uppercase;
 }
 
-.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-entry__details {
-    right: 0;
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-entries__list {
+    gap: 2px;
+}
+
+/* The 2px stack, the 32px row, and the 10px/6px inset are the sidebar's own
+   numbers, taken from SidebarRow so a contribution sits in the list's rhythm
+   rather than announcing itself by measuring differently. */
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row {
+    min-height: 32px;
+    padding: 0 6px 0 10px;
+    border-radius: var(--happy2-radius-sm);
+    color: var(--text-secondary);
+    transition: background-color 120ms ease;
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row:hover {
+    background: var(--surface-ripple);
+}
+
+/* A row under the pointer states itself in full-strength ink, exactly as the
+   product's own sidebar rows do. */
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row:hover .happy2-slot-row__text,
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row:hover .happy2-slot-row__row-action {
+    color: var(--text);
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-item[data-open] .happy2-slot-row {
+    background: var(--surface-ripple);
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row__text {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row__text > * {
+    display: inline;
+}
+
+/* The row is the control, so it fills the row's own lane rather than sitting in
+   it as a second, smaller shape. */
+.happy2-slot-row__row-action {
+    /* A block, not a flex box: an author-written label can be any length, and
+       only a block container ends an over-long line in an ellipsis. The line box
+       is the row's own height, which centres the single line it holds. */
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 32px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    appearance: none;
+    cursor: pointer;
+}
+
+.happy2-slot-row__row-action:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+    border-radius: var(--happy2-radius-sm);
+}
+
+.happy2-slot-row__row-action:disabled {
+    color: var(--text-secondary);
+    cursor: default;
+    opacity: 0.55;
+}
+
+/* The trailing control follows the sidebar's own hover controls: out of the way
+   until the row is under the pointer or the control itself has focus. */
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row__inspect {
+    opacity: 0;
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row:hover .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="sidebar"]
+    .happy2-slot-item[data-open]
+    .happy2-slot-row__inspect,
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-row__inspect:focus {
+    opacity: 1;
+}
+
+/* ---- Inline details ---------------------------------------------------- */
+
+.happy2-slot-inline {
+    display: flex;
+    min-width: 0;
+    padding-top: 6px;
+}
+
+.happy2-slot-entries[data-placement="sidebar"] .happy2-slot-inline {
+    padding: 4px 0 2px;
 }

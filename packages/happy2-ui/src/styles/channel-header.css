@@ -23,6 +23,21 @@
     min-width: 0;
 }
 
+/* A surface that offers the slot but currently has nothing in it must not hold
+   a 360px lane — and the header gap beside it — open next to the title. */
+.happy2-channel-header__title-accessory:empty {
+    display: none;
+}
+
+/* When something is attached to the title, the name and topic stop growing into
+   the free space so the attachment stays beside the title it belongs to rather
+   than drifting into the middle of the header. Headers with an empty slot keep
+   the original growing lane exactly as they were. */
+.happy2-channel-header:has(.happy2-channel-header__title-accessory:not(:empty))
+    .happy2-channel-header__info {
+    flex: 0 1 auto;
+}
+
 .happy2-channel-header {
     display: flex;
     align-items: center;

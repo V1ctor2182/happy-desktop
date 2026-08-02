@@ -143,6 +143,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
 export {
     SlotEntries,
+    type SlotActionIntent,
     type SlotEntriesPlacement,
     type SlotEntriesProps,
     type SlotVisualEntry,
