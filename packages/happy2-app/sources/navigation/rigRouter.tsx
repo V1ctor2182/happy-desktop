@@ -27,7 +27,12 @@ import type {
     HtmlPreviewRenderer,
     RigPluginApplicationContentRenderer,
 } from "happy2-ui";
-import { AppRigView, type AppRigDirectoryStore, type AppRigUpdate } from "../AppRigView";
+import {
+    AppRigView,
+    type AppBuildIdentity,
+    type AppRigDirectoryStore,
+    type AppRigUpdate,
+} from "../AppRigView";
 import {
     AppRigSettingsView,
     RIG_SETTINGS_DEFAULT_CATEGORY,
@@ -53,6 +58,8 @@ export interface RigRouterContext {
     /** Renders one HTML workspace file as a page, in a host that has an engine. */
     readonly htmlPreview?: HtmlPreviewRenderer;
     readonly rigs: AppRigDirectoryStore;
+    /** This build's development identity; absent in the packaged product. */
+    readonly buildIdentity?: AppBuildIdentity;
     readonly appearance: AppearanceStore;
     /**
      * This machine's notes, absent in a host that stores none. They are the
@@ -386,6 +393,7 @@ function RigWorkspaceLayout(
         <AppRigView
             appearance={context.appearance}
             browserContent={context.browserContent}
+            buildIdentity={context.buildIdentity}
             htmlPreview={context.htmlPreview}
             chatId={params.chatId}
             groupId={params.groupId}

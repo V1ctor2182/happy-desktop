@@ -132,6 +132,21 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+/**
+ * What a development build calls itself. A packaged Happy reports none: only a
+ * build run from a checkout has to be told apart from the other one beside it.
+ */
+export interface DesktopBuildIdentity {
+    readonly branch: string;
+    /** Short name for this checkout: its worktree directory, its branch, or "dev". */
+    readonly label: string;
+    /** Absolute path of the checkout, which is the detail worth copying. */
+    readonly path: string;
+}
+
+/** Launch argument prefix carrying `DesktopBuildIdentity` JSON into the preload. */
+export const buildIdentityArgument = "--happy2-build-identity=";
+
 /** An SSH destination — `host` or `user@host` — and the name to list it under. */
 export interface RemoteRigAddRequest {
     readonly destination: string;
@@ -275,6 +290,12 @@ export type DesktopPluginAppRequest =
     | { readonly kind: "storageList" };
 
 export interface HappyDesktopBridge {
+    /**
+     * This window's development identity, absent in a packaged build. It is a
+     * plain value rather than a call because the window is one build for its
+     * whole life: the shell has it before the first frame and it never changes.
+     */
+    readonly buildIdentity?: DesktopBuildIdentity;
     browserProxyApply(sessionId: string): Promise<void>;
     /** The current plugin application catalog, without waiting for the next change. */
     pluginApplicationsGet(): Promise<DesktopPluginCatalog>;

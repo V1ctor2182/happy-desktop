@@ -29,6 +29,7 @@ import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
 import {
+    buildIdentityArgument,
     desktopIpc,
     happyBrowserPartition,
     happyHtmlPreviewPartition,
@@ -57,11 +58,31 @@ import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserP
 import { RemoteRigManager } from "./remoteRigManager";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import { DesktopWindowStateStore } from "./windowState";
+import { desktopBuildIdentityRead } from "./buildIdentity";
 
 if (process.platform !== "darwin") {
     console.error("Happy Place desktop is available only on macOS.");
     app.exit(1);
 }
+const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
+/*
+ * A development build says so everywhere the system can name an application. The
+ * menu bar and the About item read the application name, which is otherwise
+ * literally "Electron" while running unpackaged — a window that claims to be
+ * Electron tells the reader nothing about which of their checkouts it came from.
+ */
+const applicationName = buildIdentity ? "Happy Dev" : "Happy";
+app.setName(applicationName);
+/*
+ * Each checkout is its own installation of the app. Everything below is keyed on
+ * the user-data directory — the single-instance lock above all — so sharing one
+ * would mean the second checkout's window silently quitting into the first
+ * checkout's window instead of opening, which is precisely what someone running
+ * two builds side by side is trying to avoid. Separate directories also keep one
+ * worktree's settings, window geometry, and saved instances out of another's.
+ */
+if (buildIdentity) app.setPath("userData", `${app.getPath("userData")}-${buildIdentity.label}`);
+// Only now is this process identifiable, so only now can it claim to be the one.
 if (!app.requestSingleInstanceLock()) app.quit();
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -72,6 +93,16 @@ const applicationIconPath = existsSync(builtApplicationIconPath)
     : existsSync(sourceApplicationIconPath)
       ? sourceApplicationIconPath
       : undefined;
+/*
+ * The title carries the checkout as well, because that is what Mission Control,
+ * the Window menu, and the app switcher's window list have room to show. The
+ * ordinary checkout on the default branch is simply "Happy Dev": it is the one
+ * window with nothing to distinguish it from, and naming it twice says nothing.
+ */
+const windowTitle =
+    buildIdentity && buildIdentity.label !== "dev"
+        ? `${applicationName} — ${buildIdentity.label}`
+        : applicationName;
 const windowBackgroundColor = nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
 const developmentRendererOrigin = process.env.VITE_DEV_SERVER_URL
     ? new URL(process.env.VITE_DEV_SERVER_URL).origin
@@ -392,6 +423,7 @@ function windowOptions(
 ): BrowserWindowConstructorOptions {
     return {
         backgroundColor: windowBackgroundColor,
+        title: windowTitle,
         width: bounds?.width ?? 1100,
         height: bounds?.height ?? 760,
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
@@ -402,6 +434,31 @@ function windowOptions(
         ...macosWindowChrome,
         webPreferences,
     };
+}
+
+/**
+ * Keeps the window wearing the name this build was given. Every page here
+ * carries the same `<title>`, and Chromium hands it to the window on load, which
+ * would put one identical name on every checkout's window — exactly the
+ * confusion this title exists to prevent.
+ *
+ * Refusing the page's title is not enough on its own: the name is also applied
+ * around navigation, when no title event is emitted to refuse. So the window is
+ * renamed again at each point a load can have overwritten it, which is cheap and
+ * leaves no ordering to get wrong.
+ */
+function windowTitleHold(window: BrowserWindow): void {
+    const hold = () => {
+        if (!window.isDestroyed()) window.setTitle(windowTitle);
+    };
+    window.on("page-title-updated", (event) => {
+        event.preventDefault();
+        hold();
+    });
+    window.webContents.on("did-finish-load", hold);
+    window.webContents.on("did-navigate", hold);
+    window.webContents.on("did-navigate-in-page", hold);
+    hold();
 }
 
 function windowGeometryRemember(window: BrowserWindow): void {
@@ -422,6 +479,16 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     const rendererUrl = hostedUrl ?? developmentUrl ?? pathToFileURL(rendererPath).toString();
     const window = new BrowserWindow({
         ...windowOptions(bounds, {
+            // The build a window runs is fixed for its whole life, so the preload
+            // is handed it as a launch argument rather than made to ask for it:
+            // the shell can then render its identity in the first frame.
+            ...(buildIdentity
+                ? {
+                      additionalArguments: [
+                          `${buildIdentityArgument}${JSON.stringify(buildIdentity)}`,
+                      ],
+                  }
+                : {}),
             contextIsolation: true,
             nodeIntegration: false,
             preload: join(dirname, "preload.cjs"),
@@ -429,6 +496,7 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             webviewTag: true,
         }),
     });
+    windowTitleHold(window);
     windowGeometryRemember(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
         if (browserWebUrl(url)) browserOpenPublish(window, url);
@@ -496,6 +564,7 @@ function remoteWindowCreate(url: string, bounds?: DesktopWindowBounds) {
             sandbox: true,
         }),
     });
+    windowTitleHold(window);
     windowGeometryRemember(window);
     window.webContents.setWindowOpenHandler(({ url: candidate }) => {
         if (remoteNavigationAllowed(candidate)) void shell.openExternal(candidate);
@@ -545,6 +614,10 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
     );
     const template: MenuItemConstructorOptions[] = [
         {
+            // macOS reads the bold first menu from this label. Left to the
+            // default it is the running binary's name — "Electron" in any build
+            // that is not packaged — which names the toolkit rather than the app.
+            label: applicationName,
             role: "appMenu",
             submenu: [
                 { role: "about" },

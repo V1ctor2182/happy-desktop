@@ -69,6 +69,7 @@ import {
     AppShell,
     Banner,
     BrowserPanel,
+    BuildIdentityPill,
     type BrowserContentRenderer,
     HtmlPreviewFrame,
     type HtmlPreviewRenderer,
@@ -229,9 +230,25 @@ export interface AppRigDirectoryStore {
     rigActivate(id: string): void;
 }
 
+/**
+ * What a development window calls itself: the worktree or branch it was built
+ * from, and the checkout worth copying out of it. A packaged Happy supplies
+ * none — the product has one identity and does not have to announce it.
+ */
+export interface AppBuildIdentity {
+    readonly branch: string;
+    readonly label: string;
+    readonly path: string;
+}
+
 export interface AppRigViewProps {
     /** Every Rig in this window, and the form that adds another machine. */
     rigs: AppRigDirectoryStore;
+    /**
+     * This build's development identity, shown as a pill in the sidebar footer.
+     * Absent in the packaged product, where there is nothing to tell apart.
+     */
+    buildIdentity?: AppBuildIdentity;
     /** Which Rig the URL addresses; its projects and sessions fill the window. */
     rigId: string;
     /** Theme selection behind the sidebar footer's appearance toggle. */
@@ -1168,6 +1185,22 @@ export function AppRigView(props: AppRigViewProps) {
             footer={
                 <SidebarFooter
                     actions={sidebarUpdate}
+                    identity={
+                        props.buildIdentity ? (
+                            <BuildIdentityPill
+                                detail={props.buildIdentity.path}
+                                label={props.buildIdentity.label}
+                                // The path is the one thing a reader wants out of
+                                // this pill: it is what they type to get a
+                                // terminal into the checkout the window came from.
+                                onSelect={() =>
+                                    void navigator.clipboard
+                                        .writeText(props.buildIdentity!.path)
+                                        .catch(() => undefined)
+                                }
+                            />
+                        ) : undefined
+                    }
                     appearance={appearance.appearance}
                     onAppearanceToggle={() => props.appearance.appearanceToggle()}
                     onSettingsOpen={props.onSettingsOpen}

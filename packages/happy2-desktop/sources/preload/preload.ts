@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
+    buildIdentityArgument,
     desktopIpc,
     type DesktopBrowserStatus,
+    type DesktopBuildIdentity,
     type DesktopNoteApplyRequest,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
@@ -13,7 +15,25 @@ import {
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 
+/**
+ * The development identity main launched this window with. A packaged build
+ * passes none, and anything unparseable is treated as none: an identity is a
+ * label on a window, never something the renderer should fail over.
+ */
+function buildIdentityRead(): DesktopBuildIdentity | undefined {
+    const argument = process.argv.find((value) => value.startsWith(buildIdentityArgument));
+    if (!argument) return undefined;
+    try {
+        return JSON.parse(argument.slice(buildIdentityArgument.length)) as DesktopBuildIdentity;
+    } catch {
+        return undefined;
+    }
+}
+
+const identity = buildIdentityRead();
+
 const bridge: HappyDesktopBridge = {
+    ...(identity ? { buildIdentity: identity } : {}),
     browserProxyApply: (sessionId) => ipcRenderer.invoke(desktopIpc.browserProxyApply, sessionId),
     browserOpenSubscribe(listener: (url: string) => void) {
         const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);

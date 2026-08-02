@@ -12,7 +12,7 @@
     "scripts": {
         "predev": "pnpm --dir ../.. plugins:build",
         "dev": "VITE_HAPPY2_BROWSER_LOCAL=1 vite --host 127.0.0.1 --port ${PORT:-5174} --strictPort",
-        "predev:electron": "pnpm --dir ../.. plugins:build",
+        "predev:electron": "pnpm --dir ../.. plugins:build && node ../../scripts/name-dev-electron.mjs",
         "dev:electron": "PORT=${PORT:-5174}; concurrently --kill-others-on-fail --names main,preload,renderer,electron \"vite build --config vite.main.config.ts --watch\" \"vite build --config vite.preload.config.ts --watch\" \"vite --host 127.0.0.1 --port $PORT --strictPort\" \"wait-on dist/main.js dist/preload.cjs tcp:$PORT && VITE_DEV_SERVER_URL=http://127.0.0.1:$PORT electron ./dist/main.js\"",
         "prebuild": "pnpm --dir ../.. plugins:build",
         "build": "vite build && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
@@ -24,6 +24,7 @@
         "dist:mac": "pnpm build && electron-builder --mac",
         "prerelease:mac": "pnpm --dir ../.. desktop:assets",
         "release:mac": "pnpm build && electron-builder --mac --arm64 --x64",
+        "prestart": "node ../../scripts/name-dev-electron.mjs",
         "start": "electron ./dist/main.js",
         "test": "vitest run",
         "test:watch": "vitest",

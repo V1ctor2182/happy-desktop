@@ -176,6 +176,9 @@ function RigBoundary(props: {
             context={{
                 appearance: props.appearance,
                 browserContent: props.browserContent,
+                // A development window says which checkout it came from; the
+                // packaged product supplies nothing and shows nothing.
+                buildIdentity: props.bridge.buildIdentity,
                 htmlPreview: props.htmlPreview,
                 pluginApplicationContent: props.pluginApplicationContent,
                 ...(update

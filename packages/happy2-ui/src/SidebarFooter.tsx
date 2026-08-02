@@ -38,6 +38,13 @@ export type SidebarFooterProps = {
     onAppearanceToggle: () => void;
     /** Extra trailing controls, placed before the appearance toggle. */
     actions?: ReactNode;
+    /**
+     * What this build of the application is, when it is not simply the product:
+     * a development window's checkout, rendered as a pill. It leads the control
+     * cluster rather than joining it — it names the window the reader is looking
+     * at, and is not something to press.
+     */
+    identity?: ReactNode;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -107,6 +114,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
                     {identity}
                 </span>
             )}
+            {props.identity}
             {props.actions}
             {props.onAdminOpen ? (
                 <Button

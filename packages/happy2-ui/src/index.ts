@@ -134,6 +134,11 @@ export {
     type ReactionChipProps,
 } from "./Badge";
 export { Box, type BoxProps } from "./Box";
+export {
+    BuildIdentityPill,
+    buildIdentityTone,
+    type BuildIdentityPillProps,
+} from "./BuildIdentityPill";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
 export {

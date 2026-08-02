@@ -25,6 +25,7 @@ import { BadgePage } from "./pages/BadgePage";
 import { BannerPage } from "./pages/BannerPage";
 import { PortShareControlPage } from "./pages/PortShareControlPage";
 import { BoxPage } from "./pages/BoxPage";
+import { BuildIdentityPillPage } from "./pages/BuildIdentityPillPage";
 import { ButtonPage } from "./pages/ButtonPage";
 import { CallPanelPage } from "./pages/CallPanelPage";
 import { ChannelHeaderPage } from "./pages/ChannelHeaderPage";
@@ -445,6 +446,12 @@ const components: BlueprintPage[] = [
         label: "Audience toggle",
         number: "C-065",
         page: AudienceTogglePage,
+    },
+    {
+        id: "build-identity-pill",
+        label: "Build identity pill",
+        number: "C-177",
+        page: BuildIdentityPillPage,
     },
     {
         id: "plugin-catalog-panel",
