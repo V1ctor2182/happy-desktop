@@ -21,6 +21,7 @@ import {
     type RigWindowStore,
 } from "happy2-state";
 import {
+    CodeHighlightWorkers,
     ThemeScope,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -367,30 +368,36 @@ if (bridge) {
             materialized = current;
             void rigRouter.invalidate();
         });
+        // This window renders the Rig tree directly rather than through `App`, so
+        // it has to start the highlighting pool itself: without this the file
+        // viewer and every diff in the primary desktop surface tokenize on the
+        // main thread, which is exactly where a large file must not be parsed.
         root.render(
             <DesktopAppearance appearance={appearance}>
-                <DesktopRenderer
-                    appearance={appearance}
-                    browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                    htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                    pluginApplicationContent={
-                        browserLocal
-                            ? undefined
-                            : desktopPluginApplicationRenderCreate(desktopBridge)
-                    }
-                    bridge={desktopBridge}
-                    notes={notes}
-                    // Only the Electron window hides its title bar; the browser
-                    // development server renders the same tree with web chrome.
-                    platform={browserLocal ? "web" : "desktop"}
-                    rigRouter={rigRouter}
-                    rigs={rigs}
-                    localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                    settings={settings}
-                    startupValues={startupValuesStoreCreate()}
-                    store={runtimeStore}
-                    windowState={windowStateStoreCreate(desktopBridge)}
-                />
+                <CodeHighlightWorkers>
+                    <DesktopRenderer
+                        appearance={appearance}
+                        browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                        htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                        pluginApplicationContent={
+                            browserLocal
+                                ? undefined
+                                : desktopPluginApplicationRenderCreate(desktopBridge)
+                        }
+                        bridge={desktopBridge}
+                        notes={notes}
+                        // Only the Electron window hides its title bar; the browser
+                        // development server renders the same tree with web chrome.
+                        platform={browserLocal ? "web" : "desktop"}
+                        rigRouter={rigRouter}
+                        rigs={rigs}
+                        localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                        settings={settings}
+                        startupValues={startupValuesStoreCreate()}
+                        store={runtimeStore}
+                        windowState={windowStateStoreCreate(desktopBridge)}
+                    />
+                </CodeHighlightWorkers>
             </DesktopAppearance>,
         );
     };
