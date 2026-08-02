@@ -287,6 +287,7 @@ export type ComposerProps = {
      * Ends the agent's current inference. With `running`, it takes over the send
      * control while the draft is empty; typing gives the control back to sending,
      * because a message written during a run steers it rather than stopping it.
+     * Escape in the text control calls it too, whatever the draft holds.
      */
     onStop?: () => void;
     onValueChange: (value: string) => void;
@@ -683,6 +684,24 @@ export function Composer(props: ComposerProps) {
             event.preventDefault();
             closeEmoji();
             textareaEl.current?.focus();
+            return;
+        }
+        /*
+         * Escape stops the run, the way it does in the Rig TUI, and it is the
+         * last thing Escape can mean here: every popover above has already had
+         * its turn and returned. What is half-written stays written — the draft
+         * was aimed at the run being called off, not at the next one — and a
+         * draft with something in it stops the run just the same, even though
+         * the send control has taken the circle back from stop.
+         */
+        if (
+            event.key === "Escape" &&
+            props.running &&
+            props.onStop &&
+            !event.nativeEvent.isComposing
+        ) {
+            event.preventDefault();
+            props.onStop();
             return;
         }
         if (event.key === "Enter" && !event.shiftKey) {
