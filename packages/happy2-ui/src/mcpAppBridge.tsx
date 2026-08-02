@@ -24,7 +24,9 @@ import {
     type McpAppSize,
 } from "./mcpAppProtocol";
 import {
+    HAPPY_STYLE_CONTEXT_KEY,
     localeContext,
+    resolveHappyStyleVariables,
     resolveStyleVariables,
     resolveTheme,
     styleContextSignature,
@@ -420,8 +422,9 @@ function sendHostContextChanged(
 
 /**
  * The partial `HostContext` a durable owner projects: instance context + display
- * mode, plus the live theme and standard `styles.variables` resolved from the
- * frame so a theme change reconciles the running View's appearance.
+ * mode, plus the live theme, the standard `styles.variables`, and the
+ * `happy2/styles` extension resolved from the frame so a theme change
+ * reconciles the running View's appearance.
  */
 function hostContextPayload(
     props: McpAppBridgeFrameProps,
@@ -429,6 +432,7 @@ function hostContextPayload(
 ): Record<string, unknown> {
     const theme = resolveTheme(frame);
     const styles = resolveStyleVariables(frame);
+    const happyStyles = resolveHappyStyleVariables(frame);
     return {
         ...props.hostContext,
         ...(props.displayMode ? { displayMode: props.displayMode } : {}),
@@ -437,6 +441,7 @@ function hostContextPayload(
             : {}),
         ...(theme ? { theme } : {}),
         ...(styles ? { styles: { variables: styles } } : {}),
+        ...(happyStyles ? { [HAPPY_STYLE_CONTEXT_KEY]: happyStyles } : {}),
     };
 }
 
@@ -691,6 +696,7 @@ function initializeResult(
               : { maxWidth: 1280, maxHeight: MAX_APP_HEIGHT };
     const theme = resolveTheme(frame);
     const styles = resolveStyleVariables(frame);
+    const happyStyles = resolveHappyStyleVariables(frame);
     const displayMode = props.displayMode ?? "inline";
     const availableDisplayModes = props.availableDisplayModes ?? [displayMode];
     return {
@@ -715,6 +721,9 @@ function initializeResult(
             // Standard MCP Apps style variables, mapped from Happy's live tokens so
             // the app's first paint already matches the host appearance.
             ...(styles ? { styles: { variables: styles } } : {}),
+            // Happy's own appearance roles, which the closed standard key set
+            // cannot carry, under the namespaced host-context member.
+            ...(happyStyles ? { [HAPPY_STYLE_CONTEXT_KEY]: happyStyles } : {}),
             ...localeContext(),
         },
     };

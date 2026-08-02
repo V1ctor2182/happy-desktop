@@ -1,11 +1,15 @@
 /*
  * The host-context vocabulary both MCP Apps hosts speak: the resolved theme, the
- * standard `styles.variables` mapped onto Happy's live design tokens, and the
- * locale fields. Two surfaces host apps — a durable cloud app inside the double
- * iframe sandbox proxy, and a locally installed Rig plugin's application served
- * on its own isolated origin — and a View must see the same appearance contract
- * from either. Keeping the mapping here means `theme.css` stays the single
- * source of color truth for both.
+ * standard `styles.variables` mapped onto Happy's live design tokens, the small
+ * namespaced `happy2/styles` extension that carries the Happy-specific roles the
+ * standard vocabulary cannot express, and the locale fields. Two surfaces host
+ * apps — a durable cloud app inside the double iframe sandbox proxy, and a
+ * locally installed Rig plugin's application served on its own isolated origin —
+ * and a View must see the same appearance contract from either. Keeping the
+ * mapping here means `theme.css` stays the single source of color truth for both.
+ *
+ * `packages/happy2-plugin-sdk/PLUGIN-DESIGN.md` documents every variable below
+ * as the authored contract plugin apps consume; change the two together.
  */
 
 /**
@@ -27,25 +31,20 @@ const HOST_STYLE_VARIABLE_TOKENS: ReadonlyArray<readonly [standard: string, toke
     ["--color-background-tertiary", "--surface-pressed"],
     ["--color-background-inverse", "--button-primary-background"],
     ["--color-background-ghost", "--surface-ripple"],
-    ["--color-background-info", "--surface-high"],
     ["--color-background-danger", "--box-error-background"],
-    ["--color-background-success", "--surface-high"],
     ["--color-background-warning", "--box-warning-background"],
     ["--color-background-disabled", "--surface-pressed"],
-    // Text: primary/secondary/tertiary, text on inverse fills, and the semantics.
+    // Text: primary/secondary, text on inverse fills, and the semantics.
     ["--color-text-primary", "--text"],
     ["--color-text-secondary", "--text-secondary"],
-    ["--color-text-tertiary", "--text-secondary"],
     ["--color-text-inverse", "--button-primary-tint"],
     ["--color-text-ghost", "--text-secondary"],
     ["--color-text-info", "--radio-active"],
     ["--color-text-danger", "--text-destructive"],
     ["--color-text-success", "--success"],
     ["--color-text-warning", "--box-warning-text"],
-    ["--color-text-disabled", "--text-secondary"],
-    // Borders: primary/secondary hairlines, inverse, and the semantics.
+    // Borders: the hairline, inverse, and the semantics.
     ["--color-border-primary", "--divider"],
-    ["--color-border-secondary", "--surface-pressed-overlay"],
     ["--color-border-tertiary", "--divider"],
     ["--color-border-inverse", "--button-primary-background"],
     ["--color-border-info", "--radio-active"],
@@ -55,7 +54,7 @@ const HOST_STYLE_VARIABLE_TOKENS: ReadonlyArray<readonly [standard: string, toke
     ["--color-border-disabled", "--divider"],
     // Ring / accent: primary is the system blue used for focus and selection.
     ["--color-ring-primary", "--radio-active"],
-    ["--color-ring-secondary", "--surface-pressed-overlay"],
+    ["--color-ring-secondary", "--text-secondary"],
     ["--color-ring-inverse", "--button-primary-background"],
     ["--color-ring-info", "--radio-active"],
     ["--color-ring-danger", "--text-destructive"],
@@ -73,13 +72,66 @@ const HOST_STYLE_VARIABLE_TOKENS: ReadonlyArray<readonly [standard: string, toke
     ["--border-radius-full", "--happy2-radius-pill"],
 ];
 
+/** Reads one Happy design token off the hosting frame; "" when it is not set. */
+type TokenReader = (token: string) => string;
+
+/**
+ * Mixes `share` percent of `color` into `into`, both already resolved to real
+ * computed colors. Returns "" when either input is missing so the caller omits
+ * the variable rather than emitting an unparsable value.
+ */
+function blend(color: string, share: number, into: string): string {
+    if (!color || !into) return "";
+    return `color-mix(in srgb, ${color} ${share}%, ${into})`;
+}
+
+/** Composes one shadow layer from a resolved Happy shadow tint. */
+function elevation(geometry: string, tint: string): string {
+    return tint ? `${geometry} ${tint}` : "";
+}
+
+/**
+ * The standard variables whose value is composed from more than one Happy token
+ * rather than mirroring a single one. The soft semantic fills and the low-contrast
+ * end of the text ramp do not exist as Happy roles — Happy paints those states
+ * with a `color-mix` at the point of use — so they are mixed here from the same
+ * roles at the same ratios. The elevation shadows likewise take their geometry
+ * from this file and their tint from the theme's own shadow roles, so no raw
+ * color literal is duplicated out of `theme.css`.
+ */
+const HOST_STYLE_VARIABLE_COMPOSITES: ReadonlyArray<
+    readonly [standard: string, compose: (read: TokenReader) => string]
+> = [
+    // Soft informational and success fills: the semantic hue laid over the
+    // surface, matching how `--box-*-background` is built for warning and error.
+    ["--color-background-info", (read) => blend(read("--radio-active"), 12, read("--surface"))],
+    ["--color-background-success", (read) => blend(read("--success"), 14, read("--surface"))],
+    // The one divider stronger than the hairline. Happy has a single `--divider`
+    // role, so the emphatic step is the text colour laid over the surface — the
+    // only mapping that stays visible in both schemes. Mapping this to
+    // `--surface-pressed-overlay`, which is `transparent`, silently erased the
+    // border for every app that reached for it.
+    ["--color-border-secondary", (read) => blend(read("--text"), 20, read("--surface"))],
+    // The quiet end of the text ramp. Happy has two solid text roles, so the
+    // third step and the disabled step are the secondary role faded toward the
+    // surface it sits on.
+    ["--color-text-tertiary", (read) => blend(read("--text-secondary"), 70, read("--surface"))],
+    ["--color-text-disabled", (read) => blend(read("--text-secondary"), 45, read("--surface"))],
+    // Elevation: Happy's hairline ring is the divider, and each drop shadow uses
+    // the theme tint that matches its depth.
+    ["--shadow-hairline", (read) => elevation("0 0 0 1px", read("--divider"))],
+    ["--shadow-sm", (read) => elevation("0 1px 2px", read("--shadow-color"))],
+    ["--shadow-md", (read) => elevation("0 4px 12px", read("--shadow-subtle"))],
+    ["--shadow-lg", (read) => elevation("0 12px 32px", read("--shadow-floating"))],
+];
+
 /**
  * The remaining standard variables (ext-apps 1.7.4) that have no Happy token
  * equivalent, set to sensible fixed literals so `styles.variables` covers the
  * complete supported key set. These are non-palette values — a transparent ghost
- * border, the type scale weights/sizes/line heights, the hairline border width,
- * and neutral elevation shadows — so they do not duplicate a color the theme
- * owns. Actual colors always come from `HOST_STYLE_VARIABLE_TOKENS`.
+ * border, the type scale weights/sizes/line heights, and the hairline border
+ * width — so they do not duplicate a color the theme owns. Actual colors always
+ * come from `HOST_STYLE_VARIABLE_TOKENS` or `HOST_STYLE_VARIABLE_COMPOSITES`.
  */
 const HOST_STYLE_VARIABLE_LITERALS: ReadonlyArray<readonly [standard: string, value: string]> = [
     ["--color-border-ghost", "transparent"],
@@ -116,11 +168,38 @@ const HOST_STYLE_VARIABLE_LITERALS: ReadonlyArray<readonly [standard: string, va
     ["--font-heading-3xl-line-height", "40px"],
     // Hairline border width.
     ["--border-width-regular", "1px"],
-    // Neutral elevation shadows.
-    ["--shadow-hairline", "0 0 0 1px rgb(0 0 0 / 0.06)"],
-    ["--shadow-sm", "0 1px 2px rgb(0 0 0 / 0.08)"],
-    ["--shadow-md", "0 4px 12px rgb(0 0 0 / 0.12)"],
-    ["--shadow-lg", "0 12px 32px rgb(0 0 0 / 0.18)"],
+];
+
+/**
+ * The host-context key carrying Happy's own appearance extension. The standard
+ * `styles.variables` record is a closed set of 76 keys — a View validates the
+ * notification against it and rejects the whole update when it carries an
+ * unknown key — so Happy-specific roles travel as a separate namespaced member
+ * of the host context, which the specification keeps open for exactly this.
+ */
+export const HAPPY_STYLE_CONTEXT_KEY = "happy2/styles";
+
+/**
+ * The bounded Happy-specific appearance roles, named for the plugin document
+ * rather than for Happy's internals. Every one is a live theme value the
+ * standard vocabulary has no key for: the canvas behind cards, the chrome strip,
+ * selection, form fields, the code surface, the scrim, the scrollbar, and the
+ * elevation tint. Metrics and the type scale are deliberately absent — they do
+ * not change with the theme and belong to the standard keys and the document.
+ */
+const HAPPY_STYLE_VARIABLE_TOKENS: ReadonlyArray<readonly [name: string, token: string]> = [
+    ["--happy-canvas", "--groupped-background"],
+    ["--happy-header-background", "--header-background"],
+    ["--happy-header-text", "--header-tint"],
+    ["--happy-selected-background", "--surface-selected"],
+    ["--happy-link", "--text-link"],
+    ["--happy-input-background", "--input-background"],
+    ["--happy-input-text", "--input-text"],
+    ["--happy-input-placeholder", "--input-placeholder"],
+    ["--happy-code-background", "--diff-context-bg"],
+    ["--happy-scrim", "--overlay-panel"],
+    ["--happy-scrollbar-thumb", "--scrollbar-thumb"],
+    ["--happy-shadow-color", "--shadow-color"],
 ];
 
 /**
@@ -152,17 +231,49 @@ export function resolveTheme(frame: HTMLElement | null): "light" | "dark" | unde
 export function resolveStyleVariables(
     frame: HTMLElement | null,
 ): Record<string, string> | undefined {
+    const read = tokenReader(frame);
+    if (!read) return undefined;
+    const variables: Record<string, string> = {};
+    for (const [standard, token] of HOST_STYLE_VARIABLE_TOKENS) {
+        const value = read(token);
+        if (value) variables[standard] = value;
+    }
+    for (const [standard, compose] of HOST_STYLE_VARIABLE_COMPOSITES) {
+        const value = compose(read);
+        if (value) variables[standard] = value;
+    }
+    for (const [standard, literal] of HOST_STYLE_VARIABLE_LITERALS) variables[standard] = literal;
+    return Object.keys(variables).length > 0 ? variables : undefined;
+}
+
+/**
+ * Resolves the `happy2/styles` extension for the frame: the Happy-specific
+ * appearance roles the standard key set cannot carry, read live from the same
+ * computed style so they follow the theme exactly like the standard ones.
+ * Returns undefined when nothing can be read so the optional member is omitted.
+ */
+export function resolveHappyStyleVariables(
+    frame: HTMLElement | null,
+): { variables: Record<string, string> } | undefined {
+    const read = tokenReader(frame);
+    if (!read) return undefined;
+    const variables: Record<string, string> = {};
+    for (const [name, token] of HAPPY_STYLE_VARIABLE_TOKENS) {
+        const value = read(token);
+        if (value) variables[name] = value;
+    }
+    return Object.keys(variables).length > 0 ? { variables } : undefined;
+}
+
+/**
+ * A reader over the frame's inherited custom properties, or undefined when the
+ * frame is absent or its computed style cannot be taken.
+ */
+function tokenReader(frame: HTMLElement | null): TokenReader | undefined {
     if (!frame) return undefined;
     try {
         const computed = window.getComputedStyle(frame);
-        const variables: Record<string, string> = {};
-        for (const [standard, token] of HOST_STYLE_VARIABLE_TOKENS) {
-            const value = computed.getPropertyValue(token).trim();
-            if (value) variables[standard] = value;
-        }
-        for (const [standard, literal] of HOST_STYLE_VARIABLE_LITERALS)
-            variables[standard] = literal;
-        return Object.keys(variables).length > 0 ? variables : undefined;
+        return (token) => computed.getPropertyValue(token).trim();
     } catch {
         return undefined;
     }
@@ -177,6 +288,7 @@ export function styleContextSignature(frame: HTMLElement | null): string {
     return JSON.stringify({
         theme: resolveTheme(frame) ?? null,
         styles: resolveStyleVariables(frame) ?? null,
+        happyStyles: resolveHappyStyleVariables(frame) ?? null,
     });
 }
 

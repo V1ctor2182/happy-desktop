@@ -11,7 +11,13 @@ import {
     jsonRpcResult,
     type JsonRpcRequest,
 } from "./mcpAppProtocol";
-import { localeContext, resolveStyleVariables, resolveTheme } from "./mcpAppHostContext";
+import {
+    HAPPY_STYLE_CONTEXT_KEY,
+    localeContext,
+    resolveHappyStyleVariables,
+    resolveStyleVariables,
+    resolveTheme,
+} from "./mcpAppHostContext";
 
 /**
  * The vendor methods this host adds to the standard dialect: durable key/value
@@ -451,12 +457,13 @@ function requestCancel(state: FrameState, params: unknown): void {
 /**
  * The host context a plugin application sees. It fills the window rather than
  * sitting inside a message, so `fullscreen` is both the current mode and the
- * only one offered; the theme and the standard style variables come from the
- * live tokens the frame itself inherits.
+ * only one offered; the theme, the standard style variables, and the
+ * `happy2/styles` extension come from the live tokens the frame itself inherits.
  */
 function hostContext(frame: HTMLIFrameElement): Record<string, unknown> {
     const theme = resolveTheme(frame);
     const styles = resolveStyleVariables(frame);
+    const happyStyles = resolveHappyStyleVariables(frame);
     const width = frame.clientWidth;
     const height = frame.clientHeight;
     return {
@@ -467,6 +474,7 @@ function hostContext(frame: HTMLIFrameElement): Record<string, unknown> {
         ...(width > 0 && height > 0 ? { containerDimensions: { width, height } } : {}),
         ...(theme ? { theme } : {}),
         ...(styles ? { styles: { variables: styles } } : {}),
+        ...(happyStyles ? { [HAPPY_STYLE_CONTEXT_KEY]: happyStyles } : {}),
         ...localeContext(),
     };
 }
