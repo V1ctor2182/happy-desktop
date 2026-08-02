@@ -181,6 +181,11 @@ function FilesPageContent(props: FilesPageProps & { snapshot: FilesSnapshot }) {
         </>
     ) : !loadError ? (
         <EmptyState
+            // Reading takes as long as it takes, and the snail says so. Once the
+            // answer is in and it is "nothing", the screen is a plain statement
+            // of fact: no artwork, because nothing has happened here yet and
+            // there is nothing for the reader to do about it.
+            animation={snapshot.status.type === "loading" ? "snail" : undefined}
             description={
                 snapshot.status.type === "loading"
                     ? "Fetching shared files from your workspace."

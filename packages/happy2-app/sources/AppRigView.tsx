@@ -2870,6 +2870,7 @@ function RigFileBody(props: {
         );
     return (
         <EmptyState
+            animation="snail"
             description={
                 file.kind === "file"
                     ? "Reading the file from its workspace."
@@ -2971,6 +2972,7 @@ function RigConversationBody(props: {
     if (conversation.type === "loading")
         return (
             <EmptyState
+                animation="snail"
                 description="Loading the selected local session."
                 icon="chat"
                 size="panel"
@@ -2994,6 +2996,9 @@ function RigConversationBody(props: {
     return (
         <EmptyState
             action={{ label: "New session", icon: "plus", onClick: props.onCreate }}
+            // The main screen of the whole application when no work is open: an
+            // agent standing by, waiting to be given something to do.
+            animation="robot"
             description="Select a session tab or start a new one to begin."
             icon="chat"
             size="panel"

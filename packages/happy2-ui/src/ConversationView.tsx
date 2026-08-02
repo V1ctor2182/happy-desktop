@@ -235,6 +235,9 @@ export function ConversationView(props: ConversationViewProps) {
             ) : props.entries.length === 0 ? (
                 <div className="happy2-conversation__empty" data-happy2-ui="conversation-empty">
                     <EmptyState
+                        // A conversation with nothing in it is an agent waiting
+                        // to be told what to do, so that is what it looks like.
+                        animation="robot"
                         description="Send a message to start working in this conversation."
                         icon="chat"
                         size="panel"

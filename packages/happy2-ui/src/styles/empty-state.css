@@ -10,6 +10,10 @@
  * Panel rhythm (top → bottom): medallion 48 · 16 · title 20 · 6 · description
  * 18 · 20 · action 36. Inline rhythm: medallion 40 · 12 · title 18 · 4 ·
  * description 18 · 16 · action 28.
+ *
+ * An animated state swaps the medallion for a transparent 128 (panel) or 96
+ * (inline) scene region and closes the gap under it to 8 / 6, because the
+ * artwork brings its own margin. Everything below the title is unchanged.
  */
 
 .happy2-empty-state {
@@ -63,19 +67,40 @@
 }
 
 /*
- * An animated medallion stacks the mark over the glyph inside the same box. The
- * glyph is what the reader sees first and what they keep if the worker runtime
- * never arrives; the mark fades in over it once it has painted a real frame, so
- * the medallion is never empty and never blinks.
+ * An animated empty state has no medallion at all. The artwork gets its own
+ * transparent region — no card, no fill, no border, nothing drawn behind it —
+ * sized before anything paints so the words below never move when the scene
+ * arrives.
  *
- * Absolute placement is the one thing flexbox cannot express here: two children
- * have to occupy one 48px box rather than sit beside each other.
+ * The glyph inside it is a placeholder: what the reader sees while the worker
+ * runtime loads, and what they keep if it never arrives. It stands where the
+ * artwork will, and the two cross-fade, which is the one thing flexbox cannot
+ * express here: both children occupy the same box instead of sitting beside
+ * each other.
  */
-.happy2-empty-state__media[data-animated] {
+.happy2-empty-state__scene {
     position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    color: var(--text-secondary);
 }
 
-.happy2-empty-state__mark {
+.happy2-empty-state[data-size="panel"] .happy2-empty-state__scene {
+    width: 128px;
+    height: 128px;
+}
+
+.happy2-empty-state[data-size="inline"] .happy2-empty-state__scene {
+    width: 96px;
+    height: 96px;
+}
+
+.happy2-empty-state__art {
+    /* The canvas and the placeholder glyph occupy one box and cross-fade there;
+       flexbox can only place them side by side. */
     position: absolute;
     top: 50%;
     left: 50%;
@@ -84,26 +109,34 @@
     transition: opacity 160ms ease-out;
 }
 
-.happy2-empty-state__mark[data-painted="true"] {
+.happy2-empty-state__art[data-painted="true"] {
     opacity: 1;
 }
 
-/* The glyph steps aside once the mark is really painting, rather than showing
-   through it. */
-.happy2-empty-state__media[data-animated]:has(.happy2-empty-state__mark[data-painted="true"])
-    .happy2-icon {
+/* The glyph steps aside once the artwork is really painting, rather than
+   showing through it. */
+.happy2-empty-state__scene:has(.happy2-empty-state__art[data-painted="true"]) .happy2-icon {
     opacity: 0;
     transition: opacity 160ms ease-out;
 }
 
-/* Someone who asked for less movement gets no cross-fade either: the mark is a
+/* Someone who asked for less movement gets no cross-fade either: the scene is a
    still frame, so it should simply be there. */
 @media (prefers-reduced-motion: reduce) {
-    .happy2-empty-state__mark,
-    .happy2-empty-state__media[data-animated]:has(.happy2-empty-state__mark[data-painted="true"])
-        .happy2-icon {
+    .happy2-empty-state__art,
+    .happy2-empty-state__scene:has(.happy2-empty-state__art[data-painted="true"]) .happy2-icon {
         transition: none;
     }
+}
+
+/*
+ * A panel with a scene gives back some of its outer padding: the artwork
+ * carries its own generous transparent margin inside a 512 box, so the same
+ * 40px would read as a hole above the title — and at the 720x480 Electron
+ * minimum those 32px are the difference between fitting and being cut.
+ */
+.happy2-empty-state[data-size="panel"][data-animated] {
+    padding: 24px 32px;
 }
 
 .happy2-empty-state__title {
@@ -120,6 +153,17 @@
     margin-top: 12px;
     font-size: 14px;
     line-height: 18px;
+}
+
+/* An animated region is mostly transparent margin at its edges, so the measured
+   16/12 gap under a medallion reads as a hole under a scene. 8 and 6 put the
+   optical distance back where the medallion rhythm had it. */
+.happy2-empty-state[data-size="panel"][data-animated] .happy2-empty-state__title {
+    margin-top: 8px;
+}
+
+.happy2-empty-state[data-size="inline"][data-animated] .happy2-empty-state__title {
+    margin-top: 6px;
 }
 
 .happy2-empty-state__description {

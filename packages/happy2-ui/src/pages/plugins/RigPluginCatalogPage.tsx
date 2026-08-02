@@ -324,6 +324,10 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
                     ) : visible.length === 0 ? (
                         <div className="happy2-rig-plugin-catalog__index-empty">
                             <EmptyState
+                                // Only the wait is illustrated. A search that
+                                // matched nothing is a miss the reader is
+                                // already fixing, one keystroke at a time.
+                                animation={props.loading ? "snail" : undefined}
                                 description={emptyDescription(
                                     props.loading,
                                     searching,

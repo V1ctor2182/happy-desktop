@@ -133,6 +133,11 @@ export function ActivityPage(props: ActivityPageProps) {
                     </Banner>
                 ) : (
                     <EmptyState
+                        // The same panel-wide wait the inbox draws, drawn the
+                        // same way. Only the wait: once this screen settles it
+                        // has its own scene above, and the unloaded case is not
+                        // a wait anyone is watching.
+                        animation={snapshot.notifications.type === "loading" ? "snail" : undefined}
                         description="Mentions, replies, reactions, and system events collect here."
                         icon="bell"
                         title={

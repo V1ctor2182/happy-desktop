@@ -7,7 +7,7 @@ import type { DotLottieWorker } from "@lottiefiles/dotlottie-web";
 import wasmUrl from "@lottiefiles/dotlottie-web/dotlottie-player.wasm?url";
 
 /**
- * Every mark on the screen shares this one worker. dotLottie keys its worker
+ * Every scene on the screen shares this one worker. dotLottie keys its worker
  * pool by id, so a second empty state does not mean a second thread, a second
  * WASM instantiation, or a second copy of the runtime's heap.
  */
@@ -53,23 +53,48 @@ export function dotLottieRuntimeLoad(): Promise<Runtime> {
 }
 
 /**
- * True when the reader has asked their system for less movement. Read at mount
- * and again whenever the query changes, so turning the preference on stops a
- * mark that is already running rather than waiting for a reload.
+ * The reduced-motion preference as an external store, so a component can read
+ * it with `useSyncExternalStore` instead of mirroring it into React state, and
+ * so playback and rendering answer to the same source.
+ *
+ * The preference decides more than playback: under it a scene is a still
+ * picture with no replay control at all, which is a rendering decision and has
+ * to be available while rendering. One `MediaQueryList` is shared by every
+ * subscriber, and it is created lazily so importing this module touches
+ * nothing. jsdom and older engines have no `matchMedia`; a scene that cannot
+ * ask treats the answer as "no preference" and animates.
  */
-export function reducedMotionQuery(view: Window): MediaQueryList | undefined {
-    // jsdom and older engines have no matchMedia; a mark that cannot ask simply
-    // treats the answer as "no preference" and animates.
-    return typeof view.matchMedia === "function"
-        ? view.matchMedia("(prefers-reduced-motion: reduce)")
-        : undefined;
+let motionQuery: MediaQueryList | null | undefined;
+
+function reducedMotionList(): MediaQueryList | null {
+    motionQuery ??=
+        typeof globalThis.matchMedia === "function"
+            ? globalThis.matchMedia("(prefers-reduced-motion: reduce)")
+            : null;
+    return motionQuery;
+}
+
+/** Subscribes to preference changes; returns the matching unsubscribe. */
+export function reducedMotionSubscribe(onChange: () => void): () => void {
+    const query = reducedMotionList();
+    if (query === null) return () => {};
+    query.addEventListener("change", onChange);
+    return () => {
+        query.removeEventListener("change", onChange);
+    };
+}
+
+/** The preference right now. False wherever the question cannot be asked. */
+export function reducedMotionGet(): boolean {
+    return reducedMotionList()?.matches ?? false;
 }
 
 /**
- * The pixel ratio a mark renders at. Capped at 2 because a mark is at most 56px
- * on a side: past 2 the extra samples cost worker memory and fill rate that no
- * one can see, and a 3x display would otherwise quietly triple the buffer.
+ * The pixel ratio a scene renders at. Capped at 2 because a scene is at most
+ * 128px on a side: past 2 the extra samples cost worker memory and fill rate
+ * that no one can see, and a 3x display would otherwise quietly multiply the
+ * buffer by 2.25 for nothing.
  */
-export function markPixelRatio(view: Window): number {
+export function scenePixelRatio(view: Window): number {
     return Math.min(view.devicePixelRatio || 1, 2);
 }

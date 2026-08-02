@@ -57,6 +57,7 @@ function DocumentsPageContent(
         if (props.documents.type === "loading" || props.documents.type === "unloaded")
             return (
                 <EmptyState
+                    animation="snail"
                     description="Fetching every document you can see."
                     icon="doc"
                     title="Loading documents…"
@@ -70,6 +71,10 @@ function DocumentsPageContent(
                             ? { label: "New document", onClick: () => props.onCreate?.() }
                             : undefined
                     }
+                    // The wand is only honest where the reader can actually make
+                    // the missing thing, so it appears with the button that
+                    // makes it and is absent from a composition that has none.
+                    animation={props.onCreate ? "wand" : undefined}
                     description="Documents you create or that are shared with your channels appear here."
                     icon="doc"
                     title="No documents yet"

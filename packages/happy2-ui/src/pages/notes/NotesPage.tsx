@@ -67,6 +67,11 @@ export function NotesPage(props: NotesPageProps) {
                             ? { label: "New note", onClick: () => props.onCreate?.() }
                             : undefined
                     }
+                    // The list is empty and the reader can fix that from right
+                    // here — so the wand goes only where the button does. The
+                    // editor beside it keeps its plain glyph, so the two halves
+                    // of this screen never both wave artwork at once.
+                    animation={props.onCreate ? "wand" : undefined}
                     description="Notes are kept on this machine, as Markdown you can read from anywhere."
                     icon="doc"
                     size="panel"

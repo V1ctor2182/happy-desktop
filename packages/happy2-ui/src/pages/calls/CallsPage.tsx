@@ -105,6 +105,10 @@ export function CallsPage(props: CallsPageProps) {
                     </Box>
                 ) : (
                     <EmptyState
+                        // The whole-panel wait only. The inline table below has
+                        // its own empty row and stays a plain glyph, because a
+                        // scene inside a table cell is not a scene.
+                        animation={snapshot.calls.type === "loading" ? "snail" : undefined}
                         description="Calls you place or receive will show up here."
                         icon="mic"
                         title={

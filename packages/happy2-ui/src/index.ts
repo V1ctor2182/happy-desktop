@@ -374,7 +374,12 @@ export {
     type EmptyStateProps,
     type EmptyStateSize,
 } from "./EmptyState";
-export { LottieMark, type LottieMarkName, type LottieMarkProps } from "./LottieMark";
+export {
+    LottieScene,
+    type LottieSceneName,
+    type LottieScenePlay,
+    type LottieSceneProps,
+} from "./LottieScene";
 export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
 export { TransferZone, type TransferZoneProps } from "./TransferZone";

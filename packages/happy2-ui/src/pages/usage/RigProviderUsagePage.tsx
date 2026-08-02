@@ -100,6 +100,11 @@ export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
 
                     {providers.length === 0 ? (
                         <EmptyState
+                            // A panel-wide wait, like the inbox and the plugin
+                            // catalogue. The settled version asks the reader to
+                            // go and sign in somewhere else, which is not
+                            // something artwork here can help with.
+                            animation={props.loading ? "snail" : undefined}
                             description={
                                 props.loading
                                     ? "Reading what this machine's provider accounts have spent."

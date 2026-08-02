@@ -76,6 +76,11 @@ export function SearchPage(props: SearchPageProps) {
         </StoreSurface>
     ) : (
         <EmptyState
+            // The owl is watching and has not found anything yet, which is
+            // exactly where a search box nobody has typed in stands. The two
+            // states above keep their plain glyph: searching is over in a
+            // moment, and a miss changes with every keystroke.
+            animation="owl"
             description="Find channels, people, messages, and files across your workspace."
             icon="search"
             size={props.variant === "flush" ? "inline" : undefined}
