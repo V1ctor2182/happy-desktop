@@ -1,5 +1,5 @@
 import { MultiFileDiff } from "@pierre/diffs/react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Button } from "./Button";
 import { CodeEditor } from "./CodeEditor";
 import { SegmentedControl } from "./SegmentedControl";
@@ -7,7 +7,8 @@ import { SegmentedControl } from "./SegmentedControl";
 /**
  * How a changed file is being looked at.
  *
- * - `preview` — the file as it now stands, with no change marks. What the
+ * - `preview` — the file as it now stands, in the product's own file preview:
+ *   the document rendered, the picture shown, the source read whole. What the
  *   result reads like, which is the one question a diff cannot answer.
  * - `unified` — additions and deletions interleaved in one column.
  * - `split` — old and new side by side.
@@ -54,12 +55,28 @@ export type ChangedFileDiffProps = {
     dirty?: boolean;
     /** Writes the pending edit back. */
     onSave?: () => void;
+    /**
+     * The file as it now stands, drawn by whatever the product opens a file
+     * into. It is the caller's because a preview is a whole viewer — a rendered
+     * document, a picture on its stage, a recording that plays — and this
+     * component knows only about text and about diffs of text. Without one
+     * there is nothing to show, so the mode is not offered at all rather than
+     * offered over an empty pane; that is the honest answer for a file the
+     * change deleted, which no longer has a copy to look at.
+     */
+    preview?: ReactNode;
 };
 
 /**
- * A complete working-tree diff surface. Pierre Diffs owns parsing, syntax
- * highlighting, hunk expansion, and line layout; Happy owns the product
- * boundary, the view modes, and the colors.
+ * C-237 ChangedFileDiff — a complete working-tree diff surface. Pierre Diffs
+ * owns parsing, syntax highlighting, hunk expansion, and line layout; Happy owns
+ * the product boundary, the view modes, and the colors.
+ *
+ * Preview is not one of Pierre's: the file as it now stands is a whole file, and
+ * a whole file is what the product's file preview already shows. It arrives as a
+ * slot so a changed Markdown document reads as the document rather than as a
+ * diff against itself, which is all this renderer with nothing to compare
+ * against could ever produce.
  *
  * The colors are the theme's own. Pierre derives every diff surface by mixing
  * one accent per side into the page background, so pointing those two accents
@@ -68,11 +85,18 @@ export type ChangedFileDiffProps = {
  * full-file view carrying a second palette that merely resembles the first.
  */
 export function ChangedFileDiff(props: ChangedFileDiffProps) {
-    const mode = props.mode ?? "unified";
     const editable = props.onContentChange !== undefined;
-    const segments = CHANGED_FILE_DIFF_MODES.filter(
-        (candidate) => candidate !== "edit" || editable,
+    const previewable = props.preview !== undefined;
+    const segments = CHANGED_FILE_DIFF_MODES.filter((candidate) =>
+        candidate === "edit" ? editable : candidate === "preview" ? previewable : true,
     ).map((candidate) => ({ value: candidate, label: MODE_LABELS[candidate] }));
+    // Which view is on is remembered across files, so the one that was chosen
+    // may not exist for the file that is now open — a deleted file has no copy
+    // left to read. It falls back to the diff, which is the only thing such a
+    // file still has, rather than leaving the switch pointing at a mode this
+    // pane cannot draw.
+    const requested = props.mode ?? "unified";
+    const mode = segments.some((segment) => segment.value === requested) ? requested : "unified";
     return (
         <section
             aria-label={`Changes in ${props.path}`}
@@ -84,6 +108,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
         >
             <div className="happy2-changed-file-diff__bar" data-happy2-ui="changed-file-diff-bar">
                 <SegmentedControl
+                    aria-label="How this changed file is shown"
                     onChange={(value) => props.onModeChange?.(value as ChangedFileDiffMode)}
                     segments={segments}
                     size="small"
@@ -116,7 +141,9 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             </div>
 
             <div className="happy2-changed-file-diff__body" data-happy2-ui="changed-file-diff-body">
-                {mode === "edit" ? (
+                {mode === "preview" ? (
+                    props.preview
+                ) : mode === "edit" ? (
                     <CodeEditor
                         className="happy2-changed-file-diff__editor"
                         name={props.path}
@@ -137,11 +164,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         }}
                         oldFile={{
                             name: props.oldPath ?? props.path,
-                            // Preview is this same renderer with nothing to
-                            // compare against, so every line reads as context.
-                            // Syntax highlighting, gutters, and scrolling then
-                            // stay identical to the diff it sits beside.
-                            contents: mode === "preview" ? props.newContent : props.oldContent,
+                            contents: props.oldContent,
                         }}
                         options={{
                             diffIndicators: "bars",

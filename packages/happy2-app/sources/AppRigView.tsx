@@ -3219,19 +3219,21 @@ function RigFileBody(props: {
         file.kind === "diff" &&
         file.document.type === "ready" &&
         "oldContent" in file.document.value
-    )
+    ) {
+        const change = file.document.value;
+        // An untouched tab shows what was read; once edited it shows what was
+        // typed, which is the only copy of it there is.
+        const current = file.draft ?? change.newContent;
         return (
             <ChangedFileDiff
                 appearance={props.appearance}
                 key={file.id}
                 loading={file.loading}
                 mode={props.mode}
-                // An untouched tab shows what was read; once edited it shows
-                // what was typed, which is the only copy of it there is.
-                newContent={file.draft ?? file.document.value.newContent}
-                oldContent={file.document.value.oldContent}
-                oldPath={file.document.value.oldPath}
-                dirty={file.draft !== undefined && file.draft !== file.document.value.newContent}
+                newContent={current}
+                oldContent={change.oldContent}
+                oldPath={change.oldPath}
+                dirty={file.draft !== undefined && file.draft !== change.newContent}
                 {...(writable
                     ? {
                           onContentChange: (content: string) =>
@@ -3242,10 +3244,25 @@ function RigFileBody(props: {
                       }
                     : {})}
                 onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
+                // A change that deleted the file left no copy to look at, which
+                // the read reports by having no working-tree identity for it.
+                // Preview is then not offered rather than offered over nothing.
+                {...(change.hash === undefined
+                    ? {}
+                    : {
+                          preview: (
+                              <RigChangedFilePreview
+                                  file={file}
+                                  text={current}
+                                  workspace={workspace}
+                              />
+                          ),
+                      })}
                 path={file.path}
                 saving={file.saving}
             />
         );
+    }
     if (file.document.type === "error")
         return (
             <EmptyState
@@ -3271,6 +3288,42 @@ function RigFileBody(props: {
             icon="doc"
             size="panel"
             title="Loading file…"
+        />
+    );
+}
+
+/**
+ * A changed file as it now stands, in the same preview the product opens any
+ * file into.
+ *
+ * The text is the copy already in hand: the changed-file read takes its
+ * working-tree side from the same file read that opening an ordinary file uses,
+ * so Preview and Edit are looking at one file rather than at two reads of it —
+ * including an edit that has been typed and not yet saved. Nothing is fetched
+ * here, so switching to Preview cannot land another file's bytes.
+ */
+function RigChangedFilePreview(props: {
+    file: RigFileTabSnapshot;
+    text: string;
+    workspace: RigWorkspaceStore;
+}) {
+    const { file, workspace } = props;
+    // A picture, a recording, or an archive opens as itself rather than as a
+    // diff, so a tab of one is not a diff tab and this is reached only by a tab
+    // restored from a session that sorted the file differently. Saying the file
+    // has no preview beats rendering its bytes as characters.
+    const kind = filePreviewKind(file.path);
+    const readable = kind === "markdown" || kind === "text";
+    return (
+        <FilePreview
+            content={readable ? { type: "text", text: props.text } : { type: "unavailable" }}
+            // A document followed out of the changed list lands beside it as the
+            // file itself, the same way one followed out of a file tab does.
+            onFileOpen={(href) => {
+                const target = documentLinkResolve(file.path, href);
+                workspace.fileOpen(file.groupId, target, fileTabKind(target, "all"));
+            }}
+            path={file.path}
         />
     );
 }

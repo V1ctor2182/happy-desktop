@@ -71,6 +71,7 @@ import { FileBrowserPage } from "./pages/FileBrowserPage";
 import { FileEditorPage } from "./pages/FileEditorPage";
 import { FilePanelPage } from "./pages/FilePanelPage";
 import { FilePreviewPage } from "./pages/FilePreviewPage";
+import { ChangedFileDiffPage } from "./pages/ChangedFileDiffPage";
 import { ImageViewerPage } from "./pages/ImageViewerPage";
 import { VideoViewerPage } from "./pages/VideoViewerPage";
 import { LottieScenePage } from "./pages/LottieScenePage";
@@ -295,6 +296,12 @@ const components: BlueprintPage[] = [
     },
     { id: "file-browser", label: "File browser", number: "C-168", page: FileBrowserPage },
     { id: "file-preview", label: "File preview", number: "C-169", page: FilePreviewPage },
+    {
+        id: "changed-file-diff",
+        label: "Changed file diff",
+        number: "C-237",
+        page: ChangedFileDiffPage,
+    },
     { id: "image-viewer", label: "Image viewer", number: "C-235", page: ImageViewerPage },
     { id: "video-viewer", label: "Video viewer", number: "C-236", page: VideoViewerPage },
     { id: "lottie-scene", label: "Lottie scene", number: "C-237", page: LottieScenePage },

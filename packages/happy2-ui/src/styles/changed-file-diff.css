@@ -40,6 +40,15 @@
     scrollbar-color: var(--divider) transparent;
 }
 
+/* A preview is a whole viewer that owns its own scrolling — a document with a
+   reading measure, a picture on a stage, a recording that fills its frame — so
+   the pane hands it the region rather than scrolling it from outside, which
+   would give the same content two scrollbars. */
+.happy2-changed-file-diff[data-mode="preview"] .happy2-changed-file-diff__body {
+    display: flex;
+    overflow: hidden;
+}
+
 .happy2-changed-file-diff__renderer {
     display: block;
     min-width: 0;
