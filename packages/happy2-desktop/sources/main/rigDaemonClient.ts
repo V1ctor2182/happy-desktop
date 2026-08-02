@@ -414,6 +414,24 @@ export class RigDaemonClient {
         return this.#requestJson("GET", `${fileScopePath(scope)}/files?${parameters.toString()}`);
     }
 
+    /**
+     * Every file in a checkout, which is what the panel's "All files" is. The
+     * daemon asks Git, so this is the same file set the changed list is drawn
+     * from, resolved on the machine holding the checkout rather than here.
+     */
+    listFilePaths(
+        scope: RigFileScope,
+        signal?: AbortSignal,
+    ): Promise<{ readonly paths: readonly string[]; readonly truncated: boolean }> {
+        return this.#requestJson(
+            "GET",
+            `${fileScopePath(scope)}/file-paths`,
+            undefined,
+            undefined,
+            signal,
+        );
+    }
+
     readFile(
         scope: RigFileScope,
         path: string,
@@ -422,6 +440,28 @@ export class RigDaemonClient {
         return this.#requestJson(
             "GET",
             `${fileScopePath(scope)}/file?path=${encodeURIComponent(path)}`,
+            undefined,
+            undefined,
+            signal,
+        );
+    }
+
+    /**
+     * One file's bytes as they were at a revision, which is the old side of a
+     * diff. A revision that never held the path answers with null content
+     * rather than failing, because a file added since then legitimately has no
+     * version there.
+     */
+    readFileAtRevision(
+        scope: RigFileScope,
+        path: string,
+        revision: string,
+        signal?: AbortSignal,
+    ): Promise<{ readonly content: string | null; readonly hash: string | null }> {
+        const parameters = new URLSearchParams({ path, revision });
+        return this.#requestJson(
+            "GET",
+            `${fileScopePath(scope)}/file-revision?${parameters.toString()}`,
             undefined,
             undefined,
             signal,

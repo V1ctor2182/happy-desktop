@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile, rm, stat } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -16,7 +16,7 @@ import {
     type RigDaemonClient,
     type RigFileScope,
 } from "./rigDaemonClient";
-import type { EventId, GitChangedFile } from "./rigDaemonTypes";
+import type { EventId, GitChangedFile, GitChangeSnapshot, GitFileChange } from "./rigDaemonTypes";
 import { openInRun, openInTargetsRead } from "./openIn";
 import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
@@ -50,221 +50,121 @@ function gitExecText(args: string[], options: GitExecOptions): Promise<string> {
     });
 }
 
-function gitExecBuffer(args: string[], options: GitExecOptions): Promise<Buffer> {
-    return new Promise((resolvePromise, reject) => {
-        execFileCallback("git", args, { ...options, encoding: "buffer" }, (error, stdout) => {
-            if (error) reject(error);
-            else resolvePromise(stdout);
-        });
-    });
-}
-
 interface GitLineStats {
     readonly addedLines: number;
     readonly deletedLines: number;
     readonly changes: readonly GitChangedFile[];
-}
-
-function gitChangedFilesParse(output: string): readonly Omit<GitChangedFile, "revision">[] {
-    const records = output.split("\0");
-    const changes: Omit<GitChangedFile, "revision">[] = [];
-    for (let index = 0; index < records.length; index += 1) {
-        const record = records[index];
-        if (!record || record.length < 4) continue;
-        const code = record.slice(0, 2);
-        const path = record.slice(3);
-        const status: GitChangedFile["status"] =
-            code === "??"
-                ? "untracked"
-                : code.includes("D")
-                  ? "deleted"
-                  : code.includes("R") || code.includes("C")
-                    ? "renamed"
-                    : code.includes("A")
-                      ? "added"
-                      : "modified";
-        // Porcelain -z writes the original path as the next NUL record for a
-        // rename/copy; the destination above is the path the panel should open.
-        const renamed = code.includes("R") || code.includes("C");
-        const previousPath = renamed ? records[index + 1] : undefined;
-        changes.push({ path, status, ...(previousPath ? { previousPath } : {}) });
-        if (renamed) index += 1;
-    }
-    return changes;
-}
-
-/** Lines one path gained and lost, as `git diff --numstat` reports them. */
-interface GitFileLines {
-    readonly addedLines: number;
-    readonly deletedLines: number;
+    /** Commit the rows were counted against, and so the one a diff reads from. */
+    readonly base?: string;
 }
 
 /**
- * Reads `git diff --numstat -z` into per-path line counts.
+ * Projects the daemon's scan of a checkout into the rows the panel lists.
  *
- * The `-z` form writes each record as an `added\tdeleted\t` field followed by
- * one path field, or by two path fields when rename detection fired. Nothing in
- * the record says which it was, so a path field is claimed as a rename
- * destination exactly when the field after it is not another stats field.
- * Binary files report `-` on both sides and are left without counts rather than
- * being called an empty change.
+ * The daemon already counted every line and named every path while scanning the
+ * machine the checkout is on, so this only renames its fields. Rerunning Git
+ * here instead is what left a checkout on another machine with no rows at all:
+ * its path belongs to that machine, and running `git` against it locally reports
+ * nothing.
+ *
+ * A file's `contentToken` becomes the row's revision, which is what an open
+ * viewer compares to decide it must read the file again. The daemon leaves it
+ * absent when it could not examine the file, and the status stands in so that a
+ * row without an identity reads as changed rather than as unchanged forever.
  */
-function gitNumstatParse(output: string): ReadonlyMap<string, GitFileLines> {
-    const lines = new Map<string, GitFileLines>();
-    const fields = output.split("\0");
-    const stats = /^(\d+|-)\t(\d+|-)\t$/;
-    for (let index = 0; index < fields.length; index += 1) {
-        const match = stats.exec(fields[index] ?? "");
-        if (!match) continue;
-        const first = fields[index + 1];
-        if (first === undefined) break;
-        const second = fields[index + 2];
-        const renamed = second !== undefined && !stats.test(second) && second.length > 0;
-        const path = renamed ? second : first;
-        index += renamed ? 2 : 1;
-        if (match[1] === "-" || match[2] === "-") continue;
-        lines.set(path, { addedLines: Number(match[1]), deletedLines: Number(match[2]) });
-    }
-    return lines;
+function gitChangesProject(git: GitChangeSnapshot): GitLineStats {
+    const changes = git.files.map((file) => ({
+        path: file.path,
+        ...(file.previousPath === undefined ? {} : { previousPath: file.previousPath }),
+        status: gitStatusProject(file.status),
+        revision: file.contentToken ?? file.status,
+        ...(file.insertions === undefined ? {} : { addedLines: file.insertions }),
+        ...(file.deletions === undefined ? {} : { deletedLines: file.deletions }),
+    }));
+    return {
+        addedLines: git.insertions,
+        deletedLines: git.deletions,
+        changes,
+        ...(git.base === undefined ? {} : { base: git.base }),
+    };
 }
 
-/** Files larger than this are summarized without counting their lines. */
-const UNTRACKED_LINE_LIMIT = 1024 * 1024;
+/**
+ * Narrows Git's status vocabulary to the five the panel draws.
+ *
+ * A copy is a rename that kept its source, and both open the same way. The three
+ * remaining states — an unresolved conflict, a submodule pointer, a file whose
+ * type changed — are all a tracked file that differs from HEAD, which is what
+ * "modified" says to the person reading the list.
+ */
+function gitStatusProject(status: GitFileChange["status"]): GitChangedFile["status"] {
+    switch (status) {
+        case "added":
+        case "deleted":
+        case "renamed":
+        case "untracked":
+            return status;
+        case "copied":
+            return "renamed";
+        default:
+            return "modified";
+    }
+}
 
 /**
- * A file Git has never seen has no diff, so its whole content is what it added.
- * Counting it keeps a new file from being the one row in the list with nothing
- * to say about its size. A binary or oversized file is left uncounted.
+ * Whether a checkout the daemon named is one this machine can write to.
+ *
+ * A path is only a path: the daemon on another machine reports its own, and
+ * nothing about the string says which machine it belongs to. Requiring the
+ * folder to hold Git's own control entry is what distinguishes this machine's
+ * checkout from a path that merely exists here too.
  */
-async function gitUntrackedLinesRead(
-    path: string,
-    size: number,
-): Promise<GitFileLines | undefined> {
-    if (size > UNTRACKED_LINE_LIMIT) return undefined;
+async function checkoutIsLocal(root: string): Promise<boolean> {
     try {
-        const content = await readFile(path);
-        if (content.includes(0)) return undefined;
-        const text = content.toString("utf8");
-        if (text.length === 0) return { addedLines: 0, deletedLines: 0 };
-        const newlines = text.split("\n").length;
-        return {
-            addedLines: text.endsWith("\n") ? newlines - 1 : newlines,
-            deletedLines: 0,
-        };
+        await stat(resolve(root, ".git"));
+        return true;
     } catch {
-        return undefined;
+        return false;
     }
 }
 
-async function gitChangedFilesRevise(
-    root: string,
-    changes: readonly Omit<GitChangedFile, "revision">[],
-    lines: ReadonlyMap<string, GitFileLines>,
-): Promise<readonly GitChangedFile[]> {
-    return Promise.all(
-        changes.map(async (change) => {
-            const counted = lines.get(change.path);
-            try {
-                const details = await stat(resolve(root, change.path));
-                const stats =
-                    counted ??
-                    (change.status === "untracked"
-                        ? await gitUntrackedLinesRead(resolve(root, change.path), details.size)
-                        : undefined);
-                return {
-                    ...change,
-                    ...(stats ?? {}),
-                    revision: `${String(details.mtimeMs)}:${String(details.size)}`,
-                };
-            } catch {
-                return { ...change, ...(counted ?? {}), revision: change.status };
-            }
-        }),
-    );
-}
-
 /**
- * Reads the checkout's aggregate textual diff against HEAD. A failed or
- * unavailable Git read leaves the stats absent so listing projects remains
- * available even while a checkout is being initialized or removed.
+ * The daemon's current scan of one checkout, or nothing when it has none to
+ * give. A checkout still being created or already removed has no comparison to
+ * report, and that must leave the surrounding listing usable rather than fail
+ * it.
  */
-async function gitLineStatsRead(path: string): Promise<GitLineStats | undefined> {
+async function groupGitRead(
+    client: RigProxyClient,
+    groupId: string,
+): Promise<GitLineStats | undefined> {
     try {
-        const [stdout, statusOutput] = await Promise.all([
-            gitExecText(["diff", "--numstat", "-z", "HEAD", "--"], {
-                cwd: path,
-                maxBuffer: 4 * 1024 * 1024,
-                timeout: 5_000,
-            }),
-            gitExecText(["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
-                cwd: path,
-                maxBuffer: 4 * 1024 * 1024,
-                timeout: 5_000,
-            }),
-        ]);
-        const lines = gitNumstatParse(stdout);
-        const changes = await gitChangedFilesRevise(
-            path,
-            gitChangedFilesParse(statusOutput),
-            lines,
-        );
-        // The checkout total is the sum of the rows the panel lists, so the
-        // header and the rows beneath it can never disagree about the same diff.
-        let addedLines = 0;
-        let deletedLines = 0;
-        for (const change of changes) {
-            addedLines += change.addedLines ?? 0;
-            deletedLines += change.deletedLines ?? 0;
+        const scope = await fileScopeResolve(client, groupId);
+        const watched = await client.gitWatch([scope]);
+        for (const event of watched.snapshots) {
+            if (event.type === "project_git_changed" && event.projectId === groupId)
+                return gitChangesProject(event.data.git);
+            if (event.type === "workspace_git_changed" && event.workspaceId === groupId)
+                return gitChangesProject(event.data.git);
         }
-        return { addedLines, deletedLines, changes };
+        return undefined;
     } catch {
         return undefined;
     }
 }
-
-/**
- * Cap on how many paths one workspace listing returns. A repository can hold far
- * more files than anyone can scan, and shipping all of them would cost more in
- * transfer and rendering than the tail is worth. The listing says when it was
- * truncated so the panel can admit it rather than quietly showing part of a
- * repository as if it were the whole one.
- */
-const WORKSPACE_FILE_LIMIT = 20_000;
 
 /**
  * Every file Git tracks in a checkout, plus the untracked ones it does not
  * ignore — which is what "all files" means to someone looking at a working
- * tree. Asking Git rather than walking the directory means .gitignore, nested
- * ignore files, and the exclusion of .git itself are all already handled, and
- * handled the same way the changed-file list handles them.
+ * tree. The daemon holding the checkout answers, so the listing describes the
+ * machine the files are actually on rather than this one, and its cap and
+ * truncation flag come back with it.
  */
 async function workspaceFilesRead(
     client: RigProxyClient,
     groupId: string,
 ): Promise<{ readonly paths: readonly string[]; readonly truncated: boolean }> {
-    const catalog = await client.listCatalog();
-    const project = catalog.projects.find((candidate) => candidate.id === groupId);
-    const workspace = catalog.workspaces.find((candidate) => candidate.id === groupId);
-    const root = project?.path ?? workspace?.path;
-    if (!root) throw new Error("That project or workspace is no longer available.");
-    let stdout: string;
-    try {
-        stdout = await gitExecText(
-            ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            { cwd: root, maxBuffer: 16 * 1024 * 1024, timeout: 10_000 },
-        );
-    } catch {
-        // A directory that is not a repository has no listing to give, and that
-        // is an ordinary state rather than a failure: the panel shows nothing
-        // under "All files" and the changed list beside it is empty too.
-        return { paths: [], truncated: false };
-    }
-    const all = stdout.split("\0").filter((entry) => entry.length > 0);
-    all.sort((left, right) => left.localeCompare(right));
-    return {
-        paths: all.slice(0, WORKSPACE_FILE_LIMIT),
-        truncated: all.length > WORKSPACE_FILE_LIMIT,
-    };
+    return client.listFilePaths(await fileScopeResolve(client, groupId));
 }
 
 const CHANGED_FILE_MAX_BYTES = 2 * 1024 * 1024;
@@ -561,12 +461,8 @@ async function changedFileRead(
     readonly newContent: string;
     readonly hash?: string;
 }> {
-    const catalog = await client.listCatalog();
-    const root =
-        catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
-        catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
-    if (!root) throw new Error("That project or workspace is no longer available.");
-    const git = await gitLineStatsRead(root);
+    const scope = await fileScopeResolve(client, groupId);
+    const git = await groupGitRead(client, groupId);
     const change = git?.changes.find((candidate) => candidate.path === filePath);
     if (!change) throw new Error("That file is no longer changed.");
     let newContent = "";
@@ -580,12 +476,13 @@ async function changedFileRead(
     const oldPath = change.previousPath ?? filePath;
     let oldContent = "";
     if (change.status !== "added" && change.status !== "untracked") {
-        const stdout = await gitExecBuffer(["show", `HEAD:${oldPath}`], {
-            cwd: root,
-            maxBuffer: CHANGED_FILE_MAX_BYTES,
-            timeout: 5_000,
-        });
-        oldContent = changedFileText(stdout);
+        // The daemon counted this file's lines against its own comparison base,
+        // so the diff is read from that same commit. Reading HEAD instead would
+        // let a worktree show a row whose stat and whose diff describe two
+        // different comparisons.
+        const file = await client.readFileAtRevision(scope, oldPath, git?.base ?? "HEAD", signal);
+        oldContent =
+            file.content === null ? "" : changedFileText(Buffer.from(file.content, "base64"));
     }
     return { path: filePath, oldPath, oldContent, newContent, ...(hash ? { hash } : {}) };
 }
@@ -619,7 +516,15 @@ async function changedFilesRevert(
         catalog.projects.find((candidate) => candidate.id === groupId)?.path ??
         catalog.workspaces.find((candidate) => candidate.id === groupId)?.path;
     if (!root) throw new Error("That project or workspace is no longer available.");
-    const git = await gitLineStatsRead(root);
+    // Reverting still writes through this machine's own Git and filesystem, so it
+    // may only ever run against a checkout that is on this machine. A path from
+    // another machine's daemon names nothing here — or, worse, names something
+    // unrelated that happens to sit at the same place — and restoring or deleting
+    // that is not a thing this route may be talked into doing. The daemon has no
+    // revert of its own yet; until it does, saying so is the honest answer.
+    if (!(await checkoutIsLocal(root)))
+        throw new Error("That checkout is on another machine, which cannot be reverted from here.");
+    const git = await groupGitRead(client, groupId);
     if (!git) throw new Error("That checkout has no Git state to revert to.");
     const wanted = new Set(paths);
     // Restored from HEAD: the file exists there and should again.
@@ -688,7 +593,9 @@ export type RigProxyClient = Pick<
     | "getSession"
     | "listSubagents"
     | "searchFiles"
+    | "listFilePaths"
     | "readFile"
+    | "readFileAtRevision"
     | "writeFile"
     | "getSessionUsage"
     | "getEvents"
@@ -849,24 +756,31 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         workspaceId: workspace.id,
                     })),
                 ]);
-                const projectChanges = new Map<string, number>();
-                const workspaceChanges = new Map<string, number>();
+                // One watch answers with each checkout's whole scan, rows and
+                // counts included, so the listing is projected from exactly the
+                // state the daemon reported rather than measured again here.
+                const projectChanges = new Map<string, GitChangeSnapshot>();
+                const workspaceChanges = new Map<string, GitChangeSnapshot>();
                 for (const event of watched.snapshots) {
                     if (event.type === "project_git_changed")
-                        projectChanges.set(event.projectId, event.data.git.changedFiles);
+                        projectChanges.set(event.projectId, event.data.git);
                     else if (event.type === "workspace_git_changed")
-                        workspaceChanges.set(event.workspaceId, event.data.git.changedFiles);
+                        workspaceChanges.set(event.workspaceId, event.data.git);
                 }
-                const [projectStats, workspaceStats] = await Promise.all([
-                    Promise.all(projects.map((project) => gitLineStatsRead(project.path))),
-                    Promise.all(workspaces.map((workspace) => gitLineStatsRead(workspace.path))),
-                ]);
+                const projectStats = projects.map((project) => {
+                    const git = projectChanges.get(project.id);
+                    return git === undefined ? undefined : gitChangesProject(git);
+                });
+                const workspaceStats = workspaces.map((workspace) => {
+                    const git = workspaceChanges.get(workspace.id);
+                    return git === undefined ? undefined : gitChangesProject(git);
+                });
                 writeJson(response, 200, {
                     projects: projects.map((project, index) =>
                         rigProjectProject(
                             {
                                 ...project,
-                                changedFiles: projectChanges.get(project.id),
+                                changedFiles: projectChanges.get(project.id)?.changedFiles,
                                 ...projectStats[index],
                             },
                             home,
@@ -876,7 +790,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         rigWorktreeProject(
                             {
                                 ...workspace,
-                                changedFiles: workspaceChanges.get(workspace.id),
+                                changedFiles: workspaceChanges.get(workspace.id)?.changedFiles,
                                 ...workspaceStats[index],
                             },
                             home,

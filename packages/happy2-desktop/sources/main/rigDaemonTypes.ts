@@ -138,8 +138,49 @@ export interface GitRepositoryFacts {
     readonly detached: boolean;
 }
 
+/** One file's change, as the daemon that scanned the checkout reports it. */
+export interface GitFileChange {
+    readonly path: string;
+    /** Original path of a rename or copy. */
+    readonly previousPath?: string;
+    readonly status:
+        | "added"
+        | "conflicted"
+        | "copied"
+        | "deleted"
+        | "modified"
+        | "renamed"
+        | "submodule"
+        | "type_changed"
+        | "untracked";
+    readonly binary: boolean;
+    /** Absent for a binary file, a submodule pointer, and one a cap left uncounted. */
+    readonly insertions?: number;
+    readonly deletions?: number;
+    /**
+     * Opaque identity of this file's content. Equal means the bytes already read
+     * are still current; different means read the file again. Absent when the
+     * daemon could not examine the file, which is not a claim that it is
+     * unchanged.
+     */
+    readonly contentToken?: string;
+}
+
+/**
+ * The daemon's scan of one checkout. Happy reads the whole thing rather than the
+ * count alone: the rows, their line counts, and the commit the comparison is
+ * measured against are all already here, and recomputing them locally is what
+ * made these surfaces empty for a checkout on another machine.
+ */
 export interface GitChangeSnapshot {
+    /** Commit the comparison is measured against. */
+    readonly base?: string;
+    /** Total changed files, including any the row cap omitted. */
     readonly changedFiles: number;
+    readonly files: readonly GitFileChange[];
+    readonly filesTruncated: boolean;
+    readonly insertions: number;
+    readonly deletions: number;
 }
 
 export type SlotName = "status-line" | "above-composer" | "title" | "sidebar";
