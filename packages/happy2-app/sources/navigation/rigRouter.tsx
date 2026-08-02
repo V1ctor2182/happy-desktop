@@ -16,6 +16,7 @@ import type {
     AppearanceStore,
     NotesSessionStore,
     RigGroupId,
+    RigNavigationOrderStore,
     RigSessionId,
     RigSessionLocation,
     RigSettingsStore,
@@ -69,6 +70,12 @@ export interface RigRouterContext {
     readonly notes?: NotesSessionStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: RigSettingsStore;
+    /**
+     * Where this window remembers the order the reader arranged the sidebar's
+     * pinned rows in. Absent in a host that keeps no such record, which leaves
+     * the rows in the order the window offers them.
+     */
+    readonly navigationOrder?: RigNavigationOrderStore;
     /**
      * Which shell hosts this router. The Electron window has no native title bar,
      * so the workspace draws the traffic-light inset and drag lanes itself; the
@@ -398,6 +405,7 @@ function RigWorkspaceLayout(
             chatId={params.chatId}
             groupId={params.groupId}
             noteId={params.noteId}
+            {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             notes={context.notes}
             notesOpen={props.notes}
             inboxOpen={props.inbox}

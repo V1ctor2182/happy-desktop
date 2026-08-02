@@ -14,9 +14,11 @@ import {
     RIG_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
     notesSessionStoreCreate,
+    rigNavigationOrderStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
     type NotesSessionStore,
+    type RigNavigationOrderStore,
     type RigSettingsStore,
     type RigWindowStore,
 } from "happy2-state";
@@ -49,6 +51,7 @@ import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { DesktopPluginApplicationView } from "./desktopPluginApplicationView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
+import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 
 const desktopBrowserContentRender: BrowserContentRenderer = (props) => (
     <DesktopBrowserView {...props} />
@@ -167,6 +170,7 @@ function RigBoundary(props: {
     notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
+    navigationOrder: RigNavigationOrderStore;
     rigs: RigDirectoryStore;
     settings: RigSettingsStore;
     update?: WorkspaceUpdate;
@@ -193,6 +197,7 @@ function RigBoundary(props: {
                           update: update.snapshot,
                       }
                     : {}),
+                navigationOrder: props.navigationOrder,
                 notes: props.notes,
                 platform: props.platform,
                 rigs: props.rigs,
@@ -210,6 +215,7 @@ function DesktopRenderer(props: {
     htmlPreview?: HtmlPreviewRenderer;
     pluginApplicationContent?: RigPluginApplicationContentRenderer;
     bridge: HappyDesktopBridge;
+    navigationOrder: RigNavigationOrderStore;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
@@ -311,6 +317,7 @@ function DesktopRenderer(props: {
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
             pluginApplicationContent={props.pluginApplicationContent}
+            navigationOrder={props.navigationOrder}
             notes={props.notes}
             platform={props.platform}
             router={props.rigRouter}
@@ -349,6 +356,11 @@ if (bridge) {
         // window rather than to any Rig: the main process stores them, and this store
         // outlives every daemon connection the window makes.
         const notes = notesSessionStoreCreate(desktopBridge);
+        // How the reader arranged the sidebar's pinned rows. It is the window's
+        // for the same reason the notes are: those rows are here whether or not
+        // any machine is reachable, so the arrangement must outlive every
+        // connection this window makes.
+        const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
         // Every Rig in this window, each with its own product stores. The router is
         // told to resolve its address again whenever the set of connected Rigs
         // changes, so a machine that connects after the URL already named it opens
@@ -390,6 +402,7 @@ if (bridge) {
                                 : desktopPluginApplicationRenderCreate(desktopBridge)
                         }
                         bridge={desktopBridge}
+                        navigationOrder={navigationOrder}
                         notes={notes}
                         // Only the Electron window hides its title bar; the browser
                         // development server renders the same tree with web chrome.

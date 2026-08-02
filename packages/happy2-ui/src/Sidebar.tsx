@@ -5,6 +5,7 @@ import {
     useState,
     type CSSProperties,
     type HTMLAttributes,
+    type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
@@ -135,6 +136,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Invoked when a row's trailing `action` control is used. */
     onItemAction?: (id: string) => void;
     /**
+     * Enables arranging the pinned `actions` and reports the one move a drag or
+     * a keyboard move made. Without it the pinned rows are fixed, which is what
+     * a window with nowhere to remember an order should offer.
+     */
+    onActionReorder?: (move: SidebarReorder) => void;
+    /**
      * Enables dragging rows into a different order and reports the one move a
      * drag made, on release. A top-level row carries its nested rows with it; a
      * nested row travels among its siblings inside its own parent and never
@@ -189,6 +196,28 @@ function isFirstAtDepth(items: readonly SidebarItem[], index: number): boolean {
 
 /** Pointer travel, in px, before a press becomes a drag instead of a selection. */
 const DRAG_THRESHOLD = 4;
+
+/**
+ * The list the pinned `actions` are arranged in. They are not a section — they
+ * carry no heading and belong to the window rather than to any list of entities
+ * — but they are rearranged by exactly the same machinery, so they need a list
+ * identity of their own. A symbol, so that no caller's section id can ever be
+ * mistaken for it.
+ */
+const ACTIONS_LIST = Symbol("happy2-sidebar-actions");
+
+/** Which list a reorder is happening in: one section, or the pinned actions. */
+type SidebarListId = string | typeof ACTIONS_LIST;
+
+/**
+ * One row's identity across the whole sidebar: which list it is in, and which
+ * row. The list is length-prefixed so that no id, however it is written, can
+ * shift the boundary between the two and answer for another list's row.
+ */
+function rowKey(listId: SidebarListId, itemId: string): string {
+    const list = typeof listId === "string" ? listId : "";
+    return `${String(list.length)}:${list}${itemId}`;
+}
 
 /** True when the reader asked for no motion, so a drop lands instead of gliding. */
 function reducedMotion(): boolean {
@@ -372,6 +401,9 @@ function SidebarRow({
     dragging?: boolean;
     item: SidebarItem;
     onContextMenu?: (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => void;
+    onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+    /** The gesture was taken away rather than finished; nothing is reported. */
+    onPointerCancel?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -380,6 +412,8 @@ function SidebarRow({
     /** Invoked by the row's trailing control; absent when the row offers none. */
     onAction?: () => void;
     onSelect: (id: string) => void;
+    /** The row can be arranged, which is what the keyboard shortcut is offered for. */
+    reorderable?: boolean;
     shift?: number;
 }) {
     const item = () => props.item;
@@ -398,6 +432,7 @@ function SidebarRow({
     return (
         <button
             aria-current={props.active ? "page" : undefined}
+            aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
             className={["happy2-sidebar__item", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-archived={item().archived ? "" : undefined}
@@ -411,9 +446,14 @@ function SidebarRow({
             data-dragging={props.dragging ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
+            onKeyDown={props.onKeyDown}
             onPointerDown={props.onPointerDown}
             onPointerMove={props.onPointerMove}
-            onPointerCancel={props.onPointerUp}
+            onPointerCancel={props.onPointerCancel}
+            /* The capture is released by the drop itself, so this only fires
+               first when something else took the pointer away — the row being
+               removed under it, or the system claiming the gesture. */
+            onLostPointerCapture={props.onPointerCancel}
             onPointerUp={props.onPointerUp}
             ref={nodeRef}
             style={{
@@ -594,6 +634,7 @@ export function Sidebar(props: SidebarProps) {
         "footer",
         "headerAccessory",
         "itemMenuItems",
+        "onActionReorder",
         "onBack",
         "onCompose",
         "onItemSelect",
@@ -643,9 +684,12 @@ export function Sidebar(props: SidebarProps) {
     }, [itemMenu]);
     // Reorder drag. The live value is kept in a ref as well as in state because
     // the pointer handlers read it in the same gesture that schedules the paint.
-    const dragRef = useRef<{ sectionId: string; drag: SidebarDrag } | undefined>(undefined);
+    const dragRef = useRef<{ listId: SidebarListId; drag: SidebarDrag } | undefined>(undefined);
     // Live row nodes, so a drop can read where each row was before the new order
-    // is applied and animate it from there.
+    // is applied and animate it from there. Keyed by list as well as by row,
+    // because nothing stops one caller's section from naming a row the same
+    // thing another one does, and one list's registration must not delete
+    // another's node out from under a drop.
     const [rowNodes] = useState(() => new Map<string, HTMLButtonElement>());
     // Row tops captured at the drop, consumed by the layout effect below.
     const flipRef = useRef<Map<string, number> | undefined>(undefined);
@@ -660,24 +704,48 @@ export function Sidebar(props: SidebarProps) {
     // Set by a drag that actually moved, so the click the browser fires on
     // release rearranges rather than also opening what was dragged.
     const dragClick = useRef(false);
-    const [dragPaint, setDragPaint] = useState<{ sectionId: string; drag: SidebarDrag }>();
-    const dragSet = (next: { sectionId: string; drag: SidebarDrag } | undefined): void => {
+    const [dragPaint, setDragPaint] = useState<{ listId: SidebarListId; drag: SidebarDrag }>();
+    const dragSet = (next: { listId: SidebarListId; drag: SidebarDrag } | undefined): void => {
         dragRef.current = next;
         setDragPaint(next);
     };
-    const dragOf = (sectionId: string): SidebarDrag | undefined =>
-        dragPaint?.sectionId === sectionId ? dragPaint.drag : undefined;
+    const dragOf = (listId: SidebarListId): SidebarDrag | undefined =>
+        dragPaint?.listId === listId ? dragPaint.drag : undefined;
+    const actions = local.actions ?? [];
+    /**
+     * Where one list's moves are reported, and whether it can be arranged at all.
+     * The pinned actions and a section are told apart here and nowhere else, so
+     * everything below arranges a list of rows without knowing which it has.
+     */
+    const reorderOf = (listId: SidebarListId): ((move: SidebarReorder) => void) | undefined => {
+        if (listId === ACTIONS_LIST) return local.onActionReorder;
+        const reorder = local.onItemReorder;
+        return reorder ? (move) => reorder(listId, move) : undefined;
+    };
+    // What a keyboard move has just done, for a reader who cannot see the row
+    // travel. It is written into two regions in turn: a region whose text is
+    // replaced by the same words again has not changed, and a screen reader has
+    // nothing to say about it, so each move speaks from the region the previous
+    // one left silent.
+    const [announcements, setAnnouncements] = useState<readonly [string, string]>(["", ""]);
+    const [announceSlot, setAnnounceSlot] = useState(0);
+    const moveAnnounce = (text: string): void => {
+        const slot = announceSlot === 0 ? 1 : 0;
+        setAnnounceSlot(slot);
+        setAnnouncements(slot === 0 ? [text, ""] : ["", text]);
+    };
 
     const dragStart = (
         event: ReactPointerEvent<HTMLButtonElement>,
-        section: SidebarSection,
+        listId: SidebarListId,
+        items: readonly SidebarItem[],
         rowIndex: number,
     ): void => {
-        const { units, parentId } = dragUnitsOf(section.items, rowIndex);
+        const { units, parentId } = dragUnitsOf(items, rowIndex);
         const blocks = units;
         const blockIndex = units.findIndex((unit) => unit.includes(rowIndex));
         dragClick.current = false;
-        if (!local.onItemReorder || event.button !== 0 || blocks.length < 2) return;
+        if (!reorderOf(listId) || event.button !== 0 || blocks.length < 2) return;
         // A pointer-down on the row's own control is that control's, not a drag.
         if ((event.target as HTMLElement).closest('[data-happy2-ui="sidebar-item-action"]')) return;
         // Heights are the distance a block actually displaces, measured from the
@@ -707,13 +775,13 @@ export function Sidebar(props: SidebarProps) {
         );
         event.currentTarget.setPointerCapture(event.pointerId);
         dragSet({
-            sectionId: section.id,
+            listId,
             drag: {
                 deltaY: 0,
                 from: blockIndex,
                 heights,
                 moved: false,
-                peers: units.map((unit) => section.items[unit[0]!]!.id),
+                peers: units.map((unit) => items[unit[0]!]!.id),
                 pointerId: event.pointerId,
                 startY: event.clientY,
                 to: blockIndex,
@@ -738,10 +806,43 @@ export function Sidebar(props: SidebarProps) {
         });
     };
 
-    /** Reports the move, if the drag made one, and clears the drag. */
+    /**
+     * Where every row is right now, held until the render that rearranges them:
+     * the row that is moving where the reader left it and its neighbours where
+     * they were pushed to. The rows animate from these positions to wherever the
+     * new order puts them, so the one commit that moves DOM nodes happens while
+     * the move is being made and never once the rows are sitting still.
+     */
+    const settleCapture = (
+        listId: SidebarListId,
+        items: readonly SidebarItem[],
+        movedId: string,
+    ): void => {
+        const firsts = new Map<string, number>();
+        for (const item of items) {
+            const node = rowNodes.get(rowKey(listId, item.id));
+            if (node) firsts.set(rowKey(listId, item.id), node.getBoundingClientRect().top);
+        }
+        flipRef.current = firsts;
+        // Released lit, not resting: the highlight is handed from the drag to
+        // the travelling row and only let go once it has arrived.
+        setDropped(rowKey(listId, movedId));
+        // The capture waits for the render that applies the new order, but
+        // it cannot wait forever: a move the caller declines to make, or one
+        // the server rejects, never produces that render, and an unclaimed
+        // capture would leave the row lit and then play it back from stale
+        // coordinates on the next unrelated render.
+        flipWaitClear();
+        flipWait.current = window.setTimeout(() => {
+            flipWait.current = undefined;
+            flipRef.current = undefined;
+            setDropped(undefined);
+        }, SETTLE_WAIT_MS);
+    };
+
     const dragEnd = (
         event: ReactPointerEvent<HTMLButtonElement>,
-        section: SidebarSection,
+        items: readonly SidebarItem[],
     ): void => {
         const current = dragRef.current;
         if (!current || event.pointerId !== current.drag.pointerId) return;
@@ -751,35 +852,9 @@ export function Sidebar(props: SidebarProps) {
             return;
         }
         dragClick.current = true;
-        // Where every row is right now, while the drag still holds them: the
-        // dragged row under the pointer and its neighbours pushed aside. The new
-        // order is applied immediately after, and the rows animate from these
-        // positions to wherever it puts them — so the one commit that moves DOM
-        // nodes happens here, under the pointer, and never once the row is
-        // supposed to be sitting still.
         const movedId = drag.peers[drag.from];
-        if (!reducedMotion() && drag.from !== drag.to) {
-            const firsts = new Map<string, number>();
-            for (const item of section.items) {
-                const node = rowNodes.get(item.id);
-                if (node) firsts.set(item.id, node.getBoundingClientRect().top);
-            }
-            flipRef.current = firsts;
-            // Released lit, not resting: the highlight is handed from the drag to
-            // the travelling row and only let go once it has arrived.
-            setDropped(movedId);
-            // The capture waits for the render that applies the new order, but
-            // it cannot wait forever: a move the caller declines to make, or one
-            // the server rejects, never produces that render, and an unclaimed
-            // capture would leave the row lit and then play it back from stale
-            // coordinates on the next unrelated render.
-            flipWaitClear();
-            flipWait.current = window.setTimeout(() => {
-                flipWait.current = undefined;
-                flipRef.current = undefined;
-                setDropped(undefined);
-            }, SETTLE_WAIT_MS);
-        }
+        if (!reducedMotion() && drag.from !== drag.to && movedId !== undefined)
+            settleCapture(current.listId, items, movedId);
         dragSet(undefined);
         if (drag.from === drag.to || movedId === undefined) return;
         haptic("impact");
@@ -787,11 +862,99 @@ export function Sidebar(props: SidebarProps) {
         // is whichever peer precedes its landing slot once it has been lifted
         // out, and nothing at the front of the list.
         const remaining = drag.peers.filter((_, index) => index !== drag.from);
-        local.onItemReorder?.(section.id, {
+        reorderOf(current.listId)?.({
             afterId: drag.to === 0 ? null : (remaining[drag.to - 1] ?? null),
             id: movedId,
             ...(drag.parentId !== undefined ? { parentId: drag.parentId } : {}),
         });
+    };
+
+    /**
+     * Lets a gesture go without moving anything. The pointer can be taken away
+     * mid-drag — the system claims it, the row the reader is holding is removed
+     * by something else in the workspace — and a drag that was interrupted is
+     * not a drag anybody finished: the rows go back to where they were, and the
+     * list must not be left holding a capture nobody will ever release.
+     */
+    const dragCancel = (event: ReactPointerEvent<HTMLButtonElement>): void => {
+        const current = dragRef.current;
+        if (!current || event.pointerId !== current.drag.pointerId) return;
+        dragSet(undefined);
+    };
+
+    /*
+     * The row being dragged can be taken out of the list by something else in a
+     * live workspace — a machine disconnecting, a plugin unloading. Its node
+     * still holds the pointer capture, and a capture released by a node that is
+     * no longer in the document is announced to the document rather than to the
+     * node, so the row's own handler is never called and the drag would be left
+     * holding rows nobody can move any more.
+     *
+     * A drop that ends normally has already cleared the drag by the time its
+     * capture is released, so this listener finds nothing to do and cannot take
+     * a legitimate move away.
+     */
+    const dragLive = dragPaint !== undefined;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a capture lost with its own element is announced only to the document, which no declarative boundary exposes; the listener lives for one gesture and must be removed imperatively
+    useLayoutEffect(() => {
+        if (!dragLive) return;
+        const lost = (event: Event): void => {
+            const current = dragRef.current;
+            if (!current || (event as PointerEvent).pointerId !== current.drag.pointerId) return;
+            dragSet(undefined);
+        };
+        document.addEventListener("lostpointercapture", lost);
+        return () => {
+            document.removeEventListener("lostpointercapture", lost);
+        };
+    }, [dragLive]);
+
+    /**
+     * Arranging by keyboard, for a reader who is not holding a pointer. Option
+     * with an arrow rather than the arrow alone, because the bare arrows belong
+     * to the reader's own way of moving through the rows, and a row that walked
+     * out from under the caret would take that away.
+     *
+     * The row travels among exactly the peers a drag would give it — a project
+     * carries its worktrees, a worktree stays inside its project — so the two
+     * ways of arranging the list can never disagree about what moved.
+     */
+    const moveByKey = (
+        event: ReactKeyboardEvent<HTMLButtonElement>,
+        listId: SidebarListId,
+        items: readonly SidebarItem[],
+        rowIndex: number,
+    ): void => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const reorder = reorderOf(listId);
+        if (!reorder) return;
+        // The row says it takes this shortcut, so it takes it: a list with
+        // nowhere to move to, or a row already at the end of one, is not an
+        // error and not a scroll either — it simply does nothing.
+        event.preventDefault();
+        // A hand already holds this list. Two arrangements of the same rows in
+        // flight at once would each be stated against peers the other has
+        // already moved, and the second would undo the first.
+        if (dragRef.current) return;
+        const { units, parentId } = dragUnitsOf(items, rowIndex);
+        const from = units.findIndex((unit) => unit.includes(rowIndex));
+        if (units.length < 2 || from < 0) return;
+        const to = from + (event.key === "ArrowUp" ? -1 : 1);
+        if (to < 0 || to >= units.length) return;
+        const peers = units.map((unit) => items[unit[0]!]!.id);
+        const movedId = peers[from]!;
+        if (!reducedMotion()) settleCapture(listId, items, movedId);
+        haptic("selection");
+        const remaining = peers.filter((_, index) => index !== from);
+        reorder({
+            afterId: to === 0 ? null : (remaining[to - 1] ?? null),
+            id: movedId,
+            ...(parentId !== undefined ? { parentId } : {}),
+        });
+        moveAnnounce(
+            `${items[rowIndex]!.label} moved to position ${String(to + 1)} of ${String(units.length)}`,
+        );
     };
 
     /*
@@ -808,8 +971,8 @@ export function Sidebar(props: SidebarProps) {
         const firsts = flipRef.current;
         if (!firsts) return;
         const played: Animation[] = [];
-        for (const [id, first] of firsts) {
-            const node = rowNodes.get(id);
+        for (const [key, first] of firsts) {
+            const node = rowNodes.get(key);
             if (!node) continue;
             const delta = first - node.getBoundingClientRect().top;
             if (Math.abs(delta) < 0.5) continue;
@@ -950,15 +1113,76 @@ export function Sidebar(props: SidebarProps) {
                             onSelect={local.onCompose}
                         />
                     ) : null}
-                    {local.actions?.map((action) => (
-                        <SidebarRow
-                            active={false}
-                            className="happy2-sidebar__compose"
-                            item={action}
-                            key={action.id}
-                            onSelect={() => local.onItemSelect(action.id)}
-                        />
-                    ))}
+                    {actions.length > 0 ? (
+                        /* The pinned rows are wrapped rather than left loose in
+                           the body, because a drag measures the rows laid out
+                           beside the one it started on: sharing a parent with the
+                           compose row and every section would have it measuring
+                           the whole sidebar. */
+                        <div
+                            className="happy2-sidebar__actions"
+                            data-happy2-ui="sidebar-actions"
+                            data-reordering={dragOf(ACTIONS_LIST) ? "" : undefined}
+                        >
+                            {actions.map((action, index) => {
+                                const drag = dragOf(ACTIONS_LIST);
+                                const dragging = drag?.moved === true;
+                                return (
+                                    <SidebarRow
+                                        active={false}
+                                        className="happy2-sidebar__compose"
+                                        dragging={
+                                            (dragging && drag.from === index) ||
+                                            rowKey(ACTIONS_LIST, action.id) === dropped
+                                        }
+                                        item={action}
+                                        key={action.id}
+                                        nodeRef={(node) => {
+                                            const key = rowKey(ACTIONS_LIST, action.id);
+                                            if (node) rowNodes.set(key, node);
+                                            else rowNodes.delete(key);
+                                        }}
+                                        onKeyDown={
+                                            local.onActionReorder
+                                                ? (event) =>
+                                                      moveByKey(event, ACTIONS_LIST, actions, index)
+                                                : undefined
+                                        }
+                                        onPointerDown={
+                                            local.onActionReorder
+                                                ? (event) =>
+                                                      dragStart(event, ACTIONS_LIST, actions, index)
+                                                : undefined
+                                        }
+                                        onPointerCancel={
+                                            local.onActionReorder ? dragCancel : undefined
+                                        }
+                                        onPointerMove={local.onActionReorder ? dragMove : undefined}
+                                        onPointerUp={
+                                            local.onActionReorder
+                                                ? (event) => dragEnd(event, actions)
+                                                : undefined
+                                        }
+                                        onSelect={(id) => {
+                                            if (dragClick.current) {
+                                                dragClick.current = false;
+                                                return;
+                                            }
+                                            local.onItemSelect(id);
+                                        }}
+                                        reorderable={local.onActionReorder !== undefined}
+                                        shift={
+                                            dragging
+                                                ? index === drag.from
+                                                    ? drag.deltaY
+                                                    : blockShift(drag, index)
+                                                : undefined
+                                        }
+                                    />
+                                );
+                            })}
+                        </div>
+                    ) : null}
                     {local.bodyAccessory}
                     {local.sections.map((section) => (
                         <section
@@ -1022,31 +1246,55 @@ export function Sidebar(props: SidebarProps) {
                                                   (item.depth ?? 0) > 0 &&
                                                   isFirstAtDepth(section.items, index)
                                               }
-                                              dragging={held || item.id === dropped}
+                                              dragging={
+                                                  held || rowKey(section.id, item.id) === dropped
+                                              }
                                               key={item.id}
                                               item={item}
                                               onContextMenu={openItemMenu}
+                                              onKeyDown={
+                                                  local.onItemReorder
+                                                      ? (event) =>
+                                                            moveByKey(
+                                                                event,
+                                                                section.id,
+                                                                section.items,
+                                                                index,
+                                                            )
+                                                      : undefined
+                                              }
                                               onPointerDown={
                                                   local.onItemReorder
-                                                      ? (event) => dragStart(event, section, index)
+                                                      ? (event) =>
+                                                            dragStart(
+                                                                event,
+                                                                section.id,
+                                                                section.items,
+                                                                index,
+                                                            )
                                                       : undefined
+                                              }
+                                              onPointerCancel={
+                                                  local.onItemReorder ? dragCancel : undefined
                                               }
                                               onPointerMove={
                                                   local.onItemReorder ? dragMove : undefined
                                               }
                                               onPointerUp={
                                                   local.onItemReorder
-                                                      ? (event) => dragEnd(event, section)
+                                                      ? (event) => dragEnd(event, section.items)
                                                       : undefined
                                               }
+                                              reorderable={local.onItemReorder !== undefined}
                                               onAction={
                                                   local.onItemAction && item.action
                                                       ? () => local.onItemAction?.(item.id)
                                                       : undefined
                                               }
                                               nodeRef={(node) => {
-                                                  if (node) rowNodes.set(item.id, node);
-                                                  else rowNodes.delete(item.id);
+                                                  const key = rowKey(section.id, item.id);
+                                                  if (node) rowNodes.set(key, node);
+                                                  else rowNodes.delete(key);
                                               }}
                                               onSelect={(id) => {
                                                   if (dragClick.current) {
@@ -1094,6 +1342,21 @@ export function Sidebar(props: SidebarProps) {
                     ))}
                 </div>
             </div>
+            {/* A row moved by keyboard travels without the reader's caret leaving
+                it, so where it has landed is said out loud here. Both regions
+                are always mounted, because one that arrives with its own text is
+                a region a screen reader may never have been watching. */}
+            {announcements.map((text, slot) => (
+                <span
+                    aria-live="polite"
+                    className="happy2-sidebar__announcement"
+                    data-happy2-ui="sidebar-announcement"
+                    key={slot === 0 ? "first" : "second"}
+                    role="status"
+                >
+                    {text}
+                </span>
+            ))}
             {local.footer ? (
                 <footer className="happy2-sidebar__footer" data-happy2-ui="sidebar-footer">
                     {local.footer}

@@ -18,6 +18,7 @@ import type {
     RigGroupId,
     RigModelStore,
     RigModelSelection,
+    RigNavigationOrderStore,
     NotesSessionStore,
     NoteSummary,
     RigPanelFileKind,
@@ -58,6 +59,8 @@ import type {
 import {
     rigAgentAuthor,
     rigInboxStoreNoop,
+    rigNavigationOrderApply,
+    rigNavigationOrderStoreNoop,
     rigPluginApplicationStoreNoop,
     rigProviderUsageStoreNoop,
     rigSlotsStoreNoop,
@@ -125,6 +128,7 @@ import {
     type FileTreeNode,
     type FileTreeSelectModifiers,
     type SidebarItem,
+    type SidebarReorder,
     type SidebarSection,
     type TabItem,
 } from "happy2-ui";
@@ -267,6 +271,13 @@ export interface AppRigViewProps {
      * such store and stays windowed.
      */
     windowState?: RigWindowStore;
+    /**
+     * Where this window remembers the order the reader arranged its pinned rows
+     * in. A host that keeps no such record supplies none, and the rows stay in
+     * the order the window offers them rather than being arrangeable into an
+     * order the next launch would forget.
+     */
+    navigationOrder?: RigNavigationOrderStore;
     /** Native or hosted-renderer update projected by the desktop host. */
     update?: AppRigUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
@@ -803,6 +814,23 @@ function rigItemParse(value: string): { readonly rigId: string; readonly id: str
  * unknown while it is away, and connecting it is a settings act rather than
  * something to reach for from a project list.
  */
+/**
+ * The pinned rows in the order this window keeps them. A row the reader has
+ * never moved — a plugin installed since, a machine that has only just become
+ * reachable — stays where the window offered it, so an arrangement is a
+ * decision about the rows it was made about and nothing else.
+ */
+function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): SidebarItem[] {
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return rigNavigationOrderApply(
+        rows.map((row) => row.id),
+        order,
+    ).flatMap((id) => {
+        const row = byId.get(id);
+        return row ? [row] : [];
+    });
+}
+
 function rigSections(directory: AppRigDirectorySnapshot): SidebarSection[] {
     return directory.rigs.map((rig) => ({
         id: `rig:${rig.id}`,
@@ -1000,6 +1028,15 @@ export function AppRigView(props: AppRigViewProps) {
         props.appearance.get,
         props.appearance.get,
     );
+    // The order the reader arranged the pinned rows in. It belongs to the window
+    // rather than to any one Rig — Notes and Friends outlive every connection —
+    // so a machine going away rearranges nothing.
+    const navigationOrderStore = props.navigationOrder ?? rigNavigationOrderStoreNoop;
+    const navigationOrder = useSyncExternalStore(
+        navigationOrderStore.subscribe,
+        navigationOrderStore.get,
+        navigationOrderStore.get,
+    );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -1060,91 +1097,96 @@ export function AppRigView(props: AppRigViewProps) {
             version={props.update.version}
         />
     ) : undefined;
+    // The pinned rows as the window offers them. What the reader has made of
+    // that order is applied below, so this list only ever states which rows this
+    // window has and what each one is.
+    const pinnedOffered: SidebarItem[] = [
+        // Notes follow the two rows that give the window somewhere to
+        // work, because they are the third thing this window holds that
+        // is not a session: the reader's own writing on this machine.
+        ...(props.notes
+            ? [
+                  {
+                      icon: "doc" as const,
+                      id: NOTES_ITEM,
+                      kind: "action" as const,
+                      label: "Notes",
+                  },
+              ]
+            : []),
+        // The inbox belongs to the addressed machine, so it appears only
+        // while that machine is reachable: a queue of questions is
+        // meaningless from a Rig that cannot say what it is waiting on.
+        ...(active?.session?.inbox
+            ? [
+                  {
+                      badge: inboxPending,
+                      icon: "bell" as const,
+                      id: INBOX_ITEM,
+                      kind: "action" as const,
+                      label: "Inbox",
+                  },
+              ]
+            : []),
+        // Usage belongs to the addressed machine for the same reason
+        // the inbox does: it is that machine's accounts that are being
+        // spent, so the row is absent while it cannot say.
+        ...(active?.session?.providerUsage
+            ? [
+                  {
+                      icon: "zap" as const,
+                      id: USAGE_ITEM,
+                      kind: "action" as const,
+                      label: "Usage",
+                  },
+              ]
+            : []),
+        // Friends belong to the account rather than to a machine, so
+        // this row is always here: it opens whether or not any Rig is
+        // reachable.
+        {
+            icon: "users" as const,
+            id: FRIENDS_ITEM,
+            kind: "action" as const,
+            label: "Friends",
+        },
+        // The component workbench is a development tool. Its row is a
+        // capability the host grants rather than an environment this
+        // component reads for itself: the router registers the workbench
+        // route, and hands down the way to open it, only in a build that
+        // has one. A host that offers no workbench shows no row.
+        ...(props.onBlueprintOpen
+            ? [
+                  {
+                      icon: "braces" as const,
+                      id: BLUEPRINT_ITEM,
+                      kind: "action" as const,
+                      label: "Blueprint",
+                  },
+              ]
+            : []),
+        // Whatever this machine's plugins contribute comes last of the
+        // pinned rows, in the order the daemon gives them: they are the
+        // only rows here the product did not choose, so they sit after
+        // everything it did.
+        ...plugins.applications.map((application) => ({
+            icon: "plugin" as const,
+            id: pluginItemId(application.id),
+            kind: "action" as const,
+            label: application.label,
+            // An application whose bundle is still being prepared says so
+            // here and cannot be opened yet: opening one is meant to read
+            // nothing, so a row that would have to wait is a row that is
+            // not ready. One whose code could not be prepared paints
+            // muted for the same reason.
+            ...(application.status === "loading" ? { status: "working" as const } : {}),
+            ...(application.status === "error" ? { archived: true } : {}),
+        })),
+    ];
+    const pinned = pinnedArrange(pinnedOffered, navigationOrder.order);
     const sidebar = (
         <Sidebar
-            actions={[
-                // Notes follow the two rows that give the window somewhere to
-                // work, because they are the third thing this window holds that
-                // is not a session: the reader's own writing on this machine.
-                ...(props.notes
-                    ? [
-                          {
-                              icon: "doc" as const,
-                              id: NOTES_ITEM,
-                              kind: "action" as const,
-                              label: "Notes",
-                          },
-                      ]
-                    : []),
-                // The inbox belongs to the addressed machine, so it appears only
-                // while that machine is reachable: a queue of questions is
-                // meaningless from a Rig that cannot say what it is waiting on.
-                ...(active?.session?.inbox
-                    ? [
-                          {
-                              badge: inboxPending,
-                              icon: "bell" as const,
-                              id: INBOX_ITEM,
-                              kind: "action" as const,
-                              label: "Inbox",
-                          },
-                      ]
-                    : []),
-                // Usage belongs to the addressed machine for the same reason
-                // the inbox does: it is that machine's accounts that are being
-                // spent, so the row is absent while it cannot say.
-                ...(active?.session?.providerUsage
-                    ? [
-                          {
-                              icon: "zap" as const,
-                              id: USAGE_ITEM,
-                              kind: "action" as const,
-                              label: "Usage",
-                          },
-                      ]
-                    : []),
-                // Friends belong to the account rather than to a machine, so
-                // this row is always here: it opens whether or not any Rig is
-                // reachable.
-                {
-                    icon: "users" as const,
-                    id: FRIENDS_ITEM,
-                    kind: "action" as const,
-                    label: "Friends",
-                },
-                // The component workbench is a development tool. Its row is a
-                // capability the host grants rather than an environment this
-                // component reads for itself: the router registers the workbench
-                // route, and hands down the way to open it, only in a build that
-                // has one. A host that offers no workbench shows no row.
-                ...(props.onBlueprintOpen
-                    ? [
-                          {
-                              icon: "braces" as const,
-                              id: BLUEPRINT_ITEM,
-                              kind: "action" as const,
-                              label: "Blueprint",
-                          },
-                      ]
-                    : []),
-                // Whatever this machine's plugins contribute comes last of the
-                // pinned rows, in the order the daemon gives them: they are the
-                // only rows here the product did not choose, so they sit after
-                // everything it did.
-                ...plugins.applications.map((application) => ({
-                    icon: "plugin" as const,
-                    id: pluginItemId(application.id),
-                    kind: "action" as const,
-                    label: application.label,
-                    // An application whose bundle is still being prepared says so
-                    // here and cannot be opened yet: opening one is meant to read
-                    // nothing, so a row that would have to wait is a row that is
-                    // not ready. One whose code could not be prepared paints
-                    // muted for the same reason.
-                    ...(application.status === "loading" ? { status: "working" as const } : {}),
-                    ...(application.status === "error" ? { archived: true } : {}),
-                })),
-            ]}
+            actions={pinned}
             activeItemId={
                 props.notesOpen
                     ? NOTES_ITEM
@@ -1344,6 +1386,17 @@ export function AppRigView(props: AppRigViewProps) {
                         : workspace.worktreeCreate(owner.project.id)
                 ).catch(() => undefined);
             }}
+            {...(props.navigationOrder
+                ? {
+                      onActionReorder: (move: SidebarReorder) => {
+                          props.navigationOrder?.itemReorder(
+                              move.id,
+                              move.afterId,
+                              pinned.map((row) => row.id),
+                          );
+                      },
+                  }
+                : {})}
             onItemReorder={(sectionId, move) => {
                 const rig = rigOf(sectionId.slice("rig:".length));
                 const workspace = rig?.session?.workspace;

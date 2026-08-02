@@ -230,6 +230,15 @@
     padding: 8px;
 }
 
+/* The pinned rows are their own column so a reorder drag measures them and
+   nothing else. They keep the compose row's tight rhythm: this wrapper is a
+   grouping, not a group the reader can see. */
+.happy2-sidebar__actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+}
+
 .happy2-sidebar__section {
     display: flex;
     flex-direction: column;
@@ -241,7 +250,8 @@
 }
 
 /* New chat is a SidebarRow; keep the same 2px row rhythm before the first menu. */
-.happy2-sidebar__compose + .happy2-sidebar__section {
+.happy2-sidebar__compose + .happy2-sidebar__section,
+.happy2-sidebar__actions + .happy2-sidebar__section {
     margin-top: 2px;
 }
 
@@ -359,7 +369,8 @@
    same commit; if that drop were transitioned, each row would glide in from
    wherever it had been pushed to — the dropped row appearing to fly in from
    above — instead of simply being where the new order puts it. */
-.happy2-sidebar__section[data-reordering] .happy2-sidebar__item {
+.happy2-sidebar__section[data-reordering] .happy2-sidebar__item,
+.happy2-sidebar__actions[data-reordering] .happy2-sidebar__item {
     transition:
         background-color 120ms ease,
         color 120ms ease,
@@ -367,19 +378,37 @@
 }
 
 /* The row under the pointer rides above its neighbours and drops its transition,
-   so it tracks the pointer exactly while the rows it displaces still glide. */
+   so it tracks the pointer exactly while the rows it displaces still glide. The
+   shadow is what lifts it off the column: a row being carried is the one thing
+   in the sidebar that is not lying flat in the list. */
 .happy2-sidebar__item[data-dragging] {
     z-index: 1;
     background: var(--surface-ripple);
+    box-shadow: 0 4px 12px var(--shadow-subtle);
     transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy2-sidebar__section[data-reordering] .happy2-sidebar__item {
+    .happy2-sidebar__section[data-reordering] .happy2-sidebar__item,
+    .happy2-sidebar__actions[data-reordering] .happy2-sidebar__item {
         transition:
             background-color 120ms ease,
             color 120ms ease;
     }
+}
+
+/* Said out loud, never drawn: the region reports a keyboard move to a screen
+   reader and must not take a line of the sidebar to do it. */
+.happy2-sidebar__announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .happy2-sidebar__item:hover {

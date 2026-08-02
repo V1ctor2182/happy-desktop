@@ -474,6 +474,15 @@ export {
     type RigModelStoreSnapshot,
 } from "./rig/rigModelStore.js";
 export {
+    rigNavigationOrderApply,
+    rigNavigationOrderStoreCreate,
+    rigNavigationOrderStoreNoop,
+    type RigNavigationOrderDocument,
+    type RigNavigationOrderPersistence,
+    type RigNavigationOrderSnapshot,
+    type RigNavigationOrderStore,
+} from "./rig/rigNavigationOrderStore.js";
+export {
     rigWorkspaceMemoryStoreCreate,
     type RigFileTabMemory,
     type RigGroupTabMemory,

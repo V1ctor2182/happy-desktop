@@ -397,6 +397,55 @@ function ReorderDemo() {
         </div>
     );
 }
+
+const PINNED_ROWS: SidebarItem[] = [
+    { icon: "doc", id: "notes", kind: "action", label: "Notes" },
+    { badge: 3, icon: "bell", id: "inbox", kind: "action", label: "Inbox" },
+    { icon: "zap", id: "usage", kind: "action", label: "Usage" },
+    { icon: "users", id: "friends", kind: "action", label: "Friends" },
+    { icon: "plugin", id: "plugin-hello", kind: "action", label: "Hello World" },
+];
+
+/**
+ * The pinned rows arranged by drag and by keyboard. Both report the same one
+ * move, so this demo applies them through the same list operation the product
+ * applies its durable order with.
+ */
+function PinnedReorderDemo() {
+    const [rows, setRows] = useState<SidebarItem[]>(PINNED_ROWS);
+    const [move, setMove] = useState<string>("— drag a row, or focus one and press ⌥↑ / ⌥↓ —");
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Frame height={300}>
+                <Sidebar
+                    actions={rows}
+                    activeItemId=""
+                    onActionReorder={(reorder) => {
+                        setMove(`${reorder.id} after ${reorder.afterId ?? "«front»"}`);
+                        setRows((current) => [...listMove(current, reorder.id, reorder.afterId)]);
+                    }}
+                    onItemSelect={(id) => setMove(`opened ${id}`)}
+                    sections={[
+                        {
+                            id: "projects",
+                            items: [{ id: "happy2", kind: "project", label: "happy2" }],
+                            label: "Projects",
+                        },
+                    ]}
+                    title="Pinned"
+                />
+            </Frame>
+            <span
+                data-blueprint="sidebar-action-reorder-move"
+                style={{ color: "var(--text-secondary)", font: "var(--font-caption)" }}
+            >
+                {move}
+            </span>
+            <DimensionRule label="pinned rows arrange above the projects · ⌥↑ / ⌥↓ moves the focused row" />
+        </div>
+    );
+}
+
 function Frame(props: { children: ReactNode; height: number }) {
     return (
         <div
@@ -602,6 +651,15 @@ export function SidebarPage() {
                 stage="app"
             >
                 <ReorderDemo />
+            </Specimen>
+
+            <Specimen
+                detail="The pinned rows above the projects arrange the same way, by drag or by ⌥↑ / ⌥↓ on the focused row. A move is announced to a screen reader, the badge and the row's identity travel with it, and the click the browser fires on release does not open what was dragged."
+                label="Arrange the pinned rows"
+                number="02c"
+                stage="app"
+            >
+                <PinnedReorderDemo />
             </Specimen>
 
             <Specimen
