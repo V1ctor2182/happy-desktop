@@ -19,7 +19,7 @@ import {
     rigComposerAttachmentRead,
     rigImageInputsOf,
 } from "./rigComposerAttachment.js";
-import { rigPanelStoreCreate, type RigPanelStore } from "./rigPanelStore.js";
+import { rigPanelStoreCreate, type RigPanelStore, type RigViewPlacement } from "./rigPanelStore.js";
 import {
     rigSessionDraftStoreCreate,
     type RigSessionDraftSnapshot,
@@ -245,7 +245,15 @@ export interface RigWorkspaceSnapshot {
      * while no group is addressed.
      */
     readonly tabOrder: readonly string[];
-    readonly activeFileTabId?: string;
+    /**
+     * What the main content is showing instead of the addressed conversation: an
+     * open file tab, or a panel tab the reader moved into the main content.
+     * Absent means the conversation itself is on screen.
+     *
+     * One field rather than one per kind of view, because the main content shows
+     * exactly one thing at a time and two fields could disagree about which.
+     */
+    readonly activeMainViewId?: string;
     /**
      * The file the panel's viewer is on, if any. It is separate from `fileTabs`
      * because it is a glance out of the transcript with the panel's lifetime,
@@ -325,6 +333,27 @@ export interface RigWorkspaceSnapshot {
     readonly workspaceFilesLoading: boolean;
     /** The create dialog, when it is open. */
     readonly create?: RigCreateSnapshot;
+}
+
+/**
+ * The id the panel's file viewer is drawn under. It is the panel's own tab id
+ * rather than the file's, because the viewer is one slot that shows whichever
+ * file was last pointed at.
+ */
+export const RIG_PANEL_FILE_VIEW_ID = "file";
+
+/** The same file, read as a main-content tab instead of in the panel's viewer. */
+function fileTabKindOfPanel(kind: RigPanelFileKind): RigFileTabKind {
+    return kind === "text" ? "file" : kind;
+}
+
+/**
+ * The same file, read in the panel's viewer instead of a main-content tab —
+ * undefined for a diff, which is two revisions beside each other and has no
+ * form the single-file viewer could show.
+ */
+function panelFileKindOfTab(kind: RigFileTabKind): RigPanelFileKind | undefined {
+    return kind === "diff" ? undefined : kind === "file" ? "text" : kind;
 }
 
 /**
@@ -531,8 +560,28 @@ export interface RigWorkspaceStore {
     filePanelOpen(groupId: RigGroupId, path: string, kind: RigPanelFileKind): void;
     /** Closes the panel's file viewer and stops its pending read. */
     filePanelClose(): void;
-    /** Selects one open file tab, or clears file selection when a session is selected. */
-    fileSelect(tabId: string | undefined): void;
+    /**
+     * Moves one view to the other side of the workspace: the panel's file viewer
+     * into a main-content tab, a file tab into the panel's viewer, or a live
+     * terminal, page, or webapp between the two strips.
+     *
+     * This is a change of placement and nothing else. A file keeps its identity,
+     * so a file moved into the main content is the tab it would already have
+     * been and never a second copy of one; a terminal keeps its process and a
+     * page keeps its address. Views with only one home say so by refusing:
+     * a diff has no viewer in the panel, and the conversation belongs to the
+     * address bar rather than to a strip.
+     *
+     * `viewId` is a file tab id, a panel tab id, or `"file"` for the panel's
+     * file viewer — the same ids the two strips are drawn from.
+     */
+    viewPlacementUpdate(viewId: string, placement: RigViewPlacement): void;
+    /**
+     * Puts one main-content view on screen — an open file tab or a tool tab
+     * moved into the main content — or clears it so the addressed conversation
+     * is what the main content shows.
+     */
+    mainViewSelect(viewId: string | undefined): void;
     fileClose(tabId: string): void;
     fileRetry(tabId: string): void;
     /** Chooses how changed files are displayed, for every tab. */
@@ -810,7 +859,15 @@ export function rigWorkspaceStoreCreate(
      */
     let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
     let fileTabs: readonly RigFileTabSnapshot[] = [];
-    let activeFileTabId: string | undefined;
+    let activeMainViewId: string | undefined;
+    /**
+     * The group the main content's tool view belongs to, when it is one. A tool
+     * tab is the panel's, and the panel shows one group at a time, so knowing
+     * whose it is separates "this tab has ended" from "we are looking at another
+     * project just now". Undefined whenever the main view is a file tab, which
+     * carries its own group already.
+     */
+    let activeMainViewGroupId: RigGroupId | undefined;
     /** The addressed group's tab strip, in the order the reader arranged it. */
     let tabOrder: readonly string[] = [];
     let panelFile: RigPanelFileSnapshot | undefined;
@@ -855,6 +912,24 @@ export function rigWorkspaceStoreCreate(
 
     const notify = (): void => {
         for (const listener of listeners) listener();
+    };
+
+    /**
+     * Depth of a change made of several steps. Moving a file across the window
+     * is one act built from two — opened on the far side, closed on this one —
+     * and a subscriber that saw the middle of it would see the file in both
+     * places at once, or in neither. So the steps are taken with the store
+     * silent and one snapshot is published when they are all done.
+     */
+    let composing = 0;
+    const compose = (act: () => void): void => {
+        composing += 1;
+        try {
+            act();
+        } finally {
+            composing -= 1;
+        }
+        recompute();
     };
 
     const conversationProject = (
@@ -937,6 +1012,16 @@ export function rigWorkspaceStoreCreate(
         const arrival = [
             ...groupConversationIdList(groupId),
             ...fileTabs.filter((tab) => tab.groupId === groupId).map((tab) => tab.id),
+            // A terminal or a page the reader moved out of the panel is in this
+            // strip too, and is arranged in it like everything else. The panel
+            // lists only the addressed group's tabs, so it can answer for that
+            // group and no other.
+            ...(groupId === addressedGroupId
+                ? panel
+                      .get()
+                      .tabs.filter((tab) => tab.placement === "main")
+                      .map((tab) => tab.id)
+                : []),
         ];
         const order = client.memory.groupRead(groupId)?.order;
         if (!order) return arrival;
@@ -994,6 +1079,7 @@ export function rigWorkspaceStoreCreate(
     // Rebuilds the combined snapshot only when a component snapshot actually
     // changed, so `get()` stays referentially stable across no-op ticks.
     const recompute = (): void => {
+        if (composing > 0) return;
         const listSnapshot = list.get();
         groupResume = groupResumeCompute();
         const nextTabOrder = groupTabOrderCompute(addressedGroupId);
@@ -1031,7 +1117,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.groupSessionDraft === groupSessionDraft &&
             snapshot.fileTabs === fileTabs &&
             snapshot.tabOrder === tabOrder &&
-            snapshot.activeFileTabId === activeFileTabId &&
+            snapshot.activeMainViewId === activeMainViewId &&
             snapshot.panelFile === panelFile &&
             snapshot.groupResume === groupResume &&
             snapshot.openInTargets === openInTargets &&
@@ -1067,7 +1153,7 @@ export function rigWorkspaceStoreCreate(
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             ...(create ? { create } : {}),
-            ...(activeFileTabId ? { activeFileTabId } : {}),
+            ...(activeMainViewId ? { activeMainViewId } : {}),
             ...(panelFile ? { panelFile } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -1075,6 +1161,38 @@ export function rigWorkspaceStoreCreate(
         };
         notify();
     };
+
+    /**
+     * The strip holds tabs the panel owns, so what the panel does to one reaches
+     * this snapshot: a page moved into the main content joins the order, and one
+     * closed there leaves it. The panel notifies on its own changes only, so
+     * this cannot loop back into it.
+     */
+    const unsubscribePanel = panel.subscribe(() => {
+        if (disposed) return;
+        // A tool tab the main content was showing can end from the panel's own
+        // side — its shell exits, or it is closed — and the main content must
+        // not go on naming a view that is gone.
+        //
+        // Only while its own group is the addressed one, though. The panel lists
+        // one group at a time, so a tool belonging to a project the reader has
+        // navigated away from is absent rather than ended, and clearing then
+        // would mean coming back to that project no longer showed what was left
+        // on screen in it. A file tab is this store's own and carries its own
+        // group, so it is never in question here.
+        if (
+            activeMainViewId !== undefined &&
+            activeMainViewGroupId !== undefined &&
+            activeMainViewGroupId === addressedGroupId &&
+            !fileTabs.some((tab) => tab.id === activeMainViewId) &&
+            !panel.get().tabs.some((tab) => tab.id === activeMainViewId && tab.placement === "main")
+        ) {
+            activeMainViewId = undefined;
+            activeMainViewGroupId = undefined;
+            groupTabRemember(addressedGroupId, openId);
+        }
+        recompute();
+    });
 
     /**
      * Forgets what was picked in the changed listing. A path only means anything
@@ -1194,10 +1312,11 @@ export function rigWorkspaceStoreCreate(
         }
         // Reopening moved the selection through every restored file; the reader
         // left exactly one of them on screen, so the memory decides which.
-        activeFileTabId =
+        activeMainViewId =
             memory.activeTabId && fileTabs.some((tab) => tab.id === memory.activeTabId)
                 ? memory.activeTabId
                 : undefined;
+        activeMainViewGroupId = undefined;
     };
 
     /** Stops pending work for a file tab that is being closed or replaced. */
@@ -1392,7 +1511,8 @@ export function rigWorkspaceStoreCreate(
     ): void => {
         const id = fileTabIdOf(groupId, path);
         const existing = fileTabs.find((tab) => tab.id === id);
-        activeFileTabId = id;
+        activeMainViewId = id;
+        activeMainViewGroupId = undefined;
         if (existing) {
             const change = fileChangeFind(groupId, path);
             const revision = change?.revision ?? "";
@@ -1447,6 +1567,52 @@ export function rigWorkspaceStoreCreate(
         groupTabRemember(groupId, id);
         recompute();
         fileLoad(id, revision);
+    };
+
+    /**
+     * Closes one file tab: its pending read is dropped, the strip forgets it,
+     * and the group is left reading whatever the tab was covering — the next
+     * file open in it, or the conversation behind them all.
+     */
+    const fileTabClose = (tabId: string): void => {
+        const closing = fileTabs.find((tab) => tab.id === tabId);
+        if (!closing) return;
+        fileTabRelease(tabId);
+        // The neighbours a closed tab can uncover are the ones beside it in its
+        // own strip. Indexing the whole list would hand the main content a file
+        // from another checkout, which the strip on screen does not even draw.
+        const siblings = fileTabs.filter(
+            (tab) => tab.groupId === closing.groupId && tab.id !== tabId,
+        );
+        const among = fileTabs
+            .filter((tab) => tab.groupId === closing.groupId)
+            .findIndex((tab) => tab.id === tabId);
+        fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
+        if (activeMainViewId === tabId)
+            activeMainViewId = siblings[Math.min(among, siblings.length - 1)]?.id;
+        activeMainViewGroupId = undefined;
+        groupTabForget(closing.groupId, tabId);
+        // What the closed tab uncovered in its own group: the next file
+        // there, or the conversation behind it when the group is addressed.
+        const uncovered =
+            fileTabs.find((tab) => tab.id === activeMainViewId && tab.groupId === closing.groupId)
+                ?.id ?? (closing.groupId === addressedGroupId ? openId : undefined);
+        groupTabRemember(closing.groupId, uncovered);
+        recompute();
+    };
+
+    /** Shows one file in the panel's viewer and starts reading it. */
+    const filePanelShow = (groupId: RigGroupId, path: string, kind: RigPanelFileKind): void => {
+        if (disposed) return;
+        panelFileRevision = fileChangeFind(groupId, path)?.revision;
+        panel.fileViewOpen();
+        panelFileLoad({
+            groupId,
+            path,
+            kind,
+            document: { type: "loading" },
+            loading: true,
+        });
     };
 
     const fileTabsReconcile = (): void => {
@@ -2059,7 +2225,7 @@ export function rigWorkspaceStoreCreate(
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             ...(create ? { create } : {}),
-            ...(activeFileTabId ? { activeFileTabId } : {}),
+            ...(activeMainViewId ? { activeMainViewId } : {}),
         };
     };
 
@@ -2126,7 +2292,7 @@ export function rigWorkspaceStoreCreate(
                 // A restored file tab is what this group was left showing, so it
                 // stays on screen and stays the tab this group resumes on.
                 const restoredFile = fileTabs.find(
-                    (tab) => tab.id === activeFileTabId && tab.groupId === groupId,
+                    (tab) => tab.id === activeMainViewId && tab.groupId === groupId,
                 );
                 groupTabRemember(groupId, restoredFile ? restoredFile.id : conversationId);
             }
@@ -2249,6 +2415,21 @@ export function rigWorkspaceStoreCreate(
             if (query)
                 for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
             panel.webappOpen(name, url.href);
+            // The panel brings the page forward when it is the side holding it.
+            // When the reader has moved that page into the main content, this is
+            // the half that can bring it forward instead.
+            const opened = panel
+                .get()
+                .tabs.find(
+                    (tab) =>
+                        tab.kind === "webapp" && tab.label === name && tab.placement === "main",
+                );
+            if (opened) {
+                activeMainViewId = opened.id;
+                activeMainViewGroupId = addressedGroupId;
+                if (addressedGroupId !== undefined) groupTabRemember(addressedGroupId, opened.id);
+                recompute();
+            }
         },
         // Anything the caller names wins over the connection's last selection.
         conversationCreate: (input) => {
@@ -2309,18 +2490,7 @@ export function rigWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        filePanelOpen(groupId, path, kind) {
-            if (disposed) return;
-            panelFileRevision = fileChangeFind(groupId, path)?.revision;
-            panel.fileViewOpen();
-            panelFileLoad({
-                groupId,
-                path,
-                kind,
-                document: { type: "loading" },
-                loading: true,
-            });
-        },
+        filePanelOpen: (groupId, path, kind) => filePanelShow(groupId, path, kind),
         filePanelClose() {
             if (disposed) return;
             panelFileRelease();
@@ -2329,35 +2499,85 @@ export function rigWorkspaceStoreCreate(
         },
         filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
         fileOpen: (groupId, path, kind) => fileTabOpen(groupId, path, kind, false),
-        fileSelect(tabId) {
-            const selected =
-                tabId !== undefined ? fileTabs.find((tab) => tab.id === tabId) : undefined;
-            activeFileTabId = selected?.id;
-            if (selected) groupTabRemember(selected.groupId, selected.id);
-            // Clearing file selection puts the open conversation back on screen,
-            // which is the tab this group is now being read on.
-            else if (addressedGroupId !== undefined && openId !== undefined)
-                groupTabRemember(addressedGroupId, openId);
+        viewPlacementUpdate(viewId, placement) {
+            if (disposed) return;
+            // A live tool tab changes strips and nothing else: the shell keeps
+            // running and the page keeps its address, because the tab is drawn
+            // somewhere else rather than closed and reopened.
+            const tool = panel.get().tabs.find((tab) => tab.id === viewId);
+            if (tool) {
+                if (tool.placement === placement) return;
+                panel.tabPlacementUpdate(tool.id, placement);
+                if (placement === "main") {
+                    activeMainViewId = tool.id;
+                    activeMainViewGroupId = addressedGroupId;
+                    if (addressedGroupId !== undefined) groupTabRemember(addressedGroupId, tool.id);
+                } else if (activeMainViewId === tool.id) {
+                    // The main content uncovers whatever it was showing before
+                    // this tab arrived: the conversation the address names.
+                    activeMainViewId = undefined;
+                    activeMainViewGroupId = undefined;
+                    if (addressedGroupId !== undefined && openId !== undefined)
+                        groupTabRemember(addressedGroupId, openId);
+                }
+                recompute();
+                return;
+            }
+            if (viewId === RIG_PANEL_FILE_VIEW_ID) {
+                // The viewer is a glance at one file; in the main content that
+                // same file is a document the reader settled on, so it arrives
+                // as a permanent tab rather than another replaceable preview.
+                if (placement !== "main" || !panelFile) return;
+                const file = panelFile;
+                compose(() => {
+                    panelFileRelease();
+                    panel.fileViewClose();
+                    // An expanded panel covers the workspace column the file is
+                    // about to arrive in, so it steps back to its docked width.
+                    panel.panelRestore();
+                    fileTabOpen(file.groupId, file.path, fileTabKindOfPanel(file.kind), false);
+                });
+                return;
+            }
+            const file = fileTabs.find((tab) => tab.id === viewId);
+            if (!file || placement !== "panel") return;
+            // A diff is two revisions read side by side and the panel's viewer
+            // reads one file, so there is nowhere for it to land.
+            const kind = panelFileKindOfTab(file.kind);
+            if (!kind) return;
+            // The panel's viewer reads the file from the checkout, so a tab
+            // carrying text that has not been written back has nowhere to put
+            // it. Moving is not a reason to lose an edit, so a file with unsaved
+            // work stays where the work is.
+            if (file.draft !== undefined || file.saving) return;
+            // Opened on the far side before it is closed on this one, so the
+            // file is never off screen in between, and both steps are published
+            // together so it is never in both places either.
+            compose(() => {
+                filePanelShow(file.groupId, file.path, kind);
+                fileTabClose(file.id);
+            });
+        },
+        mainViewSelect(viewId) {
+            if (disposed) return;
+            const file =
+                viewId !== undefined ? fileTabs.find((tab) => tab.id === viewId) : undefined;
+            const tool =
+                file || viewId === undefined
+                    ? undefined
+                    : panel.get().tabs.find((tab) => tab.id === viewId && tab.placement === "main");
+            activeMainViewId = file?.id ?? tool?.id;
+            activeMainViewGroupId = tool ? addressedGroupId : undefined;
+            if (file) groupTabRemember(file.groupId, file.id);
+            else if (addressedGroupId !== undefined) {
+                // Selecting nothing puts the open conversation back on screen,
+                // which is then the tab this group is being read on.
+                const remembered = tool?.id ?? openId;
+                if (remembered !== undefined) groupTabRemember(addressedGroupId, remembered);
+            }
             recompute();
         },
-        fileClose(tabId) {
-            const index = fileTabs.findIndex((tab) => tab.id === tabId);
-            const closing = fileTabs[index];
-            if (index < 0 || !closing) return;
-            fileTabRelease(tabId);
-            fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
-            if (activeFileTabId === tabId)
-                activeFileTabId = fileTabs[Math.min(index, fileTabs.length - 1)]?.id;
-            groupTabForget(closing.groupId, tabId);
-            // What the closed tab uncovered in its own group: the next file
-            // there, or the conversation behind it when the group is addressed.
-            const uncovered =
-                fileTabs.find(
-                    (tab) => tab.id === activeFileTabId && tab.groupId === closing.groupId,
-                )?.id ?? (closing.groupId === addressedGroupId ? openId : undefined);
-            groupTabRemember(closing.groupId, uncovered);
-            recompute();
-        },
+        fileClose: (tabId) => fileTabClose(tabId),
         fileRetry(tabId) {
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (tab)
@@ -2749,6 +2969,7 @@ export function rigWorkspaceStoreCreate(
             createRelease();
             // Disposing the panel stops every terminal it opened: this connection is
             // going away, and a shell nobody can reach again is an orphan.
+            unsubscribePanel();
             panel[Symbol.dispose]();
             listeners.clear();
         },

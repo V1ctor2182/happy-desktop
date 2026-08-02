@@ -371,6 +371,12 @@ export {
 export { LottieMark, type LottieMarkName, type LottieMarkProps } from "./LottieMark";
 export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
+export { TransferZone, type TransferZoneProps } from "./TransferZone";
+export {
+    TRANSFER_ZONE_ATTRIBUTE,
+    type TabTransferTarget,
+    type TransferZoneState,
+} from "./tabTransfer";
 export { Toolbar, type ToolbarProps, type ToolbarSearch } from "./Toolbar";
 export { Menu, type MenuItem, type MenuProps } from "./Menu";
 export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";

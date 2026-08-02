@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
 import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
+import type { TabTransferTarget } from "./tabTransfer";
 
 export type TabbedPaneProps = {
     className?: string;
@@ -23,6 +24,12 @@ export type TabbedPaneProps = {
     /** Returns the context-menu actions available for one tab. Empty means no menu. */
     tabMenuItems?: (tab: TabItem) => MenuItem[];
     onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
+    /** Where a tab from this pane may be moved to; see `Tabs`. */
+    transferTargets?: readonly TabTransferTarget[];
+    /** Whether one tab may leave this pane at all. Default: all may. */
+    transferable?: (tab: TabItem) => boolean;
+    /** Reports a tab moved into one of the targets. The owner performs the move. */
+    onTransfer?: (tabId: string, zone: string) => void;
     size?: TabsSize;
     /**
      * Controls that ride directly after the last tab, such as an "add tab"
@@ -60,10 +67,13 @@ export function TabbedPane(props: TabbedPaneProps) {
         "onReorder",
         "onSelect",
         "onTabMenuSelect",
+        "onTransfer",
         "size",
         "style",
         "tabMenuItems",
         "tabs",
+        "transferTargets",
+        "transferable",
     ]);
     return (
         <div
@@ -88,9 +98,12 @@ export function TabbedPane(props: TabbedPaneProps) {
                             onReorder={local.onReorder}
                             onSelect={local.onSelect}
                             onTabMenuSelect={local.onTabMenuSelect}
+                            onTransfer={local.onTransfer}
                             size={local.size ?? "small"}
                             tabMenuItems={local.tabMenuItems}
                             tabs={local.tabs}
+                            transferTargets={local.transferTargets}
+                            transferable={local.transferable}
                         />
                         {local.actions ? (
                             <div

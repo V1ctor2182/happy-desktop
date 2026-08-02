@@ -112,6 +112,7 @@ import { SpinnerPage } from "./pages/SpinnerPage";
 import { SwitchPage } from "./pages/SwitchPage";
 import { TabbedPanePage } from "./pages/TabbedPanePage";
 import { TabsPage } from "./pages/TabsPage";
+import { TransferZonePage } from "./pages/TransferZonePage";
 import { TextFieldPage } from "./pages/TextFieldPage";
 import { TitleBarPage } from "./pages/TitleBarPage";
 import { ToolbarPage } from "./pages/ToolbarPage";
@@ -360,6 +361,7 @@ const components: BlueprintPage[] = [
     { id: "empty-state", label: "Empty state", number: "C-024", page: EmptyStatePage },
     { id: "tabs", label: "Tabs", number: "C-025", page: TabsPage },
     { id: "tabbed-pane", label: "Tabbed pane", number: "C-160", page: TabbedPanePage },
+    { id: "transfer-zone", label: "Transfer zone", number: "C-171", page: TransferZonePage },
     { id: "toolbar", label: "Toolbar", number: "C-026", page: ToolbarPage },
     { id: "menu", label: "Menu", number: "C-027", page: MenuPage },
     { id: "modal", label: "Modal", number: "C-028", page: ModalPage },

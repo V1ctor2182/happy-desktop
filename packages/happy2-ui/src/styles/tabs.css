@@ -226,6 +226,57 @@
     opacity: 0.9;
 }
 
+/* Carried out of the strip, the tab leaves a gap where it was: it is being
+   drawn at the pointer instead, and a tab in two places at once would read as
+   two tabs. */
+.happy2-tabs[data-dragging] .happy2-tabs__tab[data-carried] {
+    opacity: 0.3;
+    transform: none !important;
+}
+
+/* The carried tab follows the pointer across the whole window, so it is fixed
+   to the viewport and centred on the pointer rather than laid out anywhere. */
+.happy2-tabs__carried {
+    position: fixed;
+    z-index: 60;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    height: 32px;
+    padding: 0 12px;
+    transform: translate(-50%, -50%);
+    border-radius: var(--happy2-radius-sm);
+    background: var(--surface);
+    box-shadow: 0 4px 16px var(--shadow-elevated);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    font-synthesis: none;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.happy2-tabs__carried[data-over] {
+    box-shadow:
+        0 0 0 2px var(--radio-active),
+        0 4px 16px var(--shadow-elevated);
+}
+
+/* Said out loud, never drawn: a move made with the keyboard has to be reported
+   to a screen reader without taking a pixel of the strip to do it. */
+.happy2-tabs__announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 /* The pointer owns the drag; hover paint on the tabs it passes over would read
    as a second, competing selection. */
 .happy2-tabs[data-dragging] .happy2-tabs__tab:hover:not([data-active]) {

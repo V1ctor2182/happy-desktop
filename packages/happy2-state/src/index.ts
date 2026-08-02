@@ -402,6 +402,7 @@ export {
     type RigPanelTabId,
     type RigPanelTabKind,
     type RigPanelTabSnapshot,
+    type RigViewPlacement,
 } from "./rig/rigPanelStore.js";
 export {
     rigSelectionEffortUpdate,
@@ -420,6 +421,7 @@ export {
     rigWorkspaceStoreCreate,
     type RigFileTabKind,
     type RigFileTabSnapshot,
+    RIG_PANEL_FILE_VIEW_ID,
     type RigPanelFileKind,
     type RigPanelFileSnapshot,
     type RigCreateGroupOption,

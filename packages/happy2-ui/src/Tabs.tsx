@@ -4,6 +4,7 @@ import {
     useRef,
     useState,
     type CSSProperties,
+    type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -13,6 +14,14 @@ import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
 import { Spinner } from "./Spinner";
+import {
+    transferFocusClaim,
+    transferFocusRequest,
+    transferZoneAt,
+    transferZonesArm,
+    transferZonesDisarm,
+    type TabTransferTarget,
+} from "./tabTransfer";
 export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
     id: string;
@@ -135,6 +144,21 @@ export type TabsProps = {
     /** Returns the context-menu actions available for one tab. Empty means no menu. */
     tabMenuItems?: (tab: TabItem) => MenuItem[];
     onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
+    /**
+     * The other places in the window a tab from this strip may be moved to.
+     * Supplying them is what makes a tab leave the strip at all: it can be
+     * dragged into the matching `TransferZone`, sent there with alt and the
+     * arrow pointing at it, or moved from its own context menu.
+     */
+    transferTargets?: readonly TabTransferTarget[];
+    /**
+     * Whether one tab may leave this strip. Some cannot — a permanent section,
+     * a view the other side has no form for — and they simply stay put rather
+     * than offering a move that would have to be refused. Default: all may.
+     */
+    transferable?: (tab: TabItem) => boolean;
+    /** Reports a tab moved into one of the targets. The owner performs the move. */
+    onTransfer?: (tabId: string, zone: string) => void;
 };
 const iconSizes: Record<TabsSize, 14 | 16 | 18> = {
     small: 14,
@@ -160,7 +184,22 @@ interface TabDrag {
     readonly widths: readonly number[];
     /** False until the pointer passes the threshold, so a click still selects. */
     readonly moved: boolean;
+    /** Where the pointer is, for the label that follows it out of the strip. */
+    readonly pointerX: number;
+    readonly pointerY: number;
+    /** True once the pointer has left the strip: the tab is being carried. */
+    readonly carried: boolean;
+    /** The transfer zone under the pointer, if the drop would land in one. */
+    readonly zone?: string;
+    /**
+     * The element holding the pointer capture, so a gesture that ends without a
+     * pointer-up — Escape, or this strip going away — can hand it back.
+     */
+    readonly captured?: HTMLElement;
 }
+
+/** Action ids of the menu's own move entries, which cannot collide with the owner's. */
+const TRANSFER_MENU_PREFIX = "happy2-tabs-transfer:";
 
 /** Where the dragged tab lands: each neighbour it has passed by half its width. */
 function dragTargetIndex(drag: TabDrag, deltaX: number): number {
@@ -226,9 +265,12 @@ export function Tabs(props: TabsProps) {
         "onReorder",
         "onSelect",
         "onTabMenuSelect",
+        "onTransfer",
         "tabMenuItems",
         "tabs",
         "size",
+        "transferTargets",
+        "transferable",
     ]);
     const size = () => local.size ?? "medium";
     // The context menu is local UI state: it exists between the right click
@@ -270,7 +312,24 @@ export function Tabs(props: TabsProps) {
         };
     }, [tabMenu]);
     const openTabMenu = (tab: TabItem, event: MouseEvent<HTMLButtonElement>) => {
-        const items = local.tabMenuItems?.(tab) ?? [];
+        const owned = local.tabMenuItems?.(tab) ?? [];
+        // Moving the tab is this component's own act, so it offers it itself
+        // rather than making every strip in the product word it again.
+        const moves: MenuItem[] = movable(tab)
+            ? targets().map((target) => ({
+                  icon:
+                      target.side === "leading"
+                          ? ("panel-collapse" as const)
+                          : ("panel-expand" as const),
+                  id: `${TRANSFER_MENU_PREFIX}${target.zone}`,
+                  kind: "item" as const,
+                  label: `Move to ${target.label}`,
+              }))
+            : [];
+        const items: MenuItem[] =
+            moves.length > 0 && owned.some((entry) => entry.kind === "item")
+                ? [...owned, { kind: "separator" as const }, ...moves]
+                : [...owned, ...moves];
         if (!items.some((entry) => entry.kind === "item")) {
             setTabMenu(undefined);
             return;
@@ -299,22 +358,126 @@ export function Tabs(props: TabsProps) {
         dragRef.current = next;
         dragPaint(next);
     };
+    /**
+     * Ends the gesture whatever ended it: the tab stops being carried, the
+     * pointer goes back to the document, and every zone in the window goes dark.
+     * Releasing the capture is not automatic when the drag ends by any route
+     * other than the pointer coming up.
+     */
+    const dragRelease = (): void => {
+        const current = dragRef.current;
+        if (current?.captured?.hasPointerCapture(current.pointerId))
+            current.captured.releasePointerCapture(current.pointerId);
+        dragSet(undefined);
+        transferZonesDisarm();
+    };
+    // What a move has just done, for a reader who cannot see the tab travel.
+    // Written into two regions in turn: a region given the same words twice has
+    // not changed, and a screen reader says nothing about it, so each move
+    // speaks from the region the previous one left silent.
+    const [announcements, setAnnouncements] = useState<readonly [string, string]>(["", ""]);
+    const [announceSlot, setAnnounceSlot] = useState(0);
+    const moveAnnounce = (text: string): void => {
+        const slot = announceSlot === 0 ? 1 : 0;
+        setAnnounceSlot(slot);
+        setAnnouncements(slot === 0 ? [text, ""] : ["", text]);
+    };
+    const targets = (): readonly TabTransferTarget[] => local.transferTargets ?? [];
+    /** Whether this tab is one the owner lets leave the strip. */
+    const movable = (tab: TabItem): boolean =>
+        targets().length > 0 &&
+        local.onTransfer !== undefined &&
+        (local.transferable?.(tab) ?? true);
+    /**
+     * Moves one tab to a destination. `handed` is true when the reader moved it
+     * without a pointer — with the keyboard, or from the menu — which is when
+     * the moved tab should be waiting for them on the other side rather than
+     * leaving focus on a strip that no longer holds it.
+     */
+    const transferRun = (tab: TabItem, target: TabTransferTarget, handed = false): void => {
+        if (handed) transferFocusRequest(tab.id);
+        local.onTransfer?.(tab.id, target.zone);
+        haptic("impact");
+        moveAnnounce(`${tab.label} moved to ${target.label}`);
+    };
+
+    // Whether a drag is in flight, rather than which one: the drag object is
+    // replaced on every pointer move, and the listener below cares only that
+    // there is something to cancel.
+    const dragging = drag !== undefined;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- Escape has to reach a drag that owns the pointer capture, and only the document hears it; the listener and the capture both live for one gesture and must be released imperatively
+    useLayoutEffect(() => {
+        if (!dragging) return;
+        // Written out here rather than called from the render body: this effect
+        // runs for the whole gesture, and a helper rebuilt on every render would
+        // make its cleanup run — and so end the drag — on every render too.
+        const release = () => {
+            const current = dragRef.current;
+            if (current?.captured?.hasPointerCapture(current.pointerId))
+                current.captured.releasePointerCapture(current.pointerId);
+            dragRef.current = undefined;
+            dragPaint(undefined);
+            transferZonesDisarm();
+        };
+        const cancel = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            // Dropped nowhere: the strip keeps the order it had and the tab
+            // stays where it was, which is what makes a drag reversible.
+            dragClick.current = true;
+            release();
+        };
+        document.addEventListener("keydown", cancel);
+        return () => {
+            document.removeEventListener("keydown", cancel);
+            // The zones are marked in the document rather than in this tree, so
+            // a strip torn down mid-gesture — the project closed, the group
+            // replaced — would otherwise leave them lit with nothing to drop.
+            release();
+        };
+    }, [dragging]);
+
+    // A tab moved here without a pointer is one the reader is still holding, in
+    // the sense that matters to a keyboard: it has to be where the next key
+    // press lands. The strip that lost it cannot do this, because by the time
+    // the move has happened the tab is drawn here instead.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- focus is a property of the document, not of this tree, and must be set on the rendered element before the reader's next key press reaches it
+    useLayoutEffect(() => {
+        const claimed = transferFocusClaim(local.tabs.map((tab) => tab.id));
+        if (claimed === undefined) return;
+        const arrived = list.current?.querySelector<HTMLElement>(
+            `[data-happy2-ui="tab"][data-tab-id="${CSS.escape(claimed)}"]`,
+        );
+        arrived?.focus();
+    });
 
     const dragStart = (event: ReactPointerEvent<HTMLButtonElement>, index: number): void => {
         dragClick.current = false;
-        if (!local.onReorder || event.button !== 0) return;
+        // A strip whose tabs can only be moved to the other side of the window
+        // is still a strip whose tabs are dragged: rearranging and moving out
+        // are the same gesture, and either one alone is enough to start it.
+        const draggable = local.onReorder !== undefined || movable(local.tabs[index]!);
+        if (!draggable || event.button !== 0) return;
         // A pointer-down on the close control is that control's, not a drag.
         if ((event.target as HTMLElement).closest('[data-happy2-ui="tab-close"]')) return;
         const widths = [...(list.current?.children ?? [])].map(
             (child) => (child as HTMLElement).offsetWidth,
         );
-        event.currentTarget.setPointerCapture(event.pointerId);
+        const captured = event.currentTarget;
+        captured.setPointerCapture(event.pointerId);
+        // Every place this tab could go lights up as it is picked up, so where
+        // a drag is allowed to end is visible before it has gone anywhere.
+        if (movable(local.tabs[index]!)) transferZonesArm(targets().map((target) => target.zone));
         dragSet({
+            captured,
+            carried: false,
             deltaX: 0,
             from: index,
             id: local.tabs[index]!.id,
             moved: false,
             pointerId: event.pointerId,
+            pointerX: event.clientX,
+            pointerY: event.clientY,
             startX: event.clientX,
             to: index,
             widths,
@@ -325,19 +488,59 @@ export function Tabs(props: TabsProps) {
         const current = dragRef.current;
         if (!current || event.pointerId !== current.pointerId) return;
         const deltaX = event.clientX - current.startX;
-        if (!current.moved && Math.abs(deltaX) < DRAG_THRESHOLD) return;
-        const to = dragTargetIndex(current, deltaX);
-        // A tick each time the tab crosses into a new slot, matching the sidebar.
-        if (to !== current.to) haptic("selection");
-        dragSet({ ...current, deltaX, moved: true, to });
+        const strip = list.current?.getBoundingClientRect();
+        const outside =
+            strip !== undefined &&
+            (event.clientY < strip.top ||
+                event.clientY > strip.bottom ||
+                event.clientX < strip.left ||
+                event.clientX > strip.right);
+        const tab = local.tabs[current.from];
+        const carried = outside && tab !== undefined && movable(tab);
+        if (!current.moved && !carried && Math.abs(deltaX) < DRAG_THRESHOLD) return;
+        const zone = carried
+            ? transferZoneAt(
+                  event.clientX,
+                  event.clientY,
+                  targets().map((target) => target.zone),
+              )
+            : undefined;
+        if (!carried && current.carried) transferZonesArm(targets().map((target) => target.zone));
+        // A tick when the tab crosses into a new slot, and one when it crosses
+        // into a zone: both are the moment the drop's meaning changes.
+        if (zone !== current.zone) haptic("selection");
+        // While the tab is being carried the strip stops rearranging itself:
+        // the drag has stopped being about the order it came from.
+        const to = carried ? current.to : dragTargetIndex(current, deltaX);
+        if (!carried && to !== current.to) haptic("selection");
+        dragSet({
+            ...current,
+            carried,
+            deltaX,
+            moved: true,
+            pointerX: event.clientX,
+            pointerY: event.clientY,
+            to,
+            ...(zone === undefined ? { zone: undefined } : { zone }),
+        });
     };
 
     const dragEnd = (event: ReactPointerEvent<HTMLButtonElement>): void => {
         const current = dragRef.current;
         if (!current || event.pointerId !== current.pointerId) return;
-        dragSet(undefined);
+        dragRelease();
         if (!current.moved) return;
         dragClick.current = true;
+        const tab = local.tabs[current.from];
+        // Released over a zone, the tab goes there. Released anywhere else
+        // outside the strip it goes nowhere: a drag that ends over the
+        // transcript is a drag the reader thought better of, not a drop.
+        if (current.zone !== undefined && tab) {
+            const target = targets().find((candidate) => candidate.zone === current.zone);
+            if (target) transferRun(tab, target);
+            return;
+        }
+        if (current.carried) return;
         if (current.to === current.from) return;
         haptic("impact");
         local.onReorder?.(
@@ -347,6 +550,25 @@ export function Tabs(props: TabsProps) {
                 current.to,
             ),
         );
+    };
+
+    /**
+     * Alt and the arrow pointing at the destination, which is how a row is moved
+     * in the sidebar too. A strip with one destination answers both arrows that
+     * name it; a tab that cannot leave answers neither.
+     */
+    const moveByKey = (event: ReactKeyboardEvent<HTMLButtonElement>, tab: TabItem): void => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        if (!movable(tab)) return;
+        const side = event.key === "ArrowLeft" ? "leading" : "trailing";
+        const target = targets().find((candidate) => candidate.side === side);
+        if (!target) return;
+        event.preventDefault();
+        // A hand already holds this tab: two moves of the same tab at once would
+        // each be stated against a strip the other has already changed.
+        if (dragRef.current) return;
+        transferRun(tab, target, true);
     };
 
     return (
@@ -370,10 +592,11 @@ export function Tabs(props: TabsProps) {
                         key={tab.id}
                         className="happy2-tabs__tab"
                         data-active={active() ? "" : undefined}
+                        data-carried={dragged() && drag?.carried ? "" : undefined}
                         data-dragged={dragged() ? "" : undefined}
                         data-happy2-ui="tab"
                         data-preview={tab.preview ? "" : undefined}
-                        data-reorderable={local.onReorder ? "" : undefined}
+                        data-reorderable={local.onReorder || movable(tab) ? "" : undefined}
                         data-tab-id={tab.id}
                         onClick={() => {
                             if (dragClick.current) {
@@ -384,6 +607,7 @@ export function Tabs(props: TabsProps) {
                         }}
                         onContextMenu={(event) => openTabMenu(tab, event)}
                         onDoubleClick={() => local.onDoubleClick?.(tab.id)}
+                        onKeyDown={(event) => moveByKey(event, tab)}
                         onPointerCancel={dragEnd}
                         onPointerDown={(event) => dragStart(event, index)}
                         onPointerMove={dragMove}
@@ -446,6 +670,36 @@ export function Tabs(props: TabsProps) {
                     </button>
                 );
             })}
+            {drag?.carried && local.tabs[drag.from] ? (
+                /* The tab under the pointer once it has left the strip. It is
+                   drawn at the pointer rather than in the bar because that is
+                   where the tab now is, and it never takes the pointer: the
+                   drop zone is found by hit-testing what is underneath. */
+                <span
+                    aria-hidden="true"
+                    className="happy2-tabs__carried"
+                    data-happy2-ui="tab-carried"
+                    data-over={drag.zone === undefined ? undefined : ""}
+                    style={{ left: drag.pointerX, top: drag.pointerY }}
+                >
+                    {tabLeadingMark(local.tabs[drag.from]!, iconSizes[size()])}
+                    <span className="happy2-tabs__tab-label">{local.tabs[drag.from]!.label}</span>
+                </span>
+            ) : null}
+            {/* Said out loud, never drawn. Both regions stay mounted, because a
+                region that arrives with its own text is one a screen reader may
+                never have been watching. */}
+            {announcements.map((text, slot) => (
+                <span
+                    aria-live="polite"
+                    className="happy2-tabs__announcement"
+                    data-happy2-ui="tabs-announcement"
+                    key={slot === 0 ? "first" : "second"}
+                    role="status"
+                >
+                    {text}
+                </span>
+            ))}
             {tabMenu ? (
                 <div
                     className="happy2-tabs__menu"
@@ -458,6 +712,14 @@ export function Tabs(props: TabsProps) {
                         onSelect={(actionId) => {
                             const tab = tabMenu.tab;
                             setTabMenu(undefined);
+                            if (actionId.startsWith(TRANSFER_MENU_PREFIX)) {
+                                const zone = actionId.slice(TRANSFER_MENU_PREFIX.length);
+                                const target = targets().find(
+                                    (candidate) => candidate.zone === zone,
+                                );
+                                if (target) transferRun(tab, target, true);
+                                return;
+                            }
                             local.onTabMenuSelect?.(tab, actionId);
                         }}
                         width={216}

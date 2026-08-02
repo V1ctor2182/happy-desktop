@@ -26,6 +26,7 @@ import type {
     RigPanelSnapshot,
     RigPanelStore,
     RigPanelTabId,
+    RigPanelTabSnapshot,
     RigPermissionMode,
     RigInboxItem,
     RigInboxSnapshot,
@@ -57,6 +58,7 @@ import type {
     UserError,
 } from "happy2-state";
 import {
+    RIG_PANEL_FILE_VIEW_ID,
     rigAgentAuthor,
     rigInboxStoreNoop,
     rigNavigationOrderApply,
@@ -127,6 +129,8 @@ import {
     TextField,
     TerminalPanel,
     ToolCallPreview,
+    TransferZone,
+    type TabTransferTarget,
     WindowDragRegion,
     rigComposerModelControlProps,
     sidebarReorderMove,
@@ -531,9 +535,34 @@ function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): 
     ];
 }
 
-/** One tab per tool open in the right panel, iconed by what it holds. */
-function panelTabs(panel: RigPanelSnapshot): TabItem[] {
-    return panel.tabs.map((tab) => ({
+/**
+ * The two regions a tab can be moved between, named once so the strip that
+ * offers the move and the region that accepts it cannot drift apart.
+ */
+const TRANSFER_ZONE_MAIN = "rig-main";
+const TRANSFER_ZONE_PANEL = "rig-panel";
+
+/** Where a tab in the panel's strip can go: the main content, to its leading side. */
+const PANEL_TRANSFER_TARGETS: readonly TabTransferTarget[] = [
+    { zone: TRANSFER_ZONE_MAIN, label: "the main content", side: "leading" },
+];
+
+/** Where a tab in the main strip can go: the panel, to its trailing side. */
+const MAIN_TRANSFER_TARGETS: readonly TabTransferTarget[] = [
+    { zone: TRANSFER_ZONE_PANEL, label: "the side panel", side: "trailing" },
+];
+
+/** The live tool tabs currently drawn on one side of the workspace. */
+function toolTabsPlaced(
+    panel: RigPanelSnapshot,
+    placement: "panel" | "main",
+): readonly RigPanelTabSnapshot[] {
+    return panel.tabs.filter((tab) => tab.placement === placement);
+}
+
+/** One tab per tool, iconed by what it holds. */
+function toolTabItems(tabs: readonly RigPanelTabSnapshot[]): TabItem[] {
+    return tabs.map((tab) => ({
         closable: true,
         id: tab.id,
         label: tab.label,
@@ -1970,7 +1999,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const groupFileTabs = openGroup
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
-    const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeFileTabId);
+    const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeMainViewId);
+    // Terminals and pages the reader moved out of the panel. They belong to the
+    // addressed group the way the panel does, so they are listed and drawn here
+    // only while that group is the one open.
+    const mainTools = openGroup ? toolTabsPlaced(panel, "main") : [];
+    const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
     const openInRecent = workspace.openInTargets.find(
         (target) => target.id === workspace.openInRecentId,
     );
@@ -1999,7 +2033,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // id rather than listed, so it is not part of that order and follows it.
     const groupTabs: TabItem[] = [
         ...tabsOrdered(
-            openGroup ? [...sessionTabs(openGroup), ...groupFileTabs.map(fileTabItem)] : [],
+            openGroup
+                ? [
+                      ...sessionTabs(openGroup),
+                      ...groupFileTabs.map(fileTabItem),
+                      ...toolTabItems(mainTools),
+                  ]
+                : [],
             workspace.tabOrder,
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
@@ -2025,6 +2065,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         for (const tabId of tabIds) {
             if (groupFileTabs.some((tab) => tab.id === tabId)) {
                 props.workspace.fileClose(tabId);
+                continue;
+            }
+            // A terminal or a page closes where it is drawn: it was moved here,
+            // not copied, so this is the only tab it has and closing it ends
+            // the shell or the page rather than sending it back.
+            if (mainTools.some((tab) => tab.id === tabId)) {
+                props.workspace.panel.tabClose(tabId as RigPanelTabId);
                 continue;
             }
             void props.workspace.conversationArchive(tabId as RigSessionId).catch(() => undefined);
@@ -2131,6 +2178,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }}
                         onToggle={(path, expanded) =>
                             props.workspace.fileTreeExpandedUpdate(path, expanded)
+                        }
+                        onViewTransfer={(viewId) =>
+                            props.workspace.viewPlacementUpdate(viewId, "main")
                         }
                         panel={panel}
                         previewTool={previewTool}
@@ -2355,6 +2405,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     ) : null}
                     {openGroup.conversations.length > 0 ||
                     groupFileTabs.length > 0 ||
+                    mainTools.length > 0 ||
                     detachedConversationTab ? (
                         <TabbedPane
                             actions={
@@ -2370,7 +2421,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     variant="ghost"
                                 />
                             }
-                            activeId={activeFile?.id ?? props.chatId ?? ""}
+                            activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
                             onClose={(tabId) => {
                                 // A detached subagent's tab is an address, not a
@@ -2407,13 +2458,36 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 props.workspace.tabReorder(move.id, move.afterId);
                             }}
                             onSelect={(tabId) => {
-                                if (groupFileTabs.some((tab) => tab.id === tabId)) {
-                                    props.workspace.fileSelect(tabId);
+                                if (
+                                    groupFileTabs.some((tab) => tab.id === tabId) ||
+                                    mainTools.some((tab) => tab.id === tabId)
+                                ) {
+                                    props.workspace.mainViewSelect(tabId);
                                     return;
                                 }
-                                props.workspace.fileSelect(undefined);
+                                props.workspace.mainViewSelect(undefined);
                                 props.onChatSelect(openGroup.id, tabId);
                             }}
+                            onTransfer={(tabId) =>
+                                props.workspace.viewPlacementUpdate(tabId, "panel")
+                            }
+                            // A session is what the address names, so it stays
+                            // where the address points; a diff is two revisions
+                            // read together and the panel's viewer reads one
+                            // file, so it has nowhere over there to land; and a
+                            // file with text that has not been written back
+                            // keeps its edit rather than its place.
+                            transferable={(tab) =>
+                                mainTools.some((entry) => entry.id === tab.id) ||
+                                groupFileTabs.some(
+                                    (entry) =>
+                                        entry.id === tab.id &&
+                                        entry.kind !== "diff" &&
+                                        entry.draft === undefined &&
+                                        !entry.saving,
+                                )
+                            }
+                            transferTargets={MAIN_TRANSFER_TARGETS}
                             tabMenuItems={(tab) => {
                                 const index = sweepableTabs.findIndex(
                                     (entry) => entry.id === tab.id,
@@ -2421,9 +2495,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 // The detached subagent's tab is not in the sweepable
                                 // order, so it offers no menu — its runner owns it.
                                 if (index < 0) return [];
-                                const verb = groupFileTabs.some((entry) => entry.id === tab.id)
-                                    ? "Close"
-                                    : "Archive";
+                                // A session is archived; a file, a terminal, a
+                                // page is closed. The verb has to be the true
+                                // one for the tab it is offered on.
+                                const verb =
+                                    groupFileTabs.some((entry) => entry.id === tab.id) ||
+                                    mainTools.some((entry) => entry.id === tab.id)
+                                        ? "Close"
+                                        : "Archive";
                                 return tabStripMenu(verb, index, sweepableTabs.length - index - 1);
                             }}
                             onTabMenuSelect={(tab, actionId) => {
@@ -2447,45 +2526,77 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             }}
                             tabs={groupTabs}
                         >
-                            {activeFile ? (
-                                <RigFileBody
-                                    appearance={appearance.appearance}
-                                    file={activeFile}
+                            {/* The whole content area accepts a tab dragged out
+                                of the panel, so the reader aims at where the
+                                thing will be rather than at a stripe. */}
+                            <TransferZone
+                                icon="panel-collapse"
+                                id={TRANSFER_ZONE_MAIN}
+                                label="Open in the main content"
+                            >
+                                {/* Every page moved to this side stays mounted
+                                whichever tab is on screen, exactly as it does
+                                in the panel: a page is only loaded once. */}
+                                <RigToolBodies
+                                    activeId={workspace.activeMainViewId}
+                                    {...(props.browserContent
+                                        ? { browserContent: props.browserContent }
+                                        : {})}
                                     {...(props.htmlPreview
                                         ? { htmlPreview: props.htmlPreview }
                                         : {})}
-                                    {...(props.mediaWindow
-                                        ? { mediaWindow: props.mediaWindow }
-                                        : {})}
-                                    mode={workspace.fileViewMode}
-                                    workspace={props.workspace}
+                                    {...(props.chatId ? { sessionId: props.chatId } : {})}
+                                    store={props.workspace.panel}
+                                    tabs={mainTools}
+                                    webappRevisions={
+                                        new Map(
+                                            props.slots.webapps.map((webapp) => [
+                                                webapp.name,
+                                                webapp.currentVersion,
+                                            ]),
+                                        )
+                                    }
                                 />
-                            ) : (
-                                <RigConversationBody
-                                    conversation={conversation}
-                                    focusOnType={composerClaimsTyping}
-                                    groupId={openGroup.id}
-                                    groupName={openGroup.name}
-                                    now={now}
-                                    onCreate={() => groupConversationCreate(openGroup)}
-                                    onChatSelect={props.onChatSelect}
-                                    onFileOpen={(path) => {
-                                        const target = workspacePathRelative(
-                                            path,
-                                            openGroup.create.cwd,
-                                        );
-                                        props.workspace.filePanelOpen(
-                                            openGroup.id,
-                                            target,
-                                            panelFileKind(target),
-                                        );
-                                    }}
-                                    readOnly={conversationReadOnly}
-                                    slotAction={props.slotAction}
-                                    slots={slotViews}
-                                    workspace={props.workspace}
-                                />
-                            )}
+                                {activeMainTool ? null : activeFile ? (
+                                    <RigFileBody
+                                        appearance={appearance.appearance}
+                                        file={activeFile}
+                                        {...(props.htmlPreview
+                                            ? { htmlPreview: props.htmlPreview }
+                                            : {})}
+                                        {...(props.mediaWindow
+                                            ? { mediaWindow: props.mediaWindow }
+                                            : {})}
+                                        mode={workspace.fileViewMode}
+                                        workspace={props.workspace}
+                                    />
+                                ) : (
+                                    <RigConversationBody
+                                        conversation={conversation}
+                                        focusOnType={composerClaimsTyping}
+                                        groupId={openGroup.id}
+                                        groupName={openGroup.name}
+                                        now={now}
+                                        onCreate={() => groupConversationCreate(openGroup)}
+                                        onChatSelect={props.onChatSelect}
+                                        onFileOpen={(path) => {
+                                            const target = workspacePathRelative(
+                                                path,
+                                                openGroup.create.cwd,
+                                            );
+                                            props.workspace.filePanelOpen(
+                                                openGroup.id,
+                                                target,
+                                                panelFileKind(target),
+                                            );
+                                        }}
+                                        readOnly={conversationReadOnly}
+                                        slotAction={props.slotAction}
+                                        slots={slotViews}
+                                        workspace={props.workspace}
+                                    />
+                                )}
+                            </TransferZone>
                         </TabbedPane>
                     ) : null}
                 </>
@@ -3519,6 +3630,8 @@ function RigPanelBody(props: {
     onPanelFileOpen: (path: string) => void;
     onScopeChange: (scope: RigFileScope) => void;
     onToggle: (path: string, expanded: boolean) => void;
+    /** Moves one view out of this panel and into the main content. */
+    onViewTransfer: (viewId: string) => void;
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
     scope: RigFileScope;
@@ -3565,7 +3678,10 @@ function RigPanelBody(props: {
     const addedLines = props.changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
     const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
     const count = entries.length;
-    const activeToolTab = props.panel.tabs.find((tab) => tab.id === props.panel.activeViewId);
+    // Only the tabs this side is holding: one the reader moved into the main
+    // content is drawn there, and the panel neither lists it nor renders it.
+    const panelTools = toolTabsPlaced(props.panel, "panel");
+    const activeToolTab = panelTools.find((tab) => tab.id === props.panel.activeViewId);
     const panelFile = props.panelFile;
     const tabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
@@ -3574,7 +3690,7 @@ function RigPanelBody(props: {
                   {
                       closable: true,
                       icon: panelFileIcon(panelFile.path),
-                      id: "file",
+                      id: RIG_PANEL_FILE_VIEW_ID,
                       label: panelFile.path.split("/").at(-1) ?? panelFile.path,
                       // The viewer holds whatever the transcript last pointed
                       // at, so it is marked as the replaceable tab it is.
@@ -3600,7 +3716,7 @@ function RigPanelBody(props: {
                   },
               ]
             : []),
-        ...panelTabs(props.panel),
+        ...toolTabItems(panelTools),
     ];
     return (
         <>
@@ -3629,152 +3745,139 @@ function RigPanelBody(props: {
                     variant="ghost"
                 />
             </PanelHeader>
-            <TabbedPane
-                actions={
-                    props.canStartTerminal ? (
-                        <>
-                            {props.browserContent ? (
+            {/* The whole panel accepts a tab dragged out of the main strip,
+                rather than a target inside it: the reader is aiming at this
+                side of the window, not at a stripe within it. */}
+            <TransferZone
+                icon="panel-expand"
+                id={TRANSFER_ZONE_PANEL}
+                label="Open in the side panel"
+            >
+                <TabbedPane
+                    actions={
+                        props.canStartTerminal ? (
+                            <>
+                                {props.browserContent ? (
+                                    <Button
+                                        aria-label="New browser"
+                                        icon="globe"
+                                        iconOnly
+                                        onClick={() => props.store.browserAdd()}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                ) : null}
                                 <Button
-                                    aria-label="New browser"
-                                    icon="globe"
+                                    aria-label="New terminal"
+                                    icon="terminal"
                                     iconOnly
-                                    onClick={() => props.store.browserAdd()}
+                                    onClick={() => props.store.terminalAdd()}
                                     size="small"
                                     variant="ghost"
                                 />
-                            ) : null}
-                            <Button
-                                aria-label="New terminal"
-                                icon="terminal"
-                                iconOnly
-                                onClick={() => props.store.terminalAdd()}
-                                size="small"
-                                variant="ghost"
-                            />
-                        </>
-                    ) : undefined
-                }
-                activeId={props.panel.activeViewId}
-                closeLabel="Close tab"
-                onClose={(tabId) => {
-                    if (tabId === "preview") props.store.previewClose();
-                    else if (tabId === "file") props.onPanelFileClose();
-                    else props.store.tabClose(tabId as RigPanelTabId);
-                }}
-                onSelect={(tabId) => {
-                    if (tabId === "files") props.store.filesSelect();
-                    else if (tabId === "preview" && props.panel.previewEntryId)
-                        props.store.previewOpen(props.panel.previewEntryId);
-                    else if (tabId === "file") props.store.fileViewOpen();
-                    else props.store.tabSelect(tabId as RigPanelTabId);
-                }}
-                tabs={tabs}
-            >
-                {props.panel.tabs
-                    .filter((tab) => tab.kind === "browser")
-                    .map((tab) => (
-                        <BrowserPanel
-                            active={props.panel.activeViewId === tab.id}
-                            initialUrl={tab.url}
-                            key={tab.id}
-                            onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
-                            onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
-                            renderContent={
-                                props.browserContent && props.sessionId
-                                    ? (browserProps) =>
-                                          props.browserContent!({
-                                              ...browserProps,
-                                              sessionId: props.sessionId,
-                                          })
-                                    : undefined
-                            }
-                        />
-                    ))}
-                {props.panel.activeViewId === "files" ? (
-                    <FileBrowser
-                        // The whole-checkout listing is not a diff, so it states
-                        // how many files it holds and nothing about lines.
-                        {...(all ? {} : { addedLines, deletedLines })}
-                        count={count}
-                        emptyLabel={all ? "No files." : "No changed files."}
-                        layout={props.layout}
-                        loading={loading}
-                        nodes={nodes}
-                        // A truncated listing says so rather than passing off
-                        // part of a repository as the whole of it.
-                        {...(all && props.workspaceFiles?.truncated
-                            ? { note: "Showing the first 20,000 files." }
-                            : {})}
-                        onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
-                        onOpen={props.onFileOpen}
-                        onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
-                        onRevert={props.onRevert}
-                        onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
-                            props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
-                        }
-                        onToggle={props.onToggle}
-                        scope={props.scope}
-                        selectedId={props.selectedPath}
-                        // Picking files is what the changed listing is for: the
-                        // whole checkout has nothing to revert to and no bulk
-                        // act to offer, so it is left as the plain listing.
-                        {...(all ? {} : { selectedIds: props.selection })}
-                    />
-                ) : props.panel.activeViewId === "preview" ? (
-                    props.previewTool ? (
-                        <ToolCallPreview tool={props.previewTool} />
-                    ) : (
-                        <EmptyState
-                            description="The selected call is no longer in this conversation view."
-                            icon="zap"
-                            size="panel"
-                            title="Preview unavailable"
-                        />
-                    )
-                ) : props.panel.activeViewId === "file" ? (
-                    panelFile ? (
-                        <RigPanelFileView
-                            {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
-                            {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
-                            file={panelFile}
-                            key={panelFile.path}
-                            onClose={props.onPanelFileClose}
-                            onFileOpen={props.onPanelFileOpen}
-                        />
-                    ) : (
-                        <EmptyState
-                            description="The file this conversation pointed at is no longer open."
-                            icon="doc"
-                            size="panel"
-                            title="No file open"
-                        />
-                    )
-                ) : activeToolTab?.kind === "terminal" ? (
-                    <RigTerminalTab
-                        key={activeToolTab.id}
+                            </>
+                        ) : undefined
+                    }
+                    activeId={props.panel.activeViewId}
+                    closeLabel="Close tab"
+                    onClose={(tabId) => {
+                        if (tabId === "preview") props.store.previewClose();
+                        else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.onPanelFileClose();
+                        else props.store.tabClose(tabId as RigPanelTabId);
+                    }}
+                    onSelect={(tabId) => {
+                        if (tabId === "files") props.store.filesSelect();
+                        else if (tabId === "preview" && props.panel.previewEntryId)
+                            props.store.previewOpen(props.panel.previewEntryId);
+                        else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.store.fileViewOpen();
+                        else props.store.tabSelect(tabId as RigPanelTabId);
+                    }}
+                    onTransfer={(tabId) => props.onViewTransfer(tabId)}
+                    tabs={tabs}
+                    // The listing opens content rather than being content, and a
+                    // tool-call preview is bound to an entry of the conversation
+                    // the main content is showing; neither has a form over there.
+                    transferable={(tab) => tab.id !== "files" && tab.id !== "preview"}
+                    transferTargets={PANEL_TRANSFER_TARGETS}
+                >
+                    <RigToolBodies
+                        activeId={props.panel.activeViewId}
+                        {...(props.browserContent ? { browserContent: props.browserContent } : {})}
+                        {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+                        {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
-                        tabId={activeToolTab.id}
+                        tabs={panelTools}
+                        webappRevisions={props.webappRevisions}
                     />
-                ) : activeToolTab?.kind === "webapp" ? (
-                    <HtmlPreviewFrame>
-                        {props.htmlPreview
-                            ? props.htmlPreview({
-                                  source: activeToolTab.url,
-                                  revision: String(
-                                      props.webappRevisions.get(activeToolTab.label) ?? 0,
-                                  ),
-                              })
-                            : undefined}
-                    </HtmlPreviewFrame>
-                ) : activeToolTab?.kind === "browser" ? null : (
-                    <EmptyState
-                        description="Select Files, a preview, or a live tool tab."
-                        icon="files"
-                        size="panel"
-                        title="Nothing selected"
-                    />
-                )}
-            </TabbedPane>
+                    {props.panel.activeViewId === "files" ? (
+                        <FileBrowser
+                            // The whole-checkout listing is not a diff, so it states
+                            // how many files it holds and nothing about lines.
+                            {...(all ? {} : { addedLines, deletedLines })}
+                            count={count}
+                            emptyLabel={all ? "No files." : "No changed files."}
+                            layout={props.layout}
+                            loading={loading}
+                            nodes={nodes}
+                            // A truncated listing says so rather than passing off
+                            // part of a repository as the whole of it.
+                            {...(all && props.workspaceFiles?.truncated
+                                ? { note: "Showing the first 20,000 files." }
+                                : {})}
+                            onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
+                            onOpen={props.onFileOpen}
+                            onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
+                            onRevert={props.onRevert}
+                            onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
+                                props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
+                            }
+                            onToggle={props.onToggle}
+                            scope={props.scope}
+                            selectedId={props.selectedPath}
+                            // Picking files is what the changed listing is for: the
+                            // whole checkout has nothing to revert to and no bulk
+                            // act to offer, so it is left as the plain listing.
+                            {...(all ? {} : { selectedIds: props.selection })}
+                        />
+                    ) : props.panel.activeViewId === "preview" ? (
+                        props.previewTool ? (
+                            <ToolCallPreview tool={props.previewTool} />
+                        ) : (
+                            <EmptyState
+                                description="The selected call is no longer in this conversation view."
+                                icon="zap"
+                                size="panel"
+                                title="Preview unavailable"
+                            />
+                        )
+                    ) : props.panel.activeViewId === RIG_PANEL_FILE_VIEW_ID ? (
+                        panelFile ? (
+                            <RigPanelFileView
+                                {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+                                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
+                                file={panelFile}
+                                key={panelFile.path}
+                                onClose={props.onPanelFileClose}
+                                onFileOpen={props.onPanelFileOpen}
+                            />
+                        ) : (
+                            <EmptyState
+                                description="The file this conversation pointed at is no longer open."
+                                icon="doc"
+                                size="panel"
+                                title="No file open"
+                            />
+                        )
+                    ) : activeToolTab ? null : ( // Already drawn above, for every kind of tool.
+                        <EmptyState
+                            description="Select Files, a preview, or a live tool tab."
+                            icon="files"
+                            size="panel"
+                            title="Nothing selected"
+                        />
+                    )}
+                </TabbedPane>
+            </TransferZone>
         </>
     );
 }
@@ -3860,6 +3963,74 @@ function RigPanelFileView(props: {
  * `TerminalPanel` with no height of its own so it fills the panel column. Closing
  * is the tab strip's, so no second close control appears in its header.
  */
+/**
+ * The bodies of the live tool tabs on one side of the workspace, written once
+ * and rendered by whichever side is currently holding them: moving a tab across
+ * the window changes which strip draws it and nothing about what it is.
+ *
+ * Pages are all mounted together and only one is shown, because a page that
+ * stopped being looked at is still loaded and unmounting it would throw the
+ * session away; a terminal and a webapp are drawn only while they are on
+ * screen, and a terminal's process outlives its view because the store, not
+ * this component, is what holds it.
+ *
+ * Moving a terminal across the window therefore costs it nothing: the view is
+ * rebuilt on the other side and attaches to the same running shell. A page
+ * cannot be given that promise. An iframe reloads whenever it is moved to a
+ * different parent — that is the browser's rule, not this component's, and no
+ * arrangement of React can move a node without moving it. So a page that
+ * changes sides loads again, from the address the store kept for it, which is
+ * why the address lives in the store and not in the frame.
+ */
+function RigToolBodies(props: {
+    tabs: readonly RigPanelTabSnapshot[];
+    activeId: string | undefined;
+    store: RigPanelStore;
+    browserContent?: BrowserContentRenderer;
+    htmlPreview?: HtmlPreviewRenderer;
+    sessionId?: string;
+    /** Current version per imported webapp, used to live-reload an already open page. */
+    webappRevisions: ReadonlyMap<string, number>;
+}) {
+    const active = props.tabs.find((tab) => tab.id === props.activeId);
+    return (
+        <>
+            {props.tabs
+                .filter((tab) => tab.kind === "browser")
+                .map((tab) => (
+                    <BrowserPanel
+                        active={props.activeId === tab.id}
+                        initialUrl={tab.url}
+                        key={tab.id}
+                        onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
+                        onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
+                        renderContent={
+                            props.browserContent && props.sessionId
+                                ? (browserProps) =>
+                                      props.browserContent!({
+                                          ...browserProps,
+                                          sessionId: props.sessionId,
+                                      })
+                                : undefined
+                        }
+                    />
+                ))}
+            {active?.kind === "terminal" ? (
+                <RigTerminalTab key={active.id} store={props.store} tabId={active.id} />
+            ) : active?.kind === "webapp" ? (
+                <HtmlPreviewFrame>
+                    {props.htmlPreview
+                        ? props.htmlPreview({
+                              source: active.url,
+                              revision: String(props.webappRevisions.get(active.label) ?? 0),
+                          })
+                        : undefined}
+                </HtmlPreviewFrame>
+            ) : null}
+        </>
+    );
+}
+
 function RigTerminalTab(props: { store: RigPanelStore; tabId: RigPanelTabId }) {
     const terminal: RigTerminalStore | undefined = props.store.terminal(props.tabId);
     if (!terminal)

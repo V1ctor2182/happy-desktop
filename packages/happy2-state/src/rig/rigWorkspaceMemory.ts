@@ -1,5 +1,6 @@
 import type { RigFileTabKind } from "./rigWorkspaceStore.js";
 import type { RigGroupId } from "./rigTypes.js";
+import type { RigViewPlacement } from "./rigPanelStore.js";
 
 /** One file tab remembered for a group, enough to reopen it as it was left. */
 export interface RigFileTabMemory {
@@ -18,6 +19,12 @@ export interface RigFileTabMemory {
 export interface RigPanelBrowserMemory {
     readonly url: string;
     readonly label: string;
+    /**
+     * Which strip the page was being read in. Absent means the panel, which is
+     * where every page opens and where every page remembered before this was
+     * written down was.
+     */
+    readonly placement?: RigViewPlacement;
 }
 
 /**

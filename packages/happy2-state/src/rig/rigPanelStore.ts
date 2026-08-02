@@ -10,10 +10,23 @@ export type RigPanelTabId = string & { readonly [rigPanelTabIdBrand]: true };
 /** What a panel tab holds beside the conversation. */
 export type RigPanelTabKind = "terminal" | "browser" | "webapp";
 
+/**
+ * Which of the workspace's two tab strips a view is being shown in.
+ *
+ * Placement is a property of the view, not of the strip drawing it: a terminal
+ * moved into the main content is the same terminal running the same shell under
+ * the same id, and only where it is drawn has changed. Saying that in one field
+ * is what makes moving one a change of placement rather than closing a tab here
+ * and opening a different one there.
+ */
+export type RigViewPlacement = "panel" | "main";
+
 interface RigPanelTabSnapshotBase {
     readonly id: RigPanelTabId;
     /** Tab strip label. A terminal's is its ordinal, not its shell's window title. */
     readonly label: string;
+    /** Which strip is drawing this tab. Every tab is born in the panel. */
+    readonly placement: RigViewPlacement;
 }
 
 export type RigPanelTabSnapshot =
@@ -84,6 +97,13 @@ export interface RigPanelStore {
      * width. Only meaningful while the panel is showing.
      */
     panelMaximizeToggle(): void;
+    /**
+     * Steps the panel back from expanded to its docked width, without folding it
+     * away. It is what the workspace calls when something the reader moved has
+     * landed in the main content, which an expanded panel would be standing in
+     * front of.
+     */
+    panelRestore(): void;
     /** Selects the permanent workspace-files tab and opens the panel. */
     filesSelect(): void;
     /** Opens or replaces the transient Preview tab with one conversation tool entry. */
@@ -111,6 +131,15 @@ export interface RigPanelStore {
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
     tabSelect(tabId: RigPanelTabId): void;
+    /**
+     * Moves one tab to the other strip. Nothing behind it is touched — the shell
+     * keeps running, the page keeps its address — because the tab is not being
+     * closed and reopened; it is being drawn somewhere else. A tab leaving the
+     * panel gives up the panel's selection to whatever is still there, and a tab
+     * arriving takes it, so neither strip is left pointing at a tab it no longer
+     * draws.
+     */
+    tabPlacementUpdate(tabId: RigPanelTabId, placement: RigViewPlacement): void;
     /**
      * Closes one tab, ending whatever it was running. Closing the last one leaves
      * the panel showing: the terminal section is only part of the column, and the
@@ -160,9 +189,29 @@ interface Tab {
     readonly terminal?: RigTerminalHandle;
     title?: string;
     url?: string;
+    placement: RigViewPlacement;
 }
 
 const NO_TABS: readonly RigPanelTabSnapshot[] = [];
+
+/**
+ * Whether a rebuilt tab says exactly what the one already in the snapshot says.
+ * A tab that has not changed keeps its object, so a strip re-renders only the
+ * tab that actually moved, was renamed, or went somewhere.
+ */
+function tabSame(
+    before: RigPanelTabSnapshot | undefined,
+    next: RigPanelTabSnapshot,
+): before is RigPanelTabSnapshot {
+    return (
+        before !== undefined &&
+        before.id === next.id &&
+        before.kind === next.kind &&
+        before.label === next.label &&
+        before.placement === next.placement &&
+        (before.kind === "terminal" || (next.kind !== "terminal" && before.url === next.url))
+    );
+}
 
 /**
  * The workspace's right-hand panel. It belongs to the project or worktree the
@@ -219,9 +268,15 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                               id: tab.id,
                               kind: tab.kind,
                               label: tab.label,
+                              placement: tab.placement,
                               url: tab.url ?? "about:blank",
                           }
-                        : { id: tab.id, kind: tab.kind, label: tab.label },
+                        : {
+                              id: tab.id,
+                              kind: tab.kind,
+                              label: tab.label,
+                              placement: tab.placement,
+                          },
             ),
             ...(previewEntryId === undefined ? {} : { previewEntryId }),
         };
@@ -236,17 +291,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             next.previewEntryId === snapshot.previewEntryId &&
             next.fileViewOpen === snapshot.fileViewOpen &&
             next.tabs.length === snapshot.tabs.length &&
-            next.tabs.every((tab, index) => {
-                const before = snapshot.tabs[index];
-                return (
-                    before !== undefined &&
-                    before.id === tab.id &&
-                    before.kind === tab.kind &&
-                    before.label === tab.label &&
-                    (before.kind === "terminal" ||
-                        (tab.kind !== "terminal" && before.url === tab.url))
-                );
-            })
+            next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab))
         )
             return;
         // Unchanged rows keep their identity so a tab strip re-renders only the
@@ -258,14 +303,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open: next.open,
             tabs: next.tabs.map((tab, index) => {
                 const before = snapshot.tabs[index];
-                return before !== undefined &&
-                    before.id === tab.id &&
-                    before.kind === tab.kind &&
-                    before.label === tab.label &&
-                    (before.kind === "terminal" ||
-                        (tab.kind !== "terminal" && before.url === tab.url))
-                    ? before
-                    : tab;
+                return before !== undefined && tabSame(before, tab) ? before : tab;
             }),
             ...(next.previewEntryId === undefined ? {} : { previewEntryId: next.previewEntryId }),
         };
@@ -284,7 +322,11 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         deps.memoryWrite(groupId, {
             open,
             maximized,
-            browsers: browsers.map((tab) => ({ url: tab.url ?? "about:blank", label: tab.label })),
+            browsers: browsers.map((tab) => ({
+                url: tab.url ?? "about:blank",
+                label: tab.label,
+                placement: tab.placement,
+            })),
             active: activeIndex >= 0 ? { type: "browser", index: activeIndex } : { type: "files" },
         });
     };
@@ -300,6 +342,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             kind: "terminal",
             label,
             groupId: group,
+            placement: "panel",
             terminal: deps.terminalOpen(session),
         });
         activeByGroup.set(group, id);
@@ -316,6 +359,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             kind: "browser",
             label: label ?? browserLabel(url),
             groupId: group,
+            placement: "panel",
             url,
         });
         activeByGroup.set(group, id);
@@ -328,13 +372,18 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         );
         if (existing) {
             existing.url = url;
-            activeByGroup.set(group, existing.id);
-            activeViewId = existing.id;
+            // Reopening a page the reader moved into the main content brings it
+            // forward there, not here: pointing the panel at a tab it no longer
+            // draws would leave the panel showing nothing at all.
+            if (existing.placement === "panel") {
+                activeByGroup.set(group, existing.id);
+                activeViewId = existing.id;
+            }
             return;
         }
         const id = `tab_${nextTabNumber}` as RigPanelTabId;
         nextTabNumber += 1;
-        tabs.push({ id, kind: "webapp", label: name, groupId: group, url });
+        tabs.push({ id, kind: "webapp", label: name, groupId: group, placement: "panel", url });
         activeByGroup.set(group, id);
         activeViewId = id;
     };
@@ -349,21 +398,33 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         restoredGroupIds.add(group);
         const memory = deps.memoryRead?.(group);
         if (!memory) return;
-        for (const browser of memory.browsers) browserTabAdd(group, browser.url, browser.label);
+        for (const browser of memory.browsers) {
+            browserTabAdd(group, browser.url, browser.label);
+            // A page left in the main content comes back to the main content.
+            // Where it was being read is part of how the group was arranged.
+            const added = tabs.at(-1);
+            if (added && browser.placement) added.placement = browser.placement;
+        }
         const restored = tabs.filter((tab) => tab.groupId === group && tab.kind === "browser");
-        const active =
-            memory.active.type === "browser" ? restored[memory.active.index]?.id : undefined;
+        const remembered =
+            memory.active.type === "browser" ? restored[memory.active.index] : undefined;
+        // Only a tab the panel is actually drawing can be the panel's selection.
+        const active = remembered?.placement === "panel" ? remembered.id : undefined;
         if (active) activeByGroup.set(group, active);
         else activeByGroup.delete(group);
         chromeByGroup.set(group, { open: memory.open, maximized: memory.maximized });
     };
+
+    /** The tab the panel falls back to in this group, if it still draws one. */
+    const panelSibling = (group: RigGroupId): Tab | undefined =>
+        tabs.find((tab) => tab.groupId === group && tab.placement === "panel");
 
     const tabDispose = (index: number): void => {
         const [removed] = tabs.splice(index, 1);
         removed?.terminal?.[Symbol.dispose]();
         if (!removed) return;
         if (activeByGroup.get(removed.groupId) !== removed.id) return;
-        const sibling = tabs.find((tab) => tab.groupId === removed.groupId);
+        const sibling = panelSibling(removed.groupId);
         if (sibling) {
             activeByGroup.set(removed.groupId, sibling.id);
             activeViewId = sibling.id;
@@ -392,6 +453,12 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         panelMaximizeToggle() {
             if (disposed || !open) return;
             maximized = !maximized;
+            remember();
+            recompute();
+        },
+        panelRestore() {
+            if (disposed || !maximized) return;
+            maximized = false;
             remember();
             recompute();
         },
@@ -488,6 +555,37 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             remember();
             recompute();
         },
+        tabPlacementUpdate(tabId, placement) {
+            if (disposed) return;
+            const tab = tabs.find((candidate) => candidate.id === tabId);
+            if (!tab || tab.placement === placement) return;
+            tab.placement = placement;
+            if (placement === "panel") {
+                // Arriving is being looked at: the reader moved this tab here,
+                // so the panel shows it and opens if it was folded away.
+                activeByGroup.set(tab.groupId, tab.id);
+                activeViewId = tab.id;
+                open = true;
+            } else if (activeByGroup.get(tab.groupId) === tab.id) {
+                // Leaving hands the panel's selection back to whatever the panel
+                // still draws, and to Files when it draws nothing.
+                const sibling = panelSibling(tab.groupId);
+                if (sibling) {
+                    activeByGroup.set(tab.groupId, sibling.id);
+                    activeViewId = sibling.id;
+                } else {
+                    activeByGroup.delete(tab.groupId);
+                    activeViewId = "files";
+                }
+            }
+            // Expanded, the panel covers the whole workspace column. Sending a
+            // tab to the main content while it is expanded would put the tab
+            // somewhere the panel is standing in front of, so the panel steps
+            // back to its docked width and lets the reader see where it went.
+            if (placement === "main") maximized = false;
+            remember();
+            recompute();
+        },
 
         terminal: (tabId) => tabs.find((tab) => tab.id === tabId)?.terminal,
 
@@ -512,8 +610,12 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             const chrome = nextGroupId ? chromeByGroup.get(nextGroupId) : undefined;
             open = chrome?.open ?? false;
             maximized = (chrome?.open ?? false) && (chrome?.maximized ?? false);
-            activeViewId =
-                (nextGroupId === undefined ? undefined : activeByGroup.get(nextGroupId)) ?? "files";
+            const remembered =
+                nextGroupId === undefined ? undefined : activeByGroup.get(nextGroupId);
+            const drawn = tabs.find(
+                (tab) => tab.id === remembered && tab.placement === "panel",
+            )?.id;
+            activeViewId = drawn ?? "files";
             recompute();
         },
 
