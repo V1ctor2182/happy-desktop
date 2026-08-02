@@ -130,6 +130,7 @@ import { ConversationViewPage } from "./pages/ConversationViewPage";
 import { RigUserInputPromptPage } from "./pages/RigUserInputPromptPage";
 import { RigSessionControlsPage } from "./pages/RigSessionControlsPage";
 import { CommandPickerPage } from "./pages/CommandPickerPage";
+import { RigProjectSettingsDialogPage } from "./pages/RigProjectSettingsDialogPage";
 import { RigUsagePanelPage } from "./pages/RigUsagePanelPage";
 import { RigActivityPanelPage } from "./pages/RigActivityPanelPage";
 import { ToolCallPreviewPage } from "./pages/ToolCallPreviewPage";
@@ -309,6 +310,12 @@ const components: BlueprintPage[] = [
         label: "Rig usage panel",
         number: "C-156",
         page: RigUsagePanelPage,
+    },
+    {
+        id: "rig-project-settings-dialog",
+        label: "Rig project settings",
+        number: "C-178",
+        page: RigProjectSettingsDialogPage,
     },
     {
         id: "rig-activity-panel",

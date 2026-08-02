@@ -601,20 +601,31 @@
     color: var(--git-removed-text);
 }
 
+/* The controls are overlaid, so they contribute no width of their own; the lane
+   reserves it here instead. Without that a short delta — a lone `+1` — leaves a
+   lane narrower than the controls, and on hover they reach back out of it and
+   over the name. One control is 18px and each further one adds its own 18 plus
+   the 4px gap; the 3px overhang comes back off the end. */
 .happy2-sidebar__item-trailing-swap {
     position: relative;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: flex-end;
+    min-width: 15px;
     height: 18px;
 }
 
+.happy2-sidebar__item-trailing-swap[data-controls="2"] {
+    min-width: 37px;
+}
+
 /*
- * Archive and Git stats intentionally occupy one trailing lane: overlaying the
- * smaller action prevents the workspace name or counters from shifting on hover.
+ * The controls and the Git stats intentionally occupy one trailing lane:
+ * overlaying the smaller controls prevents the workspace name or the counters
+ * from shifting on hover.
  */
-.happy2-sidebar__item-trailing-swap .happy2-sidebar__item-action {
+.happy2-sidebar__item-trailing-swap .happy2-sidebar__item-actions {
     position: absolute;
     right: 0;
 }
@@ -654,9 +665,23 @@
     transform: translateY(var(--happy2-sidebar-meta-optical-y, 0px));
 }
 
-/* The row's own control, at its trailing edge. It sits inside the row button so
-   it tracks the row's hover, and takes the row's height so the hit target is the
-   full lane rather than the glyph. */
+/* The row's controls, in one lane at its trailing edge. The lane reserves its
+   width whether or not the controls are showing, so a row that reveals one on
+   hover does not push its own name aside to do it. The negative right margin is
+   the lane's optical overhang into the row's padding — not spacing between
+   siblings, which the flex gap owns — so the outermost glyph lines up with the
+   rows above and below it. */
+.happy2-sidebar__item-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin-right: -3px;
+}
+
+/* One control. It sits inside the row button so it tracks the row's hover, and
+   takes the lane's height so the hit target is the full square rather than the
+   glyph. */
 .happy2-sidebar__item-action {
     display: flex;
     flex: none;
@@ -665,7 +690,6 @@
     box-sizing: border-box;
     width: 18px;
     height: 18px;
-    margin-right: -3px;
     border-radius: 4px;
     color: var(--text-secondary);
     cursor: pointer;

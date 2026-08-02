@@ -105,6 +105,7 @@ import {
     fileTreeFlatten,
     fileTreeVisibleFiles,
     type FileTreeBuildEntry,
+    RigProjectSettingsDialog,
     RigSessionControls,
     RigUsagePanel,
     PanelHeader,
@@ -397,6 +398,19 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 label: `New workspace in ${project.name}`,
                 ...(projectHasLineChanges ? { reveal: "hover" as const } : {}),
             },
+            // Settings sits left of the plus and waits for hover: it is about
+            // the project, not about the work to start in it. The home project
+            // is left out — its name and its path are the machine's, so there
+            // is nothing there for the reader to set.
+            ...(project.kind === "home"
+                ? {}
+                : {
+                      secondaryAction: {
+                          icon: "settings" as const,
+                          label: `Settings for ${project.name}`,
+                          reveal: "hover" as const,
+                      },
+                  }),
             // A row only carries a status while one of its sessions is live.
             // Waiting is the low-priority modifier: any session doing real work
             // makes the row spin, and only an all-waiting row wears the clock.
@@ -451,6 +465,11 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
 
 /** The row action ids the sidebar's context menu dispatches back to this surface. */
 const ROW_MENU_ARCHIVE = "archive";
+/**
+ * Opens the row's naming surface: the settings dialog for a project, which is
+ * where its name is set, and the rename field for a worktree, whose name is the
+ * only thing there is to say about it.
+ */
 const ROW_MENU_RENAME = "rename";
 
 /**
@@ -480,7 +499,7 @@ function rowMenuItems(projects: readonly RigProjectGroup[], item: SidebarItem): 
     // offers neither renaming nor archiving.
     if (owner.project.kind === "home") return [];
     return [
-        { kind: "item", id: ROW_MENU_RENAME, label: "Rename project", icon: "edit" },
+        { kind: "item", id: ROW_MENU_RENAME, label: "Project settings…", icon: "settings" },
         { kind: "separator" },
         {
             kind: "item",
@@ -1386,6 +1405,17 @@ export function AppRigView(props: AppRigViewProps) {
                         : workspace.worktreeCreate(owner.project.id)
                 ).catch(() => undefined);
             }}
+            // The cog on a project row. Only project rows carry one, and the
+            // settings surface is the same one the row's menu opens.
+            onItemSecondaryAction={(id) => {
+                const row = rigItemParse(id);
+                const rig = rigOf(row.rigId);
+                if (!rig) return;
+                const workspace = rig.session?.workspace;
+                const owner = rowOwnerFind(rig.projects, row.id);
+                if (!owner || owner.worktreeId || !workspace) return;
+                workspace.renameOpen(owner.project.id, undefined);
+            }}
             {...(props.navigationOrder
                 ? {
                       onActionReorder: (move: SidebarReorder) => {
@@ -1422,6 +1452,13 @@ export function AppRigView(props: AppRigViewProps) {
         />
     );
 
+    // Naming a row belongs to the sidebar rather than to whatever is beside it,
+    // so it travels with the sidebar onto every route: a cog that answered on
+    // the workspace and did nothing on the inbox would not be a control.
+    const naming = active?.session?.workspace ? (
+        <RigNamingDialogs projects={active.projects} workspace={active.session.workspace} />
+    ) : null;
+
     // The notes surface is the window's, not a Rig's, so it is shown whatever the
     // addressed machine is doing — including while none of them is reachable.
     if (props.notesOpen && props.notes)
@@ -1433,6 +1470,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 <RigNotesSurface
                     noteId={props.noteId}
                     notes={props.notes}
@@ -1453,6 +1491,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 {/* No connection model exists yet, so the gallery is handed
                     nobody. The surface is the same one it will render a real
                     list into. */}
@@ -1471,6 +1510,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 <BlueprintView />
             </AppShell>
         );
@@ -1487,6 +1527,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 <RigPluginApplicationPage
                     {...(pluginApplication?.error ? { error: pluginApplication.error } : {})}
                     {...(pluginApplication?.status === "ready" && pluginApplication.source
@@ -1517,6 +1558,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 <RigInboxSurface
                     onOpenSession={(rigId, groupId, chatId) =>
                         props.onChatSelect(rigId, groupId, chatId)
@@ -1540,6 +1582,7 @@ export function AppRigView(props: AppRigViewProps) {
                 sidebar={sidebar}
             >
                 {desktop ? <WindowDragRegion /> : null}
+                {naming}
                 <RigProviderUsageSurface
                     clock={active.session.clock}
                     {...(usage.error ? { error: usage.error } : {})}
@@ -1564,6 +1607,7 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onChatSelect(active.id, groupId, chatId, replace)
                 }
                 platform={props.platform}
+                projects={active.projects}
                 sidebar={sidebar}
                 slots={slots}
                 slotAction={slotAction}
@@ -1583,6 +1627,7 @@ export function AppRigView(props: AppRigViewProps) {
             sidebar={sidebar}
         >
             {desktop ? <WindowDragRegion /> : null}
+            {naming}
             <EmptyState
                 action={{
                     label: "Open settings",
@@ -1733,6 +1778,11 @@ interface RigWorkspaceSurfaceProps {
     connection: RigConnectionStore;
     /** Joined conversation-list + active-conversation product store. */
     workspace: RigWorkspaceStore;
+    /**
+     * The Rig's projects, for the surfaces that address a project the window is
+     * not currently open on — the settings dialog reached from any row.
+     */
+    projects: readonly RigProjectGroup[];
     /** Ticking clock feeding relative timestamps in the conversation list. */
     clock: RigClockStore;
     appearance: AppearanceStore;
@@ -2377,48 +2427,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             {workspace.create ? (
                 <RigCreateDialog create={workspace.create} workspace={props.workspace} />
             ) : null}
-            {/* Renaming is a workspace-level act — the row being renamed may not
-                be the project that is open — so its dialog hangs off the shell
-                rather than off any one surface inside it. */}
-            {workspace.rename ? (
-                <ModalOverlay onDismiss={() => props.workspace.renameCancel()}>
-                    <Modal
-                        footer={
-                            <>
-                                <Button
-                                    onClick={() => props.workspace.renameCancel()}
-                                    variant="ghost"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    disabled={workspace.rename.submitting}
-                                    onClick={() => {
-                                        void props.workspace.renameSubmit().catch(() => undefined);
-                                    }}
-                                    variant="primary"
-                                >
-                                    Rename
-                                </Button>
-                            </>
-                        }
-                        onClose={() => props.workspace.renameCancel()}
-                        size="small"
-                        title={`Rename ${workspace.rename.currentName}`}
-                    >
-                        <TextField
-                            disabled={workspace.rename.submitting}
-                            fullWidth
-                            label="Name"
-                            onSubmit={() => {
-                                void props.workspace.renameSubmit().catch(() => undefined);
-                            }}
-                            onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
-                            value={workspace.rename.draft}
-                        />
-                    </Modal>
-                </ModalOverlay>
-            ) : null}
+            <RigNamingDialogs projects={props.projects} workspace={props.workspace} />
             {/* Reverting is the one act in the file panel that destroys work
                 nothing else can give back, so what is about to happen is said
                 in full — how many files, and that HEAD is where they land —
@@ -3188,6 +3197,103 @@ function rigTurnElapsedMs(
  * same line as the session tabs beside them instead of a header's height higher,
  * and in the desktop window it gives that edge a lane to drag the window by.
  */
+/**
+ * Where a row is named. Naming is a sidebar act — the row it is about may not be
+ * the group that is open, and may not be on the surface that is showing at all —
+ * so this hangs off the window rather than off the workspace, and every route
+ * that shows the sidebar mounts it. Without that, the cog on a project row would
+ * be a control that answers on some pages and not others.
+ *
+ * A project opens its settings dialog rather than a bare field: it has an
+ * identity and a checkout worth stating, and its name is the one thing about it
+ * the daemon takes a new value for, so the name belongs inside that surface. A
+ * worktree has nothing but its name, and gets the field.
+ *
+ * It subscribes to the workspace itself so the routes that do not render a
+ * workspace surface still see the draft change as it is typed.
+ */
+function RigNamingDialogs(props: {
+    projects: readonly RigProjectGroup[];
+    workspace: RigWorkspaceStore;
+}) {
+    const workspace = useSyncExternalStore(
+        props.workspace.subscribe,
+        props.workspace.get,
+        props.workspace.get,
+    );
+    const rename = workspace.rename;
+    if (!rename) return null;
+    if (rename.worktreeId)
+        return (
+            <ModalOverlay onDismiss={() => props.workspace.renameCancel()}>
+                <Modal
+                    footer={
+                        <>
+                            <Button onClick={() => props.workspace.renameCancel()} variant="ghost">
+                                Cancel
+                            </Button>
+                            <Button
+                                disabled={rename.submitting}
+                                onClick={() => {
+                                    void props.workspace.renameSubmit().catch(() => undefined);
+                                }}
+                                variant="primary"
+                            >
+                                Rename
+                            </Button>
+                        </>
+                    }
+                    onClose={() => props.workspace.renameCancel()}
+                    size="small"
+                    title={`Rename ${rename.currentName}`}
+                >
+                    <TextField
+                        disabled={rename.submitting}
+                        fullWidth
+                        label="Name"
+                        onSubmit={() => {
+                            void props.workspace.renameSubmit().catch(() => undefined);
+                        }}
+                        onValueChange={(value) => props.workspace.renameDraftUpdate(value)}
+                        value={rename.draft}
+                    />
+                </Modal>
+            </ModalOverlay>
+        );
+    // The project may have been archived from another window while this was
+    // open. The dialog stays up on what the rename itself carries — the reader
+    // still has an edit in front of them, and dismissing it is what clears the
+    // draft — and simply drops the section it can no longer state.
+    const project = props.projects.find((candidate) => candidate.id === rename.projectId);
+    return (
+        <RigProjectSettingsDialog
+            draft={rename.draft}
+            {...(project?.avatar ? { imageUrl: project.avatar.url } : {})}
+            {...(project
+                ? {
+                      contents: {
+                          sessions:
+                              project.conversations.length +
+                              project.worktrees.reduce(
+                                  (total, worktree) => total + worktree.conversations.length,
+                                  0,
+                              ),
+                          worktrees: project.worktrees.length,
+                      },
+                      location: { displayPath: project.displayPath, path: project.path },
+                  }
+                : {})}
+            name={rename.currentName}
+            onClose={() => props.workspace.renameCancel()}
+            onDraftChange={(value) => props.workspace.renameDraftUpdate(value)}
+            onSubmit={() => {
+                void props.workspace.renameSubmit().catch(() => undefined);
+            }}
+            submitting={rename.submitting}
+        />
+    );
+}
+
 /**
  * The create dialog: what to do, where to do it, and how the session that does
  * it is configured — all decided before anything is started, so a task never

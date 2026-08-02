@@ -19,6 +19,12 @@ import { Icon, type IconName } from "./Icon";
 import { PluginAssetGlyph } from "./PluginAssetGlyph";
 import { Menu, type MenuItem } from "./Menu";
 import { Spinner } from "./Spinner";
+/** One control in a row's trailing lane: its glyph, what it does, and when it shows. */
+export type SidebarItemAction = {
+    icon: IconName;
+    label: string;
+    reveal?: "hover";
+};
 export type SidebarItem = {
     /** Marks a row as archived; the row keeps its position but paints muted. */
     archived?: boolean;
@@ -50,11 +56,15 @@ export type SidebarItem = {
      * hovered or the control is focused, for something destructive; the default
      * keeps it visible, for something the row is offering.
      */
-    action?: {
-        icon: IconName;
-        label: string;
-        reveal?: "hover";
-    };
+    action?: SidebarItemAction;
+    /**
+     * A second control in the same trailing lane, immediately left of `action`
+     * and reported through `onItemSecondaryAction`. It is for an act about the
+     * row rather than the one the row is offering — configuring a project
+     * beside starting work in it — and it shares the lane so the row's text
+     * keeps its width whether or not the control is showing.
+     */
+    secondaryAction?: SidebarItemAction;
     online?: boolean;
     /**
      * `working` spins in the leading slot; `waiting` shows a highlighted clock
@@ -135,6 +145,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemSelect: (id: string) => void;
     /** Invoked when a row's trailing `action` control is used. */
     onItemAction?: (id: string) => void;
+    /** Invoked when a row's trailing `secondaryAction` control is used. */
+    onItemSecondaryAction?: (id: string) => void;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
      * a keyboard move made. Without it the pinned rows are fixed, which is what
@@ -355,10 +367,7 @@ function blockShift(drag: SidebarDrag, index: number): number {
     return 0;
 }
 
-function SidebarItemAction(props: {
-    action: NonNullable<SidebarItem["action"]>;
-    onAction: () => void;
-}) {
+function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => void }) {
     return (
         /* A `span` because the row itself is the button: nesting one button
            inside another is invalid, and this control must sit inside the row
@@ -411,6 +420,8 @@ function SidebarRow({
     nodeRef?: (node: HTMLButtonElement | null) => void;
     /** Invoked by the row's trailing control; absent when the row offers none. */
     onAction?: () => void;
+    /** Invoked by the control left of it; absent when the row offers no second one. */
+    onSecondaryAction?: () => void;
     onSelect: (id: string) => void;
     /** The row can be arranged, which is what the keyboard shortcut is offered for. */
     reorderable?: boolean;
@@ -423,8 +434,42 @@ function SidebarRow({
     const mentioned = () => (item().badge ?? 0) > 0;
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
+    // The row's trailing controls in the order they are read, left to right: an
+    // act about the row, then the act the row is offering.
+    const trailingActions = (): {
+        key: string;
+        action: SidebarItemAction;
+        onAction: () => void;
+    }[] =>
+        [
+            item().secondaryAction && props.onSecondaryAction
+                ? {
+                      key: "secondary",
+                      action: item().secondaryAction!,
+                      onAction: props.onSecondaryAction,
+                  }
+                : undefined,
+            item().action && props.onAction
+                ? { key: "primary", action: item().action!, onAction: props.onAction }
+                : undefined,
+        ].filter((control) => control !== undefined);
+    // The lane can hold the Git delta instead, and only swaps to the controls
+    // when every one of them is waiting for hover anyway.
     const swapsTrailing = () =>
-        hasChangeStats() && item().action?.reveal === "hover" && props.onAction !== undefined;
+        hasChangeStats() &&
+        trailingActions().length > 0 &&
+        trailingActions().every((control) => control.action.reveal === "hover");
+    const trailingLane = () => (
+        <span className="happy2-sidebar__item-actions" data-happy2-ui="sidebar-item-actions">
+            {trailingActions().map((control) => (
+                <SidebarRowAction
+                    action={control.action}
+                    key={control.key}
+                    onAction={control.onAction}
+                />
+            ))}
+        </span>
+    );
     const depth = () => Math.max(0, item().depth ?? 0);
     const showStatus = () =>
         item().kind === "agent" && item().status !== undefined && !unread() && !mentioned();
@@ -542,6 +587,7 @@ function SidebarRow({
                 ? ((stats) => (
                       <span
                           className="happy2-sidebar__item-trailing-swap"
+                          data-controls={String(trailingActions().length)}
                           data-happy2-ui="sidebar-item-trailing-swap"
                       >
                           <span
@@ -565,7 +611,7 @@ function SidebarRow({
                                   <span data-tone="deleted">−{stats.deleted}</span>
                               ) : null}
                           </span>
-                          <SidebarItemAction action={item().action!} onAction={props.onAction!} />
+                          {trailingLane()}
                       </span>
                   ))(item().changeStats!)
                 : hasChangeStats()
@@ -612,9 +658,7 @@ function SidebarRow({
                     {item().meta}
                 </span>
             ) : null}
-            {props.onAction && item().action && !swapsTrailing() ? (
-                <SidebarItemAction action={item().action!} onAction={props.onAction} />
-            ) : null}
+            {trailingActions().length > 0 && !swapsTrailing() ? trailingLane() : null}
         </button>
     );
 }
@@ -639,6 +683,7 @@ export function Sidebar(props: SidebarProps) {
         "onCompose",
         "onItemSelect",
         "onItemAction",
+        "onItemSecondaryAction",
         "onItemMenuSelect",
         "onItemReorder",
         "onSectionAction",
@@ -1289,6 +1334,12 @@ export function Sidebar(props: SidebarProps) {
                                               onAction={
                                                   local.onItemAction && item.action
                                                       ? () => local.onItemAction?.(item.id)
+                                                      : undefined
+                                              }
+                                              onSecondaryAction={
+                                                  local.onItemSecondaryAction &&
+                                                  item.secondaryAction
+                                                      ? () => local.onItemSecondaryAction?.(item.id)
                                                       : undefined
                                               }
                                               nodeRef={(node) => {

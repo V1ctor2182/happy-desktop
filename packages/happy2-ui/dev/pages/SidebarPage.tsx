@@ -179,8 +179,28 @@ const treatmentSections: SidebarSection[] = [
                 initials: "R",
                 kind: "project",
                 label: "Project — working",
+                secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
                 status: "working",
                 tone: "ember",
+            },
+            {
+                action: { icon: "plus", label: "New workspace", reveal: "hover" },
+                changeStats: { added: 1, deleted: 0 },
+                id: "kind-project-narrow",
+                initials: "N",
+                kind: "project",
+                label: "Project — narrowest delta under two controls",
+                secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
+                tone: "mint",
+            },
+            {
+                action: { icon: "plus", label: "New workspace" },
+                id: "kind-project-clean",
+                initials: "H",
+                kind: "project",
+                label: "Project — two trailing controls",
+                secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
+                tone: "ocean",
             },
             {
                 icon: "home",
@@ -635,6 +655,8 @@ export function SidebarPage() {
                     <Frame height={460}>
                         <Sidebar
                             activeItemId="active"
+                            onItemAction={() => {}}
+                            onItemSecondaryAction={() => {}}
                             onItemSelect={() => {}}
                             sections={treatmentSections}
                             title="Row anatomy"

@@ -243,6 +243,7 @@ export {
     Sidebar,
     sidebarReorderMove,
     type SidebarItem,
+    type SidebarItemAction,
     type SidebarProps,
     type SidebarReorder,
     type SidebarSection,
@@ -306,6 +307,10 @@ export {
     type CommandPickerProps,
 } from "./CommandPicker";
 export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
+export {
+    RigProjectSettingsDialog,
+    type RigProjectSettingsDialogProps,
+} from "./RigProjectSettingsDialog";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
 export {
     SearchField,
