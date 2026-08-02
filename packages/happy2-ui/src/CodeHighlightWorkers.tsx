@@ -20,6 +20,9 @@ import PierreHighlightWorker from "@pierre/diffs/worker/worker.js?worker";
  * idle workers (the library default) is a cost with no question behind it.
  */
 export function CodeHighlightWorkers(props: { children: ReactNode }) {
+    // jsdom has no Worker, so a test render takes the main-thread fallback
+    // described above instead of constructing a pool that cannot start.
+    if (typeof Worker === "undefined") return props.children;
     return (
         <WorkerPoolContextProvider
             // The pool tokenizes for whatever renders under it, so it is
