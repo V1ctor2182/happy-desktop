@@ -30,8 +30,8 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.121
-        version: 0.0.121(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.125
+        version: 0.0.125(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
@@ -222,11 +222,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.0.121
-        version: 0.0.121(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.125
+        version: 0.0.125(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/rig-connect':
-        specifier: 0.0.25
-        version: 0.0.25
+        specifier: 0.0.29
+        version: 0.0.29
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -709,8 +709,8 @@ importers:
         specifier: ^3.3.0
         version: 3.3.0
       '@slopus/rig':
-        specifier: 0.0.121
-        version: 0.0.121(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.125
+        version: 0.0.125(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.17.4)(better-sqlite3@13.0.2)
@@ -806,8 +806,8 @@ importers:
   packages/happy2-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.0.25
-        version: 0.0.25
+        specifier: 0.0.29
+        version: 0.0.29
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2372,9 +2372,21 @@ packages:
   '@neon-rs/load@0.0.4':
     resolution: {integrity: sha512-kTPhdZyTQxB+2wpiRcFWrDcejc4JI6tkPuS7UZCG4l6Zvc5kU/gGQ/ozvHTh1XR5tS+UlfAfGuPajjzQjCiHCw==}
 
+  '@noble/ciphers@1.3.0':
+    resolution: {integrity: sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/curves@1.9.7':
+    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
+    engines: {node: ^14.21.3 || >=16}
+
   '@noble/hashes@1.4.0':
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
     engines: {node: '>= 16'}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@noble/hashes@2.2.0':
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
@@ -3007,12 +3019,16 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/rig-connect@0.0.25':
-    resolution: {integrity: sha512-TUcZS2oK+bKPGeBKJwhEhTzyps9EuzqD/EmKxAFtrvAiZik5jNz67Hzu1HBY3kaasFuQgtt1yZU6NjjALcEJtg==}
+  '@slopus/murmur@0.1.9':
+    resolution: {integrity: sha512-L3N0fSuROBKcujFPNy149kwSS9xuX9zIiZOXspWoeBjzLKAsj5Rej45fea/nQfzBBYfFdsNjfGIFi6eSj8j1eA==}
     engines: {node: '>=20'}
 
-  '@slopus/rig@0.0.121':
-    resolution: {integrity: sha512-QWwFZ8sTYbk0g3dQM8IwR+JRpWzs3RxdQr/Nzarg9mD8Wgi8rbKQSltVn+gLCMW9rMlC1KExXMOPZnwjfor0JQ==}
+  '@slopus/rig-connect@0.0.29':
+    resolution: {integrity: sha512-PBU5H3tJwmjA5UeqDKDS5B5Kx92PFTlWKCbdKe85LYIJmyY0kbgq6BtYlHvDgWc5pftGZqvKwxvOudTm8f+iNA==}
+    engines: {node: '>=20'}
+
+  '@slopus/rig@0.0.125':
+    resolution: {integrity: sha512-ryRIrIuY8YC8ff828pykQx3eMFmbDuiadZshQJXbV+E+9xOtWWAKFEE7iE/EyO5VIm83fSd34hfDN4Edal+gWw==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -9062,7 +9078,15 @@ snapshots:
 
   '@neon-rs/load@0.0.4': {}
 
+  '@noble/ciphers@1.3.0': {}
+
+  '@noble/curves@1.9.7':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
   '@noble/hashes@1.4.0': {}
+
+  '@noble/hashes@1.8.0': {}
 
   '@noble/hashes@2.2.0': {}
 
@@ -9468,11 +9492,17 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/rig-connect@0.0.25':
+  '@slopus/murmur@0.1.9':
+    dependencies:
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+
+  '@slopus/rig-connect@0.0.29':
     dependencies:
       '@sinclair/typebox': 0.34.52
 
-  '@slopus/rig@0.0.121(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
+  '@slopus/rig@0.0.125(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64
@@ -9486,13 +9516,13 @@ snapshots:
       '@pydantic/monty': 0.0.18(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@sinclair/typebox': 0.34.52
       '@slopus/ghostty-wasm': 1.3.6
+      '@slopus/murmur': 0.1.9
       '@types/node': 24.13.3
       '@vscode/ripgrep': 1.18.0
       better-sqlite3: 13.0.2
       sharp: 0.35.3(@types/node@24.13.3)
       ssh2: 1.17.0
       thumbhash: 0.1.1
-      typescript-7: typescript@7.0.2
       zod: 4.4.3
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.220
