@@ -37,11 +37,17 @@ export interface RigSessionListSnapshot {
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
     readonly mutationError?: UserError;
     /**
-     * How many times a successful authoritative catalog read has been applied
-     * here, counting from zero. It is what tells an optimistic publication apart
-     * from the host's own answer: a surface that must not act on a row this list
-     * only *believes* has gone — navigation away from an addressed group, above
-     * all — waits for this to advance rather than for the row to disappear.
+     * How many times the host's own answer has actually changed what this list
+     * describes, counting from zero. It is what tells an optimistic publication
+     * apart from the host's own answer: a surface that must not act on a row this
+     * list only *believes* has gone — navigation away from an addressed group,
+     * above all — waits for this to advance rather than for the row to disappear.
+     *
+     * It counts changes, not reads. A read that comes back describing exactly the
+     * catalog the last read described establishes nothing new to act on, so it
+     * leaves this alone and the snapshot with it. How many reads have landed is a
+     * separate, private question — one of read ordering, not of what the list
+     * says — and it is answered by the read sequence rather than by this.
      */
     readonly catalogRevision: number;
 }
@@ -269,15 +275,26 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const worktreeWaiters = new Map<RigWorktreeId, (worktree: RigWorktree) => void>();
 
     /**
-     * Counts the authoritative reads applied here. An optimistic publication
-     * leaves it alone, so a subscriber can tell "the host says this row is gone"
-     * from "this store took a row out ahead of the host".
+     * Counts the changes the authoritative reads have made to what this list
+     * describes. An optimistic publication leaves it alone, so a subscriber can
+     * tell "the host says this row is gone" from "this store took a row out ahead
+     * of the host".
      */
     let catalogRevision = 0;
+    /**
+     * The list as the last successful authoritative read described it, kept apart
+     * from what is currently published because the published rows also carry
+     * optimistic changes the host has not answered yet. Comparing each read
+     * against this — rather than against the snapshot — is what makes a removal
+     * the reader performed here still count as the host's own answer when it is
+     * read back, while a read that changed nothing counts as nothing.
+     */
+    let authoritativeProjects: readonly RigProjectGroup[] | undefined;
 
-    const publish = (): void => {
+    const publish = (
+        projected: readonly RigProjectGroup[] = rigProjectGroupsProject(catalog, sessions),
+    ): void => {
         const previous = store.getState();
-        const projected = rigProjectGroupsProject(catalog, sessions);
         // An unchanged project keeps its previous object — and with it the
         // identity of the worktrees and conversation rows nested inside it — so a
         // reconcile that changed one session does not replace every project row.
@@ -372,11 +389,28 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // may advance `appliedSequence`, because only the first one means a
             // snapshot actually landed here.
             if (!superseded && token > retiredSequence) {
+                // The read landed, whatever it turned out to say: `appliedSequence`
+                // is the read order, and a later read must not be allowed to think
+                // this one never happened just because the host had nothing new.
                 appliedSequence = token;
                 catalog = snapshot.catalog;
                 sessions = snapshot.sessions;
-                catalogRevision += 1;
-                publish();
+                const projected = rigProjectGroupsProject(catalog, sessions);
+                // Judged against the previous authoritative read, so a row this
+                // store took out optimistically is still a change when the host
+                // confirms it, and a read describing the same catalog twice is
+                // not. Reusing that read's references keeps the equal case
+                // identical rather than merely equal, which is what lets the
+                // comparison be an identity check.
+                const authoritative =
+                    authoritativeProjects === undefined
+                        ? projected
+                        : referencesPreserve(authoritativeProjects, projected);
+                if (authoritative !== authoritativeProjects) {
+                    authoritativeProjects = authoritative;
+                    catalogRevision += 1;
+                }
+                publish(authoritative);
                 worktreesSettle();
             }
             return {
@@ -494,6 +528,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         // the host, and claiming otherwise would let a retired read pass for a
         // newer authoritative snapshot that never existed.
         retiredSequence = readSequence;
+        // Nothing is watching the catalog any more, so what the last read said is
+        // no longer a baseline anyone is holding: the host may change while this
+        // is stopped, and a subscriber that comes back has to be told what is
+        // there before it can be told what left. The first read after starting
+        // again therefore counts as a change, however familiar it looks.
+        authoritativeProjects = undefined;
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         unsubscribeMutationRejections?.();
