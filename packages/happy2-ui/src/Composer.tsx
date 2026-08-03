@@ -5,6 +5,7 @@ import {
     type ChangeEvent,
     type ClipboardEvent as ReactClipboardEvent,
     type CSSProperties,
+    type DragEvent as ReactDragEvent,
     type FormEvent,
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
@@ -263,11 +264,13 @@ export type ComposerProps = {
     "data-testid"?: string;
     disabled?: boolean;
     /**
-     * Makes this composer the last resort for typing: a character typed — or a
-     * Cmd/Ctrl+V pasted — while no control that wants it has focus moves focus
-     * here and lands in the draft. Only the composer the reader is currently
-     * writing into may claim it, so an owner that mounts more than one composer
-     * at a time turns it on for exactly one of them.
+     * Makes this composer the last resort for content the surface has no other
+     * home for: a character typed — or a Cmd/Ctrl+V pasted — while no control
+     * that wants it has focus moves focus here and lands in the draft, and files
+     * dragged anywhere over the window that nothing else answers are attached
+     * here rather than opened by the browser. Only the composer the reader is
+     * currently writing into may claim any of that, so an owner that mounts more
+     * than one composer at a time turns it on for exactly one of them.
      */
     focusOnType?: boolean;
     /** e.g. "Enter to send · @ to hand off to an agent" */
@@ -276,7 +279,7 @@ export type ComposerProps = {
     onAttachFile?: () => void;
     /** Called for toggle clicks and Shift+Tab with the next audience. */
     onAudienceChange?: (audience: AudienceValue) => void;
-    /** Receives files selected through the native picker or pasted into the text input. */
+    /** Receives files picked, pasted into the draft, or dropped onto the composer. */
     onAttachmentsSelect?: (files: File[]) => void;
     onContextRemove?: (id: string) => void;
     /** Called after an emoji is selected. Unicode emoji are also inserted into the draft. */
@@ -372,6 +375,17 @@ function isPasteShortcut(event: KeyboardEvent): boolean {
 }
 
 /**
+ * Whether a drag in flight is carrying files. `types` is the only thing a drag
+ * lets anyone read before it is dropped — the items themselves stay sealed until
+ * then — so it is what decides whether the composer offers itself as the
+ * destination. Dragging a selection of text, including one inside the draft,
+ * carries no files and is left entirely to the browser.
+ */
+function dragCarriesFiles(transfer: DataTransfer | null): boolean {
+    return transfer !== null && Array.from(transfer.types).includes("Files");
+}
+
+/**
  * Whether this keystroke is ordinary typing that nothing on screen has claimed,
  * which is what makes redirecting it into `textarea` a last resort rather than a
  * hijack. It is typing when a single character was produced without a command
@@ -428,6 +442,8 @@ export function Composer(props: ComposerProps) {
     const [commandIndex, setCommandIndex] = useState(0);
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [emojiQuery, setEmojiQuery] = useState("");
+    /* Whether a file drag this composer will take is currently in flight. */
+    const [dropActive, setDropActive] = useState(false);
     const restoreFocusAfterSend = useRef(false);
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const busy = Boolean(props.disabled || props.pending);
@@ -793,6 +809,98 @@ export function Composer(props: ComposerProps) {
         props.onAttachmentsSelect(files);
     };
     /*
+     * Dropping files is attaching them, exactly as pasting them is: the same
+     * screenshot, the same PDF, arriving by the other gesture. A composer that
+     * cannot take attachments at all — or one that is switched off — leaves the
+     * drag alone rather than accepting it into nothing.
+     */
+    const dropAccepted = () => Boolean(props.onAttachmentsSelect) && !props.disabled;
+    const attachDropped = (transfer: DataTransfer | null) => {
+        const files = Array.from(transfer?.files ?? []);
+        if (files.length > 0) props.onAttachmentsSelect?.(files);
+    };
+    /*
+     * Answering `dragover` is what makes the drop possible at all: an
+     * unprevented one leaves the browser's own default in charge, which opens
+     * the dropped file over the page. It repeats for as long as the pointer is
+     * over the card, so it is also what raises the card's drop state.
+     */
+    const dragOverSurface = (event: ReactDragEvent<HTMLDivElement>) => {
+        if (!dropAccepted() || !dragCarriesFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        if (!dropActive) setDropActive(true);
+    };
+    const dragLeaveSurface = (event: ReactDragEvent<HTMLDivElement>) => {
+        if (!dropActive) return;
+        // `dragleave` also fires on every boundary crossed *inside* the card —
+        // into the textarea, onto a control — so the pointer's own position is
+        // what says whether the drag has really left it. Leaving the window
+        // reports a point outside the card too, which is the same answer.
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const inside =
+            event.clientX >= bounds.left &&
+            event.clientX <= bounds.right &&
+            event.clientY >= bounds.top &&
+            event.clientY <= bounds.bottom;
+        if (!inside) setDropActive(false);
+    };
+    const dropOnSurface = (event: ReactDragEvent<HTMLDivElement>) => {
+        if (!dropAccepted() || !dragCarriesFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        setDropActive(false);
+        attachDropped(event.dataTransfer);
+    };
+    /*
+     * The same claim the composer makes over unclaimed typing, made over a file
+     * nothing else on the surface wants: a screenshot dragged at the transcript,
+     * the sidebar, or the gap beside the card is meant for this conversation,
+     * and the draft is the only place on the surface that can hold it. Left
+     * alone the browser would navigate the whole window onto that file instead.
+     *
+     * A surface that answers the drag itself has already prevented the event by
+     * the time it reaches the window, and so has the card above, which is what
+     * keeps one drop from being attached twice.
+     */
+    // eslint-disable-next-line happy2-react/no-layout-effect -- claiming a file drop no surface wants requires window-level drag listeners whose lifetime follows the mounted composer, which no handler on a rendered element can express
+    useLayoutEffect(() => {
+        if (!props.focusOnType || !dropAccepted()) return;
+        const onDragOver = (event: DragEvent) => {
+            if (event.defaultPrevented || !dragCarriesFiles(event.dataTransfer)) return;
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+            // Whatever the pointer is over, this composer is where the file will
+            // land, so the card says so for the whole flight of the drag.
+            setDropActive(true);
+        };
+        const onDragLeave = (event: DragEvent) => {
+            // Only a pointer that has left the window has taken the drag away;
+            // every boundary inside the page bubbles the same event here.
+            if (
+                event.clientX > 0 &&
+                event.clientY > 0 &&
+                event.clientX < window.innerWidth &&
+                event.clientY < window.innerHeight
+            )
+                return;
+            setDropActive(false);
+        };
+        const onDrop = (event: DragEvent) => {
+            setDropActive(false);
+            if (event.defaultPrevented || !dragCarriesFiles(event.dataTransfer)) return;
+            event.preventDefault();
+            attachDropped(event.dataTransfer);
+        };
+        window.addEventListener("dragover", onDragOver);
+        window.addEventListener("dragleave", onDragLeave);
+        window.addEventListener("drop", onDrop);
+        return () => {
+            window.removeEventListener("dragover", onDragOver);
+            window.removeEventListener("dragleave", onDragLeave);
+            window.removeEventListener("drop", onDrop);
+        };
+    });
+    /*
      * The composer is one input surface, not a small textarea surrounded by
      * dead padding. Keep native and semantic controls in charge of their own
      * pointer interactions, but direct every other point in the card to the
@@ -829,9 +937,14 @@ export function Composer(props: ComposerProps) {
             data-audience={audienceEnabled() ? "" : undefined}
             data-agents={audienceEnabled() && props.audience === "agents" ? "" : undefined}
             data-disabled={props.disabled ? "" : undefined}
+            data-dropping={dropActive && dropAccepted() ? "" : undefined}
             data-pending={props.pending ? "" : undefined}
             data-happy2-ui="composer"
             data-testid={props["data-testid"]}
+            onDragEnter={dragOverSurface}
+            onDragLeave={dragLeaveSurface}
+            onDragOver={dragOverSurface}
+            onDrop={dropOnSurface}
             onMouseDown={focusTextareaFromSurface}
             onBlur={(event) => {
                 const next = event.relatedTarget;

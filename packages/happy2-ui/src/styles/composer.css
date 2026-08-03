@@ -51,7 +51,9 @@
     border-radius: 16px;
     /* 8px shell below the action lane (1px transparent border + 7px pad). */
     padding-bottom: 7px;
-    transition: border-color 120ms ease;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease;
 }
 
 .happy2-composer:focus-within .happy2-composer__surface {
@@ -70,6 +72,25 @@
 
 .happy2-composer[data-agents]:focus-within .happy2-composer__surface {
     border-color: var(--radio-active);
+}
+
+/*
+ * A file drag the composer will take. It reads from the frame, like agents mode
+ * and focus above it: the card takes the accent line and lifts its fill, so the
+ * destination is unmistakable while the pointer is still holding the file. The
+ * fill is a state, not a surface of its own, so it uses the same selected role
+ * the rest of the system uses to say "this one".
+ */
+.happy2-composer[data-dropping] .happy2-composer__surface {
+    background: var(--surface-selected);
+    border-color: var(--radio-active);
+}
+
+/* The edge fades carry the card's fill over the scrollport's cut edges, so they
+ * follow it into this state instead of leaving two bands of the resting fill
+ * across a lifted card. */
+.happy2-composer[data-dropping] .happy2-composer__fade {
+    background: var(--surface-selected);
 }
 
 /* Chips sit clear of the card's 16px corner field (inset ≥ radius) and align
