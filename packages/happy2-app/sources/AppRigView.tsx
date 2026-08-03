@@ -38,6 +38,7 @@ import type {
     RigSecurityPolicyStore,
     RigPluginApplication,
     RigPluginApplicationStore,
+    RigPluginCatalogStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
@@ -71,6 +72,7 @@ import {
     rigNavigationOrderApply,
     rigNavigationOrderStoreNoop,
     rigPluginApplicationStoreNoop,
+    rigPluginCatalogStoreNoop,
     rigProviderUsageStoreNoop,
     rigSlotEntriesInScope,
     rigSlotEntryInScope,
@@ -131,7 +133,6 @@ import {
     type SlotVisualEntry,
     RigInboxPage,
     RigPluginApplicationPage,
-    RigPluginCatalogPage,
     type RigPluginApplicationContentRenderer,
     RigProviderUsagePage,
     TabbedPane,
@@ -152,7 +153,7 @@ import {
     type TabItem,
 } from "happy2-ui";
 import { openExternalLink } from "./externalLink";
-import { pluginCatalogEntries } from "./pluginCatalog";
+import { PluginCatalogView } from "./views/PluginCatalogView";
 import { NewSessionShortcut } from "./components/NewSessionShortcut";
 import { BlueprintView } from "./views/BlueprintView";
 
@@ -223,6 +224,12 @@ export interface AppRigSession {
      * rather than opening onto a screen that cannot show anything.
      */
     readonly pluginApplications?: RigPluginApplicationStore;
+    /**
+     * The packages installed on this machine. Absent when the window cannot read
+     * the machine at all, which is why the catalog then says so rather than
+     * showing an empty shelf.
+     */
+    readonly pluginCatalog?: RigPluginCatalogStore;
 }
 
 export interface AppRigAddSnapshot {
@@ -1725,10 +1732,13 @@ export function AppRigView(props: AppRigViewProps) {
                 </AppShell>
             );
 
-        // The packages this machine has, read from the same catalog subscription
-        // the pinned plugin rows come from: the applications are what a package
-        // contributes, and these are the packages themselves. A window that
-        // cannot mount plugins holds the inert catalog and honestly shows none.
+        // The packages this machine has, on their own subscription. It is not the
+        // one behind the pinned plugin rows: those are the applications a package
+        // contributes, followed for as long as the window is open, and this is
+        // what is installed, followed only while this screen is. The reading
+        // starts when this mounts and stops when it goes away. A window that
+        // cannot read the machine holds the inert catalog and honestly shows
+        // none.
         if (props.pluginsOpen)
             return (
                 <AppShell
@@ -1738,11 +1748,8 @@ export function AppRigView(props: AppRigViewProps) {
                     sidebar={sidebar}
                 >
                     {desktop ? <WindowDragRegion /> : null}
-                    <RigPluginCatalogPage
-                        entries={pluginCatalogEntries(plugins)}
-                        failures={plugins.packageFailures}
-                        loading={plugins.loading}
-                        {...(plugins.error ? { error: plugins.error.message } : {})}
+                    <PluginCatalogView
+                        store={active?.session?.pluginCatalog ?? rigPluginCatalogStoreNoop}
                     />
                 </AppShell>
             );

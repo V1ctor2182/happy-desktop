@@ -75,7 +75,7 @@ export const PLUGIN_STORE_FIXTURE_FAILED: RigPluginCatalogEntry = {
     name: "Millstone",
     description: "Applies a migration to a throwaway copy of a schema and reports what it did.",
     state: "failed",
-    glyph: "package",
+    glyph: "alert",
     tone: "ember",
     author: "Happy",
     category: "Databases",
@@ -112,9 +112,36 @@ export const PLUGIN_STORE_FIXTURE_OVERLONG: RigPluginCatalogEntry = {
     ],
 };
 
+/**
+ * A package whose every string is one unbroken token: the kind of note a module
+ * loader actually produces, and the kind of path a nested checkout actually has.
+ * There is nowhere for a line to break, which is what proves the card breaks it
+ * anyway instead of growing wider than its column.
+ */
+export const PLUGIN_STORE_FIXTURE_UNBROKEN: RigPluginCatalogEntry = {
+    id: "quarry",
+    name: "quarry-workspace-indexer-daemon-supervisor",
+    description:
+        "file:///Users/someone/Development/checkouts/monorepo/packages/quarry-workspace-indexer-daemon-supervisor/dist/index.js",
+    state: "failed",
+    glyph: "alert",
+    tone: "amber",
+    version: "3.0.0",
+    note: "Error: Cannot find module '/Users/someone/Development/checkouts/monorepo/packages/quarry-workspace-indexer-daemon-supervisor/node_modules/.pnpm/registry.example.com+quarry-core@3.0.0/dist/runtime/bootstrap.js'",
+    contributions: ["QuarryWorkspaceIndexerDaemonSupervisorDiagnosticsAndTelemetryOverview"],
+    facts: [
+        {
+            label: "Installed at",
+            value: "/Users/someone/Development/checkouts/monorepo/packages/quarry-workspace-indexer-daemon-supervisor",
+            monospace: true,
+        },
+    ],
+};
+
 /** The shelves as the workbench shows them, in the page's own reading order. */
 export const PLUGIN_STORE_FIXTURE_CATALOG: readonly RigPluginCatalogEntry[] = [
     PLUGIN_STORE_FIXTURE_FAILED,
+    PLUGIN_STORE_FIXTURE_UNBROKEN,
     PLUGIN_STORE_FIXTURE_COMPLETE,
     PLUGIN_STORE_FIXTURE_BARE,
     PLUGIN_STORE_FIXTURE_OVERLONG,

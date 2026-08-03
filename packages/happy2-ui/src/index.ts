@@ -663,6 +663,7 @@ export {
     RigPluginCatalogPage,
     type RigPluginCatalogEntry,
     type RigPluginCatalogFailure,
+    type RigPluginCatalogFeedState,
     type RigPluginCatalogPageProps,
 } from "./pages/plugins/RigPluginCatalogPage";
 export {

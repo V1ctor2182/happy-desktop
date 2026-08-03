@@ -29,7 +29,7 @@ function application(overrides: Partial<DesktopPluginApplication> = {}): Desktop
 }
 
 function catalog(applications: readonly DesktopPluginApplication[]): DesktopPluginCatalog {
-    return { applications, packages: [], packageFailures: [], connection: "live", loading: false };
+    return { applications, connection: "live", loading: false };
 }
 
 function harness() {
@@ -116,13 +116,7 @@ describe("rigPluginApplicationSourceCreate", () => {
     it("reports the feed's own state alongside the projection", () => {
         const { announce, readings } = harness();
 
-        announce({
-            applications: [],
-            packages: [],
-            packageFailures: [],
-            connection: "reconnecting",
-            loading: false,
-        });
+        announce({ applications: [], connection: "reconnecting", loading: false });
 
         expect(readings[0]).toMatchObject({ connection: "reconnecting", loading: false });
     });

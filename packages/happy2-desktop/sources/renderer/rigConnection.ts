@@ -21,6 +21,7 @@ import {
     type RigInstructionsStore,
     type RigSecurityPolicyStore,
     type RigPluginApplicationStore,
+    type RigPluginCatalogStore,
     type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy2-state";
@@ -35,6 +36,7 @@ import { rigConnectFriendsSourceCreate } from "./rigConnectFriendsSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
 import { rigPluginApplicationSourceCreate } from "./rigPluginApplicationSource";
+import { rigPluginCatalogSourceCreate } from "./rigPluginCatalogSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -93,6 +95,12 @@ export interface RigSession {
      * contributes none.
      */
     readonly pluginApplications: RigPluginApplicationStore | undefined;
+    /**
+     * The packages installed on this machine, for the screen that is about them.
+     * Absent in a window that cannot read the machine, which is not the same as a
+     * machine with nothing installed.
+     */
+    readonly pluginCatalog: RigPluginCatalogStore | undefined;
     /** The machine-wide instructions every agent this Rig starts is given. */
     readonly instructions: RigInstructionsStore;
     /** The machine-wide policy its permission reviewer applies to agent actions. */
@@ -204,6 +212,12 @@ export function rigConnectionOpen(input: {
     const pluginApplicationSource = input.local
         ? rigPluginApplicationSourceCreate(window.happyDesktop)
         : undefined;
+    // What is installed is read under the same rule and for the same reason: it
+    // describes this machine's folders, so it is offered only for this machine's
+    // Rig.
+    const pluginCatalogSource = input.local
+        ? rigPluginCatalogSourceCreate(window.happyDesktop)
+        : undefined;
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -228,6 +242,7 @@ export function rigConnectionOpen(input: {
         providerUsageSource,
         ...(friendsSource ? { friendsSource } : {}),
         ...(pluginApplicationSource ? { pluginApplicationSource } : {}),
+        ...(pluginCatalogSource ? { pluginCatalogSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -269,6 +284,7 @@ export function rigConnectionOpen(input: {
                     providerUsage: client.providerUsage(),
                     friends: client.friends(),
                     pluginApplications: client.pluginApplications(),
+                    pluginCatalog: client.pluginCatalog(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),

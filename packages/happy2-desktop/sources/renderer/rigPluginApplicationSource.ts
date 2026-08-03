@@ -2,13 +2,8 @@ import type {
     RigPluginApplication,
     RigPluginApplicationSource,
     RigPluginApplicationSourceReading,
-    RigPluginPackage,
 } from "happy2-state";
-import type {
-    DesktopPluginApplication,
-    DesktopPluginCatalog,
-    DesktopPluginPackage,
-} from "../shared/desktopContract";
+import type { DesktopPluginApplication, DesktopPluginCatalog } from "../shared/desktopContract";
 
 /**
  * Adapts the desktop shell's plugin catalog to the store's source contract.
@@ -91,25 +86,7 @@ function readingReconcilerCreate(): (
 ) => RigPluginApplicationSourceReading {
     let held = new Map<string, RigPluginApplication>();
     let previous: readonly RigPluginApplication[] = [];
-    let heldPackages = new Map<string, RigPluginPackage>();
-    let previousPackages: readonly RigPluginPackage[] = [];
     return (catalog) => {
-        // Packages are kept the same way applications are, and for the same
-        // reason: the shell re-announces the whole catalog for any change in it,
-        // so a package that started must not hand every other card a new object.
-        const nextPackages = new Map<string, RigPluginPackage>();
-        const packages = catalog.packages.map((entry) => {
-            const projected = packageProject(entry);
-            const kept = heldPackages.get(entry.id);
-            const value = kept && packageSame(kept, projected) ? kept : projected;
-            nextPackages.set(entry.id, value);
-            return value;
-        });
-        heldPackages = nextPackages;
-        const packagesUnchanged =
-            packages.length === previousPackages.length &&
-            packages.every((entry, index) => entry === previousPackages[index]);
-        if (!packagesUnchanged) previousPackages = packages;
         const next = new Map<string, RigPluginApplication>();
         const applications = catalog.applications.map((application) => {
             const key = `${application.id}\u0000${application.generation}`;
@@ -126,45 +103,10 @@ function readingReconcilerCreate(): (
         if (!unchanged) previous = applications;
         return {
             applications: previous,
-            packages: previousPackages,
-            packageFailures: catalog.packageFailures,
             connection: catalog.connection,
             loading: catalog.loading,
         };
     };
-}
-
-function packageProject(entry: DesktopPluginPackage): RigPluginPackage {
-    return {
-        applicationIds: entry.applicationIds,
-        dataDirectory: entry.dataDirectory,
-        description: entry.description,
-        directory: entry.directory,
-        id: entry.id,
-        logAvailable: entry.logAvailable,
-        name: entry.name,
-        status: entry.status,
-        version: entry.version,
-        ...(entry.error === undefined ? {} : { error: entry.error }),
-        ...(entry.statusMessage === undefined ? {} : { statusMessage: entry.statusMessage }),
-    };
-}
-
-function packageSame(held: RigPluginPackage, next: RigPluginPackage): boolean {
-    return (
-        held.id === next.id &&
-        held.name === next.name &&
-        held.version === next.version &&
-        held.description === next.description &&
-        held.status === next.status &&
-        held.statusMessage === next.statusMessage &&
-        held.error === next.error &&
-        held.directory === next.directory &&
-        held.dataDirectory === next.dataDirectory &&
-        held.logAvailable === next.logAvailable &&
-        held.applicationIds.length === next.applicationIds.length &&
-        held.applicationIds.every((id, index) => id === next.applicationIds[index])
-    );
 }
 
 function applicationProject(application: DesktopPluginApplication): RigPluginApplication {

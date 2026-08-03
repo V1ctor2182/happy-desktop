@@ -10,6 +10,7 @@ import {
     type DesktopNoteApplyRequest,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
+    type DesktopPluginInventory,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -67,6 +68,13 @@ const bridge: HappyDesktopBridge = {
             listener(catalog);
         ipcRenderer.on(desktopIpc.pluginApplicationsChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.pluginApplicationsChanged, receive);
+    },
+    pluginInventoryGet: () => ipcRenderer.invoke(desktopIpc.pluginInventoryGet),
+    pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, inventory: DesktopPluginInventory) =>
+            listener(inventory);
+        ipcRenderer.on(desktopIpc.pluginInventoryChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.pluginInventoryChanged, receive);
     },
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.

@@ -37,6 +37,7 @@ export type IconName =
     | "arrow-right"
     | "arrow-up"
     | "shield"
+    | "alert"
     | "lock"
     | "eye"
     | "link"
@@ -147,6 +148,10 @@ const glyphs: Record<IconName, IconGlyph> = {
     "arrow-right": { set: "ionicons", name: "arrow-forward-outline" },
     "arrow-up": { set: "ionicons", name: "arrow-up-outline" },
     shield: { set: "ionicons", name: "shield-checkmark-outline" },
+    // `shield` is a shield with a checkmark on it — it says a thing is safe, not
+    // that a thing went wrong. Anything that failed needs a mark that reads as
+    // trouble at a glance, so it gets one of its own rather than borrowing that.
+    alert: { set: "ionicons", name: "alert-circle-outline" },
     lock: { set: "ionicons", name: "lock-closed-outline" },
     eye: { set: "ionicons", name: "eye-outline" },
     link: { set: "ionicons", name: "link-outline" },

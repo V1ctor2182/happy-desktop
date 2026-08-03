@@ -6,6 +6,7 @@ import {
     PLUGIN_STORE_FIXTURE_FAILED,
     PLUGIN_STORE_FIXTURE_OVERLONG,
     PLUGIN_STORE_FIXTURE_STOPPED,
+    PLUGIN_STORE_FIXTURE_UNBROKEN,
 } from "../../src/pages/plugins/RigPluginCatalogPage.fixtures";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -117,7 +118,7 @@ export function PluginStoreCardPage() {
             </Specimen>
 
             <Specimen
-                detail="A name, a publisher, and a category far past any reasonable length, at the card's floor width. The name ellipsizes, the meta line ellipsizes, the description wraps, and the mark and badge stay exactly where they are."
+                detail="A name, a publisher, and a category far past any reasonable length, at the card's floor width. The name ellipsizes, the meta line ellipsizes, the description clamps to three lines, and the mark and badge stay exactly where they are."
                 label="Overlong"
                 number="06"
                 stage="app"
@@ -131,9 +132,23 @@ export function PluginStoreCardPage() {
             </Specimen>
 
             <Specimen
+                detail="The harder case: a name, a description, and a loader's own error with no spaces anywhere in them, at the card's floor width. Every one of them breaks mid-token rather than widening the card, and the mark and the badge do not move."
+                label="Nowhere to break"
+                number="07"
+                stage="app"
+            >
+                <div style={{ display: "flex", width: "320px" }}>
+                    <PluginStoreCard
+                        entry={PLUGIN_STORE_FIXTURE_UNBROKEN}
+                        onOpen={() => undefined}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Two cards in one wrapping shelf at 760 px, which is where the catalog puts them. They share the row's gap and neither carries a margin of its own."
                 label="In a shelf"
-                number="07"
+                number="08"
                 stage="app"
             >
                 <div style={shelf}>

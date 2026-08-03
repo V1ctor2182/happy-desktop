@@ -903,6 +903,11 @@ void app
                 if (window && !window.isDestroyed())
                     window.webContents.send(desktopIpc.pluginApplicationsChanged, catalog);
             },
+            onInventoryChange: (inventory) => {
+                const window = windowLifecycle.get();
+                if (window && !window.isDestroyed())
+                    window.webContents.send(desktopIpc.pluginInventoryChanged, inventory);
+            },
         });
         const desktopRoot = join(app.getPath("userData"), "desktop");
         desktopWindowStateStore = await DesktopWindowStateStore.create(
@@ -994,6 +999,7 @@ void app
         }
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.pluginApplicationsGet, () => pluginApplications.get());
+        ipcMain.handle(desktopIpc.pluginInventoryGet, () => pluginApplications.inventoryGet());
         ipcMain.handle(desktopIpc.pluginAppRequest, (_event, raw: unknown) => {
             const request = pluginAppRequestParse(raw);
             if (!request) throw new Error("The plugin application request is invalid.");

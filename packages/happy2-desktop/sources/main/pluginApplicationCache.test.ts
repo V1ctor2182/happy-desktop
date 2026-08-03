@@ -560,13 +560,7 @@ describe("PluginApplicationCache", () => {
 
         cache[Symbol.dispose]();
         expect(connection.closed).toBe(true);
-        expect(cache.get()).toEqual({
-            applications: [],
-            packages: [],
-            packageFailures: [],
-            connection: "closed",
-            loading: false,
-        });
+        expect(cache.get()).toEqual({ applications: [], connection: "closed", loading: false });
         expect(cache.resourceRead("host1", "/index.html")).toBeUndefined();
     });
 

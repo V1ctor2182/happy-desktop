@@ -49,8 +49,12 @@
     min-width: 0;
 }
 
+/* A package names itself, so the name may be one long unbroken word. It wraps
+   rather than pushing the state badge off the end of the hero row. */
 .happy2-plugin-store-detail__name {
+    min-width: 0;
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--text);
     font-size: 22px;
     font-weight: 700;
@@ -59,7 +63,9 @@
 }
 
 .happy2-plugin-store-detail__attribution {
+    min-width: 0;
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 18px;
@@ -86,6 +92,18 @@
     color: var(--box-warning-text);
     font-size: 13px;
     line-height: 18px;
+}
+
+/* The glyph keeps its size and the machine's own words wrap mid-token, so a
+   stack line or a path cannot widen the column it is in. */
+.happy2-plugin-store-detail__note > :first-child {
+    flex: none;
+    margin-top: 2px;
+}
+
+.happy2-plugin-store-detail__note > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .happy2-plugin-store-detail[data-state="stopped"] .happy2-plugin-store-detail__note {
@@ -128,13 +146,26 @@
     list-style: none;
 }
 
+/* A contribution is labelled by whoever wrote the plugin, so it is treated as
+   text of unknown length rather than as a word that will fit. */
 .happy2-plugin-store-detail__contributions li {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
+    min-width: 0;
     color: var(--text);
     font-size: 13px;
     line-height: 18px;
+}
+
+.happy2-plugin-store-detail__contributions li > :first-child {
+    flex: none;
+    margin-top: 2px;
+}
+
+.happy2-plugin-store-detail__contributions li > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .happy2-plugin-store-detail__facts {

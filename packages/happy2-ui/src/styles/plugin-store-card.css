@@ -106,12 +106,23 @@
     outline-offset: 2px;
 }
 
+/*
+ * Three lines, then an ellipsis. A description is written by whoever wrote the
+ * plugin and may be a paragraph or a sentence; cards sit beside each other on a
+ * shelf, and one long entry must not set the height of the row it is in. The
+ * whole description is on the package's own page, which is where a reader who
+ * wants it goes.
+ */
 .happy2-plugin-store-card__description {
+    display: -webkit-box;
     margin: 0;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 18px;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
 }
 
 .happy2-plugin-store-card__meta {
@@ -124,14 +135,31 @@
     white-space: nowrap;
 }
 
+/*
+ * A note is the machine quoting itself — a module resolution failure, a path, a
+ * stack line — so it has no spaces to break at. It wraps mid-word rather than
+ * pushing the card wider than its column, and the glyph beside it keeps its size
+ * whatever the text does.
+ */
 .happy2-plugin-store-card__note {
     display: flex;
     align-items: flex-start;
     gap: 6px;
+    min-width: 0;
     margin: 0;
     color: var(--box-warning-text);
     font-size: 12px;
     line-height: 16px;
+}
+
+.happy2-plugin-store-card__note > :first-child {
+    flex: none;
+    margin-top: 2px;
+}
+
+.happy2-plugin-store-card__note > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .happy2-plugin-store-card[data-state="stopped"] .happy2-plugin-store-card__note {

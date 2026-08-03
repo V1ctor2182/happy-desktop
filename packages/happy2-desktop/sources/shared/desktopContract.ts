@@ -331,13 +331,34 @@ export interface DesktopPluginApplication {
     readonly source?: string;
 }
 
+/** Where the catalog subscription itself is, so a surface can say why it is empty. */
+export type DesktopPluginConnectionState = "connecting" | "live" | "reconnecting" | "closed";
+
+export interface DesktopPluginCatalog {
+    /** Every contributed application in the daemon's navigation order. */
+    readonly applications: readonly DesktopPluginApplication[];
+    readonly connection: DesktopPluginConnectionState;
+    /** True until the first catalog has been received, so "none" is not claimed early. */
+    readonly loading: boolean;
+}
+
 /**
  * One plugin package installed on the machine running Rig, as the daemon
  * describes it.
  *
- * This is the package rather than what it contributes; the two are separate
- * readings, and the catalog screen is the only surface that wants the package.
- * Nothing here is an address this side could fetch: `directory` and
+ * This is the package rather than what it contributes, which is why it is not
+ * part of the application catalog. An application is a destination, pinned into
+ * navigation for as long as a window is open; a package exists whether or not it
+ * contributes any application at all, and is only ever read by the one screen
+ * that is about packages.
+ *
+ * `contributions` carries the labels of this package's own applications, taken
+ * from the same description the package arrived in. It is denormalized on
+ * purpose: a package must be renderable from this object alone, never by joining
+ * it against a separately delivered application list that may be a frame ahead
+ * of it or behind it.
+ *
+ * Nothing here is an address this side could fetch. `directory` and
  * `dataDirectory` are paths on the daemon's machine, reported so a reader can be
  * told where a package lives, not so the renderer can open them.
  */
@@ -357,33 +378,42 @@ export interface DesktopPluginPackage {
     /** The folder the package writes to, on the daemon's machine. */
     readonly dataDirectory: string;
     readonly logAvailable: boolean;
-    /** The applications this package contributes, by their navigation identity. */
-    readonly applicationIds: readonly string[];
+    /** The labels of the applications this package contributes, in its own order. */
+    readonly contributions: readonly string[];
 }
 
 /**
  * A folder Rig found where a package should be but could not read as one. It is
  * not a package and does not become one until the reason is fixed, so it is
- * reported beside the catalog rather than inside it.
+ * reported beside the packages rather than among them.
  */
 export interface DesktopPluginPackageFailure {
     readonly folder: string;
     readonly error: string;
 }
 
-/** Where the catalog subscription itself is, so a surface can say why it is empty. */
-export type DesktopPluginConnectionState = "connecting" | "live" | "reconnecting" | "closed";
-
-export interface DesktopPluginCatalog {
-    /** Every contributed application in the daemon's navigation order. */
-    readonly applications: readonly DesktopPluginApplication[];
+/**
+ * Everything this machine can say about the plugin packages installed on it.
+ *
+ * It is a separate reading from the application catalog and travels on its own
+ * channel, because the two have different readers and different lifetimes: the
+ * applications are pinned navigation a window follows the whole time it is open,
+ * and this is one screen's subject, followed only while that screen is up.
+ *
+ * `error` is the feed's own failure, in words a reader may be shown. It never
+ * empties `packages`: whatever was last read stays readable, and `connection` is
+ * how a surface says that reading is old.
+ */
+export interface DesktopPluginInventory {
     /** Every installed package in the daemon's order, whatever each one is doing. */
     readonly packages: readonly DesktopPluginPackage[];
     /** Folders the daemon could not read as packages, and why. */
-    readonly packageFailures: readonly DesktopPluginPackageFailure[];
+    readonly failures: readonly DesktopPluginPackageFailure[];
     readonly connection: DesktopPluginConnectionState;
-    /** True until the first catalog has been received, so "none" is not claimed early. */
+    /** True until the first inventory has been received, so "none" is not claimed early. */
     readonly loading: boolean;
+    /** Why the feed itself last failed, when it has; what is held stays held. */
+    readonly error?: string;
 }
 
 /**
@@ -420,6 +450,9 @@ export interface HappyDesktopBridge {
     /** The current plugin application catalog, without waiting for the next change. */
     pluginApplicationsGet(): Promise<DesktopPluginCatalog>;
     pluginApplicationsSubscribe(listener: (catalog: DesktopPluginCatalog) => void): () => void;
+    /** The packages installed on this machine, for the one screen that reads them. */
+    pluginInventoryGet(): Promise<DesktopPluginInventory>;
+    pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void): () => void;
     /**
      * Performs one host operation for the plugin application mounted at `origin`.
      * The window reads that origin from the message event the request arrived in,
@@ -539,6 +572,8 @@ export const desktopIpc = {
     pluginAppRequest: "happy2:plugins:app-request",
     pluginApplicationsChanged: "happy2:plugins:changed",
     pluginApplicationsGet: "happy2:plugins:get",
+    pluginInventoryChanged: "happy2:plugins:inventory-changed",
+    pluginInventoryGet: "happy2:plugins:inventory-get",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
     remoteRigConnect: "happy2:remote-rig:connect",

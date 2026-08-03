@@ -4,6 +4,7 @@ import {
     happyPluginScheme,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
+    type DesktopPluginInventory,
 } from "../shared/desktopContract";
 import { PluginApplicationCache } from "./pluginApplicationCache";
 
@@ -19,8 +20,13 @@ const PLUGIN_CONTENT_SECURITY_POLICY =
 
 const EMPTY_CATALOG: DesktopPluginCatalog = {
     applications: [],
+    connection: "closed",
+    loading: false,
+};
+
+const EMPTY_INVENTORY: DesktopPluginInventory = {
     packages: [],
-    packageFailures: [],
+    failures: [],
     connection: "closed",
     loading: false,
 };
@@ -51,6 +57,11 @@ export function pluginApplicationSchemeRegister(): void {
 export interface PluginApplicationHostOptions {
     /** Announces a new catalog so the window can be told without being asked. */
     readonly onChange: (catalog: DesktopPluginCatalog) => void;
+    /**
+     * Announces what is installed, for a window with a screen that reads it.
+     * Optional so a host with no such reader neither projects nor sends it.
+     */
+    readonly onInventoryChange?: (inventory: DesktopPluginInventory) => void;
 }
 
 /**
@@ -76,11 +87,13 @@ export class PluginApplicationHost implements Disposable {
      */
     #generation = 0;
     readonly #onChange: (catalog: DesktopPluginCatalog) => void;
+    readonly #onInventoryChange?: (inventory: DesktopPluginInventory) => void;
     /** Controllers for the requests still running, by origin and request id. */
     readonly #requests = new Map<string, AbortController>();
 
     constructor(options: PluginApplicationHostOptions) {
         this.#onChange = options.onChange;
+        this.#onInventoryChange = options.onInventoryChange;
         // The window mounts an application in a frame of its own, so the bundle
         // scheme is answered in the window's session. It is answered from memory
         // and only for a currently mounted generation, and the scheme is not
@@ -93,6 +106,10 @@ export class PluginApplicationHost implements Disposable {
 
     get(): DesktopPluginCatalog {
         return this.#cache?.get() ?? EMPTY_CATALOG;
+    }
+
+    inventoryGet(): DesktopPluginInventory {
+        return this.#cache?.inventoryGet() ?? EMPTY_INVENTORY;
     }
 
     /**
@@ -108,6 +125,7 @@ export class PluginApplicationHost implements Disposable {
         const generation = ++this.#generation;
         if (rigHttpUrl === undefined) {
             this.#onChange(EMPTY_CATALOG);
+            this.#onInventoryChange?.(EMPTY_INVENTORY);
             return;
         }
         const connection = connectRig({
@@ -128,9 +146,17 @@ export class PluginApplicationHost implements Disposable {
             onChange: (catalog) => {
                 if (this.#generation === generation) this.#onChange(catalog);
             },
+            ...(this.#onInventoryChange
+                ? {
+                      onInventoryChange: (inventory: DesktopPluginInventory) => {
+                          if (this.#generation === generation) this.#onInventoryChange?.(inventory);
+                      },
+                  }
+                : {}),
         });
         this.#cache = cache;
         this.#onChange(cache.get());
+        this.#onInventoryChange?.(cache.inventoryGet());
     }
 
     /**

@@ -378,10 +378,19 @@ export {
     type RigPluginApplicationStoreDeps,
     type RigPluginApplicationsSnapshot,
     type RigPluginCatalogConnection,
+} from "./rig/rigPluginApplicationStore.js";
+export {
+    rigPluginCatalogStoreCreate,
+    rigPluginCatalogStoreNoop,
+    type RigPluginCatalogSnapshot,
+    type RigPluginCatalogSource,
+    type RigPluginCatalogSourceReading,
+    type RigPluginCatalogStore,
+    type RigPluginCatalogStoreDeps,
     type RigPluginPackage,
     type RigPluginPackageFailure,
     type RigPluginPackageStatus,
-} from "./rig/rigPluginApplicationStore.js";
+} from "./rig/rigPluginCatalogStore.js";
 export { rigFriendsPhotoRead } from "./rig/rigFriendsPhoto.js";
 export {
     rigFriendInitials,

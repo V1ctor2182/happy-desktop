@@ -9,6 +9,7 @@ import type {
     DesktopPluginApplication,
     DesktopPluginCatalog,
     DesktopPluginConnectionState,
+    DesktopPluginInventory,
     DesktopPluginPackage,
     DesktopPluginPackageFailure,
 } from "../shared/desktopContract";
@@ -56,6 +57,13 @@ export interface PluginApplicationCacheOptions {
     readonly connect: PluginApplicationConnect;
     /** Announces a new catalog projection. Called only when something changed. */
     readonly onChange: (catalog: DesktopPluginCatalog) => void;
+    /**
+     * Announces a new inventory projection, for a host that has a reader for one.
+     * It is optional because the two readings are independent: a host that only
+     * mounts applications never asks what is installed, and pays nothing for the
+     * screen that does.
+     */
+    readonly onInventoryChange?: (inventory: DesktopPluginInventory) => void;
     /** Opaque per-generation host factory; overridden by tests for determinism. */
     readonly originHostCreate?: () => string;
 }
@@ -144,11 +152,16 @@ export class PluginApplicationCache implements Disposable {
     readonly #entries = new Map<string, BundleEntry>();
     readonly #origins = new Map<string, BundleEntry>();
     readonly #onChange: (catalog: DesktopPluginCatalog) => void;
+    readonly #onInventoryChange?: (inventory: DesktopPluginInventory) => void;
     readonly #originHostCreate: () => string;
     #catalog: DesktopPluginCatalog = {
         applications: [],
+        connection: "connecting",
+        loading: true,
+    };
+    #inventory: DesktopPluginInventory = {
         packages: [],
-        packageFailures: [],
+        failures: [],
         connection: "connecting",
         loading: true,
     };
@@ -156,28 +169,44 @@ export class PluginApplicationCache implements Disposable {
     /** Catalog order, which is the daemon's navigation order rather than the map's. */
     #order: readonly PluginApp[] = [];
     /**
-     * The packages behind that order, as the daemon last described them. They are
-     * held rather than derived from the bundle entries because a package exists
-     * whether or not it contributes an application, and a stopped package that
-     * contributes nothing is exactly what the catalog screen is for.
+     * The packages the daemon last described. They are held rather than derived
+     * from the bundle entries because a package exists whether or not it
+     * contributes an application, and a stopped package that contributes nothing
+     * is exactly what the catalog screen is for.
      */
     #packages: readonly LocalPlugin[] = [];
     /** Folders the daemon reported it could not read as packages. */
     #failures: readonly DesktopPluginPackageFailure[] = [];
+    /**
+     * The feed's last failure, in the daemon's own words. It is kept rather than
+     * dropped so the screen reading this inventory can say why what it is showing
+     * has stopped changing, and it is cleared by the next live catalog rather
+     * than by a reconnect attempt, because a reconnect is not yet an answer.
+     */
+    #feedError?: string;
     readonly #connection: RigPluginsConnection;
 
     constructor(options: PluginApplicationCacheOptions) {
         this.#onChange = options.onChange;
+        this.#onInventoryChange = options.onInventoryChange;
         this.#originHostCreate =
             options.originHostCreate ?? (() => randomBytes(16).toString("hex"));
         this.#connection = options.connect({
             onChange: (apps, plugins, state) => this.#reconcile(apps, plugins, state),
-            onError: () => this.#publish(),
+            onError: (error) => {
+                this.#feedError = errorMessage(error);
+                this.#publish();
+                this.#publishInventory();
+            },
         });
     }
 
     get(): DesktopPluginCatalog {
         return this.#catalog;
+    }
+
+    inventoryGet(): DesktopPluginInventory {
+        return this.#inventory;
     }
 
     /** The application one isolated origin belongs to, or nothing once it is retired. */
@@ -352,14 +381,10 @@ export class PluginApplicationCache implements Disposable {
         this.#closed = true;
         for (const [key, entry] of this.#entries) this.#retire(key, entry, false);
         this.#connection.close();
-        this.#catalog = {
-            applications: [],
-            packages: [],
-            packageFailures: [],
-            connection: "closed",
-            loading: false,
-        };
+        this.#catalog = { applications: [], connection: "closed", loading: false };
         this.#onChange(this.#catalog);
+        this.#inventory = { packages: [], failures: [], connection: "closed", loading: false };
+        this.#onInventoryChange?.(this.#inventory);
     }
 
     /**
@@ -453,6 +478,7 @@ export class PluginApplicationCache implements Disposable {
         // the feed is doing is passed on while it is away.
         if (state.connection !== "live") {
             this.#publish(state.connection);
+            this.#publishInventory(state.connection);
             return;
         }
         this.#order = apps;
@@ -461,6 +487,8 @@ export class PluginApplicationCache implements Disposable {
             error: failure.error,
             folder: failure.pluginId,
         }));
+        // A live catalog is the answer the last failure was waiting for.
+        this.#feedError = undefined;
         const live = new Set(apps.map((app) => entryKey(app.id, app.generation)));
         // Anything the catalog stopped naming is gone: an uninstall, a stopped
         // plugin, or a replacement that arrived under a new generation.
@@ -490,6 +518,7 @@ export class PluginApplicationCache implements Disposable {
             void this.#prefetch(key, entry);
         }
         this.#publish(state.connection);
+        this.#publishInventory(state.connection);
     }
 
     /**
@@ -552,14 +581,33 @@ export class PluginApplicationCache implements Disposable {
                 const entry = this.#entries.get(entryKey(app.id, app.generation));
                 return entry ? [projectApplication(entry)] : [];
             }),
-            packages: this.#packages.map(projectPackage),
-            packageFailures: this.#failures,
             connection: connection ?? this.#catalog.connection,
             loading: false,
         };
         if (sameCatalog(this.#catalog, next)) return;
         this.#catalog = next;
         this.#onChange(next);
+    }
+
+    /**
+     * Publishes what is installed, which is a different reading from what is
+     * navigable and changes on its own schedule. The packages held are published
+     * whatever the connection is doing: a package does not stop being installed
+     * because the subscription dropped, and a screen that replaced them with an
+     * error would be claiming the machine had been emptied.
+     */
+    #publishInventory(connection?: DesktopPluginConnectionState): void {
+        if (this.#closed || !this.#onInventoryChange) return;
+        const next: DesktopPluginInventory = {
+            packages: this.#packages.map(projectPackage),
+            failures: this.#failures,
+            connection: connection ?? this.#inventory.connection,
+            loading: false,
+            ...(this.#feedError === undefined ? {} : { error: this.#feedError }),
+        };
+        if (sameInventory(this.#inventory, next)) return;
+        this.#inventory = next;
+        this.#onInventoryChange(next);
     }
 }
 
@@ -613,14 +661,15 @@ function projectApplication(entry: BundleEntry): DesktopPluginApplication {
 }
 
 /**
- * One package as the renderer may see it. The daemon's own description is
- * already reference-stable per package, so this only drops what belongs on this
- * side of the boundary and names the applications by the identity the window
- * navigates with.
+ * One package as the renderer may see it: what the daemon said about it, minus
+ * everything that belongs on this side of the boundary, plus the labels of the
+ * applications it declared. Those labels are read from the package's own
+ * description, so an inventory frame is complete on arrival and never has to be
+ * joined against the application catalog.
  */
 function projectPackage(plugin: LocalPlugin): DesktopPluginPackage {
     return {
-        applicationIds: plugin.apps.map((app) => app.id),
+        contributions: plugin.apps.map((app) => app.sidebar.label),
         dataDirectory: plugin.dataDirectory,
         description: plugin.description,
         directory: plugin.directory,
@@ -641,13 +690,19 @@ function sameCatalog(left: DesktopPluginCatalog, right: DesktopPluginCatalog): b
         left.applications.length === right.applications.length &&
         left.applications.every((application, index) =>
             sameApplication(application, right.applications[index]!),
-        ) &&
+        )
+    );
+}
+
+function sameInventory(left: DesktopPluginInventory, right: DesktopPluginInventory): boolean {
+    return (
+        left.connection === right.connection &&
+        left.loading === right.loading &&
+        left.error === right.error &&
         left.packages.length === right.packages.length &&
         left.packages.every((entry, index) => samePackage(entry, right.packages[index]!)) &&
-        left.packageFailures.length === right.packageFailures.length &&
-        left.packageFailures.every((failure, index) =>
-            sameFailure(failure, right.packageFailures[index]!),
-        )
+        left.failures.length === right.failures.length &&
+        left.failures.every((failure, index) => sameFailure(failure, right.failures[index]!))
     );
 }
 
@@ -663,8 +718,8 @@ function samePackage(left: DesktopPluginPackage, right: DesktopPluginPackage): b
         left.directory === right.directory &&
         left.dataDirectory === right.dataDirectory &&
         left.logAvailable === right.logAvailable &&
-        left.applicationIds.length === right.applicationIds.length &&
-        left.applicationIds.every((id, index) => id === right.applicationIds[index])
+        left.contributions.length === right.contributions.length &&
+        left.contributions.every((label, index) => label === right.contributions[index])
     );
 }
 

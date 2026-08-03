@@ -25,7 +25,7 @@ export function RigPluginCatalogBlueprintPage() {
             title="RigPluginCatalogPage"
         >
             <FullScreenSpecimen
-                detail="Five packages across three shelves — one that failed to start, three running, one turned off — and one folder the machine could not read as a package at all."
+                detail="Six packages across three shelves — two that failed to start, three running, one turned off — and one folder the machine could not read as a package at all."
                 label="Catalog"
                 number="01"
             >
@@ -63,7 +63,7 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="The catalog itself could not be read; the reason replaces the shelves rather than sitting above an empty one."
+                detail="The catalog itself could not be read and nothing had been read before it, so the reason replaces the shelves rather than sitting above an empty one."
                 label="Unreadable"
                 number="05"
             >
@@ -74,9 +74,46 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
+                detail="The same failure with packages already read. They stay exactly where they are — a dropped subscription uninstalls nothing — and the reason is said above them instead of standing in for them."
+                label="Unreadable, with a reading held"
+                number="06"
+            >
+                <RigPluginCatalogPage
+                    connection="reconnecting"
+                    entries={entries}
+                    error="This machine's Rig stopped answering when asked which plugins it has."
+                    failures={PLUGIN_STORE_FIXTURE_FAILURES}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Reconnecting. Nothing failed outright, so the counts are still shown — with the header and the notice both saying plainly that they are the last reading rather than the current one."
+                label="Reconnecting"
+                number="07"
+            >
+                <RigPluginCatalogPage connection="reconnecting" entries={entries} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The subscription is closed. The same packages, and no claim that any of it is current."
+                label="Not connected"
+                number="08"
+            >
+                <RigPluginCatalogPage connection="closed" entries={entries} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A machine that has never been reachable: nothing was ever read, so this is not an empty machine and does not say it is."
+                label="Never reached"
+                number="09"
+            >
+                <RigPluginCatalogPage connection="closed" entries={[]} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
                 detail="One package carrying only what Rig reports today: a name, a version, a description, and where it lives. No publisher and no category, because the manifest has nowhere to put either."
                 label="One package"
-                number="06"
+                number="10"
             >
                 <RigPluginCatalogPage entries={[PLUGIN_STORE_FIXTURE_BARE]} />
             </FullScreenSpecimen>
@@ -84,7 +121,7 @@ export function RigPluginCatalogBlueprintPage() {
             <FullScreenSpecimen
                 detail="Nothing installed and nothing readable — the reading a fresh machine with one broken plugin folder actually gives."
                 label="Only a failure"
-                number="07"
+                number="11"
             >
                 <RigPluginCatalogPage entries={[]} failures={PLUGIN_STORE_FIXTURE_FAILURES} />
             </FullScreenSpecimen>

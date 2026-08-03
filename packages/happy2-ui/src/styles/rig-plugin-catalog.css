@@ -76,6 +76,13 @@
     padding: 24px;
 }
 
+/* What is wrong with the reading, above what was read. It is a sibling of the
+   shelves and takes the measure's own gap, so it displaces nothing. */
+.happy2-rig-plugin-catalog__notice {
+    flex: 0 0 auto;
+    width: 100%;
+}
+
 /* A folder that is not a package: the same footprint as a card, so the shelf
    keeps its rhythm, but plainly not something that could be opened. */
 .happy2-rig-plugin-catalog__failure {
@@ -91,6 +98,13 @@
     border-radius: var(--happy2-radius-md);
     background: var(--box-warning-background);
     color: var(--box-warning-text);
+}
+
+/* The glyph is a fixed mark beside the text, never a column that a long error
+   can squeeze. */
+.happy2-rig-plugin-catalog__failure > :first-child {
+    flex: none;
+    margin-top: 1px;
 }
 
 .happy2-rig-plugin-catalog__failure-text {

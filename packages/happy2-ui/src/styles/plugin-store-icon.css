@@ -22,7 +22,13 @@
     justify-content: center;
     overflow: hidden;
     background: var(--text-secondary);
-    color: var(--button-primary-tint);
+    /*
+     * Dark ink, not white. These fills are chosen to be told apart, which makes
+     * them bright: measured against the five identity tones in both themes a
+     * white glyph reaches only 1.9–4.0:1, while this clears 5.2:1 on the worst of
+     * them. A mark nobody can read is not an identity.
+     */
+    color: var(--identity-tile-ink);
     -webkit-user-select: none;
     user-select: none;
 }

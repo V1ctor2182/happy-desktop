@@ -69,6 +69,13 @@ export interface PluginStoreCardProps {
      * done through a handle, so the card exposes no element of its own.
      */
     autoFocus?: boolean;
+    /**
+     * The card's own control took the focus. A surface that asked for the focus
+     * uses this to know the request was met and stop asking, so returning a
+     * reader to where they were happens once rather than every time this card is
+     * drawn again.
+     */
+    onFocus?: () => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -132,6 +139,7 @@ export function PluginStoreCard(props: PluginStoreCardProps) {
                                 data-happy2-ui="plugin-store-card-open"
                                 autoFocus={props.autoFocus}
                                 onClick={props.onOpen}
+                                onFocus={props.onFocus}
                                 type="button"
                             >
                                 {entry.name}
@@ -164,7 +172,7 @@ export function PluginStoreCard(props: PluginStoreCardProps) {
                         className="happy2-plugin-store-card__note"
                         data-happy2-ui="plugin-store-card-note"
                     >
-                        <Icon name={entry.state === "failed" ? "shield" : "dot"} size={12} />
+                        <Icon name={entry.state === "failed" ? "alert" : "dot"} size={12} />
                         <span>{entry.note}</span>
                     </p>
                 ) : null}

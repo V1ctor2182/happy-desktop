@@ -29,8 +29,12 @@
     width: 100%;
 }
 
+/* A shelf title is written here rather than by a plugin, but the count beside it
+   must never be pushed out of the row, so the title yields first. */
 .happy2-plugin-store-section__title {
+    min-width: 0;
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--text);
     font-size: 17px;
     font-weight: 700;
@@ -39,6 +43,7 @@
 }
 
 .happy2-plugin-store-section__count {
+    flex: none;
     color: var(--text-secondary);
     font-family: var(--happy2-font-mono);
     font-size: 12px;

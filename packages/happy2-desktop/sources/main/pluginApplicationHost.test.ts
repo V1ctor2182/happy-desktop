@@ -158,13 +158,7 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 
 /** A host following one endpoint, with one ready application already cached. */
 async function hostWithApplication(overrides: Partial<PluginApp> = {}) {
-    let catalog: DesktopPluginCatalog = {
-        applications: [],
-        packages: [],
-        packageFailures: [],
-        connection: "closed",
-        loading: false,
-    };
+    let catalog: DesktopPluginCatalog = { applications: [], connection: "closed", loading: false };
     const host = new PluginApplicationHost({
         onChange: (next) => {
             catalog = next;
@@ -486,13 +480,7 @@ describe("plugin host lifetime", () => {
     it("empties the catalog when no local Rig is there at all", async () => {
         const { catalog, host } = await hostWithApplication();
         host.endpointSet(undefined);
-        expect(catalog()).toEqual({
-            applications: [],
-            packages: [],
-            packageFailures: [],
-            connection: "closed",
-            loading: false,
-        });
+        expect(catalog()).toEqual({ applications: [], connection: "closed", loading: false });
     });
 
     it("closes its subscription and stops serving once disposed", async () => {
