@@ -40,15 +40,6 @@ export class RigCommandMissingError extends Error {
     }
 }
 
-export class RigDaemonIncompatibleError extends Error {
-    constructor(commandVersion: string, daemonVersion: string) {
-        super(
-            `The running Rig daemon is version ${daemonVersion}, but the installed command is ${commandVersion}. Restart it explicitly before connecting.`,
-        );
-        this.name = "RigDaemonIncompatibleError";
-    }
-}
-
 export interface RigProcessResult {
     readonly stdout: string;
     readonly stderr: string;

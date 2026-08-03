@@ -1,3 +1,11 @@
+// @vitest-environment jsdom
+//
+// The transport is renderer code: it reaches `happy2-app`, and through it
+// `happy2-ui`, whose worker-backed syntax highlighting imports the Pierre
+// worker module. That module is browser code and touches `self` the moment it
+// is evaluated, so importing this file under the plain node environment throws
+// before a single test runs. jsdom is where renderer code belongs anyway, and
+// it is the environment the other renderer tests here use.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RigEventId, RigSessionEvent, RigSessionId } from "happy2-state";
 import { rigRendererTransportCreate } from "./rigRendererTransport";

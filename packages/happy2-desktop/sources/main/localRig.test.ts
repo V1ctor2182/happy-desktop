@@ -8,7 +8,6 @@ import {
     localRigConnectorCreate,
     rigLoginEnvironmentDiscover,
     RigCommandMissingError,
-    RigDaemonIncompatibleError,
     rigVersionParse,
     type RigProcessHost,
 } from "./localRig";
@@ -21,15 +20,12 @@ afterEach(async () => {
 });
 
 describe("normal Rig discovery", () => {
-    it("uses the login shell machine record and validates the executable directly", async () => {
+    it("uses the login shell machine record without running the discovered executable", async () => {
         const host: RigProcessHost = {
-            execFile: vi
-                .fn()
-                .mockResolvedValueOnce({
-                    stdout: "shell banner\n__HAPPY2_RIG_PATH__=/opt/volta/bin/rig\0PATH=/opt/volta/bin:/usr/bin\0VOLTA_HOME=/opt/volta\0",
-                    stderr: "",
-                })
-                .mockResolvedValueOnce({ stdout: "Rig 0.0.45\n", stderr: "" }),
+            execFile: vi.fn().mockResolvedValue({
+                stdout: "shell banner\n__HAPPY2_RIG_PATH__=/opt/volta/bin/rig\0PATH=/opt/volta/bin:/usr/bin\0VOLTA_HOME=/opt/volta\0",
+                stderr: "",
+            }),
         };
 
         const result = await rigLoginEnvironmentDiscover(
@@ -45,11 +41,14 @@ describe("normal Rig discovery", () => {
                 VOLTA_HOME: "/opt/volta",
             },
             shell: "/bin/zsh",
-            version: "0.0.45",
         });
-        expect(host.execFile).toHaveBeenNthCalledWith(2, "/opt/volta/bin/rig", ["--version"], {
-            env: result.environment,
-        });
+        // Discovery is one login-shell call and nothing else: what it reports is
+        // what the shell resolved. Running the discovered command belongs to the
+        // install verifier, which is a separate decision about a separate moment.
+        expect(host.execFile).toHaveBeenCalledTimes(1);
+        const [executable, arguments_] = vi.mocked(host.execFile).mock.calls[0]!;
+        expect(executable).toBe("/bin/zsh");
+        expect(arguments_.slice(0, 2)).toEqual(["-l", "-c"]);
     });
 
     it("distinguishes missing, malformed-path, and malformed-version results", async () => {
@@ -70,7 +69,7 @@ describe("normal Rig discovery", () => {
         ).rejects.toBeInstanceOf(RigCommandMissingError);
     });
 
-    it("starts only an absent daemon and rejects a mismatched running version", async () => {
+    it("starts only an absent daemon and reports the running daemon's version", async () => {
         const root = await mkdtemp(join(tmpdir(), "happy2-local-rig-"));
         directories.push(root);
         const tokenPath = join(root, "token");
@@ -81,7 +80,7 @@ describe("normal Rig discovery", () => {
             RIG_SERVER_SOCKET_PATH: socketPath,
         };
         const host: RigProcessHost = {
-            execFile: vi.fn(async (executable, arguments_) => {
+            execFile: vi.fn(async (executable) => {
                 if (executable === "/bin/zsh")
                     return {
                         stdout: `__HAPPY2_RIG_PATH__=/usr/local/bin/rig\0${Object.entries(
@@ -91,7 +90,6 @@ describe("normal Rig discovery", () => {
                             .join("")}`,
                         stderr: "",
                     };
-                if (arguments_[0] === "--version") return { stdout: "Rig 0.0.45\n", stderr: "" };
                 await writeFile(tokenPath, "token\n");
                 return { stdout: "Daemon is running.\n", stderr: "" };
             }),
@@ -118,6 +116,7 @@ describe("normal Rig discovery", () => {
         });
 
         const connection = await connector.connect();
+        expect(connection.version).toBe("0.0.45");
         connection.close();
         expect(host.execFile).toHaveBeenCalledWith("/usr/local/bin/rig", ["daemon", "start"], {
             env: environment,
@@ -146,6 +145,9 @@ describe("normal Rig discovery", () => {
                 ),
         ).toHaveLength(2);
 
+        // A daemon older than the installed command is still the daemon this
+        // machine is running, and protocol requests — not a version string — are
+        // the compatibility boundary. Its version is reported, never refused.
         health.mockResolvedValue({
             status: "ready",
             healthy: true,
@@ -159,6 +161,6 @@ describe("normal Rig discovery", () => {
             },
             durableGlobalEventQueue: true,
         });
-        await expect(connector.connect()).rejects.toBeInstanceOf(RigDaemonIncompatibleError);
+        expect((await connector.connect()).version).toBe("0.0.32");
     });
 });

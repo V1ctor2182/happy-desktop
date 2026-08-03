@@ -1,8 +1,4 @@
-import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -286,70 +282,81 @@ describe("rigProxyHandle", () => {
         expect(JSON.parse(captured.body)).toEqual([{ fileName: "a.ts", path: "src/a.ts" }]);
     });
 
-    it("reads HEAD and working-tree text for a changed-file diff", async () => {
-        const root = await mkdtemp(join(tmpdir(), "happy2-changed-file-"));
-        try {
-            execFileSync("git", ["init", "--quiet"], { cwd: root });
-            await mkdir(join(root, "src"));
-            await writeFile(join(root, "src", "answer.ts"), "export const answer = 42;\n");
-            execFileSync("git", ["add", "src/answer.ts"], { cwd: root });
-            execFileSync(
-                "git",
-                [
-                    "-c",
-                    "user.name=Happy Test",
-                    "-c",
-                    "user.email=happy@example.invalid",
-                    "commit",
-                    "--quiet",
-                    "-m",
-                    "initial",
+    it("reads the comparison base and working-tree text for a changed-file diff", async () => {
+        const listCatalog = vi.fn(async () => ({
+            projects: [{ id: "project-1", path: "/work" }],
+            workspaces: [],
+        }));
+        // Both sides come from the daemon by project scope, never off this
+        // machine's disk: the checkout may belong to a Rig running somewhere
+        // else, where the same path names nothing — or something unrelated.
+        const readGitChanges = vi.fn(async (scope: { projectId: string }) => {
+            expect(scope).toEqual({ projectId: "project-1" });
+            return {
+                base: "9f1c0de",
+                changedFiles: 1,
+                files: [
+                    {
+                        path: "src/answer.ts",
+                        status: "modified",
+                        binary: false,
+                        insertions: 2,
+                        deletions: 1,
+                        contentToken: "current-hash",
+                    },
                 ],
-                { cwd: root },
-            );
-            await writeFile(
-                join(root, "src", "answer.ts"),
-                "export const answer = 43;\nexport const ready = true;\n",
-            );
-
-            const listCatalog = vi.fn(async () => ({
-                projects: [{ id: "project-1", path: root }],
-                workspaces: [],
-            }));
-            // Read through the daemon by project scope, never off this machine's
-            // disk: the checkout may belong to a Rig running somewhere else.
-            const readProjectFile = vi.fn(async (scope: { projectId: string }, path: string) => {
-                expect(scope).toEqual({ projectId: "project-1" });
-                const content = await readFile(join(root, path));
-                return {
-                    content: content.toString("base64"),
-                    hash: "current-hash",
-                };
-            });
-            const captured = fakeResponse();
-            await handle(
-                clientStub({
-                    listCatalog,
-                    readFile: readProjectFile,
-                } as unknown as Partial<RigProxyClient>),
-                "GET",
-                "/changed-file",
-                getRequest(),
-                captured,
-                new URLSearchParams({ group: "project-1", path: "src/answer.ts" }),
-            );
-
-            expect(captured.status, captured.body).toBe(200);
-            expect(JSON.parse(captured.body)).toEqual({
-                path: "src/answer.ts",
-                oldPath: "src/answer.ts",
-                oldContent: "export const answer = 42;\n",
-                newContent: "export const answer = 43;\nexport const ready = true;\n",
+                filesTruncated: false,
+                insertions: 2,
+                deletions: 1,
+            };
+        });
+        const readProjectFile = vi.fn(async (scope: { projectId: string }, path: string) => {
+            expect(scope).toEqual({ projectId: "project-1" });
+            expect(path).toBe("src/answer.ts");
+            return {
+                content: Buffer.from(
+                    "export const answer = 43;\nexport const ready = true;\n",
+                ).toString("base64"),
                 hash: "current-hash",
-            });
-        } finally {
-            await rm(root, { recursive: true, force: true });
-        }
+            };
+        });
+        const readFileAtRevision = vi.fn(
+            async (scope: { projectId: string }, path: string, revision: string) => {
+                expect(scope).toEqual({ projectId: "project-1" });
+                expect(path).toBe("src/answer.ts");
+                return {
+                    content: Buffer.from("export const answer = 42;\n").toString("base64"),
+                    hash: revision,
+                };
+            },
+        );
+        const captured = fakeResponse();
+        await handle(
+            clientStub({
+                listCatalog,
+                readGitChanges,
+                readFile: readProjectFile,
+                readFileAtRevision,
+            } as unknown as Partial<RigProxyClient>),
+            "GET",
+            "/changed-file",
+            getRequest(),
+            captured,
+            new URLSearchParams({ group: "project-1", path: "src/answer.ts" }),
+        );
+
+        expect(captured.status, captured.body).toBe(200);
+        expect(JSON.parse(captured.body)).toEqual({
+            path: "src/answer.ts",
+            oldPath: "src/answer.ts",
+            oldContent: "export const answer = 42;\n",
+            newContent: "export const answer = 43;\nexport const ready = true;\n",
+            hash: "current-hash",
+        });
+        // The daemon counted the row against its own base, so the old side is
+        // read from that commit. Reading HEAD instead would let one row's stat
+        // and its diff describe two different comparisons.
+        expect(readFileAtRevision.mock.calls[0]?.[2]).toBe("9f1c0de");
     });
 
     it("projects GET /sessions/:id/usage into token/cost totals and quota windows", async () => {
