@@ -399,9 +399,19 @@ export {
     type RigPluginCatalogStore,
     type RigPluginCatalogStoreDeps,
     type RigPluginCategory,
+    type RigPluginInstallClassification,
+    type RigPluginInstalled,
+    type RigPluginInstallResult,
+    type RigPluginInstallState,
+    type RigPluginManagementCode,
+    type RigPluginManagementFailure,
+    type RigPluginManagementSource,
     type RigPluginPackage,
     type RigPluginPackageFailure,
     type RigPluginPackageStatus,
+    type RigPluginRemovalResult,
+    type RigPluginRemovalState,
+    type RigPluginRemoved,
 } from "./rig/rigPluginCatalogStore.js";
 export { rigFriendsPhotoRead } from "./rig/rigFriendsPhoto.js";
 export {

@@ -55,6 +55,7 @@ import {
     pluginApplicationSchemeRegister,
     pluginAppCancelParse,
     pluginAppRequestParse,
+    pluginInstallSourceParse,
     pluginOriginHost,
 } from "./pluginApplicationHost";
 import { localRigConnectorCreate, rigInstallVerifierCreate } from "./localRig";
@@ -1121,6 +1122,23 @@ void app
         );
         ipcMain.handle(desktopIpc.pluginInventoryUnfollow, (event, raw: unknown) => {
             inventoryFollowers.unfollow(event.sender, typeof raw === "string" ? raw : "");
+        });
+        /*
+         * Changing what is installed on this machine. Both go straight to Rig,
+         * which is the authority on every part of the request: it decides what a
+         * folder holds, stages and validates a copy before replacing anything
+         * that is installed, and names the package it removed. Neither handler
+         * judges the folder, and neither reports anything the daemon did not say.
+         */
+        ipcMain.handle(desktopIpc.pluginInstall, (_event, raw: unknown) => {
+            const source = pluginInstallSourceParse(raw);
+            if (source === undefined) throw new Error("The plugin source is invalid.");
+            return pluginApplications.pluginInstall(source);
+        });
+        ipcMain.handle(desktopIpc.pluginUninstall, (_event, raw: unknown) => {
+            if (typeof raw !== "string" || raw.length === 0)
+                throw new Error("The plugin identity is invalid.");
+            return pluginApplications.pluginUninstall(raw);
         });
         ipcMain.handle(desktopIpc.pluginAppRequest, (_event, raw: unknown) => {
             const request = pluginAppRequestParse(raw);

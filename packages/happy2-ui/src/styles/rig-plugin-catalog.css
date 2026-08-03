@@ -136,3 +136,24 @@
 .happy2-rig-plugin-catalog[data-view="detail"] .happy2-rig-plugin-catalog__measure {
     max-width: 720px;
 }
+
+/* Installing belongs to the machine rather than to the search, so it sits at the
+   far end of the control lane, away from the two controls that only choose what
+   is shown. It stays on the lane's last row when the lane wraps. */
+.happy2-rig-plugin-catalog__install {
+    margin-left: auto;
+    flex: none;
+}
+
+/* Whatever a package's action lane says while it is being worked on or has just
+   been answered: a spinner or a pill, and on a package's own page the machine's
+   sentence beside it. */
+.happy2-rig-plugin-catalog__working {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}

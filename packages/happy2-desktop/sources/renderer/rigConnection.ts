@@ -37,6 +37,7 @@ import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
 import { rigPluginApplicationSourceCreate } from "./rigPluginApplicationSource";
 import { rigPluginCatalogSourceCreate } from "./rigPluginCatalogSource";
+import { rigPluginManagementSourceCreate } from "./rigPluginManagementSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -218,6 +219,13 @@ export function rigConnectionOpen(input: {
     const pluginCatalogSource = input.local
         ? rigPluginCatalogSourceCreate(window.happyDesktop)
         : undefined;
+    // Changing what is installed follows the same rule as reading it, and one
+    // further: the shell installs from a folder on the machine it is running on,
+    // so a request aimed at another machine would name folders that are not
+    // there. Only this machine's Rig is offered the lifecycle at all.
+    const pluginManagementSource = input.local
+        ? rigPluginManagementSourceCreate(window.happyDesktop)
+        : undefined;
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -243,6 +251,7 @@ export function rigConnectionOpen(input: {
         ...(friendsSource ? { friendsSource } : {}),
         ...(pluginApplicationSource ? { pluginApplicationSource } : {}),
         ...(pluginCatalogSource ? { pluginCatalogSource } : {}),
+        ...(pluginManagementSource ? { pluginManagementSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {

@@ -174,6 +174,11 @@ const bridge: HappyDesktopBridge = {
     pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void) {
         return pluginInventoryFollow(listener);
     },
+    // The whole request is one string the person supplied, and the whole answer
+    // is one value describing what the machine did with it. Nothing about the
+    // daemon crosses in either direction.
+    pluginInstall: (source: string) => ipcRenderer.invoke(desktopIpc.pluginInstall, source),
+    pluginUninstall: (folder: string) => ipcRenderer.invoke(desktopIpc.pluginUninstall, folder),
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.
     dockUnreadSet: (count: number) => ipcRenderer.send(desktopIpc.dockUnreadSet, count),

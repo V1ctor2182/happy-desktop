@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
     PLUGIN_STORE_FIXTURE_BARE,
     PLUGIN_STORE_FIXTURE_CATALOG,
@@ -11,6 +11,8 @@ import {
 import {
     RigPluginCatalogPage,
     type RigPluginCatalogEntry,
+    type RigPluginCatalogInstall,
+    type RigPluginCatalogManagement,
 } from "../../src/pages/plugins/RigPluginCatalogPage";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 
@@ -36,6 +38,7 @@ function OpenedCatalog(props: {
     connection?: "connecting" | "live" | "reconnecting" | "closed";
     entries?: readonly RigPluginCatalogEntry[];
     error?: string;
+    manage?: boolean;
     width?: number;
 }) {
     const opened = useRef(false);
@@ -61,8 +64,84 @@ function OpenedCatalog(props: {
                 entries={props.entries ?? entries}
                 {...(props.connection ? { connection: props.connection } : {})}
                 {...(props.error === undefined ? {} : { error: props.error })}
+                {...(props.manage ? { manage: management() } : {})}
             />
         </div>
+    );
+}
+
+/**
+ * A surface that can change what is installed, standing in for one.
+ *
+ * The machine is the only thing that can actually install or remove anything, so
+ * this reports every press and answers nothing: the specimens below are here to
+ * be looked at in each state, and each state is handed in directly rather than
+ * arrived at.
+ */
+function management(
+    install: RigPluginCatalogInstall = { kind: "idle" },
+): RigPluginCatalogManagement {
+    return {
+        install,
+        onInstall: (source) => console.info(`[blueprint] catalog install ${source}`),
+        onInstallDismiss: () => console.info("[blueprint] catalog install dismissed"),
+        onRemove: (id) => console.info(`[blueprint] catalog remove ${id}`),
+        onRemoveDismiss: (id) => console.info(`[blueprint] catalog remove dismissed ${id}`),
+    };
+}
+
+/**
+ * The whole flow, driven for real: pressing a control moves this harness the way
+ * the store would, so the dialogs, the inert states, and the answers can be
+ * walked through rather than only looked at. It is a fake machine — it always
+ * agrees, and after a beat.
+ */
+function LiveCatalog() {
+    const [install, setInstall] = useState<RigPluginCatalogInstall>({ kind: "idle" });
+    const [entries, setEntries] = useState<readonly RigPluginCatalogEntry[]>(
+        PLUGIN_STORE_FIXTURE_CATALOG,
+    );
+    const removalSet = (id: string, removal: RigPluginCatalogEntry["removal"]): void => {
+        setEntries((held) =>
+            held.map((entry) => {
+                if (entry.id !== id) return entry;
+                const { removal: _dropped, ...rest } = entry;
+                return removal === undefined ? rest : { ...rest, removal };
+            }),
+        );
+    };
+    return (
+        <RigPluginCatalogPage
+            entries={entries}
+            manage={{
+                install,
+                onInstall: (source) => {
+                    setInstall({ kind: "working" });
+                    window.setTimeout(() => {
+                        setInstall({
+                            kind: "installed",
+                            message: `Rig installed the plugin in ${source} and it is running.`,
+                            title: "Installed Weather 1.4.0",
+                        });
+                    }, 900);
+                },
+                onInstallDismiss: () => setInstall({ kind: "idle" }),
+                onRemove: (id) => {
+                    removalSet(id, { kind: "working" });
+                    window.setTimeout(() => {
+                        removalSet(id, {
+                            kind: "removed",
+                            message: "Rig kept what this plugin had written.",
+                        });
+                        window.setTimeout(
+                            () => setEntries((held) => held.filter((entry) => entry.id !== id)),
+                            900,
+                        );
+                    }, 900);
+                },
+                onRemoveDismiss: (id) => removalSet(id, undefined),
+            }}
+        />
     );
 }
 
@@ -71,7 +150,7 @@ export function RigPluginCatalogBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-017"
-            summary="This machine's plugin packages, offered as a catalog rather than tabulated as settings. A card carries a coloured mark, the name, one line of what the package is for, and the small print under it; cards wrap into as many columns as the surface holds and are shelved by what each package is doing. Choosing one gives it the whole surface. Every card keeps a declared action lane, empty until installing and removing exist."
+            summary="This machine's plugin packages, offered as a catalog rather than tabulated as settings. A card carries a coloured mark, the name, one line of what the package is for, and the small print under it; cards wrap into as many columns as the surface holds and are shelved by what each package is doing. Choosing one gives it the whole surface. Installing, updating, and removing fill the action lanes the card and the package page declare, and appear only on a surface that was given a way to perform them."
             title="RigPluginCatalogPage"
         >
             <FullScreenSpecimen
@@ -263,6 +342,96 @@ export function RigPluginCatalogBlueprintPage() {
                 number="21"
             >
                 <OpenedCatalog entries={[PLUGIN_STORE_FIXTURE_COMPLETE]} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same catalog on a surface that can change what is installed. Installing sits at the far end of the control lane, away from the two controls that only choose what is shown, and every card gains the one thing that can be done to it from here."
+                label="Can be changed"
+                number="22"
+            >
+                <RigPluginCatalogPage
+                    entries={entries}
+                    failures={PLUGIN_STORE_FIXTURE_FAILURES}
+                    manage={management()}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="One package being removed and one the machine has said is gone. The removed card stays until the reading stops listing it, because what is installed is the machine's to report and not this screen's to assume."
+                label="Removing, and removed"
+                number="23"
+            >
+                <RigPluginCatalogPage
+                    entries={entries.map((entry, index) =>
+                        index === 0
+                            ? { ...entry, removal: { kind: "working" as const } }
+                            : index === 1
+                              ? {
+                                    ...entry,
+                                    removal: {
+                                        kind: "removed" as const,
+                                        message: "Rig kept what this plugin had written.",
+                                    },
+                                }
+                              : entry,
+                    )}
+                    manage={management()}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The machine refused to remove one package. It is still installed, still says so, and the card carries the refusal without any other card moving."
+                label="Not removed"
+                number="24"
+            >
+                <RigPluginCatalogPage
+                    entries={entries.map((entry, index) =>
+                        index === 0
+                            ? {
+                                  ...entry,
+                                  removal: {
+                                      kind: "failed" as const,
+                                      message:
+                                          "Rig could not stop this plugin's process, so it left the installation exactly as it was.",
+                                      title: "This machine did not remove it",
+                                  },
+                              }
+                            : entry,
+                    )}
+                    manage={management()}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="What the machine said about the last install, reported on the catalog it is about rather than in the dialog that asked for it. Rig names the outcome after the fact — installed, replaced by a newer version, put back to an older one — because nothing here can know it in advance."
+                label="Installed"
+                number="25"
+            >
+                <RigPluginCatalogPage
+                    entries={entries}
+                    manage={management({
+                        kind: "installed",
+                        message:
+                            "Rig replaced the copy on this machine with version 2.4.0 from /Users/steve/plugins/cartographer.",
+                        title: "Updated Cartographer",
+                    })}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A package's own page on a surface that can change it. Updating is offered as installing the folder it came from — the only truthful way to put it, because nothing reports that an update exists — and removing is the one destructive control, kept apart from it."
+                label="A package's page, changeable"
+                number="26"
+            >
+                <OpenedCatalog manage />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The flow driven end to end against a machine that always agrees, after a beat. Install, watch the dialog go inert while the request is out, read the answer on the catalog; remove a package, watch its card mark itself and then leave when the reading drops it."
+                label="Driven"
+                number="27"
+            >
+                <LiveCatalog />
             </FullScreenSpecimen>
         </ComponentPage>
     );

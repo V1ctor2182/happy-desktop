@@ -55,6 +55,7 @@ import {
     rigPluginCatalogStoreCreate,
     type RigPluginCatalogSource,
     type RigPluginCatalogStore,
+    type RigPluginManagementSource,
 } from "./rigPluginCatalogStore.js";
 import {
     rigFriendsStoreCreate,
@@ -253,6 +254,12 @@ export interface RigClientDeps {
      * leaves the plugin catalog unavailable rather than empty.
      */
     readonly pluginCatalogSource?: RigPluginCatalogSource;
+    /**
+     * How this host changes what is installed on the machine. Omitted leaves the
+     * catalog readable and unchangeable, which is what a window that cannot reach
+     * the machine's folders can honestly offer.
+     */
+    readonly pluginManagementSource?: RigPluginManagementSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -458,7 +465,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (disposed) throw new Error("The Rig client is disposed.");
             const source = deps.pluginCatalogSource;
             if (!source) return undefined;
-            pluginCatalogStore ??= rigPluginCatalogStoreCreate({ source });
+            pluginCatalogStore ??= rigPluginCatalogStoreCreate({
+                source,
+                ...(deps.pluginManagementSource ? { management: deps.pluginManagementSource } : {}),
+            });
             return pluginCatalogStore;
         },
         instructions() {

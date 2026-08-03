@@ -154,3 +154,5 @@
 @import "./styles/friends.css";
 @import "./styles/rig-plugin-catalog.css";
 @import "./styles/workspace-lifecycle-notice.css";
+@import "./styles/rig-plugin-install-dialog.css";
+@import "./styles/rig-plugin-remove-dialog.css";

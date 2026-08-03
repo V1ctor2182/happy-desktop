@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { RigPluginCatalogStore } from "happy2-state";
 import { RigPluginCatalogPage } from "happy2-ui";
-import { pluginCatalogProjectionCreate } from "../pluginCatalog";
+import { pluginCatalogProjectionCreate, pluginInstallProject } from "../pluginCatalog";
 
 export interface PluginCatalogViewProps {
     readonly store: RigPluginCatalogStore;
@@ -24,10 +24,17 @@ export interface PluginCatalogViewProps {
  * store's; a new store is a new machine's reading and starts with nothing held.
  * Losing the memo costs one catalog's worth of new objects and nothing else, so
  * this is an identity contract rather than a correctness one.
+ *
+ * Changing what is installed is offered only when the store says this host can:
+ * a window reading a machine it cannot reach the folders of gets the same screen
+ * with no controls on it, rather than controls that would be refused. The screen
+ * states intents and the store answers; nothing is decided here, and no outcome
+ * is assumed while the machine is still deciding it.
  */
 export function PluginCatalogView(props: PluginCatalogViewProps) {
-    const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
-    const project = useMemo(() => pluginCatalogProjectionCreate(props.store), [props.store]);
+    const store = props.store;
+    const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
+    const project = useMemo(() => pluginCatalogProjectionCreate(store), [store]);
     return (
         <RigPluginCatalogPage
             connection={snapshot.connection}
@@ -35,6 +42,17 @@ export function PluginCatalogView(props: PluginCatalogViewProps) {
             failures={snapshot.failures}
             loading={snapshot.loading}
             {...(snapshot.error ? { error: snapshot.error.message } : {})}
+            {...(snapshot.manageable
+                ? {
+                      manage: {
+                          install: pluginInstallProject(snapshot.install),
+                          onInstall: store.packageInstall,
+                          onInstallDismiss: store.packageInstallDismiss,
+                          onRemove: store.packageRemove,
+                          onRemoveDismiss: store.packageRemoveDismiss,
+                      },
+                  }
+                : {})}
         />
     );
 }

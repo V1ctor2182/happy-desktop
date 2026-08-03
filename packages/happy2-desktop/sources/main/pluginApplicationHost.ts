@@ -1,10 +1,15 @@
+import { fileURLToPath } from "node:url";
 import { protocol, session as electronSession } from "electron";
-import { connectRig } from "@slopus/rig-connect";
+import { connectRig, PluginManagementRequestError } from "@slopus/rig-connect";
+import type { RigConnection } from "@slopus/rig-connect";
 import {
     happyPluginScheme,
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
+    type DesktopPluginInstallResult,
     type DesktopPluginInventory,
+    type DesktopPluginManagementFailure,
+    type DesktopPluginUninstallResult,
 } from "../shared/desktopContract";
 import { PluginApplicationCache } from "./pluginApplicationCache";
 
@@ -29,6 +34,25 @@ const EMPTY_INVENTORY: DesktopPluginInventory = {
     failures: [],
     connection: "closed",
     loading: false,
+};
+
+const HOST_UNAVAILABLE: DesktopPluginManagementFailure = {
+    kind: "unavailable",
+    message: "No Rig is connected on this machine, so its plugins cannot be changed.",
+    reason: "host",
+};
+
+/*
+ * The machine the request was aimed at is not the machine that is here now. The
+ * work may well have happened over there — an install that reached Rig is not
+ * undone by this window changing machines — so this says the answer cannot be
+ * trusted for the machine on screen rather than that nothing occurred. What is
+ * installed here is settled by the new machine's own catalog, not by this.
+ */
+const HOST_SUPERSEDED: DesktopPluginManagementFailure = {
+    kind: "superseded",
+    message: "This window changed machines while that was running, so it was left unfinished here.",
+    reason: "host",
 };
 
 /**
@@ -93,6 +117,15 @@ export class PluginApplicationHost implements Disposable {
     #inventoryFollowed = false;
     /** Controllers for the requests still running, by origin and request id. */
     readonly #requests = new Map<string, AbortController>();
+    /**
+     * The client for the machine currently being followed. It is held because a
+     * lifecycle request is addressed to a machine rather than to a subscription:
+     * the catalog reads and the installs go to the same daemon, under the same
+     * credential, and neither may outlive the endpoint they were opened for.
+     */
+    #connection?: RigConnection;
+    /** Lifecycle requests still running, so replacing the machine ends them all. */
+    readonly #operations = new Set<AbortController>();
 
     constructor(options: PluginApplicationHostOptions) {
         this.#onChange = options.onChange;
@@ -143,6 +176,12 @@ export class PluginApplicationHost implements Disposable {
         this.#endpoint = rigHttpUrl;
         this.#cache?.[Symbol.dispose]();
         this.#cache = undefined;
+        // Whatever was still being asked of the old machine stops being asked.
+        // The daemon carries on with anything it has already begun — an install
+        // is not undone by nobody waiting for it — but no answer from the machine
+        // that has gone is allowed to arrive as though it were about this one.
+        this.#operationsAbort();
+        this.#connection = undefined;
         const generation = ++this.#generation;
         if (rigHttpUrl === undefined) {
             this.#onChange(EMPTY_CATALOG);
@@ -177,10 +216,109 @@ export class PluginApplicationHost implements Disposable {
         });
         cache.inventoryFollowSet(this.#inventoryFollowed);
         this.#cache = cache;
+        this.#connection = connection;
         this.#onChange(cache.get());
         // A new endpoint is a new machine, so whoever is watching is told at once
         // rather than waiting for that machine's first catalog.
         if (this.#inventoryFollowed) this.#onInventoryChange?.(cache.inventoryGet());
+    }
+
+    /**
+     * Asks Rig to install the plugin in one folder on its own machine.
+     *
+     * Nothing about `source` is examined here. Rig owns the whole question — is
+     * this a folder, does it hold a manifest, is the manifest valid, is the icon
+     * a real PNG — and it answers it by staging and validating a copy before
+     * anything installed is touched, so a folder that is not a plugin never
+     * replaces one that is. Checking any of it here would be a second opinion
+     * this process is in no position to hold, and one that could only ever
+     * disagree with the machine.
+     *
+     * The same call is how a package is updated. Rig derives the identity from
+     * the folder, replaces the copy it already had, and reports which of an
+     * upgrade, a downgrade, a reinstall, or a first install it turned out to be.
+     */
+    async pluginInstall(source: string): Promise<DesktopPluginInstallResult> {
+        return this.#manage(
+            (connection, signal) => connection.installPlugin(source, { signal }),
+            (plugin) => ({
+                classification: plugin.classification,
+                description: plugin.description,
+                folder: plugin.folder,
+                name: plugin.name,
+                version: plugin.version,
+            }),
+        );
+    }
+
+    /**
+     * Asks Rig to remove one installed package, named by the folder the
+     * inventory reports it under. Rig stops the plugin, deletes the code it
+     * manages, and keeps the folder the plugin writes to; the answer names that
+     * folder so a reader can be told what was kept rather than left to assume.
+     */
+    async pluginUninstall(folder: string): Promise<DesktopPluginUninstallResult> {
+        return this.#manage(
+            (connection, signal) => connection.uninstallPlugin(folder, { signal }),
+            (plugin) => ({
+                dataDirectory: plugin.dataDirectory,
+                folder: plugin.folder,
+                name: plugin.name,
+            }),
+        );
+    }
+
+    /**
+     * Runs one lifecycle request against the machine that is connected now, and
+     * answers with a value rather than by throwing.
+     *
+     * Two things are checked around the call itself. The machine must be the one
+     * the request was started against — an answer that arrives after this window
+     * has changed machines describes somewhere else, and is reported as
+     * unfinished here rather than folded into the current machine's story. And
+     * the daemon's own refusal keeps its code: `PluginManagementRequestError` is
+     * the only error carrying one, and anything else is this process failing to
+     * reach the machine at all, which is a different thing to tell a reader.
+     */
+    async #manage<Wire, Value>(
+        run: (connection: RigConnection, signal: AbortSignal) => Promise<Wire>,
+        project: (wire: Wire) => Value,
+    ): Promise<
+        { ok: true; plugin: Value } | { ok: false; failure: DesktopPluginManagementFailure }
+    > {
+        const connection = this.#connection;
+        if (this.#closed || !connection) return { failure: HOST_UNAVAILABLE, ok: false };
+        const generation = this.#generation;
+        const controller = new AbortController();
+        this.#operations.add(controller);
+        try {
+            const wire = await run(connection, controller.signal);
+            if (this.#generation !== generation) return { failure: HOST_SUPERSEDED, ok: false };
+            return { ok: true, plugin: project(wire) };
+        } catch (error) {
+            if (this.#generation !== generation || controller.signal.aborted)
+                return { failure: HOST_SUPERSEDED, ok: false };
+            if (error instanceof PluginManagementRequestError)
+                return {
+                    failure: { code: error.code, message: error.message, reason: "rig" },
+                    ok: false,
+                };
+            return {
+                failure: {
+                    kind: "unreachable",
+                    message: managementErrorMessage(error),
+                    reason: "host",
+                },
+                ok: false,
+            };
+        } finally {
+            this.#operations.delete(controller);
+        }
+    }
+
+    #operationsAbort(): void {
+        for (const controller of [...this.#operations]) controller.abort();
+        this.#operations.clear();
     }
 
     /**
@@ -283,6 +421,8 @@ export class PluginApplicationHost implements Disposable {
         this.#generation += 1;
         for (const controller of this.#requests.values()) controller.abort();
         this.#requests.clear();
+        this.#operationsAbort();
+        this.#connection = undefined;
         this.#cache?.[Symbol.dispose]();
         this.#cache = undefined;
     }
@@ -313,6 +453,39 @@ export function pluginOriginHost(candidate: string): string | undefined {
         return url.protocol === `${happyPluginScheme}:` ? url.hostname : undefined;
     } catch {
         return undefined;
+    }
+}
+
+function managementErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Reads what a person typed or picked as the folder Rig is asked about.
+ *
+ * Rig installs from a folder on its own machine, so that is the one thing this
+ * accepts. A `file:` address is that same folder written as a URL, and is turned
+ * back into the path it names — dragging a folder onto a field, copying one out
+ * of a file manager, or pasting one out of a terminal are the same request, and
+ * refusing one of the three would be this side inventing a rule Rig does not
+ * have. Nothing else is interpreted: any other text is passed through untouched
+ * and Rig says what is wrong with it, which is the only answer that can be right
+ * about the machine the folder would have to be on.
+ *
+ * Only a value that is not text at all is refused here, because that is not a
+ * person getting it wrong — it is a caller that is not the window.
+ */
+export function pluginInstallSourceParse(raw: unknown): string | undefined {
+    if (typeof raw !== "string") return undefined;
+    const value = raw.trim();
+    if (!/^file:/iu.test(value)) return value;
+    try {
+        return fileURLToPath(value);
+    } catch {
+        // Not a `file:` URL this platform can name a path from — a host it does
+        // not accept, or an escape it cannot decode. It goes to Rig as written
+        // rather than being repaired into some other folder.
+        return value;
     }
 }
 

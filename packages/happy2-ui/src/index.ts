@@ -679,7 +679,10 @@ export {
     type RigPluginCatalogEntry,
     type RigPluginCatalogFailure,
     type RigPluginCatalogFeedState,
+    type RigPluginCatalogInstall,
+    type RigPluginCatalogManagement,
     type RigPluginCatalogPageProps,
+    type RigPluginCatalogRemoval,
 } from "./pages/plugins/RigPluginCatalogPage";
 export {
     PluginStoreIcon,
@@ -695,6 +698,8 @@ export {
     type PluginStoreState,
 } from "./PluginStoreCard";
 export { PluginStoreSection, type PluginStoreSectionProps } from "./PluginStoreSection";
+export { RigPluginInstallDialog, type RigPluginInstallDialogProps } from "./RigPluginInstallDialog";
+export { RigPluginRemoveDialog, type RigPluginRemoveDialogProps } from "./RigPluginRemoveDialog";
 export {
     PluginStoreDetail,
     type PluginStoreDetailProps,

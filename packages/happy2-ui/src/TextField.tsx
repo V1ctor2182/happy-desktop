@@ -5,6 +5,13 @@ export type TextFieldType = "text" | "email" | "password" | "search";
 export type TextFieldSize = "small" | "medium" | "large";
 export type TextFieldProps = {
     "aria-label"?: string;
+    /**
+     * Takes the focus as the field mounts. It exists so a surface whose whole
+     * purpose is this one field — a dialog asking for a folder — puts the caret
+     * where a reader is about to type instead of on the control that closes it.
+     * Declared rather than done through a handle, so the field exposes no element.
+     */
+    autoFocus?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -51,6 +58,7 @@ export function TextField(props: TextFieldProps) {
     const [local] = partitionComponentProps(props, [
         "aria-label",
         "autoComplete",
+        "autoFocus",
         "className",
         "data-testid",
         "disabled",
@@ -156,6 +164,7 @@ export function TextField(props: TextFieldProps) {
                         aria-describedby={describedBy()}
                         aria-invalid={invalid() ? "true" : undefined}
                         autoComplete={local.autoComplete}
+                        autoFocus={local.autoFocus}
                         className="happy2-text-field__input"
                         data-happy2-ui="text-field-input"
                         disabled={local.disabled}

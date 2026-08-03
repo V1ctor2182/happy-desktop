@@ -598,6 +598,91 @@ export interface DesktopPluginInventoryFrame {
 }
 
 /**
+ * What Rig did to this machine when it accepted an install, in its own words.
+ *
+ * Rig installs a folder; whether that folder turned out to be a package this
+ * machine already had, and whether the copy that arrived is newer than the one
+ * it replaced, is something only Rig can say — it derives the identity from the
+ * folder and compares the versions itself. It is reported rather than predicted,
+ * so nothing above ever claims an update before the machine has made one.
+ */
+export type DesktopPluginInstallClassification =
+    | "fresh-install"
+    | "upgrade"
+    | "downgrade"
+    | "reinstall";
+
+/** The package Rig installed, exactly as it described the copy it now has. */
+export interface DesktopPluginInstalled {
+    readonly classification: DesktopPluginInstallClassification;
+    readonly description: string;
+    /** The folder name Rig installed under, which is this machine's identity for it. */
+    readonly folder: string;
+    readonly name: string;
+    readonly version: string;
+}
+
+/**
+ * The package Rig removed. `dataDirectory` is the writable folder it kept, which
+ * is reported because keeping it is the part of an uninstall a person has to be
+ * told about: the code is gone and what the plugin wrote is not.
+ */
+export interface DesktopPluginUninstalled {
+    readonly dataDirectory: string;
+    readonly folder: string;
+    readonly name: string;
+}
+
+/**
+ * Rig's own closed vocabulary for refusing a plugin-management request, passed
+ * through unchanged. It is deliberately not extended here: a reason this process
+ * has of its own is a `host` failure instead, so a message a reader sees is
+ * always attributable to whichever of the two actually said it.
+ */
+export type DesktopPluginManagementCode =
+    | "install_failed"
+    | "invalid_request"
+    | "plugin_not_found"
+    | "plugins_unavailable"
+    | "uninstall_failed";
+
+/**
+ * Why a lifecycle request did not happen.
+ *
+ * `rig` is the daemon's own answer, with the code it chose and the sentence it
+ * wrote. `host` is this process being unable to ask at all: no local Rig is
+ * connected (`unavailable`), the machine the request was aimed at was replaced
+ * while it was in flight (`superseded`), or the call itself never completed
+ * (`unreachable`). A superseded request is never retried against the machine
+ * that replaced it — the folder named was a folder on the old one.
+ */
+export type DesktopPluginManagementFailure =
+    | {
+          readonly reason: "rig";
+          readonly code: DesktopPluginManagementCode;
+          readonly message: string;
+      }
+    | {
+          readonly reason: "host";
+          readonly kind: "unavailable" | "superseded" | "unreachable";
+          readonly message: string;
+      };
+
+/**
+ * The answer to one lifecycle request. It is a value rather than a rejection so
+ * the daemon's code survives the process boundary: an `Error` crossing IPC keeps
+ * only its message, and the code is what lets a surface tell "that folder is not
+ * a plugin" from "this machine is still starting up".
+ */
+export type DesktopPluginInstallResult =
+    | { readonly ok: true; readonly plugin: DesktopPluginInstalled }
+    | { readonly ok: false; readonly failure: DesktopPluginManagementFailure };
+
+export type DesktopPluginUninstallResult =
+    | { readonly ok: true; readonly plugin: DesktopPluginUninstalled }
+    | { readonly ok: false; readonly failure: DesktopPluginManagementFailure };
+
+/**
  * One host operation a mounted plugin application asked for, as the MCP Apps
  * host received it from that application's own frame.
  *
@@ -642,6 +727,26 @@ export interface HappyDesktopBridge {
      * Releasing the last subscription stops the work entirely.
      */
     pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void): () => void;
+    /**
+     * Asks Rig to install the plugin in one folder on the machine running it.
+     *
+     * `source` is what the person typed or picked, unexamined: whether it names
+     * a folder, whether that folder holds a plugin, and whether the plugin in it
+     * is valid are all Rig's to decide, and it stages and validates a copy before
+     * anything replaces what is installed. This window never reads the
+     * filesystem, so it has nothing to check with and nothing to claim.
+     *
+     * Installing a folder whose package this machine already has is how a plugin
+     * is updated: Rig replaces that copy and says in the answer whether it was an
+     * upgrade, a downgrade, or the same version again.
+     */
+    pluginInstall(source: string): Promise<DesktopPluginInstallResult>;
+    /**
+     * Asks Rig to remove one installed package by its folder name, which is the
+     * identity the inventory reports. Rig stops the plugin and deletes its
+     * installed code, and keeps the folder the plugin writes to.
+     */
+    pluginUninstall(folder: string): Promise<DesktopPluginUninstallResult>;
     /**
      * Performs one host operation for the plugin application mounted at `origin`.
      * The window reads that origin from the message event the request arrived in,
@@ -789,6 +894,10 @@ export const desktopIpc = {
     pluginApplicationsGet: "happy2:plugins:get",
     /** One reading, named with the projection it belongs to. */
     pluginInventoryChanged: "happy2:plugins:inventory-changed",
+    /** Installs the plugin in one folder on the machine running Rig. */
+    pluginInstall: "happy2:plugins:install",
+    /** Removes one installed package by the folder name Rig knows it as. */
+    pluginUninstall: "happy2:plugins:uninstall",
     /**
      * Starts following what is installed under a projection the window names,
      * answering with the reading as it stands under that same name.

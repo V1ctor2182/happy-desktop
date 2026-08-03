@@ -66,6 +66,27 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
             );
             return () => clearTimeout(timer);
         },
+        // Changing what is installed follows the reading of it: this window
+        // cannot read the machine's packages, so it does not offer to change
+        // them either. The refusal is the host's own — the daemon was never
+        // asked — so a surface says the capability is absent here instead of
+        // reporting a failure Rig would be blamed for.
+        pluginInstall: async () => ({
+            failure: {
+                kind: "unavailable",
+                message: "This window cannot change the plugins installed on this machine.",
+                reason: "host",
+            },
+            ok: false,
+        }),
+        pluginUninstall: async () => ({
+            failure: {
+                kind: "unavailable",
+                message: "This window cannot change the plugins installed on this machine.",
+                reason: "host",
+            },
+            ok: false,
+        }),
         pluginAppRequest: async () => {
             throw new Error("This window cannot host plugin applications.");
         },
