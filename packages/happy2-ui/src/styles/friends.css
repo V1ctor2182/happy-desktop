@@ -1,8 +1,11 @@
 /*
- * Friends: the people this account is connected to, read down one column the
- * way a conversation is. Nothing is drawn around a person — the face, the name,
- * and what they are doing are the whole row, and a fill appears only under the
- * pointer. Colors and type come only from theme roles.
+ * Friends: who you are here, who is asking for you, and who you already know.
+ *
+ * The reading sits on the grouped paper the product uses for a screen that is a
+ * list of things rather than a document, and the only object drawn on it is a
+ * request — the one thing waiting on a decision. People carry nothing around
+ * them: a face, a name, and a fill under the pointer. Colors and type come only
+ * from theme roles.
  */
 
 .happy2-friends {
@@ -11,7 +14,7 @@
     flex-direction: column;
     min-height: 0;
     width: 100%;
-    background: var(--surface);
+    background: var(--groupped-background);
     font-family: var(--happy2-font-ui);
 }
 
@@ -28,7 +31,7 @@
     max-width: 720px;
 }
 
-/* The scrollport is flush; spacing belongs to the list inside it. */
+/* The scrollport is flush; spacing belongs to the column inside it. */
 .happy2-friends__scroll {
     display: flex;
     flex: 1 1 auto;
@@ -38,22 +41,112 @@
     overflow-y: auto;
 }
 
-/* The reading column. Its side padding is wide enough to hold the hover fill
-   and a focus ring clear of the scrollbar. */
-.happy2-friends__list {
+/* The reading column. Its side padding is wide enough to hold a card's edge and
+   a focus ring clear of the scrollbar. */
+.happy2-friends__content {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: 4px;
+    gap: 24px;
     margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
-    padding: 16px 16px 32px;
+    padding: 8px 16px 48px;
+}
+
+/* You, at the top of your own screen. */
+.happy2-friends__hero {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px 16px;
+}
+
+.happy2-friends__hero-identity {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-friends__hero-name {
+    overflow: hidden;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 26px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-friends__hero-note {
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy2-friends__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+/* The name of a run of people, with how many are in it beside it rather than
+   only in the header: the two groups are read at different points in a long
+   column. */
+.happy2-friends__section-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+}
+
+.happy2-friends__section-label {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 22px;
+    color: var(--text);
+}
+
+.happy2-friends__section-count {
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums lining-nums;
+    line-height: 22px;
+    color: var(--text-secondary);
+}
+
+.happy2-friends__nobody {
+    margin: 0;
+    padding: 0 16px 0 0;
+    font-size: 15px;
+    line-height: 22px;
+    color: var(--text-secondary);
+}
+
+.happy2-friends__requests {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.happy2-friends__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
 }
 
 /*
- * A row carries no border and no fill of its own: it is a face and a name on
- * the page surface. The pointer is what makes it look like an object.
+ * A person carries no border and no fill of their own: they are a face and a
+ * name on the page. The pointer is what makes a row look like an object.
  */
 .happy2-friends__row {
     display: flex;
@@ -62,7 +155,7 @@
     margin: 0;
     box-sizing: border-box;
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 16px;
     background: transparent;
     border: 0;
     border-radius: var(--happy2-radius-md);
@@ -101,15 +194,6 @@ button.happy2-friends__row:focus-visible {
     min-width: 0;
 }
 
-/* Name and handle share one baseline: the handle identifies the name rather
-   than describing the person, so it belongs on the same line. */
-.happy2-friends__identity {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-}
-
 .happy2-friends__name {
     overflow: hidden;
     font-size: 15px;
@@ -120,22 +204,68 @@ button.happy2-friends__row:focus-visible {
     white-space: nowrap;
 }
 
-.happy2-friends__username {
-    flex: 0 1 auto;
+.happy2-friends__secondary {
     overflow: hidden;
     font-size: 13px;
-    line-height: 20px;
+    line-height: 18px;
     color: var(--text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* What they do and what they are doing read as one sentence, so they share a
-   line and are separated by a middle dot rather than by a pill. */
-.happy2-friends__secondary {
+/*
+ * A request is the one thing on this screen waiting on a decision, so it is the
+ * one thing given an object to sit in.
+ */
+.happy2-friend-request {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-shell);
+}
+
+.happy2-friend-request__person {
+    display: flex;
+    flex: 1 1 240px;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy2-friend-request__avatar {
+    flex: none;
+}
+
+.happy2-friend-request__identity {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-friend-request__name {
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 22px;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* What is being asked and when it was asked read as one line, separated by
+   space rather than by a rule. */
+.happy2-friend-request__note {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     min-width: 0;
     overflow: hidden;
     font-size: 13px;
@@ -144,31 +274,171 @@ button.happy2-friends__row:focus-visible {
     white-space: nowrap;
 }
 
-.happy2-friends__title,
-.happy2-friends__status-text {
+.happy2-friend-request__ask,
+.happy2-friend-request__time {
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.happy2-friends__dot {
-    flex: none;
+.happy2-friend-request__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-friend-request__status {
+    font-size: 13px;
+    line-height: 18px;
     color: var(--text-secondary);
 }
 
-/* Emoji fall through to an operating-system colour font whose artwork does not
-   fill the em square the way letters do, so the glyph gets a fixed slot of its
-   own instead of sitting in the text run. */
-.happy2-friends__status-emoji {
+.happy2-friend-request__error {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-destructive);
+}
+
+/*
+ * The greeting: the whole surface, because someone with no profile has nothing
+ * else here to read. It is a column centered in the window rather than a form
+ * filed under a header.
+ */
+.happy2-friend-setup {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--groupped-background);
+    font-family: var(--happy2-font-ui);
+}
+
+/* The column is centered across the window but not down it: a scrollport that
+   centers its overflow puts the top of a tall card out of reach, and this one
+   is nearly the height of the smallest window we support. */
+.happy2-friend-setup__scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+}
+
+.happy2-friend-setup__card {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 420px;
+    padding: 40px 24px 48px;
+}
+
+/* The picture is the control: the label carries the well and its caption, and
+   the browser's own file button is taken out of the flow entirely. */
+.happy2-friend-setup__photo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.happy2-friend-setup__photo-input {
+    /* Taken out of the flow but left in the document so it keeps its place in
+       the tab order: `display: none` would make the well unreachable from the
+       keyboard. It arranges no children of its own. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    opacity: 0;
+}
+
+.happy2-friend-setup__photo-well {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 96px;
+    height: 96px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-pill);
+    color: var(--text-secondary);
 }
 
-.happy2-friends__status-emoji-glyph {
-    font-family: var(--happy2-font-emoji);
-    font-size: 12px;
-    line-height: 1;
+.happy2-friend-setup__photo:hover .happy2-friend-setup__photo-well {
+    background: var(--surface-high);
+}
+
+.happy2-friend-setup__photo-input:focus-visible + .happy2-friend-setup__photo-well {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy2-friend-setup__photo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy2-friend-setup__photo-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--text-link);
+}
+
+.happy2-friend-setup__intro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-friend-setup__title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 32px;
+    color: var(--text);
+    text-align: center;
+}
+
+.happy2-friend-setup__description {
+    margin: 0;
+    max-width: 340px;
+    font-size: 15px;
+    line-height: 22px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.happy2-friend-setup__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.happy2-friend-setup__error {
+    margin: 0;
+    width: 100%;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-destructive);
+    text-align: center;
 }

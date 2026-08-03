@@ -133,7 +133,9 @@ function filterMentions(mentions: Mentionable[], query: string) {
     ];
 }
 /**
- * 320px raised popover listing mention candidates, filtered by `query`.
+ * Raised popover listing mention candidates, filtered by `query`. It spans the
+ * composer it belongs to and wears the command picker's geometry — quiet
+ * section headings over one-line 32px rows — so `@` and `/` are one surface.
  * People render first under the primary heading; document candidates follow
  * under their own "Documents" subsection with a doc glyph instead of an avatar.
  */
@@ -160,10 +162,10 @@ export function MentionPicker(props: MentionPickerProps) {
                     className="happy2-mention-picker__doc-glyph"
                     data-happy2-ui="mention-picker-doc-glyph"
                 >
-                    <Icon name="doc" size={14} />
+                    <Icon name="doc" size={16} />
                 </span>
             ) : (
-                <Avatar initials={mention.initials} size="sm" tone={mention.tone} type="agent" />
+                <Avatar initials={mention.initials} size="xs" tone={mention.tone} type="agent" />
             )}
             <span className="happy2-mention-picker__meta" data-happy2-ui="mention-picker-meta">
                 <span className="happy2-mention-picker__name" data-happy2-ui="mention-picker-name">
@@ -198,9 +200,17 @@ export function MentionPicker(props: MentionPickerProps) {
             role="listbox"
             style={props.style}
         >
-            <div className="happy2-mention-picker__header" data-happy2-ui="mention-picker-header">
-                {props.label ?? "Mentions"}
-            </div>
+            {/* The primary heading labels the people beneath it, so it is
+                withheld when every candidate is a document and "Documents"
+                is about to say the same thing one row lower. */}
+            {people().length > 0 || filtered().length === 0 ? (
+                <div
+                    className="happy2-mention-picker__header"
+                    data-happy2-ui="mention-picker-header"
+                >
+                    {props.label ?? "Mentions"}
+                </div>
+            ) : null}
             {filtered().length > 0 ? (
                 <>
                     {people().map(row)}

@@ -24,7 +24,7 @@ export function CommandPickerPage() {
     return (
         <ComponentPage
             number="C-152"
-            summary="Composer slash-command popover: 28px single-line rows, the command in mono beside what it does, and the highlighted row Enter commits."
+            summary="Composer slash-command popover: a quiet section heading over 32px single-line rows — glyph, command, and what it does — spanning the composer, with the highlighted row Enter commits."
             title="CommandPicker"
         >
             <Specimen
@@ -33,7 +33,13 @@ export function CommandPickerPage() {
                 number="01"
                 stage="surface"
             >
-                <CommandPicker activeId={items[0]?.id} items={items} onSelect={() => undefined} />
+                <div style={{ display: "flex", width: "420px" }}>
+                    <CommandPicker
+                        activeId={items[0]?.id}
+                        items={items}
+                        onSelect={() => undefined}
+                    />
+                </div>
             </Specimen>
 
             <Specimen
@@ -42,11 +48,13 @@ export function CommandPickerPage() {
                 number="02"
                 stage="surface"
             >
-                <CommandPicker
-                    activeId="fork"
-                    items={items.filter((item) => item.slash.startsWith("/f"))}
-                    onSelect={() => undefined}
-                />
+                <div style={{ display: "flex", width: "420px" }}>
+                    <CommandPicker
+                        activeId="fork"
+                        items={items.filter((item) => item.slash.startsWith("/f"))}
+                        onSelect={() => undefined}
+                    />
+                </div>
             </Specimen>
         </ComponentPage>
     );

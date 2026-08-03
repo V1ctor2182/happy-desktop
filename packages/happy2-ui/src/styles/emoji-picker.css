@@ -20,10 +20,13 @@
     flex-direction: column;
     gap: 8px;
     padding: 8px;
-    background: var(--surface-high);
+    background: var(--surface);
     border: 1px solid var(--modal-border);
     border-radius: var(--happy2-radius-md);
-    box-shadow: 0 12px 32px var(--shadow-floating);
+    /* It shares the composer's popover slot with the command and mention
+     * pickers, but floats narrower than the card instead of spanning it, so it
+     * keeps a short, faint drop where those two rely on the hairline alone. */
+    box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;

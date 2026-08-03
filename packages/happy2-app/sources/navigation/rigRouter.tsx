@@ -431,6 +431,10 @@ function RigWorkspaceLayout(
         noteId?: string;
         applicationId?: string;
     };
+    // The router is constructed before RouterProvider supplies the real context,
+    // so the very first render of a deep-linked URL can arrive with an empty
+    // context; the provider's context lands on the next synchronous pass.
+    if (!context.rigs) return null;
     return (
         <AppRigView
             appearance={context.appearance}

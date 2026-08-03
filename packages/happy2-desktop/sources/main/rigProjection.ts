@@ -577,7 +577,10 @@ export function rigSlotEntryProject(entry: SlotEntry): RigSlotEntry {
                       label: entry.content.label,
                       action: rigSlotActionProject(entry.content.action),
                   },
-        authorSessionId: entry.authorSessionId,
+        author:
+            entry.author.type === "agent"
+                ? { type: "agent", sessionId: entry.author.sessionId as RigSessionId }
+                : { type: "plugin", folder: entry.author.folder, name: entry.author.name },
         description: entry.description,
         purpose: entry.purpose,
         createdAt: entry.createdAt,

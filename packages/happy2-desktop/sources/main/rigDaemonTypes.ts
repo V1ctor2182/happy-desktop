@@ -205,6 +205,10 @@ export type SlotContent =
     | { readonly type: "text"; readonly markdown: string }
     | { readonly type: "button"; readonly label: string; readonly action: SlotAction };
 
+export type SlotEntryAuthor =
+    | { readonly type: "agent"; readonly sessionId: string }
+    | { readonly type: "plugin"; readonly folder: string; readonly name: string };
+
 export interface SlotEntry {
     readonly id: string;
     readonly slot: SlotName;
@@ -213,7 +217,7 @@ export interface SlotEntry {
     readonly workspaceId?: string;
     readonly sessionId?: string;
     readonly content: SlotContent;
-    readonly authorSessionId: string;
+    readonly author: SlotEntryAuthor;
     readonly description: string;
     readonly purpose: string;
     readonly createdAt: number;

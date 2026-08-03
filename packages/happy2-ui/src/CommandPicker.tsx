@@ -15,6 +15,8 @@ export type CommandPickerProps = {
     items: readonly CommandPickerItem[];
     /** The highlighted row; the owner moves it with the arrow keys. */
     activeId?: string;
+    /** Section heading above the rows (default "Commands"). */
+    label?: string;
     onSelect: (id: string) => void;
     className?: string;
     "data-testid"?: string;
@@ -24,14 +26,16 @@ export type CommandPickerProps = {
 /**
  * C-152 CommandPicker — the slash-command popover for the composer. It is the
  * same kind of surface as the mention picker beside it, not a ⌘K palette: no
- * search field of its own (the draft is the query), no scrim, and a 28px row per
- * command so a dozen of them read as a short list rather than a page of cards.
+ * search field of its own (the draft is the query), no scrim, and one 32px row
+ * per command under a quiet section heading, so a dozen of them read as a short
+ * menu rather than a page of cards. It spans the composer it belongs to, and
+ * each row is one line: glyph, command, then what it does in secondary ink.
  * Props only — the owner filters, highlights, and commits.
  */
 export function CommandPicker(props: CommandPickerProps) {
     return (
         <div
-            aria-label="Commands"
+            aria-label={props.label ?? "Commands"}
             className={["happy2-command-picker", props.className].filter(Boolean).join(" ")}
             data-happy2-ui="command-picker"
             data-testid={props["data-testid"]}
@@ -42,6 +46,12 @@ export function CommandPicker(props: CommandPickerProps) {
                 spacing of its own, and the list inside it owns the padding. */}
             <div className="happy2-command-picker__scroll" data-happy2-ui="command-picker-scroll">
                 <div className="happy2-command-picker__list" data-happy2-ui="command-picker-list">
+                    <div
+                        className="happy2-command-picker__header"
+                        data-happy2-ui="command-picker-header"
+                    >
+                        {props.label ?? "Commands"}
+                    </div>
                     {props.items.map((item) => (
                         <button
                             aria-selected={item.id === props.activeId ? "true" : "false"}
@@ -59,7 +69,7 @@ export function CommandPicker(props: CommandPickerProps) {
                                 className="happy2-command-picker__icon"
                                 data-happy2-ui="command-picker-icon"
                             >
-                                <Icon name={item.icon} size={14} />
+                                <Icon name={item.icon} size={16} />
                             </span>
                             <span
                                 className="happy2-command-picker__slash"

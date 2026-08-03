@@ -1,8 +1,10 @@
 /*
  * C-027 Menu — dropdown / context-menu popover on the high surface.
  *
- * Contract: high card with a 1px modal hairline, 10px card radius and a close,
- * subtle drop shadow, default 220px wide. Inside, a 4px-padded list of 28px
+ * Contract: a card on the plain surface with a 1px modal hairline, 10px card
+ * radius and a short, faint drop — it floats over arbitrary content, so it
+ * keeps a shadow, but a close one rather than a deep grey cast. Default 220px
+ * wide. Inside, a 4px-padded list of 28px
  * item rows (8px side padding), optional 24px mono section labels, and 1px
  * separators with 4px vertical breathing room. Every row corner is 5px — the
  * card's 10px radius minus the uniform 5px border-box inset (1px border + 4px
@@ -21,10 +23,10 @@
 .happy2-menu {
     display: block;
     width: 220px;
-    background: var(--surface-high);
+    background: var(--surface);
     border: 1px solid var(--modal-border);
     border-radius: var(--happy2-radius-md);
-    box-shadow: 0 4px 16px var(--shadow-subtle);
+    box-shadow: 0 2px 8px var(--shadow-color);
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;

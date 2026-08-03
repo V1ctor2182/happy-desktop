@@ -51,6 +51,11 @@ import {
     type RigPluginApplicationSource,
     type RigPluginApplicationStore,
 } from "./rigPluginApplicationStore.js";
+import {
+    rigFriendsStoreCreate,
+    type RigFriendsSource,
+    type RigFriendsStore,
+} from "./rigFriendsStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -88,6 +93,15 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
+    /**
+     * The single friends store for this Rig: this account's own profile, the
+     * people asking to connect, and the people it already knows. Materialized on
+     * first access and shared, so two surfaces reading the same people cost one
+     * set of daemon reads. Unavailable when the host supplied no friends feed, so
+     * a surface can say the machine cannot reach the network rather than showing
+     * a list that is empty for the wrong reason.
+     */
+    friends(): RigFriendsStore | undefined;
     /**
      * The single local plugin application catalog for this Rig. Materialized on
      * first access and shared, so the navigation showing the rows and the surface
@@ -208,6 +222,12 @@ export interface RigClientDeps {
      */
     readonly providerUsageSource?: RigProviderUsageSource;
     /**
+     * Repeating read of this account's profile, waiting requests, and people,
+     * together with the two decisions that change them. Omitted leaves friends
+     * unavailable rather than empty.
+     */
+    readonly friendsSource?: RigFriendsSource;
+    /**
      * The host's local plugin application catalog. Omitted leaves plugin
      * applications unavailable rather than empty.
      */
@@ -262,6 +282,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
+    let friendsStore: RigFriendsStore | undefined;
     let pluginApplicationStore: RigPluginApplicationStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
@@ -364,6 +385,48 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
+        },
+        friends() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.friendsSource;
+            if (!source) return undefined;
+            friendsStore ??= rigFriendsStoreCreate({
+                source,
+                output: (event) => {
+                    const store = friendsStore;
+                    if (!store) return;
+                    if (event.type === "profileCreateSubmitted") {
+                        source
+                            .signup({
+                                firstName: event.firstName,
+                                ...(event.lastName === undefined
+                                    ? {}
+                                    : { lastName: event.lastName }),
+                                ...(event.photo === undefined ? {} : { photo: event.photo }),
+                            })
+                            .then(
+                                () => store.friendsInput({ type: "profileCreateSucceeded" }),
+                                (error: unknown) =>
+                                    store.friendsInput({ type: "profileCreateFailed", error }),
+                            );
+                        return;
+                    }
+                    source.requestAnswer(event.requestId, event.answer).then(
+                        () =>
+                            store.friendsInput({
+                                type: "requestAnswerSucceeded",
+                                requestId: event.requestId,
+                            }),
+                        (error: unknown) =>
+                            store.friendsInput({
+                                type: "requestAnswerFailed",
+                                requestId: event.requestId,
+                                error,
+                            }),
+                    );
+                },
+            });
+            return friendsStore;
         },
         pluginApplications() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -480,6 +543,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
+            friendsStore?.[Symbol.dispose]();
+            friendsStore = undefined;
             pluginApplicationStore?.[Symbol.dispose]();
             pluginApplicationStore = undefined;
             instructionsStore?.[Symbol.dispose]();

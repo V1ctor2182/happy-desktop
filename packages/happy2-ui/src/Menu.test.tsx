@@ -70,7 +70,7 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
             "display",
         ]),
     ).toEqual({
-        "background-color": "rgb(248, 248, 248)",
+        "background-color": "rgb(255, 255, 255)",
         "border-radius": "10px",
         "border-top-color": "rgba(0, 0, 0, 0.1)",
         "border-top-width": "1px",

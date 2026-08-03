@@ -424,7 +424,7 @@ export function ComposerPage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="320px raised popover · 44px rows · status badges · empty state"
+                    detail="composer-width popover · 32px one-line rows · status badges · empty state"
                     label="MentionPicker"
                     number="CP-05"
                     stage="app"
@@ -437,8 +437,15 @@ export function ComposerPage() {
                             alignItems: "flex-start",
                         }}
                     >
-                        <div style={{ display: "grid", gap: "6px" }}>
-                            <DimensionRule label="width 320" />
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "6px",
+                                width: "420px",
+                            }}
+                        >
+                            <DimensionRule label="width 420 — the popover fills its composer" />
                             <MentionPicker
                                 activeId="claude"
                                 mentions={MENTIONS}
@@ -446,7 +453,9 @@ export function ComposerPage() {
                                 query=""
                             />
                         </div>
-                        <MentionPicker mentions={MENTIONS} onSelect={noop} query="zephyr" />
+                        <div style={{ display: "flex", width: "420px" }}>
+                            <MentionPicker mentions={MENTIONS} onSelect={noop} query="zephyr" />
+                        </div>
                     </div>
                 </Specimen>
             </div>

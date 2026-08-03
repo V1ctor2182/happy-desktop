@@ -961,9 +961,10 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         view.$('[data-testid="chips-readonly"] [data-happy2-ui="context-chips-chip"]').bounds()
             .height,
     ).toBe(24);
-    // Picker: 320px raised popover — radius 10, strong border, drop shadow.
+    // Picker: a popover that spans its composer — the composer's own surface,
+    // 16px corner, and hairline, with no drop shadow at all.
     const picker = view.$('[data-testid="picker"]');
-    expect(picker.bounds()).toEqual({ x: 30, y: 30, width: 320, height: 172 });
+    expect(picker.bounds()).toEqual({ x: 30, y: 30, width: 340, height: 134 });
     expect(
         picker.computedStyles([
             "background-color",
@@ -975,24 +976,26 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
             "width",
         ]),
     ).toEqual({
-        "background-color": "rgb(248, 248, 248)",
-        "border-radius": "10px",
+        "background-color": "rgb(255, 255, 255)",
+        "border-radius": "16px",
         "border-top-color": "rgb(234, 234, 234)",
         "border-top-width": "1px",
         "box-sizing": "border-box",
         padding: "6px",
-        width: "320px",
+        width: "340px",
     });
-    expect(picker.computedStyle("box-shadow")).toContain("12px 32px");
-    // Header: 26px mono uppercase faint lane, centroid on the lane center
-    // (uppercase mono ink is symmetric enough for a true centroid assertion).
+    expect(picker.computedStyle("box-shadow")).toBe("none");
+    // Header: a quiet 24px section lane in the row type, not a mono caps label.
+    // Its ink is asymmetric now that it is sentence-case proportional text
+    // ("Mentions" is cap-topped with no descenders), so the centroid is pinned
+    // to the engine consensus rather than to zero.
     const header = view.$('[data-testid="picker"] [data-happy2-ui="mention-picker-header"]');
-    expect(header.bounds().height).toBe(26);
+    expect(header.bounds().height).toBe(24);
     expect(header.computedStyles(["color", "font-size", "font-weight", "text-transform"])).toEqual({
         color: "rgb(73, 69, 79)",
-        "font-size": "11px",
-        "font-weight": "700",
-        "text-transform": "uppercase",
+        "font-size": "13px",
+        "font-weight": "400",
+        "text-transform": "none",
     });
     expect(header.element.textContent).toBe("Mentions");
     const headerDrift = await centroidDrift(
@@ -1000,8 +1003,13 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         '[data-testid="picker"] [data-happy2-ui="mention-picker-header"]',
         '[data-testid="picker"] [data-happy2-ui="mention-picker-header"]',
     );
-    expect(Math.abs(headerDrift.dy)).toBeLessThanOrEqual(0.4);
-    // Rows: 44px, sm agent avatar centered on the row, 13px/700 name.
+    // Blink paints this 13px/16px lane 0.5px above the Gecko/WebKit consensus
+    // (0.02 vs 0.52) and snaps half-pixel nudges to whole pixels, so a
+    // correction would overshoot — the same split the name lane below accepts.
+    // The window spans both placements around their midpoint.
+    expect(Math.abs(headerDrift.dy - 0.27)).toBeLessThanOrEqual(0.3);
+    // Rows: one 32px line — an xs agent avatar centered on the row, then the
+    // name and its description sharing a single baseline.
     const rows = Array.from(
         view.container.querySelectorAll(
             '[data-testid="picker"] [data-happy2-ui="mention-picker-row"]',
@@ -1009,29 +1017,29 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     );
     expect(rows.length).toBe(3);
     const row = view.$('[data-testid="picker"] [data-happy2-ui="mention-picker-row"]');
-    expect(row.bounds().width).toBe(306);
-    expect(row.bounds().height).toBe(44);
+    expect(row.bounds().width).toBe(326);
+    expect(row.bounds().height).toBe(32);
     const avatar = view.$('[data-testid="picker"] [data-happy2-ui="avatar"]');
-    expect(avatar.bounds().width).toBe(28);
-    expect(avatar.offsets().top).toBe(8);
-    expect(avatar.offsets().left).toBe(8);
+    expect(avatar.bounds().width).toBe(20);
+    expect(avatar.offsets().top).toBe(6);
+    expect(avatar.offsets().left).toBe(10);
     expect(
         (await view.$('[data-testid="picker"] [data-happy2-ui="avatar-initials"]').visibleMetrics())
             .pixelCount,
     ).toBeGreaterThan(0);
-    // Meta lanes: 16px name and 16px description line boxes stack to a 32px
-    // block on integer offsets (6px top and bottom of the 44px row).
+    // Meta lane: the name and its description share one 16px line box, centered
+    // in the 32px row on integer offsets (8px top and bottom).
     const codexRow = '[data-testid="picker"] [data-mention-id="codex"]';
     const meta = view.$(`${codexRow} [data-happy2-ui="mention-picker-meta"]`);
-    expect(meta.bounds().height).toBe(32);
-    expect(meta.offsets().top).toBe(6);
+    expect(meta.bounds().height).toBe(16);
+    expect(meta.offsets().top).toBe(8);
     const name = view.$('[data-testid="picker"] [data-happy2-ui="mention-picker-name"]');
     expect(name.textMetrics()).toMatchObject({
         font: {
             family: "happy2 Figtree, system-ui, sans-serif",
             lineHeight: 16,
             size: 13,
-            weight: "700",
+            weight: "500",
         },
         text: "Codex",
     });
@@ -1048,17 +1056,16 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     const descriptionSelector = `${codexRow} [data-happy2-ui="mention-picker-description"]`;
     const nameLaneY = await isolatedLaneY(view, metaSelector, [descriptionSelector]);
     expect(Math.abs(nameLaneY - 8.5)).toBeLessThanOrEqual(0.5);
-    // Description: 12px/16px muted lane directly under the name (its line box
-    // spans meta 16..32, center 24). Word ink is asymmetric (descenders in
-    // "Ships code…"), so the vertical centroid is pinned to the
-    // engine-consensus +0.6px (Gecko raw sat 0.5px lower and carries a
-    // measured correction — see composer.css).
+    // Description: the same 13px/16px lane as the name, sharing its baseline
+    // rather than stacking under it, so no per-engine correction is needed —
+    // both lanes centroid on the one line box they occupy.
     const codexDescription = view.$(descriptionSelector);
     expect(codexDescription.bounds().height).toBe(16);
-    // Gecko's painted description box reports its measured -0.5px correction.
-    expect(codexDescription.offsets().top).toBe(server.browser === "firefox" ? 15.5 : 16);
+    // Zero in every engine: the description fills the meta box's one line box
+    // instead of stacking below the name, which is the shared-baseline row.
+    expect(codexDescription.offsets().top).toBe(0);
     const descriptionLaneY = await isolatedLaneY(view, metaSelector, [nameSelector]);
-    expect(Math.abs(descriptionLaneY - (24 + 0.6))).toBeLessThanOrEqual(0.4);
+    expect(Math.abs(descriptionLaneY - 8.5)).toBeLessThanOrEqual(0.5);
     // Active row uses the neutral selected wash; inactive rows stay transparent.
     const activeRow = view.$(
         '[data-testid="picker"] [data-happy2-ui="mention-picker-row"][data-active]',
@@ -1071,7 +1078,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
             .computedStyle("background-color"),
     ).toBe("rgba(0, 0, 0, 0)");
     // Status badges use Happy's direct success and warning roles; the 18px
-    // badge box rides the exact vertical center of the 44px row.
+    // badge box rides the exact vertical center of the 32px row.
     const readyBadge = view.$(
         '[data-testid="picker"] [data-mention-id="codex"] [data-happy2-ui="badge"]',
     );
@@ -1080,7 +1087,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         color: "rgb(52, 199, 89)",
         height: "18px",
     });
-    expect(readyBadge.offsets().top).toBe(13);
+    expect(readyBadge.offsets().top).toBe(7);
     const badgeDrift = await centroidDrift(view, codexRow, `${codexRow} [data-happy2-ui="badge"]`);
     expect(Math.abs(badgeDrift.dy)).toBeLessThanOrEqual(0.75);
     const workingBadge = view.$(
@@ -1106,12 +1113,12 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         description.bounds().width,
     );
     // Single minimal agent: no description or status — the 16px name line box
-    // centers alone in the 44px row (integer 14px offsets).
+    // centers alone in the 32px row (integer 8px offsets).
     const soloRow = '[data-testid="picker-single"] [data-mention-id="solo"]';
-    expect(view.$(soloRow).bounds().height).toBe(44);
+    expect(view.$(soloRow).bounds().height).toBe(32);
     const soloMeta = view.$(`${soloRow} [data-happy2-ui="mention-picker-meta"]`);
     expect(soloMeta.bounds().height).toBe(16);
-    expect(soloMeta.offsets().top).toBe(14);
+    expect(soloMeta.offsets().top).toBe(8);
     expect(
         view.container.querySelector(`${soloRow} [data-happy2-ui="mention-picker-description"]`),
     ).toBeNull();
@@ -1124,7 +1131,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     await userEvent.click(rows[2]!);
     expect(picked).toEqual(["triage"]);
     const empty = view.$('[data-testid="picker-empty"] [data-happy2-ui="mention-picker-empty"]');
-    expect(empty.bounds().height).toBe(44);
+    expect(empty.bounds().height).toBe(32);
     expect(empty.element.textContent).toContain("No mentions match");
     expect((await empty.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     expect(
@@ -1259,7 +1266,10 @@ it("handles typing, sending, and mention picking", async () => {
     const composerRect = view.$('[data-testid="composer-mention"]').element.getBoundingClientRect();
     const popoverRect = popoverOf("composer-mention")!.getBoundingClientRect();
     expect(composerRect.y - (popoverRect.y + popoverRect.height)).toBeCloseTo(8, 1);
-    expect(popoverRect.x - composerRect.x).toBeCloseTo(12, 1);
+    // Flush with the composer: both cards share one vertical line down each
+    // side, so the popover reads as the same card continued upward.
+    expect(popoverRect.x - composerRect.x).toBeCloseTo(0, 1);
+    expect(popoverRect.width).toBeCloseTo(composerRect.width, 1);
     // Filtering narrows the list; Enter inserts "@Name " and reports it.
     await userEvent.keyboard("cod");
     expect(rowsOf("composer-mention").length).toBe(1);

@@ -25,7 +25,12 @@ export type RigSlotContent =
     | { readonly type: "text"; readonly markdown: string }
     | { readonly type: "button"; readonly label: string; readonly action: RigSlotAction };
 
-/** One agent-authored contribution projected from Rig's durable slot catalog. */
+/** Who contributed a slot entry: an agent conversation or an installed plugin. */
+export type RigSlotEntryAuthor =
+    | { readonly type: "agent"; readonly sessionId: RigSessionId }
+    | { readonly type: "plugin"; readonly folder: string; readonly name: string };
+
+/** One contribution projected from Rig's durable slot catalog. */
 export interface RigSlotEntry {
     readonly id: string;
     readonly slot: RigSlotName;
@@ -34,7 +39,7 @@ export interface RigSlotEntry {
     readonly workspaceId?: RigWorktreeId;
     readonly sessionId?: RigSessionId;
     readonly content: RigSlotContent;
-    readonly authorSessionId: string;
+    readonly author: RigSlotEntryAuthor;
     readonly description: string;
     readonly purpose: string;
     readonly createdAt: number;

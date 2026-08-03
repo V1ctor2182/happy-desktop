@@ -628,7 +628,12 @@ export {
     type RigInboxAnswerMap,
     type RigInboxPageProps,
 } from "./pages/inbox/RigInboxPage";
-export { FriendsPage, type Friend, type FriendsPageProps } from "./pages/friends/FriendsPage";
+export { FriendsPage, type FriendsPageProps } from "./pages/friends/FriendsPage";
+export {
+    FriendProfileSetup,
+    type FriendProfileSetupProps,
+} from "./pages/friends/FriendProfileSetup";
+export { FriendRequestCard, type FriendRequestCardProps } from "./pages/friends/FriendRequestCard";
 export {
     RigProviderUsagePage,
     type RigProviderUsagePageProps,

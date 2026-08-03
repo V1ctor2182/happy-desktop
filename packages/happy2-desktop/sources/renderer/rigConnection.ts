@@ -17,6 +17,7 @@ import {
     type RigSlotsStore,
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
+    type RigFriendsStore,
     type RigInboxStore,
     type RigInstructionsStore,
     type RigSecurityPolicyStore,
@@ -31,6 +32,7 @@ import {
 } from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy2-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
+import { rigConnectFriendsSourceCreate } from "./rigConnectFriendsSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
 import { rigPluginApplicationSourceCreate } from "./rigPluginApplicationSource";
@@ -80,6 +82,12 @@ export interface RigSession {
     readonly inbox: RigInboxStore | undefined;
     /** How much of each provider account's plan this machine's agents have spent. */
     readonly providerUsage: RigProviderUsageStore | undefined;
+    /**
+     * This machine's own profile in the network, who is asking to connect to it,
+     * and who it already knows. Absent on a daemon that does not carry Murmur
+     * yet, which is why the surface can say so instead of showing an empty list.
+     */
+    readonly friends: RigFriendsStore | undefined;
     /**
      * Applications this machine's installed plugins contribute. Absent in a
      * window that cannot mount them, which is not the same as a machine that
@@ -170,6 +178,11 @@ export function rigConnectionOpen(input: {
     // rather than streamed, so its reader starts when a surface subscribes and
     // stops when the last one leaves.
     const providerUsageSource = rigConnectProviderUsageSourceCreate(rigConnect);
+    // Friends is read the same way usage is, and for the same reason: the daemon
+    // answers about it rather than announcing it. A daemon that does not carry
+    // Murmur offers no source at all, so the surface says the machine cannot do
+    // this rather than showing an account that is missing for the wrong reason.
+    const friendsSource = rigConnectFriendsSourceCreate(rigConnect);
     // Plugin applications are prepared by the desktop shell rather than read
     // here: mounting one safely needs an isolated origin and a cached bundle,
     // which only the main process can provide. This side follows its catalog.
@@ -206,6 +219,7 @@ export function rigConnectionOpen(input: {
         catalogSource,
         inboxSource,
         providerUsageSource,
+        ...(friendsSource ? { friendsSource } : {}),
         ...(pluginApplicationSource ? { pluginApplicationSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
@@ -238,6 +252,7 @@ export function rigConnectionOpen(input: {
                     slots: (context) => client.slots(context),
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
+                    friends: client.friends(),
                     pluginApplications: client.pluginApplications(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),

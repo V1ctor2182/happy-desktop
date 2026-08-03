@@ -10,6 +10,10 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
+    RigFriendAnswer,
+    RigFriendRequestId,
+    RigFriendsSnapshot,
+    RigFriendsStore,
     RigWorkspaceFiles,
     RigFileScope,
     RigFileViewMode,
@@ -43,6 +47,7 @@ import type {
     RigSessionId,
     RigSlotAction,
     RigSlotEntry,
+    RigSlotEntryAuthor,
     RigSlotsContext,
     RigSlotsSnapshot,
     RigSlotsStore,
@@ -59,6 +64,8 @@ import type {
 import {
     RIG_PANEL_FILE_VIEW_ID,
     rigAgentAuthor,
+    rigFriendsPhotoRead,
+    rigFriendsStoreNoop,
     rigInboxStoreNoop,
     rigNavigationOrderApply,
     rigNavigationOrderStoreNoop,
@@ -196,6 +203,13 @@ export interface AppRigSession {
      * too rather than opening onto an account list that means nothing.
      */
     readonly providerUsage?: RigProviderUsageStore;
+    /**
+     * This account's own profile, the people asking to connect to it, and the
+     * people it already knows. Absent when the machine does not carry the
+     * friends service, which is why the surface can say so rather than offering
+     * a greeting nothing would answer.
+     */
+    readonly friends?: RigFriendsStore;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
@@ -1012,20 +1026,21 @@ function slotsContext(
     return sessionId ? { sessionId: sessionId as RigSessionId } : {};
 }
 
-function slotAuthor(projects: readonly RigProjectGroup[], authorSessionId: string): string {
+function slotAuthor(projects: readonly RigProjectGroup[], author: RigSlotEntryAuthor): string {
+    if (author.type === "plugin") return author.name;
     for (const project of projects) {
         const projectSession = project.conversations.find(
-            (conversation) => conversation.id === authorSessionId,
+            (conversation) => conversation.id === author.sessionId,
         );
         if (projectSession) return projectSession.title ?? "Agent session";
         for (const worktree of project.worktrees) {
             const session = worktree.conversations.find(
-                (conversation) => conversation.id === authorSessionId,
+                (conversation) => conversation.id === author.sessionId,
             );
             if (session) return session.title ?? "Agent session";
         }
     }
-    return `Agent ${authorSessionId.slice(0, 8)}`;
+    return `Agent ${author.sessionId.slice(0, 8)}`;
 }
 
 /**
@@ -1073,7 +1088,7 @@ function slotVisualEntries(
                 : undefined;
         return {
             id: entry.id,
-            author: slotAuthor(projects, entry.authorSessionId),
+            author: slotAuthor(projects, entry.author),
             description: entry.description,
             purpose: entry.purpose,
             ...(unavailable ? { disabled: true, disabledReason: unavailable } : {}),
@@ -1179,6 +1194,30 @@ export function AppRigView(props: AppRigViewProps) {
     const usageStore =
         (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
     const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
+    // Friends has no Rig in its address, so it is not the addressed machine's to
+    // answer: the identity people reach belongs to this account, and it is this
+    // machine's daemon that holds it. Reading it off whichever remote machine
+    // happened to be open would make the same account show different people
+    // depending on what the reader was last looking at.
+    const localRig = directory.rigs.find((rig) => rig.kind === "local");
+    // Subscribed for the same reason usage is, and only while it is open: the
+    // subscription is what starts the daemon being asked about requests, and it
+    // has to stop the moment the reader looks elsewhere.
+    const friendsStore =
+        (props.friendsOpen ? localRig?.session?.friends : undefined) ?? rigFriendsStoreNoop;
+    const friends = useSyncExternalStore(
+        friendsStore.subscribe,
+        friendsStore.get,
+        friendsStore.get,
+    );
+    // Why this window cannot show people, when it cannot: this machine not being
+    // up and this machine not carrying the service are two different facts, and
+    // neither one is an empty list.
+    const friendsMessage = !localRig?.session
+        ? "Waiting for this machine's Rig to connect before it can reach the people you know."
+        : localRig.session.friends
+          ? undefined
+          : "This Rig does not carry the friends service yet. Update it to connect with people.";
     const slotsStore =
         active?.session?.slots?.(slotsContext(active.projects, props.groupId, props.chatId)) ??
         rigSlotsStoreNoop;
@@ -1611,7 +1650,8 @@ export function AppRigView(props: AppRigViewProps) {
             );
 
         // Friends belong to the account rather than to a machine, so like notes the
-        // surface is shown whatever the addressed machine is doing.
+        // surface is shown whatever the addressed machine is doing — and answered
+        // by this machine's Rig rather than by the addressed one.
         if (props.friendsOpen)
             return (
                 <AppShell
@@ -1621,10 +1661,11 @@ export function AppRigView(props: AppRigViewProps) {
                     sidebar={sidebar}
                 >
                     {desktop ? <WindowDragRegion /> : null}
-                    {/* No connection model exists yet, so the gallery is handed
-                    nobody. The surface is the same one it will render a real
-                    list into. */}
-                    <FriendsPage friends={[]} />
+                    <RigFriendsSurface
+                        snapshot={friends}
+                        store={localRig?.session?.friends}
+                        {...(friendsMessage === undefined ? {} : { unavailable: friendsMessage })}
+                    />
                 </AppShell>
             );
 
@@ -1891,6 +1932,68 @@ function RigInboxSurface(props: {
             submissions={props.snapshot.submissions}
         />
     );
+}
+
+/**
+ * The account's friends inside the window's shell. It subscribes to nothing:
+ * the window already holds this store's snapshot, and its subscription is what
+ * starts and stops the daemon being asked about requests, so the reading belongs
+ * to the window's lifetime rather than to this component's.
+ *
+ * Turning a chosen file into the bytes a profile carries is glue, which is why
+ * it happens here: the page reports the file someone picked, and the window
+ * decides what a picture is made of.
+ */
+function RigFriendsSurface(props: {
+    snapshot: RigFriendsSnapshot;
+    store?: RigFriendsStore;
+    unavailable?: string;
+}) {
+    const store = props.store;
+    const snapshot = props.snapshot;
+    return (
+        <FriendsPage
+            {...(snapshot.account ? { account: snapshot.account } : {})}
+            answers={snapshot.answers}
+            {...(snapshot.error ? { error: snapshot.error } : {})}
+            friends={snapshot.friends}
+            friendTime={(friend) => friendsConnectedTime(friend.addedAt)}
+            loading={snapshot.loading}
+            onFirstNameChange={(value) => store?.firstNameUpdate(value)}
+            onLastNameChange={(value) => store?.lastNameUpdate(value)}
+            onPhotoRemove={() => store?.photoRemove()}
+            onPhotoSelect={(file) => {
+                if (!store) return;
+                // A picture that cannot be read is simply not attached: nothing
+                // was promised about it yet, and the well still says "add a
+                // photo".
+                void rigFriendsPhotoRead(file).then(
+                    (photo) => store.photoAttach(photo),
+                    () => undefined,
+                );
+            }}
+            onProfileCreate={() => store?.profileCreate()}
+            onRequestAnswer={(requestId: RigFriendRequestId, answer: RigFriendAnswer) =>
+                store?.requestAnswer(requestId, answer)
+            }
+            profileDraft={snapshot.draft}
+            requests={snapshot.requests}
+            requestTime={(request) => friendsRequestTime(request.receivedAt)}
+            {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
+        />
+    );
+}
+
+/** When a request arrived, as an absolute local date and time. */
+function friendsRequestTime(receivedAt: number): string {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(receivedAt),
+    );
+}
+
+/** When a person was connected. The day is enough; the minute is not the point. */
+function friendsConnectedTime(addedAt: number): string {
+    return `Connected ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(addedAt))}`;
 }
 
 /**
