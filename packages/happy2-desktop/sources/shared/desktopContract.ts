@@ -239,17 +239,67 @@ export interface DesktopMediaPreview {
 }
 
 /**
- * HTTP result of one committed navigation in an embedded guest — a browser tab
- * or an HTML preview alike. Only the main process sees a guest's response code,
- * so it forwards it to the renderer keyed by the guest's `webContents` id, and
- * each view claims the events for its own guest.
+ * HTTP result of one committed browser-guest navigation. Only the main process
+ * sees a guest's response code, so it forwards it to the renderer keyed by the
+ * guest's `webContents` id; a renderer tab claims the events for its own guest.
  */
-export interface DesktopGuestStatus {
+export interface DesktopBrowserStatus {
     readonly guestId: number;
     readonly url: string;
     readonly status: number;
     readonly statusText: string;
 }
+
+/**
+ * One step in the life of one main-frame document inside an HTML preview guest.
+ *
+ * A preview reloads in place whenever the file behind it changes, so one guest
+ * shows many documents and its `webContents` id identifies the guest, never the
+ * page. `navigationId` is what identifies the page: it is monotonic per guest,
+ * counts up once for every new document the main frame starts loading, and is
+ * stamped on every step of that document's life.
+ *
+ * The steps are published by the main process on one channel, in the order that
+ * process observed them, so a view never has to guess whether a response code
+ * belongs to the document it is showing or to the one before it.
+ */
+export type DesktopPreviewNavigationStep =
+    | {
+          /** A new document has begun loading in the main frame. */
+          readonly phase: "started";
+          readonly url: string;
+      }
+    | {
+          /** The document committed, with the response the server gave for it. */
+          readonly phase: "responded";
+          readonly url: string;
+          /** `-1` for a navigation that is not HTTP. */
+          readonly status: number;
+          readonly statusText: string;
+      }
+    | {
+          /** The document and everything it pulled in finished loading. */
+          readonly phase: "loaded";
+          readonly url: string;
+      }
+    | {
+          /** The main frame's load failed outright; nothing committed. */
+          readonly phase: "failed";
+          readonly url: string;
+          readonly code: number;
+          readonly description: string;
+      }
+    | {
+          /** The process drawing the page ended. */
+          readonly phase: "gone";
+          readonly url: string;
+          readonly reason: string;
+      };
+
+export type DesktopPreviewNavigation = DesktopPreviewNavigationStep & {
+    readonly guestId: number;
+    readonly navigationId: number;
+};
 
 /**
  * One local plugin application as the renderer is allowed to see it.
@@ -343,7 +393,12 @@ export interface HappyDesktopBridge {
      */
     pluginAppCancel(origin: string, requestId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
-    guestStatusSubscribe(listener: (status: DesktopGuestStatus) => void): () => void;
+    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
+    /**
+     * The ordered life of every HTML preview guest in this window. A view claims
+     * the steps carrying its own guest id and follows one navigation at a time.
+     */
+    previewNavigationSubscribe(listener: (step: DesktopPreviewNavigation) => void): () => void;
     /**
      * Reports how many conversations are waiting for the person, for the mark on
      * the Dock icon. One-way and fire-and-forget: the window states what it is
@@ -415,7 +470,8 @@ export const desktopIpc = {
     appearanceSet: "happy2:appearance:set",
     browserProxyApply: "happy2:browser:proxy-apply",
     browserOpenRequested: "happy2:browser:open-requested",
-    guestStatusChanged: "happy2:guest:status-changed",
+    browserStatusChanged: "happy2:browser:status-changed",
+    previewNavigationChanged: "happy2:html-preview:navigation-changed",
     directoryPick: "happy2:directory:pick",
     mediaPreviewChanged: "happy2:media-preview:changed",
     mediaPreviewClose: "happy2:media-preview:close",

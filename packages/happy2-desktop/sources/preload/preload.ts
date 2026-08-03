@@ -3,7 +3,8 @@ import {
     buildIdentityArgument,
     desktopIpc,
     mediaPreviewArgument,
-    type DesktopGuestStatus,
+    type DesktopBrowserStatus,
+    type DesktopPreviewNavigation,
     type DesktopBuildIdentity,
     type DesktopMediaPreview,
     type DesktopNoteApplyRequest,
@@ -44,11 +45,17 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserOpenRequested, receive);
     },
-    guestStatusSubscribe(listener: (status: DesktopGuestStatus) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, status: DesktopGuestStatus) =>
+    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, status: DesktopBrowserStatus) =>
             listener(status);
-        ipcRenderer.on(desktopIpc.guestStatusChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.guestStatusChanged, receive);
+        ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
+    },
+    previewNavigationSubscribe(listener: (step: DesktopPreviewNavigation) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, step: DesktopPreviewNavigation) =>
+            listener(step);
+        ipcRenderer.on(desktopIpc.previewNavigationChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.previewNavigationChanged, receive);
     },
     pluginApplicationsGet: () => ipcRenderer.invoke(desktopIpc.pluginApplicationsGet),
     pluginAppRequest: (origin: string, requestId: string, request: DesktopPluginAppRequest) =>

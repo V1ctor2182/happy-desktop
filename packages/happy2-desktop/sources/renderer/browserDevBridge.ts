@@ -55,7 +55,10 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         },
         pluginAppCancel: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
-        guestStatusSubscribe: () => () => undefined,
+        browserStatusSubscribe: () => () => undefined,
+        // A browser tab hosts no preview guest, so no navigation is ever
+        // reported and the subscription is a well-behaved no-op.
+        previewNavigationSubscribe: () => () => undefined,
         // A browser tab has no Dock icon to mark, so the count goes nowhere
         // rather than the window branching on where it is running.
         dockUnreadSet: () => undefined,

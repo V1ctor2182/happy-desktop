@@ -11,6 +11,7 @@ import {
     type BrowserWindowConstructorOptions,
     type MenuItemConstructorOptions,
     type OpenDialogOptions,
+    type WebContents,
 } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -36,8 +37,10 @@ import {
     happyHtmlPreviewPartition,
     mediaPreviewArgument,
     mediaPreviewView,
-    type DesktopGuestStatus,
+    type DesktopBrowserStatus,
     type DesktopMediaPreview,
+    type DesktopPreviewNavigation,
+    type DesktopPreviewNavigationStep,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
 import {
@@ -398,19 +401,6 @@ function browserGuestAttach(window: BrowserWindow): void {
         webPreferences.allowRunningInsecureContent = false;
     });
     window.webContents.on("did-attach-webview", (_event, guest) => {
-        // Only the main process observes a guest's response code. Every embedded
-        // view needs it to tell a refused response from a page: the browser to
-        // separate a served error page from a blank failed navigation, a preview
-        // to know the document it asked for is not there at all.
-        guest.on("did-navigate", (_navigation, url, status, statusText) => {
-            if (window.isDestroyed()) return;
-            window.webContents.send(desktopIpc.guestStatusChanged, {
-                guestId: guest.id,
-                url,
-                status,
-                statusText,
-            } satisfies DesktopGuestStatus);
-        });
         if (guest.session === htmlPreviewSessionGet()) {
             // A preview is one page of one file. Following a link out of it, or
             // opening a window from it, is browsing, and browsing is the browser
@@ -424,6 +414,7 @@ function browserGuestAttach(window: BrowserWindow): void {
             };
             guest.on("will-navigate", stayOnPreview);
             guest.on("will-redirect", stayOnPreview);
+            htmlPreviewLifecyclePublish(window, guest);
             return;
         }
         guest.setUserAgent(happyBrowserUserAgent);
@@ -436,6 +427,67 @@ function browserGuestAttach(window: BrowserWindow): void {
         };
         guest.on("will-navigate", navigationGuard);
         guest.on("will-redirect", navigationGuard);
+        // Only the main process observes a guest's response code. The renderer
+        // needs it to tell a served error page from a blank failed navigation.
+        guest.on("did-navigate", (_navigation, url, status, statusText) => {
+            if (window.isDestroyed()) return;
+            window.webContents.send(desktopIpc.browserStatusChanged, {
+                guestId: guest.id,
+                url,
+                status,
+                statusText,
+            } satisfies DesktopBrowserStatus);
+        });
+    });
+}
+
+/**
+ * Publishes the life of a preview guest's main-frame document as one ordered
+ * stream, numbered by navigation.
+ *
+ * A preview reloads in place whenever the file behind it changes, so a guest
+ * outlives many documents and its id says nothing about which one an event
+ * belongs to. Only this process sees the whole sequence — the start, the
+ * response code, the finish, the failure, the lost renderer — so it is the only
+ * place that can put those in one order and stamp each with the navigation it
+ * came from. The renderer then ignores anything older than the document it is
+ * on, and cannot be told by a slow answer from a previous revision that the
+ * page it is showing is broken.
+ *
+ * The counter is monotonic per guest and never restarts: a reload is a new
+ * navigation, and the number only ever goes up while the guest exists.
+ */
+function htmlPreviewLifecyclePublish(window: BrowserWindow, guest: WebContents): void {
+    let navigation = 0;
+    const publish = (step: DesktopPreviewNavigationStep): void => {
+        if (window.isDestroyed() || guest.isDestroyed()) return;
+        window.webContents.send(desktopIpc.previewNavigationChanged, {
+            guestId: guest.id,
+            navigationId: navigation,
+            ...step,
+        } satisfies DesktopPreviewNavigation);
+    };
+    guest.on("did-start-navigation", (details) => {
+        // A fragment or a history entry inside the same document is not a new
+        // page, and the document on screen keeps whatever it already said.
+        if (!details.isMainFrame || details.isSameDocument) return;
+        navigation += 1;
+        publish({ phase: "started", url: details.url });
+    });
+    guest.on("did-navigate", (_event, url, status, statusText) => {
+        publish({ phase: "responded", url, status, statusText });
+    });
+    guest.on("did-finish-load", () => {
+        publish({ phase: "loaded", url: guest.getURL() });
+    });
+    guest.on("did-fail-load", (_event, code, description, validatedURL, isMainFrame) => {
+        // ERR_ABORTED is how Chromium reports a load this guest replaced or
+        // stopped itself, which is the superseding navigation's business.
+        if (!isMainFrame || code === -3) return;
+        publish({ phase: "failed", url: validatedURL, code, description });
+    });
+    guest.on("render-process-gone", (_event, details) => {
+        publish({ phase: "gone", url: guest.getURL(), reason: details.reason });
     });
 }
 
