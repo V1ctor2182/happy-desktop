@@ -7,6 +7,8 @@ import type {
 } from "../types.js";
 import {
     entrySequence,
+    noticeFailed,
+    noticeInformational,
     type ConversationActivityEntry,
     type ConversationEntry,
     type ConversationMessageEntry,
@@ -239,7 +241,7 @@ function attachSectionTraces(
         const expanded = running || input.expandedTurnIds.has(turnUserId);
         const durableFinalMessage = lastMessage(turnBody);
         const firstErrorIndex = turnBody.findIndex(
-            (entry) => entry.kind === "notice" && entry.level === "error",
+            (entry) => entry.kind === "notice" && noticeFailed(entry),
         );
         const summaryAnchor =
             turnBody[firstErrorIndex > 0 ? firstErrorIndex - 1 : Math.max(0, turnBody.length - 1)];
@@ -264,7 +266,7 @@ function attachSectionTraces(
                   : [...turnBody, collapsedEmptyMessage];
         const failed =
             durableFinalMessage?.message.generationStatus === "failed" ||
-            turnBody.some((entry) => entry.kind === "notice" && entry.level === "error");
+            turnBody.some((entry) => entry.kind === "notice" && noticeFailed(entry));
         // A finished turn is complete whenever it produced a final reply. A tool
         // that failed mid-turn is ordinary agent recovery, not a failed turn —
         // only the run's own terminal outcome marks the final assistant message
@@ -300,15 +302,15 @@ function attachSectionTraces(
         // notices therefore stay on screen in turn order alongside the answer.
         const persistentNotices = turnBody.filter(
             (entry): entry is ConversationNoticeEntry =>
-                entry.kind === "notice" && entry.level !== "info",
+                entry.kind === "notice" && !noticeInformational(entry),
         );
         const shown = collapsed
             ? [
-                  ...persistentNotices.filter((entry) => entry.level !== "error"),
+                  ...persistentNotices.filter((entry) => !noticeFailed(entry)),
                   collapsed,
                   // The terminal error explains the settled turn, so it stays
                   // directly above that turn's neutral completion footer.
-                  ...persistentNotices.filter((entry) => entry.level === "error"),
+                  ...persistentNotices.filter((entry) => noticeFailed(entry)),
               ]
             : expanded
               ? turnBody

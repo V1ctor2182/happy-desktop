@@ -178,28 +178,29 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 style={props.style}
             />
         );
-    /* Compute preparation is the runtime materializing the workspace, not the
-       agent working: Rig attributes it to every session running out of that
-       directory, including ones with no turn in flight. So it takes no agent
-       identity header — it is the session's own machine, reported in order. */
-    if (entry.kind === "compute")
-        return (
-            <ConversationComputeEvent
-                className={props.className}
-                data-testid={props["data-testid"]}
-                defaultExpanded={props.activityDefaultExpanded}
-                {...(entry.elapsedMs === undefined ? {} : { elapsedMs: entry.elapsedMs })}
-                instanceId={entry.instanceId}
-                message={entry.message}
-                {...(entry.percent === undefined ? {} : { percent: entry.percent })}
-                phase={entry.phase}
-                provider={entry.provider}
-                state={entry.state}
-                style={props.style}
-                text={entry.text}
-            />
-        );
     if (entry.kind === "notice") {
+        /* Compute preparation is the runtime materializing the workspace, not
+           the agent working: Rig attributes it to every session running out of
+           that directory, including ones with no turn in flight. So it takes no
+           agent identity header — it is the session's own machine, reported in
+           order among the rows it holds up. */
+        if (entry.variant === "compute")
+            return (
+                <ConversationComputeEvent
+                    className={props.className}
+                    data-testid={props["data-testid"]}
+                    defaultExpanded={props.activityDefaultExpanded}
+                    {...(entry.elapsedMs === undefined ? {} : { elapsedMs: entry.elapsedMs })}
+                    instanceId={entry.instanceId}
+                    message={entry.message}
+                    {...(entry.percent === undefined ? {} : { percent: entry.percent })}
+                    phase={entry.phase}
+                    provider={entry.provider}
+                    state={entry.state}
+                    style={props.style}
+                    text={entry.text}
+                />
+            );
         if (entry.variant === "divider")
             return <DayDivider className={props.className} label={entry.text} />;
         const notice =

@@ -43,7 +43,6 @@ function entryShape(entry: ConversationEntry): string {
     if (entry.kind === "agentActivity") return entry.activity.kind;
     if (entry.kind === "request") return "request";
     if (entry.kind === "turnStatus") return "turnStatus";
-    if (entry.kind === "compute") return "compute";
     return entry.variant === "divider" ? "divider" : "notice";
 }
 

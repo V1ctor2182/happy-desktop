@@ -109,24 +109,25 @@ export function entryCompare(left: ConversationEntry, right: ConversationEntry):
 }
 
 function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolean {
-    if (left.kind === "notice" && right.kind === "notice")
-        return (
-            left.variant === right.variant &&
-            left.level === right.level &&
-            left.title === right.title &&
-            left.text === right.text
-        );
-    if (left.kind === "compute" && right.kind === "compute")
-        return (
-            left.state === right.state &&
-            left.phase === right.phase &&
-            left.provider === right.provider &&
-            left.instanceId === right.instanceId &&
-            left.message === right.message &&
-            left.percent === right.percent &&
-            left.elapsedMs === right.elapsedMs &&
-            left.text === right.text
-        );
+    if (left.kind === "notice" && right.kind === "notice") {
+        if (left.variant !== right.variant) return false;
+        if (left.text !== right.text) return false;
+        // A compute row is the same row only when the whole reported state is
+        // the same: a changed percent or elapsed second is a visible change, and
+        // keeping the old object would freeze the row a reader is watching.
+        if (left.variant === "compute" && right.variant === "compute")
+            return (
+                left.state === right.state &&
+                left.phase === right.phase &&
+                left.provider === right.provider &&
+                left.instanceId === right.instanceId &&
+                left.message === right.message &&
+                left.percent === right.percent &&
+                left.elapsedMs === right.elapsedMs
+            );
+        if (left.variant === "compute" || right.variant === "compute") return false;
+        return left.level === right.level && left.title === right.title;
+    }
     if (left.kind === "agentActivity" && right.kind === "agentActivity")
         return activityEqual(left.activity, right.activity);
     if (left.kind === "request" && right.kind === "request")

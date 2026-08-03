@@ -80,7 +80,7 @@ export type {
     ConversationEntry,
     ConversationFileDiff,
     ConversationAttachment,
-    ConversationComputeEntry,
+    ConversationComputeNoticeEntry,
     ConversationComputeState,
     ConversationJson,
     ConversationMessageEntry,
@@ -93,6 +93,7 @@ export type {
     ConversationRequestSubmission,
     ConversationRequestStatus,
     ConversationRequestQuestion,
+    ConversationServiceNoticeEntry,
     ConversationToolCall,
     ConversationTurnStatusEntry,
 } from "./conversation/conversationEntry.js";

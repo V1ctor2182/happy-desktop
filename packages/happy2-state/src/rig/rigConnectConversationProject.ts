@@ -1,10 +1,11 @@
 import type { ChatElement, ToolPresentation } from "@slopus/rig-connect";
-import type {
-    ConversationActivityPresentation,
-    ConversationEntry,
-    ConversationJson,
-    ConversationMessageProjection,
-    ConversationToolCall,
+import {
+    noticeInformational,
+    type ConversationActivityPresentation,
+    type ConversationEntry,
+    type ConversationJson,
+    type ConversationMessageProjection,
+    type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
@@ -173,7 +174,8 @@ function rigConnectGroupProject(
                 entries.push(
                     structured?.kind === "compute_preparation"
                         ? {
-                              kind: "compute",
+                              kind: "notice",
+                              variant: "compute",
                               id: element.id,
                               sequence,
                               state: structured.state,
@@ -438,7 +440,7 @@ function rigConnectGroupProject(
             entry.kind === "turnStatus" ||
             index === finalAgentIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
-            (entry.kind === "notice" && entry.level !== "info"),
+            (entry.kind === "notice" && !noticeInformational(entry)),
     );
     const hiddenCount = entries.length - visibleCollapsed.length;
     if (hiddenCount === 0) return entries;

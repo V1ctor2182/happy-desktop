@@ -1,5 +1,5 @@
 import { type CSSProperties } from "react";
-import type { ConversationComputeEntry } from "happy2-state";
+import type { ConversationComputeNoticeEntry } from "happy2-state";
 import { ConversationComputeEvent } from "../../src/ConversationComputeEvent";
 import { ConversationEntryView } from "../../src/ConversationEntryView";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -16,9 +16,10 @@ const transcript: CSSProperties = {
  * work. Every value is shaped exactly as Rig's compute preparation notice sends
  * it, so the fixture and the product row are the same row.
  */
-const preparation: readonly ConversationComputeEntry[] = [
+const preparation: readonly ConversationComputeNoticeEntry[] = [
     {
-        kind: "compute",
+        kind: "notice",
+        variant: "compute",
         id: "message:cmp1",
         sequence: "1",
         state: "unprovisioned",
@@ -29,7 +30,8 @@ const preparation: readonly ConversationComputeEntry[] = [
         text: "Preparing compute: Waiting for a compute instance.",
     },
     {
-        kind: "compute",
+        kind: "notice",
+        variant: "compute",
         id: "message:cmp2",
         sequence: "2",
         state: "provisioning",
@@ -42,7 +44,8 @@ const preparation: readonly ConversationComputeEntry[] = [
         text: "Preparing compute: Pulling node:22-bookworm. (18s)",
     },
     {
-        kind: "compute",
+        kind: "notice",
+        variant: "compute",
         id: "message:cmp3",
         sequence: "3",
         state: "provisioning",
@@ -55,7 +58,8 @@ const preparation: readonly ConversationComputeEntry[] = [
         text: "Preparing compute: Copying the workspace into the container. (41s)",
     },
     {
-        kind: "compute",
+        kind: "notice",
+        variant: "compute",
         id: "message:cmp4",
         sequence: "4",
         state: "ready",

@@ -306,9 +306,21 @@ export interface ConversationActivityEntry {
     readonly agentTrace?: AgentTurnTraceSummary;
 }
 
-export interface ConversationNoticeEntry {
+/**
+ * A service row: something the session says about itself rather than something
+ * anyone wrote. Every variant is one row in the transcript with one identity and
+ * one place in the order, and `text` is always the complete sentence a reader
+ * gets even when nothing else about the variant is understood.
+ */
+interface ConversationNoticeEntryBase {
     readonly kind: "notice";
     readonly id: string;
+    readonly sequence: string;
+    readonly text: string;
+}
+
+/** The ordinary service line and the section boundary that closes a turn. */
+export interface ConversationServiceNoticeEntry extends ConversationNoticeEntryBase {
     /** `divider` closes a section (a completed turn); `notice` is a service line. */
     readonly variant: "notice" | "divider";
     readonly level: "info" | "warning" | "error";
@@ -318,8 +330,6 @@ export interface ConversationNoticeEntry {
         readonly maxAttempts?: number;
     };
     readonly title?: string;
-    readonly text: string;
-    readonly sequence: string;
 }
 
 /**
@@ -344,15 +354,17 @@ export type ConversationComputeState =
  * is authoritative session history, ordered with everything else and reconciled
  * the same way, not a toast that disappears before the reader looks up.
  *
- * Every field is projected verbatim from Rig's own notice. `text` is the
- * daemon's complete sentence and always renders something truthful; the
- * remaining fields let a surface say the same thing better. Nothing is inferred:
- * a value Rig did not send is absent rather than guessed.
+ * It is a service notice, not a row type of its own: the daemon publishes it as
+ * one, it takes its place in the order the same way, and a surface that only
+ * understands notices still has `text`. What the variant adds is the complete
+ * concrete payload behind that sentence, so a row can say which provider, which
+ * step, how far, and how long instead of restating one line of prose.
+ *
+ * Every field is projected verbatim from Rig's own notice. Nothing is inferred:
+ * a metric Rig did not measure is absent rather than guessed.
  */
-export interface ConversationComputeEntry {
-    readonly kind: "compute";
-    readonly id: string;
-    readonly sequence: string;
+export interface ConversationComputeNoticeEntry extends ConversationNoticeEntryBase {
+    readonly variant: "compute";
     readonly state: ConversationComputeState;
     /** The provider's own step name inside the lifecycle, such as `pulling_image`. */
     readonly phase: string;
@@ -362,12 +374,37 @@ export interface ConversationComputeEntry {
     readonly instanceId: string;
     /** The provider's progress or failure sentence, as it wrote it. */
     readonly message: string;
-    /** Materialization progress, when the provider reports one. */
+    /** Materialization progress in percent, when the provider reports one. */
     readonly percent?: number;
-    /** Time spent preparing so far, when Rig measured it. */
+    /** Milliseconds spent preparing so far, when Rig measured it. */
     readonly elapsedMs?: number;
-    /** Rig's complete human-readable line, the fallback for any unknown state. */
-    readonly text: string;
+}
+
+/**
+ * Everything a service row can be, as one closed union discriminated by
+ * `variant`. A reader of an unfamiliar variant never falls through to a partial
+ * shape: it either narrows and renders the payload, or renders `text`.
+ */
+export type ConversationNoticeEntry =
+    | ConversationServiceNoticeEntry
+    | ConversationComputeNoticeEntry;
+
+/**
+ * Whether a service row is ordinary progress a collapsed turn may fold away.
+ * Compute rows are the session's machine reporting itself, so their preparation
+ * steps are as foldable as any other progress — until one of them says the
+ * machine never came up.
+ */
+export function noticeInformational(entry: ConversationNoticeEntry): boolean {
+    return entry.variant === "compute" ? entry.state !== "failed" : entry.level === "info";
+}
+
+/**
+ * Whether a service row is a failure: the thing a reader must still see after
+ * everything else about the turn has been folded away.
+ */
+export function noticeFailed(entry: ConversationNoticeEntry): boolean {
+    return entry.variant === "compute" ? entry.state === "failed" : entry.level === "error";
 }
 
 export interface ConversationRequestEntry {
@@ -402,7 +439,6 @@ export interface ConversationTurnStatusEntry {
 export type ConversationEntry =
     | ConversationMessageEntry
     | ConversationActivityEntry
-    | ConversationComputeEntry
     | ConversationNoticeEntry
     | ConversationRequestEntry
     | ConversationTurnStatusEntry;
