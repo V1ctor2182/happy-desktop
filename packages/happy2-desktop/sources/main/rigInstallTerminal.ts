@@ -164,8 +164,18 @@ export class RigInstallTerminalManager implements Disposable {
         installation.pty.resize(cols, rows);
     }
 
+    /**
+     * Releases one terminal. A terminal that already ended has retired itself, so
+     * releasing it again is the same outcome rather than an error: the caller
+     * asked for it to be gone, and it is.
+     */
     close(ownerId: number, terminalId: string): void {
-        const installation = this.owned(ownerId, terminalId);
+        this.assertActive();
+        terminalIdRequire(terminalId);
+        const installation = this.installations.get(terminalId);
+        if (!installation) return;
+        if (installation.ownerId !== ownerId)
+            throw new Error("The Rig installation terminal is unavailable.");
         this.installationDispose(installation);
         this.installations.delete(terminalId);
     }
@@ -202,6 +212,7 @@ export class RigInstallTerminalManager implements Disposable {
                 verified: false,
                 message: `npm exited with status ${exitCode}.`,
             });
+            this.retire(installation);
             return;
         }
         try {
@@ -214,6 +225,7 @@ export class RigInstallTerminalManager implements Disposable {
                 exitCode,
                 verified: true,
             });
+            this.retire(installation);
             this.options.verified?.();
         } catch (error) {
             if (this.disposed || this.installations.get(installation.id) !== installation) return;
@@ -227,13 +239,27 @@ export class RigInstallTerminalManager implements Disposable {
                         ? error.message
                         : "The installed Rig command could not be verified.",
             });
+            this.retire(installation);
         }
+    }
+
+    /**
+     * Forgets an installation that has ended and told its owner so. Only a
+     * terminal with no process behind it is retired, and only after its final
+     * event, so what an owner may still be showing is never taken away from it —
+     * the transcript lives with the reader, not here. Keeping ended terminals
+     * would instead spend the owner's budget on installs that are over, which is
+     * how a second failed attempt used to be the last one allowed.
+     */
+    private retire(installation: Installation): void {
+        if (installation.pty) return;
+        if (this.installations.get(installation.id) === installation)
+            this.installations.delete(installation.id);
     }
 
     private owned(ownerId: number, terminalId: string): Installation {
         this.assertActive();
-        if (!/^install_[a-f0-9]{32}$/u.test(terminalId))
-            throw new Error("The Rig installation terminal identity is invalid.");
+        terminalIdRequire(terminalId);
         const installation = this.installations.get(terminalId);
         if (!installation || installation.ownerId !== ownerId)
             throw new Error("The Rig installation terminal is unavailable.");
@@ -253,6 +279,11 @@ export class RigInstallTerminalManager implements Disposable {
     private assertActive(): void {
         if (this.disposed) throw new Error("The Rig installation manager is closed.");
     }
+}
+
+function terminalIdRequire(terminalId: string): void {
+    if (!/^install_[a-f0-9]{32}$/u.test(terminalId))
+        throw new Error("The Rig installation terminal identity is invalid.");
 }
 
 function sizeValidate(cols: number, rows: number): void {

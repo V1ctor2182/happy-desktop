@@ -199,6 +199,13 @@ export type RigInstallTerminalEvent =
  * that may no longer be true.
  */
 export type LocalOnboardingStage =
+    /**
+     * Happy is not being asked to run on this machine — a cloud workspace is
+     * chosen, requested, or the choice has not been made yet — so local setup
+     * has nothing to do and does nothing: no probe, no connection attempt, no
+     * poll, and no opinion about a machine nobody asked about.
+     */
+    | "inactive"
     /** The login-shell probe has not answered yet. */
     | "checking"
     /** No Node runtime; Happy cannot install one, so the person is asked to. */

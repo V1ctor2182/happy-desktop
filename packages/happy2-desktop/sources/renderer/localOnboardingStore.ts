@@ -59,6 +59,8 @@ export function localOnboardingStoreCreate(
     let emulator: TerminalEmulator | undefined;
     let emulatorPending: Promise<TerminalEmulator> | undefined;
     let emulatorTerminalId: string | undefined;
+    /** Bumped by every release, so a creation in flight knows it was let go. */
+    let emulatorGeneration = 0;
     let size = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
     let eventReceived = false;
     let inFlight = 0;
@@ -74,44 +76,61 @@ export function localOnboardingStoreCreate(
      * the transcript belongs to that install rather than to the next one.
      */
     const emulatorRelease = () => {
+        emulatorGeneration += 1;
         const live = emulator;
-        const pending = emulatorPending;
         emulator = undefined;
         emulatorPending = undefined;
         emulatorTerminalId = undefined;
-        if (live) live.dispose();
-        else if (pending) void pending.then((created) => created.dispose()).catch(() => undefined);
+        live?.dispose();
     };
+    /**
+     * The install terminal is on screen only while an install is running or has
+     * failed, and only for the terminal the shell is currently reporting. Any
+     * other stage — installed, connecting, or setup moving on — ends its
+     * lifetime, and the transcript is deliberately kept for a failure alone,
+     * which is the one case someone still needs to read.
+     */
     const onboardingSet = (next: LocalOnboardingSnapshot) => {
         if (Object.is(snapshot.onboarding, next)) return;
-        const nextTerminalId = next.install?.terminalId;
-        // The install this emulator was drawing is gone, or has been replaced by
-        // another one, so its screen goes with it.
-        const replaced = emulatorTerminalId !== undefined && emulatorTerminalId !== nextTerminalId;
-        if (replaced) emulatorRelease();
+        const shows = next.stage === "rigInstalling" || next.stage === "rigInstallFailed";
+        const ended =
+            emulatorTerminalId !== undefined &&
+            (!shows || emulatorTerminalId !== next.install?.terminalId);
+        if (ended) emulatorRelease();
         publish({
             ...snapshot,
-            ...(replaced ? { terminal: undefined } : {}),
+            ...(ended ? { terminal: undefined } : {}),
             onboarding: next,
         });
     };
-    const emulatorEnsure = (): Promise<TerminalEmulator> => {
-        emulatorTerminalId = terminalId();
+    const emulatorEnsure = (id: string): Promise<TerminalEmulator> => {
+        emulatorTerminalId = id;
+        const generation = emulatorGeneration;
         emulatorPending ??= emulatorCreate(size.cols, size.rows).then((created) => {
+            // Released while it was being built: this emulator belongs to a
+            // terminal that is gone, so it is disposed here rather than stored
+            // and disposed by nobody.
+            if (generation !== emulatorGeneration) {
+                created.dispose();
+                throw new Error("The installation terminal was released.");
+            }
             emulator = created;
             return created;
         });
         return emulatorPending;
     };
-    const outputWrite = (data: string) => {
-        const pending = emulatorEnsure();
-        void pending.then((live) => {
-            // The install ended and the emulator was released while this frame
-            // was in flight; writing into it would resurrect a dead screen.
-            if (emulatorPending !== pending) return;
-            live.write(encoder.encode(data));
-            publish({ ...snapshot, terminal: live.snapshot() });
-        });
+    const outputWrite = (id: string, data: string) => {
+        const pending = emulatorEnsure(id);
+        void pending
+            .then((live) => {
+                // The install ended and the emulator was released while this
+                // frame was in flight; writing into it would resurrect a dead
+                // screen.
+                if (emulatorPending !== pending || emulatorTerminalId !== id) return;
+                live.write(encoder.encode(data));
+                publish({ ...snapshot, terminal: live.snapshot() });
+            })
+            .catch(() => undefined);
     };
     /**
      * Sends one request and reports what happened to it. A bridge call that
@@ -149,7 +168,13 @@ export function localOnboardingStoreCreate(
                     onboardingSet(next);
                 });
                 installUnsubscribe = bridge.rigInstallSubscribe((event) => {
-                    if (event.type === "output") outputWrite(event.data);
+                    // The install-terminal channel carries every terminal this
+                    // window opened, including the startup screen's own. Only the
+                    // one setup is currently showing may write to this screen, so
+                    // both output and the final event are matched against it and
+                    // nothing else can contaminate the transcript.
+                    if (event.terminalId !== terminalId()) return;
+                    if (event.type === "output") outputWrite(event.terminalId, event.data);
                 });
                 void bridge.onboardingGet().then(
                     (initial) => {
@@ -172,8 +197,11 @@ export function localOnboardingStoreCreate(
                 installUnsubscribe = undefined;
                 // Nothing is watching this screen any more, so the emulator it
                 // was drawing into is released rather than kept for a window
-                // that may never come back.
+                // that may never come back, and the frame it last produced goes
+                // with it: a screen no emulator is behind is not one to show
+                // again if someone comes back.
                 emulatorRelease();
+                publish({ ...snapshot, terminal: undefined });
             };
         },
         rigInstall() {
@@ -238,6 +266,8 @@ export function localOnboardingView(
     const message = onboarding.message ?? snapshot.failure;
     const busy = onboarding.busy || snapshot.pending;
     switch (onboarding.stage) {
+        case "inactive":
+            return undefined;
         case "checking":
             return { kind: "checking", ...(message ? { message } : {}) };
         case "nodeMissing":

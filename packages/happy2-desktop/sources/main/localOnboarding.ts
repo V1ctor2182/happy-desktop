@@ -40,29 +40,48 @@ export interface LocalOnboardingRecord {
     readonly version: typeof recordVersion;
 }
 
-/** Reads the durable record, treating anything unreadable as "nothing decided yet". */
+/**
+ * Reads the durable record, treating anything unreadable as "nothing decided
+ * yet". A record written by the first revision of this feature is migrated
+ * rather than discarded: it recorded the same three answers under names that
+ * claimed the cloud work had already happened, and the answers themselves were
+ * truthful, so someone who already answered is not asked again after an update.
+ * The migrated shape is persisted by the next successful write. Any other
+ * version, and anything malformed, still fails closed.
+ */
 export async function localOnboardingRecordRead(
     path: string,
 ): Promise<LocalOnboardingRecord | undefined> {
     try {
         const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-        if (!isRecord(parsed) || parsed.version !== recordVersion) return undefined;
-        const cloudRequested = cloudParse(parsed.cloudRequested);
-        return {
-            ...(cloudRequested ? { cloudRequested } : {}),
-            ...(typeof parsed.profileRequested === "boolean"
-                ? { profileRequested: parsed.profileRequested }
-                : {}),
-            ...(typeof parsed.projectPath === "string" && parsed.projectPath
-                ? { projectPath: parsed.projectPath }
-                : {}),
-            version: recordVersion,
-        };
+        if (!isRecord(parsed)) return undefined;
+        if (parsed.version === recordVersion)
+            return recordParse(parsed, "cloudRequested", "profileRequested");
+        if (parsed.version === 1) return recordParse(parsed, "cloud", "profileCreated");
+        return undefined;
     } catch (error) {
         if (error instanceof SyntaxError || (error as NodeJS.ErrnoException).code === "ENOENT")
             return undefined;
         throw error;
     }
+}
+
+/** Reads the three answers out of one stored record, whichever names it used. */
+function recordParse(
+    parsed: Record<string, unknown>,
+    cloudKey: string,
+    profileKey: string,
+): LocalOnboardingRecord {
+    const cloudRequested = cloudParse(parsed[cloudKey]);
+    const profileRequested = parsed[profileKey];
+    return {
+        ...(cloudRequested ? { cloudRequested } : {}),
+        ...(typeof profileRequested === "boolean" ? { profileRequested } : {}),
+        ...(typeof parsed.projectPath === "string" && parsed.projectPath
+            ? { projectPath: parsed.projectPath }
+            : {}),
+        version: recordVersion,
+    };
 }
 
 export async function localOnboardingRecordWrite(
@@ -109,6 +128,13 @@ export interface LocalOnboardingOptions {
     /** Opens the native folder picker; resolves to undefined when cancelled. */
     readonly directoryPick: () => Promise<string | undefined>;
     readonly gitRootRead?: (path: string) => Promise<string | undefined>;
+    /**
+     * Identity of the window currently presenting setup. It is read again at
+     * every step of a long operation, so work started by a window that has since
+     * been replaced stops instead of finishing on behalf of a reader who is no
+     * longer there.
+     */
+    readonly presentation?: () => string;
 }
 
 interface InstallState {
@@ -152,6 +178,12 @@ export class LocalOnboarding implements Disposable {
     private runtimeKey?: string;
     /** Durable work runs one at a time, so two clicks cannot interleave writes. */
     private durableQueue: Promise<void> = Promise.resolve();
+    /**
+     * Whether a durable action has been admitted and not yet finished. It is set
+     * before this method returns, so a second call in the same tick is refused
+     * rather than queued behind the first.
+     */
+    private durablePending = false;
     private runtimeUnsubscribe?: () => void;
     private snapshotValue: LocalOnboardingSnapshot = {
         busy: true,
@@ -170,7 +202,10 @@ export class LocalOnboarding implements Disposable {
         };
         const onboarding = new LocalOnboarding(options, record);
         onboarding.runtimeUnsubscribe = options.runtime.subscribe(() => onboarding.refresh());
-        void onboarding.probeRun();
+        // The first look at the machine is the same decision as every later one:
+        // it happens because Happy is being asked to run here, not because this
+        // object was constructed.
+        onboarding.refresh();
         return onboarding;
     }
 
@@ -201,20 +236,29 @@ export class LocalOnboarding implements Disposable {
         this.stageRequire("rigMissing", "rigInstallFailed");
         if (this.install?.running) return;
         this.message = undefined;
+        // The attempt being retried is over. Releasing it before opening another
+        // keeps one terminal per reader at a time, so "run it again" works as
+        // often as someone is willing to press it.
+        this.installRelease();
         let terminalId: string;
         try {
             terminalId = this.options.installer.open(input.ownerId, (event) => {
                 input.emit(event);
                 if (event.type !== "exited" || this.install?.terminalId !== event.terminalId)
                     return;
-                this.install = {
-                    ownerId: input.ownerId,
-                    terminalId: event.terminalId,
-                    running: false,
-                    ...(event.verified ? {} : { message: installFailureMessage(event.message) }),
-                };
-                // A verified install means a usable `rig` command now exists, so
-                // the machine is examined again rather than assumed.
+                // A verified install has nothing left to show and nothing left
+                // to account for, so its record goes with it; a failed one keeps
+                // its reason on screen with the retry.
+                this.install = event.verified
+                    ? undefined
+                    : {
+                          ownerId: input.ownerId,
+                          terminalId: event.terminalId,
+                          running: false,
+                          message: installFailureMessage(event.message),
+                      };
+                // The command may exist now, so the machine is examined again
+                // rather than assumed either way.
                 void this.probeRun();
             }).terminalId;
         } catch (error) {
@@ -229,11 +273,7 @@ export class LocalOnboarding implements Disposable {
             // Nothing was spawned, so the terminal is released rather than left
             // as an installation this process would keep counting against the
             // window's budget.
-            try {
-                this.options.installer.close(input.ownerId, terminalId);
-            } catch {
-                // The manager already let go of it; there is nothing to release.
-            }
+            this.installerClose(input.ownerId, terminalId);
             this.installFailed(input.ownerId, terminalId, displayError(error));
             return;
         }
@@ -248,8 +288,23 @@ export class LocalOnboarding implements Disposable {
      */
     installAbandoned(ownerId: number): void {
         if (this.closed || !this.install || this.install.ownerId !== ownerId) return;
-        this.install = undefined;
+        this.installRelease();
         void this.probeRun();
+    }
+
+    /** Lets go of the terminal setup is holding, if it is holding one. */
+    private installRelease(): void {
+        const install = this.install;
+        this.install = undefined;
+        if (install && !install.running) this.installerClose(install.ownerId, install.terminalId);
+    }
+
+    private installerClose(ownerId: number, terminalId: string): void {
+        try {
+            this.options.installer.close(ownerId, terminalId);
+        } catch {
+            // The manager already let go of it; there is nothing to release.
+        }
     }
 
     /**
@@ -258,7 +313,6 @@ export class LocalOnboarding implements Disposable {
      * is sent anywhere, because rig-connect exposes no enrolment to call.
      */
     async cloudSubmit(choice: LocalOnboardingCloudChoice): Promise<void> {
-        this.stageRequire("cloud");
         const cloudRequested: LocalOnboardingCloudChoice = choice.joined
             ? {
                   joined: true,
@@ -266,7 +320,7 @@ export class LocalOnboarding implements Disposable {
                   mobileSessions: choice.mobileSessions,
               }
             : { joined: false, remoteControl: false, mobileSessions: false };
-        await this.durable("Happy could not save your Happy Cloud choices", () =>
+        await this.durable("Happy could not save your Happy Cloud choices", ["cloud"], () =>
             this.recordWrite({
                 ...this.record,
                 cloudRequested,
@@ -279,8 +333,7 @@ export class LocalOnboarding implements Disposable {
 
     /** Records whether a Happy Profile is wanted. No profile is created here. */
     async profileSubmit(request: boolean): Promise<void> {
-        this.stageRequire("profile");
-        await this.durable("Happy could not save your Happy Profile choice", () =>
+        await this.durable("Happy could not save your Happy Profile choice", ["profile"], () =>
             this.recordWrite({ ...this.record, profileRequested: request }),
         );
     }
@@ -294,12 +347,21 @@ export class LocalOnboarding implements Disposable {
      * is never written to on Happy's initiative.
      */
     async projectChoose(): Promise<void> {
-        this.stageRequire("project");
-        await this.durable("Happy could not open that project", async () => {
+        await this.durable("Happy could not open that project", ["project"], async () => {
+            // Who this is for, captured before the native picker takes over. A
+            // picker can stay open across a window replacement or a reconnection,
+            // and neither the replaced window's reader nor a different Rig asked
+            // for what comes out of it.
+            const generation = this.generation();
+            const current = () => !this.closed && this.generation() === generation;
             const picked = await this.options.directoryPick();
-            if (!picked) return;
+            // A cancelled picker, a replaced window, and a replaced connection
+            // are all the same outcome here: nothing was asked for, so nothing
+            // is said about it.
+            if (!picked || !current()) return;
             const path = await pathCanonicalize(picked);
             const root = await (this.options.gitRootRead ?? gitRootRead)(path);
+            if (!current()) return;
             if (!root) {
                 this.message =
                     "That folder is not a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.";
@@ -310,19 +372,34 @@ export class LocalOnboarding implements Disposable {
                 return;
             }
             const client = this.options.runtime.localClient();
-            if (!client || this.freshness !== "fresh") {
+            if (!client || this.freshness !== "fresh" || this.snapshotValue.stage !== "project") {
                 this.message = "Rig is not ready for a first project yet.";
                 return;
             }
-            await client.createSession({
-                cwd: path,
-                archiveOnIdle: false,
-                permissionMode: "auto",
-                trackUnread: true,
-            });
+            // Last look before the one thing here that changes someone else's
+            // state.
+            if (!current()) return;
+            try {
+                await client.createSession({
+                    cwd: path,
+                    archiveOnIdle: false,
+                    permissionMode: "auto",
+                    trackUnread: true,
+                });
+            } catch (error) {
+                // Rig may have committed the project before the answer was lost,
+                // so nothing may be concluded from this — least of all that it is
+                // safe to ask again. Freshness stops being an answer and this Rig
+                // is asked afresh; the step comes back only if that Rig's own
+                // catalog still says it is unused.
+                this.freshnessInvalidate();
+                this.message = `Happy could not confirm whether that project was opened: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`;
+                return;
+            }
             // This Rig now holds a project of its own, which is exactly what
             // freshness means; the next connection reads it again anyway.
             this.freshness = "used";
+            if (!current()) return;
             try {
                 await this.recordWrite({ ...this.record, projectPath: path });
             } catch {
@@ -351,24 +428,54 @@ export class LocalOnboarding implements Disposable {
             throw new Error("That first-run setup step is not the current one.");
     }
 
-    /** Runs one durable action at a time and reports its outcome in the snapshot. */
-    private async durable(failure: string, action: () => Promise<void>): Promise<void> {
+    /**
+     * Admits one durable action and runs it alone.
+     *
+     * Admission is synchronous and happens before any microtask: the stage is
+     * checked, a second request while one is outstanding is refused rather than
+     * queued, and `busy` is true by the time this returns. The stage is then
+     * checked again inside the task, because the world may have moved between
+     * being admitted and being run — and a step that is no longer current is
+     * abandoned silently rather than carried out late.
+     */
+    private durable(
+        failure: string,
+        stages: readonly LocalOnboardingSnapshot["stage"][],
+        action: () => Promise<void>,
+    ): Promise<void> {
+        this.stageRequire(...stages);
+        if (this.durablePending)
+            throw new Error("First-run setup is still working on the previous request.");
+        this.durablePending = true;
+        this.busy = true;
+        this.message = undefined;
+        this.publish();
         const run = this.durableQueue.then(async () => {
-            if (this.closed) return;
-            this.busy = true;
-            this.message = undefined;
-            this.publish();
             try {
+                if (this.closed || !stages.includes(this.snapshotValue.stage)) return;
                 await action();
             } catch (error) {
                 this.message = `${failure}: ${displayError(error)}`;
             } finally {
+                this.durablePending = false;
                 this.busy = false;
                 this.publish();
             }
         });
         this.durableQueue = run.catch(() => undefined);
         return run;
+    }
+
+    /**
+     * Who setup is working for right now: the window presenting it and the Rig
+     * connection behind it. A long operation reads this again before it does
+     * anything irreversible, so work started for one reader and one Rig never
+     * lands on another.
+     */
+    private generation(): string {
+        return `${this.options.presentation?.() ?? "window"}|${runtimeIdentity(
+            this.options.runtime.get(),
+        )}`;
     }
 
     /**
@@ -412,19 +519,44 @@ export class LocalOnboarding implements Disposable {
     private refresh(): void {
         if (this.closed) return;
         const runtime = this.options.runtime.get();
-        const key = runtimeIdentity(runtime);
-        if (key !== this.runtimeKey) {
-            this.runtimeKey = key;
-            // Both of these are new evidence about the machine rather than about
-            // the connection: a runtime that says the command is missing, and a
-            // connection that was replaced, can each mean a different `rig` than
-            // the one the last probe found.
-            if (runtime.phase === "installRequired" || runtime.phase === "ready")
+        const local = runtimeLocal(runtime);
+        const previous = this.runtimeKey;
+        const key = `${local ? "local" : "away"}:${runtimeIdentity(runtime)}`;
+        this.runtimeKey = key;
+        if (!local) {
+            // Happy is being run somewhere else. Local setup has no opinion about
+            // a machine nobody asked about, and no business examining it, asking
+            // its daemon to start, or waiting for anything on it.
+            this.probeRetryStop();
+            this.retryRequestedFor = undefined;
+            this.freshnessSynchronize(runtime);
+            this.publish();
+            return;
+        }
+        if (key !== previous) {
+            // Each of these is new evidence about the machine rather than about
+            // the connection: being asked to run here at all, a runtime that says
+            // the command is missing, and a connection that was replaced can each
+            // mean a different `rig` than the one the last probe found.
+            const arrived = previous === undefined || previous.startsWith("away:");
+            if (arrived || runtime.phase === "installRequired" || runtime.phase === "ready")
                 void this.probeRun();
         }
         this.connectionNudge(runtime);
         this.freshnessSynchronize(runtime);
         this.publish();
+    }
+
+    /**
+     * Drops the current freshness answer and asks the connected Rig again. It is
+     * used where Happy stopped being able to vouch for what it last read — an
+     * ambiguous write being the case that matters, since the alternative to
+     * asking again is guessing about someone else's data.
+     */
+    private freshnessInvalidate(): void {
+        this.freshness = "checking";
+        this.freshnessConnection = undefined;
+        this.freshnessSynchronize(this.options.runtime.get());
     }
 
     /**
@@ -524,7 +656,13 @@ export class LocalOnboarding implements Disposable {
                       : {}),
               }
             : undefined;
-        const stage = this.stageDerive({ node: !!node, rig: !!rig, ready, probed: !!probe });
+        const stage = this.stageDerive({
+            local: runtimeLocal(runtime),
+            node: !!node,
+            probed: !!probe,
+            ready,
+            rig: !!rig,
+        });
         const message = this.messageFor(stage, runtime);
         return {
             busy: this.busy || stage === "checking" || stage === "examining",
@@ -543,11 +681,13 @@ export class LocalOnboarding implements Disposable {
     }
 
     private stageDerive(facts: {
+        readonly local: boolean;
         readonly node: boolean;
         readonly rig: boolean;
         readonly ready: boolean;
         readonly probed: boolean;
     }): LocalOnboardingSnapshot["stage"] {
+        if (!facts.local) return "inactive";
         if (!facts.probed) return "checking";
         if (!facts.node) return "nodeMissing";
         if (!facts.rig) {
@@ -639,6 +779,17 @@ export class LocalOnboarding implements Disposable {
 /** Identity of the runtime state setup reacts to: its phase, and which connection. */
 function runtimeIdentity(runtime: DesktopRuntimeSnapshot): string {
     return runtime.phase === "ready" ? `ready:${runtime.connectionId}` : runtime.phase;
+}
+
+/**
+ * Whether Happy is being asked to run on this machine. Choosing has not asked
+ * for anything yet, a ready runtime says which mode it is in, and every other
+ * phase is working on a request that names one.
+ */
+function runtimeLocal(runtime: DesktopRuntimeSnapshot): boolean {
+    if (runtime.phase === "choosing") return false;
+    if (runtime.phase === "ready") return runtime.mode === "local";
+    return runtime.request.mode === "local";
 }
 
 function installFailureMessage(message: string | undefined): string {

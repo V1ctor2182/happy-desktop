@@ -1021,6 +1021,13 @@ void app
         onboarding = await LocalOnboarding.create({
             directoryPick: () => directoryPickShow(windowLifecycle.get()),
             installer: rigInstallManager,
+            // Which window setup is working for. A native picker outlives the
+            // window that opened it, so setup reads this again before it acts on
+            // what came back.
+            presentation: () => {
+                const window = windowLifecycle.get();
+                return window && !window.isDestroyed() ? String(window.webContents.id) : "none";
+            },
             recordPath: join(desktopRoot, "local-onboarding.json"),
             runtime,
         });
