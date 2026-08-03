@@ -47,6 +47,8 @@ export function rigConnectCatalogSourceCreate(
     let fallbackUnsubscribe: (() => void) | undefined;
     let fallbackReading: Promise<void> | undefined;
     let fallbackReadingGeneration = -1;
+    // A hint arrived while a read was in flight, so one more read is owed.
+    let fallbackRereadWanted = false;
     let live = false;
     // Which source is authoritative right now. Every asynchronous read carries
     // the generation it was started under, so a read issued against the source
@@ -88,12 +90,27 @@ export function rigConnectCatalogSourceCreate(
         void fallbackRead();
     };
 
+    /**
+     * Reads the complete catalog, coalescing hints that arrive while a read is
+     * already in flight.
+     *
+     * A hint that arrives after the request went out describes a catalog the
+     * answer on its way back cannot contain: that snapshot was taken before the
+     * change happened. Returning it and stopping would leave the surface showing
+     * a state that is already stale, with nothing scheduled to correct it — the
+     * next change might be minutes away, or might never come. So one further
+     * read is remembered and run once this one settles, whether it succeeded or
+     * failed, and any number of hints in between collapse into that single
+     * reread rather than into a queue of them.
+     */
     const fallbackRead = (): Promise<void> => {
         if (fallbackReading !== undefined && fallbackReadingGeneration === generation) {
+            fallbackRereadWanted = true;
             return fallbackReading;
         }
         const readGeneration = generation;
         fallbackReadingGeneration = readGeneration;
+        fallbackRereadWanted = false;
         const reading = fallback
             .read()
             .then((next) => {
@@ -108,7 +125,16 @@ export function rigConnectCatalogSourceCreate(
                 fail(error);
             })
             .finally(() => {
-                if (fallbackReading === reading) fallbackReading = undefined;
+                if (fallbackReading !== reading) return;
+                fallbackReading = undefined;
+                // Only for the source that is still authoritative: a reread owed
+                // to a reader Happy has since moved off would publish over the
+                // newer one, which is the thing the generation exists to stop.
+                const wanted = fallbackRereadWanted;
+                fallbackRereadWanted = false;
+                if (wanted && !disposed && !live && generation === readGeneration) {
+                    void fallbackRead();
+                }
             });
         fallbackReading = reading;
         return reading;

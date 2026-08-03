@@ -80,6 +80,13 @@ export interface RigPanelSnapshot {
      * exists, so the two never disagree about the file being shown.
      */
     readonly fileViewOpen: boolean;
+    /**
+     * Why a new terminal cannot be opened here, or absent when one can. A shell
+     * runs in the checkout, so a checkout that is not there cannot host one; the
+     * owner supplies the sentence with the scope, since it is the one that knows
+     * the group's state. Terminals already running are untouched by it.
+     */
+    readonly terminalRefusal?: string;
 }
 
 export interface RigPanelStore {
@@ -164,7 +171,11 @@ export interface RigPanelStore {
      * Tabs of other groups keep running, so moving between projects and coming
      * back finds the same terminals.
      */
-    scopeApply(groupId: RigGroupId | undefined, conversationId: RigSessionId | undefined): void;
+    scopeApply(
+        groupId: RigGroupId | undefined,
+        conversationId: RigSessionId | undefined,
+        terminalRefusal?: string,
+    ): void;
 
     [Symbol.dispose](): void;
 }
@@ -238,6 +249,8 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     const restoredGroupIds = new Set<RigGroupId>();
     let groupId: RigGroupId | undefined;
     let conversationId: RigSessionId | undefined;
+    /** Why a shell cannot be started in the current scope; supplied by the owner. */
+    let terminalRefusal: string | undefined;
     let open = false;
     let maximized = false;
     let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
@@ -279,6 +292,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                           },
             ),
             ...(previewEntryId === undefined ? {} : { previewEntryId }),
+            ...(terminalRefusal === undefined ? {} : { terminalRefusal }),
         };
     };
 
@@ -290,6 +304,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             next.activeViewId === snapshot.activeViewId &&
             next.previewEntryId === snapshot.previewEntryId &&
             next.fileViewOpen === snapshot.fileViewOpen &&
+            next.terminalRefusal === snapshot.terminalRefusal &&
             next.tabs.length === snapshot.tabs.length &&
             next.tabs.every((tab, index) => tabSame(snapshot.tabs[index], tab))
         )
@@ -306,6 +321,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
                 return before !== undefined && tabSame(before, tab) ? before : tab;
             }),
             ...(next.previewEntryId === undefined ? {} : { previewEntryId: next.previewEntryId }),
+            ...(next.terminalRefusal === undefined
+                ? {}
+                : { terminalRefusal: next.terminalRefusal }),
         };
         for (const listener of listeners) listener();
     };
@@ -502,7 +520,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             recompute();
         },
         terminalAdd() {
-            if (disposed || !groupId || !conversationId) return;
+            if (disposed || !groupId || !conversationId || terminalRefusal !== undefined) return;
             terminalTabAdd(groupId, conversationId);
             open = true;
             remember();
@@ -589,8 +607,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
 
         terminal: (tabId) => tabs.find((tab) => tab.id === tabId)?.terminal,
 
-        scopeApply(nextGroupId, nextConversationId) {
+        scopeApply(nextGroupId, nextConversationId, nextTerminalRefusal) {
             if (disposed) return;
+            terminalRefusal = nextTerminalRefusal;
             conversationId = nextConversationId;
             if (previewConversationId !== nextConversationId) {
                 previewEntryId = undefined;

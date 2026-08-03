@@ -322,12 +322,18 @@ export {
 export {
     rigProjectGroupsProject,
     rigSessionGroupIdOf,
-    rigWorktreeLifecycleAccepts,
-    rigWorktreeLifecycleRefusal,
     type RigProjectGroup,
     type RigWorktreeGroup,
     type RigWorktreeLifecycle,
 } from "./rig/rigProjectGroupProject.js";
+export {
+    rigGroupAccessOf,
+    rigProjectWriteRefusal,
+    rigWorktreeWritable,
+    rigWorktreeWriteRefusal,
+    RIG_GROUP_ACCESS_OPEN,
+    type RigGroupAccess,
+} from "./rig/rigGroupAccess.js";
 export {
     rigChatStoreCreate,
     type RigChatDeps,

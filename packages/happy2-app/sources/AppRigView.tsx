@@ -80,7 +80,6 @@ import {
     rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
-    rigWorktreeLifecycleRefusal,
 } from "happy2-state";
 import {
     type AgentWaitStatus,
@@ -125,6 +124,7 @@ import {
     RigCreateSessionDialog,
     RigProjectSettingsDialog,
     RigSessionControls,
+    type RigUserInputAnswerMap,
     RigUsagePanel,
     PanelHeader,
     Sidebar,
@@ -1147,11 +1147,16 @@ function slotUnavailable(
     action: RigSlotAction,
     webapps: ReadonlySet<string>,
     hasCurrentChat: boolean,
+    writeRefusal: string | undefined,
 ): string | undefined {
     if (action.type === "send-current-chat" && !hasCurrentChat)
         return "No chat is open here to send this message to.";
     if (action.type === "open-webapp" && !webapps.has(action.webapp))
         return `This Rig is not serving a webapp named “${action.webapp}”.`;
+    // Sending, drafting into, and starting a chat all land in the addressed
+    // checkout, so they carry that checkout's own reason rather than a second
+    // sentence about the same thing. Opening a webapp does not touch it.
+    if (action.type !== "open-webapp") return writeRefusal;
     return undefined;
 }
 
@@ -1160,11 +1165,12 @@ function slotVisualEntries(
     projects: readonly RigProjectGroup[],
     webapps: ReadonlySet<string>,
     hasCurrentChat: boolean,
+    writeRefusal?: string,
 ): readonly SlotVisualEntry[] {
     return entries.map((entry) => {
         const unavailable =
             entry.content.type === "button"
-                ? slotUnavailable(entry.content.action, webapps, hasCurrentChat)
+                ? slotUnavailable(entry.content.action, webapps, hasCurrentChat, writeRefusal)
                 : undefined;
         return {
             id: entry.id,
@@ -1343,7 +1349,18 @@ export function AppRigView(props: AppRigViewProps) {
         if (!rigSlotEntryInScope(entry, scopeNow)) return;
         const served = new Set(catalogNow.webapps.map((webapp) => webapp.name));
         const openConversation = workspaceSnapshot.conversation.type !== "unloaded";
-        if (slotUnavailable(entry.content.action, served, openConversation)) return;
+        // Read from the store at invocation, not from the render this handler
+        // was made in: the checkout may have gone away since, and a retained
+        // handler must refuse on what is true now.
+        if (
+            slotUnavailable(
+                entry.content.action,
+                served,
+                openConversation,
+                workspaceSnapshot.groupAccess.writeRefusal,
+            )
+        )
+            return;
         void slotActionRun(workspaceNow, entry.content.action).catch(() => undefined);
     };
     // Plugin rows are pinned navigation, so this is subscribed whether or not a
@@ -2252,12 +2269,19 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
     const webapps = new Set(props.slots.webapps.map((webapp) => webapp.name));
+    // What may be done in the addressed checkout, as the state decided it. Every
+    // control below that has a side effect there reads this one value, so a
+    // control that is not offered and an action that is refused always give the
+    // same reason.
+    const access = workspace.groupAccess;
+    const openGroupWorkRefusal = access.writeRefusal;
     const slotPlacement = (slot: RigSlotName): readonly SlotVisualEntry[] =>
         slotVisualEntries(
             rigSlotEntriesInScope(props.slots.entries, slot, props.slotsScope),
             rows,
             webapps,
             props.chatId !== undefined,
+            openGroupWorkRefusal,
         );
     const slotViews: RigSlotViews = {
         statusLine: slotPlacement("status-line"),
@@ -2269,13 +2293,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.
     const openGroupPhase = workspaceLifecyclePhase(openGroup?.lifecycle);
-    // Why this workspace cannot take new work, in the phase's own words. It is
-    // the same sentence the state guard rejects with, so a control that is not
-    // offered and an action that is refused never disagree about the reason.
-    const openGroupWorkRefusal =
-        openGroup?.lifecycle === undefined
-            ? undefined
-            : rigWorktreeLifecycleRefusal(openGroup.lifecycle);
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — rig-connect withdrew
     // the one it had predicted — so the address answers for itself here rather
@@ -2456,7 +2473,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     fileTabKind(path, workspace.fileScope),
                                 );
                         }}
-                        onRevert={() => props.workspace.fileRevertPromptOpen()}
+                        {...(access.canWrite
+                            ? { onRevert: () => props.workspace.fileRevertPromptOpen() }
+                            : {})}
                         onFileOpen={(path) => {
                             if (openGroup)
                                 props.workspace.fileOpen(
@@ -2911,6 +2930,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             ? { mediaWindow: props.mediaWindow }
                                             : {})}
                                         mode={workspace.fileViewMode}
+                                        {...(openGroupWorkRefusal === undefined
+                                            ? {}
+                                            : { writeRefusal: openGroupWorkRefusal })}
                                         workspace={props.workspace}
                                     />
                                 ) : (
@@ -2942,6 +2964,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         {...(conversationReadOnlyReason === undefined
                                             ? {}
                                             : { readOnlyReason: conversationReadOnlyReason })}
+                                        {...(openGroupWorkRefusal === undefined
+                                            ? {}
+                                            : { writeRefusal: openGroupWorkRefusal })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
                                         workspace={props.workspace}
@@ -3057,9 +3082,15 @@ function RigFileBody(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: RigFileViewMode;
+    /** Why this file cannot be edited or saved, or absent when it can. */
+    writeRefusal?: string;
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
+    // Typing into a document that could never be written back is worse than not
+    // offering the editor at all: the reader loses what they typed and learns
+    // why only when they try to save it.
+    const writable = props.writeRefusal === undefined;
     if (file.kind === "media")
         return (
             <RigFilePreview
@@ -3136,9 +3167,12 @@ function RigFileBody(props: {
                 }}
                 onValueChange={(value) => workspace.fileDraftUpdate(file.id, value)}
                 path={file.path}
-                readOnly={file.saving}
+                readOnly={file.saving || !writable}
                 saving={file.saving}
-                status={file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}
+                status={
+                    props.writeRefusal ??
+                    (file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved")
+                }
                 value={text}
             />
         );
@@ -3160,11 +3194,16 @@ function RigFileBody(props: {
                 oldContent={file.document.value.oldContent}
                 oldPath={file.document.value.oldPath}
                 dirty={file.draft !== undefined && file.draft !== file.document.value.newContent}
-                onContentChange={(content) => workspace.fileDraftUpdate(file.id, content)}
+                {...(writable
+                    ? {
+                          onContentChange: (content: string) =>
+                              workspace.fileDraftUpdate(file.id, content),
+                          onSave: () => {
+                              void workspace.fileDraftSave(file.id).catch(() => undefined);
+                          },
+                      }
+                    : {})}
                 onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
-                onSave={() => {
-                    void workspace.fileDraftSave(file.id).catch(() => undefined);
-                }}
                 path={file.path}
                 saving={file.saving}
             />
@@ -3266,6 +3305,8 @@ function RigConversationBody(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why nothing here may write into the checkout, or absent when it may. */
+    writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -3285,6 +3326,7 @@ function RigConversationBody(props: {
                 {...(props.readOnlyReason === undefined
                     ? {}
                     : { readOnlyReason: props.readOnlyReason })}
+                {...(props.writeRefusal === undefined ? {} : { writeRefusal: props.writeRefusal })}
                 slotAction={props.slotAction}
                 slots={props.slots}
                 workspace={props.workspace}
@@ -3353,6 +3395,8 @@ function RigConversationSurface(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why nothing here may write into the checkout, or absent when it may. */
+    writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -3506,9 +3550,12 @@ function RigConversationSurface(props: {
                 }
                 workspace.panel.previewOpen(entryId);
             }}
-            onRequestAnswer={(requestId, answers) =>
-                swallow(workspace.answerInput({ requestId, answers }))
-            }
+            {...(props.writeRefusal === undefined
+                ? {
+                      onRequestAnswer: (requestId: string, answers: RigUserInputAnswerMap) =>
+                          swallow(workspace.answerInput({ requestId, answers })),
+                  }
+                : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             panel={
@@ -3615,6 +3662,8 @@ function RigPanelComposer(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why nothing here may write into the checkout, or absent when it may. */
+    writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -4014,7 +4063,7 @@ function RigPanelBody(props: {
         modifiers: FileTreeSelectModifiers,
         orderedPaths: readonly string[],
     ) => void;
-    onRevert: () => void;
+    onRevert?: () => void;
     onLayoutChange: (layout: RigFileLayout) => void;
     onPanelClose: () => void;
     /** The file the viewer tab is on, read out of the transcript beside it. */
@@ -4161,12 +4210,17 @@ function RigPanelBody(props: {
                                         variant="ghost"
                                     />
                                 ) : null}
+                                {/* A shell runs in the checkout, so a checkout
+                                    that cannot take work cannot host one. The
+                                    panel carries the reason with its scope. */}
                                 <Button
                                     aria-label="New terminal"
+                                    disabled={props.panel.terminalRefusal !== undefined}
                                     icon="terminal"
                                     iconOnly
                                     onClick={() => props.store.terminalAdd()}
                                     size="small"
+                                    title={props.panel.terminalRefusal ?? "New terminal"}
                                     variant="ghost"
                                 />
                             </>
@@ -4221,7 +4275,7 @@ function RigPanelBody(props: {
                             onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
                             onOpen={props.onFileOpen}
                             onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
-                            onRevert={props.onRevert}
+                            {...(props.onRevert ? { onRevert: props.onRevert } : {})}
                             onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
                                 props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
                             }

@@ -6,11 +6,9 @@ import {
     rigProjectGroupsPreserve,
     rigProjectGroupsProject,
     rigSessionGroupIdOf,
-    rigWorktreeLifecycleAccepts,
-    rigWorktreeLifecycleOf,
-    rigWorktreeLifecycleRefusal,
     type RigProjectGroup,
 } from "./rigProjectGroupProject.js";
+import { rigProjectWriteRefusal, rigWorktreeWriteRefusal } from "./rigGroupAccess.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
@@ -155,6 +153,14 @@ export interface RigSessionListStore {
      * failed, with the reason recorded in `mutationError`.
      */
     worktreeCreate(projectId: RigProjectId): Promise<RigWorktreeId | undefined>;
+
+    /**
+     * Why the host's checkout for a group cannot be written to right now, or
+     * `undefined` when it can. Answered from the raw catalog record rather than
+     * from the projected rows: a group on its way out is deliberately absent
+     * from the rows, and an absence there must never read as permission.
+     */
+    groupWriteRefusal(groupId: RigGroupId): string | undefined;
 
     /**
      * Starts the first conversation in a worktree once the host reports its
@@ -476,14 +482,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             waiter.listed = true;
             if (worktree.status === "initializing") continue;
             worktreeWaiters.delete(worktree.id);
-            const lifecycle = rigWorktreeLifecycleOf(worktree);
-            if (rigWorktreeLifecycleAccepts(lifecycle)) waiter.resolve(worktree);
-            else
-                waiter.reject(
-                    new Error(
-                        rigWorktreeLifecycleRefusal(lifecycle) ?? "This workspace cannot be used.",
-                    ),
-                );
+            // The host's raw record decides, not the phase the rows are drawn
+            // from: a worktree on its way out is a present directory that is
+            // about to be deleted, and the reduced lifecycle cannot tell that
+            // apart from one that is simply there.
+            const refusal = rigWorktreeWriteRefusal(worktree);
+            if (refusal === undefined) waiter.resolve(worktree);
+            else waiter.reject(new Error(refusal));
         }
         for (const [worktreeId, waiter] of worktreeWaiters) {
             if (waiter.listed && !listed.has(worktreeId)) {
@@ -504,15 +509,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         if (refused) return Promise.reject(new Error(refused.message));
         const known = catalog.worktrees.find((candidate) => candidate.id === worktreeId);
         if (known && known.status !== "initializing") {
-            const lifecycle = rigWorktreeLifecycleOf(known);
-            return rigWorktreeLifecycleAccepts(lifecycle)
+            const refusal = rigWorktreeWriteRefusal(known);
+            return refusal === undefined
                 ? Promise.resolve(known)
-                : Promise.reject(
-                      new Error(
-                          rigWorktreeLifecycleRefusal(lifecycle) ??
-                              "This workspace cannot be used.",
-                      ),
-                  );
+                : Promise.reject(new Error(refusal));
         }
         return new Promise<RigWorktree>((resolve, reject) => {
             worktreeWaiters.set(worktreeId, { resolve, reject, listed: known !== undefined });
@@ -669,6 +669,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             };
         },
         sessionsRefresh: () => reconcile(),
+        groupWriteRefusal(groupId) {
+            const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
+            if (worktree !== undefined) return rigWorktreeWriteRefusal(worktree);
+            const project = catalog.projects.find((entry) => entry.id === groupId);
+            return project === undefined ? undefined : rigProjectWriteRefusal(project);
+        },
         sessionRead(sessionId) {
             const session = sessions.find((candidate) => candidate.id === sessionId);
             if (session?.unreadReason === undefined) return;

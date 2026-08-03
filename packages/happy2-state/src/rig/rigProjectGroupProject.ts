@@ -1,5 +1,6 @@
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import { rigConversationSummaryProject } from "./rigConversationProject.js";
+import { rigProjectWriteRefusal, rigWorktreeWriteRefusal } from "./rigGroupAccess.js";
 import { deepEqual } from "./rigSupport.js";
 import type {
     RigGroupId,
@@ -60,6 +61,13 @@ export interface RigWorktreeGroup {
      * row the reader has to guess at.
      */
     readonly lifecycle: RigWorktreeLifecycle;
+    /**
+     * Why nothing may be started or written in this checkout, or absent when
+     * something may be. Read from the host's raw status and presence rather than
+     * from `lifecycle`, which folds states together for presentation and would
+     * report a checkout that is being deleted as ready to work in.
+     */
+    readonly writeRefusal?: string;
     readonly conversations: readonly ConversationSummary[];
     /** Live marker of the busiest session in the worktree. */
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
@@ -90,6 +98,8 @@ export interface RigProjectGroup {
     readonly avatar?: RigProjectAvatar;
     /** Sessions in the project itself, i.e. not in one of its worktrees. */
     readonly conversations: readonly ConversationSummary[];
+    /** Why nothing may be written in this project's directory, or absent when it may. */
+    readonly writeRefusal?: string;
     readonly worktrees: readonly RigWorktreeGroup[];
     /** Live marker of the busiest session directly in the project. */
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
@@ -146,6 +156,7 @@ export function rigProjectGroupsProject(
         // it: it was created deliberately and is where the next session goes, so
         // an empty one is a destination rather than clutter.
         const conversations = conversationsOf(worktreeSessions.get(worktree.id));
+        const worktreeRefusal = rigWorktreeWriteRefusal(worktree);
         mapAppend(worktreesByProject, worktree.projectId).push({
             id: worktree.id,
             projectId: worktree.projectId,
@@ -154,6 +165,7 @@ export function rigProjectGroupsProject(
             path: worktree.path,
             displayPath: worktree.displayPath,
             lifecycle: rigWorktreeLifecycleOf(worktree),
+            ...(worktreeRefusal === undefined ? {} : { writeRefusal: worktreeRefusal }),
             conversations,
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
@@ -238,6 +250,7 @@ function projectGroup(
     conversations: readonly ConversationSummary[],
     worktrees: readonly RigWorktreeGroup[],
 ): RigProjectGroup {
+    const projectRefusal = rigProjectWriteRefusal(project);
     return {
         id: project.id,
         name: project.name,
@@ -246,6 +259,7 @@ function projectGroup(
         displayPath: project.displayPath,
         kind: project.kind,
         conversations,
+        ...(projectRefusal === undefined ? {} : { writeRefusal: projectRefusal }),
         worktrees,
         // A project and each of its worktrees are independent destinations.
         // Child activity belongs on the child row rather than bubbling upward.

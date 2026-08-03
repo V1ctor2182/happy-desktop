@@ -25,7 +25,7 @@ import {
     type RigSessionDraftSnapshot,
     type RigSessionDraftStore,
 } from "./rigSessionDraftStore.js";
-import { rigWorktreeLifecycleRefusal } from "./rigProjectGroupProject.js";
+import { rigGroupAccessOf, RIG_GROUP_ACCESS_OPEN, type RigGroupAccess } from "./rigGroupAccess.js";
 import { rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
@@ -271,6 +271,14 @@ export interface RigWorkspaceSnapshot {
     /** Where the reader is, whether or not a conversation is materialized. */
     readonly address: RigWorkspaceAddress;
     readonly list: RigSessionListSnapshot;
+    /**
+     * What may be done in the addressed project or worktree: whether work can be
+     * started or written there, whether work already running can be stopped, and
+     * why writing is refused when it is. Every surface that offers a control with
+     * a side effect in the checkout reads this, so a control that is not offered
+     * and an action that is refused always give the same reason.
+     */
+    readonly groupAccess: RigGroupAccess;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
     readonly fileTabs: readonly RigFileTabSnapshot[];
@@ -1055,6 +1063,7 @@ export function rigWorkspaceStoreCreate(
         address: addressPublic(),
         list: list.get(),
         conversation,
+        groupAccess: RIG_GROUP_ACCESS_OPEN,
         fileTabs,
         tabOrder,
         groupResume,
@@ -1362,8 +1371,16 @@ export function rigWorkspaceStoreCreate(
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
         const nextAddress = addressPublic();
+        // Recomputed here rather than remembered: it is derived from the same
+        // list snapshot this projection is built from, so it cannot lag behind
+        // the rows it describes. The panel is told too, since a shell is started
+        // from there and the checkout may have gone away while it was open.
+        const groupAccess = rigGroupAccessOf(openGroupWorkRefusal());
+        if (groupAccess.writeRefusal !== panel.get().terminalRefusal)
+            panel.scopeApply(addressedGroupId, openId, groupAccess.writeRefusal);
         if (
             snapshot.address === nextAddress &&
+            snapshot.groupAccess?.writeRefusal === groupAccess.writeRefusal &&
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
             snapshot.groupComposer === groupComposerDraft &&
@@ -1393,6 +1410,7 @@ export function rigWorkspaceStoreCreate(
             address: nextAddress,
             list: listSnapshot,
             conversation,
+            groupAccess,
             fileTabs,
             tabOrder,
             groupResume,
@@ -1950,12 +1968,16 @@ export function rigWorkspaceStoreCreate(
         const swallow = (operation: Promise<unknown>): void => {
             void operation.catch(() => undefined);
         };
+        // The commands that start work go through the same guard the buttons
+        // for them do; `abort`, `clear`, and the panels do not, because none of
+        // them touches the checkout.
+        const refused = openGroupWorkRefusal() !== undefined;
         switch (commandId) {
             case "new":
-                swallow(store.sessionReset());
+                if (!refused) swallow(store.sessionReset());
                 return;
             case "compact":
-                swallow(store.compact());
+                if (!refused) swallow(store.compact());
                 return;
             case "abort":
                 swallow(store.runAbort());
@@ -1973,7 +1995,7 @@ export function rigWorkspaceStoreCreate(
                 store.activityPanelShow();
                 return;
             case "fork":
-                if (openId) swallow(list.sessionFork(openId).then(openRequest));
+                if (openId && !refused) swallow(list.sessionFork(openId).then(openRequest));
                 return;
         }
     };
@@ -2063,6 +2085,8 @@ export function rigWorkspaceStoreCreate(
                             const group = conversationGroupId(conversationId);
                             if (!group)
                                 throw new Error("That conversation is no longer in a project.");
+                            const refusal = groupWorkRefusalFind(group);
+                            if (refusal) throw new Error(refusal);
                             const text = await attachmentsPlace(
                                 group,
                                 event.text,
@@ -2075,8 +2099,12 @@ export function rigWorkspaceStoreCreate(
                         });
                         return;
                     case "shellCommandSubmitted":
+                        // A shell command is the most direct write there is: it
+                        // runs in the checkout itself.
                         submitting(created, event.revision, () =>
-                            withChatStore((store) => store.shellRun(event.command)),
+                            writeGuard(sessionWorkRefusal(conversationId), () =>
+                                withChatStore((store) => store.shellRun(event.command)),
+                            ),
                         );
                         return;
                     case "commandInvoked":
@@ -2225,7 +2253,7 @@ export function rigWorkspaceStoreCreate(
         // The panel shows the addressed conversation's tabs, so it learns the new
         // address in this same call stack — before the chat handle is acquired, so
         // a terminal is never briefly attributed to the conversation just left.
-        panel.scopeApply(addressedGroupId, conversationId);
+        panel.scopeApply(addressedGroupId, conversationId, openGroupWorkRefusal());
         // The panel's viewer showed a file out of the conversation being left,
         // named by a path that only means anything in that session's checkout.
         if (conversationId !== openId) panelFileRelease();
@@ -2260,15 +2288,42 @@ export function rigWorkspaceStoreCreate(
      * reason rather than each starting a session that would fail on its first
      * command.
      */
-    const groupWorkRefusalFind = (groupId: RigGroupId | undefined): string | undefined => {
-        if (groupId === undefined) return undefined;
-        const projects = list.get().projects;
-        if (projects.type !== "ready") return undefined;
-        for (const project of projects.value)
-            for (const worktree of project.worktrees)
-                if (worktree.id === groupId) return rigWorktreeLifecycleRefusal(worktree.lifecycle);
-        return undefined;
-    };
+    /*
+       Asked of the raw catalog record, never of the rows: a checkout being
+       removed is deliberately left out of the rows, and if permission were read
+       from them its absence would look exactly like permission.
+    */
+    const groupWorkRefusalFind = (groupId: RigGroupId | undefined): string | undefined =>
+        groupId === undefined ? undefined : list.groupWriteRefusal(groupId);
+
+    /**
+     * Why an operation naming one session rather than a place is refused: it is
+     * checked against the checkout that session runs in, which is where its side
+     * effect would land. A detached subagent resolves to the addressed group,
+     * since that is the checkout it runs in too.
+     */
+    const sessionWorkRefusal = (sessionId: RigSessionId): string | undefined =>
+        groupWorkRefusalFind(conversationGroupId(sessionId));
+
+    /** The group an operation on the open conversation would act in. */
+    const openGroupWorkRefusal = (): string | undefined =>
+        groupWorkRefusalFind((addressedGroupId ?? openGroupId) as RigGroupId | undefined);
+
+    /**
+     * Runs `work` only if the checkout it would act in can take it, and rejects
+     * with that checkout's own reason otherwise.
+     *
+     * Every operation with a side effect in a checkout goes through one of these
+     * two, so there is a single place that decides and a single sentence that
+     * explains. Reading, stopping, and navigating deliberately do not: a
+     * workspace that has gone away must still be readable, and work already
+     * running in it must still be stoppable.
+     */
+    const writeGuard = <T>(refusal: string | undefined, work: () => Promise<T>): Promise<T> =>
+        refusal === undefined ? work() : Promise.reject(new Error(refusal));
+
+    /** The synchronous form: a local action that would write is simply not performed. */
+    const writeAllowed = (refusal: string | undefined): boolean => refusal === undefined;
 
     const groupStartFind = (
         groupId: RigGroupId,
@@ -2590,6 +2645,7 @@ export function rigWorkspaceStoreCreate(
             address: addressPublic(),
             list: list.get(),
             conversation,
+            groupAccess: RIG_GROUP_ACCESS_OPEN,
             fileTabs,
             tabOrder,
             groupResume,
@@ -2767,12 +2823,19 @@ export function rigWorkspaceStoreCreate(
             if (conversation.type === "ready" && conversation.value.session.type === "error")
                 chatStore?.sessionRetry();
         },
-        messageSendCurrent: (message) => withChat((store) => store.messageSend(message, [])),
+        messageSendCurrent: (message) =>
+            writeGuard(openGroupWorkRefusal(), () =>
+                withChat((store) => store.messageSend(message, [])),
+            ),
         messageSend: (sessionId, message) =>
-            withAddressedChat(sessionId, (store) => store.messageSend(message, [])),
+            writeGuard(sessionWorkRefusal(sessionId), () =>
+                withAddressedChat(sessionId, (store) => store.messageSend(message, [])),
+            ),
         draftUpdate: (sessionId, message) =>
-            withAddressedChat(sessionId, (store) =>
-                store.draftSet(message, nextDraftUpdatedAt(), draftOrigin),
+            writeGuard(sessionWorkRefusal(sessionId), () =>
+                withAddressedChat(sessionId, (store) =>
+                    store.draftSet(message, nextDraftUpdatedAt(), draftOrigin),
+                ),
             ),
         async chatStart(input) {
             const groupId = slotGroupFind(input);
@@ -2837,7 +2900,12 @@ export function rigWorkspaceStoreCreate(
                 )
                 .then(openRequest);
         },
-        conversationFork: (conversationId) => list.sessionFork(conversationId).then(openRequest),
+        // A fork starts a second session in the same checkout, so it needs that
+        // checkout as much as the first one did.
+        conversationFork: (conversationId) =>
+            writeGuard(sessionWorkRefusal(conversationId), () =>
+                list.sessionFork(conversationId).then(openRequest),
+            ),
         conversationArchive: async (conversationId) => {
             await list.sessionArchive(conversationId);
             client.chatArchive(conversationId);
@@ -2875,6 +2943,10 @@ export function rigWorkspaceStoreCreate(
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
         projectArchive: (projectId) => list.projectArchive(projectId),
         async worktreeCreate(projectId) {
+            // The new checkout is forked from the project's own folder, so a
+            // project whose folder has gone cannot produce one.
+            const refusal = groupWorkRefusalFind(projectId);
+            if (refusal) throw new Error(refusal);
             const worktreeId = await list.worktreeCreate(projectId);
             if (worktreeId === undefined) return;
             // Addressed as soon as it exists, and left empty: the conversation is
@@ -3070,6 +3142,8 @@ export function rigWorkspaceStoreCreate(
         async fileRevertConfirm(groupId) {
             const pending = fileRevert;
             if (!pending || pending.submitting) return;
+            const refusal = groupWorkRefusalFind(groupId);
+            if (refusal) throw new Error(refusal);
             fileRevert = { ...pending, submitting: true };
             recompute();
             try {
@@ -3095,8 +3169,14 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         fileDraftUpdate(tabId, draft) {
-            fileTabs = fileTabs.map((tab) =>
-                tab.id === tabId && !tab.saving ? { ...tab, draft, preview: false } : tab,
+            // An edit that could never be saved is not an edit; the editor is
+            // read-only while the checkout cannot take a write.
+            const tab = fileTabs.find((candidate) => candidate.id === tabId);
+            if (!tab || !writeAllowed(groupWorkRefusalFind(tab.groupId))) return;
+            fileTabs = fileTabs.map((candidate) =>
+                candidate.id === tabId && !candidate.saving
+                    ? { ...candidate, draft, preview: false }
+                    : candidate,
             );
             recompute();
         },
@@ -3111,6 +3191,8 @@ export function rigWorkspaceStoreCreate(
         async fileDraftSave(tabId) {
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (!tab || tab.saving || tab.draft === undefined) return;
+            const refusal = groupWorkRefusalFind(tab.groupId);
+            if (refusal) throw new Error(refusal);
             const draft = tab.draft;
             fileTabs = fileTabs.map((candidate) =>
                 candidate.id === tabId ? { ...candidate, saving: true } : candidate,
@@ -3185,14 +3267,24 @@ export function rigWorkspaceStoreCreate(
             else chatStore?.serviceTierUpdate(serviceTier);
         },
 
+        // Stopping is deliberately not guarded. Work already running in a
+        // checkout that has gone away is still running, and the reader has to be
+        // able to end it; refusing here would leave them watching something they
+        // can neither write to nor stop.
         runAbort: () => withChat((store) => store.runAbort()),
-        answerInput: (input) => withChat((store) => store.answerInput(input)),
-        compact: () => withChat((store) => store.compact()),
-        rewind: (messageId) => withChat((store) => store.rewind(messageId)),
-        conversationReset: () => withChat((store) => store.sessionReset()),
-        historyLoadMore: () => chatStore?.historyLoadMore(),
         backgroundProcessStop: (processId) =>
             withChat((store) => store.backgroundProcessStop(processId)),
+        // Answering a request lets the agent proceed with the very act it asked
+        // permission for, so it is a write into the checkout like any other.
+        answerInput: (input) =>
+            writeGuard(openGroupWorkRefusal(), () => withChat((store) => store.answerInput(input))),
+        compact: () =>
+            writeGuard(openGroupWorkRefusal(), () => withChat((store) => store.compact())),
+        rewind: (messageId) =>
+            writeGuard(openGroupWorkRefusal(), () => withChat((store) => store.rewind(messageId))),
+        conversationReset: () =>
+            writeGuard(openGroupWorkRefusal(), () => withChat((store) => store.sessionReset())),
+        historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => chatStore?.usagePanelOpen(),
         usagePanelClose: () => chatStore?.usagePanelClose(),
