@@ -11,6 +11,7 @@ import {
     type DesktopPluginAppRequest,
     type DesktopPluginCatalog,
     type DesktopPluginInventory,
+    type DesktopPluginInventoryFrame,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
     type DesktopWindowState,
@@ -38,76 +39,101 @@ function buildIdentityRead(): DesktopBuildIdentity | undefined {
 const identity = buildIdentityRead();
 
 /**
- * The inventory listeners this window has, and whether the main process is
- * projecting for it.
+ * The readers of what is installed in this window, and the projection the main
+ * process is running for them.
  *
  * Following is reference-counted here because the main process should be told
  * about this window once, not once per screen that happens to be reading. The
- * first listener opens the projection and takes the reading as it stands from
- * the same call that opened it — there is no gap between the two in which a
- * change could be missed. The last listener to leave closes it again, so a
- * window that navigates away from the catalog stops costing anything.
+ * first reader opens a projection and takes the reading as it stands from the
+ * same call that opened it — there is no gap between the two in which a change
+ * could be missed. The last one to leave closes it again, so a window that
+ * navigates away from the catalog stops costing anything.
+ *
+ * Every reader is its own record rather than its function, so the same function
+ * subscribed twice is two readers with two independent releases, and releasing
+ * one does not silently release the other.
  */
-const inventoryListeners = new Set<(inventory: DesktopPluginInventory) => void>();
+interface InventoryReader {
+    readonly listen: (inventory: DesktopPluginInventory) => void;
+    /** The projection this reader joined, which is what its release names. */
+    readonly token: string;
+}
+const inventoryReaders = new Set<InventoryReader>();
 let inventoryReceive:
-    | ((event: Electron.IpcRendererEvent, inventory: DesktopPluginInventory) => void)
+    | ((event: Electron.IpcRendererEvent, frame: DesktopPluginInventoryFrame) => void)
     | undefined;
 /**
- * Which projection this window is on. It advances every time the projection is
- * opened again after the last reader left, so an answer to a follow made during
- * an earlier one is recognizably not about this one. Without it a reply that
- * crossed a release could be handed to whoever has since taken that reader's
- * place, as a reading from a lifetime they were never part of.
+ * The projection this window is currently on, or nothing when it is on none.
+ *
+ * A message already handed to the channel is delivered whatever has happened
+ * since, so a reading sent for a projection this window has left still arrives,
+ * and it arrives looking exactly like a current one. Naming the projection is
+ * what tells the two apart: main puts this name on every reading and on every
+ * opening answer, and anything wearing another name is not about the projection
+ * anybody here is reading. Without it a queued reading from a closed projection
+ * would count as the newest thing this window had been told, and the answer the
+ * new reader is waiting for would be discarded as older than it.
  */
-let inventoryEpoch = 0;
+let inventoryToken: string | undefined;
+let inventoryTokenNext = 0;
 /**
- * How many readings this window has been pushed. A follow's answer is the state
- * as it was when the answer was made, and it travels back across a process
- * boundary, so a push can overtake it. Comparing this against what it was when
- * the follow was asked is how an overtaken answer is recognized — applying it
- * would roll the reader back to an older reading and leave them there until the
- * machine happens to change again.
+ * How many readings this window has been told, under the projection it is on. A
+ * follow's answer is the state as it was when the answer was made and travels
+ * back across a process boundary, so a reading can overtake it. Comparing this
+ * against what it was when the follow was asked is how an overtaken answer is
+ * recognized — applying it would roll the reader back to an older reading and
+ * leave them there until the machine happened to change again.
  */
 let inventoryRevision = 0;
 
+function inventoryTokenCreate(): string {
+    inventoryTokenNext += 1;
+    return `${String(inventoryTokenNext)}.${Math.random().toString(36).slice(2)}`;
+}
+
 function pluginInventoryFollow(listener: (inventory: DesktopPluginInventory) => void): () => void {
-    inventoryListeners.add(listener);
-    if (inventoryListeners.size === 1) {
-        inventoryEpoch += 1;
-        inventoryReceive = (_event, inventory) => {
+    if (inventoryReaders.size === 0) {
+        inventoryToken = inventoryTokenCreate();
+        inventoryReceive = (_event, frame) => {
+            if (frame.token !== inventoryToken) return;
             inventoryRevision += 1;
-            // A copy, because a listener is free to stop following as it is told.
-            const told = Array.from(inventoryListeners);
-            for (const each of told) each(inventory);
+            // A copy, because a reader is free to stop as it is being told.
+            const told = Array.from(inventoryReaders);
+            for (const each of told) if (inventoryReaders.has(each)) each.listen(frame.inventory);
         };
         ipcRenderer.on(desktopIpc.pluginInventoryChanged, inventoryReceive);
     }
+    const token = inventoryToken ?? inventoryTokenCreate();
+    const reader: InventoryReader = { listen: listener, token };
+    inventoryReaders.add(reader);
     /*
      * Every reader asks for the opening reading itself, and is the only one told
-     * the answer. The push listener is already installed by the time the ask goes
-     * out, so a reader who is not told this answer has not missed anything: they
-     * were told something newer instead, which is exactly the case the two
-     * guards below are for.
+     * the answer. The listener above is already installed by the time the ask
+     * goes out, so a reader who is not told this answer has not missed anything:
+     * they were told something newer instead, which is exactly what the guards
+     * below are for.
      */
-    const epoch = inventoryEpoch;
     const revision = inventoryRevision;
     void ipcRenderer
-        .invoke(desktopIpc.pluginInventoryFollow)
-        .then((inventory: DesktopPluginInventory) => {
-            if (epoch !== inventoryEpoch) return;
+        .invoke(desktopIpc.pluginInventoryFollow, token)
+        .then((frame: DesktopPluginInventoryFrame) => {
+            if (frame.token !== token || token !== inventoryToken) return;
             if (revision !== inventoryRevision) return;
-            if (!inventoryListeners.has(listener)) return;
-            listener(inventory);
+            if (!inventoryReaders.has(reader)) return;
+            reader.listen(frame.inventory);
         });
     let released = false;
     return () => {
         if (released) return;
         released = true;
-        inventoryListeners.delete(listener);
-        void ipcRenderer.invoke(desktopIpc.pluginInventoryUnfollow);
-        if (inventoryListeners.size > 0 || !inventoryReceive) return;
+        inventoryReaders.delete(reader);
+        // Named with the projection this reader was on, so a release that arrives
+        // late cannot be counted against, or close, a projection opened since.
+        void ipcRenderer.invoke(desktopIpc.pluginInventoryUnfollow, reader.token);
+        if (inventoryReaders.size > 0 || !inventoryReceive) return;
         ipcRenderer.removeListener(desktopIpc.pluginInventoryChanged, inventoryReceive);
         inventoryReceive = undefined;
+        inventoryToken = undefined;
     };
 }
 

@@ -30,6 +30,7 @@ import { dockBadgeApply, dockBadgeClear, dockUnreadCountRead } from "./dockBadge
 import { desktopUpdaterCreate } from "./updater";
 import { DesktopWindowLifecycle, type DesktopWindowBounds } from "./windowLifecycle";
 import { desktopStartRequestValidate, desktopTopologyIdValidate } from "./runtimeValidation";
+import { InventoryFollowerRegistry } from "./pluginInventoryFollowers";
 import {
     buildIdentityArgument,
     desktopIpc,
@@ -147,6 +148,30 @@ let rigInstallManager: RigInstallTerminalManager;
 let remoteRigManager: RemoteRigManager;
 let notesStore: NotesStore;
 let pluginApplications: PluginApplicationHost;
+
+/**
+ * Which renderers are reading what is installed. It lives out here because a
+ * reading is handed to the readers themselves, each under the projection it is
+ * on, and the host is built before the handlers that register them.
+ */
+const inventoryFollowers = new InventoryFollowerRegistry<Electron.WebContents>({
+    followSet: (following) => {
+        pluginApplications.inventoryFollowSet(following);
+    },
+    inventoryRead: () => pluginApplications.inventoryGet(),
+    send: (sender, frame) => sender.send(desktopIpc.pluginInventoryChanged, frame),
+    watch: (sender, lost) => {
+        sender.on("destroyed", lost);
+        sender.on("render-process-gone", lost);
+        sender.on("did-navigate", lost);
+        return () => {
+            if (sender.isDestroyed()) return;
+            sender.removeListener("destroyed", lost);
+            sender.removeListener("render-process-gone", lost);
+            sender.removeListener("did-navigate", lost);
+        };
+    },
+});
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
@@ -904,9 +929,7 @@ void app
                     window.webContents.send(desktopIpc.pluginApplicationsChanged, catalog);
             },
             onInventoryChange: (inventory) => {
-                const window = windowLifecycle.get();
-                if (window && !window.isDestroyed())
-                    window.webContents.send(desktopIpc.pluginInventoryChanged, inventory);
+                inventoryFollowers.publish(inventory);
             },
         });
         const desktopRoot = join(app.getPath("userData"), "desktop");
@@ -1010,58 +1033,11 @@ void app
          * those listeners is gone with the document that loaded it, and the new
          * one starts from nothing.
          */
-        interface InventoryFollower {
-            count: number;
-            /** Stops watching this renderer for the ways it can stop reading. */
-            readonly forget: () => void;
-        }
-        const inventoryFollowers = new Map<Electron.WebContents, InventoryFollower>();
-        const inventoryFollowSync = (): void => {
-            pluginApplications.inventoryFollowSet(inventoryFollowers.size > 0);
-        };
-        const inventoryRelease = (sender: Electron.WebContents): void => {
-            const follower = inventoryFollowers.get(sender);
-            if (!follower) return;
-            inventoryFollowers.delete(sender);
-            follower.forget();
-            inventoryFollowSync();
-        };
-        ipcMain.handle(desktopIpc.pluginInventoryFollow, (event) => {
-            const sender = event.sender;
-            const follower = inventoryFollowers.get(sender);
-            if (follower) follower.count += 1;
-            else {
-                // The watches are put on when a renderer starts reading and taken
-                // off when it stops, so a window that follows, navigates, and
-                // follows again does not accumulate a second set of them.
-                const lost = () => inventoryRelease(sender);
-                sender.on("destroyed", lost);
-                sender.on("render-process-gone", lost);
-                sender.on("did-navigate", lost);
-                inventoryFollowers.set(sender, {
-                    count: 1,
-                    forget: () => {
-                        if (sender.isDestroyed()) return;
-                        sender.removeListener("destroyed", lost);
-                        sender.removeListener("render-process-gone", lost);
-                        sender.removeListener("did-navigate", lost);
-                    },
-                });
-                inventoryFollowSync();
-            }
-            // Projecting and reading happen in this one turn, so nothing the
-            // daemon says can land between them and go unreported.
-            return pluginApplications.inventoryGet();
-        });
-        ipcMain.handle(desktopIpc.pluginInventoryUnfollow, (event) => {
-            const sender = event.sender;
-            const follower = inventoryFollowers.get(sender);
-            if (!follower) return;
-            if (follower.count > 1) {
-                follower.count -= 1;
-                return;
-            }
-            inventoryRelease(sender);
+        ipcMain.handle(desktopIpc.pluginInventoryFollow, (event, raw: unknown) =>
+            inventoryFollowers.follow(event.sender, typeof raw === "string" ? raw : ""),
+        );
+        ipcMain.handle(desktopIpc.pluginInventoryUnfollow, (event, raw: unknown) => {
+            inventoryFollowers.unfollow(event.sender, typeof raw === "string" ? raw : "");
         });
         ipcMain.handle(desktopIpc.pluginAppRequest, (_event, raw: unknown) => {
             const request = pluginAppRequestParse(raw);

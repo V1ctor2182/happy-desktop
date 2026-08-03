@@ -417,6 +417,21 @@ export interface DesktopPluginInventory {
 }
 
 /**
+ * One inventory reading with the projection it belongs to named on it.
+ *
+ * A window opens a projection, may close it, and may open another one, while
+ * readings for the closed one are still in the channel: a message already handed
+ * to the transport is delivered whatever has happened since. The token is how a
+ * reading that belongs to a projection nobody is on any more is recognized as
+ * such, instead of being taken for the current one and counted as the newest
+ * thing the machine said. It is opaque, and it never reaches the renderer.
+ */
+export interface DesktopPluginInventoryFrame {
+    readonly token: string;
+    readonly inventory: DesktopPluginInventory;
+}
+
+/**
  * One host operation a mounted plugin application asked for, as the MCP Apps
  * host received it from that application's own frame.
  *
@@ -580,9 +595,14 @@ export const desktopIpc = {
     pluginAppRequest: "happy2:plugins:app-request",
     pluginApplicationsChanged: "happy2:plugins:changed",
     pluginApplicationsGet: "happy2:plugins:get",
+    /** One reading, named with the projection it belongs to. */
     pluginInventoryChanged: "happy2:plugins:inventory-changed",
-    /** Starts following what is installed, answering with the reading as it stands. */
+    /**
+     * Starts following what is installed under a projection the window names,
+     * answering with the reading as it stands under that same name.
+     */
     pluginInventoryFollow: "happy2:plugins:inventory-follow",
+    /** Stops following one projection, named so a late one cannot close a later. */
     pluginInventoryUnfollow: "happy2:plugins:inventory-unfollow",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
