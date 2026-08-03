@@ -44,12 +44,17 @@ export interface RigDirectoryAddSnapshot {
 
 export interface RigDirectorySnapshot {
     /**
-     * The Rig the window is addressing, as `rigActivate` last recorded it. It is
-     * published because it is the only synchronous answer to "which machine is
-     * this window on" — a surface deciding something at the moment a person acts
-     * cannot ask the render that drew the control.
+     * The Rig the window is addressing, resolved against the ones that are
+     * actually here. It is published because it is the only synchronous answer
+     * to "which machine is this window on" — a surface deciding something at the
+     * moment a person acts cannot ask the render that drew the control.
+     *
+     * It names a Rig in `rigs` or it is absent. A remembered machine the reader
+     * removes hands the window back to this one, the same way the screens do;
+     * with no Rig at all — before the directory is running, or after it has been
+     * torn down — there is nothing to address and a press has nowhere to land.
      */
-    readonly activeRigId: string;
+    readonly activeRigId?: string;
     readonly add: RigDirectoryAddSnapshot;
     readonly rigs: readonly RigDirectoryEntry[];
 }
@@ -111,8 +116,9 @@ export function rigDirectoryStoreCreate(
     const rigs = new Map<string, LiveRig>();
     const listeners = new Set<() => void>();
     let add: RigDirectoryAddSnapshot = ADD_EMPTY;
-    let snapshot: RigDirectorySnapshot = { activeRigId: LOCAL_RIG_ID, add, rigs: [] };
+    let snapshot: RigDirectorySnapshot = { add, rigs: [] };
     let order: readonly string[] = [];
+    /** The reader's standing choice of machine, which may name one that has gone. */
     let activeRigId = LOCAL_RIG_ID;
     let runtimeUnsubscribe: (() => void) | undefined;
     let remoteUnsubscribe: (() => void) | undefined;
@@ -123,9 +129,20 @@ export function rigDirectoryStoreCreate(
         directoryPick: () => bridge.directoryPick(),
     };
 
+    /**
+     * The Rig a press lands on, which is the reader's choice while that machine
+     * is still here and otherwise the one the screens fall back to: this one, or
+     * whichever comes first when even it is missing. Resolving it here rather
+     * than reassigning the reader's choice means a remote machine that drops out
+     * and comes back is theirs again without them re-picking it.
+     */
+    const activeResolve = (): string | undefined =>
+        rigs.has(activeRigId) ? activeRigId : order.find((id) => rigs.has(id));
+
     const publish = () => {
+        const resolved = activeResolve();
         snapshot = {
-            activeRigId,
+            ...(resolved === undefined ? {} : { activeRigId: resolved }),
             add,
             rigs: order.flatMap((id) => {
                 const rig = rigs.get(id);
@@ -294,7 +311,8 @@ export function rigDirectoryStoreCreate(
                 runtimeUnsubscribe = runtime.subscribe(localReconcile);
                 remoteUnsubscribe = bridge.remoteRigSubscribe(remoteReconcile);
                 browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
-                    const active = rigs.get(activeRigId) ?? rigs.get(LOCAL_RIG_ID);
+                    const resolved = activeResolve();
+                    const active = resolved === undefined ? undefined : rigs.get(resolved);
                     active?.entry.session?.workspace.panel.browserAdd(url);
                 });
                 localReconcile();
@@ -312,6 +330,11 @@ export function rigDirectoryStoreCreate(
                 for (const rig of rigs.values()) connectionClose(rig);
                 rigs.clear();
                 order = [];
+                // Nobody is listening, so nobody is told — but `get` is still
+                // answerable, and what it held names connections that have just
+                // been disposed. The window is on no machine until it subscribes
+                // again, and it says so rather than handing out the wreckage.
+                snapshot = { add, rigs: [] };
             };
         },
         addOpen() {
@@ -345,8 +368,11 @@ export function rigDirectoryStoreCreate(
         rigRemove: (id) => void bridge.remoteRigRemove(id).catch(() => undefined),
         rigActivate(id) {
             if (activeRigId === id) return;
+            const before = snapshot.activeRigId;
             activeRigId = id;
-            publish();
+            // Picking a machine that is not here resolves to the same one the
+            // window was already on, and nothing on screen has changed.
+            if (activeResolve() !== before) publish();
         },
     };
 }

@@ -258,6 +258,13 @@ export interface RigWorkspaceAddress {
     readonly conversationId?: RigSessionId;
 }
 
+/**
+ * What a workspace nobody is looking at is addressing: nowhere. A stopped or
+ * disposed store publishes this, so a control retained from a surface that has
+ * since gone away cannot read a place out of it and act there.
+ */
+const ADDRESS_NOWHERE: RigWorkspaceAddress = {};
+
 export interface RigWorkspaceSnapshot {
     /** Where the reader is, whether or not a conversation is materialized. */
     readonly address: RigWorkspaceAddress;
@@ -954,7 +961,15 @@ export function rigWorkspaceStoreCreate(
      * only where navigation last pointed. Closing a conversation to sit on the
      * Rig's own root leaves the former alone and empties this.
      */
-    let address: RigWorkspaceAddress = {};
+    let address: RigWorkspaceAddress = ADDRESS_NOWHERE;
+    /**
+     * The address as the outside is allowed to act on it. Navigation is kept
+     * privately across a remount, because the URL still names the same place
+     * and `start` re-acquires it; but while no surface is running there is
+     * nowhere to act, and a stale handler asking must be told so.
+     */
+    const addressPublic = (): RigWorkspaceAddress =>
+        active && !disposed ? address : ADDRESS_NOWHERE;
     /** Groups whose remembered file tabs have already been reopened in this run. */
     const restoredGroupIds = new Set<RigGroupId>();
     /** True while reopening remembered tabs, so the reopening is not itself remembered. */
@@ -967,7 +982,7 @@ export function rigWorkspaceStoreCreate(
     let groupResumeRevision = -1;
     let memoryRevision = 0;
     let snapshot: RigWorkspaceSnapshot = {
-        address,
+        address: addressPublic(),
         list: list.get(),
         conversation,
         fileTabs,
@@ -1276,8 +1291,9 @@ export function rigWorkspaceStoreCreate(
         }
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
+        const nextAddress = addressPublic();
         if (
-            snapshot.address === address &&
+            snapshot.address === nextAddress &&
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
             snapshot.groupComposer === groupComposerDraft &&
@@ -1303,7 +1319,7 @@ export function rigWorkspaceStoreCreate(
         )
             return;
         snapshot = {
-            address,
+            address: nextAddress,
             list: listSnapshot,
             conversation,
             fileTabs,
@@ -2123,10 +2139,13 @@ export function rigWorkspaceStoreCreate(
         conversationId: RigSessionId | undefined,
     ): void => {
         if (address.groupId === groupId && address.conversationId === conversationId) return;
-        address = {
-            ...(groupId === undefined ? {} : { groupId }),
-            ...(conversationId === undefined ? {} : { conversationId }),
-        };
+        address =
+            groupId === undefined && conversationId === undefined
+                ? ADDRESS_NOWHERE
+                : {
+                      ...(groupId === undefined ? {} : { groupId }),
+                      ...(conversationId === undefined ? {} : { conversationId }),
+                  };
     };
 
     /** Applies the addressed conversation, releasing whichever one was open. */
@@ -2385,9 +2404,10 @@ export function rigWorkspaceStoreCreate(
         releaseConversation();
         conversation = { type: "unloaded" };
         snapshot = {
-            // Where navigation last pointed outlives the subscription: stopping
-            // is a surface going away, not the reader going somewhere.
-            address,
+            // Where navigation last pointed outlives the subscription privately,
+            // because the URL still names it and starting again re-acquires it.
+            // Publicly there is nowhere to act until that happens.
+            address: addressPublic(),
             list: list.get(),
             conversation,
             fileTabs,
