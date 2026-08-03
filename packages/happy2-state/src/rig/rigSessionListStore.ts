@@ -236,8 +236,19 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     let disposed = false;
     /** Tokens handed to catalog reads in the order they are issued. */
     let readSequence = 0;
-    /** The newest read token whose result has been applied; nothing older may write. */
+    /**
+     * The newest read token whose snapshot was actually applied here; nothing
+     * older may write. It says a newer authoritative observation exists, so it
+     * advances only when one really did land — never to cancel work.
+     */
     let appliedSequence = 0;
+    /**
+     * Reads issued up to here have been retired by a stop and may no longer
+     * write, whatever they come back with. Kept apart from `appliedSequence`
+     * because retiring a read establishes nothing about the host: a retired read
+     * still holds the only fresh answer its caller has.
+     */
+    let retiredSequence = 0;
     let reconciling = false;
     let reconcileAgain = false;
     let unsubscribeGlobal: (() => void) | undefined;
@@ -294,6 +305,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
      * when it came back. A superseded read is not wrong, only late: its value
      * describes an earlier moment, so the caller judging something against it
      * must use the winner's snapshot instead — which is what `superseded` says.
+     *
+     * A read the surface retired on its way back is not superseded: nothing
+     * newer was observed, the surface simply stopped listening. Its value is
+     * still the freshest thing anyone has, and the caller that asked for it is
+     * meant to judge from that value rather than from what the store kept.
      */
     interface CatalogObservation {
         readonly catalog: RigProjectCatalog;
@@ -351,7 +367,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     token,
                 };
             const superseded = token <= appliedSequence;
-            if (!superseded) {
+            // Two different questions: whether something newer was observed, and
+            // whether this read is still allowed to write. Only the first one
+            // may advance `appliedSequence`, because only the first one means a
+            // snapshot actually landed here.
+            if (!superseded && token > retiredSequence) {
                 appliedSequence = token;
                 catalog = snapshot.catalog;
                 sessions = snapshot.sessions;
@@ -467,10 +487,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const stop = (): void => {
         active = false;
-        // Every read already in flight loses: retiring the whole issued range
-        // means none of them may write, while a read issued after this still
-        // takes a newer token and applies normally.
-        appliedSequence = readSequence;
+        // Every read already in flight loses its right to write: retiring the
+        // whole issued range means none of them may publish here, while a read
+        // issued after this takes a newer token and applies normally. It is
+        // deliberately not `appliedSequence` — stopping observes nothing about
+        // the host, and claiming otherwise would let a retired read pass for a
+        // newer authoritative snapshot that never existed.
+        retiredSequence = readSequence;
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         unsubscribeMutationRejections?.();
@@ -792,13 +815,18 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                         ),
                     ),
                 };
-            // This read is the newest thing anyone has: it answers for itself.
+            // This read is the newest thing anyone has: it answers for itself,
+            // from its own value. That includes a read the surface retired while
+            // it was in flight — the list stopped listening, but this caller's
+            // question was still answered by the host.
             if (read.ok && !read.observed.superseded)
                 return judge(read.observed.catalog, requestError);
             // This read is late or failed, but a read issued after the request
-            // has already been applied — an event reconcile that overtook it, or
-            // another window's. It saw the host after the archive, so it is the
-            // better answer, and no further event is needed to close this.
+            // was applied here — an event reconcile that overtook it, or another
+            // window's. It saw the host after the archive, so it is the better
+            // answer, and no further event is needed to close this. Only a
+            // snapshot that really landed advances `appliedSequence`, so this
+            // can never be a read that was merely cancelled.
             if (appliedSequence > baseline) return judge(catalog, requestError);
             // Nothing newer exists, so nothing was established after the
             // request. If the project was already absent when this asked, the
