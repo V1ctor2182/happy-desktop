@@ -32,12 +32,19 @@ const happy2 = {
     name: "happy2",
 } as const;
 
+/** The host has answered and the project states nothing: the machine decides. */
+const computeDefault = {
+    status: "ready",
+    mode: "default",
+    image: "",
+} as const;
+
 export function RigProjectSettingsDialogPage() {
     return (
         <ComponentPage
             contract="Props only"
             number="C-178"
-            summary="What one project of the local workspace is, and the one field the daemon takes a new value for."
+            summary="What one project of the local workspace is, what it is set to, and what the daemon takes new values for."
             title="RigProjectSettingsDialog"
         >
             <Specimen
@@ -224,6 +231,266 @@ export function RigProjectSettingsDialogPage() {
                     />,
                     720,
                 )}
+            </Specimen>
+            <Specimen
+                detail="the host has answered · the project states nothing and the machine decides"
+                label="Compute, machine default"
+                number="11"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={computeDefault}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    780,
+                )}
+                <DimensionRule label="segmented control · full width of the 480px card body" />
+            </Specimen>
+            <Specimen
+                detail="the host's answer is not in yet: nothing claims to be chosen and nothing can be"
+                label="Compute, reading"
+                number="12"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{ status: "loading", mode: "default", image: "" }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    780,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the project is set to this machine and the reader has not changed it: no pending row"
+                label="Compute, this machine"
+                number="13"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "ready",
+                            current: { type: "local" },
+                            mode: "local",
+                            image: "",
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    780,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the image field appears in the same column · what is set now sits beside the commit that would change it"
+                label="Compute, container chosen"
+                number="14"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "ready",
+                            current: { type: "local" },
+                            mode: "docker",
+                            image: "node:22-bookworm",
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    820,
+                )}
+            </Specimen>
+            <Specimen
+                detail="a long registry reference: the field scrolls it and the line under it truncates rather than growing the row"
+                label="Compute, long image"
+                number="15"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "ready",
+                            current: {
+                                type: "docker",
+                                image: "europe-west4-docker.pkg.dev/happy-engineering/agents/rig-toolchain-ubuntu-24-04:2026-07-31",
+                            },
+                            mode: "docker",
+                            image: "europe-west4-docker.pkg.dev/happy-engineering/agents/rig-toolchain-ubuntu-24-04:2026-08-02",
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    820,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host is being told: every control in the dialog is inert and the commit says what it is doing"
+                label="Compute, applying"
+                number="16"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "ready",
+                            current: { type: "local" },
+                            mode: "docker",
+                            image: "node:22-bookworm",
+                            submitting: true,
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    820,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host refused: the reason, the choice still in hand, and the same commit"
+                label="Compute, not saved"
+                number="17"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "ready",
+                            current: { type: "local" },
+                            error: "The project changed before its settings could be saved.",
+                            mode: "docker",
+                            image: "node:22-bookworm",
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    880,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the setting could not be read: the section says so and offers no choice it cannot ground"
+                label="Compute, not read"
+                number="18"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        compute={{
+                            status: "error",
+                            mode: "default",
+                            image: "",
+                            readError: "The Rig on this machine could not be reached.",
+                        }}
+                        draft="happy2"
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    820,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the same section on the dark appearance, pinned so both are reviewed against their real surface"
+                label="Compute, dark"
+                number="19"
+                stage="app"
+            >
+                <div className="happy2-theme-dark" style={{ display: "flex" }}>
+                    {frame(
+                        <RigProjectSettingsDialog
+                            {...happy2}
+                            compute={{
+                                status: "ready",
+                                current: { type: "local" },
+                                mode: "docker",
+                                image: "node:22-bookworm",
+                            }}
+                            draft="happy2"
+                            onClose={() => {}}
+                            onComputeImageChange={() => {}}
+                            onComputeModeChange={() => {}}
+                            onComputeSubmit={() => {}}
+                            onDraftChange={() => {}}
+                            onSubmit={() => {}}
+                        />,
+                        820,
+                    )}
+                </div>
+            </Specimen>
+            <Specimen
+                detail="the same section on the light appearance"
+                label="Compute, light"
+                number="20"
+                stage="app"
+            >
+                <div className="happy2-theme-light" style={{ display: "flex" }}>
+                    {frame(
+                        <RigProjectSettingsDialog
+                            {...happy2}
+                            compute={{
+                                status: "ready",
+                                current: { type: "local" },
+                                mode: "docker",
+                                image: "node:22-bookworm",
+                            }}
+                            draft="happy2"
+                            onClose={() => {}}
+                            onComputeImageChange={() => {}}
+                            onComputeModeChange={() => {}}
+                            onComputeSubmit={() => {}}
+                            onDraftChange={() => {}}
+                            onSubmit={() => {}}
+                        />,
+                        820,
+                    )}
+                </div>
             </Specimen>
         </ComponentPage>
     );

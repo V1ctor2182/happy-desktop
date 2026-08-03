@@ -455,6 +455,40 @@ export interface RigProject {
 }
 
 /**
+ * Where the host runs a session started in a project, when the project itself
+ * decides. `local` is the machine the host is on; `docker` is a container built
+ * from `image` with the checkout mounted inside it.
+ *
+ * A project that states neither is represented by the absence of this value
+ * rather than by a third member: "nothing stated" is not a place work runs, it
+ * is the host's own configuration deciding, and giving it a name here would let
+ * a surface claim the machine when the host may well have said a container.
+ */
+export type RigProjectCompute =
+    | { readonly type: "local" }
+    | { readonly type: "docker"; readonly image: string };
+
+/**
+ * One project's durable compute configuration, exactly as the host holds it.
+ *
+ * It is read on its own rather than carried on the project row because the live
+ * catalog the workspace list is built from does not describe it at all: a row
+ * that carried it would have it only on the reads that happen to come from the
+ * host's own project read, and lose it again on the next live publish.
+ */
+export interface RigProjectComputeState {
+    readonly projectId: RigProjectId;
+    /** Absent when the project states nothing and the host's configuration decides. */
+    readonly compute?: RigProjectCompute;
+    /**
+     * How many times this project's choice has changed. The host builds a
+     * container's name out of it, so a change is what retires the container the
+     * previous choice built instead of reusing it.
+     */
+    readonly generation: number;
+}
+
+/**
  * One git worktree the daemon created inside a project. Sessions started in it
  * belong to the project but list under the worktree, so parallel work on separate
  * branches reads as separate groups rather than as unrelated directories.

@@ -49,6 +49,30 @@ export interface ProjectAvatar {
     readonly url: string;
 }
 
+/**
+ * Where the daemon runs sessions started in a project by default, as it durably
+ * records the choice. `generation` counts how many times the choice has changed:
+ * the daemon builds a container's name out of it, so changing the choice retires
+ * the container the previous one built rather than reusing it.
+ */
+export type ProjectWorkspaceCompute =
+    | { readonly generation: number; readonly type: "local" }
+    | { readonly generation: number; readonly image: string; readonly type: "docker" };
+
+/**
+ * A project's durable settings. `defaultWorkspaceCompute` is absent when the
+ * project states nothing about where its sessions run, which leaves the daemon's
+ * own configuration deciding — not a claim that they run on the machine itself.
+ */
+export interface ProjectSettings {
+    readonly defaultWorkspaceCompute?: ProjectWorkspaceCompute;
+}
+
+/** The new choice the daemon takes; it mints the generation itself, so none is sent. */
+export type ProjectWorkspaceComputeInput =
+    | { readonly type: "local" }
+    | { readonly image: string; readonly type: "docker" };
+
 export interface Project {
     readonly id: string;
     readonly kind: "regular" | "home";
@@ -68,6 +92,7 @@ export interface Project {
      * leaves them out of the workspace list.
      */
     readonly archivedAt?: number;
+    readonly settings: ProjectSettings;
     readonly git?: GitRepositoryFacts;
     readonly changedFiles?: number;
     readonly addedLines?: number;

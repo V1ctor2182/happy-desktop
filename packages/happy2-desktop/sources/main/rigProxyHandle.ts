@@ -22,6 +22,7 @@ import { rigDaemonHealthProject } from "./rigHttpProxy";
 import {
     rigCatalogProject,
     rigGlobalEventProject,
+    rigProjectComputeProject,
     rigProjectProject,
     rigSessionEventProject,
     rigSessionProject,
@@ -658,6 +659,7 @@ export type RigProxyClient = Pick<
     | "reorderProject"
     | "archiveProject"
     | "renameProject"
+    | "updateProjectSettings"
     | "renameWorkspace"
     | "reorderSession"
     | "getSession"
@@ -874,6 +876,22 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         ),
                     ),
                 });
+                return true;
+            }
+            if (
+                segments[0] === "projects" &&
+                segments[1] !== undefined &&
+                segments[2] === "compute" &&
+                segments.length === 3
+            ) {
+                // Answered from the daemon's own project read rather than from
+                // the catalog above. The catalog is what the grouped list is
+                // built from, and the live group stream that normally serves it
+                // carries no project settings at all, so a compute value taken
+                // from there would be present or absent depending on which
+                // reader happened to answer.
+                const { project } = await client.getProject(segments[1]);
+                writeJson(response, 200, rigProjectComputeProject(project));
                 return true;
             }
             if (path === "/workspace-files") {
@@ -1161,6 +1179,40 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     client.archiveProject(projectId, version),
                 );
                 writeJson(response, 200, {});
+                return true;
+            }
+            if (segments[2] === "compute" && segments.length === 3) {
+                const body = await bodyReadJson(request);
+                const compute = computeInputRead(body);
+                // Deliberately not `projectGuarded`: that helper answers a
+                // refused version by reading the newer one and going again,
+                // which is right for a reorder nobody else is competing over
+                // and wrong here. The daemon refuses this write only when
+                // another person changed this same setting in between — a git
+                // scan or an avatar landing does not — so retrying would throw
+                // away that person's choice on the reader's behalf. It is
+                // reported instead, and the read-back below shows what is
+                // actually set now.
+                const { project } = await client.getProject(projectId);
+                await client.updateProjectSettings(
+                    projectId,
+                    {
+                        ...(compute === undefined ? {} : { defaultWorkspaceCompute: compute }),
+                        // The renderer's own identity for this submission. The
+                        // daemon answers a repeat of one it has already applied
+                        // with the project that application produced, so a
+                        // request whose answer was lost on the way back can be
+                        // sent again without setting anything twice.
+                        mutationId: mutationIdRead(body),
+                    },
+                    project.version,
+                );
+                // Read back rather than echoing what the write returned. The
+                // caller is told what the daemon holds now, from a read of its
+                // own, which is also what makes a write that raced something
+                // else report the value that actually won.
+                const { project: saved } = await client.getProject(projectId);
+                writeJson(response, 200, rigProjectComputeProject(saved));
                 return true;
             }
             if (segments[2] === "worktrees" && segments.length === 3) {
@@ -1696,6 +1748,40 @@ function nameRead(body: Record<string, unknown>): string {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (name.length === 0) throw new Error("A name is required.");
     return name;
+}
+
+/**
+ * The compute choice a settings write carries, or `undefined` when it carries
+ * none — which is the request to stop stating one and leave the daemon's own
+ * configuration deciding again.
+ *
+ * The image is checked here rather than only at the daemon because the daemon
+ * refuses a whitespace-bearing image with a message about the image, and the
+ * reader is better told what is wrong with what they typed before a request
+ * goes out for it. It is not trimmed into validity: a name with a space in the
+ * middle is not a name with the space removed.
+ */
+function computeInputRead(
+    body: Record<string, unknown>,
+): { readonly type: "local" } | { readonly image: string; readonly type: "docker" } | undefined {
+    const compute = body.compute;
+    if (compute === undefined || compute === null) return undefined;
+    if (typeof compute !== "object") throw new Error("The compute setting is invalid.");
+    const type = (compute as Record<string, unknown>).type;
+    if (type === "local") return { type: "local" };
+    if (type !== "docker") throw new Error("The compute setting is invalid.");
+    const image = (compute as Record<string, unknown>).image;
+    const trimmed = typeof image === "string" ? image.trim() : "";
+    if (trimmed.length === 0) throw new Error("A Docker image is required.");
+    if (/\s/u.test(trimmed)) throw new Error("A Docker image must not contain whitespace.");
+    return { image: trimmed, type: "docker" };
+}
+
+/** This submission's identity, which the daemon uses to answer a repeat rather than reapply it. */
+function mutationIdRead(body: Record<string, unknown>): string {
+    const mutationId = typeof body.mutationId === "string" ? body.mutationId : "";
+    if (mutationId.length === 0) throw new Error("A mutation id is required.");
+    return mutationId;
 }
 
 async function projectGuarded(

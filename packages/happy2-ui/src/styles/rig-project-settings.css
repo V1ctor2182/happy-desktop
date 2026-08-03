@@ -110,6 +110,47 @@
     line-height: 16px;
 }
 
+/* Where the project's sessions run. It keeps the rhythm of the fields above —
+   13px label, then the control, then the note — because it is one more thing
+   about the project that is set rather than a different kind of surface. The
+   choice, the image it may need, and the notes are all immediate children of
+   this column, so the image field appearing and disappearing moves nothing but
+   itself. */
+.happy2-rig-project-settings__compute {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* What the project is set to now, beside the commit that would change it: the
+   fact on the left and the act on the right, on one line, so the reader sees
+   what they are leaving as they choose what to leave it for. */
+.happy2-rig-project-settings__compute-pending {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy2-rig-project-settings__compute-current {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    /* An image reference is long, but this line is a passing statement about
+       what is being replaced rather than the value itself — that is in the field
+       above, with its own scroll and the whole name in it. One truncated line
+       keeps the row from growing under a name nobody came here to read. */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Where the project ends. It is the one block here that removes something, so a
    hairline separates it from the fields above rather than letting it read as one
    more of them, and it keeps the same label/value/note rhythm so the separation

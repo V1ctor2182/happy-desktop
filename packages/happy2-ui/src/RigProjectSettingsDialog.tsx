@@ -5,7 +5,43 @@ import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import { Modal } from "./Modal";
 import { ModalOverlay } from "./ModalOverlay";
+import { SegmentedControl } from "./SegmentedControl";
 import { TextField } from "./TextField";
+
+/** The three things a project can say about where the sessions started in it run. */
+export type RigProjectComputeMode = "default" | "local" | "docker";
+
+/** What the host holds for a project: the machine itself, or a container built from an image. */
+export type RigProjectComputeChoice = { type: "local" } | { type: "docker"; image: string };
+
+/**
+ * Where sessions started in this project run, as the settings dialog shows it.
+ *
+ * The host's own answer (`current`) and the choice being made (`mode`, `image`)
+ * are separate on purpose: until the two agree, the reader is looking at a
+ * decision they have not committed, and the section says so rather than
+ * presenting an edit as a fact.
+ */
+export type RigProjectComputeSection = {
+    /**
+     * Whether the host's answer is in hand. Nothing states what the project is
+     * set to until it is `ready`; `error` means it could not be read, and
+     * `readError` says why.
+     */
+    status: "loading" | "ready" | "error";
+    /** What the host holds. Absent means the project states nothing and the machine decides. */
+    current?: RigProjectComputeChoice;
+    /** The choice being made. */
+    mode: RigProjectComputeMode;
+    /** The Docker image being written, kept while another option is being looked at. */
+    image: string;
+    /** True while the host is being told; the whole dialog stays up and inert. */
+    submitting?: boolean;
+    /** Why the last attempt did not save, in the reader's words. */
+    error?: string;
+    /** Why the setting could not be read, when `status` is `error`. */
+    readError?: string;
+};
 
 export type RigProjectSettingsDialogProps = {
     /** What the project is called now — the name the host has, not the draft. */
@@ -32,6 +68,18 @@ export type RigProjectSettingsDialogProps = {
     };
     /** True while the host is being told; the dialog stays up and inert. */
     submitting?: boolean;
+    /**
+     * Where sessions started in this project run. Absent leaves the section out
+     * entirely — a worktree has no compute of its own, and a caller that has lost
+     * sight of the project has nothing truthful to put here.
+     */
+    compute?: RigProjectComputeSection;
+    /** The reader chose a different place for sessions to run. Nothing is saved here. */
+    onComputeModeChange?: (mode: RigProjectComputeMode) => void;
+    /** The reader edited the Docker image. */
+    onComputeImageChange?: (image: string) => void;
+    /** The reader committed the choice. */
+    onComputeSubmit?: () => void;
     /**
      * Archiving this project, when the caller offers it. Absent leaves the
      * section out entirely — a project the caller has lost sight of has nothing
@@ -72,6 +120,42 @@ function contentsSummary(contents: { worktrees: number; sessions: number }): str
     return parts.length > 0 ? parts.join(" · ") : "No sessions yet";
 }
 
+/** The choice the controls currently express, as a value that can be compared. */
+function computeKeyOf(compute: RigProjectComputeChoice | undefined): string {
+    return compute === undefined
+        ? "default"
+        : compute.type === "local"
+          ? "local"
+          : `docker:${compute.image}`;
+}
+
+function computeDraftKeyOf(compute: RigProjectComputeSection): string {
+    return compute.mode === "default"
+        ? "default"
+        : compute.mode === "local"
+          ? "local"
+          : `docker:${compute.image.trim()}`;
+}
+
+/**
+ * What each choice actually does, in the terms the reader is deciding in. The
+ * default is not "runs on this machine": it is the project declining to say,
+ * which leaves whatever the machine is set up to do in charge — and that may
+ * well be a container.
+ */
+const computeEffect: Record<RigProjectComputeMode, string> = {
+    default:
+        "The project says nothing, so this machine decides. If it is set up to run agents in a container, new sessions here run in one; otherwise they run on the machine itself.",
+    local: "New sessions run directly on this machine, with the checkout in place — even when this machine is set up to use a container.",
+    docker: "New sessions run inside a container built from this image, with the project's checkout mounted in it. The image must already be available to this machine.",
+};
+
+/** What the host holds now, said plainly. */
+function computeCurrentLabel(compute: RigProjectComputeChoice | undefined): string {
+    if (compute === undefined) return "This machine's own setting";
+    return compute.type === "local" ? "This machine, directly" : compute.image;
+}
+
 /**
  * C-178 RigProjectSettingsDialog — what one project of the local workspace is,
  * and the one thing about it the reader sets.
@@ -94,9 +178,10 @@ function contentsSummary(contents: { worktrees: number; sessions: number }): str
 export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
     const archiving = props.archive?.submitting === true;
     const confirming = props.archive?.confirming === true;
+    const computing = props.compute?.submitting === true;
     // One request is in flight and there is nothing to type into or commit while
-    // it lands: the whole dialog answers for it rather than the archive block alone.
-    const submitting = props.submitting === true || archiving;
+    // it lands: the whole dialog answers for it rather than one block alone.
+    const submitting = props.submitting === true || archiving || computing;
     // A blank name is not a name; anything else commits, and a draft equal to
     // the current name simply closes, which is what the host is told to do with it.
     const committable = props.draft.trim().length > 0;
@@ -196,6 +281,133 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                                   </span>
                               </div>
                           ))(props.location)
+                        : null}
+                    {props.compute
+                        ? ((compute) => {
+                              const ready = compute.status === "ready";
+                              // Everything here waits on the host's own answer.
+                              // Offering a choice before it arrives would let the
+                              // reader pick against a selection that is only a
+                              // placeholder, and commit it without ever having
+                              // seen what the project is actually set to.
+                              const inert = submitting || !ready;
+                              const changed =
+                                  ready &&
+                                  computeDraftKeyOf(compute) !== computeKeyOf(compute.current);
+                              return (
+                                  <div
+                                      className="happy2-rig-project-settings__compute"
+                                      data-happy2-ui="rig-project-settings-compute"
+                                  >
+                                      <span className="happy2-rig-project-settings__label">
+                                          Where sessions run
+                                      </span>
+                                      {compute.status === "error" ? (
+                                          <Banner
+                                              data-testid="rig-project-compute-read-error"
+                                              tone="danger"
+                                              title="Not read"
+                                          >
+                                              {compute.readError ??
+                                                  "This project's compute setting could not be read."}
+                                          </Banner>
+                                      ) : null}
+                                      {compute.error ? (
+                                          <Banner
+                                              data-testid="rig-project-compute-error"
+                                              tone="danger"
+                                              title="Not saved"
+                                          >
+                                              {compute.error}
+                                          </Banner>
+                                      ) : null}
+                                      <SegmentedControl
+                                          aria-label="Where sessions started in this project run"
+                                          data-testid="rig-project-compute-mode"
+                                          disabled={inert}
+                                          fullWidth
+                                          onChange={(value) =>
+                                              props.onComputeModeChange?.(
+                                                  value as RigProjectComputeMode,
+                                              )
+                                          }
+                                          segments={[
+                                              {
+                                                  value: "default",
+                                                  label: "Machine default",
+                                                  icon: "settings",
+                                              },
+                                              {
+                                                  value: "local",
+                                                  label: "This machine",
+                                                  icon: "terminal",
+                                              },
+                                              {
+                                                  value: "docker",
+                                                  label: "Container",
+                                                  icon: "package",
+                                              },
+                                          ]}
+                                          value={compute.mode}
+                                      />
+                                      {compute.mode === "docker" ? (
+                                          <TextField
+                                              data-testid="rig-project-compute-image"
+                                              disabled={inert}
+                                              fullWidth
+                                              label="Image"
+                                              onSubmit={() => {
+                                                  if (changed) props.onComputeSubmit?.();
+                                              }}
+                                              onValueChange={(value) =>
+                                                  props.onComputeImageChange?.(value)
+                                              }
+                                              placeholder="node:22-bookworm"
+                                              value={compute.image}
+                                          />
+                                      ) : null}
+                                      <span className="happy2-rig-project-settings__hint">
+                                          {compute.status === "loading"
+                                              ? "Reading what this project is set to…"
+                                              : computeEffect[compute.mode]}
+                                      </span>
+                                      <span className="happy2-rig-project-settings__hint">
+                                          Applies to sessions started after it is saved. Anything
+                                          already running stays where it is, and a container in use
+                                          now is left behind rather than reused.
+                                      </span>
+                                      {/* Only what has not been settled is
+                                          stated. While the choice and the host
+                                          agree, the control already says what
+                                          the project is set to, and repeating it
+                                          underneath would read as a second
+                                          setting. */}
+                                      {changed ? (
+                                          <div
+                                              className="happy2-rig-project-settings__compute-pending"
+                                              data-happy2-ui="rig-project-settings-compute-pending"
+                                          >
+                                              <span
+                                                  className="happy2-rig-project-settings__compute-current"
+                                                  data-happy2-ui="rig-project-settings-compute-current"
+                                                  title={computeCurrentLabel(compute.current)}
+                                              >
+                                                  {`Set to: ${computeCurrentLabel(compute.current)}`}
+                                              </span>
+                                              <Button
+                                                  data-testid="rig-project-compute-apply"
+                                                  disabled={submitting}
+                                                  onClick={() => props.onComputeSubmit?.()}
+                                                  size="small"
+                                                  variant="primary"
+                                              >
+                                                  {computing ? "Applying…" : "Apply"}
+                                              </Button>
+                                          </div>
+                                      ) : null}
+                                  </div>
+                              );
+                          })(props.compute)
                         : null}
                     {props.archive ? (
                         <div

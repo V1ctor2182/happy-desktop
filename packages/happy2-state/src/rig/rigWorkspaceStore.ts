@@ -51,6 +51,8 @@ import type {
     RigMenusSnapshot,
     RigModelSelection,
     RigPermissionMode,
+    RigProjectCompute,
+    RigProjectComputeState,
     RigProjectId,
     RigQueuedMessage,
     RigContextGauge,
@@ -346,6 +348,12 @@ export interface RigWorkspaceSnapshot {
     /** The project archive that has been asked for and not yet carried out, if any. */
     readonly projectArchive?: RigProjectArchiveSnapshot;
     /**
+     * Where the project whose settings are open runs its sessions. Present only
+     * while a project's settings are open — a worktree has no compute of its own
+     * — and it goes when they close.
+     */
+    readonly projectCompute?: RigProjectComputeSnapshot;
+    /**
      * How changed files are being read. One preference for the workspace rather
      * than one per tab: it is how this reader likes to look at diffs, and
      * having it reset on every file they open would make it not a preference.
@@ -549,6 +557,55 @@ export interface RigProjectArchiveSnapshot {
      * failure a failure rather than a slow success.
      */
     readonly error?: string;
+}
+
+/** Which of the three things a project can say about where its sessions run. */
+export type RigProjectComputeMode = "default" | "local" | "docker";
+
+/**
+ * Where the project whose settings are open runs its sessions: what the host
+ * holds, and what the reader is in the middle of choosing instead.
+ *
+ * It lives beside the rename it is shown with rather than in a store of its own
+ * because the dialog goes inert as a whole — one request in flight disables the
+ * name, the compute controls, and the commit together — and a surface cannot
+ * make that decision from two snapshots that notify independently.
+ *
+ * The setting is not part of the project row: the host's live catalog does not
+ * describe it, so it is read for the project this dialog names and re-read
+ * whenever the host says a project changed.
+ */
+export interface RigProjectComputeSnapshot {
+    readonly projectId: RigProjectId;
+    /**
+     * Whether the host's own answer is in hand yet. Until it is `ready` nothing
+     * here states what the project is set to, and the controls have nothing
+     * truthful to show as chosen.
+     */
+    readonly status: "loading" | "ready" | "error";
+    /** What the host holds, once `status` is `ready`. Absent means the project states nothing. */
+    readonly current?: RigProjectCompute;
+    /**
+     * How many times the host has recorded a change to this project's choice. It
+     * names the containers the choice builds, so a reader can see that changing
+     * the setting starts a new one rather than reusing what is there.
+     */
+    readonly generation: number;
+    /** The choice being made. Seeded from `current` when the host's answer arrives. */
+    readonly mode: RigProjectComputeMode;
+    /**
+     * The image being typed. Kept across a switch away from Docker and back, so
+     * looking at another option does not throw away what was written — and kept
+     * verbatim, because an image name with a space in it is wrong rather than
+     * one space shorter.
+     */
+    readonly image: string;
+    /** True while the host is being told; the whole dialog stays up and inert. */
+    readonly submitting: boolean;
+    /** Why the last submission did not save, in the reader's words. */
+    readonly error?: string;
+    /** Why the setting could not be read, when `status` is `error`. */
+    readonly readError?: string;
 }
 
 /**
@@ -903,6 +960,27 @@ export interface RigWorkspaceStore {
      * for another attempt.
      */
     projectArchiveSubmit(): Promise<void>;
+    /**
+     * Chooses what the open project should say about where its sessions run.
+     * Local and nothing at all commit on their own; Docker needs an image, so it
+     * only moves the choice and waits for the reader to write one.
+     */
+    projectComputeModeUpdate(mode: RigProjectComputeMode): void;
+    /** Edits the Docker image being chosen. */
+    projectComputeImageUpdate(image: string): void;
+    /**
+     * Saves the chosen setting on the open project, and resolves once the host
+     * has answered with what it holds. A choice equal to what the host already
+     * holds is not a change and is not sent.
+     *
+     * The submission carries one identity for its whole life, so a repeat of a
+     * request whose answer was lost cannot apply it twice; changing the choice
+     * makes it a different submission with a different identity. Nothing is
+     * shown as saved until the host's own read-back says so, and a project that
+     * is renamed, archived, or navigated away from while this is in flight can
+     * never have another project's answer applied to it.
+     */
+    projectComputeSubmit(): Promise<void>;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /**
@@ -1013,6 +1091,34 @@ export function rigWorkspaceStoreCreate(
     let projectArchive: RigProjectArchiveSnapshot | undefined;
     /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
     let projectArchiveSubmission = 0;
+    let projectCompute: RigProjectComputeSnapshot | undefined;
+    /**
+     * Which read of the compute setting is the current one. Every read takes a
+     * token when it is issued, and only the newest may write, so a slow read
+     * cannot put an older value back over a newer one — including the read that
+     * was in flight when the reader opened another project's settings.
+     */
+    let projectComputeReadToken = 0;
+    /** Which submission owns the compute block, so a superseded one's answer is dropped. */
+    let projectComputeSubmission = 0;
+    /**
+     * The identity of the submission the reader is on, and the choice it belongs
+     * to. Sending the same choice again — after a failure, or after a lost answer
+     * — reuses the identity, so the host can recognize the repeat; choosing
+     * something else makes it a different submission and mints a new one.
+     */
+    let projectComputeMutationId: string | undefined;
+    let projectComputeMutationChoice: string | undefined;
+    /** The host's "a project changed" feed, open only while a project's settings are. */
+    let unsubscribeProjectsChanged: (() => void) | undefined;
+
+    /**
+     * One submission's identity. The host adopts it only to recognize a repeat of
+     * a request it has already applied, so it has no format to satisfy beyond
+     * being different every time.
+     */
+    const computeMutationIdCreate = (): string =>
+        `compute_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
     /**
      * The last authoritative catalog read this workspace acted on. The list
      * publishes optimistically too, so this is what makes "the host says the row
@@ -1465,6 +1571,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.openInRecentId === openInRecentId &&
             snapshot.rename === rename &&
             snapshot.projectArchive === projectArchive &&
+            snapshot.projectCompute === projectCompute &&
             snapshot.fileViewMode === fileViewMode &&
             snapshot.fileScope === fileScope &&
             snapshot.fileLayout === fileLayout &&
@@ -1505,6 +1612,7 @@ export function rigWorkspaceStoreCreate(
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
             ...(rename ? { rename } : {}),
             ...(projectArchive ? { projectArchive } : {}),
+            ...(projectCompute ? { projectCompute } : {}),
         };
         notify();
     };
@@ -2777,6 +2885,143 @@ export function rigWorkspaceStoreCreate(
         return addressedGroupId ?? openGroupId;
     };
 
+    /**
+     * One choice written as a value that can be compared. Two choices are the
+     * same choice when this is the same string, which is what decides whether a
+     * submission is a repeat of the one before it and whether the reader has
+     * diverged from what the host holds.
+     */
+    const computeKey = (compute: RigProjectCompute | undefined): string =>
+        compute === undefined
+            ? "default"
+            : compute.type === "local"
+              ? "local"
+              : `docker:${compute.image}`;
+
+    /** The choice the compute block currently expresses, or `undefined` for stating nothing. */
+    const computeOfDraft = (pending: RigProjectComputeSnapshot): RigProjectCompute | undefined =>
+        pending.mode === "default"
+            ? undefined
+            : pending.mode === "local"
+              ? { type: "local" }
+              : { type: "docker", image: pending.image.trim() };
+
+    /**
+     * Applies the host's answer to the open compute block.
+     *
+     * The reader's own choice survives it. A read only reseeds the controls while
+     * they still express what the host last said — which is the case before the
+     * reader has touched them, and stops being the case the moment they choose
+     * something else. That is what lets another window's change show up here
+     * without taking a half-made decision away from the person making it.
+     */
+    const projectComputeApply = (state: RigProjectComputeState): void => {
+        const pending = projectCompute;
+        if (!pending || pending.projectId !== state.projectId) return;
+        const untouched =
+            pending.status !== "ready" ||
+            computeKey(computeOfDraft(pending)) === computeKey(pending.current);
+        const seeded: Pick<RigProjectComputeSnapshot, "image" | "mode"> = untouched
+            ? {
+                  mode: state.compute === undefined ? "default" : state.compute.type,
+                  // An image the reader typed is kept when the host states none,
+                  // so switching to Docker to look at it and back does not lose
+                  // it; the host's own image replaces it when there is one.
+                  image: state.compute?.type === "docker" ? state.compute.image : pending.image,
+              }
+            : { mode: pending.mode, image: pending.image };
+        projectCompute = {
+            projectId: pending.projectId,
+            status: "ready",
+            generation: state.generation,
+            ...(state.compute === undefined ? {} : { current: state.compute }),
+            ...seeded,
+            submitting: pending.submitting,
+            ...(pending.error === undefined ? {} : { error: pending.error }),
+        };
+    };
+
+    /**
+     * Reads the open project's compute setting from the host.
+     *
+     * Every read takes a token when it is issued, and only the newest one may
+     * write. That is what keeps the answer for one project from landing on
+     * another: opening a second project's settings — or closing these — issues a
+     * newer token (or none at all), and the earlier read simply has nothing left
+     * to say. The block's own project is checked as well, so an answer can never
+     * be applied to a project it was not asked about.
+     */
+    const projectComputeLoad = (projectId: RigProjectId): void => {
+        const token = ++projectComputeReadToken;
+        void list.projectComputeRead(projectId).then(
+            (state) => {
+                if (disposed || token !== projectComputeReadToken) return;
+                if (projectCompute?.projectId !== projectId) return;
+                projectComputeApply(state);
+                recompute();
+            },
+            (error) => {
+                if (disposed || token !== projectComputeReadToken) return;
+                const pending = projectCompute;
+                if (pending?.projectId !== projectId) return;
+                // A read that failed after one succeeded keeps what is on screen:
+                // the reader is looking at the host's last answer, which is more
+                // than this failure can replace it with.
+                if (pending.status === "ready") return;
+                projectCompute = {
+                    ...pending,
+                    status: "error",
+                    readError: rigUserError(error).message,
+                };
+                recompute();
+            },
+        );
+    };
+
+    /**
+     * Opens the compute block on one project and starts following it.
+     *
+     * The subscription is the host's own "a project changed" feed rather than the
+     * grouped list: the setting is not in that list, so a change to it alone
+     * leaves every row identical and the list announces nothing. It is opened
+     * with the block and closed with it, so a dialog nobody has open follows
+     * nothing.
+     */
+    const projectComputeOpen = (projectId: RigProjectId): void => {
+        projectComputeClose();
+        projectCompute = {
+            projectId,
+            status: "loading",
+            generation: 0,
+            mode: "default",
+            image: "",
+            submitting: false,
+        };
+        unsubscribeProjectsChanged = list.projectsChangedSubscribe(() => {
+            if (disposed || projectCompute?.projectId !== projectId) return;
+            // Never while the host is being told: that request's own answer is
+            // the read-back, and a read racing it could show the value from
+            // before the write as though it were the result of it.
+            if (projectCompute.submitting) return;
+            projectComputeLoad(projectId);
+        });
+        projectComputeLoad(projectId);
+    };
+
+    /** Closes the compute block and retires every read still on its way back to it. */
+    const projectComputeClose = (): void => {
+        unsubscribeProjectsChanged?.();
+        unsubscribeProjectsChanged = undefined;
+        // Retires the reads in flight rather than merely dropping the block: a
+        // token taken after this is newer than all of them, so none of their
+        // answers may write, whatever they were asked about.
+        projectComputeReadToken += 1;
+        projectComputeSubmission += 1;
+        projectComputeMutationId = undefined;
+        projectComputeMutationChoice = undefined;
+        projectCompute = undefined;
+    };
+
     return {
         get: () => snapshot,
         panel,
@@ -3548,6 +3793,11 @@ export function rigWorkspaceStoreCreate(
                 draft: currentName,
                 submitting: false,
             };
+            // Only a project runs sessions; a worktree inherits its project's
+            // choice and has nothing of its own to set, so its dialog opens no
+            // compute block and follows nothing on the host's behalf.
+            if (worktreeId) projectComputeClose();
+            else projectComputeOpen(projectId);
             recompute();
         },
         renameDraftUpdate(draft) {
@@ -3563,6 +3813,10 @@ export function rigWorkspaceStoreCreate(
             if (projectArchive?.projectId === rename.projectId && !projectArchive.submitting)
                 projectArchive = undefined;
             rename = undefined;
+            // The compute block belongs to this dialog and goes with it, which
+            // is also what stops following the project and retires every read
+            // still on its way back.
+            projectComputeClose();
             recompute();
         },
         async renameSubmit() {
@@ -3586,8 +3840,10 @@ export function rigWorkspaceStoreCreate(
                 // Closed either way: the list store reports a failed rename by
                 // reconciling the old name back, which says more than a dialog
                 // stuck open over a row that already shows the answer.
-                if (rename === undefined || rename.projectId === pending.projectId)
+                if (rename === undefined || rename.projectId === pending.projectId) {
                     rename = undefined;
+                    projectComputeClose();
+                }
                 recompute();
             }
         },
@@ -3634,7 +3890,10 @@ export function rigWorkspaceStoreCreate(
                 // this confirmation is describing a project that no longer
                 // exists, so it closes with it.
                 projectArchive = undefined;
-                if (rename?.projectId === pending.projectId) rename = undefined;
+                if (rename?.projectId === pending.projectId) {
+                    rename = undefined;
+                    projectComputeClose();
+                }
                 recompute();
                 return;
             }
@@ -3647,6 +3906,111 @@ export function rigWorkspaceStoreCreate(
                 submitting: false,
                 error: result.error.message,
             };
+            recompute();
+        },
+        projectComputeModeUpdate(mode) {
+            const pending = projectCompute;
+            // Nothing to choose between until the host has answered, and nothing
+            // to change while it is being told.
+            if (!pending || pending.status !== "ready" || pending.submitting) return;
+            if (pending.mode === mode) return;
+            // The reason a previous attempt failed described the choice it was
+            // made about; choosing again is not that attempt.
+            projectCompute = { ...pending, mode, error: undefined };
+            recompute();
+        },
+        projectComputeImageUpdate(image) {
+            const pending = projectCompute;
+            if (!pending || pending.status !== "ready" || pending.submitting) return;
+            if (pending.image === image) return;
+            projectCompute = { ...pending, image, error: undefined };
+            recompute();
+        },
+        async projectComputeSubmit() {
+            const pending = projectCompute;
+            if (!pending || pending.status !== "ready" || pending.submitting) return;
+            const chosen = computeOfDraft(pending);
+            // Checked before anything goes out, because the reader is better told
+            // what is wrong with what they typed than shown the host's answer
+            // about it. Not trimmed into validity: an image with a space in the
+            // middle of it is wrong rather than one space shorter.
+            if (pending.mode === "docker") {
+                const image = pending.image.trim();
+                if (image.length === 0) {
+                    projectCompute = { ...pending, error: "Name the Docker image to run in." };
+                    recompute();
+                    return;
+                }
+                if (/\s/u.test(image)) {
+                    projectCompute = {
+                        ...pending,
+                        error: "A Docker image name cannot contain spaces.",
+                    };
+                    recompute();
+                    return;
+                }
+            }
+            // Already what the host holds. Saying so again would ask the host to
+            // answer for nothing, and — because the host counts changes to this
+            // setting — would be indistinguishable to it from a change if it did
+            // not compare them itself.
+            const key = computeKey(chosen);
+            if (key === computeKey(pending.current)) {
+                projectCompute = { ...pending, error: undefined };
+                recompute();
+                return;
+            }
+            // One identity for one choice. Sending the same choice again after a
+            // failure — including one where the answer was simply lost — is the
+            // same submission and reuses it, so the host recognizes the repeat;
+            // choosing something else is a different submission and mints a new
+            // one.
+            if (projectComputeMutationChoice !== key || projectComputeMutationId === undefined) {
+                projectComputeMutationChoice = key;
+                projectComputeMutationId = computeMutationIdCreate();
+            }
+            const mutationId = projectComputeMutationId;
+            const projectId = pending.projectId;
+            const submission = ++projectComputeSubmission;
+            projectCompute = { ...pending, submitting: true, error: undefined };
+            recompute();
+            const result = await list.projectComputeUpdate(projectId, chosen, mutationId);
+            // Superseded, closed, or reopened on another project: a later
+            // submission owns this block now, or nothing does. Either way this
+            // answer has nowhere to go, and applying it would be applying one
+            // project's result to whatever is on screen instead.
+            if (disposed || submission !== projectComputeSubmission) return;
+            const open = projectCompute;
+            if (!open || open.projectId !== projectId) return;
+            if (result.type === "failed") {
+                // The setting is whatever the host says it is, which this
+                // failure does not establish; the block keeps showing the last
+                // answer it had, with the reason and the same commit.
+                projectCompute = { ...open, submitting: false, error: result.error.message };
+                recompute();
+                return;
+            }
+            // Saved, as the host's own read-back of the project describes it —
+            // not as it was asked for. The controls are set from that read-back
+            // rather than left on the request, so a write that raced another
+            // window shows the choice that actually won instead of claiming the
+            // one this reader made.
+            projectCompute = {
+                projectId,
+                status: "ready",
+                generation: result.state.generation,
+                ...(result.state.compute === undefined ? {} : { current: result.state.compute }),
+                mode: result.state.compute === undefined ? "default" : result.state.compute.type,
+                image:
+                    result.state.compute?.type === "docker"
+                        ? result.state.compute.image
+                        : open.image,
+                submitting: false,
+            };
+            // The submission is done with; the next one starts its own identity
+            // even if it makes the same choice again.
+            projectComputeMutationId = undefined;
+            projectComputeMutationChoice = undefined;
             recompute();
         },
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),

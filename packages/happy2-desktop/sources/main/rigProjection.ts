@@ -38,6 +38,7 @@ import type {
     RigModel,
     RigModelCatalog,
     RigProject,
+    RigProjectComputeState,
     RigProjectId,
     RigQueuedMessage,
     RigSession,
@@ -124,6 +125,28 @@ export function rigProjectProject(project: Project, homeDir: string): RigProject
                   },
               }
             : {}),
+    };
+}
+
+/**
+ * Projects one daemon project's compute settings into what the settings surface
+ * reads. The daemon states the choice and the generation together; a project that
+ * states no choice keeps the generation it has, because the generation counts
+ * changes to the setting rather than belonging to any one choice.
+ */
+export function rigProjectComputeProject(project: Project): RigProjectComputeState {
+    const compute = project.settings.defaultWorkspaceCompute;
+    return {
+        projectId: project.id as RigProjectId,
+        generation: compute?.generation ?? 0,
+        ...(compute === undefined
+            ? {}
+            : {
+                  compute:
+                      compute.type === "local"
+                          ? { type: "local" }
+                          : { type: "docker", image: compute.image },
+              }),
     };
 }
 

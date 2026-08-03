@@ -321,6 +321,9 @@ export {
 export { RigUsagePanel, type RigUsagePanelProps } from "./RigUsagePanel";
 export {
     RigProjectSettingsDialog,
+    type RigProjectComputeChoice,
+    type RigProjectComputeMode,
+    type RigProjectComputeSection,
     type RigProjectSettingsDialogProps,
 } from "./RigProjectSettingsDialog";
 export {

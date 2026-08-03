@@ -16,6 +16,7 @@ import type {
     RigWorkspaceFileBytes,
     RigWorkspaceFileDocument,
     RigProjectCatalog,
+    RigProjectComputeState,
     RigServiceTier,
     RigSession,
     RigSessionCreateInput,
@@ -276,6 +277,16 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
         projectRename: async (projectId, name) => {
             await postJson<Record<string, never>>(`/projects/${projectId}/rename`, { name });
         },
+        projectComputeRead: (projectId) =>
+            getJson<RigProjectComputeState>(`/projects/${projectId}/compute`),
+        projectComputeWrite: (projectId, compute, mutationId) =>
+            postJson<RigProjectComputeState>(`/projects/${projectId}/compute`, {
+                // Sent as an explicit `null` rather than left out, so the request
+                // says "state nothing" instead of being a request that happens to
+                // mention no compute at all.
+                compute: compute ?? null,
+                mutationId,
+            }),
         worktreeRename: async (projectId, worktreeId, name) => {
             await postJson<Record<string, never>>(
                 `/projects/${projectId}/worktrees/${worktreeId}/rename`,

@@ -18,6 +18,8 @@ import type {
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigProjectCatalog,
+    RigProjectCompute,
+    RigProjectComputeState,
     RigProjectId,
     RigServiceTier,
     RigSession,
@@ -433,6 +435,36 @@ export interface RigTransport {
 
     /** Renames a project. The name is presentation only; nothing derives from it. */
     projectRename(projectId: RigProjectId, name: string): Promise<void>;
+
+    /**
+     * Reads where sessions started in one project run by default, from the host's
+     * own account of that project.
+     *
+     * It is a read of its own rather than a field of `projectsRead` because the
+     * host's live catalog does not describe the setting at all: a value carried
+     * on the project row would be there in one reader's answer and gone from the
+     * next.
+     */
+    projectComputeRead(projectId: RigProjectId): Promise<RigProjectComputeState>;
+
+    /**
+     * Sets where sessions started in one project run by default, or stops the
+     * project stating it at all when `compute` is absent, and resolves with what
+     * the host holds afterwards — read back by the host rather than echoed from
+     * the request, so the answer is the value that actually won a race.
+     *
+     * `mutationId` is this submission's identity and is the same across every
+     * attempt at it: the host answers a repeat of a submission it has already
+     * applied with the project that application produced rather than applying it
+     * twice. Rejects when the host refused, including because someone else
+     * changed this same setting in between — that is not retried here, because
+     * retrying it would throw their choice away on the reader's behalf.
+     */
+    projectComputeWrite(
+        projectId: RigProjectId,
+        compute: RigProjectCompute | undefined,
+        mutationId: string,
+    ): Promise<RigProjectComputeState>;
 
     /**
      * Reserves a worktree in the project and resolves with it while its checkout

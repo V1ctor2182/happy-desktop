@@ -20,6 +20,8 @@ import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransp
 import type {
     RigGroupId,
     RigProjectCatalog,
+    RigProjectCompute,
+    RigProjectComputeState,
     RigProjectId,
     RigSession,
     RigSessionCreateInput,
@@ -91,6 +93,23 @@ export type RigProjectArchiveResult =
     | { readonly type: "failed"; readonly error: UserError };
 
 /**
+ * What came of one attempt to change where a project's sessions run.
+ *
+ * `saved` carries the host's own read-back rather than the value that was asked
+ * for: a write that raced another window reports the setting that actually won,
+ * so a caller can never show a choice as saved that the host does not hold.
+ * `failed` carries the reason, and the setting is whatever the next read says —
+ * the host either applied nothing or applied it and lost the answer, and only a
+ * read can tell those apart.
+ *
+ * Returned by value rather than recorded in `mutationError` so an unrelated
+ * concurrent mutation can neither clear nor stand in for this answer.
+ */
+export type RigProjectComputeResult =
+    | { readonly type: "saved"; readonly state: RigProjectComputeState }
+    | { readonly type: "failed"; readonly error: UserError };
+
+/**
  * Where a session lives: both halves of its address, since a local session is
  * addressed by its group — its project, or the worktree inside it — and then by
  * itself.
@@ -148,6 +167,44 @@ export interface RigSessionListStore {
      * showing the project that is still there.
      */
     projectArchive(projectId: RigProjectId): Promise<RigProjectArchiveResult>;
+
+    /**
+     * Reads where sessions started in one project run by default. Not part of the
+     * list snapshot: the host's live catalog does not describe the setting, so it
+     * belongs to the surface that asks for it rather than to every row.
+     */
+    projectComputeRead(projectId: RigProjectId): Promise<RigProjectComputeState>;
+
+    /**
+     * Changes where sessions started in one project run by default, or stops the
+     * project stating it when `compute` is absent. Deliberately not optimistic
+     * and not recorded in `mutationError`: the answer is the host's own read-back
+     * of the project, returned to the one caller that asked.
+     *
+     * `mutationId` is the caller's identity for this submission and must be
+     * reused by every attempt at it, so a request whose answer was lost can be
+     * sent again without the host applying it a second time.
+     */
+    projectComputeUpdate(
+        projectId: RigProjectId,
+        compute: RigProjectCompute | undefined,
+        mutationId: string,
+    ): Promise<RigProjectComputeResult>;
+
+    /**
+     * Notifies whenever the host says a project changed, whether or not the
+     * grouped list can see the change.
+     *
+     * The list itself reconciles on the same events, but a project's compute
+     * setting is not in the catalog those events are reconciled into, so a change
+     * to it alone leaves every row identical and announces nothing. A surface
+     * showing that setting subscribes here instead and re-reads it. Independent
+     * of `subscribe`, because it is a different question — "the host says
+     * something changed" rather than "these are the rows" — and because a surface
+     * asking it does not want the list materialized on its behalf.
+     */
+    projectsChangedSubscribe(listener: () => void): () => void;
+
     /** Renames a project; the new name shows before the host confirms it. */
     projectRename(projectId: RigProjectId, name: string): Promise<void>;
 
@@ -987,6 +1044,43 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                         ),
                 ),
             };
+        },
+        projectComputeRead(projectId) {
+            return deps.transport.projectComputeRead(projectId);
+        },
+        async projectComputeUpdate(projectId, compute, mutationId) {
+            try {
+                // The transport's answer is the host's own read of the project
+                // after the write, not an echo of the request, so this is the
+                // authoritative read-back rather than the question asked twice.
+                // A disposed store still returns it: the caller asked, the host
+                // answered, and losing the surface does not unmake either.
+                return {
+                    type: "saved",
+                    state: await deps.transport.projectComputeWrite(projectId, compute, mutationId),
+                };
+            } catch (error) {
+                return { type: "failed", error: rigUserError(error) };
+            }
+        },
+        projectsChangedSubscribe(listener) {
+            // Deliberately the transport's own event stream rather than the
+            // catalog source this store otherwise follows. That source publishes
+            // a grouped catalog, and a project setting it does not carry changes
+            // nothing in it, so following it here would mean never hearing about
+            // the very change this subscription exists for.
+            return deps.transport.globalEventsSubscribe({
+                event: (event) => {
+                    if (event.type === "catalog_changed" && !disposed) listener();
+                },
+                // A stream that failed or ended announces nothing further, and a
+                // reader waiting on it is better off asking again than trusting
+                // silence. The listener decides what to do with that.
+                error: () => {
+                    if (!disposed) listener();
+                },
+                end: () => undefined,
+            });
         },
         [Symbol.dispose]() {
             if (disposed) return;

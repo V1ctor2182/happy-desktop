@@ -21,6 +21,7 @@ import type {
     Project,
     ProjectAssetResponse,
     ProjectWorkspace,
+    ProjectWorkspaceComputeInput,
     GitWatchResponse,
     ProtocolSession,
     RemoteTerminalResponse,
@@ -309,6 +310,35 @@ export class RigDaemonClient {
      */
     renameProject(projectId: string, name: string): Promise<{ readonly project: Project }> {
         return this.#requestJson("PATCH", `/projects/${encodeURIComponent(projectId)}`, { name });
+    }
+
+    /**
+     * Sets where sessions started in this project run by default, or clears the
+     * choice by sending no compute at all, which puts the project back under
+     * whatever the daemon itself is configured to do.
+     *
+     * Guarded by the version the project was read at. The daemon compares it
+     * against the project's *user* mutation version rather than its row version,
+     * so a git scan or an avatar arriving in between does not refuse the write
+     * while another person changing this same setting does. `mutationId` is this
+     * submission's identity: the daemon answers a repeat of one it has already
+     * applied with the project that application produced, rather than applying
+     * it a second time.
+     */
+    updateProjectSettings(
+        projectId: string,
+        request: {
+            readonly defaultWorkspaceCompute?: ProjectWorkspaceComputeInput;
+            readonly mutationId: string;
+        },
+        expectedVersion: number,
+    ): Promise<{ readonly project: Project }> {
+        return this.#requestJson(
+            "PUT",
+            `/projects/${encodeURIComponent(projectId)}/settings`,
+            request,
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
     }
 
     /** Renames a worktree; guarded by the version it was read at. */

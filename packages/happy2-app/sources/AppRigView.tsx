@@ -3930,6 +3930,7 @@ function RigWindowDialogs(props: {
             {rigNamingDialog(
                 workspace.rename,
                 workspace.projectArchive,
+                workspace.projectCompute,
                 props.projects,
                 props.workspace,
             )}
@@ -3951,6 +3952,7 @@ function RigWindowDialogs(props: {
 function rigNamingDialog(
     rename: RigWorkspaceSnapshot["rename"],
     archive: RigWorkspaceSnapshot["projectArchive"],
+    compute: RigWorkspaceSnapshot["projectCompute"],
     projects: readonly RigProjectGroup[],
     store: RigWorkspaceStore,
 ): ReactNode {
@@ -4017,11 +4019,31 @@ function rigNamingDialog(
                   },
               }
             : {};
+    // Only this dialog's own project again. The compute block is materialized
+    // with the dialog and released with it, so a snapshot naming another project
+    // can only be one this render has raced; dropping it is what stops one
+    // project's setting — and the handler that would save it — from being shown
+    // over another.
+    const computeBlock =
+        compute?.projectId === rename.projectId
+            ? {
+                  compute: {
+                      status: compute.status,
+                      mode: compute.mode,
+                      image: compute.image,
+                      ...(compute.current === undefined ? {} : { current: compute.current }),
+                      submitting: compute.submitting,
+                      ...(compute.error === undefined ? {} : { error: compute.error }),
+                      ...(compute.readError === undefined ? {} : { readError: compute.readError }),
+                  },
+              }
+            : {};
     return (
         <RigProjectSettingsDialog
             draft={rename.draft}
             {...(project?.avatar ? { imageUrl: project.avatar.url } : {})}
             {...archiveBlock}
+            {...computeBlock}
             {...(project
                 ? {
                       contents: {
@@ -4047,6 +4069,11 @@ function rigNamingDialog(
             }}
             onArchiveRequest={() => store.projectArchiveOpen(rename.projectId)}
             onClose={() => store.renameCancel()}
+            onComputeImageChange={(value) => store.projectComputeImageUpdate(value)}
+            onComputeModeChange={(mode) => store.projectComputeModeUpdate(mode)}
+            onComputeSubmit={() => {
+                void store.projectComputeSubmit().catch(() => undefined);
+            }}
             onDraftChange={(value) => store.renameDraftUpdate(value)}
             onSubmit={() => {
                 void store.renameSubmit().catch(() => undefined);

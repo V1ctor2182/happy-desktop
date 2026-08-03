@@ -15,6 +15,8 @@ import type {
     RigPermissionMode,
     RigProject,
     RigProjectCatalog,
+    RigProjectCompute,
+    RigProjectComputeState,
     RigProjectId,
     RigServiceTier,
     RigWorktree,
@@ -57,6 +59,8 @@ export type FakeRigOperation =
     | "projectReorder"
     | "projectArchive"
     | "projectRename"
+    | "projectComputeRead"
+    | "projectComputeWrite"
     | "worktreeRename"
     | "worktreeCreate"
     | "worktreeArchive"
@@ -85,6 +89,12 @@ export type FakeRigOperation =
 export interface FakeRigCall {
     readonly operation: FakeRigOperation;
     readonly sessionId?: RigSessionId;
+    /** The project a project-scoped call addressed. */
+    readonly projectId?: RigProjectId;
+    /** The compute choice a settings write carried, absent when it cleared the setting. */
+    readonly compute?: RigProjectCompute;
+    /** The caller's identity for one settings submission, reused by every attempt at it. */
+    readonly mutationId?: string;
     /** The row a reorder moved and the row it was placed after (null for the front). */
     readonly afterId?: string | null;
     /** The arrangement a reorder recorded, in order. */
@@ -278,6 +288,8 @@ class FakeRigTransportModel implements FakeRigTransport {
         Set<RigEventObserver<RigSessionEvent>>
     >();
     private readonly globalObservers = new Set<RigEventObserver<RigGlobalEvent>>();
+    /** Per-project compute settings this fake host holds; a project absent here states none. */
+    private readonly computes = new Map<RigProjectId, RigProjectComputeState>();
     private readonly failures = new Map<FakeRigOperation, unknown[]>();
     private readonly deferGates = new Map<FakeRigOperation, Promise<void>[]>();
     private readonly terminals = new Map<RigTerminalId, RigTerminal>();
@@ -337,6 +349,11 @@ class FakeRigTransportModel implements FakeRigTransport {
         for (const observer of this.sessionObservers.get(sessionId) ?? [])
             observer.error(new Error("stream dropped"));
     }
+    /** This project's compute setting, or the untouched default of stating none. */
+    private computeOf(projectId: RigProjectId): RigProjectComputeState {
+        return this.computes.get(projectId) ?? { projectId, generation: 0 };
+    }
+
     globalEmit(event: RigGlobalEvent): void {
         for (const observer of this.globalObservers) observer.event(event);
     }
@@ -569,6 +586,24 @@ class FakeRigTransportModel implements FakeRigTransport {
                         project.id === projectId ? { ...project, name } : project,
                     ),
                 };
+            }),
+        projectComputeRead: (projectId) =>
+            this.perform("projectComputeRead", { projectId }, () => this.computeOf(projectId)),
+        projectComputeWrite: (projectId, compute, mutationId) =>
+            this.perform("projectComputeWrite", { projectId, compute, mutationId }, () => {
+                const current = this.computeOf(projectId);
+                // As the host records it: the generation counts changes to the
+                // choice, so setting the same one again leaves it alone and a
+                // different one — including clearing it — advances it.
+                const changed =
+                    JSON.stringify(current.compute ?? null) !== JSON.stringify(compute ?? null);
+                const next: RigProjectComputeState = {
+                    projectId,
+                    generation: changed ? current.generation + 1 : current.generation,
+                    ...(compute === undefined ? {} : { compute }),
+                };
+                this.computes.set(projectId, next);
+                return next;
             }),
         worktreeRename: (projectId, worktreeId, name) =>
             this.perform("worktreeRename", {}, () => {
