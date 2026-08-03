@@ -107,7 +107,7 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // and a daemon, and it has no native picker or PTY to run setup with, so
         // it reports setup as finished rather than presenting steps it cannot
         // truthfully perform.
-        onboardingGet: async () => ({ busy: false, stage: "complete" }) as const,
+        onboardingGet: async () => ({ busy: false, freshness: "used", stage: "complete" }) as const,
         onboardingSubscribe: () => () => undefined,
         onboardingRigInstall: async () => undefined,
         onboardingCloudSubmit: async () => undefined,

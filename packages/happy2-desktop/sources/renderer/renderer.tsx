@@ -35,6 +35,7 @@ import {
 import {
     mediaPreviewView,
     type DesktopConfig,
+    type DesktopRuntimeSnapshot,
     type DesktopUpdateSnapshot,
     type HappyDesktopBridge,
 } from "../shared/desktopContract";
@@ -253,12 +254,17 @@ function RigBoundary(props: {
 }
 
 /**
- * First-run setup, while there is any of it left to do. Setup owns the whole
- * window until this machine can actually run Rig and the person has answered the
- * questions that follow, so the workspace below it is never mounted against a
- * machine that is not ready. Which stage is on is the main process's answer, so
- * a restart, an interrupted install, or a Rig that disappeared resumes here
- * rather than in a remembered position.
+ * First-run setup, while there is any of it left to do. It owns the window only
+ * once this machine is the one Happy is being asked to run on: choosing between
+ * a local Rig and a cloud workspace comes first, and a cloud workspace is not
+ * something local setup has any business standing in front of.
+ *
+ * Within local mode it does own the whole window until the machine can actually
+ * run Rig and the person has answered the questions that follow, so the
+ * workspace below is never mounted against a machine that is not ready. Which
+ * stage is on is the main process's answer, so a restart, an interrupted
+ * install, or a Rig that disappeared resumes here rather than in a remembered
+ * position.
  */
 function DesktopOnboardingGate(props: { children: ReactNode; store: LocalOnboardingStore }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
@@ -278,8 +284,16 @@ function DesktopOnboardingGate(props: { children: ReactNode; store: LocalOnboard
     );
 }
 
-function DesktopRenderer(props: {
+/** True while the runtime is working on, or running, this machine's own Rig. */
+function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
+    if (snapshot.phase === "choosing") return false;
+    if (snapshot.phase === "ready") return snapshot.mode === "local";
+    return snapshot.request.mode === "local";
+}
+
+interface DesktopRendererProps {
     appearance: AppearanceStore;
+    onboarding: LocalOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
@@ -295,13 +309,38 @@ function DesktopRenderer(props: {
     store: DesktopRuntimeStore;
     localWebUpdate: LocalWebUpdateStore;
     windowState: RigWindowStore;
-}) {
+}
+
+/**
+ * The desktop's own screens: choosing where Happy should run, the startup and
+ * failure states of that choice, and the workspace once a machine is connected.
+ * First-run setup is layered over this rather than built into it, so the choice
+ * itself is always reachable.
+ */
+function DesktopRenderer(props: DesktopRendererProps) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const hostedUpdate = useSyncExternalStore(
         props.localWebUpdate.subscribe,
         props.localWebUpdate.get,
         props.localWebUpdate.get,
     );
+    const content = (
+        <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
+    );
+    // Local setup gates local mode and nothing else: the topology chooser and
+    // every cloud transition pass through untouched, so someone who wants a
+    // cloud workspace is never asked to install Rig first.
+    if (!snapshot || !desktopLocalPhase(snapshot)) return content;
+    return <DesktopOnboardingGate store={props.onboarding}>{content}</DesktopOnboardingGate>;
+}
+
+function DesktopRuntimeContent(
+    props: DesktopRendererProps & {
+        hostedUpdate: LocalWebUpdateSnapshot;
+        snapshot: DesktopRuntimeSnapshot | undefined;
+    },
+) {
+    const { hostedUpdate, snapshot } = props;
     if (!snapshot)
         return (
             <DesktopStartupScreen
@@ -484,34 +523,33 @@ if (mediaPreviewBridge) {
         root.render(
             <DesktopAppearance appearance={appearance}>
                 <CodeHighlightWorkers>
-                    <DesktopOnboardingGate store={onboardingStore}>
-                        <DesktopRenderer
-                            appearance={appearance}
-                            browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                            htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                            pluginApplicationContent={
-                                browserLocal
-                                    ? undefined
-                                    : desktopPluginApplicationRenderCreate(desktopBridge)
-                            }
-                            bridge={desktopBridge}
-                            mediaWindow={
-                                browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
-                            }
-                            navigationOrder={navigationOrder}
-                            notes={notes}
-                            // Only the Electron window hides its title bar; the browser
-                            // development server renders the same tree with web chrome.
-                            platform={browserLocal ? "web" : "desktop"}
-                            rigRouter={rigRouter}
-                            rigs={rigs}
-                            localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                            settings={settings}
-                            startupValues={startupValuesStoreCreate()}
-                            store={runtimeStore}
-                            windowState={windowStateStoreCreate(desktopBridge)}
-                        />
-                    </DesktopOnboardingGate>
+                    <DesktopRenderer
+                        appearance={appearance}
+                        onboarding={onboardingStore}
+                        browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                        htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                        pluginApplicationContent={
+                            browserLocal
+                                ? undefined
+                                : desktopPluginApplicationRenderCreate(desktopBridge)
+                        }
+                        bridge={desktopBridge}
+                        mediaWindow={
+                            browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
+                        }
+                        navigationOrder={navigationOrder}
+                        notes={notes}
+                        // Only the Electron window hides its title bar; the browser
+                        // development server renders the same tree with web chrome.
+                        platform={browserLocal ? "web" : "desktop"}
+                        rigRouter={rigRouter}
+                        rigs={rigs}
+                        localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                        settings={settings}
+                        startupValues={startupValuesStoreCreate()}
+                        store={runtimeStore}
+                        windowState={windowStateStoreCreate(desktopBridge)}
+                    />
                 </CodeHighlightWorkers>
             </DesktopAppearance>,
         );

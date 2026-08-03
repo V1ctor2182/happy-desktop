@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { TerminalGridSnapshot } from "happy2-state";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
@@ -16,6 +16,16 @@ export interface LocalOnboardingCloudChoice {
     readonly mobileSessions: boolean;
 }
 
+/**
+ * What the Happy Cloud toggles start at. The step owns them as local UI state
+ * once it is on screen, so this is the initial visual value alone — it is what
+ * lets every combination be rendered rather than only the default one.
+ */
+export interface LocalOnboardingCloudDraft {
+    readonly remoteControl: boolean;
+    readonly mobileSessions: boolean;
+}
+
 /** The live install terminal, exactly as the surface may draw it. */
 export interface LocalOnboardingTerminal {
     readonly grid?: TerminalGridSnapshot;
@@ -28,9 +38,13 @@ export interface LocalOnboardingTerminal {
  * rendered without the facts it is about.
  */
 export type LocalOnboardingView =
-    | { readonly kind: "checking" }
+    | { readonly kind: "checking"; readonly message?: string }
     | { readonly kind: "node-missing" }
-    | { readonly kind: "rig-missing"; readonly nodeVersion: string }
+    | {
+          readonly kind: "rig-missing";
+          readonly nodeVersion: string;
+          readonly message?: string;
+      }
     | { readonly kind: "rig-installing"; readonly terminal: LocalOnboardingTerminal }
     | {
           readonly kind: "rig-install-failed";
@@ -39,8 +53,15 @@ export type LocalOnboardingView =
       }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string }
-    | { readonly kind: "cloud" }
-    | { readonly kind: "profile" }
+    | {
+          readonly kind: "cloud";
+          /** What the toggles start at, so every combination can be rendered. */
+          readonly draft?: LocalOnboardingCloudDraft;
+          readonly busy: boolean;
+          readonly message?: string;
+      }
+    | { readonly kind: "profile"; readonly busy: boolean; readonly message?: string }
+    | { readonly kind: "examining" }
     | { readonly kind: "project"; readonly busy: boolean; readonly message?: string };
 
 export interface LocalOnboardingScreenProps {
@@ -83,7 +104,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 data-testid="local-onboarding-screen"
                 kicker={screenKicker(view)}
                 loadingLabel={screenLoadingLabel(view)}
-                state={view.kind === "checking" || view.kind === "connecting" ? "loading" : "form"}
+                state={screenState(view)}
                 steps={stepsFor(view)}
                 title={screenTitle(view)}
                 width="large"
@@ -97,9 +118,27 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
 function LocalOnboardingBody(props: LocalOnboardingScreenProps) {
     const view = props.view;
     switch (view.kind) {
-        case "checking":
         case "connecting":
+        case "examining":
             return null;
+        case "checking":
+            // A machine that cannot be examined at all keeps being examined, so
+            // there is nothing to press: the reason is stated and the screen
+            // continues on its own.
+            if (!view.message) return null;
+            return (
+                <div className="happy2-local-onboarding" data-happy2-ui="local-onboarding">
+                    <Banner icon="shield" title="Happy cannot read this machine" tone="warning">
+                        {view.message}
+                    </Banner>
+                    <p
+                        className="happy2-local-onboarding__note"
+                        data-happy2-ui="local-onboarding-note"
+                    >
+                        Happy keeps trying on its own. Nothing has been installed or changed.
+                    </p>
+                </div>
+            );
         case "node-missing":
             return (
                 <div className="happy2-local-onboarding" data-happy2-ui="local-onboarding">
@@ -131,6 +170,11 @@ function LocalOnboardingBody(props: LocalOnboardingScreenProps) {
                         you. It runs this exact command in a terminal you can watch:
                     </p>
                     <CommandRow copyLabel="Copy install command" text={RIG_INSTALL_COMMAND} />
+                    {view.message ? (
+                        <Banner icon="shield" title="That install could not start" tone="danger">
+                            {view.message}
+                        </Banner>
+                    ) : null}
                     <div
                         className="happy2-local-onboarding__actions"
                         data-happy2-ui="local-onboarding-actions"
@@ -197,7 +241,14 @@ function LocalOnboardingBody(props: LocalOnboardingScreenProps) {
                 </div>
             );
         case "cloud":
-            return <CloudStep onSubmit={props.onCloudSubmit} />;
+            return (
+                <CloudStep
+                    busy={view.busy}
+                    {...(view.draft ? { draft: view.draft } : {})}
+                    {...(view.message ? { message: view.message } : {})}
+                    onSubmit={props.onCloudSubmit}
+                />
+            );
         case "profile":
             return (
                 <div className="happy2-local-onboarding" data-happy2-ui="local-onboarding">
@@ -206,22 +257,38 @@ function LocalOnboardingBody(props: LocalOnboardingScreenProps) {
                         data-happy2-ui="local-onboarding-lead"
                     >
                         A Happy Profile is how friends recognise you: a name and a picture that
-                        travel with your messages. It is entirely optional, and everything in it is
-                        end-to-end encrypted — Happy stores it without being able to read it.
+                        travel with your messages. It is entirely optional, and everything in it
+                        would be end-to-end encrypted — Happy would store it without being able to
+                        read it.
                     </p>
+                    <PendingNote>
+                        No profile is created by answering this. Happy writes your answer down on
+                        this machine and will ask you for a name and a picture when profiles are
+                        ready.
+                    </PendingNote>
+                    {view.message ? (
+                        <Banner icon="shield" title="That answer was not saved" tone="danger">
+                            {view.message}
+                        </Banner>
+                    ) : null}
                     <div
                         className="happy2-local-onboarding__actions"
                         data-happy2-ui="local-onboarding-actions"
                     >
                         <Button
+                            disabled={view.busy}
                             onClick={() => props.onProfileSubmit(false)}
                             type="button"
                             variant="secondary"
                         >
-                            Not now
+                            No profile
                         </Button>
-                        <Button onClick={() => props.onProfileSubmit(true)} type="button">
-                            Create my profile
+                        <Button
+                            disabled={view.busy}
+                            onClick={() => props.onProfileSubmit(true)}
+                            type="button"
+                        >
+                            {view.busy ? "Saving…" : "Set one up for me"}
                         </Button>
                     </div>
                 </div>
@@ -292,11 +359,21 @@ function InstallTerminal(props: {
  * The Happy Cloud questions. Joining, being reachable from another device, and
  * keeping encrypted session blobs in the cloud are three separate answers, and
  * the last two only mean anything once the first is yes. The toggles are local
- * UI state until the person submits them, because they are one decision.
+ * UI state until the person submits them, because they are one decision, and
+ * they start from `draft` so every combination is a state this screen can be
+ * rendered in rather than only the default one.
+ *
+ * Submitting records a request. Nothing here creates an account, enrols this
+ * machine, or stores anything anywhere, and the copy says so.
  */
-function CloudStep(props: { readonly onSubmit: (choice: LocalOnboardingCloudChoice) => void }) {
-    const [remoteControl, remoteControlSet] = useState(true);
-    const [mobileSessions, mobileSessionsSet] = useState(true);
+function CloudStep(props: {
+    readonly busy: boolean;
+    readonly draft?: LocalOnboardingCloudDraft;
+    readonly message?: string;
+    readonly onSubmit: (choice: LocalOnboardingCloudChoice) => void;
+}) {
+    const [remoteControl, remoteControlSet] = useState(props.draft?.remoteControl ?? true);
+    const [mobileSessions, mobileSessionsSet] = useState(props.draft?.mobileSessions ?? true);
     return (
         <div className="happy2-local-onboarding" data-happy2-ui="local-onboarding">
             <p className="happy2-local-onboarding__lead" data-happy2-ui="local-onboarding-lead">
@@ -311,22 +388,33 @@ function CloudStep(props: { readonly onSubmit: (choice: LocalOnboardingCloudChoi
             >
                 <Switch
                     checked={remoteControl}
-                    description="Pick up a conversation from another device you are signed in on and steer this machine's agents from there."
+                    description="Once Happy Cloud is available, pick up a conversation from another device you are signed in on and steer this machine's agents from there."
                     label="Let me control this machine remotely"
                     onChange={remoteControlSet}
                 />
                 <Switch
                     checked={mobileSessions}
-                    description="Using Happy on a phone means your sessions are stored in the cloud as end-to-end encrypted blobs Happy cannot read. Turn this off to join everything else and keep every session only on this machine."
+                    description="Using Happy on a phone will mean your sessions are stored in the cloud as end-to-end encrypted blobs Happy cannot read. Turn this off to ask for everything else and keep every session only on this machine."
                     label="Store encrypted sessions so phones can read them"
                     onChange={mobileSessionsSet}
                 />
             </div>
+            <PendingNote>
+                Nothing is created or connected by answering this. There is no Happy Cloud account,
+                no enrolment, and no session leaves this machine yet; your answers are written down
+                here so setup can finish the moment Happy Cloud can accept them.
+            </PendingNote>
+            {props.message ? (
+                <Banner icon="shield" title="Those answers were not saved" tone="danger">
+                    {props.message}
+                </Banner>
+            ) : null}
             <div
                 className="happy2-local-onboarding__actions"
                 data-happy2-ui="local-onboarding-actions"
             >
                 <Button
+                    disabled={props.busy}
                     onClick={() =>
                         props.onSubmit({
                             joined: false,
@@ -340,13 +428,28 @@ function CloudStep(props: { readonly onSubmit: (choice: LocalOnboardingCloudChoi
                     Stay local only
                 </Button>
                 <Button
+                    disabled={props.busy}
                     onClick={() => props.onSubmit({ joined: true, mobileSessions, remoteControl })}
                     type="button"
                 >
-                    Join Happy Cloud
+                    {props.busy ? "Saving…" : "Save these choices"}
                 </Button>
             </div>
         </div>
+    );
+}
+
+/**
+ * States plainly that an answer is a recorded intention rather than something
+ * that has already happened. Every screen that asks about Happy Cloud carries
+ * one, because the honest difference between "saved" and "done" is the whole
+ * point of these two steps.
+ */
+function PendingNote(props: { readonly children: ReactNode }) {
+    return (
+        <p className="happy2-local-onboarding__note" data-happy2-ui="local-onboarding-note">
+            {props.children}
+        </p>
     );
 }
 
@@ -374,7 +477,11 @@ function CommandRow(props: { readonly copyLabel: string; readonly text: string }
 /** The three phases of setup, so the person can see where the line ends. */
 function stepsFor(view: LocalOnboardingView): readonly OnboardingStep[] {
     const phase =
-        view.kind === "cloud" || view.kind === "profile" ? 1 : view.kind === "project" ? 2 : 0;
+        view.kind === "cloud" || view.kind === "profile"
+            ? 1
+            : view.kind === "project" || view.kind === "examining"
+              ? 2
+              : 0;
     return ["This machine", "Happy Cloud", "First project"].map((label, index) => ({
         label,
         state: index < phase ? "complete" : index === phase ? "current" : "upcoming",
@@ -386,6 +493,7 @@ function screenKicker(view: LocalOnboardingView): string {
         case "cloud":
         case "profile":
             return "Happy Cloud";
+        case "examining":
         case "project":
             return "First project";
         default:
@@ -410,9 +518,11 @@ function screenTitle(view: LocalOnboardingView): string {
         case "connect-failed":
             return "Rig could not start.";
         case "cloud":
-            return "Join Happy Cloud?";
+            return "Do you want Happy Cloud?";
         case "profile":
-            return "Create a Happy Profile?";
+            return "Do you want a Happy Profile?";
+        case "examining":
+            return "Reading your Rig.";
         case "project":
             return "Open your first project.";
     }
@@ -432,5 +542,12 @@ function screenCopy(view: LocalOnboardingView): string | undefined {
 function screenLoadingLabel(view: LocalOnboardingView): string | undefined {
     if (view.kind === "checking") return "Checking for Node.js and Rig…";
     if (view.kind === "connecting") return "Connecting to your Rig daemon…";
+    if (view.kind === "examining") return "Checking whether this Rig has been used…";
     return undefined;
+}
+
+/** Loading is for the screens with nothing to answer and nothing to report. */
+function screenState(view: LocalOnboardingView): "form" | "loading" {
+    if (view.kind === "connecting" || view.kind === "examining") return "loading";
+    return view.kind === "checking" && !view.message ? "loading" : "form";
 }

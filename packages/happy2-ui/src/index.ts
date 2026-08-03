@@ -467,6 +467,7 @@ export {
 export {
     LocalOnboardingScreen,
     type LocalOnboardingCloudChoice,
+    type LocalOnboardingCloudDraft,
     type LocalOnboardingScreenProps,
     type LocalOnboardingTerminal,
     type LocalOnboardingView,

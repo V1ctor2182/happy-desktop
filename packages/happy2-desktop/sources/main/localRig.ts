@@ -140,6 +140,54 @@ export async function localRuntimeProbe(
     };
 }
 
+/**
+ * What one check of an installed Rig produced: the version it reported, and a
+ * release for whatever the check had to hold open.
+ */
+export interface RigInstallVerification {
+    readonly version: string;
+    close(): void;
+}
+
+/**
+ * Proof that a usable `rig` command exists, and nothing more than that. A
+ * finished installation is verified through this rather than through the
+ * connector, because starting or connecting the user's daemon is the desktop
+ * runtime's alone: two owners for one daemon is exactly the thing that produces
+ * a second daemon, or a connection nobody closes.
+ */
+export interface RigInstallVerifier {
+    connect(): Promise<RigInstallVerification>;
+}
+
+/**
+ * Checks the login shell's `rig` and asks it for its version. It runs the
+ * command and reads its output — it never starts a daemon, connects to one, or
+ * writes anything.
+ */
+export function rigInstallVerifierCreate(
+    options: {
+        readonly host?: RigProcessHost;
+        readonly environment?: NodeJS.ProcessEnv;
+        readonly configuredShell?: string;
+    } = {},
+): RigInstallVerifier {
+    const host = options.host ?? defaultProcessHost;
+    return {
+        async connect(): Promise<RigInstallVerification> {
+            const login = await rigLoginEnvironmentDiscover(
+                host,
+                options.environment ?? process.env,
+                options.configuredShell,
+            );
+            const result = await host.execFile(login.command, ["--version"], {
+                env: login.environment,
+            });
+            return { version: rigVersionParse(result.stdout), close: () => undefined };
+        },
+    };
+}
+
 /** Connects to the normal daemon, starting it through the discovered command if absent. */
 export function localRigConnectorCreate(
     options: {
@@ -167,15 +215,34 @@ export function localRigConnectorCreate(
             const paths = rigDaemonPathsResolve(login.environment);
             let connection = await daemonProbe(paths.socketPath, paths.tokenPath, clientCreate);
             if (!connection) {
-                await host.execFile(login.command, ["daemon", "start"], {
-                    env: login.environment,
-                });
-                connection = await daemonWait(
-                    paths.socketPath,
-                    paths.tokenPath,
-                    clientCreate,
-                    wait,
-                );
+                // The daemon is shared, so this process is not necessarily the
+                // one that gets to start it: another Happy, a terminal, or an
+                // editor can win the race and leave `rig daemon start` exiting
+                // nonzero over a socket that is already correct. What the
+                // command said is evidence; the daemon that actually answers is
+                // the verdict.
+                let startError: unknown;
+                try {
+                    await host.execFile(login.command, ["daemon", "start"], {
+                        env: login.environment,
+                    });
+                } catch (error) {
+                    startError = error;
+                }
+                try {
+                    connection = await daemonWait(
+                        paths.socketPath,
+                        paths.tokenPath,
+                        clientCreate,
+                        wait,
+                    );
+                } catch (waitError) {
+                    if (!startError) throw waitError;
+                    throw new Error(
+                        `Rig daemon could not be started: ${errorMessage(startError)}`,
+                        { cause: startError },
+                    );
+                }
             }
             // The daemon owns its own lifecycle and may legitimately outlive an
             // installed CLI update. Protocol requests remain the compatibility
@@ -321,6 +388,10 @@ async function readyHealthWait(
         await wait(50);
     }
     throw new Error("The normal Rig daemon did not become ready.");
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 function delay(milliseconds: number): Promise<void> {

@@ -4,26 +4,38 @@ import { dirname } from "node:path";
 import type {
     DesktopRuntimeSnapshot,
     LocalOnboardingCloudChoice,
+    LocalOnboardingFreshness,
     LocalOnboardingSnapshot,
     RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 import { localRuntimeProbe, type LocalRuntimeProbe } from "./localRig";
 import { rigInstallCommand } from "./rigInstallTerminal";
 
-const recordVersion = 1;
+const recordVersion = 2;
 /**
  * How often the machine is re-examined while setup is waiting on something the
- * person does outside Happy — installing Node, or installing Rig themselves
- * after ours failed. Rig's daemon has no channel for "a command appeared in your
- * shell", so this is the stopgap poll the reactivity rule allows; it runs only
- * on those stages and stops the moment setup moves past them.
+ * person does outside Happy — installing Node, installing Rig themselves after
+ * ours failed, or repairing a Rig that stopped answering. Rig's daemon has no
+ * channel for "a command appeared in your shell", so this is the stopgap poll
+ * the reactivity rule allows; it runs only on those stages and stops the moment
+ * setup moves past them.
  */
 const waitingPollMs = 3_000;
+/**
+ * A login shell that cannot be run at all leaves setup knowing nothing, which is
+ * the one failure it must recover from by itself. It backs off from here to the
+ * ceiling instead of asking again immediately.
+ */
+const probeRetryMinimumMs = 1_000;
+const probeRetryMaximumMs = 30_000;
 
 /** The decisions first-run setup writes down, and nothing it can observe instead. */
 export interface LocalOnboardingRecord {
-    readonly cloud?: LocalOnboardingCloudChoice;
-    readonly profileCreated?: boolean;
+    /** What was asked for in Happy Cloud. Nothing has been enrolled or created. */
+    readonly cloudRequested?: LocalOnboardingCloudChoice;
+    /** Whether a Happy Profile was asked for. No profile has been created. */
+    readonly profileRequested?: boolean;
+    /** The last folder opened as a project, kept for display rather than for stages. */
     readonly projectPath?: string;
     readonly version: typeof recordVersion;
 }
@@ -35,11 +47,11 @@ export async function localOnboardingRecordRead(
     try {
         const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
         if (!isRecord(parsed) || parsed.version !== recordVersion) return undefined;
-        const cloud = cloudParse(parsed.cloud);
+        const cloudRequested = cloudParse(parsed.cloudRequested);
         return {
-            ...(cloud ? { cloud } : {}),
-            ...(typeof parsed.profileCreated === "boolean"
-                ? { profileCreated: parsed.profileCreated }
+            ...(cloudRequested ? { cloudRequested } : {}),
+            ...(typeof parsed.profileRequested === "boolean"
+                ? { profileRequested: parsed.profileRequested }
                 : {}),
             ...(typeof parsed.projectPath === "string" && parsed.projectPath
                 ? { projectPath: parsed.projectPath }
@@ -86,6 +98,7 @@ export interface LocalOnboardingInstaller {
         emit: (event: RigInstallTerminalEvent) => void,
     ): { readonly terminalId: string };
     confirm(ownerId: number, terminalId: string, cols: number, rows: number): void;
+    close(ownerId: number, terminalId: string): void;
 }
 
 export interface LocalOnboardingOptions {
@@ -110,12 +123,13 @@ interface InstallState {
  * and which stage those two facts put setup in.
  *
  * Nothing here is a remembered position. Every stage is derived again from a
- * live login-shell probe, the desktop runtime's own state, and the durable
- * record, so a restart, a reinstall that kept user data, an interrupted install,
- * or a Rig that was removed all resume at the truthful stage rather than at the
- * one setup happened to leave off at. The daemon is never started or stopped
- * here — the desktop runtime owns that, and it deliberately leaves the user's
- * normal daemon running when Happy exits.
+ * live login-shell probe, the desktop runtime's own state, the connected Rig's
+ * own catalog, and the durable record, so a restart, a reinstall that kept user
+ * data, an interrupted install, a replaced Rig data directory, or a Rig that was
+ * removed all resume at the truthful stage rather than at the one setup happened
+ * to leave off at. The daemon is never started or stopped here — the desktop
+ * runtime owns that, and it deliberately leaves the user's normal daemon running
+ * when Happy exits.
  */
 export class LocalOnboarding implements Disposable {
     private closed = false;
@@ -123,12 +137,27 @@ export class LocalOnboarding implements Disposable {
     private listeners = new Set<(snapshot: LocalOnboardingSnapshot) => void>();
     private busy = false;
     private message?: string;
+    /** Why the machine could not be examined at all, kept apart from step messages. */
+    private probeMessage?: string;
     private poll?: ReturnType<typeof setInterval>;
     private probing?: Promise<void>;
     private probed?: LocalRuntimeProbe;
-    private rigFresh?: boolean;
+    private probeRetry?: ReturnType<typeof setTimeout>;
+    private probeRetryMs?: number;
+    private freshness: LocalOnboardingFreshness = "checking";
+    /** The runtime connection the current freshness answer was read from. */
+    private freshnessConnection?: number;
+    /** The discovered `rig` path a connection retry has already been asked for. */
+    private retryRequestedFor?: string;
+    private runtimeKey?: string;
+    /** Durable work runs one at a time, so two clicks cannot interleave writes. */
+    private durableQueue: Promise<void> = Promise.resolve();
     private runtimeUnsubscribe?: () => void;
-    private snapshotValue: LocalOnboardingSnapshot = { busy: true, stage: "checking" };
+    private snapshotValue: LocalOnboardingSnapshot = {
+        busy: true,
+        freshness: "checking",
+        stage: "checking",
+    };
 
     private constructor(
         private readonly options: LocalOnboardingOptions,
@@ -158,6 +187,10 @@ export class LocalOnboarding implements Disposable {
      * Runs the fixed global install in a real PTY after the person confirmed it.
      * The command, the shell, and the process all stay in this process; the
      * window receives output and reports the size it can draw.
+     *
+     * Opening and confirming are one step: a terminal that could not be spawned
+     * is closed again and reported as a failure the person can retry, never left
+     * behind as a running install with nothing behind it.
      */
     rigInstall(input: {
         readonly ownerId: number;
@@ -165,24 +198,45 @@ export class LocalOnboarding implements Disposable {
         readonly rows: number;
         readonly emit: (event: RigInstallTerminalEvent) => void;
     }): void {
-        if (this.closed) throw new Error("First-run setup is closed.");
+        this.stageRequire("rigMissing", "rigInstallFailed");
         if (this.install?.running) return;
-        const opened = this.options.installer.open(input.ownerId, (event) => {
-            input.emit(event);
-            if (event.type !== "exited" || this.install?.terminalId !== event.terminalId) return;
-            this.install = {
-                ownerId: input.ownerId,
-                terminalId: event.terminalId,
-                running: false,
-                ...(event.verified ? {} : { message: installFailureMessage(event.message) }),
-            };
-            // A verified install means the command exists and the daemon
-            // answered, so the machine is re-examined rather than assumed.
-            void this.probeRun();
-        });
-        this.install = { ownerId: input.ownerId, terminalId: opened.terminalId, running: true };
         this.message = undefined;
-        this.options.installer.confirm(input.ownerId, opened.terminalId, input.cols, input.rows);
+        let terminalId: string;
+        try {
+            terminalId = this.options.installer.open(input.ownerId, (event) => {
+                input.emit(event);
+                if (event.type !== "exited" || this.install?.terminalId !== event.terminalId)
+                    return;
+                this.install = {
+                    ownerId: input.ownerId,
+                    terminalId: event.terminalId,
+                    running: false,
+                    ...(event.verified ? {} : { message: installFailureMessage(event.message) }),
+                };
+                // A verified install means a usable `rig` command now exists, so
+                // the machine is examined again rather than assumed.
+                void this.probeRun();
+            }).terminalId;
+        } catch (error) {
+            this.installFailed(input.ownerId, undefined, displayError(error));
+            return;
+        }
+        this.install = { ownerId: input.ownerId, terminalId, running: true };
+        this.message = undefined;
+        try {
+            this.options.installer.confirm(input.ownerId, terminalId, input.cols, input.rows);
+        } catch (error) {
+            // Nothing was spawned, so the terminal is released rather than left
+            // as an installation this process would keep counting against the
+            // window's budget.
+            try {
+                this.options.installer.close(input.ownerId, terminalId);
+            } catch {
+                // The manager already let go of it; there is nothing to release.
+            }
+            this.installFailed(input.ownerId, terminalId, displayError(error));
+            return;
+        }
         this.publish();
     }
 
@@ -198,39 +252,50 @@ export class LocalOnboarding implements Disposable {
         void this.probeRun();
     }
 
+    /**
+     * Records what the person wants from Happy Cloud. It writes a preference and
+     * nothing else: no account is created, no machine is enrolled, and nothing
+     * is sent anywhere, because rig-connect exposes no enrolment to call.
+     */
     async cloudSubmit(choice: LocalOnboardingCloudChoice): Promise<void> {
-        const normalized: LocalOnboardingCloudChoice = choice.joined
+        this.stageRequire("cloud");
+        const cloudRequested: LocalOnboardingCloudChoice = choice.joined
             ? {
                   joined: true,
                   remoteControl: choice.remoteControl,
                   mobileSessions: choice.mobileSessions,
               }
             : { joined: false, remoteControl: false, mobileSessions: false };
-        await this.recordWrite({
-            ...this.record,
-            cloud: normalized,
-            // Declining Happy Cloud settles the profile question with it: there
-            // is nothing for an encrypted profile to exist in.
-            ...(normalized.joined ? {} : { profileCreated: false }),
-        });
+        await this.durable("Happy could not save your Happy Cloud choices", () =>
+            this.recordWrite({
+                ...this.record,
+                cloudRequested,
+                // Declining Happy Cloud settles the profile question with it:
+                // there is nothing for an encrypted profile to exist in.
+                ...(cloudRequested.joined ? {} : { profileRequested: false }),
+            }),
+        );
     }
 
-    async profileSubmit(create: boolean): Promise<void> {
-        await this.recordWrite({ ...this.record, profileCreated: create });
+    /** Records whether a Happy Profile is wanted. No profile is created here. */
+    async profileSubmit(request: boolean): Promise<void> {
+        this.stageRequire("profile");
+        await this.durable("Happy could not save your Happy Profile choice", () =>
+            this.recordWrite({ ...this.record, profileRequested: request }),
+        );
     }
 
     /**
      * Asks for a folder, requires it to be the root of a Git repository, and
      * opens it as this Rig's first project. Rig registers a project when work is
      * started in a directory, so opening the folder starts that project's first
-     * chat rather than writing a project row behind the daemon's back.
+     * chat rather than writing a project row behind the daemon's back — and it
+     * happens only while this Rig is demonstrably unused, so an established Rig
+     * is never written to on Happy's initiative.
      */
     async projectChoose(): Promise<void> {
-        if (this.busy) return;
-        this.busy = true;
-        this.message = undefined;
-        this.publish();
-        try {
+        this.stageRequire("project");
+        await this.durable("Happy could not open that project", async () => {
             const picked = await this.options.directoryPick();
             if (!picked) return;
             const path = await pathCanonicalize(picked);
@@ -245,8 +310,8 @@ export class LocalOnboarding implements Disposable {
                 return;
             }
             const client = this.options.runtime.localClient();
-            if (!client) {
-                this.message = "Rig is not connected yet. It will be ready in a moment.";
+            if (!client || this.freshness !== "fresh") {
+                this.message = "Rig is not ready for a first project yet.";
                 return;
             }
             await client.createSession({
@@ -255,33 +320,87 @@ export class LocalOnboarding implements Disposable {
                 permissionMode: "auto",
                 trackUnread: true,
             });
-            this.rigFresh = false;
-            await this.recordWrite({ ...this.record, projectPath: path });
-        } catch (error) {
-            this.message = `Happy could not open that project: ${displayError(error)}`;
-        } finally {
-            this.busy = false;
-            this.publish();
-        }
+            // This Rig now holds a project of its own, which is exactly what
+            // freshness means; the next connection reads it again anyway.
+            this.freshness = "used";
+            try {
+                await this.recordWrite({ ...this.record, projectPath: path });
+            } catch {
+                // The project is open in Rig, and Rig is what setup reads back.
+                // The remembered path is for display alone, so failing to write
+                // it must never be reported as a project that did not open.
+                this.publish();
+            }
+        });
     }
 
     [Symbol.dispose](): void {
         if (this.closed) return;
         this.closed = true;
         this.pollStop();
+        this.probeRetryStop();
         this.runtimeUnsubscribe?.();
         this.runtimeUnsubscribe = undefined;
         this.listeners.clear();
     }
 
+    /** Refuses an action that does not belong to the stage setup is actually on. */
+    private stageRequire(...stages: readonly LocalOnboardingSnapshot["stage"][]): void {
+        if (this.closed) throw new Error("First-run setup is closed.");
+        if (!stages.includes(this.snapshotValue.stage))
+            throw new Error("That first-run setup step is not the current one.");
+    }
+
+    /** Runs one durable action at a time and reports its outcome in the snapshot. */
+    private async durable(failure: string, action: () => Promise<void>): Promise<void> {
+        const run = this.durableQueue.then(async () => {
+            if (this.closed) return;
+            this.busy = true;
+            this.message = undefined;
+            this.publish();
+            try {
+                await action();
+            } catch (error) {
+                this.message = `${failure}: ${displayError(error)}`;
+            } finally {
+                this.busy = false;
+                this.publish();
+            }
+        });
+        this.durableQueue = run.catch(() => undefined);
+        return run;
+    }
+
+    /**
+     * An install that never started. A terminal that was opened is reported as a
+     * failed install so its step stays on screen with a retry; one that was never
+     * opened has nothing to show, so the reason belongs to the step that offered
+     * the install instead.
+     */
+    private installFailed(ownerId: number, terminalId: string | undefined, reason: string): void {
+        const message = installFailureMessage(reason.endsWith(".") ? reason : `${reason}.`);
+        this.install = terminalId ? { ownerId, terminalId, running: false, message } : undefined;
+        this.message = terminalId ? undefined : message;
+        this.publish();
+    }
+
     /** Re-examines the machine now; concurrent callers share one probe. */
     private probeRun(): Promise<void> {
         if (this.closed) return Promise.resolve();
+        this.probeRetryStop();
         this.probing ??= (async () => {
             try {
                 this.probed = await (this.options.probe ?? localRuntimeProbe)();
+                this.probeMessage = undefined;
+                this.probeRetryMs = undefined;
             } catch (error) {
-                this.message = displayError(error);
+                // A probe that failed says nothing about the machine, and what
+                // the last one found may already be false, so the facts are
+                // dropped rather than shown as if they were current.
+                this.probed = undefined;
+                this.retryRequestedFor = undefined;
+                this.probeMessage = `Happy could not examine this machine: ${displayError(error)}`;
+                this.probeRetrySchedule();
             } finally {
                 this.probing = undefined;
                 this.refresh();
@@ -293,39 +412,84 @@ export class LocalOnboarding implements Disposable {
     private refresh(): void {
         if (this.closed) return;
         const runtime = this.options.runtime.get();
-        // A connected daemon proves the command exists even if the probe has not
-        // answered yet, and an installed command with no daemon is exactly what
-        // the runtime retries; asking it to try again is the only nudge setup
-        // gives the connection.
-        if (
-            this.probed?.rigCommand &&
-            (runtime.phase === "installRequired" || runtime.phase === "error") &&
-            !this.install?.running
-        )
-            void this.options.runtime.retry().catch(() => undefined);
-        if (runtime.phase === "ready" && this.rigFresh === undefined) void this.freshnessRead();
+        const key = runtimeIdentity(runtime);
+        if (key !== this.runtimeKey) {
+            this.runtimeKey = key;
+            // Both of these are new evidence about the machine rather than about
+            // the connection: a runtime that says the command is missing, and a
+            // connection that was replaced, can each mean a different `rig` than
+            // the one the last probe found.
+            if (runtime.phase === "installRequired" || runtime.phase === "ready")
+                void this.probeRun();
+        }
+        this.connectionNudge(runtime);
+        this.freshnessSynchronize(runtime);
         this.publish();
     }
 
     /**
-     * Reads whether this Rig holds any project of its own. Rig publishes no
-     * first-run flag, so an empty project catalog is the only truthful evidence
-     * that it has never been used; its automatic home project is not one the
-     * person opened.
+     * Asks the runtime to connect once per newly discovered `rig` command. A
+     * daemon that refuses is a truthful failure the person is shown, not
+     * something to attempt again on every state change until it gives in.
      */
-    private async freshnessRead(): Promise<void> {
-        const client = this.options.runtime.localClient();
-        if (!client) return;
-        try {
-            const catalog = await client.listCatalog();
-            this.rigFresh = !catalog.projects.some(
-                (project) => project.kind !== "home" && project.archivedAt === undefined,
-            );
-        } catch {
-            // A catalog that cannot be read says nothing about freshness; the
-            // next runtime change asks again.
+    private connectionNudge(runtime: DesktopRuntimeSnapshot): void {
+        const command = this.probed?.rigCommand;
+        if (!command) {
+            this.retryRequestedFor = undefined;
             return;
         }
+        if (runtime.phase !== "installRequired" && runtime.phase !== "error") return;
+        if (this.install?.running || this.retryRequestedFor === command) return;
+        this.retryRequestedFor = command;
+        void this.options.runtime.retry().catch(() => undefined);
+    }
+
+    /**
+     * Keeps freshness tied to the Rig that answered it. Anything other than a
+     * live local connection means there is no Rig to be fresh, and a different
+     * connection identity is a different Rig until its own catalog says
+     * otherwise — a Rig whose data directory was replaced included.
+     */
+    private freshnessSynchronize(runtime: DesktopRuntimeSnapshot): void {
+        if (runtime.phase !== "ready" || runtime.mode !== "local") {
+            this.freshness = "checking";
+            this.freshnessConnection = undefined;
+            return;
+        }
+        if (this.freshnessConnection === runtime.connectionId) return;
+        this.freshnessConnection = runtime.connectionId;
+        this.freshness = "checking";
+        void this.freshnessRead(runtime.connectionId);
+    }
+
+    /**
+     * Reads whether this Rig holds any project of its own. Rig publishes no
+     * first-run flag, so its project catalog is the only evidence available, and
+     * it is read conservatively: any project that is not Rig's automatic home
+     * project counts as prior use, archived or not, because someone archiving
+     * their work does not make their Rig new again.
+     */
+    private async freshnessRead(connectionId: number): Promise<void> {
+        const client = this.options.runtime.localClient();
+        if (!client) {
+            // The connection went away between the snapshot and this read; the
+            // next runtime change asks its own connection.
+            this.freshnessConnection = undefined;
+            return;
+        }
+        let freshness: LocalOnboardingFreshness;
+        try {
+            const catalog = await client.listCatalog();
+            freshness = catalog.projects.some((project) => project.kind !== "home")
+                ? "used"
+                : "fresh";
+        } catch {
+            // A catalog that cannot be read is not evidence of a new Rig, so
+            // setup says so and asks nothing of it.
+            freshness = "error";
+        }
+        if (this.closed || this.freshnessConnection !== connectionId) return;
+        this.freshness = freshness;
         this.publish();
     }
 
@@ -363,17 +527,17 @@ export class LocalOnboarding implements Disposable {
         const stage = this.stageDerive({ node: !!node, rig: !!rig, ready, probed: !!probe });
         const message = this.messageFor(stage, runtime);
         return {
-            busy: this.busy || stage === "checking",
-            ...(this.record.cloud ? { cloud: this.record.cloud } : {}),
+            busy: this.busy || stage === "checking" || stage === "examining",
+            ...(this.record.cloudRequested ? { cloudRequested: this.record.cloudRequested } : {}),
+            freshness: this.freshness,
             ...(this.install ? { install: this.installSnapshot(this.install) } : {}),
             ...(message ? { message } : {}),
             ...(node ? { node } : {}),
-            ...(this.record.profileCreated === undefined
+            ...(this.record.profileRequested === undefined
                 ? {}
-                : { profileCreated: this.record.profileCreated }),
+                : { profileRequested: this.record.profileRequested }),
             ...(this.record.projectPath ? { projectPath: this.record.projectPath } : {}),
             ...(rig ? { rig } : {}),
-            ...(this.rigFresh === undefined ? {} : { rigFresh: this.rigFresh }),
             stage,
         };
     }
@@ -395,11 +559,14 @@ export class LocalOnboarding implements Disposable {
             const runtime = this.options.runtime.get();
             return runtime.phase === "error" ? "connectFailed" : "connecting";
         }
-        if (!this.record.cloud) return "cloud";
-        if (this.record.cloud.joined && this.record.profileCreated === undefined) return "profile";
-        // A Rig that already has projects has nothing to open for the first
-        // time; only a fresh one is asked for a first project.
-        if (!this.record.projectPath && this.rigFresh !== false) return "project";
+        if (!this.record.cloudRequested) return "cloud";
+        if (this.record.cloudRequested.joined && this.record.profileRequested === undefined)
+            return "profile";
+        // Only this Rig's own answer decides whether it needs a first project. A
+        // remembered folder proves nothing about the Rig connected now, and a Rig
+        // that cannot be read is not one Happy may write a project into.
+        if (this.freshness === "checking") return "examining";
+        if (this.freshness === "fresh") return "project";
         return "complete";
     }
 
@@ -419,6 +586,7 @@ export class LocalOnboarding implements Disposable {
         runtime: DesktopRuntimeSnapshot,
     ): string | undefined {
         if (this.message) return this.message;
+        if (stage === "checking") return this.probeMessage;
         if (stage === "rigInstallFailed") return this.install?.message;
         if (stage === "connectFailed" && runtime.phase === "error") return runtime.message;
         return undefined;
@@ -427,11 +595,16 @@ export class LocalOnboarding implements Disposable {
     /**
      * Keeps the waiting poll running for exactly the stages that wait on the
      * person doing something outside Happy, and stops it everywhere else so a
-     * finished setup does no work.
+     * finished setup does no work. A failed connection waits here too: the `rig`
+     * it was connecting to may have been removed, and only another probe can
+     * find that out.
      */
     private pollSynchronize(stage: LocalOnboardingSnapshot["stage"]): void {
         const waiting =
-            stage === "nodeMissing" || stage === "rigMissing" || stage === "rigInstallFailed";
+            stage === "nodeMissing" ||
+            stage === "rigMissing" ||
+            stage === "rigInstallFailed" ||
+            stage === "connectFailed";
         if (waiting && !this.poll) {
             this.poll = setInterval(() => void this.probeRun(), waitingPollMs);
             this.poll.unref?.();
@@ -443,6 +616,29 @@ export class LocalOnboarding implements Disposable {
         clearInterval(this.poll);
         this.poll = undefined;
     }
+
+    private probeRetrySchedule(): void {
+        this.probeRetryMs = Math.min(
+            this.probeRetryMs ? this.probeRetryMs * 2 : probeRetryMinimumMs,
+            probeRetryMaximumMs,
+        );
+        this.probeRetry = setTimeout(() => {
+            this.probeRetry = undefined;
+            void this.probeRun();
+        }, this.probeRetryMs);
+        this.probeRetry.unref?.();
+    }
+
+    private probeRetryStop(): void {
+        if (!this.probeRetry) return;
+        clearTimeout(this.probeRetry);
+        this.probeRetry = undefined;
+    }
+}
+
+/** Identity of the runtime state setup reacts to: its phase, and which connection. */
+function runtimeIdentity(runtime: DesktopRuntimeSnapshot): string {
+    return runtime.phase === "ready" ? `ready:${runtime.connectionId}` : runtime.phase;
 }
 
 function installFailureMessage(message: string | undefined): string {

@@ -217,9 +217,28 @@ export type LocalOnboardingStage =
     | "cloud"
     /** Cloud was joined; the optional encrypted profile has not been decided. */
     | "profile"
-    /** Everything else is settled and this Rig has no project yet. */
+    /** Whether this Rig has ever been used is still being read from it. */
+    | "examining"
+    /** Everything else is settled and this Rig is demonstrably unused. */
     | "project"
     | "complete";
+
+/**
+ * How much is known about whether the connected Rig has been used before.
+ *
+ * It is deliberately not a boolean with an absent third case: "not read yet"
+ * and "could not be read" are different from "this Rig is new", and only the
+ * last of them may ever lead to Happy registering anything in someone's Rig.
+ */
+export type LocalOnboardingFreshness =
+    /** No authoritative answer yet for the Rig currently connected. */
+    | "checking"
+    /** This Rig holds no project of its own: it has never been used.  */
+    | "fresh"
+    /** This Rig already holds projects, archived or not. */
+    | "used"
+    /** Its catalog could not be read, so nothing may be concluded from it. */
+    | "error";
 
 /** The Node runtime the user's login shell resolves, when it resolves one. */
 export interface LocalOnboardingNode {
@@ -236,10 +255,14 @@ export interface LocalOnboardingRig {
 }
 
 /**
- * What the person chose about Happy Cloud. The three answers are independent on
- * purpose: joining is one decision, letting other devices drive this machine is
- * another, and storing end-to-end encrypted session blobs so phones can read a
- * conversation is a third that can be declined while still joining.
+ * What the person asked for about Happy Cloud. The three answers are independent
+ * on purpose: joining is one decision, letting other devices drive this machine
+ * is another, and storing end-to-end encrypted session blobs so phones can read
+ * a conversation is a third that can be declined while still joining.
+ *
+ * This is a request, not a state. Nothing in Happy can create an account, enrol
+ * a machine, or store anything in a cloud yet, so what is recorded here is what
+ * setup should do once rig-connect can do it.
  */
 export interface LocalOnboardingCloudChoice {
     readonly joined: boolean;
@@ -261,16 +284,18 @@ export interface LocalOnboardingSnapshot {
     readonly node?: LocalOnboardingNode;
     readonly rig?: LocalOnboardingRig;
     /**
-     * True when the connected Rig holds no project of its own yet. Rig publishes
-     * no first-run flag, so this is read from its catalog: an empty catalog is
-     * the only observable evidence that this is a fresh Rig.
+     * Whether the Rig connected right now has ever been used. Rig publishes no
+     * first-run flag, so this is read from its catalog and is re-read for every
+     * connection: a replaced Rig data directory is a different answer, and a
+     * remembered one would let setup skip or repeat itself untruthfully.
      */
-    readonly rigFresh?: boolean;
+    readonly freshness: LocalOnboardingFreshness;
     readonly install?: LocalOnboardingInstall;
-    readonly cloud?: LocalOnboardingCloudChoice;
-    /** Whether the optional encrypted Happy Profile was created; absent until asked. */
-    readonly profileCreated?: boolean;
-    /** The Git folder opened as the first project, once one has been. */
+    /** The Happy Cloud enrolment the person asked for; nothing is enrolled yet. */
+    readonly cloudRequested?: LocalOnboardingCloudChoice;
+    /** Whether a Happy Profile was asked for; absent until the question is answered. */
+    readonly profileRequested?: boolean;
+    /** The Git folder most recently opened as a project, for display only. */
     readonly projectPath?: string;
     /** True while this process is doing the current stage's work. */
     readonly busy: boolean;
@@ -673,8 +698,10 @@ export interface HappyDesktopBridge {
      * keystrokes through `rigInstallInput`/`rigInstallResize`.
      */
     onboardingRigInstall(cols: number, rows: number): Promise<void>;
+    /** Records what the person wants set up in Happy Cloud; it enrols nothing. */
     onboardingCloudSubmit(choice: LocalOnboardingCloudChoice): Promise<void>;
-    onboardingProfileSubmit(create: boolean): Promise<void>;
+    /** Records whether a Happy Profile is wanted; it creates no profile. */
+    onboardingProfileSubmit(request: boolean): Promise<void>;
     /**
      * Opens the native folder picker, requires a Git repository root, and opens
      * it as this Rig's first project. Picking, validating, and registering all

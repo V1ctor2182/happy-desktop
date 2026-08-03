@@ -121,36 +121,105 @@ export function LocalOnboardingScreenPage() {
                 })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Joining, remote control, and encrypted mobile sessions are three independent answers"
+                detail="Joining, remote control, and encrypted mobile sessions are three independent answers, and answering saves a choice rather than enrolling anything"
                 label="Happy Cloud"
                 number="08"
             >
-                {screen({ kind: "cloud" })}
+                {screen({ busy: false, kind: "cloud" })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Optional, encrypted, and declinable without leaving the cloud"
-                label="Happy Profile"
+                detail="Joining without letting another device drive this machine"
+                label="Happy Cloud · remote control off"
                 number="09"
             >
-                {screen({ kind: "profile" })}
+                {screen({
+                    busy: false,
+                    draft: { mobileSessions: true, remoteControl: false },
+                    kind: "cloud",
+                })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Joining while refusing to keep encrypted sessions in the cloud for phones"
+                label="Happy Cloud · mobile storage off"
+                number="10"
+            >
+                {screen({
+                    busy: false,
+                    draft: { mobileSessions: false, remoteControl: true },
+                    kind: "cloud",
+                })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Both optional parts declined; joining is still one press away"
+                label="Happy Cloud · all off"
+                number="11"
+            >
+                {screen({
+                    busy: false,
+                    draft: { mobileSessions: false, remoteControl: false },
+                    kind: "cloud",
+                })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The choice could not be written down, so the step stays and says so"
+                label="Happy Cloud · save failed"
+                number="12"
+            >
+                {screen({
+                    busy: false,
+                    kind: "cloud",
+                    message:
+                        "Happy could not save your Happy Cloud choices: EACCES: permission denied, open '/Users/ada/Library/Application Support/Happy/desktop/local-onboarding.json'.",
+                })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Optional, encrypted, declinable without leaving the cloud, and not created by answering"
+                label="Happy Profile"
+                number="13"
+            >
+                {screen({ busy: false, kind: "profile" })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Reading whether this Rig has ever been used, before anything is offered"
+                label="Examining the Rig"
+                number="14"
+            >
+                {screen({ kind: "examining" })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Native folder picker; a folder that is not a Git repository is refused"
                 label="First project"
-                number="10"
+                number="15"
             >
                 {screen({ kind: "project", busy: false })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
+                detail="The picker is open or the project is being registered, so the action is held"
+                label="First project · busy"
+                number="16"
+            >
+                {screen({ busy: true, kind: "project" })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
                 detail="A refused folder keeps the step and says exactly what is wrong"
                 label="First project · rejected"
-                number="11"
+                number="17"
             >
                 {screen({
                     busy: false,
                     kind: "project",
                     message:
                         "That folder is not a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.",
+                })}
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The login shell could not be read at all; detection keeps going by itself"
+                label="Machine unreadable"
+                number="18"
+            >
+                {screen({
+                    kind: "checking",
+                    message: "Happy could not examine this machine: spawn /bin/zsh EACCES.",
                 })}
             </FullScreenSpecimen>
         </ComponentPage>

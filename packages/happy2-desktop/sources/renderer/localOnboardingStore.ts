@@ -11,6 +11,10 @@ export interface LocalOnboardingViewSnapshot {
     readonly onboarding?: LocalOnboardingSnapshot;
     /** The install terminal's current screen, once any output has arrived. */
     readonly terminal?: TerminalGridSnapshot;
+    /** True while a request this window made is still in flight. */
+    readonly pending: boolean;
+    /** Why the last request could not be delivered, until another is made. */
+    readonly failure?: string;
 }
 
 export interface LocalOnboardingStore {
@@ -21,7 +25,7 @@ export interface LocalOnboardingStore {
     terminalResize(cols: number, rows: number): void;
     connectRetry(): void;
     cloudSubmit(choice: LocalOnboardingCloudChoice): void;
-    profileSubmit(create: boolean): void;
+    profileSubmit(request: boolean): void;
     projectChoose(): void;
 }
 
@@ -35,8 +39,10 @@ const DEFAULT_ROWS = 24;
  *
  * Nothing here decides anything. The stage, the install process, the folder
  * picker, and the daemon all belong to the main process; this store forwards
- * intent and keeps the screen current, and the emulator's transcript survives
- * the command exiting so a failure stays readable.
+ * intent and keeps the screen current. What it does own is this window's side of
+ * a request: an operation the shell refused is reported on screen rather than
+ * dropped, and the emulator is a real resource with a lifetime — it belongs to
+ * one install terminal and is released with it.
  */
 export function localOnboardingStoreCreate(
     bridge: HappyDesktopBridge,
@@ -47,23 +53,50 @@ export function localOnboardingStoreCreate(
 ): LocalOnboardingStore {
     const listeners = new Set<() => void>();
     const encoder = new TextEncoder();
-    let snapshot: LocalOnboardingViewSnapshot = {};
+    let snapshot: LocalOnboardingViewSnapshot = { pending: false };
     let bridgeUnsubscribe: (() => void) | undefined;
     let installUnsubscribe: (() => void) | undefined;
     let emulator: TerminalEmulator | undefined;
     let emulatorPending: Promise<TerminalEmulator> | undefined;
+    let emulatorTerminalId: string | undefined;
     let size = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
     let eventReceived = false;
+    let inFlight = 0;
 
     const publish = (next: LocalOnboardingViewSnapshot) => {
         snapshot = next;
         for (const listener of listeners) listener();
     };
+    const terminalId = () => snapshot.onboarding?.install?.terminalId;
+    /**
+     * Lets go of the emulator and the screen it was showing. A terminal that has
+     * ended is not one this window keeps a WebAssembly emulator alive for, and
+     * the transcript belongs to that install rather than to the next one.
+     */
+    const emulatorRelease = () => {
+        const live = emulator;
+        const pending = emulatorPending;
+        emulator = undefined;
+        emulatorPending = undefined;
+        emulatorTerminalId = undefined;
+        if (live) live.dispose();
+        else if (pending) void pending.then((created) => created.dispose()).catch(() => undefined);
+    };
     const onboardingSet = (next: LocalOnboardingSnapshot) => {
         if (Object.is(snapshot.onboarding, next)) return;
-        publish({ ...snapshot, onboarding: next });
+        const nextTerminalId = next.install?.terminalId;
+        // The install this emulator was drawing is gone, or has been replaced by
+        // another one, so its screen goes with it.
+        const replaced = emulatorTerminalId !== undefined && emulatorTerminalId !== nextTerminalId;
+        if (replaced) emulatorRelease();
+        publish({
+            ...snapshot,
+            ...(replaced ? { terminal: undefined } : {}),
+            onboarding: next,
+        });
     };
     const emulatorEnsure = (): Promise<TerminalEmulator> => {
+        emulatorTerminalId = terminalId();
         emulatorPending ??= emulatorCreate(size.cols, size.rows).then((created) => {
             emulator = created;
             return created;
@@ -71,13 +104,39 @@ export function localOnboardingStoreCreate(
         return emulatorPending;
     };
     const outputWrite = (data: string) => {
-        void emulatorEnsure().then((live) => {
+        const pending = emulatorEnsure();
+        void pending.then((live) => {
+            // The install ended and the emulator was released while this frame
+            // was in flight; writing into it would resurrect a dead screen.
+            if (emulatorPending !== pending) return;
             live.write(encoder.encode(data));
             publish({ ...snapshot, terminal: live.snapshot() });
         });
     };
-    const terminalId = () => snapshot.onboarding?.install?.terminalId;
-    const forget = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    /**
+     * Sends one request and reports what happened to it. A bridge call that
+     * rejects is the shell refusing — a stale window, a step that is no longer
+     * current — and saying so is the only way the person is not left pressing an
+     * inert button.
+     */
+    const attempt = (operation: Promise<unknown>, failure: string) => {
+        inFlight += 1;
+        publish({ ...snapshot, failure: undefined, pending: true });
+        void operation.then(
+            () => {
+                inFlight -= 1;
+                publish({ ...snapshot, pending: inFlight > 0 });
+            },
+            (error: unknown) => {
+                inFlight -= 1;
+                publish({
+                    ...snapshot,
+                    failure: `${failure} ${errorMessage(error)}`,
+                    pending: inFlight > 0,
+                });
+            },
+        );
+    };
 
     return {
         get: () => snapshot,
@@ -92,9 +151,17 @@ export function localOnboardingStoreCreate(
                 installUnsubscribe = bridge.rigInstallSubscribe((event) => {
                     if (event.type === "output") outputWrite(event.data);
                 });
-                void bridge.onboardingGet().then((initial) => {
-                    if (!eventReceived) onboardingSet(initial);
-                });
+                void bridge.onboardingGet().then(
+                    (initial) => {
+                        if (!eventReceived) onboardingSet(initial);
+                    },
+                    (error: unknown) => {
+                        publish({
+                            ...snapshot,
+                            failure: `Happy could not read the state of first-run setup. ${errorMessage(error)}`,
+                        });
+                    },
+                );
             }
             return () => {
                 listeners.delete(listener);
@@ -103,15 +170,25 @@ export function localOnboardingStoreCreate(
                 bridgeUnsubscribe = undefined;
                 installUnsubscribe?.();
                 installUnsubscribe = undefined;
+                // Nothing is watching this screen any more, so the emulator it
+                // was drawing into is released rather than kept for a window
+                // that may never come back.
+                emulatorRelease();
             };
         },
         rigInstall() {
-            forget(bridge.onboardingRigInstall(size.cols, size.rows));
+            attempt(
+                bridge.onboardingRigInstall(size.cols, size.rows),
+                "Happy could not start the installation.",
+            );
         },
         terminalInput(data) {
             const id = terminalId();
             if (!id || !snapshot.onboarding?.install?.running) return;
-            forget(bridge.rigInstallInput(id, data));
+            attempt(
+                bridge.rigInstallInput(id, data),
+                "Happy could not reach the installation terminal.",
+            );
         },
         terminalResize(cols, rows) {
             if (size.cols === cols && size.rows === rows) return;
@@ -119,19 +196,27 @@ export function localOnboardingStoreCreate(
             emulator?.resize(cols, rows);
             const id = terminalId();
             if (id && snapshot.onboarding?.install?.running)
-                forget(bridge.rigInstallResize(id, cols, rows));
+                // A resize the shell refuses says nothing the person can act on;
+                // the next keystroke or output frame reports the real state.
+                void bridge.rigInstallResize(id, cols, rows).catch(() => undefined);
         },
         connectRetry() {
-            forget(bridge.runtimeRetry());
+            attempt(bridge.runtimeRetry(), "Happy could not ask Rig to start again.");
         },
         cloudSubmit(choice) {
-            forget(bridge.onboardingCloudSubmit(choice));
+            attempt(
+                bridge.onboardingCloudSubmit(choice),
+                "Happy could not save your Happy Cloud choices.",
+            );
         },
-        profileSubmit(create) {
-            forget(bridge.onboardingProfileSubmit(create));
+        profileSubmit(request) {
+            attempt(
+                bridge.onboardingProfileSubmit(request),
+                "Happy could not save your Happy Profile choice.",
+            );
         },
         projectChoose() {
-            forget(bridge.onboardingProjectChoose());
+            attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
         },
     };
 }
@@ -141,25 +226,34 @@ export function localOnboardingView(
     snapshot: LocalOnboardingViewSnapshot,
 ): LocalOnboardingView | undefined {
     const onboarding = snapshot.onboarding;
-    if (!onboarding) return { kind: "checking" };
+    if (!onboarding)
+        return { kind: "checking", ...(snapshot.failure ? { message: snapshot.failure } : {}) };
     const terminal = {
         ...(snapshot.terminal ? { grid: snapshot.terminal } : {}),
         running: onboarding.install?.running === true,
     };
+    // What the shell reported about the step comes first; a request this window
+    // could not even deliver is the fallback, so one failure is never shown as
+    // if it were the other.
+    const message = onboarding.message ?? snapshot.failure;
+    const busy = onboarding.busy || snapshot.pending;
     switch (onboarding.stage) {
         case "checking":
-            return { kind: "checking" };
+            return { kind: "checking", ...(message ? { message } : {}) };
         case "nodeMissing":
             return { kind: "node-missing" };
         case "rigMissing":
-            return { kind: "rig-missing", nodeVersion: onboarding.node?.version ?? "" };
+            return {
+                kind: "rig-missing",
+                nodeVersion: onboarding.node?.version ?? "",
+                ...(message ? { message } : {}),
+            };
         case "rigInstalling":
             return { kind: "rig-installing", terminal };
         case "rigInstallFailed":
             return {
                 kind: "rig-install-failed",
-                message:
-                    onboarding.message ?? "The installation ended without a usable rig command.",
+                message: message ?? "The installation ended without a usable rig command.",
                 terminal,
             };
         case "connecting":
@@ -167,19 +261,21 @@ export function localOnboardingView(
         case "connectFailed":
             return {
                 kind: "connect-failed",
-                message: onboarding.message ?? "Happy could not reach your Rig daemon.",
+                message: message ?? "Happy could not reach your Rig daemon.",
             };
         case "cloud":
-            return { kind: "cloud" };
+            return { busy, kind: "cloud", ...(message ? { message } : {}) };
         case "profile":
-            return { kind: "profile" };
+            return { busy, kind: "profile", ...(message ? { message } : {}) };
+        case "examining":
+            return { kind: "examining" };
         case "project":
-            return {
-                busy: onboarding.busy,
-                kind: "project",
-                ...(onboarding.message ? { message: onboarding.message } : {}),
-            };
+            return { busy, kind: "project", ...(message ? { message } : {}) };
         case "complete":
             return undefined;
     }
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

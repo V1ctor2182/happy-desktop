@@ -57,7 +57,7 @@ import {
     pluginAppRequestParse,
     pluginOriginHost,
 } from "./pluginApplicationHost";
-import { localRigConnectorCreate } from "./localRig";
+import { localRigConnectorCreate, rigInstallVerifierCreate } from "./localRig";
 import { LocalOnboarding } from "./localOnboarding";
 import { NotesStore } from "./notesStore";
 import {
@@ -206,6 +206,20 @@ async function directoryPickShow(owner: BrowserWindow | undefined): Promise<stri
         ? await dialog.showOpenDialog(owner, options)
         : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
+}
+
+/**
+ * Only the window that is actually presenting Happy right now may drive first-run
+ * setup. Every one of these operations installs software, writes durable choices,
+ * or opens a native picker, so a renderer that has been replaced — a reload, a
+ * topology change, a window that lost its turn — must not be able to reach them
+ * with a preload it still holds. Which step may run is checked separately and
+ * authoritatively by first-run setup itself, against the stage it is on.
+ */
+function onboardingSenderRequire(sender: Electron.WebContents): void {
+    const presenting = windowLifecycle.get();
+    if (!presenting || presenting.isDestroyed() || presenting.webContents !== sender)
+        throw new Error("First-run setup is not being presented by this window.");
 }
 
 function browserSessionGet() {
@@ -995,7 +1009,10 @@ void app
             const window = windowLifecycle.get();
             if (window && !window.isDestroyed()) window.webContents.send(desktopIpc.notesChanged);
         });
-        rigInstallManager = new RigInstallTerminalManager(connector, {
+        // A finished install is checked by running the newly installed command,
+        // never by connecting: the runtime is the only owner of the user's
+        // daemon, and it is the one asked to try again once Rig is really there.
+        rigInstallManager = new RigInstallTerminalManager(rigInstallVerifierCreate(), {
             verified: () => void runtime.retry().catch(() => undefined),
         });
         // First-run setup follows the runtime rather than owning a connection of
@@ -1192,8 +1209,12 @@ void app
         ipcMain.handle(desktopIpc.directoryPick, (event) =>
             directoryPickShow(BrowserWindow.fromWebContents(event.sender) ?? undefined),
         );
-        ipcMain.handle(desktopIpc.onboardingGet, () => onboarding.get());
+        ipcMain.handle(desktopIpc.onboardingGet, (event) => {
+            onboardingSenderRequire(event.sender);
+            return onboarding.get();
+        });
         ipcMain.handle(desktopIpc.onboardingRigInstall, (event, cols: unknown, rows: unknown) => {
+            onboardingSenderRequire(event.sender);
             const size = rigTerminalSizeValidate(cols, rows);
             onboarding.rigInstall({
                 cols: size.cols,
@@ -1205,15 +1226,20 @@ void app
                 rows: size.rows,
             });
         });
-        ipcMain.handle(desktopIpc.onboardingCloudSubmit, (_event, choice: unknown) =>
-            onboarding.cloudSubmit(onboardingCloudChoiceValidate(choice)),
-        );
-        ipcMain.handle(desktopIpc.onboardingProfileSubmit, (_event, create: unknown) => {
-            if (typeof create !== "boolean")
-                throw new Error("The Happy Profile choice is invalid.");
-            return onboarding.profileSubmit(create);
+        ipcMain.handle(desktopIpc.onboardingCloudSubmit, (event, choice: unknown) => {
+            onboardingSenderRequire(event.sender);
+            return onboarding.cloudSubmit(onboardingCloudChoiceValidate(choice));
         });
-        ipcMain.handle(desktopIpc.onboardingProjectChoose, () => onboarding.projectChoose());
+        ipcMain.handle(desktopIpc.onboardingProfileSubmit, (event, request: unknown) => {
+            onboardingSenderRequire(event.sender);
+            if (typeof request !== "boolean")
+                throw new Error("The Happy Profile choice is invalid.");
+            return onboarding.profileSubmit(request);
+        });
+        ipcMain.handle(desktopIpc.onboardingProjectChoose, (event) => {
+            onboardingSenderRequire(event.sender);
+            return onboarding.projectChoose();
+        });
         ipcMain.handle(desktopIpc.runtimeStart, (_event, request: unknown) =>
             runtime.start(desktopStartRequestValidate(request)),
         );

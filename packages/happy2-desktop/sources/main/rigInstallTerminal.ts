@@ -1,7 +1,7 @@
 import { spawn as ptySpawn, type IPty } from "@lydell/node-pty";
 import { randomBytes } from "node:crypto";
 import { userInfo } from "node:os";
-import type { LocalRigConnector } from "./localRig";
+import type { RigInstallVerifier } from "./localRig";
 
 export const rigInstallCommand = "npm install --global @slopus/rig";
 const installExitMarker = "__HAPPY2_RIG_INSTALL_EXIT__:";
@@ -62,13 +62,20 @@ interface Installation {
     exitMarker?: number;
 }
 
-/** Owns fixed-command installation PTYs and bounds them to renderer lifetimes. */
+/**
+ * Owns fixed-command installation PTYs and bounds them to renderer lifetimes.
+ *
+ * When `npm` exits cleanly this manager checks that a usable `rig` command now
+ * exists, and stops there. Starting or connecting the user's daemon belongs to
+ * `DesktopRuntime` alone, so the verified install reports the fact and the
+ * runtime is the one thing that ever opens a connection.
+ */
 export class RigInstallTerminalManager implements Disposable {
     private readonly installations = new Map<string, Installation>();
     private disposed = false;
 
     constructor(
-        private readonly connector: LocalRigConnector,
+        private readonly verifier: RigInstallVerifier,
         private readonly options: {
             readonly ptyHost?: RigInstallPtyHost;
             readonly environment?: NodeJS.ProcessEnv;
@@ -198,8 +205,8 @@ export class RigInstallTerminalManager implements Disposable {
             return;
         }
         try {
-            const connection = await this.connector.connect();
-            connection.close();
+            const verification = await this.verifier.connect();
+            verification.close();
             if (this.disposed || this.installations.get(installation.id) !== installation) return;
             installation.emit({
                 type: "exited",
