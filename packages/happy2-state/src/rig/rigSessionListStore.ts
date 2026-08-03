@@ -36,7 +36,33 @@ export interface RigSessionListSnapshot {
     readonly projects: Loadable<readonly RigProjectGroup[]>;
     /** Last failed create/fork/reset, surfaced without rejecting the action. */
     readonly mutationError?: UserError;
+    /**
+     * How many times a successful authoritative catalog read has been applied
+     * here, counting from zero. It is what tells an optimistic publication apart
+     * from the host's own answer: a surface that must not act on a row this list
+     * only *believes* has gone — navigation away from an addressed group, above
+     * all — waits for this to advance rather than for the row to disappear.
+     */
+    readonly catalogRevision: number;
 }
+
+/**
+ * What became of one project archive, as the caller that asked for it needs to
+ * read it. Deliberately not a `void` promise resolved on the host's answer: a
+ * request the host accepted is not proof that the project is gone, and the
+ * absence of a row is not proof either while the read that would establish it
+ * may itself have failed. `archived` is reported only once a successful
+ * authoritative catalog read no longer holds the project, so it also covers the
+ * project another window archived first. Everything else is `failed`, carrying
+ * the reason to show and leaving the caller free to ask again — the host takes
+ * the same request on an already archived project unchanged.
+ *
+ * Returned by value rather than recorded in `mutationError`, so a concurrent
+ * unrelated mutation can neither clear nor overwrite this answer.
+ */
+export type RigProjectArchiveResult =
+    | { readonly type: "archived" }
+    | { readonly type: "failed"; readonly error: UserError };
 
 /**
  * Where a session lives: both halves of its address, since a local session is
@@ -88,11 +114,14 @@ export interface RigSessionListStore {
 
     /**
      * Archives a project: it leaves the list with its conversations and
-     * worktrees, and the host removes those worktrees' checkouts. A failure is
-     * recorded in `mutationError` and the following reconcile puts the project
-     * back.
+     * worktrees, and the host archives those worktrees and removes their
+     * checkouts. Deliberately not optimistic — the row goes when a successful
+     * authoritative read says it is gone, which is also the only thing that
+     * resolves this as `archived`. A refused request, an unreadable catalog, and
+     * a project still listed afterwards are all `failed`, and the list is left
+     * showing the project that is still there.
      */
-    projectArchive(projectId: RigProjectId): Promise<void>;
+    projectArchive(projectId: RigProjectId): Promise<RigProjectArchiveResult>;
     /** Renames a project; the new name shows before the host confirms it. */
     projectRename(projectId: RigProjectId, name: string): Promise<void>;
 
@@ -196,6 +225,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const createId = deps.createId ?? defaultCreateId;
 
     const store = createStore<RigSessionListSnapshot>()(() => ({
+        catalogRevision: 0,
         projects: { type: "loading" },
     }));
 
@@ -224,6 +254,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // driven by the host's own catalog rather than by polling it.
     const worktreeWaiters = new Map<RigWorktreeId, (worktree: RigWorktree) => void>();
 
+    /**
+     * Counts the authoritative reads applied here. An optimistic publication
+     * leaves it alone, so a subscriber can tell "the host says this row is gone"
+     * from "this store took a row out ahead of the host".
+     */
+    let catalogRevision = 0;
+
     const publish = (): void => {
         const previous = store.getState();
         const projected = rigProjectGroupsProject(catalog, sessions);
@@ -234,8 +271,41 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             previous.projects.type === "ready"
                 ? referencesPreserve(previous.projects.value, projected)
                 : projected;
-        if (previous.projects.type !== "ready" || previous.projects.value !== projects)
-            store.setState({ ...previous, projects: { type: "ready", value: projects } });
+        // The revision alone is worth a notification: a read that confirmed the
+        // list is unchanged is still the host's answer, and it is what a
+        // subscriber waiting on authoritative truth is waiting for.
+        if (
+            previous.projects.type !== "ready" ||
+            previous.projects.value !== projects ||
+            previous.catalogRevision !== catalogRevision
+        )
+            store.setState({
+                ...previous,
+                catalogRevision,
+                projects: { type: "ready", value: projects },
+            });
+    };
+
+    /**
+     * One authoritative catalog read, returned rather than only applied. The
+     * value is what a caller verifies against: reading truth and then asking the
+     * store what it holds would answer from whichever write landed last, which
+     * on a failed read is the caller's own optimism.
+     */
+    const catalogSnapshotRead = async (): Promise<
+        | { readonly catalog: RigProjectCatalog; readonly sessions: readonly RigSessionSummary[] }
+        | undefined
+    > => {
+        try {
+            return deps.catalogSource
+                ? await deps.catalogSource.read()
+                : await Promise.all([
+                      deps.transport.projectsRead(),
+                      deps.transport.sessionsRead(),
+                  ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
+        } catch {
+            return undefined;
+        }
     };
 
     /** Settles anyone waiting on a worktree that has stopped initializing. */
@@ -288,6 +358,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             if (disposed || current !== generation) return;
             catalog = snapshot.catalog;
             sessions = snapshot.sessions;
+            catalogRevision += 1;
             publish();
             worktreesSettle();
         } catch (error) {
@@ -611,26 +682,57 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     if (!disposed) await reconcile();
                 }
             }),
-        projectArchive: (projectId) =>
-            mutate(async () => {
-                // The whole folder leaves the list before the host confirms —
-                // archiving is deliberate and must feel immediate — and its
-                // worktrees go with it so no orphaned row is left behind. Its
-                // sessions need no filtering: the projection files sessions
-                // under listed projects, so they leave with it.
-                catalog = {
-                    projects: catalog.projects.filter((project) => project.id !== projectId),
-                    worktrees: catalog.worktrees.filter(
-                        (worktree) => worktree.projectId !== projectId,
+        async projectArchive(projectId) {
+            // No optimistic removal. Archiving destroys worktree checkouts, so
+            // what the caller needs from this is the truth rather than the
+            // appearance of speed: a row taken out ahead of the host cannot be
+            // told from one the host removed, and a verification read that then
+            // fails would leave that guess standing as the answer.
+            try {
+                await deps.transport.projectArchive(projectId);
+            } catch (error) {
+                return { type: "failed", error: rigUserError(error) };
+            }
+            const snapshot = await catalogSnapshotRead();
+            if (disposed)
+                return {
+                    type: "failed",
+                    error: rigUserError(
+                        new Error(
+                            "The workspace was closed before the archive could be confirmed.",
+                        ),
                     ),
                 };
-                publish();
-                try {
-                    await deps.transport.projectArchive(projectId);
-                } finally {
-                    if (!disposed) await reconcile();
-                }
-            }),
+            if (snapshot === undefined)
+                return {
+                    type: "failed",
+                    error: rigUserError(
+                        new Error(
+                            "The archive was requested but the project list could not be read back, so it is unconfirmed. Try again.",
+                        ),
+                    ),
+                };
+            // Applied under the same guard a reconcile uses, so a read that
+            // started later still wins; the answer below comes from the value
+            // read here either way.
+            generation += 1;
+            catalog = snapshot.catalog;
+            sessions = snapshot.sessions;
+            catalogRevision += 1;
+            publish();
+            worktreesSettle();
+            // The catalog lists only projects the host has not archived, so
+            // absence here is the host saying it is archived — including when
+            // another window archived it first.
+            return snapshot.catalog.projects.some((project) => project.id === projectId)
+                ? {
+                      type: "failed",
+                      error: rigUserError(
+                          new Error("The project is still listed, so it was not archived."),
+                      ),
+                  }
+                : { type: "archived" };
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;

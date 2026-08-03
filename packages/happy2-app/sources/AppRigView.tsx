@@ -609,16 +609,6 @@ function rowOwnerFind(
     return undefined;
 }
 
-/**
- * Every sidebar group an archived project takes with it: the project's own row
- * and each of its worktrees, whose checkouts go with the project. A URL naming
- * any of them stops naming anything the moment the archive is asked for, so both
- * places that archive a project check the addressed group against this.
- */
-function rigProjectClosingGroupIds(project: RigProjectGroup): readonly string[] {
-    return [project.id as string, ...project.worktrees.map((worktree) => worktree.id as string)];
-}
-
 /** A group with no conversation has no transcript; the constant keeps the prop stable. */
 const NO_ENTRIES: readonly ConversationEntry[] = [];
 
@@ -1545,20 +1535,12 @@ export function AppRigView(props: AppRigViewProps) {
                     return;
                 }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
-                // The archived row is about to stop existing, so the URL
-                // stops naming it: addressing the list is this surface's
-                // job, since the store never navigates. Archiving a
-                // project takes its worktrees with it, so an open one of
-                // those has to be left as well.
-                const closing = owner.worktreeId
-                    ? [owner.worktreeId as string]
-                    : rigProjectClosingGroupIds(owner.project);
-                if (
-                    props.rigId === rig.id &&
-                    props.groupId !== undefined &&
-                    closing.includes(props.groupId)
-                )
-                    props.onChatSelect(rig.id, undefined);
+                // Deliberately no navigation here. An archive that the host
+                // refuses would have ejected the reader from a project that is
+                // still there, and an archive performed from another window or
+                // another machine would not have moved them at all. Leaving the
+                // addressed group is one thing, driven by the host's own catalog
+                // no longer holding it, and the workspace reports that.
                 void (
                     owner.worktreeId
                         ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
@@ -1904,28 +1886,7 @@ export function AppRigView(props: AppRigViewProps) {
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
             {active?.session?.workspace ? (
-                <RigWindowDialogs
-                    // Archiving a project takes its worktrees with it, so a URL
-                    // naming any of them stops naming anything. The store never
-                    // navigates: leaving for the machine's own list is this
-                    // surface's job, and it happens as the request goes out
-                    // because the row leaves the list with it.
-                    onProjectArchiving={(projectId) => {
-                        const project = active.projects.find(
-                            (candidate) => candidate.id === projectId,
-                        );
-                        if (
-                            !project ||
-                            props.rigId !== active.id ||
-                            props.groupId === undefined ||
-                            !rigProjectClosingGroupIds(project).includes(props.groupId)
-                        )
-                            return;
-                        props.onChatSelect(active.id, undefined);
-                    }}
-                    projects={active.projects}
-                    workspace={active.session.workspace}
-                />
+                <RigWindowDialogs projects={active.projects} workspace={active.session.workspace} />
             ) : null}
         </>
     );
@@ -3664,7 +3625,6 @@ function rigTurnElapsedMs(
  * a draft change as it is typed.
  */
 function RigWindowDialogs(props: {
-    onProjectArchiving: (projectId: RigProjectId) => void;
     projects: readonly RigProjectGroup[];
     workspace: RigWorkspaceStore;
 }) {
@@ -3680,7 +3640,6 @@ function RigWindowDialogs(props: {
                 workspace.projectArchive,
                 props.projects,
                 props.workspace,
-                props.onProjectArchiving,
             )}
             {rigCreateDialog(workspace.create, props.workspace)}
         </>
@@ -3702,7 +3661,6 @@ function rigNamingDialog(
     archive: RigWorkspaceSnapshot["projectArchive"],
     projects: readonly RigProjectGroup[],
     store: RigWorkspaceStore,
-    onProjectArchiving: (projectId: RigProjectId) => void,
 ): ReactNode {
     if (!rename) return null;
     if (rename.worktreeId)
@@ -3751,20 +3709,29 @@ function rigNamingDialog(
     // another project — or one this dialog was opened over afterwards — is not
     // this reader's question.
     const archiving = archive?.projectId === rename.projectId ? archive : undefined;
+    // The archive is shown whenever an intent for it exists, whether or not the
+    // row is in the list this render happens to hold: an operation the reader
+    // started is not a fact about the catalog, and dropping the block the moment
+    // the row went would take the pending state, the button, and the reason a
+    // failure gave with it. Only a project with nothing pending has to be listed
+    // to be offered one.
+    const archiveBlock =
+        archiving || project
+            ? {
+                  archive: {
+                      confirming: archiving !== undefined,
+                      submitting: archiving?.submitting === true,
+                      ...(archiving?.error !== undefined ? { error: archiving.error } : {}),
+                  },
+              }
+            : {};
     return (
         <RigProjectSettingsDialog
             draft={rename.draft}
             {...(project?.avatar ? { imageUrl: project.avatar.url } : {})}
+            {...archiveBlock}
             {...(project
                 ? {
-                      // Archiving is offered only while the project is still
-                      // listed: one that left the catalog underneath this dialog
-                      // has already reached the state the button would ask for.
-                      archive: {
-                          confirming: archiving !== undefined,
-                          submitting: archiving?.submitting === true,
-                          ...(archiving?.error !== undefined ? { error: archiving.error } : {}),
-                      },
                       contents: {
                           sessions:
                               project.conversations.length +
@@ -3777,13 +3744,13 @@ function rigNamingDialog(
                       location: { displayPath: project.displayPath, path: project.path },
                   }
                 : {})}
-            name={rename.currentName}
+            // While an archive is pending, the name is the one the intent
+            // captured and the store keeps current against the host: what the
+            // reader is being asked to destroy has to be the entity that is
+            // about to be destroyed, not whatever this dialog was opened on.
+            name={archiving?.name ?? rename.currentName}
             onArchiveCancel={() => store.projectArchiveCancel()}
             onArchiveConfirm={() => {
-                // Addressed away first: the project leaves the list as the
-                // request goes out, so a URL naming it would be stale before
-                // the host answers.
-                onProjectArchiving(rename.projectId);
                 void store.projectArchiveSubmit().catch(() => undefined);
             }}
             onArchiveRequest={() => store.projectArchiveOpen(rename.projectId)}

@@ -612,6 +612,25 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
     )({ params: { groupId, rigId }, to: "/chats/$rigId/$groupId" });
 }
 
+/**
+ * Addresses a Rig's own list, replacing the current entry. It is where a reader
+ * is left when the group the URL named stops existing — its project archived,
+ * here or from another window — and the nearest address that is still true is
+ * the machine that held it.
+ *
+ * Replace rather than push: the entry being left names a row that is gone, so
+ * keeping it in history would only offer a Back that lands nowhere.
+ */
+export function rigRouterListOpen(router: RigRouter, rigId: string): void {
+    void (
+        router.navigate as unknown as (options: {
+            params: Record<string, string>;
+            replace: boolean;
+            to: string;
+        }) => Promise<void>
+    )({ params: { rigId }, replace: true, to: "/chats/$rigId" });
+}
+
 /** Creates deterministic local-router history for application and navigation tests. */
 export function rigMemoryHistoryCreate(initialEntry = "/chats/local"): RouterHistory {
     return createMemoryHistory({ initialEntries: [initialEntry] });

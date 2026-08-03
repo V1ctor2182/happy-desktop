@@ -310,6 +310,7 @@ export {
 } from "./rig/rigMenusStore.js";
 export {
     rigSessionListStoreCreate,
+    type RigProjectArchiveResult,
     type RigSessionCatalogSnapshot,
     type RigSessionCatalogSource,
     type RigSessionListDeps,

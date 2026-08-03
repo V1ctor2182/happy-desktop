@@ -29,6 +29,7 @@ import { rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
 import type {
+    RigProjectArchiveResult,
     RigSessionListSnapshot,
     RigSessionListStore,
     RigSessionLocation,
@@ -521,7 +522,19 @@ export type RigWorkspaceOutput =
           readonly location: RigSessionLocation;
       }
     /** A group to address before it holds a conversation, such as a new worktree. */
-    | { readonly type: "groupOpenRequested"; readonly groupId: RigGroupId };
+    | { readonly type: "groupOpenRequested"; readonly groupId: RigGroupId }
+    /**
+     * The addressed group is gone from the host's own catalog: the project was
+     * archived, here or from another window or another machine's Happy, and its
+     * worktrees went with it. The URL now names nothing, so the owner replaces
+     * the address with this Rig's list rather than leaving a route pointing at a
+     * row that no longer exists.
+     *
+     * Emitted only after a successful authoritative read — never from this
+     * store's own optimism, and never while a request is still in flight — and
+     * only once per removal, so a failed archive never moves the reader.
+     */
+    | { readonly type: "addressedGroupRemoved"; readonly groupId: RigGroupId };
 
 export interface RigWorkspaceDeps {
     readonly output?: (event: RigWorkspaceOutput) => void;
@@ -601,10 +614,12 @@ export interface RigWorkspaceStore {
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     /**
      * Archives a project, taking its conversations and its worktrees' checkouts
-     * with it. The caller addresses somewhere else first when the archived
-     * project holds the open conversation; this store does not navigate.
+     * with it, and resolves with the verified outcome. The caller does not
+     * navigate off the result: an addressed group that the host's catalog no
+     * longer holds is reported through `addressedGroupRemoved`, which covers the
+     * archive another window or another machine performed just the same.
      */
-    projectArchive(projectId: RigProjectId): Promise<void>;
+    projectArchive(projectId: RigProjectId): Promise<RigProjectArchiveResult>;
     /**
      * Adds a worktree to the project and opens a first conversation in it once
      * the host has prepared its checkout.
@@ -923,6 +938,18 @@ export function rigWorkspaceStoreCreate(
     let openInTargetsRequested = false;
     let rename: RigRenameSnapshot | undefined;
     let projectArchive: RigProjectArchiveSnapshot | undefined;
+    /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
+    let projectArchiveSubmission = 0;
+    /**
+     * The last authoritative catalog read this workspace acted on. The list
+     * publishes optimistically too, so this is what makes "the host says the row
+     * is gone" a different event from "the row is not in the snapshot".
+     */
+    let catalogRevisionSeen = -1;
+    /** The addressed group as of the last authoritative read that still held it. */
+    let addressedGroupSeen: RigGroupId | undefined;
+    /** Every group id the last authoritative read listed: projects and their worktrees. */
+    let authoritativeGroupIds: ReadonlySet<string> = new Set();
     let fileViewMode: RigFileViewMode = "unified";
     // Changed and flat by default: the panel opens on the work in progress,
     // which is short and reads better as a list than as a tree of one-file
@@ -2410,6 +2437,83 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
+    /**
+     * Records whether the group now addressed is one the host has actually
+     * listed. Addressing something the catalog already described is what makes a
+     * later absence a removal; addressing a worktree this client has only just
+     * reserved leaves it unconfirmed until a read says otherwise, so the reader
+     * is never moved off work they are in the middle of starting.
+     */
+    const addressedGroupSeenUpdate = (): void => {
+        addressedGroupSeen =
+            addressedGroupId !== undefined && authoritativeGroupIds.has(addressedGroupId)
+                ? addressedGroupId
+                : undefined;
+    };
+
+    /**
+     * What the host's own answer means for this workspace's addressing and for a
+     * destructive intent the reader is holding. It runs only when the list
+     * reports a newly applied authoritative read, so nothing here can be
+     * triggered by an optimistic row change or by a request still in flight.
+     *
+     * Two things are settled from it. A group the catalog no longer holds is no
+     * longer addressable, however it went — archived here, from another window,
+     * or on the machine itself — so its removal is reported once for the owner
+     * to re-address. And a pending archive is checked against the entity it
+     * names: gone means the outcome the reader asked for already holds, and a
+     * renamed project means the sentence they are being asked to confirm is
+     * about to stop matching, so the confirmation is restarted on the new name
+     * rather than left standing over a stale copy.
+     */
+    const catalogAuthoritativeApply = (): void => {
+        const listSnapshot = list.get();
+        if (listSnapshot.catalogRevision === catalogRevisionSeen) return;
+        catalogRevisionSeen = listSnapshot.catalogRevision;
+        const projects = listSnapshot.projects;
+        if (projects.type !== "ready") return;
+        const listedIds = new Set<string>();
+        for (const project of projects.value) {
+            listedIds.add(project.id);
+            for (const worktree of project.worktrees) listedIds.add(worktree.id);
+        }
+        authoritativeGroupIds = listedIds;
+        if (addressedGroupId !== undefined) {
+            const listed = listedIds.has(addressedGroupId);
+            // Removed means it was here and is not any more. A group the host
+            // has never confirmed is a group still arriving — a worktree just
+            // reserved, a URL opened before the first read landed — and moving
+            // the reader off one of those would be ejecting them from work they
+            // are in the middle of starting.
+            if (listed) addressedGroupSeen = addressedGroupId;
+            else if (addressedGroupSeen === addressedGroupId) {
+                // Forgotten as it is reported, so a second read of the same
+                // absence does not ask the owner to navigate twice. The address
+                // itself is left alone: replacing it is the owner's answer to
+                // this, and the surfaces below still describe where the reader
+                // was until that lands.
+                addressedGroupSeen = undefined;
+                output({ type: "addressedGroupRemoved", groupId: addressedGroupId });
+            }
+        }
+        // A submission owns its own confirmation until it settles; the read that
+        // proves it archived is the one that closes it, from `projectArchiveSubmit`.
+        if (!projectArchive || projectArchive.submitting) return;
+        const project = projects.value.find(
+            (candidate) => candidate.id === projectArchive?.projectId,
+        );
+        if (!project) {
+            projectArchive = undefined;
+            return;
+        }
+        if (project.name === projectArchive.name) return;
+        projectArchive = {
+            projectId: projectArchive.projectId,
+            name: project.name,
+            submitting: false,
+        };
+    };
+
     const start = (): void => {
         active = true;
         unsubscribeList = list.subscribe(() => {
@@ -2419,6 +2523,7 @@ export function rigWorkspaceStoreCreate(
             // has is what makes that possible.
             if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
             fileTabsReconcile();
+            catalogAuthoritativeApply();
             recompute();
         });
         // The addressed conversation survives losing every subscriber (the URL
@@ -2533,6 +2638,7 @@ export function rigWorkspaceStoreCreate(
             if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
                 addressedGroupId = groupId;
+                addressedGroupSeenUpdate();
                 groupRestore(groupId);
                 // A restored file tab is what this group was left showing, so it
                 // stays on screen and stays the tab this group resumes on.
@@ -2553,6 +2659,7 @@ export function rigWorkspaceStoreCreate(
             // The panel belongs to this group, so it learns the address before
             // the conversation is released rather than after.
             addressedGroupId = groupId;
+            addressedGroupSeenUpdate();
             openConversation(undefined);
             groupRestore(groupId);
             // The file scope belongs to the whole workspace, so "All files"
@@ -3167,6 +3274,11 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         renameOpen(projectId, worktreeId) {
+            // The settings dialog is where a submitting archive is being shown.
+            // Opening another row's settings over it would hide a destructive
+            // request the reader is waiting on, so the cog does nothing until
+            // that request has an answer.
+            if (projectArchive?.submitting) return;
             const projects = list.get().projects;
             if (projects.type !== "ready") return;
             const project = projects.value.find((candidate) => candidate.id === projectId);
@@ -3229,6 +3341,10 @@ export function rigWorkspaceStoreCreate(
             }
         },
         projectArchiveOpen(projectId) {
+            // An archive already with the host owns this slot until it answers;
+            // replacing it here would throw away the pending state of a request
+            // that is still going to come back.
+            if (projectArchive?.submitting) return;
             const projects = list.get().projects;
             if (projects.type !== "ready") return;
             const project = projects.value.find((candidate) => candidate.id === projectId);
@@ -3250,33 +3366,35 @@ export function rigWorkspaceStoreCreate(
         async projectArchiveSubmit() {
             const pending = projectArchive;
             if (!pending || pending.submitting) return;
+            const submission = ++projectArchiveSubmission;
             projectArchive = { projectId: pending.projectId, name: pending.name, submitting: true };
             recompute();
-            // The list store swallows the failure into its own `mutationError`
-            // and reconciles, so what happened is read off the catalog rather
-            // than caught here: this resolves with the host's answer applied.
-            await list.projectArchive(pending.projectId);
-            if (disposed) return;
-            const projects = list.get().projects;
-            const listed =
-                projects.type === "ready" &&
-                projects.value.some((candidate) => candidate.id === pending.projectId);
-            if (!listed) {
-                // Gone is gone, whether this archived it or another window did
-                // first. The settings dialog over it is describing a project
-                // that no longer exists, so it closes with the confirmation.
+            // The one answer this reads. It is the list store's verified result,
+            // not the shape of the catalog afterwards and not a shared error
+            // slot: a concurrent mutation can neither clear it nor stand in for
+            // it, and an absent row on its own never counts as success.
+            const result = await list.projectArchive(pending.projectId);
+            // Superseded or gone: a later submission owns the confirmation now,
+            // and a disposed workspace has no reader left to tell.
+            if (disposed || submission !== projectArchiveSubmission) return;
+            if (result.type === "archived") {
+                // The host's own catalog no longer holds it — archived here, or
+                // already archived when this asked. The settings dialog above
+                // this confirmation is describing a project that no longer
+                // exists, so it closes with it.
                 projectArchive = undefined;
                 if (rename?.projectId === pending.projectId) rename = undefined;
                 recompute();
                 return;
             }
-            // Reconciled back into the list: the host refused, and the reader is
-            // left with the project, the reason, and the same button.
+            // Refused, unreadable, or still listed. Nothing was navigated away
+            // from and nothing was taken out of the list, so the reader is left
+            // with the project, the reason, and the same button.
             projectArchive = {
                 projectId: pending.projectId,
                 name: pending.name,
                 submitting: false,
-                error: list.get().mutationError?.message ?? "The project was not archived.",
+                error: result.error.message,
             };
             recompute();
         },

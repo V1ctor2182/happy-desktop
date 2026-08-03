@@ -6,6 +6,7 @@ import {
     DesktopStartupScreen,
     rigRouterConversationOpen,
     rigRouterGroupOpen,
+    rigRouterListOpen,
     rigRouterCreate,
     type AppRigUpdate,
     type RigRouter,
@@ -424,6 +425,7 @@ if (mediaPreviewBridge) {
             conversationOpen: (rigId, location) =>
                 rigRouterConversationOpen(rigRouter, rigId, location),
             groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
+            listOpen: (rigId) => rigRouterListOpen(rigRouter, rigId),
             modelPreferencePersistence: modelSettings.preferencePersistence,
         });
         let materialized = "";

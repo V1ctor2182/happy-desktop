@@ -15,6 +15,7 @@ export {
     rigMemoryHistoryCreate,
     rigRouterConversationOpen,
     rigRouterGroupOpen,
+    rigRouterListOpen,
     rigRouterCreate,
     type RigRouter,
     type RigRouterContext,

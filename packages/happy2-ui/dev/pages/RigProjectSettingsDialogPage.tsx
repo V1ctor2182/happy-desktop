@@ -205,6 +205,26 @@ export function RigProjectSettingsDialogPage() {
                     />,
                 )}
             </Specimen>
+            <Specimen
+                detail="the row left the list while the archive was still with the host: the operation the reader started is still on screen, still inert, still theirs"
+                label="Archiving, row gone"
+                number="10"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        archive={{ confirming: true, submitting: true }}
+                        draft="happy2"
+                        name="happy2"
+                        onArchiveCancel={() => {}}
+                        onArchiveConfirm={() => {}}
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    720,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

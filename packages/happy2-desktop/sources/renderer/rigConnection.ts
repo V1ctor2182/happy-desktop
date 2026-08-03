@@ -110,6 +110,14 @@ export interface RigSessionDeps {
     readonly conversationOpen: (location: RigSessionLocation) => void;
     /** Navigates to a group that holds no conversation yet, such as a new worktree. */
     readonly groupOpen: (groupId: string) => void;
+    /**
+     * Replaces the address with this Rig's own list, because the group the URL
+     * named is gone from the host's catalog — its project was archived, here or
+     * from somewhere else. The entry being replaced rather than pushed is the
+     * point: a Back that returned to a row which no longer exists would be a
+     * dead end the reader put there by accident.
+     */
+    readonly listOpen: () => void;
     /** Announces that this connection's session is ready or has been replaced. */
     readonly changed: () => void;
 }
@@ -243,9 +251,17 @@ export function rigConnectionOpen(input: {
                     models: client.models,
                     workspace: rigWorkspaceStoreCreate(client, {
                         output: (event) => {
-                            if (event.type === "conversationOpenRequested")
-                                input.deps.conversationOpen(event.location);
-                            else input.deps.groupOpen(event.groupId);
+                            switch (event.type) {
+                                case "conversationOpenRequested":
+                                    input.deps.conversationOpen(event.location);
+                                    return;
+                                case "groupOpenRequested":
+                                    input.deps.groupOpen(event.groupId);
+                                    return;
+                                case "addressedGroupRemoved":
+                                    input.deps.listOpen();
+                                    return;
+                            }
                         },
                     }),
                     slots: () => client.slots(),
