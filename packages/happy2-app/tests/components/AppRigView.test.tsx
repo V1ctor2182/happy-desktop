@@ -8,7 +8,12 @@ import type {
     RigPanelStore,
     RigWorkspaceStore,
 } from "happy2-state";
-import { appearanceStoreCreate, rigHostNoop } from "happy2-state";
+import {
+    appearanceStoreCreate,
+    rigGroupAccessOf,
+    rigHostNoop,
+    RIG_GROUP_UNLISTED_REFUSAL,
+} from "happy2-state";
 import {
     AppRigView,
     type AppRigDirectorySnapshot,
@@ -89,6 +94,12 @@ function workspace(): RigWorkspaceStore {
             },
         },
         conversation: { type: "unloaded" as const },
+        /* The stub addresses nothing, and that is exactly the case the store
+         * publishes the unlisted refusal for: an id the catalog does not
+         * describe is never permission to write into it. Every snapshot carries
+         * an access, so this one does too. */
+        address: {},
+        groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
         fileTabs: [],
         tabOrder: [],
         openInTargets: [],

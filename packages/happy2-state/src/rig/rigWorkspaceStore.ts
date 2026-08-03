@@ -1389,7 +1389,7 @@ export function rigWorkspaceStoreCreate(
             panel.scopeApply(addressedGroupId, openId, groupAccess.writeRefusal);
         if (
             snapshot.address === nextAddress &&
-            snapshot.groupAccess?.writeRefusal === groupAccess.writeRefusal &&
+            snapshot.groupAccess.writeRefusal === groupAccess.writeRefusal &&
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
             snapshot.groupComposer === groupComposerDraft &&
