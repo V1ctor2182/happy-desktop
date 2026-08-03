@@ -51,6 +51,10 @@ import { PluginDiagnosticsViewerPage } from "./pages/PluginDiagnosticsViewerPage
 import { McpAppShellPage } from "./pages/McpAppShellPage";
 import { RigPluginApplicationBlueprintPage } from "./pages/RigPluginApplicationBlueprintPage";
 import { RigPluginCatalogBlueprintPage } from "./pages/RigPluginCatalogBlueprintPage";
+import { PluginStoreIconPage } from "./pages/PluginStoreIconPage";
+import { PluginStoreCardPage } from "./pages/PluginStoreCardPage";
+import { PluginStoreSectionPage } from "./pages/PluginStoreSectionPage";
+import { PluginStoreDetailPage } from "./pages/PluginStoreDetailPage";
 import { ComposerPage } from "./pages/ComposerPage";
 import { DataTablePage } from "./pages/DataTablePage";
 import { DiffSnippetPage } from "./pages/DiffSnippetPage";
@@ -345,6 +349,30 @@ const components: BlueprintPage[] = [
         label: "Rig create session",
         number: "C-238",
         page: RigCreateSessionDialogPage,
+    },
+    {
+        id: "plugin-store-icon",
+        label: "Plugin store icon",
+        number: "C-239",
+        page: PluginStoreIconPage,
+    },
+    {
+        id: "plugin-store-card",
+        label: "Plugin store card",
+        number: "C-240",
+        page: PluginStoreCardPage,
+    },
+    {
+        id: "plugin-store-section",
+        label: "Plugin store section",
+        number: "C-241",
+        page: PluginStoreSectionPage,
+    },
+    {
+        id: "plugin-store-detail",
+        label: "Plugin store detail",
+        number: "C-242",
+        page: PluginStoreDetailPage,
     },
     {
         id: "rig-activity-panel",

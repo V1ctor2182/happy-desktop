@@ -1,0 +1,150 @@
+/*
+ * PluginStoreCard — one package as a thing you could have.
+ *
+ * The card is a flex row: the mark, then a column holding the heading, the
+ * description, the metadata, and the action lane. Every gap belongs to a flex
+ * parent, so a card with no metadata and no action is the same card with fewer
+ * children rather than a different layout.
+ *
+ * The whole card is the target for opening it. The name is the real button and
+ * it grows an overlay across the card, which is the one piece of absolute
+ * positioning here: a card that wrapped everything in one button could not hold
+ * the action lane, because a button may not contain a button.
+ */
+
+.happy2-plugin-store-card,
+.happy2-plugin-store-card__body,
+.happy2-plugin-store-card__heading,
+.happy2-plugin-store-card__actions {
+    box-sizing: border-box;
+}
+
+.happy2-plugin-store-card {
+    position: relative;
+    display: flex;
+    flex: 1 1 320px;
+    align-items: flex-start;
+    gap: 16px;
+    min-width: 0;
+    max-width: 520px;
+    padding: 16px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    background: var(--surface);
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-plugin-store-card:hover {
+    background: var(--surface-high);
+}
+
+.happy2-plugin-store-card[data-selected="true"] {
+    border-color: var(--text-link);
+}
+
+.happy2-plugin-store-card__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy2-plugin-store-card__heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-plugin-store-card__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-plugin-store-card__open {
+    display: block;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* The press target is the whole card, not the four words of its name. This is
+   an overlay rather than a layout box: it takes no space and arranges no
+   children, so nothing else on the card moves for it. */
+.happy2-plugin-store-card__open::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    content: "";
+}
+
+.happy2-plugin-store-card__open:focus-visible {
+    outline: none;
+}
+
+.happy2-plugin-store-card__open:focus-visible::after {
+    outline: 2px solid var(--text-link);
+    outline-offset: 2px;
+}
+
+.happy2-plugin-store-card__description {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-card__meta {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-plugin-store-card__note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 0;
+    color: var(--box-warning-text);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-plugin-store-card[data-state="stopped"] .happy2-plugin-store-card__note {
+    color: var(--text-secondary);
+}
+
+/* The action lane sits above the card-wide press overlay so its own controls
+   receive the press instead of opening the package. */
+.happy2-plugin-store-card__actions {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-top: 4px;
+}

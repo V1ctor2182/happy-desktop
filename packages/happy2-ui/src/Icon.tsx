@@ -66,7 +66,13 @@ export type IconName =
     | "dot";
 export type IconProps = {
     name: IconName;
-    size?: 12 | 14 | 16 | 18 | 20;
+    /*
+     * The chrome sizes run 12–20. 24 and 32 exist for the places a glyph is the
+     * subject rather than an affordance beside one — an application mark and a
+     * hero mark — where a 20px glyph inside a 48 or 64px tile reads as a speck
+     * rather than as the thing's face.
+     */
+    size?: 12 | 14 | 16 | 18 | 20 | 24 | 32;
     color?: string;
     className?: string;
     style?: CSSProperties;

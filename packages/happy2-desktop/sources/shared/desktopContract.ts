@@ -331,12 +331,56 @@ export interface DesktopPluginApplication {
     readonly source?: string;
 }
 
+/**
+ * One plugin package installed on the machine running Rig, as the daemon
+ * describes it.
+ *
+ * This is the package rather than what it contributes; the two are separate
+ * readings, and the catalog screen is the only surface that wants the package.
+ * Nothing here is an address this side could fetch: `directory` and
+ * `dataDirectory` are paths on the daemon's machine, reported so a reader can be
+ * told where a package lives, not so the renderer can open them.
+ */
+export interface DesktopPluginPackage {
+    /** The plugin's folder name, which is the daemon's identity for the package. */
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly description: string;
+    /** Whether the package's own code is up, stopped, or failed to start. */
+    readonly status: "running" | "stopped" | "failed";
+    /** The package's own words about the state it is in, when it offered any. */
+    readonly statusMessage?: string;
+    readonly error?: string;
+    /** Where Rig installed the package's code, on the daemon's machine. */
+    readonly directory: string;
+    /** The folder the package writes to, on the daemon's machine. */
+    readonly dataDirectory: string;
+    readonly logAvailable: boolean;
+    /** The applications this package contributes, by their navigation identity. */
+    readonly applicationIds: readonly string[];
+}
+
+/**
+ * A folder Rig found where a package should be but could not read as one. It is
+ * not a package and does not become one until the reason is fixed, so it is
+ * reported beside the catalog rather than inside it.
+ */
+export interface DesktopPluginPackageFailure {
+    readonly folder: string;
+    readonly error: string;
+}
+
 /** Where the catalog subscription itself is, so a surface can say why it is empty. */
 export type DesktopPluginConnectionState = "connecting" | "live" | "reconnecting" | "closed";
 
 export interface DesktopPluginCatalog {
     /** Every contributed application in the daemon's navigation order. */
     readonly applications: readonly DesktopPluginApplication[];
+    /** Every installed package in the daemon's order, whatever each one is doing. */
+    readonly packages: readonly DesktopPluginPackage[];
+    /** Folders the daemon could not read as packages, and why. */
+    readonly packageFailures: readonly DesktopPluginPackageFailure[];
     readonly connection: DesktopPluginConnectionState;
     /** True until the first catalog has been received, so "none" is not claimed early. */
     readonly loading: boolean;

@@ -19,6 +19,8 @@ const PLUGIN_CONTENT_SECURITY_POLICY =
 
 const EMPTY_CATALOG: DesktopPluginCatalog = {
     applications: [],
+    packages: [],
+    packageFailures: [],
     connection: "closed",
     loading: false,
 };

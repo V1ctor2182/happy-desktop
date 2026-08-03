@@ -46,6 +46,8 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // surface needs to say "not here" instead of waiting forever.
         pluginApplicationsGet: async (): Promise<DesktopPluginCatalog> => ({
             applications: [],
+            packages: [],
+            packageFailures: [],
             connection: "closed",
             loading: false,
         }),

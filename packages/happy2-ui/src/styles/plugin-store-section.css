@@ -1,0 +1,70 @@
+/*
+ * PluginStoreSection — one shelf: a heading, an optional line under it, and the
+ * cards, which wrap into as many columns as the surface can hold.
+ *
+ * The shelf owns every gap between its own children, and the wrapping row owns
+ * the gap between cards, so a card never carries a margin to hold itself off
+ * whatever happens to sit beside it.
+ */
+
+.happy2-plugin-store-section,
+.happy2-plugin-store-section__header,
+.happy2-plugin-store-section__items {
+    box-sizing: border-box;
+}
+
+.happy2-plugin-store-section {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-plugin-store-section__header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-plugin-store-section__title {
+    margin: 0;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 24px;
+    letter-spacing: 0;
+}
+
+.happy2-plugin-store-section__count {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 16px;
+}
+
+.happy2-plugin-store-section__accessory {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.happy2-plugin-store-section__subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-section__items {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+}

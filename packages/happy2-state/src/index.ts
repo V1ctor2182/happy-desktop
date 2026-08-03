@@ -378,6 +378,9 @@ export {
     type RigPluginApplicationStoreDeps,
     type RigPluginApplicationsSnapshot,
     type RigPluginCatalogConnection,
+    type RigPluginPackage,
+    type RigPluginPackageFailure,
+    type RigPluginPackageStatus,
 } from "./rig/rigPluginApplicationStore.js";
 export { rigFriendsPhotoRead } from "./rig/rigFriendsPhoto.js";
 export {

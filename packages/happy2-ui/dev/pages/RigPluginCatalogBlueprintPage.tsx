@@ -1,15 +1,17 @@
-import { RIG_PLUGIN_CATALOG_PLACEHOLDER } from "../../src/pages/plugins/RigPluginCatalogPage.fixtures";
+import {
+    PLUGIN_STORE_FIXTURE_BARE,
+    PLUGIN_STORE_FIXTURE_CATALOG,
+    PLUGIN_STORE_FIXTURE_FAILURES,
+} from "../../src/pages/plugins/RigPluginCatalogPage.fixtures";
 import { RigPluginCatalogPage } from "../../src/pages/plugins/RigPluginCatalogPage";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 
 /*
- * The same placeholder catalog the running window is handed, so a specimen here
- * and the real screen show the same packages. Its last entry carries a name,
- * publisher, version, and purpose far past any reasonable length, which is what
- * proves the row keeps its margin mark, its version, and its state column where
- * every other row has them.
+ * Fixture packages, not a machine. The running screen shows exactly what its Rig
+ * reported and nothing else; these specimens exist so every state the page
+ * supports can be reviewed, including the ones a working machine rarely reaches.
  */
-const entries = RIG_PLUGIN_CATALOG_PLACEHOLDER;
+const entries = PLUGIN_STORE_FIXTURE_CATALOG;
 
 /** What the minimum Electron window leaves this page beside the Rig sidebar. */
 const NARROW = { width: 470, height: 424 };
@@ -19,30 +21,33 @@ export function RigPluginCatalogBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number="P-017"
-            summary="Every plugin package this machine knows about, read as an index rather than a storefront: a run of hairline-separated rows, a 2px mark in the left margin for the ones that want something, and a detail column carrying what a package does, what an update would change, what it adds to Happy, and where it came from. Every control reports what it would do instead of doing it — the strip under the filter says so, and says what was pressed."
+            summary="This machine's plugin packages, offered as a catalog rather than tabulated as settings. A card carries a coloured mark, the name, one line of what the package is for, and the small print under it; cards wrap into as many columns as the surface holds and are shelved by what each package is doing. Choosing one gives it the whole surface. Every card keeps a declared action lane, empty until installing and removing exist."
             title="RigPluginCatalogPage"
         >
             <FullScreenSpecimen
-                detail="Nine packages: two with an update waiting, one that stopped, two running, one turned off, and three on offer. The margin marks read down the left edge."
+                detail="Five packages across three shelves — one that failed to start, three running, one turned off — and one folder the machine could not read as a package at all."
                 label="Catalog"
                 number="01"
             >
-                <RigPluginCatalogPage entries={entries} />
+                <RigPluginCatalogPage entries={entries} failures={PLUGIN_STORE_FIXTURE_FAILURES} />
             </FullScreenSpecimen>
 
             <Specimen
-                detail="The same page in the space the minimum 720×480 window leaves beside the sidebar. Search and the filter wrap onto two rows, and the detail column takes the surface only once a row is chosen."
+                detail="The same page in the space the minimum 720×480 window leaves beside the sidebar. Search and the filter wrap onto two rows and the cards fall to one column; nothing else changes."
                 label="Minimum window"
                 number="02"
                 stage="surface"
             >
                 <div style={{ display: "flex", flex: "none", overflow: "hidden", ...NARROW }}>
-                    <RigPluginCatalogPage entries={entries} />
+                    <RigPluginCatalogPage
+                        entries={entries}
+                        failures={PLUGIN_STORE_FIXTURE_FAILURES}
+                    />
                 </div>
             </Specimen>
 
             <FullScreenSpecimen
-                detail="Before the first catalog arrives, so neither an empty machine nor a full one is claimed early. This state and the two below it are written for the real catalog and speak of reading a machine; the running screen cannot reach them while the packages are invented, which is why the standing disclosure says otherwise."
+                detail="Before the first catalog arrives, so neither an empty machine nor a full one is claimed early."
                 label="Loading"
                 number="03"
             >
@@ -50,7 +55,7 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="A machine with no plugins and nothing on offer."
+                detail="A machine with no plugins installed, which is what a machine that has never installed one actually shows."
                 label="Nothing here"
                 number="04"
             >
@@ -58,7 +63,7 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="The catalog itself could not be read; the reason replaces the list rather than sitting above an empty one."
+                detail="The catalog itself could not be read; the reason replaces the shelves rather than sitting above an empty one."
                 label="Unreadable"
                 number="05"
             >
@@ -69,11 +74,19 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="One package, so the index is a single row and the detail column has the empty reading beside it."
+                detail="One package carrying only what Rig reports today: a name, a version, a description, and where it lives. No publisher and no category, because the manifest has nowhere to put either."
                 label="One package"
                 number="06"
             >
-                <RigPluginCatalogPage entries={[entries[3]!]} />
+                <RigPluginCatalogPage entries={[PLUGIN_STORE_FIXTURE_BARE]} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Nothing installed and nothing readable — the reading a fresh machine with one broken plugin folder actually gives."
+                label="Only a failure"
+                number="07"
+            >
+                <RigPluginCatalogPage entries={[]} failures={PLUGIN_STORE_FIXTURE_FAILURES} />
             </FullScreenSpecimen>
         </ComponentPage>
     );

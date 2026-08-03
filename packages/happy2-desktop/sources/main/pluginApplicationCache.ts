@@ -9,6 +9,8 @@ import type {
     DesktopPluginApplication,
     DesktopPluginCatalog,
     DesktopPluginConnectionState,
+    DesktopPluginPackage,
+    DesktopPluginPackageFailure,
 } from "../shared/desktopContract";
 import { happyPluginScheme } from "../shared/desktopContract";
 
@@ -145,12 +147,23 @@ export class PluginApplicationCache implements Disposable {
     readonly #originHostCreate: () => string;
     #catalog: DesktopPluginCatalog = {
         applications: [],
+        packages: [],
+        packageFailures: [],
         connection: "connecting",
         loading: true,
     };
     #closed = false;
     /** Catalog order, which is the daemon's navigation order rather than the map's. */
     #order: readonly PluginApp[] = [];
+    /**
+     * The packages behind that order, as the daemon last described them. They are
+     * held rather than derived from the bundle entries because a package exists
+     * whether or not it contributes an application, and a stopped package that
+     * contributes nothing is exactly what the catalog screen is for.
+     */
+    #packages: readonly LocalPlugin[] = [];
+    /** Folders the daemon reported it could not read as packages. */
+    #failures: readonly DesktopPluginPackageFailure[] = [];
     readonly #connection: RigPluginsConnection;
 
     constructor(options: PluginApplicationCacheOptions) {
@@ -158,7 +171,7 @@ export class PluginApplicationCache implements Disposable {
         this.#originHostCreate =
             options.originHostCreate ?? (() => randomBytes(16).toString("hex"));
         this.#connection = options.connect({
-            onChange: (apps, _plugins, state) => this.#reconcile(apps, state),
+            onChange: (apps, plugins, state) => this.#reconcile(apps, plugins, state),
             onError: () => this.#publish(),
         });
     }
@@ -339,7 +352,13 @@ export class PluginApplicationCache implements Disposable {
         this.#closed = true;
         for (const [key, entry] of this.#entries) this.#retire(key, entry, false);
         this.#connection.close();
-        this.#catalog = { applications: [], connection: "closed", loading: false };
+        this.#catalog = {
+            applications: [],
+            packages: [],
+            packageFailures: [],
+            connection: "closed",
+            loading: false,
+        };
         this.#onChange(this.#catalog);
     }
 
@@ -422,7 +441,11 @@ export class PluginApplicationCache implements Disposable {
         if (described) entry.app = described;
     }
 
-    #reconcile(apps: readonly PluginApp[], state: PluginsState): void {
+    #reconcile(
+        apps: readonly PluginApp[],
+        plugins: readonly LocalPlugin[],
+        state: PluginsState,
+    ): void {
         if (this.#closed) return;
         // A subscription that is not live has nothing to say about what is
         // installed, so a gap keeps every cached generation rather than retiring
@@ -433,6 +456,11 @@ export class PluginApplicationCache implements Disposable {
             return;
         }
         this.#order = apps;
+        this.#packages = plugins;
+        this.#failures = state.failures.map((failure) => ({
+            error: failure.error,
+            folder: failure.pluginId,
+        }));
         const live = new Set(apps.map((app) => entryKey(app.id, app.generation)));
         // Anything the catalog stopped naming is gone: an uninstall, a stopped
         // plugin, or a replacement that arrived under a new generation.
@@ -524,6 +552,8 @@ export class PluginApplicationCache implements Disposable {
                 const entry = this.#entries.get(entryKey(app.id, app.generation));
                 return entry ? [projectApplication(entry)] : [];
             }),
+            packages: this.#packages.map(projectPackage),
+            packageFailures: this.#failures,
             connection: connection ?? this.#catalog.connection,
             loading: false,
         };
@@ -582,6 +612,28 @@ function projectApplication(entry: BundleEntry): DesktopPluginApplication {
     };
 }
 
+/**
+ * One package as the renderer may see it. The daemon's own description is
+ * already reference-stable per package, so this only drops what belongs on this
+ * side of the boundary and names the applications by the identity the window
+ * navigates with.
+ */
+function projectPackage(plugin: LocalPlugin): DesktopPluginPackage {
+    return {
+        applicationIds: plugin.apps.map((app) => app.id),
+        dataDirectory: plugin.dataDirectory,
+        description: plugin.description,
+        directory: plugin.directory,
+        id: plugin.id,
+        logAvailable: plugin.logAvailable,
+        name: plugin.name,
+        status: plugin.status,
+        version: plugin.version,
+        ...(plugin.error === undefined ? {} : { error: plugin.error }),
+        ...(plugin.statusMessage === undefined ? {} : { statusMessage: plugin.statusMessage }),
+    };
+}
+
 function sameCatalog(left: DesktopPluginCatalog, right: DesktopPluginCatalog): boolean {
     return (
         left.connection === right.connection &&
@@ -589,8 +641,38 @@ function sameCatalog(left: DesktopPluginCatalog, right: DesktopPluginCatalog): b
         left.applications.length === right.applications.length &&
         left.applications.every((application, index) =>
             sameApplication(application, right.applications[index]!),
+        ) &&
+        left.packages.length === right.packages.length &&
+        left.packages.every((entry, index) => samePackage(entry, right.packages[index]!)) &&
+        left.packageFailures.length === right.packageFailures.length &&
+        left.packageFailures.every((failure, index) =>
+            sameFailure(failure, right.packageFailures[index]!),
         )
     );
+}
+
+function samePackage(left: DesktopPluginPackage, right: DesktopPluginPackage): boolean {
+    return (
+        left.id === right.id &&
+        left.name === right.name &&
+        left.version === right.version &&
+        left.description === right.description &&
+        left.status === right.status &&
+        left.statusMessage === right.statusMessage &&
+        left.error === right.error &&
+        left.directory === right.directory &&
+        left.dataDirectory === right.dataDirectory &&
+        left.logAvailable === right.logAvailable &&
+        left.applicationIds.length === right.applicationIds.length &&
+        left.applicationIds.every((id, index) => id === right.applicationIds[index])
+    );
+}
+
+function sameFailure(
+    left: DesktopPluginPackageFailure,
+    right: DesktopPluginPackageFailure,
+): boolean {
+    return left.folder === right.folder && left.error === right.error;
 }
 
 function sameApplication(left: DesktopPluginApplication, right: DesktopPluginApplication): boolean {

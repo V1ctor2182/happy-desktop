@@ -106,6 +106,10 @@
 @import "./styles/plugin-install-dialog.css";
 @import "./styles/plugin-permission-card.css";
 @import "./styles/plugin-diagnostics.css";
+@import "./styles/plugin-store-icon.css";
+@import "./styles/plugin-store-card.css";
+@import "./styles/plugin-store-section.css";
+@import "./styles/plugin-store-detail.css";
 @import "./styles/onboarding-screen.css";
 @import "./styles/splash-screen.css";
 @import "./styles/split-column.css";

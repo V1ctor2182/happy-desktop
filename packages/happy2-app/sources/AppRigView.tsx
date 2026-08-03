@@ -131,7 +131,6 @@ import {
     type SlotVisualEntry,
     RigInboxPage,
     RigPluginApplicationPage,
-    RIG_PLUGIN_CATALOG_PLACEHOLDER,
     RigPluginCatalogPage,
     type RigPluginApplicationContentRenderer,
     RigProviderUsagePage,
@@ -153,6 +152,7 @@ import {
     type TabItem,
 } from "happy2-ui";
 import { openExternalLink } from "./externalLink";
+import { pluginCatalogEntries } from "./pluginCatalog";
 import { NewSessionShortcut } from "./components/NewSessionShortcut";
 import { BlueprintView } from "./views/BlueprintView";
 
@@ -1725,10 +1725,10 @@ export function AppRigView(props: AppRigViewProps) {
                 </AppShell>
             );
 
-        // The packages this machine has are read whatever the addressed machine is
-        // doing, because the reading is not one machine's to give yet: the daemon
-        // reports the applications a plugin contributes but not the packages behind
-        // them, so the catalog is a placeholder and says so on its own face.
+        // The packages this machine has, read from the same catalog subscription
+        // the pinned plugin rows come from: the applications are what a package
+        // contributes, and these are the packages themselves. A window that
+        // cannot mount plugins holds the inert catalog and honestly shows none.
         if (props.pluginsOpen)
             return (
                 <AppShell
@@ -1738,7 +1738,12 @@ export function AppRigView(props: AppRigViewProps) {
                     sidebar={sidebar}
                 >
                     {desktop ? <WindowDragRegion /> : null}
-                    <RigPluginCatalogPage entries={RIG_PLUGIN_CATALOG_PLACEHOLDER} />
+                    <RigPluginCatalogPage
+                        entries={pluginCatalogEntries(plugins)}
+                        failures={plugins.packageFailures}
+                        loading={plugins.loading}
+                        {...(plugins.error ? { error: plugins.error.message } : {})}
+                    />
                 </AppShell>
             );
 

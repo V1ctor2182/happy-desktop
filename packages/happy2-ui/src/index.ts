@@ -659,15 +659,31 @@ export {
     type RigPluginApplicationPageProps,
     type RigPluginApplicationPageStatus,
 } from "./pages/plugins/RigPluginApplicationPage";
-export { RIG_PLUGIN_CATALOG_PLACEHOLDER } from "./pages/plugins/RigPluginCatalogPage.fixtures";
 export {
     RigPluginCatalogPage,
+    type RigPluginCatalogEntry,
+    type RigPluginCatalogFailure,
     type RigPluginCatalogPageProps,
-    type RigPluginEntry,
-    type RigPluginFact,
-    type RigPluginOrigin,
-    type RigPluginState,
 } from "./pages/plugins/RigPluginCatalogPage";
+export {
+    PluginStoreIcon,
+    pluginStoreTone,
+    type PluginStoreIconProps,
+    type PluginStoreIconSize,
+} from "./PluginStoreIcon";
+export {
+    PluginStoreCard,
+    PLUGIN_STORE_STATE_LABELS,
+    type PluginStoreCardProps,
+    type PluginStoreEntry,
+    type PluginStoreState,
+} from "./PluginStoreCard";
+export { PluginStoreSection, type PluginStoreSectionProps } from "./PluginStoreSection";
+export {
+    PluginStoreDetail,
+    type PluginStoreDetailProps,
+    type PluginStoreFact,
+} from "./PluginStoreDetail";
 export { ProfilePage, type ProfilePageProps } from "./pages/profile/ProfilePage";
 export { CallsPage, type CallsPageProps } from "./pages/calls/CallsPage";
 export {

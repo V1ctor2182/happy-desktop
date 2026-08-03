@@ -56,7 +56,7 @@ function application(
 }
 
 function live(applications: readonly RigPluginApplication[]): RigPluginApplicationSourceReading {
-    return { applications, connection: "live", loading: false };
+    return { applications, packages: [], packageFailures: [], connection: "live", loading: false };
 }
 
 describe("rigPluginApplicationStore", () => {
@@ -65,7 +65,13 @@ describe("rigPluginApplicationStore", () => {
         const store = rigPluginApplicationStoreCreate({ source });
 
         expect(source.following()).toBe(false);
-        expect(store.get()).toEqual({ applications: [], connection: "connecting", loading: true });
+        expect(store.get()).toEqual({
+            applications: [],
+            packages: [],
+            packageFailures: [],
+            connection: "connecting",
+            loading: true,
+        });
 
         const first = store.subscribe(() => undefined);
         const second = store.subscribe(() => undefined);
@@ -113,7 +119,13 @@ describe("rigPluginApplicationStore", () => {
 
         // The gap: the feed drops, then returns with one application unchanged,
         // one behind new code, and one gone entirely.
-        source.announce({ applications: before, connection: "reconnecting", loading: false });
+        source.announce({
+            applications: before,
+            packages: [],
+            packageFailures: [],
+            connection: "reconnecting",
+            loading: false,
+        });
         source.announce(live([stable, application("inbox:main", "gen-2")]));
 
         const after = store.get().applications;
@@ -133,6 +145,8 @@ describe("rigPluginApplicationStore", () => {
         source.announce(live([application("usage:main", "gen-1")]));
         source.announce({
             applications: store.get().applications,
+            packages: [],
+            packageFailures: [],
             connection: "reconnecting",
             loading: false,
         });

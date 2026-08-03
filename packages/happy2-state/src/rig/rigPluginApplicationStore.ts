@@ -35,13 +35,55 @@ export interface RigPluginApplication {
     readonly source?: string;
 }
 
+/** Whether a package's own code is up, deliberately stopped, or failed to start. */
+export type RigPluginPackageStatus = "running" | "stopped" | "failed";
+
 /**
- * One reading of every local plugin application, with how the feed itself is
- * doing. `loading` is true only before the first catalog arrives, so a window
- * never claims a machine contributes nothing before it has been asked.
+ * One plugin package installed on the machine, as the host reports it.
+ *
+ * A package is a different reading from the applications it contributes: it
+ * exists whether or not it contributes any, and a package that stopped
+ * contributes nothing while remaining entirely installed. `directory` and
+ * `dataDirectory` are paths on the machine running the plugin — they are here to
+ * be shown to a reader, and nothing above may treat them as addresses.
+ */
+export interface RigPluginPackage {
+    /** The package's folder name, which is the machine's identity for it. */
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly description: string;
+    readonly status: RigPluginPackageStatus;
+    /** The package's own words about the state it is in, when it offered any. */
+    readonly statusMessage?: string;
+    readonly error?: string;
+    readonly directory: string;
+    readonly dataDirectory: string;
+    readonly logAvailable: boolean;
+    /** The applications it contributes, by the identity navigation uses. */
+    readonly applicationIds: readonly string[];
+}
+
+/**
+ * A folder the machine found where a package should be and could not read as
+ * one. It does not become a package until the reason is fixed, so it is carried
+ * beside the catalog rather than inside it.
+ */
+export interface RigPluginPackageFailure {
+    readonly folder: string;
+    readonly error: string;
+}
+
+/**
+ * One reading of this machine's plugins: the packages installed on it, the
+ * folders it could not read, the applications those packages contribute, and how
+ * the feed itself is doing. `loading` is true only before the first catalog
+ * arrives, so a window never claims a machine has nothing before it has asked.
  */
 export interface RigPluginApplicationSourceReading {
     readonly applications: readonly RigPluginApplication[];
+    readonly packages: readonly RigPluginPackage[];
+    readonly packageFailures: readonly RigPluginPackageFailure[];
     readonly connection: RigPluginCatalogConnection;
     readonly loading: boolean;
 }
@@ -60,9 +102,11 @@ export interface RigPluginApplicationSource {
 
 export interface RigPluginApplicationsSnapshot {
     readonly applications: readonly RigPluginApplication[];
+    readonly packages: readonly RigPluginPackage[];
+    readonly packageFailures: readonly RigPluginPackageFailure[];
     readonly connection: RigPluginCatalogConnection;
     readonly loading: boolean;
-    /** Set when the feed itself failed; the applications already held stay visible. */
+    /** Set when the feed itself failed; what is already held stays visible. */
     readonly error?: UserError;
 }
 
@@ -78,6 +122,8 @@ export interface RigPluginApplicationStoreDeps {
 
 const EMPTY: RigPluginApplicationsSnapshot = {
     applications: [],
+    packages: [],
+    packageFailures: [],
     connection: "connecting",
     loading: true,
 };
@@ -107,6 +153,8 @@ export function rigPluginApplicationStoreCreate(
                 store.setState(
                     {
                         applications: reading.applications,
+                        packages: reading.packages,
+                        packageFailures: reading.packageFailures,
                         connection: reading.connection,
                         loading: reading.loading,
                     },
@@ -152,6 +200,8 @@ export function rigPluginApplicationStoreCreate(
 
 const INERT_SNAPSHOT: RigPluginApplicationsSnapshot = {
     applications: [],
+    packages: [],
+    packageFailures: [],
     connection: "closed",
     loading: false,
 };

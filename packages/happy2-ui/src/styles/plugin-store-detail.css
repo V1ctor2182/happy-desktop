@@ -1,0 +1,173 @@
+/*
+ * PluginStoreDetail — one package's product page.
+ *
+ * A single flex column owning every gap between its parts, so an absent note,
+ * an absent action lane, or an absent shelf of facts removes a child and
+ * nothing else. The hero is the one row inside it: the hero mark, the identity
+ * column, and the state badge.
+ */
+
+.happy2-plugin-store-detail,
+.happy2-plugin-store-detail__hero,
+.happy2-plugin-store-detail__identity,
+.happy2-plugin-store-detail__actions,
+.happy2-plugin-store-detail__section {
+    box-sizing: border-box;
+}
+
+.happy2-plugin-store-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    font-family: var(--happy2-font-ui);
+}
+
+.happy2-plugin-store-detail__back {
+    flex: none;
+}
+
+/* The arrow points back the way the reader came. It is the same glyph turned
+   around rather than a second one, so leaving and entering read as one act. */
+.happy2-plugin-store-detail__back .happy2-button__icon {
+    transform: rotate(180deg);
+}
+
+.happy2-plugin-store-detail__hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+}
+
+.happy2-plugin-store-detail__identity {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy2-plugin-store-detail__name {
+    margin: 0;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 28px;
+    letter-spacing: 0;
+}
+
+.happy2-plugin-store-detail__attribution {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-plugin-store-detail__note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--box-warning-border);
+    border-radius: var(--happy2-radius-sm);
+    background: var(--box-warning-background);
+    color: var(--box-warning-text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-detail[data-state="stopped"] .happy2-plugin-store-detail__note {
+    border-color: var(--divider);
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy2-plugin-store-detail__description {
+    width: 100%;
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 21px;
+}
+
+.happy2-plugin-store-detail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-plugin-store-detail__section-title {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.happy2-plugin-store-detail__contributions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy2-plugin-store-detail__contributions li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-detail__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+}
+
+.happy2-plugin-store-detail__fact {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.happy2-plugin-store-detail__fact dt {
+    flex: 0 0 112px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-detail__fact dd {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-plugin-store-detail__fact dd[data-monospace="true"] {
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+}

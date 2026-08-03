@@ -1,0 +1,97 @@
+/*
+ * PluginStoreIcon — the rounded-square mark a plugin package is recognized by.
+ * Sizes: sm 32 / md 48 / lg 64. Tones are Happy's direct colour roles, the same
+ * ones the avatar's identity tones resolve to.
+ *
+ * The corner radii follow the desktop's application-icon curve rather than one
+ * shared token: a 32px tile with a 10px radius and a 64px tile with the same
+ * radius are not the same shape, and the mark has to read as one family across
+ * the card, the section, and the hero.
+ */
+
+.happy2-plugin-store-icon,
+.happy2-plugin-store-icon__glyph,
+.happy2-plugin-store-icon__artwork {
+    box-sizing: border-box;
+}
+
+.happy2-plugin-store-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--text-secondary);
+    color: var(--button-primary-tint);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy2-plugin-store-icon[data-size="sm"] {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.happy2-plugin-store-icon[data-size="md"] {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.happy2-plugin-store-icon[data-size="lg"] {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+}
+
+.happy2-plugin-store-icon[data-tone="violet"] {
+    background: var(--radio-active);
+}
+
+.happy2-plugin-store-icon[data-tone="ember"] {
+    background: var(--text-destructive);
+}
+
+.happy2-plugin-store-icon[data-tone="mint"] {
+    background: var(--success);
+}
+
+.happy2-plugin-store-icon[data-tone="ocean"] {
+    background: var(--text-link);
+}
+
+.happy2-plugin-store-icon[data-tone="rose"] {
+    background: var(--delete-action);
+}
+
+.happy2-plugin-store-icon[data-tone="amber"] {
+    background: var(--box-warning-border);
+}
+
+.happy2-plugin-store-icon[data-tone="slate"] {
+    background: var(--text-secondary);
+}
+
+.happy2-plugin-store-icon[data-tone="brand"] {
+    background: var(--fab-background);
+}
+
+/* Supplied artwork owns the whole mark, so no tone shows through behind a
+   silhouette that has transparency of its own. */
+.happy2-plugin-store-icon[data-artwork] {
+    background: transparent;
+}
+
+.happy2-plugin-store-icon__artwork {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy2-plugin-store-icon__glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
