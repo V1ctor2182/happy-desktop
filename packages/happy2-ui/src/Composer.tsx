@@ -474,9 +474,16 @@ export function Composer(props: ComposerProps) {
      * nothing to send, so that same circle stops the run; the moment there is
      * something to say it returns to sending, and what it sends steers the run
      * already under way.
+     *
+     * Unless nothing can be sent at all. A draft left in a composer that has
+     * since been closed — the checkout went away, or a send is already in
+     * flight — cannot steer anything, so keeping the send control there would
+     * leave a disabled circle sitting on top of a run the reader still has to
+     * be able to end. Whenever sending is impossible, stopping takes the
+     * circle back regardless of what is written.
      */
     const stopShown = () =>
-        Boolean(props.running && props.onStop) && props.value.trim().length === 0;
+        Boolean(props.running && props.onStop) && (busy || props.value.trim().length === 0);
     const emoji = () => props.emoji ?? [];
     const filteredEmoji = () => {
         const needle = emojiQuery.trim().toLowerCase();
