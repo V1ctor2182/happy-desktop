@@ -640,10 +640,17 @@ export interface DesktopPluginUninstalled {
  * always attributable to whichever of the two actually said it.
  */
 export type DesktopPluginManagementCode =
+    | "catalog_invalid"
+    | "catalog_not_found"
     | "install_failed"
     | "invalid_request"
+    | "invalid_response"
     | "plugin_not_found"
     | "plugins_unavailable"
+    | "repository_not_found"
+    | "request_failed"
+    | "source_changed"
+    | "source_unavailable"
     | "uninstall_failed";
 
 /**

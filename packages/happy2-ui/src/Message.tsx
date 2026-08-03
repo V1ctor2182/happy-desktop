@@ -127,6 +127,15 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     automated?: boolean;
     /** Who the message addressed, e.g. "To agents · Happy + 1". */
     audienceLabel?: string;
+    /**
+     * A short standing fact about this incoming message, printed as a quiet
+     * second line under the author name — where a friend's message stands with
+     * respect to the agent's context, for example. It is display text chosen by
+     * the producer, never a state name, and a message with nothing to say about
+     * itself simply omits it. An own message has no author line, so it never
+     * carries one.
+     */
+    contextNote?: string;
     /** Compact optional action placed in the author metadata before the time. */
     metaAccessory?: ReactNode;
     author: string;
@@ -257,6 +266,7 @@ export function Message(props: MessageProps) {
         "children",
         "className",
         "compact",
+        "contextNote",
         "deliveryState",
         "emptyText",
         "generationStatus",
@@ -537,6 +547,18 @@ export function Message(props: MessageProps) {
                 {/* Own messages carry no meta row — the accent bubble on the
                     right is identity enough; no author, time, or audience pill. */}
                 {incomingMeta}
+                {/* A standing fact about the message belongs under the name it
+                    is a fact about, not inside the hover metadata: it is read
+                    before the body, once, and it does not appear and disappear
+                    with the pointer. */}
+                {showIncomingIdentity() && local.contextNote ? (
+                    <span
+                        className="happy2-message__context-note"
+                        data-happy2-ui="message-context-note"
+                    >
+                        {local.contextNote}
+                    </span>
+                ) : null}
                 {ownBubbleLine ? (
                     <div
                         className="happy2-message__bubble-line"

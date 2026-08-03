@@ -228,6 +228,26 @@ function failureText(
             return { message: failure.message, title: "This machine has no such plugin" };
         case "plugins_unavailable":
             return { message: failure.message, title: "This machine is not managing plugins" };
+        case "repository_not_found":
+            return { message: failure.message, title: "That repository could not be found" };
+        case "catalog_not_found":
+            return { message: failure.message, title: "That repository lists no packages" };
+        case "catalog_invalid":
+            return {
+                message: failure.message,
+                title: "That repository's package list is unreadable",
+            };
+        case "source_unavailable":
+            return { message: failure.message, title: "That package could not be downloaded" };
+        case "source_changed":
+            return {
+                message: failure.message,
+                title: "That package changed while it was being fetched",
+            };
+        case "invalid_response":
+            return { message: failure.message, title: "This machine's answer could not be read" };
+        case "request_failed":
+            return { message: failure.message, title: "This machine could not be asked" };
         case "install_failed":
         case "uninstall_failed":
             return {

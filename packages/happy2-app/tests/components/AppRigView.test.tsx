@@ -245,13 +245,14 @@ it("lists one row per project and its sessions as tabs", () => {
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
         "new-chat",
         "friends",
+        "shared",
         "plugins",
         "local/prj_one",
     ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[3]?.textContent).toContain("happy2");
-    expect(rows[3]?.textContent).not.toContain("~/happy2");
+    expect(rows[4]?.textContent).toContain("happy2");
+    expect(rows[4]?.textContent).not.toContain("~/happy2");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy2-ui="tab"]')];

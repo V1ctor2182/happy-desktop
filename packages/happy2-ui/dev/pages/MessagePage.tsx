@@ -682,6 +682,40 @@ export function MessagePage() {
                 )}
                 <DimensionRule label="mark 12 · the identity gutter, same slot as an initials avatar" />
             </Specimen>
+
+            <Specimen
+                detail="a standing fact about the message, printed once under the name it is a fact about — where a friend's message stands with respect to the agent's context. Unlike the hover metadata it never appears or disappears with the pointer, and an own message never carries one."
+                label="Message — context note"
+                number="17"
+                stage="app"
+            >
+                {channelFrame(
+                    <>
+                        <Message
+                            author="Jun Park"
+                            body="Does the blocking lock hold across the retry?"
+                            contextNote="In the agent's context"
+                            initials="JP"
+                            time="9:44"
+                        />
+                        <Message
+                            author="Maya Kovacs"
+                            body="Check the cold-start path too."
+                            contextNote="Waiting to reach the agent"
+                            initials="MK"
+                            time="9:45"
+                        />
+                        <Message
+                            author="Amara Achebe"
+                            body="This one was written a long way back in the run."
+                            contextNote="Outside the agent's context"
+                            initials="AA"
+                            time="9:46"
+                        />
+                    </>,
+                )}
+                <DimensionRule label="12/16 secondary line · shares the author line's 12 px inset" />
+            </Specimen>
         </ComponentPage>
     );
 }

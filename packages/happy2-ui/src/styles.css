@@ -156,3 +156,9 @@
 @import "./styles/workspace-lifecycle-notice.css";
 @import "./styles/rig-plugin-install-dialog.css";
 @import "./styles/rig-plugin-remove-dialog.css";
+@import "./styles/session-share-indicator.css";
+@import "./styles/session-share-panel.css";
+@import "./styles/session-share-start-dialog.css";
+@import "./styles/session-share-stop-dialog.css";
+@import "./styles/shared-sessions-page.css";
+@import "./styles/shared-session-view.css";

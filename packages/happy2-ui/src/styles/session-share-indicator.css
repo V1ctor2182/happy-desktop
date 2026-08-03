@@ -1,0 +1,113 @@
+/*
+ * C-245 SessionShareIndicator — the standing reminder that someone else is
+ * reading this session.
+ *
+ * One row: a fixed 16px eye mark, a text block that wraps its label and
+ * sentence onto one line where there is room and two where there is not, and a
+ * right-pinned action pair. It is a full-width strip rather than a floating
+ * chip because it sits in the conversation's own column above the transcript
+ * and must never be mistaken for something that scrolled past.
+ *
+ * Tone is carried the way Banner carries it: a hairline border, a soft fill,
+ * and the mark's colour. `live` is Happy's interactive teal — present, not
+ * alarming; `behind` is the warning role; `ended` falls back to the ordinary
+ * hairline and secondary ink, because a share that is over is a fact rather
+ * than a condition. Flexbox throughout, theme roles only.
+ */
+
+.happy2-session-share-indicator,
+.happy2-session-share-indicator * {
+    box-sizing: border-box;
+}
+
+.happy2-session-share-indicator {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    background: var(--surface-high);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    text-align: left;
+}
+
+.happy2-session-share-indicator[data-condition="live"] {
+    border-color: var(--text-link);
+}
+
+.happy2-session-share-indicator[data-condition="live"] .happy2-session-share-indicator__mark,
+.happy2-session-share-indicator[data-condition="live"] .happy2-session-share-indicator__label {
+    color: var(--text-link);
+}
+
+.happy2-session-share-indicator[data-condition="behind"] {
+    border-color: var(--box-warning-border);
+    background: var(--box-warning-background);
+}
+
+.happy2-session-share-indicator[data-condition="behind"] .happy2-session-share-indicator__mark,
+.happy2-session-share-indicator[data-condition="behind"] .happy2-session-share-indicator__label {
+    color: var(--box-warning-text);
+}
+
+.happy2-session-share-indicator[data-condition="ended"] .happy2-session-share-indicator__mark,
+.happy2-session-share-indicator[data-condition="ended"] .happy2-session-share-indicator__label {
+    color: var(--text-secondary);
+}
+
+.happy2-session-share-indicator__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy2-session-share-indicator__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The label and the sentence are one reading, so they share a line until the
+   strip is too narrow and then wrap as a pair rather than being truncated. */
+.happy2-session-share-indicator__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-width: 0;
+}
+
+.happy2-session-share-indicator__label {
+    flex: none;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 18px;
+}
+
+.happy2-session-share-indicator__sentence {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-session-share-indicator__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+}

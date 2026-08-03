@@ -284,6 +284,9 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
+                                {...(entry.kind === "message" && entry.contextNote !== undefined
+                                    ? { contextNote: entry.contextNote }
+                                    : {})}
                                 activityAuthor={
                                     props.agentAuthor &&
                                     conversationAgentRowStartsGroup(props.entries, index)

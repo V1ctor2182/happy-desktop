@@ -444,6 +444,46 @@ export {
     type RigFriendsStoreDeps,
 } from "./rig/rigFriendsStore.js";
 export {
+    rigSessionShareStoreCreate,
+    rigSessionShareStoreNoop,
+    type RigSessionShare,
+    type RigSessionShareAccess,
+    type RigSessionShareChoice,
+    type RigSessionShareCondition,
+    type RigSessionShareDialog,
+    type RigSessionShareHealth,
+    type RigSessionShareMember,
+    type RigSessionShareMemberId,
+    type RigSessionShareOutput,
+    type RigSessionShareSnapshot,
+    type RigSessionShareSource,
+    type RigSessionShareSourceReading,
+    type RigSessionShareStore,
+    type RigSessionShareStoreDeps,
+} from "./rig/rigSessionShareStore.js";
+export {
+    rigFriendAuthor,
+    rigSessionShareReplicaProject,
+    type RigSessionShareReplicaEntry,
+} from "./rig/rigSessionShareReplicaProject.js";
+export {
+    rigSharedSessionsStoreCreate,
+    rigSharedSessionsStoreNoop,
+    type RigSharedSession,
+    type RigSharedSessionGrant,
+    type RigSharedSessionId,
+    type RigSharedSessionReading,
+    type RigSharedSessionsInput,
+    type RigSharedSessionsOutput,
+    type RigSharedSessionsSnapshot,
+    type RigSharedSessionsSource,
+    type RigSharedSessionsSourceHistoryPage,
+    type RigSharedSessionsSourceReading,
+    type RigSharedSessionsSourceReplica,
+    type RigSharedSessionsStore,
+    type RigSharedSessionsStoreDeps,
+} from "./rig/rigSharedSessionsStore.js";
+export {
     rigProviderUsageStoreCreate,
     rigProviderUsageStoreNoop,
     type RigProviderUsageCredits,

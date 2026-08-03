@@ -42,8 +42,8 @@
     },
     "devDependencies": {
         "@slopus/ghostty-web": "0.1.0",
-        "@slopus/rig": "0.0.129",
-        "@slopus/rig-connect": "0.0.31",
+        "@slopus/rig": "0.0.132",
+        "@slopus/rig-connect": "0.0.32",
         "@tailwindcss/vite": "^4.3.2",
         "@tanstack/react-router": "^1.170.18",
         "@testing-library/react": "^16.3.2",

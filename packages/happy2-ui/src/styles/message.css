@@ -190,6 +190,29 @@
     margin-left: 12px;
 }
 
+/* A standing fact about an incoming message — where a friend's message stands
+   with respect to the agent's context, say — printed once under the name it is
+   a fact about. It takes the author line's own inset so the two read as one
+   identity block, and it stays quiet enough not to compete with the message.
+   Unlike the hover metadata it never appears or disappears under the pointer.
+   `conversationRowHeight` cannot model it, because the note is not on the entry
+   projection it reads; a row carrying one is corrected by its own measurement
+   on mount. */
+.happy2-message__context-note {
+    display: block;
+    overflow: hidden;
+    margin-bottom: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-message:not([data-agent]):not([data-own]) .happy2-message__context-note {
+    margin-left: 12px;
+}
+
 .happy2-message__meta-separator {
     display: block;
     flex: none;

@@ -644,6 +644,15 @@ export interface RigWorkspaceDeps {
      * with no folder picker — Blueprint and tests included.
      */
     readonly host?: RigHost;
+    /**
+     * Announces which conversation this workspace is now showing, so a surface
+     * that is about the open conversation without being part of it can follow
+     * navigation. Sharing is the one such surface: the share belongs to the
+     * session the reader is in, and the indicator over the transcript has to
+     * change with the reader rather than being told to by whichever view
+     * happened to render. Called with nothing when no conversation is open.
+     */
+    readonly conversationFocus?: (conversationId?: RigSessionId) => void;
 }
 
 export interface RigWorkspaceNewChatInput {
@@ -2449,6 +2458,10 @@ export function rigWorkspaceStoreCreate(
         acquisitionGeneration += 1;
         acquiringId = undefined;
         openId = conversationId;
+        // Announced before the handle is acquired, for the same reason the panel
+        // is: a share indicator must never be shown against the conversation
+        // that is being left, however briefly.
+        deps.conversationFocus?.(conversationId);
         releaseConversation();
         if (!conversationId) {
             conversation = { type: "unloaded" };

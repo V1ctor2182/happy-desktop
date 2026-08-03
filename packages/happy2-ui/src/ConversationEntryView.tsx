@@ -29,6 +29,13 @@ export type ConversationEntryViewProps = {
     activityAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
+    /**
+     * A short standing fact about this message, printed under the author name:
+     * where a friend's message stands with respect to the agent's context, for
+     * example. The owning surface supplies the finished sentence, since only it
+     * knows what the message is and what became of it.
+     */
+    contextNote?: string;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
     /** Answers a pending question request entry. */
@@ -287,6 +294,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(author?.sessionId === undefined ? {} : { avatarSessionId: author.sessionId })}
             body={message.text}
             className={props.className}
+            {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
             data-testid={props["data-testid"]}
             deliveryState={entry.delivery}
             emptyText={

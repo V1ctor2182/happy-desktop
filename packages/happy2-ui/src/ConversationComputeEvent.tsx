@@ -44,6 +44,9 @@ const STATES: Record<
     unprovisioned: { label: "Compute not started", glyph: "cube-outline", tone: "idle" },
     provisioning: { label: "Preparing compute", glyph: "hourglass-outline", tone: "busy" },
     ready: { label: "Compute ready", glyph: "checkmark-circle-outline", tone: "done" },
+    /* No machine can be had at all — a different thing from one that broke on
+       the way up, and the only one of these a reader cannot wait out. */
+    unavailable: { label: "Compute unavailable", glyph: "cloud-offline-outline", tone: "error" },
     stopped: { label: "Compute stopped", glyph: "stop-circle-outline", tone: "idle" },
     failed: { label: "Compute failed", glyph: "alert-circle-outline", tone: "error" },
 };

@@ -286,6 +286,14 @@ export interface ConversationMessageEntry {
     readonly delivery: "sending" | "pending_steering" | "sent" | "failed";
     readonly clientMutationId?: string;
     readonly error?: UserError;
+    /**
+     * A quiet line under the author's name saying where this message stands
+     * with the agent. It is written for a message somebody else put into the
+     * session — a friend the reader is sharing it with — because whether their
+     * words reached the agent is not something the message itself can show.
+     * Already in the words the surface says, never a wire value.
+     */
+    readonly contextNote?: string;
 }
 
 export interface ConversationActivityEntry {
@@ -342,6 +350,7 @@ export type ConversationComputeState =
     | "unprovisioned"
     | "provisioning"
     | "ready"
+    | "unavailable"
     | "failed"
     | "stopped";
 

@@ -104,6 +104,12 @@ import { SearchResultsPage } from "./pages/SearchResultsPage";
 import { FloatingConversationDockPage } from "./pages/FloatingConversationDockPage";
 import { RigSettingsBlueprintPage } from "./pages/RigSettingsPage";
 import { FriendsBlueprintPage } from "./pages/FriendsBlueprintPage";
+import { SessionShareIndicatorPage } from "./pages/SessionShareIndicatorPage";
+import { SessionSharePanelPage } from "./pages/SessionSharePanelPage";
+import { SessionShareStartDialogPage } from "./pages/SessionShareStartDialogPage";
+import { SessionShareStopDialogPage } from "./pages/SessionShareStopDialogPage";
+import { SharedSessionsBlueprintPage } from "./pages/SharedSessionsBlueprintPage";
+import { SharedSessionBlueprintPage } from "./pages/SharedSessionBlueprintPage";
 import { RigInboxBlueprintPage } from "./pages/RigInboxBlueprintPage";
 import { RigProviderUsageBlueprintPage } from "./pages/RigProviderUsageBlueprintPage";
 import { SettingsStorePage } from "./pages/SettingsStorePage";
@@ -417,6 +423,30 @@ const components: BlueprintPage[] = [
         page: RigPluginRemoveDialogPage,
     },
     {
+        id: "session-share-indicator",
+        label: "Session share indicator",
+        number: "C-245",
+        page: SessionShareIndicatorPage,
+    },
+    {
+        id: "session-share-panel",
+        label: "Session share panel",
+        number: "C-246",
+        page: SessionSharePanelPage,
+    },
+    {
+        id: "session-share-start-dialog",
+        label: "Session share start dialog",
+        number: "C-247",
+        page: SessionShareStartDialogPage,
+    },
+    {
+        id: "session-share-stop-dialog",
+        label: "Session share stop dialog",
+        number: "C-248",
+        page: SessionShareStopDialogPage,
+    },
+    {
         id: "rig-activity-panel",
         label: "Rig activity panel",
         number: "C-157",
@@ -709,6 +739,18 @@ const fullScreens: BlueprintPage[] = [
         label: "Plugin catalog",
         number: "P-017",
         page: RigPluginCatalogBlueprintPage,
+    },
+    {
+        id: "shared-sessions",
+        label: "Shared with me",
+        number: "P-018",
+        page: SharedSessionsBlueprintPage,
+    },
+    {
+        id: "shared-session",
+        label: "Shared session",
+        number: "P-019",
+        page: SharedSessionBlueprintPage,
     },
 ];
 const pageNumberCompare = (left: BlueprintPage, right: BlueprintPage) =>

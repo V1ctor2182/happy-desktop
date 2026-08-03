@@ -1,0 +1,232 @@
+/*
+ * C-246 SessionSharePanel — the owner's management surface for one share.
+ *
+ * A column: the section toolbar naming what this is and how many people are in
+ * it, then a body of blocks separated by one gap the body itself owns — the
+ * failure banner, the delivery reading, the one setting, the people, and the
+ * ending. Every block is full width, so the panel drops straight into a side
+ * panel at any width the shell gives it.
+ *
+ * People carry no card of their own: they are a face, a name, and what they can
+ * do, on the panel's own paper, exactly as the Friends surface draws them. The
+ * only object with a fill is the delivery reading, because it is a measurement
+ * rather than a person. Flexbox throughout, theme roles only.
+ */
+
+.happy2-session-share-panel,
+.happy2-session-share-panel * {
+    box-sizing: border-box;
+}
+
+.happy2-session-share-panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    text-align: left;
+}
+
+.happy2-session-share-panel__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+    width: 100%;
+    padding: 8px 16px 20px;
+}
+
+/* ---- Delivery reading ----------------------------------------------------- */
+
+.happy2-session-share-panel__health {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    background: var(--groupped-background);
+}
+
+.happy2-session-share-panel__health[data-condition="behind"] {
+    border-color: var(--box-warning-border);
+    background: var(--box-warning-background);
+}
+
+.happy2-session-share-panel__health-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-width: 0;
+}
+
+.happy2-session-share-panel__health-mark {
+    display: flex;
+    flex: none;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+}
+
+.happy2-session-share-panel__health[data-condition="live"] .happy2-session-share-panel__health-mark,
+.happy2-session-share-panel__health[data-condition="live"]
+    .happy2-session-share-panel__health-label {
+    color: var(--text-link);
+}
+
+.happy2-session-share-panel__health[data-condition="behind"]
+    .happy2-session-share-panel__health-mark,
+.happy2-session-share-panel__health[data-condition="behind"]
+    .happy2-session-share-panel__health-label {
+    color: var(--box-warning-text);
+}
+
+.happy2-session-share-panel__health-label {
+    flex: none;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 18px;
+}
+
+.happy2-session-share-panel__health-backlog {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy2-session-share-panel__health-checked {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums lining-nums;
+    line-height: 16px;
+}
+
+/* ---- The one setting ------------------------------------------------------ */
+
+.happy2-session-share-panel__setting {
+    flex: none;
+    align-self: flex-start;
+}
+
+.happy2-session-share-panel__setting-record {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+/* ---- People --------------------------------------------------------------- */
+
+.happy2-session-share-panel__members {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    width: 100%;
+    padding: 0;
+    list-style: none;
+}
+
+.happy2-session-share-panel__member {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 8px 8px 4px;
+    border-radius: var(--happy2-radius-md);
+}
+
+.happy2-session-share-panel__member[data-access="revoked"],
+.happy2-session-share-panel__member[data-access="ended"] {
+    color: var(--text-secondary);
+}
+
+.happy2-session-share-panel__member-avatar {
+    flex: none;
+}
+
+.happy2-session-share-panel__member-identity {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-session-share-panel__member-name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-session-share-panel__member[data-access="revoked"] .happy2-session-share-panel__member-name,
+.happy2-session-share-panel__member[data-access="ended"] .happy2-session-share-panel__member-name {
+    color: var(--text-secondary);
+}
+
+.happy2-session-share-panel__member-access {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Ending --------------------------------------------------------------- */
+
+.happy2-session-share-panel__stop {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding-top: 4px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-session-share-panel__stop-note {
+    flex: 1 1 200px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-session-share-panel__record {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-session-share-panel__record-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}

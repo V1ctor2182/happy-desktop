@@ -110,10 +110,17 @@ export interface RigPluginRemoved {
 
 /** The machine's own closed vocabulary for refusing a lifecycle request. */
 export type RigPluginManagementCode =
+    | "catalog_invalid"
+    | "catalog_not_found"
     | "install_failed"
     | "invalid_request"
+    | "invalid_response"
     | "plugin_not_found"
     | "plugins_unavailable"
+    | "repository_not_found"
+    | "request_failed"
+    | "source_changed"
+    | "source_unavailable"
     | "uninstall_failed";
 
 /**

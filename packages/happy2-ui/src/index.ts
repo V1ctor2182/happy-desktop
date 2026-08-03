@@ -768,3 +768,27 @@ export {
     type ModerationTarget,
     type ModerationTargetKind,
 } from "./ModerationReportCard";
+export {
+    SESSION_SHARE_CONDITION_LABELS,
+    SessionShareIndicator,
+    type SessionShareCondition,
+    type SessionShareIndicatorProps,
+} from "./SessionShareIndicator";
+export {
+    SessionSharePanel,
+    type SessionShareHealthSummary,
+    type SessionShareMemberRow,
+    type SessionSharePanelProps,
+} from "./SessionSharePanel";
+export {
+    SessionShareStartDialog,
+    type SessionShareCandidate,
+    type SessionShareStartDialogProps,
+} from "./SessionShareStartDialog";
+export { SessionShareStopDialog, type SessionShareStopDialogProps } from "./SessionShareStopDialog";
+export {
+    SharedSessionsPage,
+    type SharedSessionRow,
+    type SharedSessionsPageProps,
+} from "./pages/shared/SharedSessionsPage";
+export { SharedSessionView, type SharedSessionViewProps } from "./pages/shared/SharedSessionView";

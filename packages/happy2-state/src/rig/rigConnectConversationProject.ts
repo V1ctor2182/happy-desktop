@@ -11,6 +11,7 @@ import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
 import type { RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
 import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import { rigFriendAuthor } from "./rigSessionShareReplicaProject.js";
 import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 
 export interface RigConnectConversationInput {
@@ -137,17 +138,30 @@ function rigConnectGroupProject(
                     element.source === "notification" || backgroundWorkNotice.test(element.text)
                         ? notificationProject(element.text, input.subagents)
                         : undefined;
+                // A message somebody this session is shared with wrote. It is
+                // attributed by the name the owner of the share registered for
+                // them and by nothing their own machine sent, which is why the
+                // element's `displayName` is the only name read here.
+                const friend = element.friendAuthor;
                 entries.push({
                     kind: "message",
                     source: "server",
                     delivery: element.delivery,
+                    ...(friend && element.friendMessageContext
+                        ? { contextNote: FRIEND_MESSAGE_CONTEXT[element.friendMessageContext] }
+                        : {}),
                     message: messageProject({
                         id: element.messageId,
                         sessionId: input.sessionId,
                         sequence,
                         text: notification?.text ?? element.text,
                         createdAt: element.createdAt,
-                        author: notification?.author ?? rigOwnerAuthor,
+                        author: friend
+                            ? rigFriendAuthor({
+                                  displayName: friend.displayName,
+                                  shareMemberId: friend.shareMemberId,
+                              })
+                            : (notification?.author ?? rigOwnerAuthor),
                         attachments: (
                             element.attachments ??
                             input.sentImages?.get(element.messageId) ??
@@ -523,6 +537,18 @@ function rigConnectGroupProject(
     entries[finalAgentIndex] = tracedFinal;
     return visibleCollapsed.map((entry) => (entry === finalAgent ? tracedFinal : entry));
 }
+
+/**
+ * Where a friend's message stands with the agent, said as something a reader can
+ * act on rather than as the word the wire used. It matters because a friend
+ * writing into a shared session is not the same as the agent having read them:
+ * the owner is the only one who can tell whether their words landed.
+ */
+const FRIEND_MESSAGE_CONTEXT: Record<"included" | "overflow" | "pending", string> = {
+    included: "In the agent's context",
+    overflow: "Outside the agent's context",
+    pending: "Waiting to reach the agent",
+};
 
 function messageProject(input: {
     readonly id: string;
