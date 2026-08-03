@@ -50,19 +50,54 @@
     app-region: drag;
 }
 
-/* Chat chrome uses its actual visible headers as the drag surface. The prior
-   transparent full-width overlay sat above these controls and swallowed pointer
-   input. Interactive descendants opt out of native dragging explicitly. */
+/*
+ * Native drag regions — the ownership contract.
+ *
+ * Chromium collects every `app-region` box in tree order and the window folds
+ * them into one region: `drag` unions, `no-drag` subtracts. Later rectangles
+ * win outright, and the resulting region is hit-tested by the window *below*
+ * the page, so anything inside it can never receive a click. Two rules follow,
+ * and breaking either one is what makes a header control unclickable:
+ *
+ *   1. Only the top band of a column may declare `drag`. A surface further down
+ *      re-covers every hole punched before it — including a popover hanging out
+ *      of the header above it, whose rows were carved out earlier in the tree.
+ *   2. Anything that floats out of a drag band owns its own hit surface and
+ *      declares `no-drag` itself. A control's own opt-out does not extend to a
+ *      menu, card, or padding box that escapes the band.
+ *
+ * Chat chrome therefore uses its actual visible headers as the drag surface.
+ * The prior transparent full-width overlay sat above these controls and
+ * swallowed pointer input. Interactive descendants opt out explicitly.
+ */
 .happy2-app-shell[data-window-controls] .happy2-sidebar__header,
 .happy2-app-shell[data-window-controls] .happy2-channel-header,
 .happy2-app-shell[data-window-controls] .happy2-panel-header,
-.happy2-app-shell[data-window-controls] .happy2-tabbed-pane__bar,
 .happy2-app-shell__reveal[data-window-controls] {
     -webkit-app-region: drag;
     app-region: drag;
 }
 
-.happy2-app-shell[data-window-controls] button,
+/* Rule 1 in force. A tab strip is window chrome only where it is the column's
+   first row and there is no header above it; nested under a channel header it
+   is an ordinary control surface, and making it draggable reclaimed the top of
+   every menu that opened downwards out of that header. */
+.happy2-app-shell[data-window-controls]
+    .happy2-app-shell__workspace
+    > .happy2-tabbed-pane:first-child
+    > .happy2-tabbed-pane__bar {
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+
+/* A transparent dismissal backdrop is a full-window button, so this blanket
+   opt-out used to subtract the entire window and leave a window that could not
+   be dragged by any of its chrome for as long as a menu was open. It is a click
+   target for the page and nothing to the window, so it declares no region at
+   all — `app-region: none` is not an escape hatch, Chromium resolves it to
+   `no-drag`, so the only way out of the region list is to not match here. */
+.happy2-app-shell[data-window-controls]
+    button:not(.happy2-rig-control__backdrop, .happy2-slot-backdrop, .happy2-plugin-menu__backdrop),
 .happy2-app-shell[data-window-controls] a,
 .happy2-app-shell[data-window-controls] input,
 .happy2-app-shell[data-window-controls] select,
@@ -72,10 +107,25 @@
     app-region: no-drag;
 }
 
-/* A tab bar is draggable between its controls, but its trailing action lane is
-   one stable interactive target. Carve out the whole lane so native hit testing
-   cannot reclaim the button's padded surround while tabs scroll or reflow. */
+/* A tab bar heading its column is draggable between its controls, but its
+   trailing action lane is one stable interactive target. Carve out the whole
+   lane so native hit testing cannot reclaim the button's padded surround while
+   tabs scroll or reflow. */
 .happy2-app-shell[data-window-controls] .happy2-tabbed-pane__actions {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+/* Rule 2 in force. A menu, popover, or card that hangs out of a drag band is
+   only partly made of buttons: its own padding, hairline, and separators are
+   not, and the strip of it still overlapping the band above stays draggable
+   unless the overlay claims its whole box. Each of these is the shared surface
+   every product popover is built from, so claiming them here covers the menus
+   opened from any header rather than one call site's control. */
+.happy2-app-shell[data-window-controls] .happy2-menu,
+.happy2-app-shell[data-window-controls] .happy2-rig-control__popover,
+.happy2-app-shell[data-window-controls] .happy2-channel-header__menu-popover,
+.happy2-app-shell[data-window-controls] .happy2-plugin-menu__popover {
     -webkit-app-region: no-drag;
     app-region: no-drag;
 }

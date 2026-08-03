@@ -18,7 +18,12 @@
 
 /* Transparent drag target for loading, authentication, and other full-window
    states that temporarily replace TitleBar. Its containing surface owns the
-   positioning context. */
+   positioning context.
+
+   It is pointer-transparent. A native drag region is hit-tested by the window
+   below the DOM, so `pointer-events: none` costs it nothing there, while
+   without it the overlay is an opaque box over the first 56px of whatever it
+   covers and eats every click landing on the surface's own header controls. */
 .happy2-window-drag-region {
     position: absolute;
     z-index: 1;
@@ -26,6 +31,7 @@
     left: 0;
     width: 100%;
     background: transparent;
+    pointer-events: none;
     -webkit-user-select: none;
     user-select: none;
     -webkit-app-region: drag;
