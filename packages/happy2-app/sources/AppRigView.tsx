@@ -73,6 +73,7 @@ import {
     rigPluginApplicationStoreNoop,
     rigProviderUsageStoreNoop,
     rigSlotEntriesInScope,
+    rigSlotEntryInScope,
     rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
@@ -1236,10 +1237,40 @@ export function AppRigView(props: AppRigViewProps) {
     const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
     const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
     const webapps = new Set(slots.webapps.map((webapp) => webapp.name));
+    // A press is decided here, not trusted from the render that drew the row.
+    // Every one of the four placements reports through this one function, and
+    // each thing it acts on is read at the moment of the press: the catalog and
+    // the webapps come from the surface itself, whose identity is stable for the
+    // connection, and whether a conversation is open comes from the workspace.
+    // The contribution must still resolve against the scope this window is
+    // addressing, so a press that lands after the reader has left the project,
+    // worktree, or chat an entry was addressed at does nothing — the same rule
+    // that decides what is shown decides what may be performed. A contribution
+    // withdrawn, rewritten into text, or pointing at a webapp this Rig no longer
+    // serves is inert for the same reason.
     const slotAction = (entryId: string): void => {
-        const entry = slots.entries.find((candidate) => candidate.id === entryId);
-        if (!entry || entry.content.type !== "button" || !active?.session) return;
-        void slotActionRun(active.session.workspace, entry.content.action).catch(() => undefined);
+        const session = active?.session;
+        if (!session) return;
+        const current = slotsStore.get();
+        const entry = current.entries.find((candidate) => candidate.id === entryId);
+        if (!entry || entry.content.type !== "button") return;
+        const workspaceNow = session.workspace.get();
+        // The conversation the workspace has actually materialized is the one
+        // this window is addressing, whatever route drew the row that was
+        // pressed. The route's own chat stands in only while nothing has been
+        // materialized yet, which is the one moment the two can disagree.
+        const openConversation =
+            workspaceNow.conversation.type === "ready"
+                ? workspaceNow.conversation.value.conversationId
+                : undefined;
+        const scopeNow: RigSlotsContext = openConversation
+            ? { ...slotsScope, sessionId: openConversation }
+            : slotsScope;
+        if (!rigSlotEntryInScope(entry, scopeNow)) return;
+        const served = new Set(current.webapps.map((webapp) => webapp.name));
+        const hasOpenConversation = workspaceNow.conversation.type !== "unloaded";
+        if (slotUnavailable(entry.content.action, served, hasOpenConversation)) return;
+        void slotActionRun(session.workspace, entry.content.action).catch(() => undefined);
     };
     // Plugin rows are pinned navigation, so this is subscribed whether or not a
     // plugin application is open: the point of the rows is to be there while the

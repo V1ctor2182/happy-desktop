@@ -300,10 +300,19 @@ export function rigSlotEntriesInScope(
     slot: RigSlotName,
     context: RigSlotsContext,
 ): readonly RigSlotEntry[] {
-    return entries.filter((entry) => entry.slot === slot && entryResolves(entry, context));
+    return entries.filter((entry) => entry.slot === slot && rigSlotEntryInScope(entry, context));
 }
 
-function entryResolves(entry: RigSlotEntry, context: RigSlotsContext): boolean {
+/**
+ * Whether one entry's scope resolves against the addressed context.
+ *
+ * The same question the list above asks, asked about a single entry, because
+ * rendering is not the only moment it has to be asked: a handler held from an
+ * earlier render would otherwise act on a contribution the reader has since
+ * navigated away from. Deciding scope in one place is what keeps what is shown
+ * and what can be performed the same answer.
+ */
+export function rigSlotEntryInScope(entry: RigSlotEntry, context: RigSlotsContext): boolean {
     switch (entry.scope) {
         case "everywhere":
             return true;
@@ -316,10 +325,24 @@ function entryResolves(entry: RigSlotEntry, context: RigSlotsContext): boolean {
     }
 }
 
+/*
+ * Why the reconciliation below compares whole values rather than a revision.
+ *
+ * Rig stamps `createdAt`/`updatedAt` with the wall clock, so two edits to the
+ * same entry inside one millisecond carry the same `updatedAt`. A timestamp is
+ * therefore metadata about when something was written, not a revision that
+ * orders writes, and treating it as one would let the second edit be dropped
+ * and the stale content held for as long as nothing else touched that entry.
+ * Happy has to be correct without Rig supplying a revision, so an object is
+ * only reused when its complete public value is unchanged.
+ */
+
 /**
  * Keeps the object an unchanged entry already had, so a re-read of the catalog
  * leaves everything it did not change alone: a view holding one contribution is
- * looking at the same object it was before an unrelated entry arrived.
+ * looking at the same object it was before an unrelated entry arrived. The
+ * whole array keeps its identity only when the order and every element are
+ * unchanged too.
  */
 function entriesPreserve(
     previous: readonly RigSlotEntry[],
@@ -328,12 +351,9 @@ function entriesPreserve(
     const before = new Map(previous.map((entry) => [entry.id, entry]));
     const next = incoming.map((entry) => {
         const candidate = before.get(entry.id);
-        return candidate?.updatedAt === entry.updatedAt ? candidate : entry;
+        return candidate !== undefined && slotEntryEquals(candidate, entry) ? candidate : entry;
     });
-    return next.length === previous.length &&
-        next.every((entry, index) => entry === previous[index])
-        ? previous
-        : next;
+    return arrayPreserve(previous, next);
 }
 
 function webappsPreserve(
@@ -343,10 +363,99 @@ function webappsPreserve(
     const before = new Map(previous.map((webapp) => [webapp.name, webapp]));
     const next = incoming.map((webapp) => {
         const candidate = before.get(webapp.name);
-        return candidate?.updatedAt === webapp.updatedAt ? candidate : webapp;
+        return candidate !== undefined && webappEquals(candidate, webapp) ? candidate : webapp;
     });
-    return next.length === previous.length &&
-        next.every((webapp, index) => webapp === previous[index])
+    return arrayPreserve(previous, next);
+}
+
+function arrayPreserve<T>(previous: readonly T[], next: readonly T[]): readonly T[] {
+    return next.length === previous.length && next.every((item, index) => item === previous[index])
         ? previous
         : next;
+}
+
+/** Every field of one entry, so no change to a contribution can be missed. */
+function slotEntryEquals(a: RigSlotEntry, b: RigSlotEntry): boolean {
+    return (
+        a.id === b.id &&
+        a.slot === b.slot &&
+        a.scope === b.scope &&
+        a.projectId === b.projectId &&
+        a.workspaceId === b.workspaceId &&
+        a.sessionId === b.sessionId &&
+        a.description === b.description &&
+        a.purpose === b.purpose &&
+        a.createdAt === b.createdAt &&
+        a.updatedAt === b.updatedAt &&
+        slotAuthorEquals(a.author, b.author) &&
+        slotContentEquals(a.content, b.content)
+    );
+}
+
+function slotAuthorEquals(a: RigSlotEntryAuthor, b: RigSlotEntryAuthor): boolean {
+    switch (a.type) {
+        case "agent":
+            return b.type === "agent" && a.sessionId === b.sessionId;
+        case "plugin":
+            return b.type === "plugin" && a.folder === b.folder && a.name === b.name;
+    }
+}
+
+function slotContentEquals(a: RigSlotContent, b: RigSlotContent): boolean {
+    switch (a.type) {
+        case "text":
+            return b.type === "text" && a.markdown === b.markdown;
+        case "button":
+            return (
+                b.type === "button" && a.label === b.label && slotActionEquals(a.action, b.action)
+            );
+    }
+}
+
+function slotActionEquals(a: RigSlotAction, b: RigSlotAction): boolean {
+    switch (a.type) {
+        case "send-current-chat":
+            return b.type === "send-current-chat" && a.message === b.message;
+        case "open-webapp":
+            return b.type === "open-webapp" && a.webapp === b.webapp;
+        case "send-chat":
+            return b.type === "send-chat" && a.sessionId === b.sessionId && a.message === b.message;
+        case "draft-chat":
+            return (
+                b.type === "draft-chat" && a.sessionId === b.sessionId && a.message === b.message
+            );
+        case "new-chat":
+            return (
+                b.type === "new-chat" &&
+                a.projectId === b.projectId &&
+                a.workspaceId === b.workspaceId &&
+                a.model === b.model &&
+                a.effort === b.effort &&
+                a.prompt === b.prompt
+            );
+    }
+}
+
+/** Every field of one webapp, including its whole version history. */
+function webappEquals(a: RigWebapp, b: RigWebapp): boolean {
+    return (
+        a.name === b.name &&
+        a.description === b.description &&
+        a.purpose === b.purpose &&
+        a.authorSessionId === b.authorSessionId &&
+        a.sourceDescription === b.sourceDescription &&
+        a.currentVersion === b.currentVersion &&
+        a.createdAt === b.createdAt &&
+        a.updatedAt === b.updatedAt &&
+        a.versions.length === b.versions.length &&
+        a.versions.every((version, index) => webappVersionEquals(version, b.versions[index]!))
+    );
+}
+
+function webappVersionEquals(a: RigWebappVersion, b: RigWebappVersion): boolean {
+    return (
+        a.version === b.version &&
+        a.changeDescription === b.changeDescription &&
+        a.createdAt === b.createdAt
+    );
 }
