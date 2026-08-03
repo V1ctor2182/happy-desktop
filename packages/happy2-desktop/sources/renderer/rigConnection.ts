@@ -117,7 +117,7 @@ export interface RigSessionDeps {
      * point: a Back that returned to a row which no longer exists would be a
      * dead end the reader put there by accident.
      */
-    readonly listOpen: () => void;
+    readonly listOpen: (groupId: string) => void;
     /** Announces that this connection's session is ready or has been replaced. */
     readonly changed: () => void;
 }
@@ -259,7 +259,7 @@ export function rigConnectionOpen(input: {
                                     input.deps.groupOpen(event.groupId);
                                     return;
                                 case "addressedGroupRemoved":
-                                    input.deps.listOpen();
+                                    input.deps.listOpen(event.groupId);
                                     return;
                             }
                         },

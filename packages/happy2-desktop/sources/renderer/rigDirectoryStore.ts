@@ -93,8 +93,12 @@ export interface RigDirectoryDeps {
     readonly conversationOpen: (rigId: string, location: RigSessionLocation) => void;
     /** Navigates to a group of the named Rig that holds no conversation yet. */
     readonly groupOpen: (rigId: string, groupId: string) => void;
-    /** Replaces the address with the named Rig's list when the addressed group stops existing. */
-    readonly listOpen: (rigId: string) => void;
+    /**
+     * Replaces the address with the named Rig's list because that Rig's group
+     * stopped existing. Both identities travel: the window addresses one Rig at
+     * a time and a background one reporting a removal must not move the reader.
+     */
+    readonly listOpen: (rigId: string, groupId: string) => void;
     /** Desktop-wide model memory shared by local and remote Rig connections. */
     readonly modelPreferencePersistence: RigModelPreferencePersistence;
 }
@@ -197,7 +201,7 @@ export function rigDirectoryStoreCreate(
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(id, location),
                 groupOpen: (groupId) => deps.groupOpen(id, groupId),
-                listOpen: () => deps.listOpen(id),
+                listOpen: (groupId) => deps.listOpen(id, groupId),
                 changed: () => {
                     const current = rigs.get(id);
                     const session = current?.connection?.get();

@@ -234,7 +234,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const listeners = new Set<() => void>();
     let active = false;
     let disposed = false;
-    let generation = 0;
+    /** Tokens handed to catalog reads in the order they are issued. */
+    let readSequence = 0;
+    /** The newest read token whose result has been applied; nothing older may write. */
+    let appliedSequence = 0;
     let reconciling = false;
     let reconcileAgain = false;
     let unsubscribeGlobal: (() => void) | undefined;
@@ -287,24 +290,65 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
 
     /**
-     * One authoritative catalog read, returned rather than only applied. The
-     * value is what a caller verifies against: reading truth and then asking the
-     * store what it holds would answer from whichever write landed last, which
-     * on a failed read is the caller's own optimism.
+     * What one catalog read observed, and whether it was still the newest one
+     * when it came back. A superseded read is not wrong, only late: its value
+     * describes an earlier moment, so the caller judging something against it
+     * must use the winner's snapshot instead — which is what `superseded` says.
      */
-    const catalogSnapshotRead = async (): Promise<
-        | { readonly catalog: RigProjectCatalog; readonly sessions: readonly RigSessionSummary[] }
-        | undefined
+    interface CatalogObservation {
+        readonly catalog: RigProjectCatalog;
+        readonly sessions: readonly RigSessionSummary[];
+        readonly superseded: boolean;
+    }
+
+    /**
+     * Every authoritative catalog read in this store goes through here, and the
+     * order they are allowed to land in is decided before any of them starts.
+     *
+     * A token is taken when the read is issued, not when it returns. Only a read
+     * whose token is newer than the last applied one may write, so a slow read
+     * can never roll the catalog back over a later one that already landed, and
+     * a read that lost the race neither publishes nor counts as a new revision.
+     * That ordering is what keeps a project or worktree created, unarchived, or
+     * renamed while a read was in flight from being wiped out by its answer.
+     *
+     * `fresh` asks the transport itself rather than the live catalog source. The
+     * source answers from the snapshot it currently holds, which for a caller
+     * that has just changed something on the host is the moment before the
+     * change: verifying against it would be reading the question back as the
+     * answer.
+     */
+    const catalogRead = async (
+        fresh: boolean,
+    ): Promise<
+        | { readonly ok: true; readonly observed: CatalogObservation }
+        | { readonly ok: false; readonly error: unknown }
     > => {
+        const token = ++readSequence;
         try {
-            return deps.catalogSource
-                ? await deps.catalogSource.read()
-                : await Promise.all([
-                      deps.transport.projectsRead(),
-                      deps.transport.sessionsRead(),
-                  ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
-        } catch {
-            return undefined;
+            const snapshot =
+                deps.catalogSource && !fresh
+                    ? await deps.catalogSource.read()
+                    : await Promise.all([
+                          deps.transport.projectsRead(),
+                          deps.transport.sessionsRead(),
+                      ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
+            if (disposed) return { ok: false, error: new Error("The session list was closed.") };
+            const superseded = token <= appliedSequence;
+            if (!superseded) {
+                appliedSequence = token;
+                catalog = snapshot.catalog;
+                sessions = snapshot.sessions;
+                catalogRevision += 1;
+                publish();
+                worktreesSettle();
+            }
+            return {
+                ok: true,
+                observed: { catalog: snapshot.catalog, sessions: snapshot.sessions, superseded },
+            };
+        } catch (error) {
+            return { ok: false, error };
         }
     };
 
@@ -344,31 +388,20 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             return;
         }
         reconciling = true;
-        const current = ++generation;
         try {
-            // Read together so a project and the sessions filed under it are
-            // never one tick apart: a session whose project the catalog does not
-            // yet describe would otherwise vanish from the list for a moment.
-            const snapshot = deps.catalogSource
-                ? await deps.catalogSource.read()
-                : await Promise.all([
-                      deps.transport.projectsRead(),
-                      deps.transport.sessionsRead(),
-                  ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
-            if (disposed || current !== generation) return;
-            catalog = snapshot.catalog;
-            sessions = snapshot.sessions;
-            catalogRevision += 1;
-            publish();
-            worktreesSettle();
-        } catch (error) {
-            if (disposed || current !== generation) return;
+            // The catalog and its sessions are read together so a project and the
+            // sessions filed under it are never one tick apart: a session whose
+            // project the catalog does not yet describe would otherwise vanish
+            // from the list for a moment. Ordering, application, and supersession
+            // all belong to the coordinator.
+            const read = await catalogRead(false);
+            if (read.ok || disposed) return;
             const previous = store.getState();
             // A failed refresh of an already loaded list keeps the rows on screen.
             if (previous.projects.type !== "ready")
                 store.setState({
                     ...previous,
-                    projects: { type: "error", error: rigUserError(error) },
+                    projects: { type: "error", error: rigUserError(read.error) },
                 });
         } finally {
             reconciling = false;
@@ -417,7 +450,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const stop = (): void => {
         active = false;
-        generation += 1;
+        // Every read already in flight loses: retiring the whole issued range
+        // means none of them may write, while a read issued after this still
+        // takes a newer token and applies normally.
+        appliedSequence = readSequence;
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         unsubscribeMutationRejections?.();
@@ -688,12 +724,21 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // appearance of speed: a row taken out ahead of the host cannot be
             // told from one the host removed, and a verification read that then
             // fails would leave that guess standing as the answer.
+            // Whether the project was here at all before asking. If it was
+            // already gone, the state being asked for already holds, and a read
+            // that then fails does not turn that into an open question.
+            const presentBefore = catalog.projects.some((project) => project.id === projectId);
             try {
                 await deps.transport.projectArchive(projectId);
             } catch (error) {
                 return { type: "failed", error: rigUserError(error) };
             }
-            const snapshot = await catalogSnapshotRead();
+            // Deliberately `fresh`: the live catalog source answers from the
+            // snapshot it is holding, and the event that would replace it
+            // travels separately from this request's response. Reading it here
+            // could hand back the moment before the archive and let a project
+            // that is now gone be reported as still listed.
+            const read = await catalogRead(true);
             if (disposed)
                 return {
                     type: "failed",
@@ -703,28 +748,29 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                         ),
                     ),
                 };
-            if (snapshot === undefined)
-                return {
-                    type: "failed",
-                    error: rigUserError(
-                        new Error(
-                            "The archive was requested but the project list could not be read back, so it is unconfirmed. Try again.",
-                        ),
-                    ),
-                };
-            // Applied under the same guard a reconcile uses, so a read that
-            // started later still wins; the answer below comes from the value
-            // read here either way.
-            generation += 1;
-            catalog = snapshot.catalog;
-            sessions = snapshot.sessions;
-            catalogRevision += 1;
-            publish();
-            worktreesSettle();
+            if (!read.ok)
+                return presentBefore
+                    ? {
+                          type: "failed",
+                          error: rigUserError(
+                              new Error(
+                                  "The archive was requested but the project list could not be read back, so it is unconfirmed. Try again.",
+                              ),
+                          ),
+                      }
+                    : // It was already absent when this asked, and the host takes
+                      // the request on an archived project unchanged, so there is
+                      // nothing left for a read to establish.
+                      { type: "archived" };
+            // A read that started after this one and has already landed is the
+            // better answer: it saw everything this one saw and then some, so
+            // the judgement is made against the catalog that won rather than
+            // against a value that describes an earlier moment.
+            const judged = read.observed.superseded ? catalog : read.observed.catalog;
             // The catalog lists only projects the host has not archived, so
-            // absence here is the host saying it is archived — including when
-            // another window archived it first.
-            return snapshot.catalog.projects.some((project) => project.id === projectId)
+            // absence is the host saying it is archived — including when another
+            // window archived it first.
+            return judged.projects.some((project) => project.id === projectId)
                 ? {
                       type: "failed",
                       error: rigUserError(

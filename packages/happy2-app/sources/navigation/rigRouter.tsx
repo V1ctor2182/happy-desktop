@@ -613,15 +613,30 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
 }
 
 /**
- * Addresses a Rig's own list, replacing the current entry. It is where a reader
- * is left when the group the URL named stops existing — its project archived,
- * here or from another window — and the nearest address that is still true is
- * the machine that held it.
+ * Addresses a Rig's own list because one of its groups stopped existing — its
+ * project archived, here or from another window or another machine. It is the
+ * nearest address that is still true for a reader who was inside that group.
+ *
+ * It moves nobody who is not standing on the thing that went. A Rig reports the
+ * removal of its own group whether or not the window is currently addressing
+ * that Rig, and several Rigs are connected at once, so the current address is
+ * what decides: only a route naming this exact Rig and this exact group is
+ * replaced. Everything else — another Rig, another project, the Rig's own list,
+ * Notes, settings, a plugin — is already a valid address, and a removal
+ * elsewhere is inert against it.
  *
  * Replace rather than push: the entry being left names a row that is gone, so
  * keeping it in history would only offer a Back that lands nowhere.
  */
-export function rigRouterListOpen(router: RigRouter, rigId: string): void {
+export function rigRouterListOpen(router: RigRouter, rigId: string, groupId: string): void {
+    // Read from the address itself rather than from a matched route: this runs
+    // from a store notification, and what must be true is what the window is
+    // showing right now.
+    const segments = router.state.location.pathname
+        .split("/")
+        .filter((segment) => segment.length > 0)
+        .map((segment) => decodeURIComponent(segment));
+    if (segments[0] !== "chats" || segments[1] !== rigId || segments[2] !== groupId) return;
     void (
         router.navigate as unknown as (options: {
             params: Record<string, string>;

@@ -2544,6 +2544,14 @@ export function rigWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        // The catalog is no longer being watched, so what was last known about
+        // it is no longer a basis for reporting anything. Confirmation is
+        // rebuilt from the reads taken after this store is on screen again,
+        // which is what keeps a removal that happened while nobody was looking
+        // from being announced as if the reader had just watched it.
+        addressedGroupSeen = undefined;
+        authoritativeGroupIds = new Set();
+        catalogRevisionSeen = -1;
         for (const controller of fileLoadControllers.values()) controller.abort();
         fileLoadControllers.clear();
         for (const tab of fileTabs)
@@ -2716,6 +2724,13 @@ export function rigWorkspaceStoreCreate(
         conversationClose: () => {
             addressApply(undefined, undefined);
             releaseGroup();
+            // Addressing the Rig's list addresses no group, so the identity a
+            // removal would be reported against is put down with the group
+            // itself. Without this, a project archived long after the reader
+            // left it — or archived, restored, and archived again — would still
+            // ask the owner to navigate away from a list it is already on.
+            addressedGroupId = undefined;
+            addressedGroupSeen = undefined;
             openConversation(undefined);
         },
         conversationListRetry: () => {

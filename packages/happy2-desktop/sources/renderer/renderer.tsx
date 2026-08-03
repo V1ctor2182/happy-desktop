@@ -425,7 +425,7 @@ if (mediaPreviewBridge) {
             conversationOpen: (rigId, location) =>
                 rigRouterConversationOpen(rigRouter, rigId, location),
             groupOpen: (rigId, groupId) => rigRouterGroupOpen(rigRouter, rigId, groupId),
-            listOpen: (rigId) => rigRouterListOpen(rigRouter, rigId),
+            listOpen: (rigId, groupId) => rigRouterListOpen(rigRouter, rigId, groupId),
             modelPreferencePersistence: modelSettings.preferencePersistence,
         });
         let materialized = "";
