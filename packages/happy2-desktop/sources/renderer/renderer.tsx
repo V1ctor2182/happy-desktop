@@ -25,6 +25,7 @@ import {
 } from "happy2-state";
 import {
     CodeHighlightWorkers,
+    LocalOnboardingScreen,
     ThemeScope,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
@@ -40,6 +41,11 @@ import {
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { dockUnreadPublish } from "./dockUnread";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
+import {
+    localOnboardingStoreCreate,
+    localOnboardingView,
+    type LocalOnboardingStore,
+} from "./localOnboardingStore";
 import { rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
@@ -246,6 +252,32 @@ function RigBoundary(props: {
     );
 }
 
+/**
+ * First-run setup, while there is any of it left to do. Setup owns the whole
+ * window until this machine can actually run Rig and the person has answered the
+ * questions that follow, so the workspace below it is never mounted against a
+ * machine that is not ready. Which stage is on is the main process's answer, so
+ * a restart, an interrupted install, or a Rig that disappeared resumes here
+ * rather than in a remembered position.
+ */
+function DesktopOnboardingGate(props: { children: ReactNode; store: LocalOnboardingStore }) {
+    const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const view = localOnboardingView(snapshot);
+    if (!view) return <>{props.children}</>;
+    return (
+        <LocalOnboardingScreen
+            onCloudSubmit={(choice) => props.store.cloudSubmit(choice)}
+            onConnectRetry={() => props.store.connectRetry()}
+            onProfileSubmit={(create) => props.store.profileSubmit(create)}
+            onProjectChoose={() => props.store.projectChoose()}
+            onRigInstall={() => props.store.rigInstall()}
+            onTerminalInput={(data) => props.store.terminalInput(data)}
+            onTerminalResize={(cols, rows) => props.store.terminalResize(cols, rows)}
+            view={view}
+        />
+    );
+}
+
 function DesktopRenderer(props: {
     appearance: AppearanceStore;
     browserContent?: BrowserContentRenderer;
@@ -394,6 +426,9 @@ if (mediaPreviewBridge) {
     const desktopBridge = bridge;
     const start = (config: DesktopConfig): void => {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
+        // First-run setup outlives every daemon connection this window makes, so
+        // its store is created once here beside the runtime store.
+        const onboardingStore = localOnboardingStoreCreate(desktopBridge);
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
@@ -449,32 +484,34 @@ if (mediaPreviewBridge) {
         root.render(
             <DesktopAppearance appearance={appearance}>
                 <CodeHighlightWorkers>
-                    <DesktopRenderer
-                        appearance={appearance}
-                        browserContent={browserLocal ? undefined : desktopBrowserContentRender}
-                        htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
-                        pluginApplicationContent={
-                            browserLocal
-                                ? undefined
-                                : desktopPluginApplicationRenderCreate(desktopBridge)
-                        }
-                        bridge={desktopBridge}
-                        mediaWindow={
-                            browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
-                        }
-                        navigationOrder={navigationOrder}
-                        notes={notes}
-                        // Only the Electron window hides its title bar; the browser
-                        // development server renders the same tree with web chrome.
-                        platform={browserLocal ? "web" : "desktop"}
-                        rigRouter={rigRouter}
-                        rigs={rigs}
-                        localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
-                        settings={settings}
-                        startupValues={startupValuesStoreCreate()}
-                        store={runtimeStore}
-                        windowState={windowStateStoreCreate(desktopBridge)}
-                    />
+                    <DesktopOnboardingGate store={onboardingStore}>
+                        <DesktopRenderer
+                            appearance={appearance}
+                            browserContent={browserLocal ? undefined : desktopBrowserContentRender}
+                            htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
+                            pluginApplicationContent={
+                                browserLocal
+                                    ? undefined
+                                    : desktopPluginApplicationRenderCreate(desktopBridge)
+                            }
+                            bridge={desktopBridge}
+                            mediaWindow={
+                                browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
+                            }
+                            navigationOrder={navigationOrder}
+                            notes={notes}
+                            // Only the Electron window hides its title bar; the browser
+                            // development server renders the same tree with web chrome.
+                            platform={browserLocal ? "web" : "desktop"}
+                            rigRouter={rigRouter}
+                            rigs={rigs}
+                            localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
+                            settings={settings}
+                            startupValues={startupValuesStoreCreate()}
+                            store={runtimeStore}
+                            windowState={windowStateStoreCreate(desktopBridge)}
+                        />
+                    </DesktopOnboardingGate>
                 </CodeHighlightWorkers>
             </DesktopAppearance>,
         );

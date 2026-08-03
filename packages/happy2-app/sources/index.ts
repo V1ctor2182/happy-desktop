@@ -34,5 +34,6 @@ export {
     terminalSocketUrl,
 } from "./browserTerminalConnection";
 export { terminalDriverCreate } from "./terminalDriver";
+export { ghosttyEmulatorCreate, type TerminalEmulator } from "./ghosttyTerminal";
 export { createServerClient, ServerError } from "./server";
 export type { AuthMethods, User } from "./server";

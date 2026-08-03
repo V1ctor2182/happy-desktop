@@ -26,7 +26,7 @@ import {
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
-import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
+import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
@@ -147,6 +147,17 @@ export class DesktopRuntime implements AsyncDisposable {
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
+    }
+
+    /**
+     * The live local daemon client, or nothing while no local Rig is connected.
+     * It is exposed so another main-process owner can ask the daemon a question
+     * without opening a second connection to it; the renderer never sees this.
+     */
+    localClient(): RigDaemonClient | undefined {
+        return this.snapshotValue.phase === "ready" && this.snapshotValue.mode === "local"
+            ? this.rigConnection?.client
+            : undefined;
     }
 
     /** Opens one authenticated browser-proxy tunnel through the active local Rig daemon. */

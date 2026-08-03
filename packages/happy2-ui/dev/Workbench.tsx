@@ -128,6 +128,7 @@ import { DocumentsPagePage } from "./pages/DocumentsPagePage";
 import { DocumentDeleteDialogPage } from "./pages/DocumentDeleteDialogPage";
 import { DocumentWritePermissionCardPage } from "./pages/DocumentWritePermissionCardPage";
 import { DesktopStartupScreenPage } from "./pages/DesktopStartupScreenPage";
+import { LocalOnboardingScreenPage } from "./pages/LocalOnboardingScreenPage";
 import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage";
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
@@ -223,6 +224,12 @@ const components: BlueprintPage[] = [
         label: "Desktop startup screen",
         number: "C-145",
         page: DesktopStartupScreenPage,
+    },
+    {
+        id: "local-onboarding-screen",
+        label: "Local onboarding screen",
+        number: "C-239",
+        page: LocalOnboardingScreenPage,
     },
     {
         id: "desktop-instance-switcher",

@@ -103,6 +103,16 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         remoteRigGet: async () => [],
         remoteRigRemove: async () => undefined,
         remoteRigSubscribe: () => () => undefined,
+        // Browser-local development runs against a machine that already has Rig
+        // and a daemon, and it has no native picker or PTY to run setup with, so
+        // it reports setup as finished rather than presenting steps it cannot
+        // truthfully perform.
+        onboardingGet: async () => ({ busy: false, stage: "complete" }) as const,
+        onboardingSubscribe: () => () => undefined,
+        onboardingRigInstall: async () => undefined,
+        onboardingCloudSubmit: async () => undefined,
+        onboardingProfileSubmit: async () => undefined,
+        onboardingProjectChoose: async () => undefined,
         runtimeGet: async () => {
             const snapshot = await request<DesktopRuntimeSnapshot>("runtimeGet");
             if (snapshot.phase !== "ready" || snapshot.activeTarget.mode !== "local")

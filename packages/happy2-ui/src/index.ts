@@ -465,6 +465,13 @@ export {
     type AuthScreenState,
 } from "./AuthScreen";
 export {
+    LocalOnboardingScreen,
+    type LocalOnboardingCloudChoice,
+    type LocalOnboardingScreenProps,
+    type LocalOnboardingTerminal,
+    type LocalOnboardingView,
+} from "./LocalOnboardingScreen";
+export {
     OnboardingScreen,
     type OnboardingBrand,
     type OnboardingScreenProps,

@@ -34,3 +34,30 @@ function terminalSize(cols: unknown, rows: unknown) {
         throw new Error("The Rig terminal size is invalid.");
     return { cols: cols as number, rows: rows as number };
 }
+
+/**
+ * The three Happy Cloud answers as the renderer sent them. They are validated
+ * together because they are one decision the person made on one screen, and a
+ * partial or renamed answer must be rejected rather than half-recorded.
+ */
+export function onboardingCloudChoiceValidate(value: unknown): {
+    readonly joined: boolean;
+    readonly mobileSessions: boolean;
+    readonly remoteControl: boolean;
+} {
+    if (
+        !value ||
+        typeof value !== "object" ||
+        Array.isArray(value) ||
+        typeof (value as Record<string, unknown>).joined !== "boolean" ||
+        typeof (value as Record<string, unknown>).mobileSessions !== "boolean" ||
+        typeof (value as Record<string, unknown>).remoteControl !== "boolean"
+    )
+        throw new Error("The Happy Cloud choice is invalid.");
+    const choice = value as Record<string, boolean>;
+    return {
+        joined: choice.joined!,
+        mobileSessions: choice.mobileSessions!,
+        remoteControl: choice.remoteControl!,
+    };
+}

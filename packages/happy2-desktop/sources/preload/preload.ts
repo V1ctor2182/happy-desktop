@@ -17,6 +17,8 @@ import {
     type DesktopWindowState,
     type HappyDesktopBridge,
     type HappyMediaPreviewBridge,
+    type LocalOnboardingCloudChoice,
+    type LocalOnboardingSnapshot,
     type RemoteRigSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
@@ -203,6 +205,20 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.remoteRigChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.remoteRigChanged, receive);
     },
+    onboardingGet: () => ipcRenderer.invoke(desktopIpc.onboardingGet),
+    onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, snapshot: LocalOnboardingSnapshot) =>
+            listener(snapshot);
+        ipcRenderer.on(desktopIpc.onboardingChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.onboardingChanged, receive);
+    },
+    onboardingRigInstall: (cols: number, rows: number) =>
+        ipcRenderer.invoke(desktopIpc.onboardingRigInstall, cols, rows),
+    onboardingCloudSubmit: (choice: LocalOnboardingCloudChoice) =>
+        ipcRenderer.invoke(desktopIpc.onboardingCloudSubmit, choice),
+    onboardingProfileSubmit: (create: boolean) =>
+        ipcRenderer.invoke(desktopIpc.onboardingProfileSubmit, create),
+    onboardingProjectChoose: () => ipcRenderer.invoke(desktopIpc.onboardingProjectChoose),
     runtimeGet: () => ipcRenderer.invoke(desktopIpc.runtimeGet),
     runtimeReset: () => ipcRenderer.invoke(desktopIpc.runtimeReset),
     runtimeRetry: () => ipcRenderer.invoke(desktopIpc.runtimeRetry),

@@ -191,6 +191,94 @@ export type RigInstallTerminalEvent =
       };
 
 /**
+ * Where local first-run setup currently stands. The stage is always derived from
+ * what this machine actually has — a Node runtime, the global `rig` command, a
+ * connected daemon — plus the choices already recorded durably, so a restart, a
+ * reinstall that keeps user data, or an interrupted install resumes at the same
+ * stage or at the nearest truthful earlier one rather than at a remembered step
+ * that may no longer be true.
+ */
+export type LocalOnboardingStage =
+    /** The login-shell probe has not answered yet. */
+    | "checking"
+    /** No Node runtime; Happy cannot install one, so the person is asked to. */
+    | "nodeMissing"
+    /** Node is present, `rig` is not, and no install has been confirmed yet. */
+    | "rigMissing"
+    /** The confirmed `npm install --global @slopus/rig` is running in a real PTY. */
+    | "rigInstalling"
+    /** That install ended without a usable `rig`; its output stays on screen. */
+    | "rigInstallFailed"
+    /** `rig` exists; the normal user daemon is being started or connected to. */
+    | "connecting"
+    /** The daemon could not be reached; the desktop runtime carries the reason. */
+    | "connectFailed"
+    /** Local mode works; the Happy Cloud questions have not been answered. */
+    | "cloud"
+    /** Cloud was joined; the optional encrypted profile has not been decided. */
+    | "profile"
+    /** Everything else is settled and this Rig has no project yet. */
+    | "project"
+    | "complete";
+
+/** The Node runtime the user's login shell resolves, when it resolves one. */
+export interface LocalOnboardingNode {
+    readonly path: string;
+    /** As `node --version` reported it, for example `v22.11.0`. */
+    readonly version: string;
+}
+
+/** The globally installed Rig command the user's login shell resolves. */
+export interface LocalOnboardingRig {
+    readonly path: string;
+    /** Version of the running daemon, once one has been connected to. */
+    readonly version?: string;
+}
+
+/**
+ * What the person chose about Happy Cloud. The three answers are independent on
+ * purpose: joining is one decision, letting other devices drive this machine is
+ * another, and storing end-to-end encrypted session blobs so phones can read a
+ * conversation is a third that can be declined while still joining.
+ */
+export interface LocalOnboardingCloudChoice {
+    readonly joined: boolean;
+    readonly remoteControl: boolean;
+    readonly mobileSessions: boolean;
+}
+
+/** The install terminal as the window is allowed to see it. */
+export interface LocalOnboardingInstall {
+    readonly terminalId: string;
+    readonly command: "npm install --global @slopus/rig";
+    readonly running: boolean;
+    /** Why the install ended unusable, once it has. */
+    readonly message?: string;
+}
+
+export interface LocalOnboardingSnapshot {
+    readonly stage: LocalOnboardingStage;
+    readonly node?: LocalOnboardingNode;
+    readonly rig?: LocalOnboardingRig;
+    /**
+     * True when the connected Rig holds no project of its own yet. Rig publishes
+     * no first-run flag, so this is read from its catalog: an empty catalog is
+     * the only observable evidence that this is a fresh Rig.
+     */
+    readonly rigFresh?: boolean;
+    readonly install?: LocalOnboardingInstall;
+    readonly cloud?: LocalOnboardingCloudChoice;
+    /** Whether the optional encrypted Happy Profile was created; absent until asked. */
+    readonly profileCreated?: boolean;
+    /** The Git folder opened as the first project, once one has been. */
+    readonly projectPath?: string;
+    /** True while this process is doing the current stage's work. */
+    readonly busy: boolean;
+    /** Displayable detail for the current stage: why it failed, or what to do. */
+    readonly message?: string;
+}
+
+/**
  * One note in this machine's collection. A note belongs to the machine rather
  * than to a Rig connection, so it travels over the desktop bridge instead of a
  * Rig's HTTP proxy and stays available whichever Rig the window is looking at.
@@ -576,6 +664,24 @@ export interface HappyDesktopBridge {
     remoteRigGet(): Promise<readonly RemoteRigSnapshot[]>;
     remoteRigRemove(id: string): Promise<void>;
     remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void): () => void;
+    /** Where local first-run setup stands, without waiting for its next change. */
+    onboardingGet(): Promise<LocalOnboardingSnapshot>;
+    onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void): () => void;
+    /**
+     * The person's explicit confirmation to install Rig. This process opens the
+     * PTY and runs the fixed command; the window only draws it and forwards
+     * keystrokes through `rigInstallInput`/`rigInstallResize`.
+     */
+    onboardingRigInstall(cols: number, rows: number): Promise<void>;
+    onboardingCloudSubmit(choice: LocalOnboardingCloudChoice): Promise<void>;
+    onboardingProfileSubmit(create: boolean): Promise<void>;
+    /**
+     * Opens the native folder picker, requires a Git repository root, and opens
+     * it as this Rig's first project. Picking, validating, and registering all
+     * happen in the main process; the window never learns a path it did not
+     * already receive in a snapshot.
+     */
+    onboardingProjectChoose(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
@@ -635,6 +741,12 @@ export const desktopIpc = {
     noteRename: "happy2:notes:rename",
     notesChanged: "happy2:notes:changed",
     notesList: "happy2:notes:list",
+    onboardingChanged: "happy2:onboarding:changed",
+    onboardingCloudSubmit: "happy2:onboarding:cloud-submit",
+    onboardingGet: "happy2:onboarding:get",
+    onboardingProfileSubmit: "happy2:onboarding:profile-submit",
+    onboardingProjectChoose: "happy2:onboarding:project-choose",
+    onboardingRigInstall: "happy2:onboarding:rig-install",
     /** Withdraws one host operation the application's View no longer wants. */
     pluginAppCancel: "happy2:plugins:app-cancel",
     /** One host operation, on behalf of the application at the given origin. */

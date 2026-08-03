@@ -6,7 +6,13 @@ import type { HealthResponse } from "@slopus/rig/types";
 import { RigDaemonClient, rigDaemonPathsResolve, rigDaemonTokenRead } from "./rigDaemonClient";
 
 const discoveryMarker = "__HAPPY2_RIG_PATH__=";
-const discoveryCommand = `printf '${discoveryMarker}%s\\0' "$(command -v rig 2>/dev/null)"; /usr/bin/env -0`;
+const nodePathMarker = "__HAPPY2_NODE_PATH__=";
+const nodeVersionMarker = "__HAPPY2_NODE_VERSION__=";
+const discoveryCommand =
+    `printf '${discoveryMarker}%s\\0' "$(command -v rig 2>/dev/null)"; ` +
+    `printf '${nodePathMarker}%s\\0' "$(command -v node 2>/dev/null)"; ` +
+    `printf '${nodeVersionMarker}%s\\0' "$(node --version 2>/dev/null)"; ` +
+    `/usr/bin/env -0`;
 const maximumOutputBytes = 1024 * 1024;
 
 export interface RigLoginEnvironment {
@@ -95,6 +101,45 @@ export async function rigLoginEnvironmentDiscover(
     };
 }
 
+/**
+ * What the user's login shell resolves for the two commands local mode depends
+ * on, without deciding anything about them. Either may be absent: that is the
+ * answer first-run setup exists to act on, not a failure.
+ */
+export interface LocalRuntimeProbe {
+    readonly environment: NodeJS.ProcessEnv;
+    readonly nodeCommand?: string;
+    /** Exactly what `node --version` printed, for example `v22.11.0`. */
+    readonly nodeVersion?: string;
+    readonly rigCommand?: string;
+    readonly shell: string;
+}
+
+/**
+ * Reads Node and Rig out of the user's real login shell in one pass, so what
+ * Happy sees is what the person would see in a terminal — version managers,
+ * shell profiles, and all. It never throws for a missing command; only a shell
+ * that cannot be run or cannot describe its own environment is an error.
+ */
+export async function localRuntimeProbe(
+    host: RigProcessHost = defaultProcessHost,
+    environment: NodeJS.ProcessEnv = process.env,
+    configuredShell?: string,
+): Promise<LocalRuntimeProbe> {
+    const shell = loginShellResolve(environment, configuredShell);
+    const result = await host.execFile(shell, ["-l", "-c", discoveryCommand], {
+        env: minimalShellEnvironment(environment),
+    });
+    const parsed = discoveryOutputParse(result.stdout);
+    return {
+        environment: parsed.environment,
+        ...(parsed.nodeCommand ? { nodeCommand: parsed.nodeCommand } : {}),
+        ...(parsed.nodeVersion ? { nodeVersion: parsed.nodeVersion } : {}),
+        ...(parsed.command ? { rigCommand: parsed.command } : {}),
+        shell,
+    };
+}
+
 /** Connects to the normal daemon, starting it through the discovered command if absent. */
 export function localRigConnectorCreate(
     options: {
@@ -170,6 +215,8 @@ export function rigVersionParse(value: string): string {
 export function discoveryOutputParse(value: string): {
     readonly command?: string;
     readonly environment: NodeJS.ProcessEnv;
+    readonly nodeCommand?: string;
+    readonly nodeVersion?: string;
 } {
     const markerIndex = value.indexOf(discoveryMarker);
     if (markerIndex < 0)
@@ -179,8 +226,25 @@ export function discoveryOutputParse(value: string): {
     const command = pathRecord.slice(discoveryMarker.length).trim();
     if (command && (!isAbsolute(command) || command.includes("\n")))
         throw new Error("The login shell returned an invalid Rig executable path.");
+    let nodeCommand: string | undefined;
+    let nodeVersion: string | undefined;
     const environment: NodeJS.ProcessEnv = {};
     for (const record of records) {
+        // The probe's own markers ride the same NUL-separated stream as the
+        // environment, and each is answered by the shell whether or not the
+        // command exists, so an empty value means "absent" rather than "unasked".
+        if (record.startsWith(nodePathMarker)) {
+            const candidate = record.slice(nodePathMarker.length).trim();
+            if (candidate && (!isAbsolute(candidate) || candidate.includes("\n")))
+                throw new Error("The login shell returned an invalid Node executable path.");
+            if (candidate) nodeCommand = candidate;
+            continue;
+        }
+        if (record.startsWith(nodeVersionMarker)) {
+            const candidate = record.slice(nodeVersionMarker.length).trim();
+            if (/^v?\d+\.\d+\.\d+/u.test(candidate)) nodeVersion = candidate;
+            continue;
+        }
         const separator = record.indexOf("=");
         if (separator <= 0) continue;
         const key = record.slice(0, separator);
@@ -188,7 +252,12 @@ export function discoveryOutputParse(value: string): {
         environment[key] = record.slice(separator + 1);
     }
     if (!environment.PATH) throw new Error("The login shell environment did not include PATH.");
-    return { ...(command ? { command } : {}), environment };
+    return {
+        ...(command ? { command } : {}),
+        environment,
+        ...(nodeCommand ? { nodeCommand } : {}),
+        ...(nodeVersion ? { nodeVersion } : {}),
+    };
 }
 
 function loginShellResolve(environment: NodeJS.ProcessEnv, configuredShell?: string): string {

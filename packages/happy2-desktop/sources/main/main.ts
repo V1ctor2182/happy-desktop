@@ -58,6 +58,7 @@ import {
     pluginOriginHost,
 } from "./pluginApplicationHost";
 import { localRigConnectorCreate } from "./localRig";
+import { LocalOnboarding } from "./localOnboarding";
 import { NotesStore } from "./notesStore";
 import {
     noteApplyRequestValidate,
@@ -65,7 +66,11 @@ import {
     noteTitleOptionalValidate,
     noteTitleValidate,
 } from "./notesIpcValidation";
-import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
+import {
+    onboardingCloudChoiceValidate,
+    rigTerminalInputValidate,
+    rigTerminalSizeValidate,
+} from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
@@ -145,6 +150,7 @@ let runtime: DesktopRuntime;
 let desktopConfigStore: DesktopConfigStore;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
+let onboarding: LocalOnboarding;
 let remoteRigManager: RemoteRigManager;
 let notesStore: NotesStore;
 let pluginApplications: PluginApplicationHost;
@@ -188,6 +194,19 @@ const unavailableBrowserProxy = "http://127.0.0.1:9";
  */
 let mediaPreviewWindow: BrowserWindow | undefined;
 let mediaPreviewSubject: DesktopMediaPreview | undefined;
+
+/** The one native folder chooser, shared by the renderer's request and first-run setup. */
+async function directoryPickShow(owner: BrowserWindow | undefined): Promise<string | undefined> {
+    const options: OpenDialogOptions = {
+        buttonLabel: "Choose",
+        properties: ["openDirectory", "createDirectory"],
+        title: "Choose a Rig working directory",
+    };
+    const result = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+    return result.canceled ? undefined : result.filePaths[0];
+}
 
 function browserSessionGet() {
     return electronSession.fromPartition(happyBrowserPartition, { cache: true });
@@ -624,6 +643,7 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     const ownerId = window.webContents.id;
     const cleanup = () => {
         rigInstallManager?.closeOwner(ownerId);
+        onboarding?.installAbandoned(ownerId);
         // The mark on the Dock belongs to the window that reported it. This one
         // is going away — reloaded, gone, or replaced — so it takes its own mark
         // with it, unless another window is already presenting and has set its
@@ -978,6 +998,20 @@ void app
         rigInstallManager = new RigInstallTerminalManager(connector, {
             verified: () => void runtime.retry().catch(() => undefined),
         });
+        // First-run setup follows the runtime rather than owning a connection of
+        // its own: the daemon is started, connected, and left running by the
+        // runtime alone, and setup only reads its state and asks it to try again.
+        onboarding = await LocalOnboarding.create({
+            directoryPick: () => directoryPickShow(windowLifecycle.get()),
+            installer: rigInstallManager,
+            recordPath: join(desktopRoot, "local-onboarding.json"),
+            runtime,
+        });
+        onboarding.subscribe((snapshot) => {
+            const window = windowLifecycle.get();
+            if (window && !window.isDestroyed())
+                window.webContents.send(desktopIpc.onboardingChanged, snapshot);
+        });
         const updater = desktopUpdaterCreate({
             packaged: app.isPackaged,
             update: (snapshot) => runtime.updateSet(snapshot),
@@ -1155,18 +1189,31 @@ void app
             const window = BrowserWindow.fromWebContents(event.sender);
             if (window && window === mediaPreviewWindow) window.close();
         });
-        ipcMain.handle(desktopIpc.directoryPick, async (event) => {
-            const owner = BrowserWindow.fromWebContents(event.sender);
-            const options: OpenDialogOptions = {
-                buttonLabel: "Choose",
-                properties: ["openDirectory", "createDirectory"],
-                title: "Choose a Rig working directory",
-            };
-            const result = owner
-                ? await dialog.showOpenDialog(owner, options)
-                : await dialog.showOpenDialog(options);
-            return result.canceled ? undefined : result.filePaths[0];
+        ipcMain.handle(desktopIpc.directoryPick, (event) =>
+            directoryPickShow(BrowserWindow.fromWebContents(event.sender) ?? undefined),
+        );
+        ipcMain.handle(desktopIpc.onboardingGet, () => onboarding.get());
+        ipcMain.handle(desktopIpc.onboardingRigInstall, (event, cols: unknown, rows: unknown) => {
+            const size = rigTerminalSizeValidate(cols, rows);
+            onboarding.rigInstall({
+                cols: size.cols,
+                emit: (installEvent) => {
+                    if (!event.sender.isDestroyed())
+                        event.sender.send(desktopIpc.rigInstallEvent, installEvent);
+                },
+                ownerId: event.sender.id,
+                rows: size.rows,
+            });
         });
+        ipcMain.handle(desktopIpc.onboardingCloudSubmit, (_event, choice: unknown) =>
+            onboarding.cloudSubmit(onboardingCloudChoiceValidate(choice)),
+        );
+        ipcMain.handle(desktopIpc.onboardingProfileSubmit, (_event, create: unknown) => {
+            if (typeof create !== "boolean")
+                throw new Error("The Happy Profile choice is invalid.");
+            return onboarding.profileSubmit(create);
+        });
+        ipcMain.handle(desktopIpc.onboardingProjectChoose, () => onboarding.projectChoose());
         ipcMain.handle(desktopIpc.runtimeStart, (_event, request: unknown) =>
             runtime.start(desktopStartRequestValidate(request)),
         );
@@ -1253,6 +1300,7 @@ app.on("before-quit", (event) => {
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
         rigInstallManager?.[Symbol.dispose]();
+        onboarding?.[Symbol.dispose]();
         // The preview window belongs to this application, not to the desktop, so
         // it goes when the application does rather than keeping it alive.
         if (mediaPreviewWindow && !mediaPreviewWindow.isDestroyed()) mediaPreviewWindow.destroy();
