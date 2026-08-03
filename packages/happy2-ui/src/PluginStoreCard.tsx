@@ -172,7 +172,7 @@ export function PluginStoreCard(props: PluginStoreCardProps) {
                         className="happy2-plugin-store-card__note"
                         data-happy2-ui="plugin-store-card-note"
                     >
-                        <Icon name={entry.state === "failed" ? "alert" : "dot"} size={12} />
+                        <Icon name={entry.state === "failed" ? "close" : "dot"} size={12} />
                         <span>{entry.note}</span>
                     </p>
                 ) : null}

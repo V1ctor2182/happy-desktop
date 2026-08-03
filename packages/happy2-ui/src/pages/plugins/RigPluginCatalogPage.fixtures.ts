@@ -96,7 +96,7 @@ export const PLUGIN_STORE_FIXTURE_FAILED: RigPluginCatalogEntry = {
     name: "Millstone",
     description: "Applies a migration to a throwaway copy of a schema and reports what it did.",
     state: "failed",
-    glyph: "alert",
+    glyph: "close",
     tone: "ember",
     author: "Happy",
     category: "Data",
@@ -146,7 +146,7 @@ export const PLUGIN_STORE_FIXTURE_UNBROKEN: RigPluginCatalogEntry = {
     description:
         "file:///Users/someone/Development/checkouts/monorepo/packages/quarry-workspace-indexer-daemon-supervisor/dist/index.js",
     state: "failed",
-    glyph: "alert",
+    glyph: "close",
     tone: "amber",
     author: "quarry-workspace-tools",
     category: "Utilities",

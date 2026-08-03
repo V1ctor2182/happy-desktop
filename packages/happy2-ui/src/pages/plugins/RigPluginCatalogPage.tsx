@@ -178,7 +178,7 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
         stale || (props.error !== undefined && held) ? (
             <Banner
                 className="happy2-rig-plugin-catalog__notice"
-                icon={props.error === undefined ? "clock" : "alert"}
+                icon={props.error === undefined ? "clock" : "close"}
                 tone={props.error === undefined ? "neutral" : "warning"}
                 title={noticeTitle(connection, props.error)}
             >
@@ -252,7 +252,7 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
             {props.error !== undefined && !held ? (
                 <EmptyState
                     description={props.error}
-                    icon="alert"
+                    icon="close"
                     title="This machine's plugins could not be read"
                 />
             ) : visible.length === 0 ? (
@@ -334,7 +334,7 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
                             data-happy2-ui="rig-plugin-catalog-failure"
                             key={failure.folder}
                         >
-                            <Icon name="alert" size={16} />
+                            <Icon name="close" size={16} />
                             <div className="happy2-rig-plugin-catalog__failure-text">
                                 <span className="happy2-rig-plugin-catalog__failure-folder">
                                     {failure.folder}

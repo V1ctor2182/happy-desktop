@@ -85,7 +85,7 @@ function entryProject(source: RigPluginPackage): RigPluginCatalogEntry {
         name: source.name,
         description: source.description,
         state: source.status,
-        glyph: source.status === "failed" ? "alert" : "package",
+        glyph: source.status === "failed" ? "close" : "package",
         tone: pluginStoreTone(source.id),
         author: source.author,
         category: CATEGORY_LABELS[source.category],

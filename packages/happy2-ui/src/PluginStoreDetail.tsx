@@ -124,7 +124,7 @@ export function PluginStoreDetail(props: PluginStoreDetailProps) {
                     className="happy2-plugin-store-detail__note"
                     data-happy2-ui="plugin-store-detail-note"
                 >
-                    <Icon name={entry.state === "failed" ? "alert" : "dot"} size={14} />
+                    <Icon name={entry.state === "failed" ? "close" : "dot"} size={14} />
                     <span>{entry.note}</span>
                 </p>
             ) : null}

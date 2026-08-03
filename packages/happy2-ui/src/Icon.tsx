@@ -37,7 +37,6 @@ export type IconName =
     | "arrow-right"
     | "arrow-up"
     | "shield"
-    | "alert"
     | "lock"
     | "eye"
     | "link"
@@ -122,6 +121,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     copy: { set: "ionicons", name: "copy-outline" },
     "chevron-down": { set: "ionicons", name: "chevron-down-outline" },
     "chevron-right": { set: "ionicons", name: "chevron-forward-outline" },
+    // A bare cross: dismissing a thing where it is an affordance, and what went
+    // wrong where it is not. In a danger or warning tone beside a failure it is
+    // the house mark for trouble; `shield` says the opposite and is never it.
     close: { set: "ionicons", name: "close-outline" },
     branch: { set: "octicons", name: "git-branch" },
     merge: { set: "octicons", name: "git-merge" },
@@ -147,11 +149,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     more: { set: "ionicons", name: "ellipsis-horizontal" },
     "arrow-right": { set: "ionicons", name: "arrow-forward-outline" },
     "arrow-up": { set: "ionicons", name: "arrow-up-outline" },
+    // A shield with a checkmark on it: it says a thing is safe, not that a thing
+    // went wrong. Nothing that failed may wear it.
     shield: { set: "ionicons", name: "shield-checkmark-outline" },
-    // `shield` is a shield with a checkmark on it — it says a thing is safe, not
-    // that a thing went wrong. Anything that failed needs a mark that reads as
-    // trouble at a glance, so it gets one of its own rather than borrowing that.
-    alert: { set: "ionicons", name: "alert-circle-outline" },
     lock: { set: "ionicons", name: "lock-closed-outline" },
     eye: { set: "ionicons", name: "eye-outline" },
     link: { set: "ionicons", name: "link-outline" },
