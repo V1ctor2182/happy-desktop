@@ -129,10 +129,30 @@ async function checkoutIsLocal(root: string): Promise<boolean> {
 }
 
 /**
+ * Whether a failure to read one checkout's Git state means that checkout simply
+ * has none — as against the daemon being unreachable or broken.
+ *
+ * The daemon answers a checkout it cannot track at all with 409, and one it no
+ * longer holds with 404. Both are ordinary answers about that one entity: a
+ * worktree still being created, or one removed a moment ago, genuinely has no
+ * comparison to report. Everything else is a real failure and has to keep
+ * travelling, because reporting a transport fault as "nothing changed" is how a
+ * reader ends up trusting an empty list.
+ */
+function gitAbsence(error: unknown): boolean {
+    return (
+        error instanceof RigDaemonHttpError &&
+        (error.statusCode === 404 || error.statusCode === 409)
+    );
+}
+
+/**
  * The daemon's current scan of one checkout, or nothing when it has none to
- * give. A checkout still being created or already removed has no comparison to
- * report, and that must leave the surrounding listing usable rather than fail
- * it.
+ * give.
+ *
+ * This asks for the scan rather than for whatever has already been scanned, so
+ * the answer is complete the first time it is asked — a reader opening a diff
+ * cannot be told the file is unchanged merely because it is the first to look.
  */
 async function groupGitRead(
     client: RigProxyClient,
@@ -140,17 +160,66 @@ async function groupGitRead(
 ): Promise<GitLineStats | undefined> {
     try {
         const scope = await fileScopeResolve(client, groupId);
-        const watched = await client.gitWatch([scope]);
-        for (const event of watched.snapshots) {
-            if (event.type === "project_git_changed" && event.projectId === groupId)
-                return gitChangesProject(event.data.git);
-            if (event.type === "workspace_git_changed" && event.workspaceId === groupId)
-                return gitChangesProject(event.data.git);
-        }
-        return undefined;
-    } catch {
-        return undefined;
+        return gitChangesProject(await client.readGitChanges(scope));
+    } catch (error) {
+        if (gitAbsence(error)) return undefined;
+        throw error;
     }
+}
+
+/** How long a cold listing may spend waiting for scans nobody has asked for yet. */
+const GIT_FILL_DEADLINE_MS = 10_000;
+
+/**
+ * How many of those scans may be outstanding at once. The daemon scans four
+ * checkouts in parallel, and this route must not be the thing that queues forty
+ * of them behind each other.
+ */
+const GIT_FILL_CONCURRENCY = 4;
+
+/**
+ * Scans for the checkouts a batched watch had none of yet.
+ *
+ * A watch registers interest and reports what has already been scanned, which
+ * on a cold connection is nothing: the listing would render every project with
+ * no counts and no changed rows, and only catch up when a later poll or a sync
+ * event happened to arrive. So the ones that came back empty are read
+ * individually, which makes the daemon do the scan and wait for it.
+ *
+ * Only the cold pass pays for this — once an entity is watched it stays in the
+ * batch answer, and the steady-state listing is one request again. A checkout
+ * that cannot answer within the deadline is left out rather than holding the
+ * whole listing hostage; it is watched by now, so its state arrives over the
+ * event stream shortly after.
+ */
+async function gitChangesFill(
+    client: RigProxyClient,
+    scopes: readonly RigFileScope[],
+): Promise<Map<string, GitChangeSnapshot>> {
+    const filled = new Map<string, GitChangeSnapshot>();
+    const deadline = Date.now() + GIT_FILL_DEADLINE_MS;
+    const pending = [...scopes];
+    const drain = async (): Promise<void> => {
+        for (;;) {
+            const scope = pending.shift();
+            if (scope === undefined) return;
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) return;
+            try {
+                const git = await client.readGitChanges(scope, AbortSignal.timeout(remaining));
+                filled.set(scope.workspaceId ?? scope.projectId, git);
+            } catch {
+                // One checkout that will not report leaves its own row without
+                // counts. The listing itself is already answered by the catalog
+                // read above, and failing all of it over one worktree would be
+                // the worse trade.
+            }
+        }
+    };
+    await Promise.all(
+        Array.from({ length: Math.min(GIT_FILL_CONCURRENCY, pending.length) }, drain),
+    );
+    return filled;
 }
 
 /**
@@ -579,6 +648,7 @@ export type RigProxyClient = Pick<
     | "listWebapps"
     | "getWebappFile"
     | "gitWatch"
+    | "readGitChanges"
     | "getProject"
     | "getProjectAsset"
     | "listWorkspaces"
@@ -751,6 +821,28 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                         projectChanges.set(event.projectId, event.data.git);
                     else if (event.type === "workspace_git_changed")
                         workspaceChanges.set(event.workspaceId, event.data.git);
+                }
+                // Whatever the watch had no scan for is scanned now, so that a
+                // first listing carries the same counts and rows as every one
+                // after it rather than arriving blank.
+                const cold = await gitChangesFill(client, [
+                    ...projects
+                        .filter((project) => !projectChanges.has(project.id))
+                        .map((project) => ({ projectId: project.id })),
+                    ...workspaces
+                        .filter((workspace) => !workspaceChanges.has(workspace.id))
+                        .map((workspace) => ({
+                            projectId: workspace.projectId,
+                            workspaceId: workspace.id,
+                        })),
+                ]);
+                for (const project of projects) {
+                    const git = cold.get(project.id);
+                    if (git !== undefined) projectChanges.set(project.id, git);
+                }
+                for (const workspace of workspaces) {
+                    const git = cold.get(workspace.id);
+                    if (git !== undefined) workspaceChanges.set(workspace.id, git);
                 }
                 const projectStats = projects.map((project) => {
                     const git = projectChanges.get(project.id);

@@ -8,6 +8,7 @@ import type {
     CreateRemoteTerminalRequest,
     EventId,
     GetSessionUsageResponse,
+    GitChangeSnapshot,
     GlobalEventQueueEntry,
     GlobalEventDelivery,
     GlobalCatalogResponse,
@@ -241,6 +242,24 @@ export class RigDaemonClient {
         entities: readonly { readonly projectId: string; readonly workspaceId?: string }[],
     ): Promise<GitWatchResponse> {
         return this.#requestJson("POST", "/git/watch", { entities });
+    }
+
+    /**
+     * One checkout's current Git comparison, waiting for a scan when the daemon
+     * has not already made one. `gitWatch` only registers interest and returns
+     * whatever has been scanned so far, so it answers a cold entity with
+     * nothing at all; this route registers the same interest and then blocks on
+     * the scan, which is what a caller that has to render the state now needs.
+     */
+    async readGitChanges(scope: RigFileScope, signal?: AbortSignal): Promise<GitChangeSnapshot> {
+        const answer = await this.#requestJson<{ readonly git: GitChangeSnapshot }>(
+            "GET",
+            `${fileScopePath(scope)}/git`,
+            undefined,
+            undefined,
+            signal,
+        );
+        return answer.git;
     }
 
     /** Reads one project avatar's bytes so the loopback proxy can re-serve them. */
