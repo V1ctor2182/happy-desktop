@@ -74,8 +74,8 @@ export function PluginStoreDetailPage() {
             </Specimen>
 
             <Specimen
-                detail="Only what Rig reports today, and no way back — a package page that is not standing in for a catalog behind it. Absent publisher, category, note, and actions each remove a child rather than leaving a gap."
-                label="Bare"
+                detail="A page with no way back, because nothing is standing behind it — and a package with no artwork, so the hero wears its generated mark. Publisher and category are reported and shown; the absent note, action lane, and back affordance each remove a child rather than leaving a gap."
+                label="No mark, no way back"
                 number="04"
                 stage="surface"
             >

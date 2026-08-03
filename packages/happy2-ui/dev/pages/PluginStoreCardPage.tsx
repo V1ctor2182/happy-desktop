@@ -48,8 +48,8 @@ export function PluginStoreCardPage() {
             </Specimen>
 
             <Specimen
-                detail="What a real machine draws today: name, version, description. No publisher and no category, because Rig's plugin manifest has nowhere to put either — the meta line simply loses those terms rather than leaving a gap."
-                label="Only what Rig reports"
+                detail="A package whose mark has not arrived. Publisher, category, and version are all reported and all shown; only the artwork is missing, so the tile falls back to the house glyph in the package's own colour and everything else sits exactly where it does on any other card. A package Rig has no icon for looks like this permanently."
+                label="No mark yet"
                 number="02"
                 stage="app"
             >

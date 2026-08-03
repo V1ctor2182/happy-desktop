@@ -161,8 +161,8 @@ export function RigPluginCatalogBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="One package carrying only what Rig reports today: a name, a version, a description, and where it lives. No publisher and no category, because the manifest has nowhere to put either."
-                label="One package"
+                detail="A single package, fully described — name, publisher, category, version, description, and where it lives — but with no artwork of its own, so its mark is the generated one. One card is also the narrowest the shelf ever gets."
+                label="One package, no mark"
                 number="10"
             >
                 <RigPluginCatalogPage entries={[PLUGIN_STORE_FIXTURE_BARE]} />
