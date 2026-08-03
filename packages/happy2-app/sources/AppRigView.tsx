@@ -2887,14 +2887,20 @@ function RigFileBody(props: {
                               // The page is served from the file on disk, so the
                               // rendered face shows what was saved; the source
                               // face is where an unsaved edit lives until it is.
-                              <HtmlPreviewFrame>
-                                  {file.previewUrl
-                                      ? props.htmlPreview({
-                                            source: file.previewUrl,
-                                            revision: file.revision,
-                                        })
-                                      : undefined}
-                              </HtmlPreviewFrame>
+                              <HtmlPreviewFrame
+                                  {...(file.previewError
+                                      ? {
+                                            failure: {
+                                                kind: "address-unavailable" as const,
+                                                path: file.path,
+                                                detail: file.previewError,
+                                            },
+                                        }
+                                      : {})}
+                                  renderContent={props.htmlPreview}
+                                  revision={file.revision}
+                                  source={file.previewUrl}
+                              />
                           ),
                       }
                     : {})}
@@ -4060,11 +4066,19 @@ function RigPanelFileView(props: {
             {...(file.kind === "document" && props.htmlPreview
                 ? {
                       rendered: (
-                          <HtmlPreviewFrame>
-                              {file.previewUrl
-                                  ? props.htmlPreview({ source: file.previewUrl })
-                                  : undefined}
-                          </HtmlPreviewFrame>
+                          <HtmlPreviewFrame
+                              {...(file.previewError
+                                  ? {
+                                        failure: {
+                                            kind: "address-unavailable" as const,
+                                            path: file.path,
+                                            detail: file.previewError,
+                                        },
+                                    }
+                                  : {})}
+                              renderContent={props.htmlPreview}
+                              source={file.previewUrl}
+                          />
                       ),
                   }
                 : {})}
@@ -4147,14 +4161,11 @@ function RigToolBodies(props: {
             {active?.kind === "terminal" ? (
                 <RigTerminalTab key={active.id} store={props.store} tabId={active.id} />
             ) : active?.kind === "webapp" ? (
-                <HtmlPreviewFrame>
-                    {props.htmlPreview
-                        ? props.htmlPreview({
-                              source: active.url,
-                              revision: String(props.webappRevisions.get(active.label) ?? 0),
-                          })
-                        : undefined}
-                </HtmlPreviewFrame>
+                <HtmlPreviewFrame
+                    {...(props.htmlPreview ? { renderContent: props.htmlPreview } : {})}
+                    revision={String(props.webappRevisions.get(active.label) ?? 0)}
+                    source={active.url}
+                />
             ) : null}
         </>
     );

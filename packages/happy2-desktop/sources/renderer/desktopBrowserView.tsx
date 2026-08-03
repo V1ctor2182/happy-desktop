@@ -1,6 +1,6 @@
 import { Component, createElement } from "react";
 import type { BrowserContentProps, BrowserController } from "happy2-ui";
-import { happyBrowserPartition, type DesktopBrowserStatus } from "../shared/desktopContract";
+import { happyBrowserPartition, type DesktopGuestStatus } from "../shared/desktopContract";
 
 interface BrowserWebViewEvent extends Event {
     readonly canGoBack?: boolean;
@@ -63,7 +63,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     private proxyGeneration = 0;
     private statusUnsubscribe?: () => void;
     /** Response of the navigation that is loading or has just committed. */
-    private status?: DesktopBrowserStatus;
+    private status?: DesktopGuestStatus;
     /** Address of the newest requested navigation, for failures with no commit. */
     private requested?: string;
 
@@ -140,7 +140,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     };
 
     componentDidMount(): void {
-        this.statusUnsubscribe = window.happyDesktop?.browserStatusSubscribe((status) => {
+        this.statusUnsubscribe = window.happyDesktop?.guestStatusSubscribe((status) => {
             if (status.guestId !== this.element?.getWebContentsId()) return;
             this.status = status;
             void this.statusVerify();

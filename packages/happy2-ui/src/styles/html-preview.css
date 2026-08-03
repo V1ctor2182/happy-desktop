@@ -14,6 +14,35 @@
     background: var(--page-canvas);
 }
 
+/* What the region says instead of a page.
+ *
+ * A load that failed leaves the guest blank or on the engine's own error
+ * document, so this covers it completely rather than floating over it. It
+ * overlays instead of replacing the guest, which is what lets the guest keep
+ * its size and its process while the page comes back. */
+.happy2-html-preview__error {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    background: var(--surface);
+}
+
+.happy2-html-preview__error-detail {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
 /* Whatever the host mounted — an Electron guest, an inert stand-in — is the
    page, and the page is the whole region. */
 .happy2-html-preview > webview,

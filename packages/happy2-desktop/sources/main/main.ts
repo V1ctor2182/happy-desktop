@@ -36,7 +36,7 @@ import {
     happyHtmlPreviewPartition,
     mediaPreviewArgument,
     mediaPreviewView,
-    type DesktopBrowserStatus,
+    type DesktopGuestStatus,
     type DesktopMediaPreview,
     type RemoteRigAddRequest,
 } from "../shared/desktopContract";
@@ -398,6 +398,19 @@ function browserGuestAttach(window: BrowserWindow): void {
         webPreferences.allowRunningInsecureContent = false;
     });
     window.webContents.on("did-attach-webview", (_event, guest) => {
+        // Only the main process observes a guest's response code. Every embedded
+        // view needs it to tell a refused response from a page: the browser to
+        // separate a served error page from a blank failed navigation, a preview
+        // to know the document it asked for is not there at all.
+        guest.on("did-navigate", (_navigation, url, status, statusText) => {
+            if (window.isDestroyed()) return;
+            window.webContents.send(desktopIpc.guestStatusChanged, {
+                guestId: guest.id,
+                url,
+                status,
+                statusText,
+            } satisfies DesktopGuestStatus);
+        });
         if (guest.session === htmlPreviewSessionGet()) {
             // A preview is one page of one file. Following a link out of it, or
             // opening a window from it, is browsing, and browsing is the browser
@@ -423,17 +436,6 @@ function browserGuestAttach(window: BrowserWindow): void {
         };
         guest.on("will-navigate", navigationGuard);
         guest.on("will-redirect", navigationGuard);
-        // Only the main process observes a guest's response code. The renderer
-        // needs it to tell a served error page from a blank failed navigation.
-        guest.on("did-navigate", (_navigation, url, status, statusText) => {
-            if (window.isDestroyed()) return;
-            window.webContents.send(desktopIpc.browserStatusChanged, {
-                guestId: guest.id,
-                url,
-                status,
-                statusText,
-            } satisfies DesktopBrowserStatus);
-        });
     });
 }
 

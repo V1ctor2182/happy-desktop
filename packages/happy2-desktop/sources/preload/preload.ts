@@ -3,7 +3,7 @@ import {
     buildIdentityArgument,
     desktopIpc,
     mediaPreviewArgument,
-    type DesktopBrowserStatus,
+    type DesktopGuestStatus,
     type DesktopBuildIdentity,
     type DesktopMediaPreview,
     type DesktopNoteApplyRequest,
@@ -44,11 +44,11 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserOpenRequested, receive);
     },
-    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, status: DesktopBrowserStatus) =>
+    guestStatusSubscribe(listener: (status: DesktopGuestStatus) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, status: DesktopGuestStatus) =>
             listener(status);
-        ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
+        ipcRenderer.on(desktopIpc.guestStatusChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.guestStatusChanged, receive);
     },
     pluginApplicationsGet: () => ipcRenderer.invoke(desktopIpc.pluginApplicationsGet),
     pluginAppRequest: (origin: string, requestId: string, request: DesktopPluginAppRequest) =>

@@ -200,6 +200,12 @@ export interface RigFileTabSnapshot {
      * answered — a page has nowhere to load from until then.
      */
     readonly previewUrl?: string;
+    /**
+     * Why this document has no address, when asking for one failed. The file
+     * itself is unaffected and still reads as source; this is what stops the
+     * rendered face from waiting on an answer that is never coming.
+     */
+    readonly previewError?: string;
 }
 
 /**
@@ -225,6 +231,8 @@ export interface RigPanelFileSnapshot {
     readonly loading: boolean;
     /** Where a `document` file is served as a page, once the host has said. */
     readonly previewUrl?: string;
+    /** Why it has none, when asking the host for one failed. */
+    readonly previewError?: string;
 }
 
 /**
@@ -1463,26 +1471,31 @@ export function rigWorkspaceStoreCreate(
      * It is a separate request from reading the file because the two answer
      * different questions: the text is what the reader edits, the address is
      * where the rendered page loads from, and the source view must not wait on
-     * the page. A failure leaves the tab without an address, which the surface
-     * shows as a document it can only offer as source.
+     * the page. A failure is kept on the tab rather than dropped, because a tab
+     * with neither an address nor a reason is a rendered face that waits for
+     * ever; the source view is unaffected either way.
      */
     const filePreviewAddressResolve = (
         tabId: string,
         generation: number,
         tab: RigFileTabSnapshot,
     ): void => {
+        const settle = (resolved: { url: string } | { error: string }): void => {
+            if (disposed || fileLoadGenerations.get(tabId) !== generation) return;
+            fileTabs = fileTabs.map((candidate) =>
+                candidate.id === tabId
+                    ? "url" in resolved
+                        ? { ...candidate, previewUrl: resolved.url, previewError: undefined }
+                        : { ...candidate, previewUrl: undefined, previewError: resolved.error }
+                    : candidate,
+            );
+            recompute();
+        };
         void client.htmlPreviewOpen(tab.groupId, tab.path).then(
-            (url) => {
-                if (disposed || fileLoadGenerations.get(tabId) !== generation) return;
-                fileTabs = fileTabs.map((candidate) =>
-                    candidate.id === tabId ? { ...candidate, previewUrl: url } : candidate,
-                );
-                recompute();
-            },
-            () => {
-                // The reader still has the file; only its rendered face is
-                // unavailable, and the surface says so without a failed tab.
-            },
+            (url) => settle({ url }),
+            // The reader still has the file; only its rendered face is
+            // unavailable, and the surface says why without a failed tab.
+            (error: unknown) => settle({ error: rigUserError(error).message }),
         );
     };
 
@@ -1589,11 +1602,19 @@ export function rigWorkspaceStoreCreate(
             void client.htmlPreviewOpen(file.groupId, file.path).then(
                 (url) => {
                     if (disposed || panelFileGeneration !== generation || !panelFile) return;
-                    panelFile = { ...panelFile, previewUrl: url };
+                    panelFile = { ...panelFile, previewUrl: url, previewError: undefined };
                     recompute();
                 },
-                () => {
-                    // Only the rendered face is unavailable; the source remains.
+                // Only the rendered face is unavailable; the source remains, and
+                // the viewer says why rather than preparing a page for ever.
+                (error: unknown) => {
+                    if (disposed || panelFileGeneration !== generation || !panelFile) return;
+                    panelFile = {
+                        ...panelFile,
+                        previewUrl: undefined,
+                        previewError: rigUserError(error).message,
+                    };
+                    recompute();
                 },
             );
         void read.then(

@@ -127,6 +127,7 @@ import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
 import { WaitRingPage } from "./pages/WaitRingPage";
+import { HtmlPreviewErrorPage } from "./pages/HtmlPreviewErrorPage";
 import { HtmlPreviewFramePage } from "./pages/HtmlPreviewFramePage";
 import { ContextMeterPage } from "./pages/ContextMeterPage";
 import { SlotEntriesPage } from "./pages/SlotEntriesPage";
@@ -270,6 +271,12 @@ const components: BlueprintPage[] = [
         label: "HTML preview frame",
         number: "C-173",
         page: HtmlPreviewFramePage,
+    },
+    {
+        id: "html-preview-error",
+        label: "HTML preview error",
+        number: "C-239",
+        page: HtmlPreviewErrorPage,
     },
     {
         id: "markdown-document",

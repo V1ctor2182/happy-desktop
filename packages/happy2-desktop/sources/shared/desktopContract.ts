@@ -239,11 +239,12 @@ export interface DesktopMediaPreview {
 }
 
 /**
- * HTTP result of one committed browser-guest navigation. Only the main process
- * sees a guest's response code, so it forwards it to the renderer keyed by the
- * guest's `webContents` id; a renderer tab claims the events for its own guest.
+ * HTTP result of one committed navigation in an embedded guest — a browser tab
+ * or an HTML preview alike. Only the main process sees a guest's response code,
+ * so it forwards it to the renderer keyed by the guest's `webContents` id, and
+ * each view claims the events for its own guest.
  */
-export interface DesktopBrowserStatus {
+export interface DesktopGuestStatus {
     readonly guestId: number;
     readonly url: string;
     readonly status: number;
@@ -342,7 +343,7 @@ export interface HappyDesktopBridge {
      */
     pluginAppCancel(origin: string, requestId: string): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
-    browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
+    guestStatusSubscribe(listener: (status: DesktopGuestStatus) => void): () => void;
     /**
      * Reports how many conversations are waiting for the person, for the mark on
      * the Dock icon. One-way and fire-and-forget: the window states what it is
@@ -414,7 +415,7 @@ export const desktopIpc = {
     appearanceSet: "happy2:appearance:set",
     browserProxyApply: "happy2:browser:proxy-apply",
     browserOpenRequested: "happy2:browser:open-requested",
-    browserStatusChanged: "happy2:browser:status-changed",
+    guestStatusChanged: "happy2:guest:status-changed",
     directoryPick: "happy2:directory:pick",
     mediaPreviewChanged: "happy2:media-preview:changed",
     mediaPreviewClose: "happy2:media-preview:close",

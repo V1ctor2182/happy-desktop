@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import { Component, type ReactNode } from "react";
+import type { HtmlPreviewProps } from "../../src/htmlPreview";
 import { FilePreview } from "../../src/FilePreview";
 import { HtmlPreviewFrame } from "../../src/HtmlPreviewFrame";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -50,6 +51,24 @@ function frame(children: ReactNode, height = 420, width = 720) {
     );
 }
 
+/* A guest that loads and then loses the process drawing it. Blueprint has no
+   engine to crash, so the report is made once on mount — which is exactly how
+   the product's Electron guest reports one — and the specimen then shows the
+   thing that matters: the guest is still mounted under the sheet. */
+class CrashingGuest extends Component<HtmlPreviewProps> {
+    componentDidMount(): void {
+        this.props.previewFailed({
+            kind: "renderer-gone",
+            source: this.props.source,
+            detail: "crashed",
+        });
+    }
+
+    render() {
+        return guest;
+    }
+}
+
 export function HtmlPreviewFramePage() {
     return (
         <ComponentPage
@@ -75,7 +94,7 @@ export function HtmlPreviewFramePage() {
                 number="02"
                 stage="surface"
             >
-                {frame(<HtmlPreviewFrame />, 220)}
+                {frame(<HtmlPreviewFrame renderContent={() => null} />, 220)}
             </Specimen>
 
             <Specimen
@@ -92,6 +111,40 @@ export function HtmlPreviewFramePage() {
                         size="1.1 KB"
                     />,
                     480,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="The address was never resolved — the frame says so instead of preparing forever. Every failure variant is on C-239."
+                label="Failed"
+                number="04"
+                stage="surface"
+            >
+                {frame(
+                    <HtmlPreviewFrame
+                        failure={{
+                            kind: "address-unavailable",
+                            path: "docs/release-notes.html",
+                            detail: "The workspace is no longer connected.",
+                        }}
+                        renderContent={() => null}
+                    />,
+                    220,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="Reported by the guest itself — the sheet covers the page it was drawing, and that guest stays mounted underneath"
+                label="Failed while showing a page"
+                number="05"
+                stage="surface"
+            >
+                {frame(
+                    <HtmlPreviewFrame
+                        renderContent={(previewProps) => <CrashingGuest {...previewProps} />}
+                        source="http://8f3a1c62d4b95e07a1c3f5d6e7b8a9c0.localhost/docs/release-notes.html"
+                    />,
+                    300,
                 )}
             </Specimen>
         </ComponentPage>
