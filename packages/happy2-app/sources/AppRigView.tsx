@@ -80,6 +80,7 @@ import {
     rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
+    rigWorktreeLifecycleRefusal,
 } from "happy2-state";
 import {
     type AgentWaitStatus,
@@ -152,6 +153,7 @@ import {
     type SidebarReorder,
     type SidebarSection,
     type TabItem,
+    WorkspaceLifecycleLane,
     WorkspaceLifecycleNotice,
     type WorkspaceLifecyclePhase,
 } from "happy2-ui";
@@ -2267,6 +2269,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.
     const openGroupPhase = workspaceLifecyclePhase(openGroup?.lifecycle);
+    // Why this workspace cannot take new work, in the phase's own words. It is
+    // the same sentence the state guard rejects with, so a control that is not
+    // offered and an action that is refused never disagree about the reason.
+    const openGroupWorkRefusal =
+        openGroup?.lifecycle === undefined
+            ? undefined
+            : rigWorktreeLifecycleRefusal(openGroup.lifecycle);
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — rig-connect withdrew
     // the one it had predicted — so the address answers for itself here rather
@@ -2306,7 +2315,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         : undefined;
     // Sessions without a list position are delegated children. They remain
     // readable by id, but their runner owns their input and configuration.
-    const conversationReadOnly = detachedConversationId !== undefined;
+    // A workspace that cannot take new work cannot take a message into an old
+    // conversation either: the session is pointed at a checkout that is not
+    // usable, so what it read before stays readable and its input closes with
+    // the reason it closed for.
+    const conversationReadOnly =
+        detachedConversationId !== undefined || openGroupWorkRefusal !== undefined;
+    const conversationReadOnlyReason =
+        detachedConversationId !== undefined
+            ? "Subagent chats are read-only"
+            : openGroupWorkRefusal;
     // One strip, holding the group's sessions and its open files together in
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
@@ -2375,6 +2393,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 onChatSelect={props.onChatSelect}
                 projects={rows}
                 readOnly={conversationReadOnly}
+                {...(conversationReadOnlyReason === undefined
+                    ? {}
+                    : { readOnlyReason: conversationReadOnlyReason })}
                 slotAction={props.slotAction}
                 slots={slotViews}
                 workspace={props.workspace}
@@ -2573,26 +2594,30 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }
                     />
                     {/* Cmd+T opens a tab, and here a tab is a session in the
-                        project that is already open. */}
-                    <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
+                        project that is already open — so a workspace that cannot
+                        host a session does not answer the shortcut at all,
+                        rather than answering it with a failure. */}
+                    {openGroupWorkRefusal === undefined ? (
+                        <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
+                    ) : null}
                     {/* A worktree with work already in it keeps its tab strip and
                         its transcripts, so its phase is stated in the lane above
                         them rather than in place of them: the reader can still
-                        read what ran there before the checkout went away. */}
-                    {openGroupPhase !== undefined && openGroup.conversations.length > 0 ? (
-                        <div className="rig-workspace__lifecycle">
-                            <WorkspaceLifecycleNotice
-                                {...(openGroup.lifecycle?.phase === "failed" &&
-                                openGroup.lifecycle.reason !== undefined
-                                    ? { detail: openGroup.lifecycle.reason }
-                                    : {})}
-                                name={openGroup.name}
-                                {...(openGroup.path ? { path: openGroup.path } : {})}
-                                phase={openGroupPhase}
-                                size="compact"
-                            />
-                        </div>
-                    ) : null}
+                        read what ran there before the checkout went away. The
+                        lane is mounted in every phase, including the ready one,
+                        so arriving at or leaving a phase never rebuilds the
+                        strip and transcripts underneath it. */}
+                    <WorkspaceLifecycleLane
+                        {...(openGroup.lifecycle?.phase === "failed" &&
+                        openGroup.lifecycle.reason !== undefined
+                            ? { detail: openGroup.lifecycle.reason }
+                            : {})}
+                        name={openGroup.name}
+                        {...(openGroup.path ? { path: openGroup.path } : {})}
+                        {...(openGroupPhase !== undefined && openGroup.conversations.length > 0
+                            ? { phase: openGroupPhase }
+                            : {})}
+                    />
                     {openGroup.conversations.length === 0 && openGroupPhase !== undefined ? (
                         // Nothing has run here and the place itself is not ready
                         // to be worked in: a composer would take a message the
@@ -2722,17 +2747,22 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     detachedConversationTab ? (
                         <TabbedPane
                             actions={
-                                <Button
-                                    aria-label="Create a session in this project"
-                                    icon="plus"
-                                    iconOnly
-                                    // A tab is a session, so adding one creates
-                                    // it directly in the addressed project or
-                                    // worktree instead of opening the task form.
-                                    onClick={() => groupConversationCreate(openGroup)}
-                                    size="small"
-                                    variant="ghost"
-                                />
+                                // A tab is a session, so adding one creates it
+                                // directly in the addressed project or worktree
+                                // instead of opening the task form — and a
+                                // workspace that cannot host a session offers no
+                                // button, because the only thing it could do is
+                                // fail.
+                                openGroupWorkRefusal === undefined ? (
+                                    <Button
+                                        aria-label="Create a session in this project"
+                                        icon="plus"
+                                        iconOnly
+                                        onClick={() => groupConversationCreate(openGroup)}
+                                        size="small"
+                                        variant="ghost"
+                                    />
+                                ) : undefined
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
@@ -2890,7 +2920,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         groupId={openGroup.id}
                                         groupName={openGroup.name}
                                         now={now}
-                                        onCreate={() => groupConversationCreate(openGroup)}
+                                        {...(openGroupWorkRefusal === undefined
+                                            ? {
+                                                  onCreate: () =>
+                                                      groupConversationCreate(openGroup),
+                                              }
+                                            : {})}
                                         onChatSelect={props.onChatSelect}
                                         onFileOpen={(path) => {
                                             const target = workspacePathRelative(
@@ -2904,6 +2939,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             );
                                         }}
                                         readOnly={conversationReadOnly}
+                                        {...(conversationReadOnlyReason === undefined
+                                            ? {}
+                                            : { readOnlyReason: conversationReadOnlyReason })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
                                         workspace={props.workspace}
@@ -3221,10 +3259,13 @@ function RigConversationBody(props: {
     groupId: string;
     groupName: string;
     now: number;
-    onCreate: () => void;
+    /** Starts a session here, when this workspace can host one. */
+    onCreate?: () => void;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    /** Why the input is closed, said in the words of whatever closed it. */
+    readOnlyReason?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -3241,6 +3282,9 @@ function RigConversationBody(props: {
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
                 readOnly={props.readOnly}
+                {...(props.readOnlyReason === undefined
+                    ? {}
+                    : { readOnlyReason: props.readOnlyReason })}
                 slotAction={props.slotAction}
                 slots={props.slots}
                 workspace={props.workspace}
@@ -3272,7 +3316,15 @@ function RigConversationBody(props: {
         );
     return (
         <EmptyState
-            action={{ label: "New session", icon: "plus", onClick: props.onCreate }}
+            {...(props.onCreate === undefined
+                ? {}
+                : {
+                      action: {
+                          label: "New session",
+                          icon: "plus" as const,
+                          onClick: props.onCreate,
+                      },
+                  })}
             // The main screen of the whole application when no work is open: an
             // agent standing by, waiting to be given something to do.
             animation="robot"
@@ -3299,6 +3351,8 @@ function RigConversationSurface(props: {
     /** Opens a file the transcript names, in the panel beside it. */
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    /** Why the input is closed, said in the words of whatever closed it. */
+    readOnlyReason?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -3338,7 +3392,7 @@ function RigConversationSurface(props: {
             composerFocusOnType={!props.readOnly && props.focusOnType}
             composerPlaceholder={
                 props.readOnly
-                    ? "Subagent chats are read-only"
+                    ? (props.readOnlyReason ?? "Subagent chats are read-only")
                     : composerPlaceholder(props.groupName)
             }
             conversationId={conversation.conversationId}
@@ -3559,6 +3613,8 @@ function RigPanelComposer(props: {
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
+    /** Why the input is closed, said in the words of whatever closed it. */
+    readOnlyReason?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
     workspace: RigWorkspaceStore;
@@ -3582,7 +3638,7 @@ function RigPanelComposer(props: {
                 composerFocusOnType={!props.readOnly}
                 composerPlaceholder={
                     props.readOnly
-                        ? "Subagent chats are read-only"
+                        ? (props.readOnlyReason ?? "Subagent chats are read-only")
                         : composerPlaceholder(props.groupName)
                 }
                 composerControls={

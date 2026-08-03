@@ -1,5 +1,6 @@
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import { rigConversationSummaryProject } from "./rigConversationProject.js";
+import { deepEqual } from "./rigSupport.js";
 import type {
     RigGroupId,
     RigProject,
@@ -152,7 +153,7 @@ export function rigProjectGroupsProject(
             orderKey: worktree.orderKey,
             path: worktree.path,
             displayPath: worktree.displayPath,
-            lifecycle: worktreeLifecycleOf(worktree),
+            lifecycle: rigWorktreeLifecycleOf(worktree),
             conversations,
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
@@ -171,6 +172,65 @@ export function rigProjectGroupsProject(
         ),
     );
     return groups.sort(byOrderKey);
+}
+
+/**
+ * Returns `next`, reusing every entity from `previous` the reconcile did not
+ * actually change — matched by its own id rather than by where it happens to sit
+ * in the array, and merged one level at a time so a change reaches only the
+ * entities it is about.
+ *
+ * A projection is rebuilt in full on every reconcile, so identity has to be put
+ * back deliberately. Matching positionally would make a drag, a new worktree, or
+ * a project moving to the front replace every row after it, and a single
+ * worktree changing phase would hand its siblings and their conversations new
+ * objects. Matching by id means a reorder returns the same objects in a
+ * different order, and one phase change replaces exactly one worktree, its
+ * project, and the two arrays holding them.
+ */
+export function rigProjectGroupsPreserve(
+    previous: readonly RigProjectGroup[],
+    next: readonly RigProjectGroup[],
+): readonly RigProjectGroup[] {
+    return entitiesPreserve(previous, next, (before, after) => {
+        const conversations = entitiesPreserve(before.conversations, after.conversations);
+        const worktrees = entitiesPreserve(before.worktrees, after.worktrees, worktreePreserve);
+        const merged =
+            conversations === after.conversations && worktrees === after.worktrees
+                ? after
+                : { ...after, conversations, worktrees };
+        return deepEqual(before, merged) ? before : merged;
+    });
+}
+
+function worktreePreserve(before: RigWorktreeGroup, after: RigWorktreeGroup): RigWorktreeGroup {
+    const conversations = entitiesPreserve(before.conversations, after.conversations);
+    const merged = conversations === after.conversations ? after : { ...after, conversations };
+    return deepEqual(before, merged) ? before : merged;
+}
+
+/**
+ * One collection's structural sharing: each entity is matched to the previous
+ * one carrying the same id, and the array itself is reused when every entity in
+ * it came back unchanged and in the same order.
+ */
+function entitiesPreserve<T extends { readonly id: string }>(
+    previous: readonly T[],
+    next: readonly T[],
+    preserve: (before: T, after: T) => T = (before, after) =>
+        deepEqual(before, after) ? before : after,
+): readonly T[] {
+    if (previous === next) return previous;
+    const byId = new Map<string, T>();
+    for (const entity of previous) byId.set(entity.id, entity);
+    let changed = previous.length !== next.length;
+    const merged = next.map((entity, index) => {
+        const before = byId.get(entity.id);
+        const kept = before === undefined ? entity : preserve(before, entity);
+        if (kept !== previous[index]) changed = true;
+        return kept;
+    });
+    return changed ? merged : previous;
 }
 
 function projectGroup(
@@ -227,7 +287,7 @@ const LIFECYCLE_FAILED: RigWorktreeLifecycle = { phase: "failed" };
  * it its own presentation would be building a screen for something nothing
  * sends.
  */
-function worktreeLifecycleOf(worktree: RigWorktree): RigWorktreeLifecycle {
+export function rigWorktreeLifecycleOf(worktree: RigWorktree): RigWorktreeLifecycle {
     if (worktree.status === "initializing") return LIFECYCLE_CREATING;
     if (worktree.status === "failed" || worktree.status === "archive_failed") {
         return worktree.error === undefined
@@ -235,6 +295,31 @@ function worktreeLifecycleOf(worktree: RigWorktree): RigWorktreeLifecycle {
             : { phase: "failed", reason: worktree.error };
     }
     return worktree.presence === "missing" ? LIFECYCLE_MISSING : LIFECYCLE_READY;
+}
+
+/**
+ * Whether work can start in this worktree at all. Only a prepared checkout that
+ * is still on disk can host a session: a session pointed at a directory that
+ * does not exist fails on its first command, and the failure it reports is about
+ * a missing path rather than about the workspace never having been made.
+ */
+export function rigWorktreeLifecycleAccepts(lifecycle: RigWorktreeLifecycle): boolean {
+    return lifecycle.phase === "ready";
+}
+
+/**
+ * Why work cannot start here, in the phase's own words, or `undefined` when it
+ * can. The sentence is what a refused control shows and what a refused action
+ * rejects with, so both say the same thing rather than one of them apologising
+ * generically.
+ */
+export function rigWorktreeLifecycleRefusal(lifecycle: RigWorktreeLifecycle): string | undefined {
+    if (lifecycle.phase === "ready") return undefined;
+    if (lifecycle.phase === "creating") return "This workspace is still being created.";
+    if (lifecycle.phase === "missing") return "This workspace's folder is no longer on disk.";
+    return lifecycle.reason === undefined
+        ? "This workspace could not be created."
+        : `This workspace could not be created. ${lifecycle.reason}`;
 }
 
 /**

@@ -322,6 +322,8 @@ export {
 export {
     rigProjectGroupsProject,
     rigSessionGroupIdOf,
+    rigWorktreeLifecycleAccepts,
+    rigWorktreeLifecycleRefusal,
     type RigProjectGroup,
     type RigWorktreeGroup,
     type RigWorktreeLifecycle,

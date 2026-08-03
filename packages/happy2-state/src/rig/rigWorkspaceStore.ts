@@ -25,6 +25,7 @@ import {
     type RigSessionDraftSnapshot,
     type RigSessionDraftStore,
 } from "./rigSessionDraftStore.js";
+import { rigWorktreeLifecycleRefusal } from "./rigProjectGroupProject.js";
 import { rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
@@ -2249,6 +2250,26 @@ export function rigWorkspaceStoreCreate(
     };
 
     /** What starting a conversation in an addressed group takes, from the list. */
+    /**
+     * Why this group cannot take new work, in the phase's own words, or
+     * `undefined` when it can. Only a worktree can refuse: a project's directory
+     * is the one Happy was pointed at, while a worktree's checkout may still be
+     * being prepared, may have failed to be prepared, or may have been removed
+     * from disk since. Every route that starts a session asks this first, so a
+     * shortcut, a tab button, a composer, and a plugin all refuse for the same
+     * reason rather than each starting a session that would fail on its first
+     * command.
+     */
+    const groupWorkRefusalFind = (groupId: RigGroupId | undefined): string | undefined => {
+        if (groupId === undefined) return undefined;
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        for (const project of projects.value)
+            for (const worktree of project.worktrees)
+                if (worktree.id === groupId) return rigWorktreeLifecycleRefusal(worktree.lifecycle);
+        return undefined;
+    };
+
     const groupStartFind = (
         groupId: RigGroupId,
     ):
@@ -2281,6 +2302,8 @@ export function rigWorkspaceStoreCreate(
         attachments: readonly ComposerAttachment[],
         selection: RigSelection | undefined,
     ): Promise<void> => {
+        const refusal = groupWorkRefusalFind(groupId);
+        if (refusal) return Promise.reject(new Error(refusal));
         const start = groupStartFind(groupId);
         if (!start) return Promise.reject(new Error("That group is no longer listed."));
         const create = selection
@@ -2754,6 +2777,8 @@ export function rigWorkspaceStoreCreate(
         async chatStart(input) {
             const groupId = slotGroupFind(input);
             if (!groupId) throw new Error("That project or workspace is no longer listed.");
+            const refusal = groupWorkRefusalFind(groupId);
+            if (refusal) throw new Error(refusal);
             const start = groupStartFind(groupId);
             if (!start) throw new Error("That project or workspace is not ready.");
             const create: RigSessionCreateInput = {
@@ -2802,6 +2827,8 @@ export function rigWorkspaceStoreCreate(
         },
         // Anything the caller names wins over the connection's last selection.
         conversationCreate: (input) => {
+            const refusal = groupWorkRefusalFind(input.worktreeId);
+            if (refusal) return Promise.reject(new Error(refusal));
             const models = client.models.get();
             const selection = models.type === "ready" ? models.lastUsedSelection : undefined;
             return list

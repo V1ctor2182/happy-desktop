@@ -359,6 +359,7 @@ export {
     type SpinnerVariant,
 } from "./Spinner";
 export { WaitRing, type WaitRingProps, waitFinishDateLabel, waitRemainingLabel } from "./WaitRing";
+export { WorkspaceLifecycleLane, type WorkspaceLifecycleLaneProps } from "./WorkspaceLifecycleLane";
 export {
     WorkspaceLifecycleNotice,
     type WorkspaceLifecycleNoticeProps,

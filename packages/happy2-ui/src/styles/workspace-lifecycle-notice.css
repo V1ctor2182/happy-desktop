@@ -165,3 +165,32 @@
     font-weight: 400;
     line-height: 16px;
 }
+
+/* ---- C-242 WorkspaceLifecycleLane ---------------------------------------- */
+
+/*
+ * The row the notice sits in, above the work it is about. It is in the document
+ * in every phase — including the ready one, where it holds nothing — because a
+ * row that came and went would move everything below it and rebuild the tab
+ * strip, transcript, and composer at the exact moment the reader needs them to
+ * stay where they were. Empty, it takes no space and shows nothing.
+ */
+.happy2-workspace-lifecycle-lane {
+    display: flex;
+    flex: none;
+    padding: 8px 12px 0;
+}
+
+.happy2-workspace-lifecycle-lane[data-empty] {
+    display: none;
+}
+
+/*
+ * The strip is content-sized on its own, which in a lane as wide as a window
+ * would let a long host reason run off the right edge instead of wrapping. Here
+ * it takes the lane's width and wraps inside it.
+ */
+.happy2-workspace-lifecycle-lane .happy2-workspace-lifecycle {
+    flex: 1 1 auto;
+    min-width: 0;
+}

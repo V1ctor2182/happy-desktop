@@ -3,8 +3,12 @@ import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
 import type { UserError } from "../types.js";
 import {
+    rigProjectGroupsPreserve,
     rigProjectGroupsProject,
     rigSessionGroupIdOf,
+    rigWorktreeLifecycleAccepts,
+    rigWorktreeLifecycleOf,
+    rigWorktreeLifecycleRefusal,
     type RigProjectGroup,
 } from "./rigProjectGroupProject.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
@@ -286,9 +290,26 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     let sessions: readonly RigSessionSummary[] = [];
     let catalog: RigProjectCatalog = EMPTY_CATALOG;
     // Callers waiting for a freshly reserved worktree to finish initializing.
-    // Settled from `publish`, which every reconcile runs through, so the wait is
-    // driven by the host's own catalog rather than by polling it.
-    const worktreeWaiters = new Map<RigWorktreeId, (worktree: RigWorktree) => void>();
+    // Settled from every reconcile, so the wait is driven by the host's own
+    // catalog rather than by polling it. Each waiter keeps both halves: a
+    // creation the host refuses, a checkout it could not prepare, a row it
+    // withdrew, and disposal all have to end the wait, or the caller's action
+    // never returns and its spinner never stops.
+    interface RigWorktreeWaiter {
+        readonly resolve: (worktree: RigWorktree) => void;
+        readonly reject: (error: Error) => void;
+        /** Whether the catalog has ever listed this worktree, so a later absence is a withdrawal. */
+        listed: boolean;
+    }
+    const worktreeWaiters = new Map<RigWorktreeId, RigWorktreeWaiter>();
+
+    /** Ends one wait with a reason, if anyone is still waiting on that worktree. */
+    const worktreeWaiterReject = (worktreeId: RigWorktreeId, message: string): void => {
+        const waiter = worktreeWaiters.get(worktreeId);
+        if (!waiter) return;
+        worktreeWaiters.delete(worktreeId);
+        waiter.reject(new Error(message));
+    };
 
     /**
      * Counts the changes the authoritative reads have made to what this list
@@ -313,10 +334,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         const previous = store.getState();
         // An unchanged project keeps its previous object — and with it the
         // identity of the worktrees and conversation rows nested inside it — so a
-        // reconcile that changed one session does not replace every project row.
+        // reconcile that changed one session does not replace every project row,
+        // and a worktree changing phase does not replace its siblings.
         const projects =
             previous.projects.type === "ready"
-                ? referencesPreserve(previous.projects.value, projected)
+                ? rigProjectGroupsPreserve(previous.projects.value, projected)
                 : projected;
         // The revision alone is worth a notification: a read that confirmed the
         // list is unchanged is still the host's answer, and it is what a
@@ -439,33 +461,61 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         }
     };
 
-    /** Settles anyone waiting on a worktree that has stopped initializing. */
+    /**
+     * Settles anyone waiting on a worktree that has stopped initializing, and
+     * ends the wait for one the catalog has stopped listing after having listed
+     * it — a withdrawn row is an answer, not a reason to keep waiting.
+     */
     const worktreesSettle = (): void => {
         if (worktreeWaiters.size === 0) return;
+        const listed = new Set<RigWorktreeId>();
         for (const worktree of catalog.worktrees) {
+            const waiter = worktreeWaiters.get(worktree.id);
+            if (!waiter) continue;
+            listed.add(worktree.id);
+            waiter.listed = true;
             if (worktree.status === "initializing") continue;
-            const settle = worktreeWaiters.get(worktree.id);
-            if (settle) {
-                worktreeWaiters.delete(worktree.id);
-                settle(worktree);
+            worktreeWaiters.delete(worktree.id);
+            const lifecycle = rigWorktreeLifecycleOf(worktree);
+            if (rigWorktreeLifecycleAccepts(lifecycle)) waiter.resolve(worktree);
+            else
+                waiter.reject(
+                    new Error(
+                        rigWorktreeLifecycleRefusal(lifecycle) ?? "This workspace cannot be used.",
+                    ),
+                );
+        }
+        for (const [worktreeId, waiter] of worktreeWaiters) {
+            if (waiter.listed && !listed.has(worktreeId)) {
+                worktreeWaiterReject(worktreeId, "The workspace is no longer listed.");
             }
         }
     };
 
     /**
      * Resolves once the host reports the worktree usable, or rejects when it
-     * failed to prepare. A worktree that never settles leaves this pending; the
-     * caller is a user action, so it is cancelled by disposal rather than by a
-     * timeout that would report a failure the host never had.
+     * failed to prepare, was refused, or was withdrawn. A worktree still being
+     * prepared leaves this pending; the caller is a user action, so it is
+     * cancelled by disposal rather than by a timeout that would report a failure
+     * the host never had.
      */
     const worktreeReady = (worktreeId: RigWorktreeId): Promise<RigWorktree> => {
+        const refused = store.getState().worktreeCreateFailures.get(worktreeId);
+        if (refused) return Promise.reject(new Error(refused.message));
         const known = catalog.worktrees.find((candidate) => candidate.id === worktreeId);
-        if (known && known.status !== "initializing") return Promise.resolve(known);
+        if (known && known.status !== "initializing") {
+            const lifecycle = rigWorktreeLifecycleOf(known);
+            return rigWorktreeLifecycleAccepts(lifecycle)
+                ? Promise.resolve(known)
+                : Promise.reject(
+                      new Error(
+                          rigWorktreeLifecycleRefusal(lifecycle) ??
+                              "This workspace cannot be used.",
+                      ),
+                  );
+        }
         return new Promise<RigWorktree>((resolve, reject) => {
-            worktreeWaiters.set(worktreeId, (worktree) => {
-                if (worktree.status === "ready") resolve(worktree);
-                else reject(new Error("The worktree could not be prepared."));
-            });
+            worktreeWaiters.set(worktreeId, { resolve, reject, listed: known !== undefined });
         });
     };
 
@@ -551,6 +601,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                       )
                     : previous.worktreeCreateFailures;
             store.setState({ ...previous, mutationError: error, worktreeCreateFailures });
+            // Anyone waiting to start the first conversation in that worktree is
+            // waiting for a checkout that will never be prepared, so the refusal
+            // ends their wait with the host's own sentence.
+            if (rejection.action === "create_workspace") {
+                worktreeWaiterReject(rejection.mutationId as RigWorktreeId, error.message);
+            }
         });
         void reconcile();
     };
@@ -917,7 +973,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            // A wait that outlives its surface would leave its caller's promise
+            // pending for the life of the process, so disposal answers it.
+            const cancelled = new Error("The workspace list was closed.");
+            const waiters = [...worktreeWaiters.values()];
             worktreeWaiters.clear();
+            for (const waiter of waiters) waiter.reject(cancelled);
             stop();
             storeUnsub();
             listeners.clear();

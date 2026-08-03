@@ -46,18 +46,6 @@ body {
 }
 
 /*
- * The lane a worktree's phase is stated in when the worktree still has work in
- * it: between the heading and the tab strip, inset to the same gutter the strip
- * uses so the notice lines up with the tabs under it. Arrangement only — the
- * notice itself is `WorkspaceLifecycleNotice`.
- */
-.rig-workspace__lifecycle {
-    display: flex;
-    flex: none;
-    padding: 8px 12px 0;
-}
-
-/*
  * The revert confirmation body: what happens, then the files it happens to.
  * The list is bounded and scrolls, because a selection of forty files is
  * exactly the case where reading them before agreeing matters most.

@@ -46,7 +46,12 @@ export function rigConnectCatalogSourceCreate(
     let connection: ReturnType<RigConnection["connectGroups"]> | undefined;
     let fallbackUnsubscribe: (() => void) | undefined;
     let fallbackReading: Promise<void> | undefined;
+    let fallbackReadingGeneration = -1;
     let live = false;
+    // Which source is authoritative right now. Every asynchronous read carries
+    // the generation it was started under, so a read issued against the source
+    // Happy has since moved off can never publish over the newer one.
+    let generation = 0;
     let disposed = false;
     const listeners = new Set<() => void>();
     const errorListeners = new Set<(error: unknown) => void>();
@@ -74,25 +79,39 @@ export function rigConnectCatalogSourceCreate(
         if (disposed || fallbackUnsubscribe) return;
         connection?.close();
         connection = undefined;
+        // The stream stopped being authoritative the moment it failed, even if
+        // it had reached `live` earlier. Handing authority back to the complete
+        // reader before it starts is what lets its results be published at all.
+        live = false;
+        generation += 1;
         fallbackUnsubscribe = fallback.subscribe(() => void fallbackRead(), fail);
         void fallbackRead();
     };
 
     const fallbackRead = (): Promise<void> => {
-        fallbackReading ??= fallback
+        if (fallbackReading !== undefined && fallbackReadingGeneration === generation) {
+            return fallbackReading;
+        }
+        const readGeneration = generation;
+        fallbackReadingGeneration = readGeneration;
+        const reading = fallback
             .read()
             .then((next) => {
-                if (disposed || live) return;
+                if (disposed || live || generation !== readGeneration) return;
                 snapshot = next;
                 for (const waiter of waiting) waiter.resolve(next);
                 waiting.clear();
                 for (const listener of listeners) listener();
             })
-            .catch(fail)
+            .catch((error: unknown) => {
+                if (disposed || generation !== readGeneration) return;
+                fail(error);
+            })
             .finally(() => {
-                fallbackReading = undefined;
+                if (fallbackReading === reading) fallbackReading = undefined;
             });
-        return fallbackReading;
+        fallbackReading = reading;
+        return reading;
     };
 
     const start = (): void => {
@@ -100,7 +119,10 @@ export function rigConnectCatalogSourceCreate(
         connection = rig.connectGroups({
             onChange: (projects, state) => {
                 if (state.connection !== "live") return;
-                live = true;
+                if (!live) {
+                    live = true;
+                    generation += 1;
+                }
                 fallbackUnsubscribe?.();
                 fallbackUnsubscribe = undefined;
                 publish(projects);
