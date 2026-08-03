@@ -808,9 +808,11 @@ function panelFileKind(path: string): RigPanelFileKind {
  * agent saw them, which is usually an absolute path on the machine running the
  * session; the host reads paths inside the checkout, so its root is stripped
  * when the path is under it and the path is otherwise passed through unchanged.
+ * A leading `./` is the same file written the way a shell prompt writes it, and
+ * the host addresses that file without it.
  */
 function workspacePathRelative(path: string, root: string | undefined): string {
-    const normalized = path.replaceAll("\\", "/");
+    const normalized = path.replaceAll("\\", "/").replace(/^(?:\.\/)+/u, "");
     if (root === undefined) return normalized;
     const base = root.replaceAll("\\", "/").replace(/\/+$/u, "");
     return base.length > 0 && normalized.startsWith(`${base}/`)

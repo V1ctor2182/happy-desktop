@@ -45,9 +45,22 @@ function webHref(value: unknown): string | undefined {
 }
 
 /**
+ * A `path:line` or `path:line:column` target, reduced to the file it names.
+ *
+ * Naming a line is how everything that writes about code refers to it, and a
+ * reader who clicks one is asking for that file. Carrying the position through
+ * as part of the name left the whole reference pointing at nothing openable, so
+ * the position is dropped here — the file is what a viewer can show.
+ */
+function withoutPosition(path: string): string {
+    return path.replace(/:\d+(?::\d+)?$/u, "");
+}
+
+/**
  * The file this link points at, for a link that is not a web address: a
  * relative path, an absolute path, or a `file:` URL. A bare `#fragment` is
- * in-document navigation and names no file.
+ * in-document navigation and names no file, and a path ending in `/` names a
+ * directory rather than something to open.
  */
 export function markdownDocumentLinkPath(value: unknown): string | undefined {
     if (typeof value !== "string") return undefined;
@@ -56,18 +69,24 @@ export function markdownDocumentLinkPath(value: unknown): string | undefined {
         return undefined;
     if (webHref(trimmed) !== undefined) return undefined;
     const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(trimmed);
-    if (scheme) {
-        if (scheme[1]!.toLowerCase() !== "file") return undefined;
+    if (scheme && scheme[1]!.toLowerCase() === "file") {
         try {
-            return decodeURIComponent(new URL(trimmed).pathname) || undefined;
+            const file = withoutPosition(decodeURIComponent(new URL(trimmed).pathname));
+            return file.length > 0 && !file.endsWith("/") ? file : undefined;
         } catch {
             return undefined;
         }
     }
     // A link's own fragment and query are addressing within the target
     // document; the file itself is what a viewer can open.
-    const path = trimmed.split(/[#?]/u)[0] ?? "";
-    return path.length > 0 ? path : undefined;
+    const path = withoutPosition(trimmed.split(/[#?]/u)[0] ?? "");
+    // A colon before a line number is not a scheme separator, so the position
+    // comes off before anything decides this is a protocol: `Message.tsx:42`
+    // read as a scheme was a file reference the reader could not open. What is
+    // still prefixed by a scheme after that really is one, and no viewer here
+    // opens it.
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(path)) return undefined;
+    return path.length > 0 && !path.endsWith("/") ? path : undefined;
 }
 
 const FileOpenContext = createContext<((path: string) => void) | undefined>(undefined);

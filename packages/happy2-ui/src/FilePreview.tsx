@@ -123,12 +123,50 @@ const EXTENSION_KIND: Record<string, FilePreviewKind> = {
  */
 const URL_KINDS = new Set<FilePreviewKind>(["audio", "pdf"]);
 /**
+ * Extensions whose bytes are opaque to every viewer here. Named explicitly
+ * because being unrecognized is not evidence of being binary: a checkout is
+ * full of `LICENSE`, `CHANGELOG`, `.nvmrc`, and one-off suffixes that are all
+ * plain text, and refusing them left most of what a transcript points at
+ * unopenable.
+ */
+const OPAQUE_EXTENSIONS = new Set([
+    "a",
+    "bin",
+    "class",
+    "db",
+    "deb",
+    "dll",
+    "dmg",
+    "dylib",
+    "eot",
+    "exe",
+    "iso",
+    "jar",
+    "node",
+    "o",
+    "otf",
+    "pkg",
+    "pyc",
+    "pyo",
+    "rpm",
+    "so",
+    "sqlite",
+    "sqlite3",
+    "ttf",
+    "war",
+    "wasm",
+    "whl",
+    "woff",
+    "woff2",
+]);
+/**
  * What the preview should do with a file, from its name.
  *
- * Anything the `FileTree` already recognizes as source, data, configuration, or
- * prose is text, because the reason to open one is to read it. Everything else
- * is binary until proven otherwise — guessing wrong towards text is what fills a
- * viewer with replacement characters.
+ * A name this surface has a viewer for is shown with it, an archive or a
+ * compiled artefact is binary, and everything else is read as text: the reason
+ * to open a file at all is to read it, and the far more common wrong answer was
+ * calling a perfectly readable file binary because nobody had listed its
+ * extension.
  */
 export function filePreviewKind(path: string): FilePreviewKind {
     const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
@@ -136,15 +174,8 @@ export function filePreviewKind(path: string): FilePreviewKind {
     const ext = dot > 0 ? name.slice(dot + 1) : "";
     const known = EXTENSION_KIND[ext];
     if (known) return known;
-    const family = fileTreeFamily({ kind: "file", name });
-    return family === "code" ||
-        family === "data" ||
-        family === "style" ||
-        family === "config" ||
-        family === "shell" ||
-        family === "prose"
-        ? "text"
-        : "binary";
+    if (OPAQUE_EXTENSIONS.has(ext)) return "binary";
+    return fileTreeFamily({ kind: "file", name }) === "archive" ? "binary" : "text";
 }
 /** Header glyph for each kind — what sort of thing is being looked at. */
 const KIND_ICON: Record<FilePreviewKind, IconName> = {
