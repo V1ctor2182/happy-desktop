@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
     DesktopRuntimeSnapshot,
@@ -116,14 +116,36 @@ function recordParse(
     };
 }
 
+let recordWriteSequence = 0;
+
+/**
+ * Writes the record atomically, and only for a reader who is still the one being
+ * written for.
+ *
+ * The prepared copy is put down beside the record and made authoritative by a
+ * rename, so an interrupted write leaves the previous answers intact. That
+ * rename is the instant the answer becomes this machine's, so `authorized` is
+ * asked immediately before it: a document, a window, or a Rig may have been
+ * replaced while the bytes were being written, and answers given to a reader who
+ * has since gone must not be committed on their successor's behalf. An abandoned
+ * write takes its temporary file with it and returns false, having changed
+ * nothing.
+ */
 export async function localOnboardingRecordWrite(
     path: string,
     record: LocalOnboardingRecord,
-): Promise<void> {
+    authorized?: () => boolean,
+): Promise<boolean> {
     await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${process.pid}.tmp`;
+    recordWriteSequence += 1;
+    const temporary = `${path}.${process.pid}.${recordWriteSequence}.tmp`;
     await writeFile(temporary, `${JSON.stringify(record, undefined, 2)}\n`, { mode: 0o600 });
+    if (authorized && !authorized()) {
+        await rm(temporary, { force: true });
+        return false;
+    }
     await rename(temporary, path);
+    return true;
 }
 
 /** The daemon capability first-run setup needs, and no more of it. */
@@ -394,13 +416,17 @@ export class LocalOnboarding implements Disposable {
                 // they were looking at; a document or a machine that has been
                 // replaced since is not owed their answer.
                 if (!working.current()) return;
-                await this.recordWrite({
-                    ...this.record,
-                    cloudRequested,
-                    // Declining Happy Cloud settles the profile question with it:
-                    // there is nothing for an encrypted profile to exist in.
-                    ...(cloudRequested.joined ? {} : { profileRequested: false }),
-                });
+                await this.recordWrite(
+                    {
+                        ...this.record,
+                        cloudRequested,
+                        // Declining Happy Cloud settles the profile question with
+                        // it: there is nothing for an encrypted profile to exist
+                        // in.
+                        ...(cloudRequested.joined ? {} : { profileRequested: false }),
+                    },
+                    working.current,
+                );
             },
         );
     }
@@ -412,7 +438,10 @@ export class LocalOnboarding implements Disposable {
             ["profile"],
             async (working) => {
                 if (!working.current()) return;
-                await this.recordWrite({ ...this.record, profileRequested: request });
+                await this.recordWrite(
+                    { ...this.record, profileRequested: request },
+                    working.current,
+                );
             },
         );
     }
@@ -484,7 +513,7 @@ export class LocalOnboarding implements Disposable {
             if (!mine()) return;
             this.freshness = "used";
             try {
-                await this.recordWrite({ ...this.record, projectPath: path });
+                await this.recordWrite({ ...this.record, projectPath: path }, mine);
             } catch {
                 // The project is open in Rig, and Rig is what setup reads back.
                 // The remembered path is for display alone, so failing to write
@@ -547,7 +576,10 @@ export class LocalOnboarding implements Disposable {
                 if (!working.current()) return;
                 await action(working);
             } catch (error) {
-                this.message = `${failure}: ${displayError(error)}`;
+                // A failure belongs to whoever asked for the work. If they have
+                // been replaced, the setup now on screen is not theirs to put an
+                // error on, so it is dropped with the request it came from.
+                if (working.current()) this.message = `${failure}: ${displayError(error)}`;
             } finally {
                 this.durablePending = false;
                 this.busy = false;
@@ -744,11 +776,25 @@ export class LocalOnboarding implements Disposable {
         this.publish();
     }
 
-    private async recordWrite(record: LocalOnboardingRecord): Promise<void> {
-        await localOnboardingRecordWrite(this.options.recordPath, record);
+    /**
+     * Commits answers for a reader who is still the one giving them. The write
+     * is abandoned at the last moment if they are not, and nothing is remembered
+     * or published on their successor's behalf.
+     */
+    private async recordWrite(
+        record: LocalOnboardingRecord,
+        authorized: () => boolean,
+    ): Promise<boolean> {
+        const committed = await localOnboardingRecordWrite(
+            this.options.recordPath,
+            record,
+            authorized,
+        );
+        if (!committed) return false;
         this.record = record;
         this.message = undefined;
         this.publish();
+        return true;
     }
 
     private publish(): void {
