@@ -64,6 +64,7 @@ class FakeRigConnection {
             apps: () => [],
             plugins: () => [],
             state: () => ({ connection: "live", failures: [] }),
+            readIcon: () => Promise.reject(new Error("This fake serves no plugin icons.")),
             readResource: (_app, uri) =>
                 Promise.resolve({
                     contents: [

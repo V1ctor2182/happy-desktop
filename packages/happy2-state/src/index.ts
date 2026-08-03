@@ -387,6 +387,7 @@ export {
     type RigPluginCatalogSourceReading,
     type RigPluginCatalogStore,
     type RigPluginCatalogStoreDeps,
+    type RigPluginCategory,
     type RigPluginPackage,
     type RigPluginPackageFailure,
     type RigPluginPackageStatus,

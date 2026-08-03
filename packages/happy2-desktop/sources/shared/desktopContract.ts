@@ -368,6 +368,17 @@ export interface DesktopPluginPackage {
     readonly name: string;
     readonly version: string;
     readonly description: string;
+    /** Who publishes the package, exactly as its own manifest names them. */
+    readonly author: string;
+    /** The one shelf the package declared for itself, from Rig's closed set. */
+    readonly category: DesktopPluginCategory;
+    /**
+     * The package's own mark, once its bytes have been read and checked. It is
+     * absent while it has not been read yet and stays absent when the daemon has
+     * none to give, so a package without one is drawn with a generated mark and
+     * nothing here is ever invented to fill the gap.
+     */
+    readonly icon?: DesktopPluginIcon;
     /** Whether the package's own code is up, stopped, or failed to start. */
     readonly status: "running" | "stopped" | "failed";
     /** The package's own words about the state it is in, when it offered any. */
@@ -380,6 +391,41 @@ export interface DesktopPluginPackage {
     readonly logAvailable: boolean;
     /** The labels of the applications this package contributes, in its own order. */
     readonly contributions: readonly string[];
+}
+
+/**
+ * The shelf a package declared for itself: Rig's own closed set, restated here
+ * rather than imported, so the renderer's contract does not depend on the daemon
+ * client. A package that declares none is `other`, which Rig fills in.
+ */
+export type DesktopPluginCategory =
+    | "automation"
+    | "collaboration"
+    | "data"
+    | "developer-tools"
+    | "media"
+    | "productivity"
+    | "utilities"
+    | "other";
+
+/**
+ * One package's mark, as bytes already fetched under this process's own
+ * credentials and already checked against the exact media type and size the
+ * catalog declared for them.
+ *
+ * Only bytes cross. No path on the daemon's machine and no address the renderer
+ * could fetch for itself is ever put here: a mark the renderer could ask for
+ * would be a second way to reach the daemon, and an unauthenticated one.
+ *
+ * `generation` is the content hash the catalog declared for these bytes. It is
+ * carried so a mark can be recognized as the same mark without comparing bytes,
+ * which is what lets a decoded mark be kept across readings instead of being
+ * rebuilt for every frame.
+ */
+export interface DesktopPluginIcon {
+    readonly bytes: Uint8Array;
+    readonly generation: string;
+    readonly mediaType: "image/png";
 }
 
 /**

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { PluginIconRequestError } from "@slopus/rig-connect";
 import type {
     LocalPlugin,
     PluginApp,
@@ -9,6 +10,7 @@ import type {
     DesktopPluginApplication,
     DesktopPluginCatalog,
     DesktopPluginConnectionState,
+    DesktopPluginIcon,
     DesktopPluginInventory,
     DesktopPluginPackage,
     DesktopPluginPackageFailure,
@@ -51,6 +53,26 @@ interface BundleEntry {
     readonly resources: Map<string, CachedResource>;
     error?: string;
     status: "loading" | "ready" | "error";
+}
+
+/**
+ * One package's mark, at whatever stage of being read it has reached.
+ *
+ * It is keyed by the package and the generation together: the generation is the
+ * content hash of the bytes, so a package whose mark changed is a different
+ * entry rather than the same one mutated, and the old bytes are dropped whole
+ * instead of being overwritten while something is still reading them.
+ *
+ * A mark that could not be read is remembered as unreadable rather than
+ * forgotten, so a package the daemon has no mark for is asked about once instead
+ * of on every reading. The remembered failure is discarded with the generation
+ * it belongs to, which is what makes a replaced mark retried and an unchanged
+ * one not.
+ */
+interface IconEntry {
+    bytes?: Uint8Array;
+    readonly controller: AbortController;
+    status: "loading" | "ready" | "unavailable";
 }
 
 export interface PluginApplicationCacheOptions {
@@ -196,6 +218,13 @@ export class PluginApplicationCache implements Disposable {
     /** Folders the daemon reported it could not read as packages. */
     #failures: readonly DesktopPluginPackageFailure[] = [];
     /**
+     * Every package mark this process has read or tried to read, by package and
+     * generation together. The bytes are kept when nobody is reading the
+     * inventory, because a content hash cannot go stale — reopening the catalog
+     * draws immediately instead of asking again. Only the asking is on demand.
+     */
+    readonly #icons = new Map<string, IconEntry>();
+    /**
      * Where the inventory's own subscription is. It is tracked separately from
      * the application catalog's because the inventory may be projected at any
      * moment by a screen that has just opened, including while nothing is being
@@ -243,7 +272,9 @@ export class PluginApplicationCache implements Disposable {
      */
     inventoryGet(): DesktopPluginInventory {
         const next: DesktopPluginInventory = {
-            packages: this.#packages.map(projectPackage),
+            packages: this.#packages.map((plugin) =>
+                projectPackage(plugin, this.#iconRead(plugin)),
+            ),
             failures: this.#failures,
             connection: this.#inventoryConnection,
             loading: !this.#inventoryRead,
@@ -261,7 +292,14 @@ export class PluginApplicationCache implements Disposable {
      * `inventoryGet` in the same turn and would otherwise be told twice.
      */
     inventoryFollowSet(following: boolean): void {
+        if (this.#inventoryFollowed === following) return;
         this.#inventoryFollowed = following;
+        // Reading marks is transport work done for one screen, so it starts when
+        // that screen does. What has already been read stays read; only the
+        // asking stops, because an answer nobody is waiting for is a download
+        // nobody asked for.
+        if (following) this.#iconsRead();
+        else this.#iconsAbandon();
     }
 
     /** The application one isolated origin belongs to, or nothing once it is retired. */
@@ -435,6 +473,8 @@ export class PluginApplicationCache implements Disposable {
         if (this.#closed) return;
         this.#closed = true;
         for (const [key, entry] of this.#entries) this.#retire(key, entry, false);
+        for (const entry of this.#icons.values()) entry.controller.abort();
+        this.#icons.clear();
         this.#connection.close();
         this.#catalog = { applications: [], connection: "closed", loading: false };
         this.#onChange(this.#catalog);
@@ -578,7 +618,100 @@ export class PluginApplicationCache implements Disposable {
             this.#origins.set(entry.originHost, entry);
             void this.#prefetch(key, entry);
         }
+        this.#iconsRetire();
+        this.#iconsRead();
         this.#publish(state.connection);
+        this.#publishInventory();
+    }
+
+    /**
+     * The mark a package's current generation has, or nothing while it has not
+     * been read or could not be. A generation the daemon has replaced is never
+     * answered from here, because the entry it would answer from is keyed by the
+     * generation that was replaced.
+     */
+    #iconRead(plugin: LocalPlugin): DesktopPluginIcon | undefined {
+        const entry = this.#icons.get(iconKey(plugin));
+        if (!entry?.bytes) return undefined;
+        return {
+            bytes: entry.bytes,
+            generation: plugin.icon.generation,
+            mediaType: plugin.icon.mediaType,
+        };
+    }
+
+    /**
+     * Drops every mark no installed package declares any more: an uninstalled
+     * package's, and the previous generation's for a package whose mark changed.
+     * A read still in flight for one of them is abandoned, because its answer is
+     * about a generation nothing will ask for again.
+     */
+    #iconsRetire(): void {
+        const declared = new Set(this.#packages.map(iconKey));
+        for (const [key, entry] of this.#icons) {
+            if (declared.has(key)) continue;
+            this.#icons.delete(key);
+            entry.controller.abort();
+        }
+    }
+
+    /** Stops asking for marks, keeping whatever has already been answered. */
+    #iconsAbandon(): void {
+        for (const [key, entry] of this.#icons) {
+            if (entry.status !== "loading") continue;
+            this.#icons.delete(key);
+            entry.controller.abort();
+        }
+    }
+
+    /**
+     * Asks for every mark that is wanted and not yet known. A package is asked
+     * about once per generation: a mark that arrived is kept, and one the daemon
+     * had none for is remembered as unavailable rather than asked for again on
+     * the next reading.
+     */
+    #iconsRead(): void {
+        if (this.#closed || !this.#inventoryFollowed) return;
+        for (const plugin of this.#packages) {
+            const key = iconKey(plugin);
+            if (this.#icons.has(key)) continue;
+            const entry: IconEntry = { controller: new AbortController(), status: "loading" };
+            this.#icons.set(key, entry);
+            void this.#iconLoad(key, entry, plugin);
+        }
+    }
+
+    /**
+     * Reads one package's mark. The daemon fetches it under this process's
+     * credentials, bounds it, and refuses to return anything whose media type or
+     * length is not the one the catalog declared, so what arrives here is already
+     * the exact generation that was asked for.
+     *
+     * Being told the generation is stale is not a failure to retry: the catalog
+     * is the authority on which generation exists, and it is already on its way
+     * with the new one. The entry is dropped so the next reading asks afresh.
+     */
+    async #iconLoad(key: string, entry: IconEntry, plugin: LocalPlugin): Promise<void> {
+        try {
+            const answer = await this.#connection.readIcon(plugin, {
+                signal: entry.controller.signal,
+            });
+            if (this.#icons.get(key) !== entry) return;
+            entry.bytes = answer.bytes;
+            entry.status = "ready";
+        } catch (error) {
+            if (entry.controller.signal.aborted) return;
+            if (this.#icons.get(key) !== entry) return;
+            if (error instanceof PluginIconRequestError && error.code === "stale_generation") {
+                this.#icons.delete(key);
+                return;
+            }
+            // Anything else — the daemon has no mark for this package, or does
+            // not know the package at all — is settled for this generation. A
+            // package with no mark of its own is drawn with a generated one, and
+            // nothing about the failure is turned into metadata.
+            entry.status = "unavailable";
+        }
         this.#publishInventory();
     }
 
@@ -722,8 +855,13 @@ function projectApplication(entry: BundleEntry): DesktopPluginApplication {
  * description, so an inventory frame is complete on arrival and never has to be
  * joined against the application catalog.
  */
-function projectPackage(plugin: LocalPlugin): DesktopPluginPackage {
+function projectPackage(
+    plugin: LocalPlugin,
+    icon: DesktopPluginIcon | undefined,
+): DesktopPluginPackage {
     return {
+        author: plugin.author,
+        category: plugin.category,
         contributions: plugin.apps.map((app) => app.sidebar.label),
         dataDirectory: plugin.dataDirectory,
         description: plugin.description,
@@ -734,8 +872,14 @@ function projectPackage(plugin: LocalPlugin): DesktopPluginPackage {
         status: plugin.status,
         version: plugin.version,
         ...(plugin.error === undefined ? {} : { error: plugin.error }),
+        ...(icon === undefined ? {} : { icon }),
         ...(plugin.statusMessage === undefined ? {} : { statusMessage: plugin.statusMessage }),
     };
+}
+
+/** One package's mark, identified by the package and the generation together. */
+function iconKey(plugin: LocalPlugin): string {
+    return `${plugin.id}${KEY_SEPARATOR}${plugin.icon.generation}`;
 }
 
 function sameCatalog(left: DesktopPluginCatalog, right: DesktopPluginCatalog): boolean {
@@ -764,6 +908,11 @@ function sameInventory(left: DesktopPluginInventory, right: DesktopPluginInvento
 function samePackage(left: DesktopPluginPackage, right: DesktopPluginPackage): boolean {
     return (
         left.id === right.id &&
+        left.author === right.author &&
+        left.category === right.category &&
+        // The generation is the hash of the bytes, so two marks under one
+        // generation are the same mark and the bytes need not be compared.
+        left.icon?.generation === right.icon?.generation &&
         left.name === right.name &&
         left.version === right.version &&
         left.description === right.description &&

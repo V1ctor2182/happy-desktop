@@ -5,21 +5,33 @@ import type { RigPluginCatalogEntry, RigPluginCatalogFailure } from "./RigPlugin
  * of.
  *
  * These are specimens, not a catalog. They exist so the cards, the shelves, and
- * a package's own page can be reviewed in every state they support — including
- * the ones a real machine reaches only occasionally, and the ones no machine can
- * reach yet because Rig reports no such field. Nothing here is exported from the
- * package and no application surface may import this file: the running screen is
- * handed what the machine actually said, and shows nothing when the machine has
- * nothing.
+ * a package's own page can be reviewed in every state they support, including
+ * the ones a real machine reaches only occasionally. Nothing here is exported
+ * from the package and no application surface may import this file: the running
+ * screen is handed what the machine actually said, and shows nothing when the
+ * machine has nothing.
+ *
+ * The marks below are real PNG bytes, drawn for these specimens and carried as
+ * data so the workbench needs no server. A running screen never sees a data
+ * address: it is handed one the host made for bytes it fetched and checked, and
+ * the component cannot tell the two apart, which is the point of reviewing it
+ * against real images rather than against a placeholder.
  *
  * Every name below is invented. None refers to a package that exists.
  */
 
+/* Marks drawn for these specimens. Original artwork, not any package's icon. */
+const ARTWORK_RINGS =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA/ElEQVR42u3bwRGDMAxEUZWSwqiN0lJCWiA3LgwEiCUt0meGW8ZkXwI2tmV283hN86J0muehFjYM5anBh0BUCX8LoVr4SwhVw59CqB7+EKFL+F2E1gDdwm8QAAAAgL4AXcOvCAAAEHvB92c5PEsC/AqdiWGq4aMQTDV4FIQp3ecZCBYVPqsdCQCFtkIAPL6wN4Iph49o2w0g+/OyAKN6CCmAs0H+6fO9bgNT+vUz/gVhACNGfgAAAAAPwUcAtOsG2w+EGArzMsTrMBMiTIkxKcq0OAsjLI2xOMryOADsE2KXGAAAAMCOceoFqBqhbojKMWoHqR6lhpiKcv2wX/BAorfG+iRWAAAAAElFTkSuQmCC";
+const ARTWORK_BARS =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAw0lEQVR42u3bMQrDMAwFUB+kh8thcuBOXZMtS2hpghUs6xm8Gv6bZNBv7eZ5rcs20m2RZ7Swj6FkDd4FYpbwtxBmC38JYdbwfyHMHv4nQpXwXxFKA1QLf0IAAABAXYCq4Q8EAIGPv7dPlwsgI0Cv8NEIAAAkCB+JAACAQQgAAAAAAAAAMOjwEz0UAcgwAkeOxAAAJPkJRv0IAQAwCAEAAAAAAAAAANgTsiUGAAAAG+P6AlojRcMrTanNKU6qzipPF6zP7z6U4/Xac0hLAAAAAElFTkSuQmCC";
+const ARTWORK_CHEVRON =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABLElEQVR42u2byxGDMAwFXUrqSaWpLOd0AKdcGRDvScJez3BF2h0+tmyNERyf92vrdA3n6AabJuWp4BIRs8CHJMwGf0nCrPCnJMwOfyghcqPt9y2HieYgE1Ap4U58yaP/T6BCgiK2VECmBFVcuYAMCcqYFgFOCep4NgEOCY5Yt//9R0kpJTjjWAUoJLhjjM4JZggeGY9oJNEMeJkAdcJZ8FIBqsQz4eUC7gJkw1sEREEq4G0CrgJVwVsFnAWrhLcLUEiwV4cqlq9d4NMERCSk1Qerqjgd4BHAK8BHkN8gEyGmwiyGWA5TEKEkRlGUsjgbI2yNLbg5ahPwlO3x9HpAyxNjCEAAAhCwtICVzgjLT4khAAEImKdvYGl4BNAyQ9MUbXM0TtI6S/P0ku3zO2AP9bVxrqk8AAAAAElFTkSuQmCC";
+
 /**
- * The complete card: mark, publisher, category, version, and a running package
- * with applications behind it. Publisher and category are the two fields Rig's
- * plugin manifest has no place for today, so this is what the card is ready for
- * rather than what any machine currently fills in.
+ * The complete card: the package's own mark, its publisher, its shelf, its
+ * version, and the applications it contributes while running. This is what a
+ * fully described package looks like, and every field on it is one Rig reports.
  */
 export const PLUGIN_STORE_FIXTURE_COMPLETE: RigPluginCatalogEntry = {
     id: "cartographer",
@@ -29,8 +41,9 @@ export const PLUGIN_STORE_FIXTURE_COMPLETE: RigPluginCatalogEntry = {
     state: "running",
     glyph: "package",
     tone: "ocean",
+    artworkUrl: ARTWORK_RINGS,
     author: "Westbourne Labs",
-    category: "Code intelligence",
+    category: "Developer tools",
     version: "2.4.0",
     contributions: ["Repository map", "Symbol search"],
     facts: [
@@ -40,7 +53,12 @@ export const PLUGIN_STORE_FIXTURE_COMPLETE: RigPluginCatalogEntry = {
     ],
 };
 
-/** The card a real machine draws today: a name, a version, and a description. */
+/**
+ * A package whose mark has not arrived. Its bytes are read on their own schedule,
+ * so a card is drawn before them and falls back to its generated mark; when they
+ * land the card changes and nothing else does. A package Rig has no mark for
+ * looks exactly like this, permanently, which is why one specimen covers both.
+ */
 export const PLUGIN_STORE_FIXTURE_BARE: RigPluginCatalogEntry = {
     id: "lantern",
     name: "Lantern",
@@ -49,6 +67,8 @@ export const PLUGIN_STORE_FIXTURE_BARE: RigPluginCatalogEntry = {
     state: "running",
     glyph: "package",
     tone: "mint",
+    author: "Rowan Iyer",
+    category: "Developer tools",
     version: "0.9.4",
     contributions: ["Build watch"],
     facts: [{ label: "Folder", value: "lantern", monospace: true }],
@@ -62,8 +82,9 @@ export const PLUGIN_STORE_FIXTURE_STOPPED: RigPluginCatalogEntry = {
     state: "stopped",
     glyph: "package",
     tone: "amber",
+    artworkUrl: ARTWORK_CHEVRON,
     author: "Aoife Kelleher",
-    category: "Notifications",
+    category: "Productivity",
     version: "0.4.1",
     note: "Stopped after its last run and not restarted.",
     facts: [{ label: "Folder", value: "postmark", monospace: true }],
@@ -78,7 +99,7 @@ export const PLUGIN_STORE_FIXTURE_FAILED: RigPluginCatalogEntry = {
     glyph: "alert",
     tone: "ember",
     author: "Happy",
-    category: "Databases",
+    category: "Data",
     version: "2.1.0",
     note: "Its entry point threw before it could register anything: Cannot find module './server.js'.",
     facts: [
@@ -100,8 +121,9 @@ export const PLUGIN_STORE_FIXTURE_OVERLONG: RigPluginCatalogEntry = {
     state: "running",
     glyph: "package",
     tone: "violet",
+    artworkUrl: ARTWORK_BARS,
     author: "a-publisher-with-an-unreasonably-long-handle",
-    category: "Review and annotation tooling for very long names",
+    category: "Collaboration",
     version: "0.0.1-alpha.7+build.20260318",
     facts: [
         {
@@ -126,6 +148,8 @@ export const PLUGIN_STORE_FIXTURE_UNBROKEN: RigPluginCatalogEntry = {
     state: "failed",
     glyph: "alert",
     tone: "amber",
+    author: "quarry-workspace-tools",
+    category: "Utilities",
     version: "3.0.0",
     note: "Error: Cannot find module '/Users/someone/Development/checkouts/monorepo/packages/quarry-workspace-indexer-daemon-supervisor/node_modules/.pnpm/registry.example.com+quarry-core@3.0.0/dist/runtime/bootstrap.js'",
     contributions: ["QuarryWorkspaceIndexerDaemonSupervisorDiagnosticsAndTelemetryOverview"],
@@ -136,6 +160,37 @@ export const PLUGIN_STORE_FIXTURE_UNBROKEN: RigPluginCatalogEntry = {
             monospace: true,
         },
     ],
+};
+
+/**
+ * A package whose mark is addressable and does not draw. The host checks the
+ * bytes it fetched against the media type and length the catalog declared, so
+ * this is the residue: something that passed those checks and still will not
+ * decode. The card must fall back to its generated mark rather than leave a
+ * broken image where the package's identity should be.
+ */
+export const PLUGIN_STORE_FIXTURE_UNDRAWABLE: RigPluginCatalogEntry = {
+    id: "sundial",
+    name: "Sundial",
+    description: "Keeps a session's elapsed work beside its transcript rather than in a log.",
+    state: "running",
+    glyph: "package",
+    tone: "ocean",
+    artworkUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+    author: "Marta Oyelaran",
+    category: "Productivity",
+    version: "1.2.0",
+    facts: [{ label: "Folder", value: "sundial", monospace: true }],
+};
+
+/**
+ * The same package after its mark changed. Rig names a mark by the hash of its
+ * bytes, so a replaced icon is a different address and nothing else about the
+ * package moves: this is the pair to compare a generation update against.
+ */
+export const PLUGIN_STORE_FIXTURE_REGENERATED: RigPluginCatalogEntry = {
+    ...PLUGIN_STORE_FIXTURE_COMPLETE,
+    artworkUrl: ARTWORK_CHEVRON,
 };
 
 /** The shelves as the workbench shows them, in the page's own reading order. */

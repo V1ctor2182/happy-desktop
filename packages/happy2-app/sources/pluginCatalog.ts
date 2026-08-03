@@ -1,6 +1,7 @@
 import type {
     RigPluginCatalogSnapshot,
     RigPluginCatalogStore,
+    RigPluginCategory,
     RigPluginPackage,
 } from "happy2-state";
 import { pluginStoreTone, type RigPluginCatalogEntry } from "happy2-ui";
@@ -25,18 +26,18 @@ import { pluginStoreTone, type RigPluginCatalogEntry } from "happy2-ui";
  * nothing from the last one.
  *
  * Everything projected is something the machine said. A package's name, version,
- * description, state, the folders it lives in and writes to, whether it kept a
- * log, and the labels of what it contributes are all reported by Rig in the same
- * reading. Nothing is invented to fill a card out: a package with no note
- * carries no note, and a machine with no packages produces no entries.
+ * description, state, publisher, shelf, the folders it lives in and writes to,
+ * whether it kept a log, and the labels of what it contributes are all reported
+ * by Rig in the same reading. Nothing is invented to fill a card out: a package
+ * with no note carries no note, and a machine with no packages produces no
+ * entries.
  *
- * Three fields the card can show are deliberately never set. Rig's plugin
- * manifest has no publisher and no category, so a package on this machine has
- * neither, and guessing one from a folder name would put a claim about
- * authorship on screen that nothing stands behind. The same goes for the mark:
- * the manifest requires an icon file, but no Rig endpoint serves it, so every
- * package wears a house glyph in a colour derived from its own identity rather
- * than artwork we do not have.
+ * The mark is the one thing that may be missing. A package declares an icon and
+ * the host fetches and checks it, but a package whose icon cannot be served has
+ * none, and a reading taken before the bytes arrived does not have it yet. In
+ * both cases the card wears a house glyph in a colour derived from the package's
+ * own identity — a generated mark, not a claim that this is the package's
+ * artwork, and never something derived from why the real one is absent.
  */
 export interface PluginCatalogProjection {
     (snapshot: RigPluginCatalogSnapshot): readonly RigPluginCatalogEntry[];
@@ -86,6 +87,11 @@ function entryProject(source: RigPluginPackage): RigPluginCatalogEntry {
         state: source.status,
         glyph: source.status === "failed" ? "alert" : "package",
         tone: pluginStoreTone(source.id),
+        author: source.author,
+        category: CATEGORY_LABELS[source.category],
+        // Absent until the host has the bytes, and absent for good when it has
+        // none to get. Either way the card falls back to its generated mark.
+        ...(source.artworkUrl === undefined ? {} : { artworkUrl: source.artworkUrl }),
         ...(source.version.length > 0 ? { version: source.version } : {}),
         ...(note === undefined || note.length === 0 ? {} : { note }),
         ...(source.contributions.length > 0 ? { contributions: source.contributions } : {}),
@@ -101,10 +107,33 @@ function entryProject(source: RigPluginPackage): RigPluginCatalogEntry {
     };
 }
 
+/**
+ * The shelves in a reader's words, one for each shelf Rig has.
+ *
+ * The mapping is deliberately total and deliberately literal: every value the
+ * host can report gets exactly one label, so a shelf can never be dropped or
+ * quietly turned into another one, and no label says more than the package
+ * claimed. `other` is what Rig fills in for a package that declared nothing, so
+ * it is named as the absence it is rather than dressed up as a category.
+ */
+const CATEGORY_LABELS: Record<RigPluginCategory, string> = {
+    automation: "Automation",
+    collaboration: "Collaboration",
+    data: "Data",
+    "developer-tools": "Developer tools",
+    media: "Media",
+    other: "Uncategorized",
+    productivity: "Productivity",
+    utilities: "Utilities",
+};
+
 /** Every field `entryProject` reads, which is what makes two readings the same card. */
 function packageSame(held: RigPluginPackage, next: RigPluginPackage): boolean {
     return (
         held.id === next.id &&
+        held.author === next.author &&
+        held.category === next.category &&
+        held.artworkUrl === next.artworkUrl &&
         held.name === next.name &&
         held.version === next.version &&
         held.description === next.description &&

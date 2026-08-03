@@ -59,6 +59,7 @@ class FakeConnection {
             apps: () => this.latest,
             plugins: () => [],
             state: () => ({ connection: "live", failures: [] }),
+            readIcon: () => Promise.reject(new Error("This fake serves no plugin icons.")),
             readResource: (app, uri, load) =>
                 new Promise((resolve, reject) => {
                     const pending: PendingLoad = {

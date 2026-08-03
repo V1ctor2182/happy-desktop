@@ -7,6 +7,21 @@ import type { RigPluginCatalogConnection } from "./rigPluginApplicationStore.js"
 export type RigPluginPackageStatus = "running" | "stopped" | "failed";
 
 /**
+ * The shelf a package declared for itself. It is a closed set the host reports
+ * rather than free text, so a surface may put whatever words it likes in front
+ * of a reader without ever inventing a shelf the package did not claim.
+ */
+export type RigPluginCategory =
+    | "automation"
+    | "collaboration"
+    | "data"
+    | "developer-tools"
+    | "media"
+    | "productivity"
+    | "utilities"
+    | "other";
+
+/**
  * One plugin package installed on this machine.
  *
  * A package is a different reading from the applications it contributes: it
@@ -25,6 +40,17 @@ export interface RigPluginPackage {
     readonly name: string;
     readonly version: string;
     readonly description: string;
+    /** Who publishes the package, as its own manifest names them. */
+    readonly author: string;
+    /** The shelf the package declared for itself. */
+    readonly category: RigPluginCategory;
+    /**
+     * Where this screen may draw the package's own mark from, when the host read
+     * one. It is an address the host made for the bytes it fetched and owns for
+     * the life of this reading; nothing may keep it past the subscription it came
+     * from. A package the host has no mark for simply has none here.
+     */
+    readonly artworkUrl?: string;
     readonly status: RigPluginPackageStatus;
     /** The package's own words about the state it is in, when it offered any. */
     readonly statusMessage?: string;

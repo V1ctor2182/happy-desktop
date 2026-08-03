@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { type ToneName } from "./Avatar";
 import { Icon, type IconName } from "./Icon";
 
@@ -72,15 +72,25 @@ export function pluginStoreTone(seed: string): ToneName {
  * The mark says nothing about state. A stopped package is not a grey package —
  * what it is doing is said in words beside it, and greying its mark would only
  * make a catalog of stopped packages unreadable.
+ *
+ * Artwork that will not draw falls back to the glyph. Whoever supplies an address
+ * has already checked the bytes behind it as far as it can, so this is the
+ * residue that only the decoder can find, and a package's identity is worth more
+ * than a broken image where its mark should be. Which address failed is this
+ * component's own business and is forgotten as soon as a different one arrives,
+ * so a package whose mark is replaced is drawn rather than held against its
+ * predecessor.
  */
 export function PluginStoreIcon(props: PluginStoreIconProps) {
     const size = props.size ?? "md";
+    const [undrawable, setUndrawable] = useState<string | undefined>(undefined);
+    const artworkUrl = props.artworkUrl === undrawable ? undefined : props.artworkUrl;
     return (
         <span
             aria-hidden={props["aria-label"] ? undefined : "true"}
             aria-label={props["aria-label"]}
             className={["happy2-plugin-store-icon", props.className].filter(Boolean).join(" ")}
-            data-artwork={props.artworkUrl ? "" : undefined}
+            data-artwork={artworkUrl ? "" : undefined}
             data-happy2-ui="plugin-store-icon"
             data-size={size}
             data-testid={props["data-testid"]}
@@ -88,13 +98,14 @@ export function PluginStoreIcon(props: PluginStoreIconProps) {
             role={props["aria-label"] ? "img" : undefined}
             style={props.style}
         >
-            {props.artworkUrl ? (
+            {artworkUrl ? (
                 <img
                     alt=""
                     className="happy2-plugin-store-icon__artwork"
                     data-happy2-ui="plugin-store-icon-artwork"
                     draggable={false}
-                    src={props.artworkUrl}
+                    onError={() => setUndrawable(artworkUrl)}
+                    src={artworkUrl}
                 />
             ) : (
                 <span

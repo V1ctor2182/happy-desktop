@@ -2,8 +2,11 @@ import { useRef } from "react";
 import {
     PLUGIN_STORE_FIXTURE_BARE,
     PLUGIN_STORE_FIXTURE_CATALOG,
+    PLUGIN_STORE_FIXTURE_COMPLETE,
     PLUGIN_STORE_FIXTURE_FAILURES,
+    PLUGIN_STORE_FIXTURE_REGENERATED,
     PLUGIN_STORE_FIXTURE_UNBROKEN,
+    PLUGIN_STORE_FIXTURE_UNDRAWABLE,
 } from "../../src/pages/plugins/RigPluginCatalogPage.fixtures";
 import {
     RigPluginCatalogPage,
@@ -229,6 +232,38 @@ export function RigPluginCatalogBlueprintPage() {
             >
                 <OpenedCatalog entries={[PLUGIN_STORE_FIXTURE_UNBROKEN]} width={NARROW.width} />
             </Specimen>
+            <FullScreenSpecimen
+                detail="Marks as they really arrive. One package carries its own PNG, one has not had its bytes read yet, and one is addressable but will not decode — the last two both fall back to a generated mark, which is what a package with no icon of its own always wears."
+                label="Marks, present and absent"
+                number="19"
+            >
+                <RigPluginCatalogPage
+                    entries={[
+                        PLUGIN_STORE_FIXTURE_COMPLETE,
+                        PLUGIN_STORE_FIXTURE_BARE,
+                        PLUGIN_STORE_FIXTURE_UNDRAWABLE,
+                    ]}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same package before and after its mark changed. Rig names a mark by the hash of its bytes, so a new icon is a new address and nothing else about the package moves; side by side these are the two readings a generation update produces."
+                label="A mark replaced"
+                number="20"
+            >
+                <div style={{ display: "flex", flex: "1 1 auto", minWidth: 0 }}>
+                    <RigPluginCatalogPage entries={[PLUGIN_STORE_FIXTURE_COMPLETE]} />
+                    <RigPluginCatalogPage entries={[PLUGIN_STORE_FIXTURE_REGENERATED]} />
+                </div>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A package's page with its own mark at hero size and its publisher and shelf under the name. Each of these is something Rig reported about the package rather than something derived from its folder name."
+                label="A described package's page"
+                number="21"
+            >
+                <OpenedCatalog entries={[PLUGIN_STORE_FIXTURE_COMPLETE]} />
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }
