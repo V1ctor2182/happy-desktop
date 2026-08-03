@@ -496,6 +496,15 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 
     const start = (): void => {
         active = true;
+        // A new watching epoch begins with nothing known about the host. Cleared
+        // here rather than on the way out because a mutation issued while nobody
+        // was watching still reconciles, and its read would otherwise leave a
+        // baseline behind that the startup read below matches — announcing
+        // nothing to a subscriber that has just arrived and knows nothing. The
+        // first read of an epoch therefore always counts as a change, however
+        // familiar it looks, so a group is confirmed present before its later
+        // absence can be reported as a removal.
+        authoritativeProjects = undefined;
         unsubscribeGlobal = deps.catalogSource
             ? deps.catalogSource.subscribe(
                   () => {
@@ -528,12 +537,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         // the host, and claiming otherwise would let a retired read pass for a
         // newer authoritative snapshot that never existed.
         retiredSequence = readSequence;
-        // Nothing is watching the catalog any more, so what the last read said is
-        // no longer a baseline anyone is holding: the host may change while this
-        // is stopped, and a subscriber that comes back has to be told what is
-        // there before it can be told what left. The first read after starting
-        // again therefore counts as a change, however familiar it looks.
-        authoritativeProjects = undefined;
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         unsubscribeMutationRejections?.();
