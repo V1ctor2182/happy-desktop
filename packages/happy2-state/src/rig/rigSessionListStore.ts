@@ -317,12 +317,22 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
      * that has just changed something on the host is the moment before the
      * change: verifying against it would be reading the question back as the
      * answer.
+     *
+     * A read that fails keeps its place in that order rather than losing it: it
+     * reports the token it was issued and whether something newer landed while
+     * it was failing, so a caller holding an error can still see that a later
+     * read has already answered its question.
      */
     const catalogRead = async (
         fresh: boolean,
     ): Promise<
-        | { readonly ok: true; readonly observed: CatalogObservation }
-        | { readonly ok: false; readonly error: unknown }
+        | { readonly ok: true; readonly observed: CatalogObservation; readonly token: number }
+        | {
+              readonly ok: false;
+              readonly error: unknown;
+              readonly superseded: boolean;
+              readonly token: number;
+          }
     > => {
         const token = ++readSequence;
         try {
@@ -333,7 +343,13 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                           deps.transport.projectsRead(),
                           deps.transport.sessionsRead(),
                       ]).then(([readCatalog, read]) => ({ catalog: readCatalog, sessions: read }));
-            if (disposed) return { ok: false, error: new Error("The session list was closed.") };
+            if (disposed)
+                return {
+                    ok: false,
+                    error: new Error("The session list was closed."),
+                    superseded: token <= appliedSequence,
+                    token,
+                };
             const superseded = token <= appliedSequence;
             if (!superseded) {
                 appliedSequence = token;
@@ -346,9 +362,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             return {
                 ok: true,
                 observed: { catalog: snapshot.catalog, sessions: snapshot.sessions, superseded },
+                token,
             };
         } catch (error) {
-            return { ok: false, error };
+            return { ok: false, error, superseded: token <= appliedSequence, token };
         }
     };
 
@@ -728,10 +745,37 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // already gone, the state being asked for already holds, and a read
             // that then fails does not turn that into an open question.
             const presentBefore = catalog.projects.some((project) => project.id === projectId);
+            // Where this request sits in the read order. Any read applied above
+            // this line was issued after the request went out, so what it saw
+            // includes the archive if the host performed it — which is what
+            // makes such a read able to answer for this one.
+            const baseline = readSequence;
+            // The catalog lists only projects the host has not archived, so
+            // absence is the host saying it is archived — including when another
+            // window archived it first. An error in hand only chooses the words
+            // for a project that is still there.
+            const judge = (
+                judged: RigProjectCatalog,
+                requestError: unknown,
+            ): RigProjectArchiveResult =>
+                judged.projects.some((project) => project.id === projectId)
+                    ? {
+                          type: "failed",
+                          error: rigUserError(
+                              requestError ??
+                                  new Error("The project is still listed, so it was not archived."),
+                          ),
+                      }
+                    : { type: "archived" };
+            let requestError: unknown;
             try {
                 await deps.transport.projectArchive(projectId);
             } catch (error) {
-                return { type: "failed", error: rigUserError(error) };
+                // Held rather than returned. A request that failed on the way
+                // back is ambiguous — the host may have archived the project and
+                // lost the answer — so the question is settled by reading the
+                // list, exactly as it is for a request that succeeded.
+                requestError = error;
             }
             // Deliberately `fresh`: the live catalog source answers from the
             // snapshot it is holding, and the event that would replace it
@@ -748,36 +792,29 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                         ),
                     ),
                 };
-            if (!read.ok)
-                return presentBefore
-                    ? {
-                          type: "failed",
-                          error: rigUserError(
-                              new Error(
-                                  "The archive was requested but the project list could not be read back, so it is unconfirmed. Try again.",
-                              ),
-                          ),
-                      }
-                    : // It was already absent when this asked, and the host takes
-                      // the request on an archived project unchanged, so there is
-                      // nothing left for a read to establish.
-                      { type: "archived" };
-            // A read that started after this one and has already landed is the
-            // better answer: it saw everything this one saw and then some, so
-            // the judgement is made against the catalog that won rather than
-            // against a value that describes an earlier moment.
-            const judged = read.observed.superseded ? catalog : read.observed.catalog;
-            // The catalog lists only projects the host has not archived, so
-            // absence is the host saying it is archived — including when another
-            // window archived it first.
-            return judged.projects.some((project) => project.id === projectId)
-                ? {
-                      type: "failed",
-                      error: rigUserError(
-                          new Error("The project is still listed, so it was not archived."),
-                      ),
-                  }
-                : { type: "archived" };
+            // This read is the newest thing anyone has: it answers for itself.
+            if (read.ok && !read.observed.superseded)
+                return judge(read.observed.catalog, requestError);
+            // This read is late or failed, but a read issued after the request
+            // has already been applied — an event reconcile that overtook it, or
+            // another window's. It saw the host after the archive, so it is the
+            // better answer, and no further event is needed to close this.
+            if (appliedSequence > baseline) return judge(catalog, requestError);
+            // Nothing newer exists, so nothing was established after the
+            // request. If the project was already absent when this asked, the
+            // state being asked for already held and the host takes the request
+            // on an archived project unchanged; otherwise this is genuinely
+            // unverified and says so.
+            if (!presentBefore) return { type: "archived" };
+            return {
+                type: "failed",
+                error: rigUserError(
+                    requestError ??
+                        new Error(
+                            "The archive was requested but the project list could not be read back, so it is unconfirmed. Try again.",
+                        ),
+                ),
+            };
         },
         [Symbol.dispose]() {
             if (disposed) return;

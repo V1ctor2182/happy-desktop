@@ -629,14 +629,25 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
  * keeping it in history would only offer a Back that lands nowhere.
  */
 export function rigRouterListOpen(router: RigRouter, rigId: string, groupId: string): void {
-    // Read from the address itself rather than from a matched route: this runs
-    // from a store notification, and what must be true is what the window is
-    // showing right now.
-    const segments = router.state.location.pathname
-        .split("/")
-        .filter((segment) => segment.length > 0)
-        .map((segment) => decodeURIComponent(segment));
-    if (segments[0] !== "chats" || segments[1] !== rigId || segments[2] !== groupId) return;
+    // The router's own matched route, never a hand-parsed path: it already
+    // knows which route the window is showing and what its parameters decoded
+    // to, and the leaf match is the whole answer. Only the two routes that put
+    // the reader *inside* a group qualify — the group itself and a conversation
+    // in it. Any other address, including one that matched nothing, is left
+    // alone.
+    //
+    // The matches are read through the same structural cast this file already
+    // uses for `navigate`: the ambient route registration these types resolve
+    // against is not this router's tree, so the generated union names routes
+    // that do not exist here. The values are the router's own.
+    const matches = router.state.matches as unknown as readonly {
+        readonly params: Record<string, string | undefined>;
+        readonly routeId: string;
+    }[];
+    const match = matches.at(-1);
+    if (match === undefined) return;
+    if (match.routeId !== groupRoute.id && match.routeId !== chatRoute.id) return;
+    if (match.params.rigId !== rigId || match.params.groupId !== groupId) return;
     void (
         router.navigate as unknown as (options: {
             params: Record<string, string>;
