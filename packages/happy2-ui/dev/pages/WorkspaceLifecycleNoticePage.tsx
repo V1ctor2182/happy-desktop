@@ -85,7 +85,7 @@ export function WorkspaceLifecycleNoticePage() {
             </Specimen>
 
             <Specimen
-                detail='phase="failed" · panel · no reason, which is what the live catalog stream carries today'
+                detail='phase="failed" · panel · the host reported a failure without a sentence about it'
                 label="Failed, with no reason given"
                 number="04"
                 stage="app"

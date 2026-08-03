@@ -187,10 +187,11 @@ function catalogProject(
                 displayPath: workspace.path,
                 status: workspace.status,
                 presence: workspace.presence,
-                // rig-connect's joined tree carries the workspace's phase but
-                // not the daemon's own sentence about a failed one, so a failure
-                // arriving this way has a phase and no reason. The surface says
-                // what it knows rather than inventing the missing half.
+                // The host's own sentence about a failed checkout, carried
+                // whole. It is present only while the workspace it belongs to
+                // reports one, so a workspace that stops failing stops carrying
+                // a reason rather than keeping the last one it had.
+                ...(workspace.error === undefined ? {} : { error: workspace.error }),
                 ...gitProject(workspace.git),
             });
             sessions.push(
