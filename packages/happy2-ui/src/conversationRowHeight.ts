@@ -255,6 +255,10 @@ export function conversationRowHeight(
     /* A settled footer owns the clearance above it when prior activity exists. */
     if (entry.kind === "turnStatus")
         return conversationTurnStatusAfterActivity(entries, index) ? 40 : 32;
+    /* A compute row owns its own measure: its detail disclosure is local to the
+       row, and the provider sentence beside the label wraps against whatever the
+       metrics and controls leave it. */
+    if (entry.kind === "compute") return undefined;
     if (entry.kind === "notice") {
         if (entry.variant === "divider") return DIVIDER_HEIGHT;
         if (entry.level === "error") return undefined;

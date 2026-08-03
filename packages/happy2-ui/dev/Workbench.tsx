@@ -9,6 +9,7 @@ import { AgentTracePanelPage } from "./pages/AgentTracePanelPage";
 import { AgentWorkingStatusPage } from "./pages/AgentWorkingStatusPage";
 import { AgentTraceRowPage } from "./pages/AgentTraceRowPage";
 import { TurnSummaryPage } from "./pages/TurnSummaryPage";
+import { ConversationComputeEventPage } from "./pages/ConversationComputeEventPage";
 import { ConversationErrorCardPage } from "./pages/ConversationErrorCardPage";
 import { AgentImageDetailPage } from "./pages/AgentImageDetailPage";
 import { AgentImagePanelPage } from "./pages/AgentImagePanelPage";
@@ -252,6 +253,12 @@ const components: BlueprintPage[] = [
         label: "Conversation error card",
         number: "C-166",
         page: ConversationErrorCardPage,
+    },
+    {
+        id: "conversation-compute-event",
+        label: "Conversation compute event",
+        number: "C-240",
+        page: ConversationComputeEventPage,
     },
     {
         id: "floating-conversation-dock",

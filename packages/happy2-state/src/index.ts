@@ -80,6 +80,8 @@ export type {
     ConversationEntry,
     ConversationFileDiff,
     ConversationAttachment,
+    ConversationComputeEntry,
+    ConversationComputeState,
     ConversationJson,
     ConversationMessageEntry,
     ConversationMessageProjection,

@@ -116,6 +116,17 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             left.title === right.title &&
             left.text === right.text
         );
+    if (left.kind === "compute" && right.kind === "compute")
+        return (
+            left.state === right.state &&
+            left.phase === right.phase &&
+            left.provider === right.provider &&
+            left.instanceId === right.instanceId &&
+            left.message === right.message &&
+            left.percent === right.percent &&
+            left.elapsedMs === right.elapsedMs &&
+            left.text === right.text
+        );
     if (left.kind === "agentActivity" && right.kind === "agentActivity")
         return activityEqual(left.activity, right.activity);
     if (left.kind === "request" && right.kind === "request")

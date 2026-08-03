@@ -18,6 +18,10 @@ export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";
 export { CopyButton, type CopyButtonProps } from "./CopyButton";
 export { ScrollingText, type ScrollingTextProps } from "./ScrollingText";
 export { TypedText, type TypedTextProps } from "./TypedText";
+export {
+    ConversationComputeEvent,
+    type ConversationComputeEventProps,
+} from "./ConversationComputeEvent";
 export { ConversationErrorCard, type ConversationErrorCardProps } from "./ConversationErrorCard";
 export { AgentDesk, type AgentDeskProps, type DeskListItem, type DeskRun } from "./AgentDesk";
 export {

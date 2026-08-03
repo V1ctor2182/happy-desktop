@@ -322,6 +322,54 @@ export interface ConversationNoticeEntry {
     readonly sequence: string;
 }
 
+/**
+ * The lifecycle a compute instance reports while it materializes the workspace a
+ * session runs in. These are exactly the states Rig publishes on a compute
+ * preparation notice, so a reader is never shown a phase the daemon did not
+ * declare.
+ */
+export type ConversationComputeState =
+    | "unprovisioned"
+    | "provisioning"
+    | "ready"
+    | "failed"
+    | "stopped";
+
+/**
+ * One durable compute lifecycle event in the transcript.
+ *
+ * A session that runs on provisioned compute spends its first seconds — and,
+ * when a provider breaks, its whole life — waiting on a machine rather than on a
+ * model. That wait belongs in the transcript beside the messages it delays: it
+ * is authoritative session history, ordered with everything else and reconciled
+ * the same way, not a toast that disappears before the reader looks up.
+ *
+ * Every field is projected verbatim from Rig's own notice. `text` is the
+ * daemon's complete sentence and always renders something truthful; the
+ * remaining fields let a surface say the same thing better. Nothing is inferred:
+ * a value Rig did not send is absent rather than guessed.
+ */
+export interface ConversationComputeEntry {
+    readonly kind: "compute";
+    readonly id: string;
+    readonly sequence: string;
+    readonly state: ConversationComputeState;
+    /** The provider's own step name inside the lifecycle, such as `pulling_image`. */
+    readonly phase: string;
+    /** The compute provider plugin that owns the instance. */
+    readonly provider: string;
+    /** Instance identity, shared by every event of one materialization. */
+    readonly instanceId: string;
+    /** The provider's progress or failure sentence, as it wrote it. */
+    readonly message: string;
+    /** Materialization progress, when the provider reports one. */
+    readonly percent?: number;
+    /** Time spent preparing so far, when Rig measured it. */
+    readonly elapsedMs?: number;
+    /** Rig's complete human-readable line, the fallback for any unknown state. */
+    readonly text: string;
+}
+
 export interface ConversationRequestEntry {
     readonly kind: "request";
     readonly id: string;
@@ -354,6 +402,7 @@ export interface ConversationTurnStatusEntry {
 export type ConversationEntry =
     | ConversationMessageEntry
     | ConversationActivityEntry
+    | ConversationComputeEntry
     | ConversationNoticeEntry
     | ConversationRequestEntry
     | ConversationTurnStatusEntry;

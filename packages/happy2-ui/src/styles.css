@@ -24,6 +24,7 @@
 @import "./styles/scrolling-text.css";
 @import "./styles/copy-button.css";
 @import "./styles/conversation-error-card.css";
+@import "./styles/conversation-compute-event.css";
 @import "./styles/agent-desk.css";
 @import "./styles/agent-trace-row.css";
 @import "./styles/agent-trace-panel.css";

@@ -162,16 +162,44 @@ function rigConnectGroupProject(
                 });
                 break;
             }
-            case "system_notice":
-                entries.push({
-                    kind: "notice",
-                    id: element.id,
-                    variant: "notice",
-                    level: "info",
-                    text: element.text,
-                    sequence,
-                });
+            case "system_notice": {
+                // A service line that says what it is gets the row that shows
+                // it properly. Rig attributes compute preparation to every
+                // session running out of that workspace, so this is the moment
+                // a reader waiting on a machine can see why. Anything else, and
+                // any notice whose structured kind this build does not know,
+                // keeps Rig's complete sentence as an ordinary service line.
+                const structured = element.structured;
+                entries.push(
+                    structured?.kind === "compute_preparation"
+                        ? {
+                              kind: "compute",
+                              id: element.id,
+                              sequence,
+                              state: structured.state,
+                              phase: structured.phase,
+                              provider: structured.provider,
+                              instanceId: structured.computeInstanceId,
+                              message: structured.message,
+                              ...(structured.percent === undefined
+                                  ? {}
+                                  : { percent: structured.percent }),
+                              ...(structured.elapsedMs === undefined
+                                  ? {}
+                                  : { elapsedMs: structured.elapsedMs }),
+                              text: element.text,
+                          }
+                        : {
+                              kind: "notice",
+                              id: element.id,
+                              variant: "notice",
+                              level: "info",
+                              text: element.text,
+                              sequence,
+                          },
+                );
                 break;
+            }
             case "inference":
                 if (ended) break;
                 entries.push({
