@@ -467,6 +467,7 @@ export {
     type RigFileViewMode,
     type RigRenameSnapshot,
     type RigConversationSnapshot,
+    type RigWorkspaceAddress,
     type RigWorkspaceDeps,
     type RigWorkspaceNewChatInput,
     type RigWorkspaceOutput,

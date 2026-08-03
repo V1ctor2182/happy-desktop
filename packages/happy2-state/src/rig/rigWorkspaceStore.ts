@@ -241,7 +241,26 @@ export interface RigPanelFileSnapshot {
  * React surface reads the entire workspace through one `useSyncExternalStore`
  * without joining independent stores in the view.
  */
+/**
+ * What this workspace is addressing, as navigation last set it: the project or
+ * worktree on screen, and the conversation inside it when one is open. A group
+ * route carries a group and no conversation; the Rig's own root carries
+ * neither.
+ *
+ * It is published rather than left inside the store because it is the only
+ * synchronous authority on where the reader actually is. A surface that has to
+ * decide something at the moment a person acts — whether an agent's
+ * contribution may still be performed here, for instance — cannot ask the route
+ * that drew it, because that render may no longer be the one on screen.
+ */
+export interface RigWorkspaceAddress {
+    readonly groupId?: RigGroupId;
+    readonly conversationId?: RigSessionId;
+}
+
 export interface RigWorkspaceSnapshot {
+    /** Where the reader is, whether or not a conversation is materialized. */
+    readonly address: RigWorkspaceAddress;
     readonly list: RigSessionListSnapshot;
     /** Materialization state for the open conversation; unloaded means none is open. */
     readonly conversation: Loadable<RigConversationSnapshot>;
@@ -928,6 +947,14 @@ export function rigWorkspaceStoreCreate(
     const fileLoadControllers = new Map<string, AbortController>();
     /** The group the URL currently names, so tab memory knows what it describes. */
     let addressedGroupId: RigGroupId | undefined;
+    /**
+     * The published address. It is kept beside `addressedGroupId` rather than
+     * derived from it because the two answer different questions: that one is
+     * how long a group's tabs, files, and panel scope are held, and this one is
+     * only where navigation last pointed. Closing a conversation to sit on the
+     * Rig's own root leaves the former alone and empties this.
+     */
+    let address: RigWorkspaceAddress = {};
     /** Groups whose remembered file tabs have already been reopened in this run. */
     const restoredGroupIds = new Set<RigGroupId>();
     /** True while reopening remembered tabs, so the reopening is not itself remembered. */
@@ -940,6 +967,7 @@ export function rigWorkspaceStoreCreate(
     let groupResumeRevision = -1;
     let memoryRevision = 0;
     let snapshot: RigWorkspaceSnapshot = {
+        address,
         list: list.get(),
         conversation,
         fileTabs,
@@ -1249,6 +1277,7 @@ export function rigWorkspaceStoreCreate(
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
         if (
+            snapshot.address === address &&
             snapshot.list === listSnapshot &&
             snapshot.conversation === conversation &&
             snapshot.groupComposer === groupComposerDraft &&
@@ -1274,6 +1303,7 @@ export function rigWorkspaceStoreCreate(
         )
             return;
         snapshot = {
+            address,
             list: listSnapshot,
             conversation,
             fileTabs,
@@ -2087,6 +2117,18 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
+    /** Records where navigation has just pointed this workspace. */
+    const addressApply = (
+        groupId: RigGroupId | undefined,
+        conversationId: RigSessionId | undefined,
+    ): void => {
+        if (address.groupId === groupId && address.conversationId === conversationId) return;
+        address = {
+            ...(groupId === undefined ? {} : { groupId }),
+            ...(conversationId === undefined ? {} : { conversationId }),
+        };
+    };
+
     /** Applies the addressed conversation, releasing whichever one was open. */
     const openConversation = (conversationId: RigSessionId | undefined): void => {
         // The panel shows the addressed conversation's tabs, so it learns the new
@@ -2343,6 +2385,9 @@ export function rigWorkspaceStoreCreate(
         releaseConversation();
         conversation = { type: "unloaded" };
         snapshot = {
+            // Where navigation last pointed outlives the subscription: stopping
+            // is a surface going away, not the reader going somewhere.
+            address,
             list: list.get(),
             conversation,
             fileTabs,
@@ -2415,6 +2460,7 @@ export function rigWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
+            addressApply(groupId, conversationId);
             if (groupId !== addressedGroupId) {
                 fileSelectionReset();
                 fileTreeExpansionReset();
@@ -2435,6 +2481,7 @@ export function rigWorkspaceStoreCreate(
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
+            addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
                 fileSelectionReset();
                 fileTreeExpansionReset();
@@ -2496,6 +2543,7 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         conversationClose: () => {
+            addressApply(undefined, undefined);
             releaseGroup();
             openConversation(undefined);
         },

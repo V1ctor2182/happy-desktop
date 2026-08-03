@@ -233,6 +233,15 @@ export interface AppRigAddSnapshot {
 }
 
 export interface AppRigDirectorySnapshot {
+    /**
+     * The Rig this window is addressing, as `rigActivate` last recorded it. It
+     * is the synchronous authority on which machine is on screen, for the
+     * decisions that cannot be taken at render time — whether an agent's
+     * contribution may still be performed when someone presses it. A host that
+     * records no addressed Rig supplies nothing here, and such a press is inert
+     * rather than aimed at a guess.
+     */
+    readonly activeRigId?: string;
     readonly add: AppRigAddSnapshot;
     readonly rigs: readonly AppRigEntry[];
 }
@@ -1237,40 +1246,45 @@ export function AppRigView(props: AppRigViewProps) {
     const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
     const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
     const webapps = new Set(slots.webapps.map((webapp) => webapp.name));
-    // A press is decided here, not trusted from the render that drew the row.
-    // Every one of the four placements reports through this one function, and
-    // each thing it acts on is read at the moment of the press: the catalog and
-    // the webapps come from the surface itself, whose identity is stable for the
-    // connection, and whether a conversation is open comes from the workspace.
-    // The contribution must still resolve against the scope this window is
-    // addressing, so a press that lands after the reader has left the project,
-    // worktree, or chat an entry was addressed at does nothing — the same rule
-    // that decides what is shown decides what may be performed. A contribution
-    // withdrawn, rewritten into text, or pointing at a webapp this Rig no longer
-    // serves is inert for the same reason.
+    // A press is decided from where the reader is when they press, and nothing
+    // else. Not one thing here comes from the render that drew the row: the
+    // window's own directory says which machine is addressed, that machine's
+    // workspace says which project, worktree, and conversation are addressed —
+    // whether or not a conversation is materialized — and that machine's slot
+    // surface supplies the catalog and the webapps it is currently serving.
+    // Where each answer comes from is what makes them one answer: the workspace
+    // and the catalog are the addressed Rig's own, so a press can never be
+    // resolved against one machine and performed on another.
+    //
+    // The whole resolution is a single synchronous pass with nothing awaited in
+    // it, so no address can move part way through, and what is performed is
+    // performed on the very workspace the decision was taken against. Every one
+    // of the four placements reports here, so all four are decided this way. A
+    // contribution withdrawn, rewritten into text, pointing at a webapp this Rig
+    // no longer serves, or scoped to somewhere the reader has left does nothing
+    // at all — the rule that decides what is shown decides what may be run.
     const slotAction = (entryId: string): void => {
-        const session = active?.session;
-        if (!session) return;
-        const current = slotsStore.get();
-        const entry = current.entries.find((candidate) => candidate.id === entryId);
+        const directoryNow = props.rigs.get();
+        const rigNow = directoryNow.activeRigId
+            ? directoryNow.rigs.find((rig) => rig.id === directoryNow.activeRigId)
+            : undefined;
+        const sessionNow = rigNow?.session;
+        if (!rigNow || !sessionNow?.slots) return;
+        const workspaceNow = sessionNow.workspace;
+        const workspaceSnapshot = workspaceNow.get();
+        const scopeNow = slotsContext(
+            rigNow.projects,
+            workspaceSnapshot.address.groupId,
+            workspaceSnapshot.address.conversationId,
+        );
+        const catalogNow = sessionNow.slots().get();
+        const entry = catalogNow.entries.find((candidate) => candidate.id === entryId);
         if (!entry || entry.content.type !== "button") return;
-        const workspaceNow = session.workspace.get();
-        // The conversation the workspace has actually materialized is the one
-        // this window is addressing, whatever route drew the row that was
-        // pressed. The route's own chat stands in only while nothing has been
-        // materialized yet, which is the one moment the two can disagree.
-        const openConversation =
-            workspaceNow.conversation.type === "ready"
-                ? workspaceNow.conversation.value.conversationId
-                : undefined;
-        const scopeNow: RigSlotsContext = openConversation
-            ? { ...slotsScope, sessionId: openConversation }
-            : slotsScope;
         if (!rigSlotEntryInScope(entry, scopeNow)) return;
-        const served = new Set(current.webapps.map((webapp) => webapp.name));
-        const hasOpenConversation = workspaceNow.conversation.type !== "unloaded";
-        if (slotUnavailable(entry.content.action, served, hasOpenConversation)) return;
-        void slotActionRun(session.workspace, entry.content.action).catch(() => undefined);
+        const served = new Set(catalogNow.webapps.map((webapp) => webapp.name));
+        const openConversation = workspaceSnapshot.conversation.type !== "unloaded";
+        if (slotUnavailable(entry.content.action, served, openConversation)) return;
+        void slotActionRun(workspaceNow, entry.content.action).catch(() => undefined);
     };
     // Plugin rows are pinned navigation, so this is subscribed whether or not a
     // plugin application is open: the point of the rows is to be there while the

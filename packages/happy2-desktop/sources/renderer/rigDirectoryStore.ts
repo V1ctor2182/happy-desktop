@@ -43,6 +43,13 @@ export interface RigDirectoryAddSnapshot {
 }
 
 export interface RigDirectorySnapshot {
+    /**
+     * The Rig the window is addressing, as `rigActivate` last recorded it. It is
+     * published because it is the only synchronous answer to "which machine is
+     * this window on" — a surface deciding something at the moment a person acts
+     * cannot ask the render that drew the control.
+     */
+    readonly activeRigId: string;
     readonly add: RigDirectoryAddSnapshot;
     readonly rigs: readonly RigDirectoryEntry[];
 }
@@ -104,7 +111,7 @@ export function rigDirectoryStoreCreate(
     const rigs = new Map<string, LiveRig>();
     const listeners = new Set<() => void>();
     let add: RigDirectoryAddSnapshot = ADD_EMPTY;
-    let snapshot: RigDirectorySnapshot = { add, rigs: [] };
+    let snapshot: RigDirectorySnapshot = { activeRigId: LOCAL_RIG_ID, add, rigs: [] };
     let order: readonly string[] = [];
     let activeRigId = LOCAL_RIG_ID;
     let runtimeUnsubscribe: (() => void) | undefined;
@@ -118,6 +125,7 @@ export function rigDirectoryStoreCreate(
 
     const publish = () => {
         snapshot = {
+            activeRigId,
             add,
             rigs: order.flatMap((id) => {
                 const rig = rigs.get(id);
@@ -336,7 +344,9 @@ export function rigDirectoryStoreCreate(
         rigDisconnect: (id) => void bridge.remoteRigDisconnect(id).catch(() => undefined),
         rigRemove: (id) => void bridge.remoteRigRemove(id).catch(() => undefined),
         rigActivate(id) {
+            if (activeRigId === id) return;
             activeRigId = id;
+            publish();
         },
     };
 }
