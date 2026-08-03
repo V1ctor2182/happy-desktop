@@ -58,8 +58,9 @@ export interface PluginApplicationHostOptions {
     /** Announces a new catalog so the window can be told without being asked. */
     readonly onChange: (catalog: DesktopPluginCatalog) => void;
     /**
-     * Announces what is installed, for a window with a screen that reads it.
-     * Optional so a host with no such reader neither projects nor sends it.
+     * Announces what is installed. It is called only while something is
+     * following, so a host whose windows are all looking at something else does
+     * no inventory work at all.
      */
     readonly onInventoryChange?: (inventory: DesktopPluginInventory) => void;
 }
@@ -88,6 +89,8 @@ export class PluginApplicationHost implements Disposable {
     #generation = 0;
     readonly #onChange: (catalog: DesktopPluginCatalog) => void;
     readonly #onInventoryChange?: (inventory: DesktopPluginInventory) => void;
+    /** Whether any window is reading the inventory right now. */
+    #inventoryFollowed = false;
     /** Controllers for the requests still running, by origin and request id. */
     readonly #requests = new Map<string, AbortController>();
 
@@ -113,6 +116,24 @@ export class PluginApplicationHost implements Disposable {
     }
 
     /**
+     * Starts or stops projecting what is installed. The daemon subscription
+     * itself is not affected: it is the one the pinned application rows need, and
+     * it is followed for as long as an endpoint is set, whoever is looking. What
+     * this releases is everything only the catalog screen wants — turning the
+     * daemon's package objects into renderer-shaped ones, comparing them, and
+     * cloning them across the IPC boundary.
+     *
+     * It is remembered on the host rather than only on the cache, because
+     * changing endpoint builds a new cache and whoever is watching is still
+     * watching.
+     */
+    inventoryFollowSet(following: boolean): void {
+        if (this.#inventoryFollowed === following) return;
+        this.#inventoryFollowed = following;
+        this.#cache?.inventoryFollowSet(following);
+    }
+
+    /**
      * Follows the active local Rig. A new endpoint replaces the subscription and
      * every cached generation with it, because bundles belong to the daemon that
      * served them; no endpoint at all leaves the catalog empty and closed.
@@ -125,7 +146,7 @@ export class PluginApplicationHost implements Disposable {
         const generation = ++this.#generation;
         if (rigHttpUrl === undefined) {
             this.#onChange(EMPTY_CATALOG);
-            this.#onInventoryChange?.(EMPTY_INVENTORY);
+            if (this.#inventoryFollowed) this.#onInventoryChange?.(EMPTY_INVENTORY);
             return;
         }
         const connection = connectRig({
@@ -154,9 +175,12 @@ export class PluginApplicationHost implements Disposable {
                   }
                 : {}),
         });
+        cache.inventoryFollowSet(this.#inventoryFollowed);
         this.#cache = cache;
         this.#onChange(cache.get());
-        this.#onInventoryChange?.(cache.inventoryGet());
+        // A new endpoint is a new machine, so whoever is watching is told at once
+        // rather than waiting for that machine's first catalog.
+        if (this.#inventoryFollowed) this.#onInventoryChange?.(cache.inventoryGet());
     }
 
     /**

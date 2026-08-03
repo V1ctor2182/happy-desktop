@@ -164,7 +164,27 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
     // underneath the reader cannot leave a page describing it.
     const chosen = entries.find((entry) => entry.id === chosenId);
     const searching = query.trim().length > 0;
-    const subtitle = catalogSubtitle(entries, failures, props.loading, connection);
+    const subtitle = catalogSubtitle(entries, failures, props.loading, connection, props.error);
+
+    /*
+     * What is wrong with the reading, said above whatever was read. It belongs to
+     * the screen and not to the catalog: a package's own page is read from the
+     * same subscription, so a reader who opened one is owed the same warning that
+     * what they are reading has stopped changing.
+     *
+     * A dropped subscription uninstalls nothing, so this never removes a package.
+     */
+    const notice =
+        stale || (props.error !== undefined && held) ? (
+            <Banner
+                className="happy2-rig-plugin-catalog__notice"
+                icon={props.error === undefined ? "clock" : "alert"}
+                tone={props.error === undefined ? "neutral" : "warning"}
+                title={noticeTitle(connection, props.error)}
+            >
+                {props.error ?? noticeDescription(connection)}
+            </Banner>
+        ) : null;
 
     if (chosen)
         return (
@@ -175,6 +195,10 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
                 subtitle={subtitle}
                 view="detail"
             >
+                {/* A fixed slot: whether or not there is a notice, the detail
+                    below it keeps its position, so appearing or clearing one
+                    does not remount the page a reader is on. */}
+                {notice}
                 <PluginStoreDetail
                     entry={chosen}
                     onBack={() => {
@@ -223,22 +247,7 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
             subtitle={subtitle}
             view="catalog"
         >
-            {/*
-             * What is wrong with the reading, said above what was read. A dropped
-             * subscription does not uninstall anything, so the packages stay
-             * exactly where they are and this explains why they have stopped
-             * changing.
-             */}
-            {stale || (props.error !== undefined && held) ? (
-                <Banner
-                    className="happy2-rig-plugin-catalog__notice"
-                    icon={props.error === undefined ? "clock" : "alert"}
-                    tone={props.error === undefined ? "neutral" : "warning"}
-                    title={noticeTitle(connection, props.error)}
-                >
-                    {props.error ?? noticeDescription(connection)}
-                </Banner>
-            ) : null}
+            {notice}
 
             {props.error !== undefined && !held ? (
                 <EmptyState
@@ -251,7 +260,7 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
                     // Only the wait is illustrated. A search that matched nothing
                     // is a miss the reader is already fixing, one keystroke at a
                     // time.
-                    animation={props.loading ? "snail" : undefined}
+                    animation={props.loading || connection === "connecting" ? "snail" : undefined}
                     description={emptyDescription(
                         props.loading,
                         searching,
@@ -259,11 +268,17 @@ export function RigPluginCatalogPage(props: RigPluginCatalogPageProps) {
                         filter,
                         connection,
                     )}
-                    icon={props.loading ? "clock" : searching ? "search" : "package"}
+                    icon={
+                        props.loading || connection === "connecting"
+                            ? "clock"
+                            : searching
+                              ? "search"
+                              : "package"
+                    }
                     {...(searching
                         ? { action: { label: "Clear search", onClick: () => search("") } }
                         : {})}
-                    title={emptyTitle(props.loading, searching)}
+                    title={emptyTitle(props.loading, searching, connection)}
                 />
             ) : (
                 SHELVES.map((shelf) => {
@@ -389,20 +404,37 @@ function CatalogFrame(props: {
 /** What the notice above the shelves is called, in one line. */
 function noticeTitle(connection: RigPluginCatalogFeedState, error: string | undefined): string {
     if (error !== undefined) return "This machine's plugins could not be read";
-    return connection === "reconnecting"
-        ? "Reconnecting to this machine"
-        : "Not connected to this machine";
+    switch (connection) {
+        case "connecting":
+            return "Connecting to this machine";
+        case "reconnecting":
+            return "Reconnecting to this machine";
+        default:
+            return "Not connected to this machine";
+    }
 }
 
 function noticeDescription(connection: RigPluginCatalogFeedState): string {
-    return connection === "reconnecting"
-        ? "These are the packages it last reported. The list will catch up on its own."
-        : "These are the packages it last reported, and they may since have changed.";
+    switch (connection) {
+        case "connecting":
+            return "These are the packages it last reported. The list will catch up once the connection is open.";
+        case "reconnecting":
+            return "These are the packages it last reported. The list will catch up on its own.";
+        default:
+            return "These are the packages it last reported, and they may since have changed.";
+    }
 }
 
-function emptyTitle(loading: boolean | undefined, searching: boolean): string {
+function emptyTitle(
+    loading: boolean | undefined,
+    searching: boolean,
+    connection: RigPluginCatalogFeedState,
+): string {
     if (loading) return "Reading this machine's plugins…";
-    return searching ? "Nothing matches" : "No plugins here";
+    if (searching) return "Nothing matches";
+    // Being connected to is not being connected and is certainly not being
+    // empty, so an open connection nobody has answered on yet says so.
+    return connection === "connecting" ? "Connecting to this machine…" : "No plugins here";
 }
 
 function emptyDescription(
@@ -414,6 +446,8 @@ function emptyDescription(
 ): string {
     if (loading) return "Asking this machine which packages it has.";
     if (searching) return `No plugin matches “${query.trim()}”.`;
+    if (connection === "connecting")
+        return "Waiting for this machine to answer which packages it has.";
     if (connection !== "live")
         return "This machine has not been reachable, so nothing has been read from it yet.";
     switch (filter) {
@@ -471,15 +505,30 @@ function catalogSubtitle(
     failures: readonly RigPluginCatalogFailure[],
     loading: boolean | undefined,
     connection: RigPluginCatalogFeedState,
+    error: string | undefined,
 ): string {
-    if (entries.length === 0 && failures.length === 0)
-        return loading ? "Reading…" : connection === "live" ? "Nothing installed" : "Not connected";
+    if (entries.length === 0 && failures.length === 0) {
+        if (loading) return "Reading…";
+        if (error !== undefined) return "Could not be read";
+        switch (connection) {
+            case "live":
+                return "Nothing installed";
+            case "connecting":
+                return "Connecting…";
+            default:
+                return "Not connected";
+        }
+    }
     const counts = filterCounts(entries);
     const parts = [`${String(entries.length)} installed`];
     if (counts.failed > 0) parts.push(`${String(counts.failed)} failed`);
     if (counts.stopped > 0) parts.push(`${String(counts.stopped)} off`);
     if (failures.length > 0) parts.push(`${String(failures.length)} unreadable`);
-    if (connection !== "live")
-        parts.push(connection === "reconnecting" ? "reconnecting" : "last read");
+    // A count is a claim about now. Either a feed that is not live or a feed that
+    // answered with a failure makes it a claim about the last time anyone heard,
+    // and it is the same qualification either way.
+    if (connection === "connecting") parts.push("connecting");
+    else if (connection === "reconnecting") parts.push("reconnecting");
+    else if (connection !== "live" || error !== undefined) parts.push("last read");
     return parts.join(" · ");
 }

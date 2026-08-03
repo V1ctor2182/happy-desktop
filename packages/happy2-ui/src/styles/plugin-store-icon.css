@@ -21,14 +21,19 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    background: var(--text-secondary);
     /*
-     * Dark ink, not white. These fills are chosen to be told apart, which makes
-     * them bright: measured against the five identity tones in both themes a
-     * white glyph reaches only 1.9–4.0:1, while this clears 5.2:1 on the worst of
-     * them. A mark nobody can read is not an identity.
+     * The ink is paired with the fill it sits on, because the fills are not one
+     * family: the identity tones are bright in both appearances, while the two
+     * neutral ones follow the theme and invert with it. A mark nobody can read
+     * is not an identity, so each pairing is an existing Happy role that already
+     * answers "what goes on top of this" — never a colour of this feature's own.
+     *
+     * This is the neutral fill, which is the theme's secondary text colour, so
+     * what reads on it is the surface that colour is meant to be read against:
+     * 9.3:1 light, 9.6:1 dark.
      */
-    color: var(--identity-tile-ink);
+    background: var(--text-secondary);
+    color: var(--surface);
     -webkit-user-select: none;
     user-select: none;
 }
@@ -53,34 +58,45 @@
 
 .happy2-plugin-store-icon[data-tone="violet"] {
     background: var(--radio-active);
+    color: var(--button-primary-background);
 }
 
 .happy2-plugin-store-icon[data-tone="ember"] {
     background: var(--text-destructive);
+    color: var(--button-primary-background);
 }
 
 .happy2-plugin-store-icon[data-tone="mint"] {
     background: var(--success);
+    color: var(--button-primary-background);
 }
 
 .happy2-plugin-store-icon[data-tone="ocean"] {
     background: var(--text-link);
+    color: var(--button-primary-background);
 }
 
 .happy2-plugin-store-icon[data-tone="rose"] {
     background: var(--delete-action);
+    color: var(--button-primary-background);
 }
 
 .happy2-plugin-store-icon[data-tone="amber"] {
     background: var(--box-warning-border);
+    color: var(--button-primary-background);
 }
 
+/* The neutral tone is the base fill named, so it keeps the base pairing. */
 .happy2-plugin-store-icon[data-tone="slate"] {
     background: var(--text-secondary);
+    color: var(--surface);
 }
 
+/* Happy's own mark, which inverts with the theme, so it takes the ink Happy
+   already puts on that exact fill rather than a dark glyph on a black tile. */
 .happy2-plugin-store-icon[data-tone="brand"] {
     background: var(--fab-background);
+    color: var(--fab-icon);
 }
 
 /* Supplied artwork owns the whole mark, so no tone shows through behind a

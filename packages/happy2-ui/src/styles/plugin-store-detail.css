@@ -112,9 +112,14 @@
     color: var(--text-secondary);
 }
 
+/* The full description is the plugin author's own prose and is never clamped
+   here, so a single unbroken token — a URL, a package name, a stack frame —
+   would otherwise set the width of the whole column. It wraps mid-token. */
 .happy2-plugin-store-detail__description {
     width: 100%;
+    min-width: 0;
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--text);
     font-size: 14px;
     line-height: 21px;

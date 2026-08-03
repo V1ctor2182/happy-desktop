@@ -4,7 +4,6 @@ import type {
     DesktopNoteContent,
     DesktopNoteSummary,
     DesktopPluginCatalog,
-    DesktopPluginInventory,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     HappyDesktopBridge,
@@ -52,15 +51,21 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         }),
         pluginApplicationsSubscribe: () => () => undefined,
         // The same is true of what is installed: this window cannot read the
-        // machine, so it reports a settled empty inventory rather than one that
-        // is forever about to arrive.
-        pluginInventoryGet: async (): Promise<DesktopPluginInventory> => ({
-            packages: [],
-            failures: [],
-            connection: "closed",
-            loading: false,
-        }),
-        pluginInventorySubscribe: () => () => undefined,
+        // machine, so it reports a settled empty inventory once rather than one
+        // that is forever about to arrive.
+        pluginInventorySubscribe: (listener) => {
+            const timer = setTimeout(
+                () =>
+                    listener({
+                        packages: [],
+                        failures: [],
+                        connection: "closed",
+                        loading: false,
+                    }),
+                0,
+            );
+            return () => clearTimeout(timer);
+        },
         pluginAppRequest: async () => {
             throw new Error("This window cannot host plugin applications.");
         },

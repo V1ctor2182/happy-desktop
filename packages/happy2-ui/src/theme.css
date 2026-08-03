@@ -77,10 +77,6 @@
     --modal-border: rgb(0 0 0 / 0.1);
     --button-primary-background: #000000;
     --button-primary-tint: #ffffff;
-    /* Ink on a saturated identity fill. It does not follow the theme, because
-       the fills it sits on do not either: a mark is the same bright colour in
-       light and dark, and only a dark glyph clears 3:1 on all of them. */
-    --identity-tile-ink: #000000;
     --button-primary-disabled: #c0c0c0;
     --button-secondary-tint: #666666;
     --input-background: #f5f5f5;
@@ -273,7 +269,6 @@
         --modal-border: rgb(255 255 255 / 0.1);
         --button-primary-background: #000000;
         --button-primary-tint: #ffffff;
-        --identity-tile-ink: #000000;
         --button-primary-disabled: #c0c0c0;
         --button-secondary-tint: #8e8e93;
         --input-background: #303030;
@@ -438,10 +433,6 @@
     --modal-border: rgb(255 255 255 / 0.1);
     --button-primary-background: #000000;
     --button-primary-tint: #ffffff;
-    /* Ink on a saturated identity fill. It does not follow the theme, because
-       the fills it sits on do not either: a mark is the same bright colour in
-       light and dark, and only a dark glyph clears 3:1 on all of them. */
-    --identity-tile-ink: #000000;
     --button-primary-disabled: #c0c0c0;
     --button-secondary-tint: #8e8e93;
     --input-background: #303030;

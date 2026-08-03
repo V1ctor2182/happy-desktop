@@ -58,10 +58,9 @@ export interface PluginApplicationCacheOptions {
     /** Announces a new catalog projection. Called only when something changed. */
     readonly onChange: (catalog: DesktopPluginCatalog) => void;
     /**
-     * Announces a new inventory projection, for a host that has a reader for one.
-     * It is optional because the two readings are independent: a host that only
-     * mounts applications never asks what is installed, and pays nothing for the
-     * screen that does.
+     * Announces a new inventory projection. It is only ever called while someone
+     * is following, which is what keeps a window that is not looking at the
+     * catalog from paying to project, clone, and deliver it.
      */
     readonly onInventoryChange?: (inventory: DesktopPluginInventory) => void;
     /** Opaque per-generation host factory; overridden by tests for determinism. */
@@ -159,12 +158,31 @@ export class PluginApplicationCache implements Disposable {
         connection: "connecting",
         loading: true,
     };
+    /**
+     * The last inventory projected, kept so an unchanged reading is the same
+     * object and an announcement is only made for a real change. While nobody is
+     * following it is only refreshed when someone asks.
+     */
     #inventory: DesktopPluginInventory = {
         packages: [],
         failures: [],
         connection: "connecting",
         loading: true,
     };
+    /**
+     * Whether anything is reading the inventory. Nothing is projected, compared,
+     * or announced while this is false: the packages are held as the daemon's own
+     * objects and only become a renderer-shaped reading when a screen wants one.
+     */
+    #inventoryFollowed = false;
+    /**
+     * Whether an authoritative reading has ever arrived. A subscription that is
+     * merely connecting has said nothing about what is installed, so "none" is
+     * not a fact yet and the inventory reports itself as still loading. It never
+     * goes back: once a machine has been read, a later gap is a stale reading
+     * rather than an unread one.
+     */
+    #inventoryRead = false;
     #closed = false;
     /** Catalog order, which is the daemon's navigation order rather than the map's. */
     #order: readonly PluginApp[] = [];
@@ -177,6 +195,13 @@ export class PluginApplicationCache implements Disposable {
     #packages: readonly LocalPlugin[] = [];
     /** Folders the daemon reported it could not read as packages. */
     #failures: readonly DesktopPluginPackageFailure[] = [];
+    /**
+     * Where the inventory's own subscription is. It is tracked separately from
+     * the application catalog's because the inventory may be projected at any
+     * moment by a screen that has just opened, including while nothing is being
+     * published at all.
+     */
+    #inventoryConnection: DesktopPluginConnectionState = "connecting";
     /**
      * The feed's last failure, in the daemon's own words. It is kept rather than
      * dropped so the screen reading this inventory can say why what it is showing
@@ -195,6 +220,10 @@ export class PluginApplicationCache implements Disposable {
             onChange: (apps, plugins, state) => this.#reconcile(apps, plugins, state),
             onError: (error) => {
                 this.#feedError = errorMessage(error);
+                // A feed that failed has answered, in its way. Whatever it is, it
+                // is not "still asking", so a screen stops waiting and says what
+                // went wrong instead of showing a reading that is never coming.
+                this.#inventoryRead = true;
                 this.#publish();
                 this.#publishInventory();
             },
@@ -205,8 +234,34 @@ export class PluginApplicationCache implements Disposable {
         return this.#catalog;
     }
 
+    /**
+     * The inventory as it stands, projected from the raw reading being held. It
+     * is projected here rather than remembered from the last announcement,
+     * because nothing is announced while nobody follows: a follower's opening
+     * frame has to be built from what the daemon last said, not from whatever was
+     * last sent to somebody else.
+     */
     inventoryGet(): DesktopPluginInventory {
-        return this.#inventory;
+        const next: DesktopPluginInventory = {
+            packages: this.#packages.map(projectPackage),
+            failures: this.#failures,
+            connection: this.#inventoryConnection,
+            loading: !this.#inventoryRead,
+            ...(this.#feedError === undefined ? {} : { error: this.#feedError }),
+        };
+        if (sameInventory(this.#inventory, next)) return this.#inventory;
+        this.#inventory = next;
+        return next;
+    }
+
+    /**
+     * Starts or stops projecting the inventory. Following is reference-counted
+     * above this, so this is only told the answer; it publishes nothing on the
+     * way in, because whoever started following takes its opening frame from
+     * `inventoryGet` in the same turn and would otherwise be told twice.
+     */
+    inventoryFollowSet(following: boolean): void {
+        this.#inventoryFollowed = following;
     }
 
     /** The application one isolated origin belongs to, or nothing once it is retired. */
@@ -383,8 +438,10 @@ export class PluginApplicationCache implements Disposable {
         this.#connection.close();
         this.#catalog = { applications: [], connection: "closed", loading: false };
         this.#onChange(this.#catalog);
+        this.#inventoryConnection = "closed";
+        this.#inventoryRead = true;
         this.#inventory = { packages: [], failures: [], connection: "closed", loading: false };
-        this.#onInventoryChange?.(this.#inventory);
+        if (this.#inventoryFollowed) this.#onInventoryChange?.(this.#inventory);
     }
 
     /**
@@ -477,8 +534,9 @@ export class PluginApplicationCache implements Disposable {
         // views that the resumed catalog is about to confirm unchanged. Only how
         // the feed is doing is passed on while it is away.
         if (state.connection !== "live") {
+            this.#inventoryConnection = state.connection;
             this.#publish(state.connection);
-            this.#publishInventory(state.connection);
+            this.#publishInventory();
             return;
         }
         this.#order = apps;
@@ -487,8 +545,11 @@ export class PluginApplicationCache implements Disposable {
             error: failure.error,
             folder: failure.pluginId,
         }));
-        // A live catalog is the answer the last failure was waiting for.
+        // A live catalog is the answer the last failure was waiting for, and the
+        // first one is the moment this machine has actually been read.
         this.#feedError = undefined;
+        this.#inventoryConnection = "live";
+        this.#inventoryRead = true;
         const live = new Set(apps.map((app) => entryKey(app.id, app.generation)));
         // Anything the catalog stopped naming is gone: an uninstall, a stopped
         // plugin, or a replacement that arrived under a new generation.
@@ -518,7 +579,7 @@ export class PluginApplicationCache implements Disposable {
             void this.#prefetch(key, entry);
         }
         this.#publish(state.connection);
-        this.#publishInventory(state.connection);
+        this.#publishInventory();
     }
 
     /**
@@ -596,17 +657,11 @@ export class PluginApplicationCache implements Disposable {
      * because the subscription dropped, and a screen that replaced them with an
      * error would be claiming the machine had been emptied.
      */
-    #publishInventory(connection?: DesktopPluginConnectionState): void {
-        if (this.#closed || !this.#onInventoryChange) return;
-        const next: DesktopPluginInventory = {
-            packages: this.#packages.map(projectPackage),
-            failures: this.#failures,
-            connection: connection ?? this.#inventory.connection,
-            loading: false,
-            ...(this.#feedError === undefined ? {} : { error: this.#feedError }),
-        };
-        if (sameInventory(this.#inventory, next)) return;
-        this.#inventory = next;
+    #publishInventory(): void {
+        if (this.#closed || !this.#inventoryFollowed || !this.#onInventoryChange) return;
+        const previous = this.#inventory;
+        const next = this.inventoryGet();
+        if (next === previous) return;
         this.#onInventoryChange(next);
     }
 }

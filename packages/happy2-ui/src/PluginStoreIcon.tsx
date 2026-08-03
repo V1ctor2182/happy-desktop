@@ -63,7 +63,7 @@ export function pluginStoreTone(seed: string): ToneName {
 /**
  * PluginStoreIcon — the graphic mark a plugin package is recognized by.
  *
- * It is a rounded square in the package's own colour with a white glyph in it,
+ * It is a rounded square in the package's own colour with a glyph cut out of it,
  * the shape an application icon has everywhere else on this desktop, so a page
  * of packages reads as things you could have rather than as rows in a table.
  * Artwork replaces the whole tile when the catalog has any; until then the tone

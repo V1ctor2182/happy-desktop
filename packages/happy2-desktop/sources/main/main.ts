@@ -999,7 +999,70 @@ void app
         }
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.pluginApplicationsGet, () => pluginApplications.get());
-        ipcMain.handle(desktopIpc.pluginInventoryGet, () => pluginApplications.inventoryGet());
+        /*
+         * Which renderers are reading what is installed, and how many readers
+         * each one has. The count is per window rather than global so one window
+         * closing, crashing, or navigating cannot cancel another window's
+         * reading, and so a window that dies without unfollowing does not leave
+         * the projection running forever.
+         *
+         * A full document navigation drops the count too: the preload that owned
+         * those listeners is gone with the document that loaded it, and the new
+         * one starts from nothing.
+         */
+        interface InventoryFollower {
+            count: number;
+            /** Stops watching this renderer for the ways it can stop reading. */
+            readonly forget: () => void;
+        }
+        const inventoryFollowers = new Map<Electron.WebContents, InventoryFollower>();
+        const inventoryFollowSync = (): void => {
+            pluginApplications.inventoryFollowSet(inventoryFollowers.size > 0);
+        };
+        const inventoryRelease = (sender: Electron.WebContents): void => {
+            const follower = inventoryFollowers.get(sender);
+            if (!follower) return;
+            inventoryFollowers.delete(sender);
+            follower.forget();
+            inventoryFollowSync();
+        };
+        ipcMain.handle(desktopIpc.pluginInventoryFollow, (event) => {
+            const sender = event.sender;
+            const follower = inventoryFollowers.get(sender);
+            if (follower) follower.count += 1;
+            else {
+                // The watches are put on when a renderer starts reading and taken
+                // off when it stops, so a window that follows, navigates, and
+                // follows again does not accumulate a second set of them.
+                const lost = () => inventoryRelease(sender);
+                sender.on("destroyed", lost);
+                sender.on("render-process-gone", lost);
+                sender.on("did-navigate", lost);
+                inventoryFollowers.set(sender, {
+                    count: 1,
+                    forget: () => {
+                        if (sender.isDestroyed()) return;
+                        sender.removeListener("destroyed", lost);
+                        sender.removeListener("render-process-gone", lost);
+                        sender.removeListener("did-navigate", lost);
+                    },
+                });
+                inventoryFollowSync();
+            }
+            // Projecting and reading happen in this one turn, so nothing the
+            // daemon says can land between them and go unreported.
+            return pluginApplications.inventoryGet();
+        });
+        ipcMain.handle(desktopIpc.pluginInventoryUnfollow, (event) => {
+            const sender = event.sender;
+            const follower = inventoryFollowers.get(sender);
+            if (!follower) return;
+            if (follower.count > 1) {
+                follower.count -= 1;
+                return;
+            }
+            inventoryRelease(sender);
+        });
         ipcMain.handle(desktopIpc.pluginAppRequest, (_event, raw: unknown) => {
             const request = pluginAppRequestParse(raw);
             if (!request) throw new Error("The plugin application request is invalid.");

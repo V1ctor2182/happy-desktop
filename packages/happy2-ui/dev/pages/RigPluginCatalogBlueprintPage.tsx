@@ -1,9 +1,14 @@
+import { useRef } from "react";
 import {
     PLUGIN_STORE_FIXTURE_BARE,
     PLUGIN_STORE_FIXTURE_CATALOG,
     PLUGIN_STORE_FIXTURE_FAILURES,
+    PLUGIN_STORE_FIXTURE_UNBROKEN,
 } from "../../src/pages/plugins/RigPluginCatalogPage.fixtures";
-import { RigPluginCatalogPage } from "../../src/pages/plugins/RigPluginCatalogPage";
+import {
+    RigPluginCatalogPage,
+    type RigPluginCatalogEntry,
+} from "../../src/pages/plugins/RigPluginCatalogPage";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 
 /*
@@ -15,6 +20,48 @@ const entries = PLUGIN_STORE_FIXTURE_CATALOG;
 
 /** What the minimum Electron window leaves this page beside the Rig sidebar. */
 const NARROW = { width: 470, height: 424 };
+
+/**
+ * The page with a package already open.
+ *
+ * Which package is open is the page's own view state and nothing outside it can
+ * set it, so the workbench opens one the only way a reader can: by pressing the
+ * first card. It is pressed once, as the specimen mounts, which is why this is a
+ * harness and not a prop invented for the workbench.
+ */
+function OpenedCatalog(props: {
+    connection?: "connecting" | "live" | "reconnecting" | "closed";
+    entries?: readonly RigPluginCatalogEntry[];
+    error?: string;
+    width?: number;
+}) {
+    const opened = useRef(false);
+    return (
+        <div
+            ref={(node) => {
+                if (!node || opened.current) return;
+                const card = node.querySelector<HTMLButtonElement>(
+                    '[data-happy2-ui="plugin-store-card-open"]',
+                );
+                if (!card) return;
+                opened.current = true;
+                card.click();
+            }}
+            style={{
+                display: "flex",
+                flex: props.width === undefined ? "1 1 auto" : "none",
+                overflow: "hidden",
+                ...(props.width === undefined ? {} : { width: props.width, height: 424 }),
+            }}
+        >
+            <RigPluginCatalogPage
+                entries={props.entries ?? entries}
+                {...(props.connection ? { connection: props.connection } : {})}
+                {...(props.error === undefined ? {} : { error: props.error })}
+            />
+        </div>
+    );
+}
 
 export function RigPluginCatalogBlueprintPage() {
     return (
@@ -125,6 +172,63 @@ export function RigPluginCatalogBlueprintPage() {
             >
                 <RigPluginCatalogPage entries={[]} failures={PLUGIN_STORE_FIXTURE_FAILURES} />
             </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A package's own page. It is read from the same subscription the catalog is, and this one is live, so nothing qualifies it."
+                label="One package's page"
+                number="12"
+            >
+                <OpenedCatalog />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same page while the subscription is down. A reader who has opened a package is owed the same warning the shelves get — said above the page rather than instead of it, and without disturbing the page they are on."
+                label="One package's page, reconnecting"
+                number="13"
+            >
+                <OpenedCatalog connection="reconnecting" />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A package's page while the feed itself answered with a failure. The package stays — nothing was uninstalled — and the header says the counts are the last reading even though the connection still reports live."
+                label="One package's page, unreadable feed"
+                number="14"
+            >
+                <OpenedCatalog error="This machine's Rig stopped answering when asked which plugins it has." />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="An open connection nobody has answered on yet, with an earlier reading still on screen. Being connected to is neither being connected nor being empty, and the page says which it is."
+                label="Connecting, with a reading held"
+                number="15"
+            >
+                <RigPluginCatalogPage connection="connecting" entries={entries} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same connection with nothing ever read from it. It is not an empty machine and does not claim to be one."
+                label="Connecting, nothing read"
+                number="16"
+            >
+                <RigPluginCatalogPage connection="connecting" entries={[]} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The package whose every string is one unbroken token, on its own page at full width. Its description is a single path with nowhere to break, and it wraps mid-token rather than setting the width of the column."
+                label="Unbroken package's page"
+                number="17"
+            >
+                <OpenedCatalog entries={[PLUGIN_STORE_FIXTURE_UNBROKEN]} />
+            </FullScreenSpecimen>
+
+            <Specimen
+                detail="The same page in the space the minimum window leaves, where the measure is 470px wide and the text column inside it 422px. The description, the name, the note, and the contribution all still wrap inside it."
+                label="Unbroken package's page, minimum window"
+                number="18"
+                stage="surface"
+            >
+                <OpenedCatalog entries={[PLUGIN_STORE_FIXTURE_UNBROKEN]} width={NARROW.width} />
+            </Specimen>
         </ComponentPage>
     );
 }

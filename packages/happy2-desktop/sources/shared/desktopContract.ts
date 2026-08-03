@@ -450,8 +450,16 @@ export interface HappyDesktopBridge {
     /** The current plugin application catalog, without waiting for the next change. */
     pluginApplicationsGet(): Promise<DesktopPluginCatalog>;
     pluginApplicationsSubscribe(listener: (catalog: DesktopPluginCatalog) => void): () => void;
-    /** The packages installed on this machine, for the one screen that reads them. */
-    pluginInventoryGet(): Promise<DesktopPluginInventory>;
+    /**
+     * Follows the packages installed on this machine, for the one screen that
+     * reads them.
+     *
+     * Unlike the application catalog there is no separate read: subscribing is
+     * what starts the machine being projected at all, and the opening reading
+     * arrives through the listener. Asking and following cannot be two steps,
+     * because a change between them would be a frame nobody was told about.
+     * Releasing the last subscription stops the work entirely.
+     */
     pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void): () => void;
     /**
      * Performs one host operation for the plugin application mounted at `origin`.
@@ -573,7 +581,9 @@ export const desktopIpc = {
     pluginApplicationsChanged: "happy2:plugins:changed",
     pluginApplicationsGet: "happy2:plugins:get",
     pluginInventoryChanged: "happy2:plugins:inventory-changed",
-    pluginInventoryGet: "happy2:plugins:inventory-get",
+    /** Starts following what is installed, answering with the reading as it stands. */
+    pluginInventoryFollow: "happy2:plugins:inventory-follow",
+    pluginInventoryUnfollow: "happy2:plugins:inventory-unfollow",
     remoteRigAdd: "happy2:remote-rig:add",
     remoteRigChanged: "happy2:remote-rig:changed",
     remoteRigConnect: "happy2:remote-rig:connect",

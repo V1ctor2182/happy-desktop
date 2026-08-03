@@ -37,6 +37,63 @@ function buildIdentityRead(): DesktopBuildIdentity | undefined {
 
 const identity = buildIdentityRead();
 
+/**
+ * The inventory listeners this window has, and whether the main process is
+ * projecting for it.
+ *
+ * Following is reference-counted here because the main process should be told
+ * about this window once, not once per screen that happens to be reading. The
+ * first listener opens the projection and takes the reading as it stands from
+ * the same call that opened it — there is no gap between the two in which a
+ * change could be missed. The last listener to leave closes it again, so a
+ * window that navigates away from the catalog stops costing anything.
+ */
+const inventoryListeners = new Set<(inventory: DesktopPluginInventory) => void>();
+let inventoryReceive:
+    | ((event: Electron.IpcRendererEvent, inventory: DesktopPluginInventory) => void)
+    | undefined;
+
+function pluginInventoryFollow(listener: (inventory: DesktopPluginInventory) => void): () => void {
+    inventoryListeners.add(listener);
+    if (inventoryListeners.size === 1) {
+        inventoryReceive = (_event, inventory) => {
+            // A copy, because a listener is free to stop following as it is told.
+            const told = Array.from(inventoryListeners);
+            for (const each of told) each(inventory);
+        };
+        ipcRenderer.on(desktopIpc.pluginInventoryChanged, inventoryReceive);
+        void ipcRenderer
+            .invoke(desktopIpc.pluginInventoryFollow)
+            .then((inventory: DesktopPluginInventory) => {
+                // The answer belongs to the follow that asked for it. If everyone
+                // has left in the meantime the projection is already closed and
+                // this reading is nobody's.
+                if (inventoryListeners.size === 0) return;
+                const told = Array.from(inventoryListeners);
+                for (const each of told) each(inventory);
+            });
+    } else {
+        // A later listener joins a projection that is already open, so it is
+        // given what this window last heard rather than waiting for a change.
+        void ipcRenderer
+            .invoke(desktopIpc.pluginInventoryFollow)
+            .then((inventory: DesktopPluginInventory) => {
+                if (!inventoryListeners.has(listener)) return;
+                listener(inventory);
+            });
+    }
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        inventoryListeners.delete(listener);
+        void ipcRenderer.invoke(desktopIpc.pluginInventoryUnfollow);
+        if (inventoryListeners.size > 0 || !inventoryReceive) return;
+        ipcRenderer.removeListener(desktopIpc.pluginInventoryChanged, inventoryReceive);
+        inventoryReceive = undefined;
+    };
+}
+
 const bridge: HappyDesktopBridge = {
     ...(identity ? { buildIdentity: identity } : {}),
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
@@ -69,12 +126,8 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.pluginApplicationsChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.pluginApplicationsChanged, receive);
     },
-    pluginInventoryGet: () => ipcRenderer.invoke(desktopIpc.pluginInventoryGet),
     pluginInventorySubscribe(listener: (inventory: DesktopPluginInventory) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, inventory: DesktopPluginInventory) =>
-            listener(inventory);
-        ipcRenderer.on(desktopIpc.pluginInventoryChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.pluginInventoryChanged, receive);
+        return pluginInventoryFollow(listener);
     },
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.

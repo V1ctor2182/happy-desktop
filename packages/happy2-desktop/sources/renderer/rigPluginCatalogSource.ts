@@ -19,6 +19,12 @@ import type {
  * each one contributes, so the whole adapter is a subscription and a projection
  * with nothing to join and nothing to fetch.
  *
+ * Subscribing is also what makes the shell project the inventory at all, and the
+ * opening reading arrives through the same subscription rather than through a
+ * second call. There is deliberately no read-without-following: a reading taken
+ * separately from the subscription would have a gap between them, and a change
+ * that landed in that gap would be a frame nobody was told about.
+ *
  * A shell that cannot read the machine supplies no bridge, and this returns
  * nothing rather than an empty feed, so the inventory is reported unavailable
  * instead of reported empty.
@@ -26,7 +32,6 @@ import type {
 export function rigPluginCatalogSourceCreate(
     desktop:
         | {
-              pluginInventoryGet(): Promise<DesktopPluginInventory>;
               pluginInventorySubscribe(
                   listener: (inventory: DesktopPluginInventory) => void,
               ): () => void;
@@ -35,31 +40,15 @@ export function rigPluginCatalogSourceCreate(
 ): RigPluginCatalogSource | undefined {
     if (!desktop) return undefined;
     return {
-        subscribe(listener, onError) {
+        subscribe(listener) {
             let closed = false;
             // One reconciler per subscription, so a card's projection keeps its
             // identity across announcements for as long as the screen is up.
             const reconcile = readingReconcilerCreate();
-            // The shell announces changes rather than replaying what it holds, so
-            // the opening read is asked for with the listener already attached.
-            // An announcement that lands while that read is in flight is the
-            // newer of the two and keeps its place.
-            let announced = false;
             const unsubscribe = desktop.pluginInventorySubscribe((inventory) => {
                 if (closed) return;
-                announced = true;
                 listener(reconcile(inventory));
             });
-            void desktop.pluginInventoryGet().then(
-                (inventory) => {
-                    if (closed || announced) return;
-                    listener(reconcile(inventory));
-                },
-                (error: unknown) => {
-                    if (closed || announced) return;
-                    onError(error);
-                },
-            );
             return () => {
                 if (closed) return;
                 closed = true;
