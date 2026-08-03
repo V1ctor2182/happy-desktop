@@ -609,6 +609,16 @@ function rowOwnerFind(
     return undefined;
 }
 
+/**
+ * Every sidebar group an archived project takes with it: the project's own row
+ * and each of its worktrees, whose checkouts go with the project. A URL naming
+ * any of them stops naming anything the moment the archive is asked for, so both
+ * places that archive a project check the addressed group against this.
+ */
+function rigProjectClosingGroupIds(project: RigProjectGroup): readonly string[] {
+    return [project.id as string, ...project.worktrees.map((worktree) => worktree.id as string)];
+}
+
 /** A group with no conversation has no transcript; the constant keeps the prop stable. */
 const NO_ENTRIES: readonly ConversationEntry[] = [];
 
@@ -1542,10 +1552,7 @@ export function AppRigView(props: AppRigViewProps) {
                 // those has to be left as well.
                 const closing = owner.worktreeId
                     ? [owner.worktreeId as string]
-                    : [
-                          owner.project.id as string,
-                          ...owner.project.worktrees.map((worktree) => worktree.id as string),
-                      ];
+                    : rigProjectClosingGroupIds(owner.project);
                 if (
                     props.rigId === rig.id &&
                     props.groupId !== undefined &&
@@ -1897,7 +1904,28 @@ export function AppRigView(props: AppRigViewProps) {
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
             {active?.session?.workspace ? (
-                <RigWindowDialogs projects={active.projects} workspace={active.session.workspace} />
+                <RigWindowDialogs
+                    // Archiving a project takes its worktrees with it, so a URL
+                    // naming any of them stops naming anything. The store never
+                    // navigates: leaving for the machine's own list is this
+                    // surface's job, and it happens as the request goes out
+                    // because the row leaves the list with it.
+                    onProjectArchiving={(projectId) => {
+                        const project = active.projects.find(
+                            (candidate) => candidate.id === projectId,
+                        );
+                        if (
+                            !project ||
+                            props.rigId !== active.id ||
+                            props.groupId === undefined ||
+                            !rigProjectClosingGroupIds(project).includes(props.groupId)
+                        )
+                            return;
+                        props.onChatSelect(active.id, undefined);
+                    }}
+                    projects={active.projects}
+                    workspace={active.session.workspace}
+                />
             ) : null}
         </>
     );
@@ -3636,6 +3664,7 @@ function rigTurnElapsedMs(
  * a draft change as it is typed.
  */
 function RigWindowDialogs(props: {
+    onProjectArchiving: (projectId: RigProjectId) => void;
     projects: readonly RigProjectGroup[];
     workspace: RigWorkspaceStore;
 }) {
@@ -3646,7 +3675,13 @@ function RigWindowDialogs(props: {
     );
     return (
         <>
-            {rigNamingDialog(workspace.rename, props.projects, props.workspace)}
+            {rigNamingDialog(
+                workspace.rename,
+                workspace.projectArchive,
+                props.projects,
+                props.workspace,
+                props.onProjectArchiving,
+            )}
             {rigCreateDialog(workspace.create, props.workspace)}
         </>
     );
@@ -3657,11 +3692,17 @@ function RigWindowDialogs(props: {
  * field: it has an identity and a checkout worth stating, and its name is the
  * one thing about it the daemon takes a new value for, so the name belongs
  * inside that surface. A worktree has nothing but its name, and gets the field.
+ *
+ * The project's settings are also where it ends: the archive lives in that same
+ * dialog, so the confirmation, what it is waiting on, and why it failed are all
+ * one projection of this store rather than a second surface over the first.
  */
 function rigNamingDialog(
     rename: RigWorkspaceSnapshot["rename"],
+    archive: RigWorkspaceSnapshot["projectArchive"],
     projects: readonly RigProjectGroup[],
     store: RigWorkspaceStore,
+    onProjectArchiving: (projectId: RigProjectId) => void,
 ): ReactNode {
     if (!rename) return null;
     if (rename.worktreeId)
@@ -3706,12 +3747,24 @@ function rigNamingDialog(
     // still has an edit in front of them, and dismissing it is what clears the
     // draft — and simply drops the section it can no longer state.
     const project = projects.find((candidate) => candidate.id === rename.projectId);
+    // Only what this dialog's own project is doing: an archive confirmed on
+    // another project — or one this dialog was opened over afterwards — is not
+    // this reader's question.
+    const archiving = archive?.projectId === rename.projectId ? archive : undefined;
     return (
         <RigProjectSettingsDialog
             draft={rename.draft}
             {...(project?.avatar ? { imageUrl: project.avatar.url } : {})}
             {...(project
                 ? {
+                      // Archiving is offered only while the project is still
+                      // listed: one that left the catalog underneath this dialog
+                      // has already reached the state the button would ask for.
+                      archive: {
+                          confirming: archiving !== undefined,
+                          submitting: archiving?.submitting === true,
+                          ...(archiving?.error !== undefined ? { error: archiving.error } : {}),
+                      },
                       contents: {
                           sessions:
                               project.conversations.length +
@@ -3725,6 +3778,15 @@ function rigNamingDialog(
                   }
                 : {})}
             name={rename.currentName}
+            onArchiveCancel={() => store.projectArchiveCancel()}
+            onArchiveConfirm={() => {
+                // Addressed away first: the project leaves the list as the
+                // request goes out, so a URL naming it would be stale before
+                // the host answers.
+                onProjectArchiving(rename.projectId);
+                void store.projectArchiveSubmit().catch(() => undefined);
+            }}
+            onArchiveRequest={() => store.projectArchiveOpen(rename.projectId)}
             onClose={() => store.renameCancel()}
             onDraftChange={(value) => store.renameDraftUpdate(value)}
             onSubmit={() => {

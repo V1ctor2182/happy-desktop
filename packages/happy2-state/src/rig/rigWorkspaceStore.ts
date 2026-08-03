@@ -328,6 +328,8 @@ export interface RigWorkspaceSnapshot {
     readonly openInRecentId?: string;
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: RigRenameSnapshot;
+    /** The project archive that has been asked for and not yet carried out, if any. */
+    readonly projectArchive?: RigProjectArchiveSnapshot;
     /**
      * How changed files are being read. One preference for the workspace rather
      * than one per tab: it is how this reader likes to look at diffs, and
@@ -482,6 +484,29 @@ export interface RigRenameSnapshot {
     readonly draft: string;
     /** True while the host is being told; the dialog stays up and inert. */
     readonly submitting: boolean;
+}
+
+/**
+ * A project archive the reader has asked for and has not yet gone through with.
+ * Archiving takes the project's conversations and every worktree checkout under
+ * it, so it is confirmed against the name it is about to remove rather than
+ * carried out on the click that asked for it.
+ *
+ * Kept beside the rename it is reached from, so the settings surface reads one
+ * snapshot for what it is showing and what it is in the middle of.
+ */
+export interface RigProjectArchiveSnapshot {
+    readonly projectId: RigProjectId;
+    /** What the project is called, for the sentence the confirmation states. */
+    readonly name: string;
+    /** True while the host is being told; the confirmation stays up and inert. */
+    readonly submitting: boolean;
+    /**
+     * Why the last attempt did not archive it, in the reader's words. Present
+     * only after the list reconciled the project back, which is what makes a
+     * failure a failure rather than a slow success.
+     */
+    readonly error?: string;
 }
 
 /**
@@ -777,6 +802,22 @@ export interface RigWorkspaceStore {
     renameCancel(): void;
     /** Commits the pending name; a blank one is not a rename and closes instead. */
     renameSubmit(): Promise<void>;
+    /**
+     * Asks to archive a project, which puts the confirmation in front of the
+     * reader rather than archiving anything. A project the list no longer holds
+     * is not asked about.
+     */
+    projectArchiveOpen(projectId: RigProjectId): void;
+    /** Abandons the pending archive, leaving the project where it is. */
+    projectArchiveCancel(): void;
+    /**
+     * Goes through with the pending archive. Resolves once the list has
+     * reconciled: gone means archived — here, or already archived elsewhere —
+     * and the confirmation and the settings dialog over it both close; still
+     * listed means the host refused, and the reason stays on the confirmation
+     * for another attempt.
+     */
+    projectArchiveSubmit(): Promise<void>;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /**
@@ -881,6 +922,7 @@ export function rigWorkspaceStoreCreate(
     let openInRecentId: string | undefined;
     let openInTargetsRequested = false;
     let rename: RigRenameSnapshot | undefined;
+    let projectArchive: RigProjectArchiveSnapshot | undefined;
     let fileViewMode: RigFileViewMode = "unified";
     // Changed and flat by default: the panel opens on the work in progress,
     // which is short and reads better as a list than as a tree of one-file
@@ -1306,6 +1348,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.openInTargets === openInTargets &&
             snapshot.openInRecentId === openInRecentId &&
             snapshot.rename === rename &&
+            snapshot.projectArchive === projectArchive &&
             snapshot.fileViewMode === fileViewMode &&
             snapshot.fileScope === fileScope &&
             snapshot.fileLayout === fileLayout &&
@@ -1342,6 +1385,7 @@ export function rigWorkspaceStoreCreate(
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
             ...(rename ? { rename } : {}),
+            ...(projectArchive ? { projectArchive } : {}),
         };
         notify();
     };
@@ -3150,6 +3194,11 @@ export function rigWorkspaceStoreCreate(
         },
         renameCancel() {
             if (!rename) return;
+            // The confirmation is reached from inside this dialog, so it is put
+            // down with it. Never while the host is being told: that request is
+            // already gone and still has an answer to report.
+            if (projectArchive?.projectId === rename.projectId && !projectArchive.submitting)
+                projectArchive = undefined;
             rename = undefined;
             recompute();
         },
@@ -3178,6 +3227,58 @@ export function rigWorkspaceStoreCreate(
                     rename = undefined;
                 recompute();
             }
+        },
+        projectArchiveOpen(projectId) {
+            const projects = list.get().projects;
+            if (projects.type !== "ready") return;
+            const project = projects.value.find((candidate) => candidate.id === projectId);
+            // Nothing to confirm about a project the list no longer holds: it was
+            // archived from somewhere else while this surface was open, and the
+            // outcome the reader asked for already holds.
+            if (!project) return;
+            projectArchive = { projectId, name: project.name, submitting: false };
+            recompute();
+        },
+        projectArchiveCancel() {
+            // Not while the host is being told: the request cannot be recalled,
+            // and a confirmation that vanished mid-flight would leave the reader
+            // guessing at what it did. It resolves on its own, either way.
+            if (!projectArchive || projectArchive.submitting) return;
+            projectArchive = undefined;
+            recompute();
+        },
+        async projectArchiveSubmit() {
+            const pending = projectArchive;
+            if (!pending || pending.submitting) return;
+            projectArchive = { projectId: pending.projectId, name: pending.name, submitting: true };
+            recompute();
+            // The list store swallows the failure into its own `mutationError`
+            // and reconciles, so what happened is read off the catalog rather
+            // than caught here: this resolves with the host's answer applied.
+            await list.projectArchive(pending.projectId);
+            if (disposed) return;
+            const projects = list.get().projects;
+            const listed =
+                projects.type === "ready" &&
+                projects.value.some((candidate) => candidate.id === pending.projectId);
+            if (!listed) {
+                // Gone is gone, whether this archived it or another window did
+                // first. The settings dialog over it is describing a project
+                // that no longer exists, so it closes with the confirmation.
+                projectArchive = undefined;
+                if (rename?.projectId === pending.projectId) rename = undefined;
+                recompute();
+                return;
+            }
+            // Reconciled back into the list: the host refused, and the reader is
+            // left with the project, the reason, and the same button.
+            projectArchive = {
+                projectId: pending.projectId,
+                name: pending.name,
+                submitting: false,
+                error: list.get().mutationError?.message ?? "The project was not archived.",
+            };
+            recompute();
         },
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
         conversationScrollUpdate(conversationId, position) {

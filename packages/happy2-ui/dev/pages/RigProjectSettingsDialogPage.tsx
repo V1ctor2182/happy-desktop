@@ -2,15 +2,19 @@ import type { ReactNode } from "react";
 import { RigProjectSettingsDialog } from "../../src/RigProjectSettingsDialog";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
-/** The dialog is fixed to the window it is in, so a specimen gives it one. */
-function frame(children: ReactNode) {
+/**
+ * The dialog is fixed to the window it is in, so a specimen gives it one. The
+ * archive specimens ask for a taller one: the block is below the fields, and a
+ * window too short to hold it would only show the modal's own body scrolling.
+ */
+function frame(children: ReactNode, height = 560) {
     return (
         <div
             style={{
                 background: "var(--groupped-background)",
                 border: "1px solid var(--surface-pressed-overlay)",
                 borderRadius: "8px",
-                height: "560px",
+                height: `${String(height)}px`,
                 overflow: "hidden",
                 position: "relative",
                 transform: "translateZ(0)",
@@ -104,9 +108,91 @@ export function RigProjectSettingsDialogPage() {
                 )}
             </Specimen>
             <Specimen
+                detail="the act that ends the project, below everything the reader came to look at"
+                label="Archive offered"
+                number="05"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        archive={{}}
+                        draft="happy2"
+                        onArchiveRequest={() => {}}
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    860,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the question names the project and says what leaves with it"
+                label="Archive confirming"
+                number="06"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        archive={{ confirming: true }}
+                        draft="happy2"
+                        onArchiveCancel={() => {}}
+                        onArchiveConfirm={() => {}}
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    860,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host is being told and cannot be recalled: the whole dialog goes inert, dismissal included"
+                label="Archiving"
+                number="07"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        archive={{ confirming: true, submitting: true }}
+                        draft="happy2"
+                        onArchiveCancel={() => {}}
+                        onArchiveConfirm={() => {}}
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    860,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host refused and the project came back: the reason and the same button"
+                label="Archive failed"
+                number="08"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        archive={{
+                            confirming: true,
+                            error: "The project changed before it could be archived.",
+                        }}
+                        draft="happy2"
+                        onArchiveCancel={() => {}}
+                        onArchiveConfirm={() => {}}
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                    />,
+                    860,
+                )}
+            </Specimen>
+            <Specimen
                 detail="the checkout was archived from elsewhere while this was open: the edit stays and the section it can no longer state is dropped"
                 label="Project gone"
-                number="05"
+                number="09"
                 stage="app"
             >
                 {frame(

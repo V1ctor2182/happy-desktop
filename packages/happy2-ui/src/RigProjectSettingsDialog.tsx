@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { Avatar } from "./Avatar";
+import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import { Modal } from "./Modal";
@@ -31,6 +32,25 @@ export type RigProjectSettingsDialogProps = {
     };
     /** True while the host is being told; the dialog stays up and inert. */
     submitting?: boolean;
+    /**
+     * Archiving this project, when the caller offers it. Absent leaves the
+     * section out entirely — a project the caller has lost sight of has nothing
+     * left to archive.
+     */
+    archive?: {
+        /** True once the reader has asked, and the confirmation is what they are looking at. */
+        confirming?: boolean;
+        /** True while the host is being told; everything in the dialog goes inert. */
+        submitting?: boolean;
+        /** Why the last attempt did not archive it, in the reader's words. */
+        error?: string;
+    };
+    /** The reader asked to archive; the caller answers by confirming. Nothing is archived here. */
+    onArchiveRequest?: () => void;
+    /** The reader went through with it. */
+    onArchiveConfirm?: () => void;
+    /** The reader kept the project. */
+    onArchiveCancel?: () => void;
     onDraftChange: (draft: string) => void;
     onSubmit: () => void;
     onClose: () => void;
@@ -61,21 +81,34 @@ function contentsSummary(contents: { worktrees: number; sessions: number }): str
  * filed under it. Below that is the name — the only project field the daemon
  * accepts a new value for — and then the location, read-only because the
  * checkout is where it is, with a copy for the terminal the reader is about to
- * open there. Archiving is deliberately not here: it throws away every worktree
- * checkout, and it stays on the row's context menu where reaching it is a
- * decision rather than a stray click inside a settings form.
+ * open there. Last is archiving, which is where a project ends: it is the one
+ * act here that removes something, so it sits below everything the reader came
+ * to look at, and it asks before it does anything. The question names the
+ * project and says what leaves with it, because "Archive" alone does not tell
+ * anyone whether their code is about to be deleted.
  *
  * Props only. The draft lives with the caller so the dialog is a pure function
  * of what it is given, and `submitting` is the host being told — the field and
  * the commit go inert together rather than one of them lying about it.
  */
 export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
-    const submitting = props.submitting === true;
+    const archiving = props.archive?.submitting === true;
+    const confirming = props.archive?.confirming === true;
+    // One request is in flight and there is nothing to type into or commit while
+    // it lands: the whole dialog answers for it rather than the archive block alone.
+    const submitting = props.submitting === true || archiving;
     // A blank name is not a name; anything else commits, and a draft equal to
     // the current name simply closes, which is what the host is told to do with it.
     const committable = props.draft.trim().length > 0;
     return (
-        <ModalOverlay onDismiss={() => props.onClose()}>
+        // Dismissal stops only while the project is being archived: that request
+        // cannot be recalled, and a dialog that vanished off a stray backdrop
+        // click mid-archive would leave the reader guessing.
+        <ModalOverlay
+            onDismiss={() => {
+                if (!archiving) props.onClose();
+            }}
+        >
             <Modal
                 className={props.className}
                 data-testid={props["data-testid"]}
@@ -84,7 +117,11 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                         {/* Not disabled while saving: the close in the header and
                             the backdrop both still dismiss, and a Cancel that
                             went inert beside them would be the odd one out. */}
-                        <Button onClick={() => props.onClose()} variant="ghost">
+                        <Button
+                            disabled={archiving}
+                            onClick={() => props.onClose()}
+                            variant="ghost"
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -92,12 +129,12 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                             onClick={() => props.onSubmit()}
                             variant="primary"
                         >
-                            {submitting ? "Saving…" : "Save"}
+                            {props.submitting === true ? "Saving…" : "Save"}
                         </Button>
                     </>
                 }
                 icon="settings"
-                onClose={() => props.onClose()}
+                onClose={archiving ? undefined : () => props.onClose()}
                 size="medium"
                 style={props.style}
                 title="Project settings"
@@ -160,6 +197,66 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                               </div>
                           ))(props.location)
                         : null}
+                    {props.archive ? (
+                        <div
+                            className="happy2-rig-project-settings__archive"
+                            data-happy2-ui="rig-project-settings-archive"
+                        >
+                            <span className="happy2-rig-project-settings__label">Archive</span>
+                            {props.archive.error ? (
+                                <Banner
+                                    data-testid="rig-project-archive-error"
+                                    tone="danger"
+                                    title="Not archived"
+                                >
+                                    {props.archive.error}
+                                </Banner>
+                            ) : null}
+                            {/* The question and the answer occupy the same block,
+                                so asking does not move the dialog's other rows
+                                or take the reader somewhere else to answer it. */}
+                            <span className="happy2-rig-project-settings__hint">
+                                {confirming
+                                    ? `Archive ${props.name}? It leaves the sidebar with its sessions, and every workspace under it is archived and its worktree folder removed. The project's own checkout stays exactly where it is.`
+                                    : "Takes the project out of the sidebar with its sessions, archives every workspace under it, and removes those workspaces' worktree folders. The project's own checkout is left alone."}
+                            </span>
+                            <div className="happy2-rig-project-settings__archive-actions">
+                                {confirming ? (
+                                    <>
+                                        <Button
+                                            disabled={archiving}
+                                            onClick={() => props.onArchiveCancel?.()}
+                                            size="small"
+                                            variant="ghost"
+                                        >
+                                            Keep project
+                                        </Button>
+                                        <Button
+                                            data-testid="rig-project-archive-confirm"
+                                            disabled={archiving}
+                                            icon="archive"
+                                            onClick={() => props.onArchiveConfirm?.()}
+                                            size="small"
+                                            variant="danger"
+                                        >
+                                            {archiving ? "Archiving…" : `Archive ${props.name}`}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button
+                                        data-testid="rig-project-archive"
+                                        disabled={submitting}
+                                        icon="archive"
+                                        onClick={() => props.onArchiveRequest?.()}
+                                        size="small"
+                                        variant="danger"
+                                    >
+                                        Archive project
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
             </Modal>
         </ModalOverlay>

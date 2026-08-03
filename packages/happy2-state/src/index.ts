@@ -466,6 +466,7 @@ export {
     type RigFileScope,
     type RigFileViewMode,
     type RigRenameSnapshot,
+    type RigProjectArchiveSnapshot,
     type RigConversationSnapshot,
     type RigWorkspaceAddress,
     type RigWorkspaceDeps,

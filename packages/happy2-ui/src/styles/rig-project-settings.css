@@ -109,3 +109,25 @@
     font-weight: 500;
     line-height: 16px;
 }
+
+/* Where the project ends. It is the one block here that removes something, so a
+   hairline separates it from the fields above rather than letting it read as one
+   more of them, and it keeps the same label/value/note rhythm so the separation
+   is the only thing that sets it apart. */
+.happy2-rig-project-settings__archive {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-rig-project-settings__archive-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
