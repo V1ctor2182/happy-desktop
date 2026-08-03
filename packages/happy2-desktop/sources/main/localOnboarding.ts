@@ -42,12 +42,19 @@ export interface LocalOnboardingRecord {
 
 /**
  * Reads the durable record, treating anything unreadable as "nothing decided
- * yet". A record written by the first revision of this feature is migrated
- * rather than discarded: it recorded the same three answers under names that
- * claimed the cloud work had already happened, and the answers themselves were
- * truthful, so someone who already answered is not asked again after an update.
- * The migrated shape is persisted by the next successful write. Any other
- * version, and anything malformed, still fails closed.
+ * yet".
+ *
+ * A record written by the first revision of this feature is migrated rather than
+ * discarded: it recorded the same three answers under names that claimed the
+ * cloud work had already happened, and the answers themselves were truthful, so
+ * someone who already answered is not asked again after an update. The migrated
+ * shape is persisted by the next successful write.
+ *
+ * Validation is all-or-nothing on purpose. A record is a set of answers that
+ * were only ever written together, so a file that disagrees with itself was not
+ * written by this feature — and the safe reading of a file setup cannot account
+ * for is that nothing has been decided, not that some of it can be kept. Keeping
+ * fragments is the one failure that skips a question instead of repeating it.
  */
 export async function localOnboardingRecordRead(
     path: string,
@@ -66,20 +73,45 @@ export async function localOnboardingRecordRead(
     }
 }
 
-/** Reads the three answers out of one stored record, whichever names it used. */
+/**
+ * Reads one stored record, whichever names its version used, and refuses it
+ * whole unless every part of it is a shape and a combination this feature could
+ * actually have written.
+ */
 function recordParse(
     parsed: Record<string, unknown>,
     cloudKey: string,
     profileKey: string,
-): LocalOnboardingRecord {
-    const cloudRequested = cloudParse(parsed[cloudKey]);
-    const profileRequested = parsed[profileKey];
+): LocalOnboardingRecord | undefined {
+    const allowed = new Set(["version", cloudKey, profileKey, "projectPath"]);
+    for (const key of Object.keys(parsed)) if (!allowed.has(key)) return undefined;
+
+    const cloudValue = parsed[cloudKey];
+    const cloudRequested = cloudValue === undefined ? undefined : cloudParse(cloudValue);
+    if (cloudValue !== undefined && !cloudRequested) return undefined;
+
+    const profileValue = parsed[profileKey];
+    if (profileValue !== undefined && typeof profileValue !== "boolean") return undefined;
+    const profileRequested = profileValue as boolean | undefined;
+
+    const pathValue = parsed.projectPath;
+    if (pathValue !== undefined && (typeof pathValue !== "string" || !pathValue)) return undefined;
+    const projectPath = pathValue as string | undefined;
+
+    // The questions are asked in one order and each answer is written with the
+    // one before it, so these combinations are the only ones that can exist.
+    // A profile answer with no cloud answer, or a project opened before either
+    // was settled, describes a path through setup that does not exist.
+    if (profileRequested !== undefined && !cloudRequested) return undefined;
+    if (cloudRequested && !cloudRequested.joined && profileRequested !== false) return undefined;
+    if (profileRequested === true && !cloudRequested?.joined) return undefined;
+    if (projectPath !== undefined && (!cloudRequested || profileRequested === undefined))
+        return undefined;
+
     return {
         ...(cloudRequested ? { cloudRequested } : {}),
-        ...(typeof profileRequested === "boolean" ? { profileRequested } : {}),
-        ...(typeof parsed.projectPath === "string" && parsed.projectPath
-            ? { projectPath: parsed.projectPath }
-            : {}),
+        ...(profileRequested === undefined ? {} : { profileRequested }),
+        ...(projectPath === undefined ? {} : { projectPath }),
         version: recordVersion,
     };
 }
@@ -137,6 +169,16 @@ export interface LocalOnboardingOptions {
     readonly presentation?: () => string;
 }
 
+/**
+ * One durable action's claim on the reader and the machine it was started for.
+ * `current` is asked again at every boundary the action crosses, because none of
+ * what it captured is guaranteed to still be true on the other side of an await.
+ */
+interface LocalOnboardingWork {
+    current(): boolean;
+    readonly generation: string;
+}
+
 interface InstallState {
     readonly ownerId: number;
     readonly terminalId: string;
@@ -170,6 +212,13 @@ export class LocalOnboarding implements Disposable {
     private probed?: LocalRuntimeProbe;
     private probeRetry?: ReturnType<typeof setTimeout>;
     private probeRetryMs?: number;
+    /**
+     * Which question the probe in flight is answering. Anything that makes the
+     * machine's facts obsolete advances it, so an answer to the previous
+     * question is discarded rather than installed as if it were current.
+     */
+    private probeEpoch = 0;
+    private probeRunId = 0;
     private freshness: LocalOnboardingFreshness = "checking";
     /** The runtime connection the current freshness answer was read from. */
     private freshnessConnection?: number;
@@ -235,6 +284,11 @@ export class LocalOnboarding implements Disposable {
     }): void {
         this.stageRequire("rigMissing", "rigInstallFailed");
         if (this.install?.running) return;
+        // Who asked for this install, and against which runtime. Nothing here
+        // awaits, but the PTY is a real side effect on the machine and it is
+        // started only for the reader and the runtime that are current when it
+        // starts — never on behalf of a document that has already gone.
+        const generation = this.generation();
         this.message = undefined;
         // The attempt being retried is over. Releasing it before opening another
         // keeps one terminal per reader at a time, so "run it again" works as
@@ -257,6 +311,13 @@ export class LocalOnboarding implements Disposable {
                           running: false,
                           message: installFailureMessage(event.message),
                       };
+                // What the last probe found is exactly what this install set out
+                // to change, so it stops being an answer here — before the
+                // runtime is handed the news and before anything is drawn.
+                // Otherwise the moment between "installed" and "examined" reads
+                // as a machine with no Rig on it, and offers to install it again.
+                if (event.verified) this.probeInvalidate();
+                this.publish();
                 // The command may exist now, so the machine is examined again
                 // rather than assumed either way.
                 void this.probeRun();
@@ -267,6 +328,11 @@ export class LocalOnboarding implements Disposable {
         }
         this.install = { ownerId: input.ownerId, terminalId, running: true };
         this.message = undefined;
+        if (this.generation() !== generation) {
+            this.installRelease();
+            this.publish();
+            return;
+        }
         try {
             this.options.installer.confirm(input.ownerId, terminalId, input.cols, input.rows);
         } catch (error) {
@@ -320,21 +386,34 @@ export class LocalOnboarding implements Disposable {
                   mobileSessions: choice.mobileSessions,
               }
             : { joined: false, remoteControl: false, mobileSessions: false };
-        await this.durable("Happy could not save your Happy Cloud choices", ["cloud"], () =>
-            this.recordWrite({
-                ...this.record,
-                cloudRequested,
-                // Declining Happy Cloud settles the profile question with it:
-                // there is nothing for an encrypted profile to exist in.
-                ...(cloudRequested.joined ? {} : { profileRequested: false }),
-            }),
+        await this.durable(
+            "Happy could not save your Happy Cloud choices",
+            ["cloud"],
+            async (working) => {
+                // The answer belongs to the reader who gave it and to the setup
+                // they were looking at; a document or a machine that has been
+                // replaced since is not owed their answer.
+                if (!working.current()) return;
+                await this.recordWrite({
+                    ...this.record,
+                    cloudRequested,
+                    // Declining Happy Cloud settles the profile question with it:
+                    // there is nothing for an encrypted profile to exist in.
+                    ...(cloudRequested.joined ? {} : { profileRequested: false }),
+                });
+            },
         );
     }
 
     /** Records whether a Happy Profile is wanted. No profile is created here. */
     async profileSubmit(request: boolean): Promise<void> {
-        await this.durable("Happy could not save your Happy Profile choice", ["profile"], () =>
-            this.recordWrite({ ...this.record, profileRequested: request }),
+        await this.durable(
+            "Happy could not save your Happy Profile choice",
+            ["profile"],
+            async (working) => {
+                if (!working.current()) return;
+                await this.recordWrite({ ...this.record, profileRequested: request });
+            },
         );
     }
 
@@ -347,21 +426,21 @@ export class LocalOnboarding implements Disposable {
      * is never written to on Happy's initiative.
      */
     async projectChoose(): Promise<void> {
-        await this.durable("Happy could not open that project", ["project"], async () => {
-            // Who this is for, captured before the native picker takes over. A
-            // picker can stay open across a window replacement or a reconnection,
-            // and neither the replaced window's reader nor a different Rig asked
-            // for what comes out of it.
-            const generation = this.generation();
-            const current = () => !this.closed && this.generation() === generation;
+        await this.durable("Happy could not open that project", ["project"], async (working) => {
+            // Which Rig said it was unused. Every conclusion below belongs to
+            // this connection alone: a Rig that has since been replaced answered
+            // a different question, and its successor's answer is not this one's
+            // to overwrite.
+            const connection = this.freshnessConnection;
+            const mine = () => working.current() && this.freshnessConnection === connection;
             const picked = await this.options.directoryPick();
-            // A cancelled picker, a replaced window, and a replaced connection
-            // are all the same outcome here: nothing was asked for, so nothing
-            // is said about it.
-            if (!picked || !current()) return;
+            // A cancelled picker, a replaced window, a reloaded document, and a
+            // replaced connection are all the same outcome here: nothing was
+            // asked for, so nothing is said about it.
+            if (!picked || !mine()) return;
             const path = await pathCanonicalize(picked);
             const root = await (this.options.gitRootRead ?? gitRootRead)(path);
-            if (!current()) return;
+            if (!mine()) return;
             if (!root) {
                 this.message =
                     "That folder is not a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.";
@@ -372,13 +451,13 @@ export class LocalOnboarding implements Disposable {
                 return;
             }
             const client = this.options.runtime.localClient();
-            if (!client || this.freshness !== "fresh" || this.snapshotValue.stage !== "project") {
+            if (!client || this.freshness !== "fresh") {
                 this.message = "Rig is not ready for a first project yet.";
                 return;
             }
             // Last look before the one thing here that changes someone else's
             // state.
-            if (!current()) return;
+            if (!mine()) return;
             try {
                 await client.createSession({
                     cwd: path,
@@ -389,17 +468,21 @@ export class LocalOnboarding implements Disposable {
             } catch (error) {
                 // Rig may have committed the project before the answer was lost,
                 // so nothing may be concluded from this — least of all that it is
-                // safe to ask again. Freshness stops being an answer and this Rig
-                // is asked afresh; the step comes back only if that Rig's own
-                // catalog still says it is unused.
+                // safe to ask again. Freshness stops being an answer and that Rig
+                // is asked afresh; the step comes back only if its own catalog
+                // still says it is unused. If the connection is already gone, its
+                // failure is not the successor's to inherit either.
+                if (!mine()) return;
                 this.freshnessInvalidate();
                 this.message = `Happy could not confirm whether that project was opened: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`;
                 return;
             }
-            // This Rig now holds a project of its own, which is exactly what
-            // freshness means; the next connection reads it again anyway.
+            // The Rig this succeeded against now holds a project of its own,
+            // which is exactly what freshness means for that Rig — and only for
+            // it. A connection that replaced it has already been asked its own
+            // question, and this answer is not about it.
+            if (!mine()) return;
             this.freshness = "used";
-            if (!current()) return;
             try {
                 await this.recordWrite({ ...this.record, projectPath: path });
             } catch {
@@ -441,19 +524,28 @@ export class LocalOnboarding implements Disposable {
     private durable(
         failure: string,
         stages: readonly LocalOnboardingSnapshot["stage"][],
-        action: () => Promise<void>,
+        action: (working: LocalOnboardingWork) => Promise<void>,
     ): Promise<void> {
         this.stageRequire(...stages);
         if (this.durablePending)
             throw new Error("First-run setup is still working on the previous request.");
+        // Who asked, captured while they are still the one asking.
+        const generation = this.generation();
+        const working: LocalOnboardingWork = {
+            current: () =>
+                !this.closed &&
+                this.generation() === generation &&
+                stages.includes(this.snapshotValue.stage),
+            generation,
+        };
         this.durablePending = true;
         this.busy = true;
         this.message = undefined;
         this.publish();
         const run = this.durableQueue.then(async () => {
             try {
-                if (this.closed || !stages.includes(this.snapshotValue.stage)) return;
-                await action();
+                if (!working.current()) return;
+                await action(working);
             } catch (error) {
                 this.message = `${failure}: ${displayError(error)}`;
             } finally {
@@ -491,16 +583,29 @@ export class LocalOnboarding implements Disposable {
         this.publish();
     }
 
-    /** Re-examines the machine now; concurrent callers share one probe. */
+    /**
+     * Re-examines the machine now; concurrent callers share one probe.
+     *
+     * A probe that was already in flight when its question stopped being the
+     * current one is not the answer to the new one: it started before whatever
+     * changed the machine, so its result is dropped and a fresh probe is what
+     * anyone waiting gets.
+     */
     private probeRun(): Promise<void> {
         if (this.closed) return Promise.resolve();
         this.probeRetryStop();
-        this.probing ??= (async () => {
+        if (this.probing) return this.probing;
+        const epoch = this.probeEpoch;
+        const runId = (this.probeRunId += 1);
+        this.probing = (async () => {
             try {
-                this.probed = await (this.options.probe ?? localRuntimeProbe)();
+                const probed = await (this.options.probe ?? localRuntimeProbe)();
+                if (epoch !== this.probeEpoch) return;
+                this.probed = probed;
                 this.probeMessage = undefined;
                 this.probeRetryMs = undefined;
             } catch (error) {
+                if (epoch !== this.probeEpoch) return;
                 // A probe that failed says nothing about the machine, and what
                 // the last one found may already be false, so the facts are
                 // dropped rather than shown as if they were current.
@@ -509,11 +614,25 @@ export class LocalOnboarding implements Disposable {
                 this.probeMessage = `Happy could not examine this machine: ${displayError(error)}`;
                 this.probeRetrySchedule();
             } finally {
-                this.probing = undefined;
-                this.refresh();
+                if (this.probeRunId === runId) this.probing = undefined;
+                if (epoch === this.probeEpoch) this.refresh();
             }
         })();
         return this.probing;
+    }
+
+    /**
+     * Drops what the machine was last known to be, and disowns the probe in
+     * flight so its answer to the old question cannot arrive as an answer to the
+     * new one. With no facts, no stage offers to change the machine.
+     */
+    private probeInvalidate(): void {
+        this.probeEpoch += 1;
+        this.probing = undefined;
+        this.probed = undefined;
+        this.probeMessage = undefined;
+        this.retryRequestedFor = undefined;
+        this.probeRetryStop();
     }
 
     private refresh(): void {
@@ -827,14 +946,22 @@ async function pathCanonicalize(path: string): Promise<string> {
     }
 }
 
+/**
+ * One stored Happy Cloud answer. It is exactly three booleans — no more, no
+ * fewer — and declining to join settles the other two with it, so a record that
+ * declines while asking for remote control is not an answer this feature gave.
+ */
 function cloudParse(value: unknown): LocalOnboardingCloudChoice | undefined {
+    if (!isRecord(value)) return undefined;
+    const keys = Object.keys(value);
     if (
-        !isRecord(value) ||
+        keys.length !== 3 ||
         typeof value.joined !== "boolean" ||
         typeof value.remoteControl !== "boolean" ||
         typeof value.mobileSessions !== "boolean"
     )
         return undefined;
+    if (!value.joined && (value.remoteControl || value.mobileSessions)) return undefined;
     return {
         joined: value.joined,
         mobileSessions: value.mobileSessions,

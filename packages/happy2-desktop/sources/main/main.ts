@@ -209,6 +209,25 @@ async function directoryPickShow(owner: BrowserWindow | undefined): Promise<stri
 }
 
 /**
+ * Which document is presenting Happy. It advances on every main-frame navigation
+ * or reload, on a renderer that is lost or crashes, and on a window that is
+ * replaced, so a `webContents` id — which survives all of those — is never the
+ * whole answer to "is this still the reader who asked?".
+ */
+let presentationEpoch = 0;
+
+function presentationAdvance(): void {
+    presentationEpoch += 1;
+}
+
+/** The presenting document's identity: which renderer, and which of its lives. */
+function presentationIdentity(): string {
+    const window = windowLifecycle.get();
+    const presenting = window && !window.isDestroyed() ? window.webContents.id : undefined;
+    return `${presenting ?? "none"}:${presentationEpoch}`;
+}
+
+/**
  * Only the window that is actually presenting Happy right now may drive first-run
  * setup. Every one of these operations installs software, writes durable choices,
  * or opens a native picker, so a renderer that has been replaced — a reload, a
@@ -655,7 +674,16 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
         if (!pluginApplications.originAllows(details.url)) details.preventDefault();
     });
     const ownerId = window.webContents.id;
+    // A document is not a window. The same `webContents` survives a reload and a
+    // main-frame navigation, so setup's idea of who it is working for advances
+    // with the document rather than with the window: work started by the page
+    // that was here a moment ago is not owed to the page that replaced it.
+    window.webContents.on("did-start-navigation", (details) => {
+        if (details.isMainFrame) presentationAdvance();
+    });
+    presentationAdvance();
     const cleanup = () => {
+        presentationAdvance();
         rigInstallManager?.closeOwner(ownerId);
         onboarding?.installAbandoned(ownerId);
         // The mark on the Dock belongs to the window that reported it. This one
@@ -1024,10 +1052,7 @@ void app
             // Which window setup is working for. A native picker outlives the
             // window that opened it, so setup reads this again before it acts on
             // what came back.
-            presentation: () => {
-                const window = windowLifecycle.get();
-                return window && !window.isDestroyed() ? String(window.webContents.id) : "none";
-            },
+            presentation: presentationIdentity,
             recordPath: join(desktopRoot, "local-onboarding.json"),
             runtime,
         });
