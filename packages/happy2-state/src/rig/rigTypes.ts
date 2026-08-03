@@ -474,6 +474,18 @@ export interface RigWorktree {
         | "archiving"
         | "archive_failed"
         | "archived";
+    /**
+     * Whether the checkout this worktree names is still on disk. The host
+     * watches for it, so a directory removed outside Happy turns a listed
+     * worktree `missing` without anything being asked of it.
+     */
+    readonly presence: "present" | "missing";
+    /**
+     * Why the host could not prepare or remove this checkout, when it says. The
+     * reason is part of the worktree's durable record rather than of the request
+     * that produced it, so it outlives the window that asked for the checkout.
+     */
+    readonly error?: string;
     /** Current changed-file total for this checkout, omitted until Git state is available. */
     readonly changedFiles?: number;
     /** Aggregate textual diff against HEAD, omitted until Git state is available. */

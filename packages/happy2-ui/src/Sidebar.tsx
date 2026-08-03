@@ -73,6 +73,21 @@ export type SidebarItem = {
      * do real work reports `working`.
      */
     status?: "ready" | "working" | "waiting";
+    /**
+     * Where the thing behind this row is in its own life, as distinct from what
+     * is happening inside it: `creating` while it is still being made,
+     * `unavailable` once what it named is no longer there, and `failed` when it
+     * could not be made at all.
+     *
+     * A row in one of these states is not a row doing work, so the lifecycle
+     * takes the leading slot and the trailing label from `status` — the reader
+     * needs to know the place does not exist yet before they are told nothing is
+     * running in it. The label is named in `lifecycleLabel` so the row says what
+     * happened in the caller's own words.
+     */
+    lifecycle?: "creating" | "unavailable" | "failed";
+    /** What the row's `lifecycle` reads as, e.g. "Creating…", "Missing", "Failed". */
+    lifecycleLabel?: string;
     tone?: ToneName;
     unread?: boolean;
 };
@@ -471,9 +486,18 @@ function SidebarRow({
         </span>
     );
     const depth = () => Math.max(0, item().depth ?? 0);
+    const lifecycle = () => item().lifecycle;
     const showStatus = () =>
-        item().kind === "agent" && item().status !== undefined && !unread() && !mentioned();
-    const showMeta = () => item().meta !== undefined && !unread() && !mentioned() && !showStatus();
+        item().kind === "agent" &&
+        item().status !== undefined &&
+        lifecycle() === undefined &&
+        !unread() &&
+        !mentioned();
+    // A row whose place is still being made, or is gone, says so ahead of any
+    // count of what is inside it: the reader is being told the row's own news.
+    const showLifecycle = () => lifecycle() !== undefined && item().lifecycleLabel !== undefined;
+    const showMeta = () =>
+        item().meta !== undefined && !unread() && !mentioned() && !showStatus() && !showLifecycle();
     return (
         <button
             aria-current={props.active ? "page" : undefined}
@@ -486,6 +510,7 @@ function SidebarRow({
             data-kind={item().kind}
             data-mentioned={mentioned() ? "" : undefined}
             data-happy2-ui="sidebar-item"
+            data-lifecycle={lifecycle()}
             data-status={item().status}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
@@ -523,8 +548,30 @@ function SidebarRow({
                     className="happy2-sidebar__item-leading"
                     data-happy2-ui="sidebar-item-leading"
                 >
-                    {(item().kind === "workspace" || item().kind === "project") &&
-                    item().status === "working" ? (
+                    {/* Accent rather than the muted tone the working spinner
+                        wears: the same glyph in the same slot would otherwise
+                        mean two different things — this place is being made, or
+                        work is happening inside a place that already exists —
+                        and the two have to be told apart at a glance rather
+                        than by reading the trailing word. */}
+                    {lifecycle() === "creating" ? (
+                        <Spinner
+                            label={`${item().label} is being created`}
+                            size={14}
+                            tone="accent"
+                        />
+                    ) : lifecycle() !== undefined ? (
+                        <span
+                            aria-label={`${item().label}: ${item().lifecycleLabel ?? "unavailable"}`}
+                            className="happy2-sidebar__item-lifecycle-glyph"
+                            data-happy2-ui="sidebar-item-lifecycle-glyph"
+                            data-lifecycle={lifecycle()}
+                            role="img"
+                        >
+                            <Icon name={lifecycle() === "failed" ? "alert" : "unlink"} size={14} />
+                        </span>
+                    ) : (item().kind === "workspace" || item().kind === "project") &&
+                      item().status === "working" ? (
                         <Spinner label={`${item().label} is working`} size={14} tone="muted" />
                     ) : (item().kind === "workspace" || item().kind === "project") &&
                       item().status === "waiting" ? (
@@ -635,6 +682,15 @@ function SidebarRow({
                         </span>
                     ))(item().changeStats!)
                   : null}
+            {showLifecycle() ? (
+                <span
+                    className="happy2-sidebar__item-lifecycle"
+                    data-happy2-ui="sidebar-item-lifecycle"
+                    data-lifecycle={lifecycle()}
+                >
+                    {item().lifecycleLabel}
+                </span>
+            ) : null}
             {showStatus() ? (
                 <>
                     {item().status === "working" ? (

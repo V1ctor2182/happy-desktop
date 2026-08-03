@@ -43,6 +43,7 @@ import type {
     RigProviderUsageStore,
     RigProjectGroup,
     RigProjectId,
+    RigWorktreeLifecycle,
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
@@ -151,6 +152,8 @@ import {
     type SidebarReorder,
     type SidebarSection,
     type TabItem,
+    WorkspaceLifecycleNotice,
+    type WorkspaceLifecyclePhase,
 } from "happy2-ui";
 import { openExternalLink } from "./externalLink";
 import { PluginCatalogView } from "./views/PluginCatalogView";
@@ -426,6 +429,14 @@ interface OpenGroup {
     readonly conversations: RigProjectGroup["conversations"];
     readonly changes: NonNullable<RigProjectGroup["changes"]>;
     readonly create: RigSessionCreateInput;
+    /**
+     * Where the open group's checkout is in its own life, for a worktree. A
+     * project has none: it is a directory Rig adopted rather than one it made,
+     * so there is no moment at which it is being prepared.
+     */
+    readonly lifecycle?: RigWorktreeLifecycle;
+    /** The checkout's path, so a notice about it can name the directory. */
+    readonly path: string;
 }
 
 /**
@@ -500,6 +511,10 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 label: `Archive ${worktree.name}`,
                 reveal: "hover" as const,
             },
+            // A worktree whose checkout is still being made, could not be made,
+            // or is no longer there says so on the row: the reader is looking at
+            // a place they may be about to send work into.
+            ...sidebarLifecycle(worktree.lifecycle),
             ...(worktree.activity === "running"
                 ? { status: "working" as const }
                 : worktree.activity === "waiting"
@@ -518,6 +533,39 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
                 : {}),
         })),
     ];
+}
+
+/**
+ * The row treatment one worktree phase asks for, as `SidebarItem` names them.
+ *
+ * A ready worktree contributes nothing: it is an ordinary row, and the row is
+ * then free to report the work happening inside it. The other three replace that
+ * report, because a place that does not exist yet has nothing running in it and
+ * a place that has gone is not somewhere to send work.
+ */
+function sidebarLifecycle(
+    lifecycle: RigWorktreeLifecycle,
+): Pick<SidebarItem, "lifecycle" | "lifecycleLabel"> {
+    if (lifecycle.phase === "creating")
+        return { lifecycle: "creating", lifecycleLabel: "creating" };
+    if (lifecycle.phase === "failed") return { lifecycle: "failed", lifecycleLabel: "failed" };
+    if (lifecycle.phase === "missing")
+        return { lifecycle: "unavailable", lifecycleLabel: "missing" };
+    return {};
+}
+
+/**
+ * The phase a screen showing this worktree has to interrupt the reader with.
+ *
+ * A ready worktree and a project both answer `undefined`: the place is simply
+ * there, and a notice saying so would sit permanently over every screen in the
+ * application. The notice's own type leaves `ready` out for the same reason.
+ */
+function workspaceLifecyclePhase(
+    lifecycle: RigWorktreeLifecycle | undefined,
+): WorkspaceLifecyclePhase | undefined {
+    if (lifecycle === undefined || lifecycle.phase === "ready") return undefined;
+    return lifecycle.phase;
 }
 
 /** The row action ids the sidebar's context menu dispatches back to this surface. */
@@ -870,6 +918,7 @@ function openGroupFind(
                 conversations: project.conversations,
                 changes: project.changes ?? [],
                 create: { cwd: project.path },
+                path: project.displayPath,
             };
         for (const worktree of project.worktrees)
             if (worktree.id === groupId)
@@ -880,6 +929,8 @@ function openGroupFind(
                     conversations: worktree.conversations,
                     changes: worktree.changes ?? [],
                     create: { cwd: worktree.path, worktreeId: worktree.id },
+                    lifecycle: worktree.lifecycle,
+                    path: worktree.displayPath,
                 };
     }
     return undefined;
@@ -2212,6 +2263,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         title: slotPlacement("title"),
     };
     const openGroup = openGroupFind(rows, props.groupId);
+    // The worktree phase this screen has to say something about. `ready` and a
+    // project both leave it absent: there is nothing to interrupt the reader
+    // with when the place they are looking at is simply there.
+    const openGroupPhase = workspaceLifecyclePhase(openGroup?.lifecycle);
+    // The address the reader was sent to when a creation was accepted locally
+    // and then refused. There is no row at it any more — rig-connect withdrew
+    // the one it had predicted — so the address answers for itself here rather
+    // than falling through to "no project open".
+    const refusedCreate =
+        openGroup === undefined && props.groupId !== undefined
+            ? workspace.list.worktreeCreateFailures.get(props.groupId as RigWorktreeId)
+            : undefined;
     const groupFileTabs = openGroup
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
@@ -2512,7 +2575,41 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     {/* Cmd+T opens a tab, and here a tab is a session in the
                         project that is already open. */}
                     <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
-                    {openGroup.conversations.length === 0 && workspace.groupComposer ? (
+                    {/* A worktree with work already in it keeps its tab strip and
+                        its transcripts, so its phase is stated in the lane above
+                        them rather than in place of them: the reader can still
+                        read what ran there before the checkout went away. */}
+                    {openGroupPhase !== undefined && openGroup.conversations.length > 0 ? (
+                        <div className="rig-workspace__lifecycle">
+                            <WorkspaceLifecycleNotice
+                                {...(openGroup.lifecycle?.phase === "failed" &&
+                                openGroup.lifecycle.reason !== undefined
+                                    ? { detail: openGroup.lifecycle.reason }
+                                    : {})}
+                                name={openGroup.name}
+                                {...(openGroup.path ? { path: openGroup.path } : {})}
+                                phase={openGroupPhase}
+                                size="compact"
+                            />
+                        </div>
+                    ) : null}
+                    {openGroup.conversations.length === 0 && openGroupPhase !== undefined ? (
+                        // Nothing has run here and the place itself is not ready
+                        // to be worked in: a composer would take a message the
+                        // checkout it is addressed to cannot receive. What
+                        // happened to the workspace is the whole screen instead,
+                        // and it gives way to the composer the moment the
+                        // checkout is there.
+                        <WorkspaceLifecycleNotice
+                            {...(openGroup.lifecycle?.phase === "failed" &&
+                            openGroup.lifecycle.reason !== undefined
+                                ? { detail: openGroup.lifecycle.reason }
+                                : {})}
+                            name={openGroup.name}
+                            {...(openGroup.path ? { path: openGroup.path } : {})}
+                            phase={openGroupPhase}
+                        />
+                    ) : openGroup.conversations.length === 0 && workspace.groupComposer ? (
                         // A group with nothing in it gets no tab strip — an empty
                         // strip is a control that does nothing but take a row —
                         // and a live composer rather than a button: the first
@@ -2821,21 +2918,36 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
-                    {/* No project is open, so there is nowhere in front of the
-                        reader for a session to be started — but Create asks
-                        where, so it answers from here as readily as anywhere
-                        else, and it is the only move this screen has. */}
-                    <EmptyState
-                        action={{
-                            label: "Create",
-                            icon: "plus",
-                            onClick: () => props.workspace.createOpen(),
-                        }}
-                        description="Pick one in the sidebar, or start a session in any of them."
-                        icon="files"
-                        size="panel"
-                        title="No project open"
-                    />
+                    {refusedCreate ? (
+                        // This address was a workspace being made until Rig
+                        // refused it. Saying "no project open" here would leave
+                        // the reader to work out for themselves that the row they
+                        // just watched appear and vanish was never created.
+                        <WorkspaceLifecycleNotice
+                            detail={refusedCreate.message}
+                            // The name every worktree Happy asks for is created
+                            // under. Rig never gave this one a record, so the
+                            // name the request carried is the only one there is.
+                            name="Workspace"
+                            phase="refused"
+                        />
+                    ) : (
+                        /* No project is open, so there is nowhere in front of the
+                           reader for a session to be started — but Create asks
+                           where, so it answers from here as readily as anywhere
+                           else, and it is the only move this screen has. */
+                        <EmptyState
+                            action={{
+                                label: "Create",
+                                icon: "plus",
+                                onClick: () => props.workspace.createOpen(),
+                            }}
+                            description="Pick one in the sidebar, or start a session in any of them."
+                            icon="files"
+                            size="panel"
+                            title="No project open"
+                        />
+                    )}
                 </>
             )}
             {/* Reverting is the one act in the file panel that destroys work

@@ -61,6 +61,8 @@ export type IconName =
     | "panel-restore"
     | "trash"
     | "archive"
+    | "alert"
+    | "unlink"
     | "plugin"
     | "package"
     | "dot";
@@ -181,6 +183,12 @@ const glyphs: Record<IconName, IconGlyph> = {
     "panel-restore": { set: "octicons", name: "screen-normal" },
     trash: { set: "ionicons", name: "trash-outline" },
     archive: { set: "ionicons", name: "archive-outline" },
+    // Something went wrong with the thing this glyph sits on — as distinct from
+    // `shield`, which is about what an agent was allowed to do.
+    alert: { set: "ionicons", name: "alert-circle-outline" },
+    // The thing is still listed but what it pointed at is no longer there: a
+    // checkout removed outside Happy, a link with nothing on the other end.
+    unlink: { set: "ionicons", name: "unlink-outline" },
     dot: { set: "ionicons", name: "ellipse" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];

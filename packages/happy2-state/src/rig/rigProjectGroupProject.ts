@@ -13,6 +13,31 @@ import type {
 } from "./rigTypes.js";
 
 /**
+ * Where a worktree is in its life, as the host reports it.
+ *
+ * A worktree is listed from the moment it is asked for, so the row exists long
+ * before its checkout does and can outlive the checkout it names. These are the
+ * phases the host actually distinguishes:
+ *
+ * - `creating` — the checkout is being prepared. The row is addressable and
+ *   named, but its directory does not exist yet, so nothing can run in it.
+ * - `ready` — the checkout is prepared and present.
+ * - `missing` — the checkout was prepared and its directory is no longer there.
+ *   Nothing in Happy did that; it is what the host sees on disk now.
+ * - `failed` — the host could not prepare the checkout, carrying its own reason
+ *   when it gives one. Terminal: nothing further happens to this worktree.
+ *
+ * Being archived is deliberately not a phase. The host stops listing a worktree
+ * the moment its archival begins, so "on its way out" is not something this list
+ * can observe — see the filter in `rigProjectGroupsProject`.
+ */
+export type RigWorktreeLifecycle =
+    | { readonly phase: "creating" }
+    | { readonly phase: "ready" }
+    | { readonly phase: "missing" }
+    | { readonly phase: "failed"; readonly reason?: string };
+
+/**
  * One of a project's git worktrees with the sessions running in it. A worktree is
  * a branch someone is working on in parallel, so its sessions list under it
  * rather than beside the project's own — the same way a project's sessions list
@@ -27,6 +52,13 @@ export interface RigWorktreeGroup {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
+    /**
+     * Whether this worktree's checkout is being prepared, usable, gone, or was
+     * never made at all. Every row carries one: a worktree that exists is always
+     * somewhere in that sequence, and a row saying nothing about it would be a
+     * row the reader has to guess at.
+     */
+    readonly lifecycle: RigWorktreeLifecycle;
     readonly conversations: readonly ConversationSummary[];
     /** Live marker of the busiest session in the worktree. */
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
@@ -120,6 +152,7 @@ export function rigProjectGroupsProject(
             orderKey: worktree.orderKey,
             path: worktree.path,
             displayPath: worktree.displayPath,
+            lifecycle: worktreeLifecycleOf(worktree),
             conversations,
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
@@ -168,6 +201,40 @@ function projectGroup(
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),
         ...(project.changes === undefined ? {} : { changes: project.changes }),
     };
+}
+
+/*
+ * The phases with nothing else to say are shared objects rather than fresh ones,
+ * so a reconcile that changed a session cannot hand a worktree row a new
+ * lifecycle object and make an otherwise unchanged row compare as changed.
+ */
+const LIFECYCLE_CREATING: RigWorktreeLifecycle = { phase: "creating" };
+const LIFECYCLE_READY: RigWorktreeLifecycle = { phase: "ready" };
+const LIFECYCLE_MISSING: RigWorktreeLifecycle = { phase: "missing" };
+const LIFECYCLE_FAILED: RigWorktreeLifecycle = { phase: "failed" };
+
+/**
+ * Reads the host's worktree record as the phase a reader can act on.
+ *
+ * Preparation and presence are two separate facts about the same checkout, and
+ * only their combination says what the reader is looking at: a checkout that was
+ * never made is not the same thing as one that was made and then removed, and
+ * showing both as "not there" would hide which of the two happened.
+ *
+ * `archive_failed` reads as `failed` rather than as a phase of its own. It is a
+ * value Happy's transport type still admits and the host no longer produces —
+ * archival either finishes or leaves the worktree listed as it was — so giving
+ * it its own presentation would be building a screen for something nothing
+ * sends.
+ */
+function worktreeLifecycleOf(worktree: RigWorktree): RigWorktreeLifecycle {
+    if (worktree.status === "initializing") return LIFECYCLE_CREATING;
+    if (worktree.status === "failed" || worktree.status === "archive_failed") {
+        return worktree.error === undefined
+            ? LIFECYCLE_FAILED
+            : { phase: "failed", reason: worktree.error };
+    }
+    return worktree.presence === "missing" ? LIFECYCLE_MISSING : LIFECYCLE_READY;
 }
 
 /**

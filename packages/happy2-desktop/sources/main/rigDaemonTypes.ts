@@ -91,6 +91,10 @@ export interface ProjectWorkspace {
     readonly orderKey: string;
     readonly path: string;
     readonly status: ProjectWorkspaceStatus;
+    /** Whether the checkout is still on disk, which the daemon watches for. */
+    readonly presence: "present" | "missing";
+    /** Why the daemon could not prepare or remove the checkout, when it says. */
+    readonly error?: string;
     /** Optimistic-concurrency token the daemon requires to guard an archive or reorder. */
     readonly version: number;
     readonly createdAt: number;

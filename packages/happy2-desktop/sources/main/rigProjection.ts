@@ -137,6 +137,8 @@ export function rigWorktreeProject(workspace: ProjectWorkspace, homeDir: string)
         path: workspace.path,
         displayPath: rigDisplayCwd(workspace.path, homeDir),
         status: workspace.status,
+        presence: workspace.presence,
+        ...(workspace.error === undefined ? {} : { error: workspace.error }),
         ...(workspace.changedFiles === undefined ? {} : { changedFiles: workspace.changedFiles }),
         ...(workspace.addedLines === undefined ? {} : { addedLines: workspace.addedLines }),
         ...(workspace.deletedLines === undefined ? {} : { deletedLines: workspace.deletedLines }),

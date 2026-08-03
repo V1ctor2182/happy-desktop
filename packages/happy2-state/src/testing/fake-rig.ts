@@ -509,6 +509,7 @@ class FakeRigTransportModel implements FakeRigTransport {
                     path: `/worktrees/${id}`,
                     displayPath: `/worktrees/${id}`,
                     status: "ready",
+                    presence: "present",
                 };
                 this.projects = {
                     ...this.projects,

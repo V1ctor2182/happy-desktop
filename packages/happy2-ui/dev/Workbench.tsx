@@ -132,6 +132,7 @@ import { DesktopInstanceSwitcherPage } from "./pages/DesktopInstanceSwitcherPage
 import { RigConnectionStatusPage } from "./pages/RigConnectionStatusPage";
 import { AgentActivityRowPage } from "./pages/AgentActivityRowPage";
 import { WaitRingPage } from "./pages/WaitRingPage";
+import { WorkspaceLifecycleNoticePage } from "./pages/WorkspaceLifecycleNoticePage";
 import { HtmlPreviewErrorPage } from "./pages/HtmlPreviewErrorPage";
 import { HtmlPreviewFramePage } from "./pages/HtmlPreviewFramePage";
 import { ContextMeterPage } from "./pages/ContextMeterPage";
@@ -198,6 +199,12 @@ const components: BlueprintPage[] = [
     { id: "title-bar", label: "Title bar", number: "C-007", page: TitleBarPage },
     { id: "rail", label: "Rail", number: "C-008", page: RailPage },
     { id: "sidebar", label: "Sidebar", number: "C-009", page: SidebarPage },
+    {
+        id: "workspace-lifecycle-notice",
+        label: "Workspace lifecycle notice",
+        number: "C-241",
+        page: WorkspaceLifecycleNoticePage,
+    },
     {
         id: "chat-project-create-dialog",
         label: "Project create dialog",

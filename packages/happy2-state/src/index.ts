@@ -324,6 +324,7 @@ export {
     rigSessionGroupIdOf,
     type RigProjectGroup,
     type RigWorktreeGroup,
+    type RigWorktreeLifecycle,
 } from "./rig/rigProjectGroupProject.js";
 export {
     rigChatStoreCreate,

@@ -359,6 +359,12 @@ export {
     type SpinnerVariant,
 } from "./Spinner";
 export { WaitRing, type WaitRingProps, waitFinishDateLabel, waitRemainingLabel } from "./WaitRing";
+export {
+    WorkspaceLifecycleNotice,
+    type WorkspaceLifecycleNoticeProps,
+    type WorkspaceLifecycleNoticeSize,
+    type WorkspaceLifecyclePhase,
+} from "./WorkspaceLifecycleNotice";
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {

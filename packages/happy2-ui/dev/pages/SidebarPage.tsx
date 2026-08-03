@@ -139,6 +139,75 @@ const workspaceSections: SidebarSection[] = [
 /* A tiny inline photo so the blueprint shows the image-avatar row state. */
 const PHOTO =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAT0lEQVR4nGPorvk+ufrTrOp3i6perqx8srHiwY6K2wfKrzNgFT1edokBq+j5srMMWEWvlZ5kwCp6r+QIA1bRp8X7GbCKvi3ezYBV9EvRNgD7aoNVazUeBQAAAABJRU5ErkJggg==";
+/*
+ * A project whose worktrees are in every phase of their own life at once. Each
+ * row is the same workspace row, so the specimen shows what the reader actually
+ * compares: the leading slot and the trailing word change while the row's name,
+ * indent, and branch stay exactly where they were.
+ */
+const lifecycleSections: SidebarSection[] = [
+    {
+        id: "lifecycle",
+        items: [
+            {
+                action: { icon: "plus", label: "New workspace", reveal: "hover" },
+                id: "lifecycle-project",
+                initials: "H",
+                kind: "project",
+                label: "happy2",
+                secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
+                tone: "ember",
+            },
+            {
+                action: { icon: "archive", label: "Archive", reveal: "hover" },
+                depth: 1,
+                id: "lifecycle-creating",
+                kind: "workspace",
+                label: "fix-login-redirect",
+                lifecycle: "creating",
+                lifecycleLabel: "creating",
+            },
+            {
+                action: { icon: "archive", label: "Archive", reveal: "hover" },
+                changeStats: { added: 42, deleted: 7 },
+                depth: 1,
+                id: "lifecycle-ready",
+                kind: "workspace",
+                label: "session-catalogue",
+                status: "working",
+            },
+            {
+                action: { icon: "archive", label: "Archive", reveal: "hover" },
+                depth: 1,
+                id: "lifecycle-failed",
+                kind: "workspace",
+                label: "port-sharing-spike",
+                lifecycle: "failed",
+                lifecycleLabel: "failed",
+            },
+            {
+                action: { icon: "archive", label: "Archive", reveal: "hover" },
+                depth: 1,
+                id: "lifecycle-missing",
+                kind: "workspace",
+                label: "documents-rewrite",
+                lifecycle: "unavailable",
+                lifecycleLabel: "missing",
+            },
+            {
+                action: { icon: "archive", label: "Archive", reveal: "hover" },
+                depth: 1,
+                id: "lifecycle-long",
+                kind: "workspace",
+                label: "reconcile-worktrees-from-the-catalogue-stream",
+                lifecycle: "creating",
+                lifecycleLabel: "creating",
+            },
+        ],
+        label: "happy2",
+    },
+];
+
 const treatmentSections: SidebarSection[] = [
     {
         id: "states",
@@ -663,6 +732,27 @@ export function SidebarPage() {
                         />
                     </Frame>
                     <DimensionRule label="row 32 px · radius 6 · pad 0 10 · gap 8" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="A worktree's own phase takes the leading slot and the trailing word: a spinner while its checkout is being prepared, an alert once it could not be, an unlink once its directory has gone. A ready row is unchanged and still reports the work inside it."
+                label="Workspace lifecycle rows"
+                number="02a"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Frame height={300}>
+                        <Sidebar
+                            activeItemId="lifecycle-creating"
+                            onItemAction={() => {}}
+                            onItemSecondaryAction={() => {}}
+                            onItemSelect={() => {}}
+                            sections={lifecycleSections}
+                            title="Lifecycle"
+                        />
+                    </Frame>
+                    <DimensionRule label="leading 16 · trailing label 11px mono · row 32 px unchanged in every phase" />
                 </div>
             </Specimen>
 

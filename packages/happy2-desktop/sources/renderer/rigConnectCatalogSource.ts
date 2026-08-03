@@ -164,6 +164,11 @@ function catalogProject(
                 path: workspace.path,
                 displayPath: workspace.path,
                 status: workspace.status,
+                presence: workspace.presence,
+                // rig-connect's joined tree carries the workspace's phase but
+                // not the daemon's own sentence about a failed one, so a failure
+                // arriving this way has a phase and no reason. The surface says
+                // what it knows rather than inventing the missing half.
                 ...gitProject(workspace.git),
             });
             sessions.push(

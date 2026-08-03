@@ -50,6 +50,19 @@ export interface RigSessionListSnapshot {
      * says — and it is answered by the read sequence rather than by this.
      */
     readonly catalogRevision: number;
+    /**
+     * Worktrees this window asked for that the host refused, by the identity it
+     * refused them under — which is the identity the worktree would have had, so
+     * the reader who was sent to that address finds the refusal waiting there
+     * instead of an empty screen.
+     *
+     * A refused creation leaves nothing behind on the host: it never made the
+     * worktree, and it keeps no record of having declined to. So this is the
+     * only place the refusal exists, and it is kept for as long as the window is
+     * open rather than pretended to be durable. Each attempt carries its own
+     * identity, so a refusal can never land on a later attempt's row.
+     */
+    readonly worktreeCreateFailures: ReadonlyMap<RigWorktreeId, UserError>;
 }
 
 /**
@@ -230,9 +243,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const output = deps.output ?? (() => undefined);
     const createId = deps.createId ?? defaultCreateId;
 
+    const NO_WORKTREE_CREATE_FAILURES: ReadonlyMap<RigWorktreeId, UserError> = new Map();
+
     const store = createStore<RigSessionListSnapshot>()(() => ({
         catalogRevision: 0,
         projects: { type: "loading" },
+        worktreeCreateFailures: NO_WORKTREE_CREATE_FAILURES,
     }));
 
     const EMPTY_CATALOG: RigProjectCatalog = { projects: [], worktrees: [] };
@@ -520,10 +536,21 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // withdrawal of the optimistic row is rig-connect's own doing: what
             // is left for this store is saying why the row went away.
             if (disposed || !pendingMutationIds.delete(rejection.mutationId)) return;
-            store.setState({
-                ...store.getState(),
-                mutationError: rigUserError(new Error(rejection.message)),
-            });
+            const error = rigUserError(new Error(rejection.message));
+            const previous = store.getState();
+            // A refused worktree creation is also filed under the identity it was
+            // refused under. The row is gone — rig-connect withdrew it — but the
+            // reader was sent to that address the moment the creation was
+            // accepted locally, so the address has to be able to answer for
+            // itself rather than falling back to "nothing is open".
+            const worktreeCreateFailures =
+                rejection.action === "create_workspace"
+                    ? new Map(previous.worktreeCreateFailures).set(
+                          rejection.mutationId as RigWorktreeId,
+                          error,
+                      )
+                    : previous.worktreeCreateFailures;
+            store.setState({ ...previous, mutationError: error, worktreeCreateFailures });
         });
         void reconcile();
     };
