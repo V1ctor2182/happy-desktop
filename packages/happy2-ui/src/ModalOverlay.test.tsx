@@ -410,6 +410,10 @@ it("moves focus into the dialog on open, closes on Escape without a click, and r
     // engines (pointer users put focus back with their next click anyway).
     opener.focus();
     await userEvent.keyboard("{Enter}");
+    // The browser synthesises the opener's click from the key press, so the
+    // overlay is not in the DOM the instant the key press resolves; wait for the
+    // open to land before reading it.
+    await view.ready();
     // Focus lands on the dialog's first focusable control at open, so keyboard
     // dismissal works immediately — no preparatory click inside the card.
     const overlay = view.container.querySelector('[data-happy2-ui="modal-overlay"]')!;

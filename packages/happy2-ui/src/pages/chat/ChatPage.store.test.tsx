@@ -1,5 +1,6 @@
 import "../../styles.css";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import type {
     AgentTurnTraceDetails,
     AgentTurnTraceSummary,
@@ -273,8 +274,12 @@ it("updates one mounted message while preserving sibling DOM", async () => {
     const secondRoot = view.container.querySelector(
         '[data-slot-id="message-2"] [data-happy2-ui="message"]',
     )!;
-    update([{ ...first, message: { ...first.message, text: "streamed body" } }, second]);
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // A change made outside React's event system commits from a scheduler task,
+    // which a bare frame can outrun; flush it so the assertions below read the
+    // updated tree rather than whichever one the frame happened to catch.
+    flushSync(() =>
+        update([{ ...first, message: { ...first.message, text: "streamed body" } }, second]),
+    );
     expect(
         view.container.querySelector('[data-slot-id="message-1"] [data-happy2-ui="message"]'),
     ).toBe(firstRoot);
@@ -383,11 +388,14 @@ it("renders a complete chat page from coarse HappyState surface stores", async (
     expect(view.container.textContent).toContain("Product");
     const channelRow = view.container.querySelector<HTMLElement>('[data-item-id="chat-1"]')!;
     channelRow.focus();
-    sidebar.input({
-        type: "projectSummariesReconciled",
-        projects: [{ ...testProject, name: "Product launch", updatedAt: "later" }],
-    });
-    await nextFrame();
+    // Reconciliation arrives outside React's event system; flush it so the row read
+    // below cannot depend on when React committed it.
+    flushSync(() =>
+        sidebar.input({
+            type: "projectSummariesReconciled",
+            projects: [{ ...testProject, name: "Product launch", updatedAt: "later" }],
+        }),
+    );
     expect(view.container.querySelector('[data-item-id="chat-1"]')).toBe(channelRow);
     expect(document.activeElement).toBe(channelRow);
     expect(view.container.textContent).toContain("Product launch");
@@ -404,70 +412,71 @@ it("renders a complete chat page from coarse HappyState surface stores", async (
     const happyRow = view.container.querySelector('[data-item-id="happy-chat"]')!;
     (happyRow as HTMLElement).click();
     expect(chatSelect).toHaveBeenCalledWith("happy-chat", "chat", false);
-    sidebar.input({
-        type: "chatSummariesReconciled",
-        changedChats: [
-            {
-                chat: { ...happyChat, unreadCount: 4 },
-                id: happyChat.id,
-                displayName: "Happy",
-                participants: [
-                    {
-                        id: "user-1",
-                        displayName: "Ada Lovelace",
-                        username: "ada",
-                        kind: "human",
-                    },
-                    {
-                        id: "happy",
-                        displayName: "Happy",
-                        username: "happy",
-                        kind: "agent",
-                        agentRole: "default",
-                    },
-                ],
-            },
-        ],
-        removedChatIds: [],
-        sync: { protocolVersion: 1, generation: "test", sequence: "1" },
-    });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    flushSync(() =>
+        sidebar.input({
+            type: "chatSummariesReconciled",
+            changedChats: [
+                {
+                    chat: { ...happyChat, unreadCount: 4 },
+                    id: happyChat.id,
+                    displayName: "Happy",
+                    participants: [
+                        {
+                            id: "user-1",
+                            displayName: "Ada Lovelace",
+                            username: "ada",
+                            kind: "human",
+                        },
+                        {
+                            id: "happy",
+                            displayName: "Happy",
+                            username: "happy",
+                            kind: "agent",
+                            agentRole: "default",
+                        },
+                    ],
+                },
+            ],
+            removedChatIds: [],
+            sync: { protocolVersion: 1, generation: "test", sequence: "1" },
+        }),
+    );
     expect(view.container.querySelector('[data-item-id="happy-chat"]')).toBe(happyRow);
     expect(happyRow.hasAttribute("data-unread")).toBe(true);
     expect(happyRow.querySelector('[data-happy2-ui="sidebar-item-unread"]')).not.toBeNull();
     expect(happyRow.querySelector('[data-happy2-ui="count-badge"]')).toBeNull();
-    sidebar.input({
-        type: "chatSummariesReconciled",
-        changedChats: [
-            {
-                chat: { ...happyChat, unreadCount: 5, mentionCount: 2 },
-                id: happyChat.id,
-                displayName: "Happy",
-                participants: [
-                    {
-                        id: "user-1",
-                        displayName: "Ada Lovelace",
-                        username: "ada",
-                        kind: "human",
-                    },
-                    {
-                        id: "happy",
-                        displayName: "Happy",
-                        username: "happy",
-                        kind: "agent",
-                        agentRole: "default",
-                    },
-                ],
-            },
-        ],
-        removedChatIds: [],
-        sync: { protocolVersion: 1, generation: "test", sequence: "2" },
-    });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    flushSync(() =>
+        sidebar.input({
+            type: "chatSummariesReconciled",
+            changedChats: [
+                {
+                    chat: { ...happyChat, unreadCount: 5, mentionCount: 2 },
+                    id: happyChat.id,
+                    displayName: "Happy",
+                    participants: [
+                        {
+                            id: "user-1",
+                            displayName: "Ada Lovelace",
+                            username: "ada",
+                            kind: "human",
+                        },
+                        {
+                            id: "happy",
+                            displayName: "Happy",
+                            username: "happy",
+                            kind: "agent",
+                            agentRole: "default",
+                        },
+                    ],
+                },
+            ],
+            removedChatIds: [],
+            sync: { protocolVersion: 1, generation: "test", sequence: "2" },
+        }),
+    );
     expect(view.container.querySelector('[data-item-id="happy-chat"]')).toBe(happyRow);
     expect(happyRow.querySelector('[data-happy2-ui="count-badge"]')?.textContent).toBe("2");
-    composer.getState().textUpdate("typed through the concrete composer store");
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    flushSync(() => composer.getState().textUpdate("typed through the concrete composer store"));
     expect(view.container.querySelector("textarea")?.value).toBe(
         "typed through the concrete composer store",
     );
@@ -541,11 +550,14 @@ it("keeps a project channel row focused and mounted while project metadata recon
     const row = view.container.querySelector<HTMLElement>('[data-item-id="chat-1"]')!;
     row.focus();
 
-    sidebar.input({
-        type: "projectSummariesReconciled",
-        projects: [{ ...testProject, name: "Product launch", updatedAt: "later" }],
-    });
-    await nextFrame();
+    // Reconciliation arrives outside React's event system; flush it so the row read
+    // below cannot depend on when React committed it.
+    flushSync(() =>
+        sidebar.input({
+            type: "projectSummariesReconciled",
+            projects: [{ ...testProject, name: "Product launch", updatedAt: "later" }],
+        }),
+    );
 
     expect(view.container.querySelector('[data-item-id="chat-1"]')).toBe(row);
     expect(document.activeElement).toBe(row);
@@ -640,20 +652,21 @@ it("creates a direct message from the directory and does not hijack later naviga
     await nextFrame();
     expect(directMessageCreate).toHaveBeenCalledExactlyOnceWith("user-2");
 
-    sidebar.input({
-        type: "chatSummariesReconciled",
-        changedChats: [
-            {
-                chat: directChat,
-                id: directChat.id,
-                displayName: teammate.displayName,
-                participants: [owner, teammate],
-            },
-        ],
-        removedChatIds: [],
-        sync: { protocolVersion: 1, generation: "test", sequence: "1" },
-    });
-    await nextFrame();
+    flushSync(() =>
+        sidebar.input({
+            type: "chatSummariesReconciled",
+            changedChats: [
+                {
+                    chat: directChat,
+                    id: directChat.id,
+                    displayName: teammate.displayName,
+                    participants: [owner, teammate],
+                },
+            ],
+            removedChatIds: [],
+            sync: { protocolVersion: 1, generation: "test", sequence: "1" },
+        }),
+    );
     expect(chatSelect).toHaveBeenLastCalledWith("dm-grace", "chat", false);
 
     view.container.querySelector<HTMLButtonElement>('[data-item-id="chat-2"]')!.click();
@@ -923,22 +936,23 @@ it("reconciles an effort notice without remounting or moving focus from the chat
     expect(document.activeElement).toBe(high);
 
     const notice = messageItem("effort-message", "@reasoner's reasoning effort changed to low");
-    chatSurface.input({
-        type: "messageUpserted",
-        item: {
-            ...notice,
-            message: {
-                ...notice.message,
-                kind: "automated",
-                service: {
-                    type: "agent_effort_changed",
-                    agentUserId: agent.id,
-                    effort: "low",
+    flushSync(() =>
+        chatSurface.input({
+            type: "messageUpserted",
+            item: {
+                ...notice,
+                message: {
+                    ...notice.message,
+                    kind: "automated",
+                    service: {
+                        type: "agent_effort_changed",
+                        agentUserId: agent.id,
+                        effort: "low",
+                    },
                 },
             },
-        },
-    });
-    await nextFrame();
+        }),
+    );
 
     const updatedControl = view.container.querySelector('[data-happy2-ui="segmented-control"]')!;
     expect(updatedControl).toBe(control);
@@ -1014,8 +1028,9 @@ it("keeps an optimistic message outgoing through its authoritative confirmation"
     expect(pendingRoot.getAttribute("data-delivery-state")).toBe("sending");
     expect(pendingRoot.textContent).not.toContain("Happy Place");
 
-    update(confirmed);
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // The confirmation arrives outside React's event system, so it commits from a
+    // scheduler task a bare frame can outrun; flush it before reading the row.
+    flushSync(() => update(confirmed));
     const confirmedRoot = view.container.querySelector('[data-happy2-ui="message"]')!;
     expect(confirmedRoot).toBe(pendingRoot);
     expect(confirmedRoot.getAttribute("data-own")).toBe("");
@@ -1158,55 +1173,58 @@ it("streams a turn's steps inline and folds them behind View traces when it ends
 
     // A streaming tick updates the message without replacing the message row or
     // the already listed steps.
-    chatSurface.input({
-        type: "messageUpserted",
-        item: assistantItem(
-            traceSummary({
-                entryCount: 3,
-                latest: { kind: "tool", title: "Running tests", occurredAt: 3 },
-            }),
-            "Partial reply",
-        ),
-    });
-    await nextFrame();
+    flushSync(() =>
+        chatSurface.input({
+            type: "messageUpserted",
+            item: assistantItem(
+                traceSummary({
+                    entryCount: 3,
+                    latest: { kind: "tool", title: "Running tests", occurredAt: 3 },
+                }),
+                "Partial reply",
+            ),
+        }),
+    );
     expect(view.container.querySelectorAll('[data-happy2-ui="message"]')[2]).toBe(messageRoot);
     expect(messageRoot.textContent).toContain("Partial reply");
     expect(view.container.querySelector('[data-happy2-ui="agent-activity-row"]')).toBe(firstStep);
 
-    chatSurface.input({
-        type: "traceLoaded",
-        messageId: "message-2",
-        trace: {
-            ...traceSummary({
-                entryCount: 3,
-                latest: { kind: "tool", title: "Running tests", occurredAt: 3 },
-            }),
-            entries: [
-                traceEntry("entry-1", "Turn started", 1),
-                traceEntry("entry-2", "Reasoning", 2),
-                traceEntry("entry-3", "Running tests", 3),
-            ],
-        },
-    });
-    await nextFrame();
+    flushSync(() =>
+        chatSurface.input({
+            type: "traceLoaded",
+            messageId: "message-2",
+            trace: {
+                ...traceSummary({
+                    entryCount: 3,
+                    latest: { kind: "tool", title: "Running tests", occurredAt: 3 },
+                }),
+                entries: [
+                    traceEntry("entry-1", "Turn started", 1),
+                    traceEntry("entry-2", "Reasoning", 2),
+                    traceEntry("entry-3", "Running tests", 3),
+                ],
+            },
+        }),
+    );
     const updatedSteps = view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]');
     expect(updatedSteps).toHaveLength(3);
     expect(updatedSteps[0]).toBe(firstStep);
 
     // Completing the turn settles the durable reply in place, folds the steps
     // away, and turns the activity row into the "View traces" link.
-    chatSurface.input({
-        type: "messageUpserted",
-        item: assistantItem(
-            traceSummary({
-                status: "complete",
-                entryCount: 4,
-                latest: { kind: "status", title: "Turn completed", occurredAt: 4 },
-            }),
-            "All done.",
-        ),
-    });
-    await nextFrame();
+    flushSync(() =>
+        chatSurface.input({
+            type: "messageUpserted",
+            item: assistantItem(
+                traceSummary({
+                    status: "complete",
+                    entryCount: 4,
+                    latest: { kind: "status", title: "Turn completed", occurredAt: 4 },
+                }),
+                "All done.",
+            ),
+        }),
+    );
     expect(view.container.querySelectorAll('[data-happy2-ui="agent-activity-row"]')).toHaveLength(
         0,
     );
@@ -1319,8 +1337,7 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
 
     // The composer keeps its DOM node, focus, value, and selection across every
     // live activity update behind it.
-    composer.getState().textUpdate("draft while the agent works");
-    await nextFrame();
+    flushSync(() => composer.getState().textUpdate("draft while the agent works"));
     const textarea = view.container.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.focus();
     textarea.setSelectionRange(6, 11);
@@ -1348,10 +1365,14 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
         })),
         expiresAt: Date.now() + 15_000,
     });
-    chatSurface.input({
-        type: "agentActivityReconciled",
-        agentActivity: [activity(2, 1, 12_400)],
-    });
+    // Commit the reconciliation, then still wait a frame: the bounding-box
+    // comparisons below read painted geometry, not just the committed tree.
+    flushSync(() =>
+        chatSurface.input({
+            type: "agentActivityReconciled",
+            agentActivity: [activity(2, 1, 12_400)],
+        }),
+    );
     await nextFrame();
     expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBe(statusRow);
     // It is the message list's footer, sitting in the clearance the transcript
@@ -1370,11 +1391,12 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
 
     // A live update rewrites the counts in place while the footer is mounted:
     // same row, same composer.
-    chatSurface.input({
-        type: "agentActivityReconciled",
-        agentActivity: [activity(1, 0, 80_000)],
-    });
-    await nextFrame();
+    flushSync(() =>
+        chatSurface.input({
+            type: "agentActivityReconciled",
+            agentActivity: [activity(1, 0, 80_000)],
+        }),
+    );
     expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBe(statusRow);
     expect(statusRow.textContent).toContain("1 agent");
     expect(statusRow.textContent).not.toContain("process");
@@ -1390,20 +1412,29 @@ it("reports a running turn's fan-out on the transcript's status line", async () 
     expect(messageList.scrollHeight).toBeGreaterThan(messageList.clientHeight);
     messageList.scrollTop = 0;
     messageList.dispatchEvent(new Event("scroll"));
-    await nextFrame();
     expect(messageList.scrollTop).toBe(0);
-    expect(view.container.querySelector('[data-happy2-ui="agent-working-status"]')).toBeNull();
+    // The virtualizer re-measures from its own observers, so no fixed number of
+    // frames guarantees the row is gone; wait for the unmount itself. This still
+    // fails if the row never leaves — it only stops guessing how long that takes.
+    await vi.waitFor(
+        () =>
+            expect(
+                view.container.querySelector('[data-happy2-ui="agent-working-status"]'),
+            ).toBeNull(),
+        { timeout: 5_000 },
+    );
     expect(view.container.querySelector("textarea")).toBe(textarea);
     expect(document.activeElement).toBe(textarea);
 
     // The line belongs to the working turn: completing it takes the line away
     // and leaves the "View traces" link on the settled reply.
-    chatSurface.input({
-        type: "messageUpserted",
-        item: assistantItem(traceSummary({ status: "complete", entryCount: 2 }), "All done."),
+    flushSync(() => {
+        chatSurface.input({
+            type: "messageUpserted",
+            item: assistantItem(traceSummary({ status: "complete", entryCount: 2 }), "All done."),
+        });
+        chatSurface.input({ type: "agentActivityReconciled", agentActivity: [] });
     });
-    chatSurface.input({ type: "agentActivityReconciled", agentActivity: [] });
-    await nextFrame();
     expect(view.container.querySelector('[data-happy2-ui="agent-trace-row-stats"]')).toBeNull();
     expect(view.container.querySelector("textarea")).toBe(textarea);
     expect(document.activeElement).toBe(textarea);
@@ -1493,14 +1524,15 @@ it("projects shared MCP links into the sidebar and opens them via the external-l
     expect(chatSelect).not.toHaveBeenCalled();
 
     // Reactively adds a link and deduplicates a repeat of the first from the new snapshot.
-    chatSurface.input({
-        type: "messageUpserted",
-        item: sharedLinkMessage("message-2", [
-            sharedResourceLink("https://a.example", "Alpha again"),
-            sharedResourceLink("https://b.example", "Beta"),
-        ]),
-    });
-    await nextFrame();
+    flushSync(() =>
+        chatSurface.input({
+            type: "messageUpserted",
+            item: sharedLinkMessage("message-2", [
+                sharedResourceLink("https://a.example", "Alpha again"),
+                sharedResourceLink("https://b.example", "Beta"),
+            ]),
+        }),
+    );
     const ids = [
         ...view.container.querySelectorAll(
             '[data-section-id="shared-links"] [data-happy2-ui="sidebar-item"]',
@@ -1509,9 +1541,16 @@ it("projects shared MCP links into the sidebar and opens them via the external-l
     expect(ids).toEqual(["shared-link:https://a.example", "shared-link:https://b.example"]);
 
     // Clearing every message's links (newer changePts) removes the whole section.
-    chatSurface.input({ type: "messageUpserted", item: sharedLinkMessage("message-1", [], "2") });
-    chatSurface.input({ type: "messageUpserted", item: sharedLinkMessage("message-2", [], "2") });
-    await nextFrame();
+    flushSync(() => {
+        chatSurface.input({
+            type: "messageUpserted",
+            item: sharedLinkMessage("message-1", [], "2"),
+        });
+        chatSurface.input({
+            type: "messageUpserted",
+            item: sharedLinkMessage("message-2", [], "2"),
+        });
+    });
     expect(view.container.querySelector('[data-section-id="shared-links"]')).toBeNull();
 });
 it("uses the shared expandable inspector shell for documents", async () => {

@@ -115,22 +115,26 @@ it("renders every concrete HappyState surface from its deterministic real-store 
         </StoreSurface>
     ));
     await view.ready();
-    sidebar.input({ type: "sidebarLoading" });
-    chat.input({ type: "chatLoading" });
-    composer.getState().textUpdate("typed locally");
-    search.store.getState().queryUpdate("relay");
-    search.input({ type: "searchLoading", query: "relay" });
-    files.input({ type: "filesLoading" });
-    directory.input({ type: "directoryLoading" });
-    admin.input({ type: "adminLoading" });
-    images.input({ type: "imagesLoading" });
-    secrets.input({ type: "secretsLoading" });
-    notifications.input({ type: "notificationsLoading" });
-    calls.input({ type: "callsLoading" });
-    settings.input({ type: "settingsLoadFailed", error: new UserError("offline") });
-    workspace.input({ type: "workspaceLoading" });
-    workspaceFile.input({ type: "fileLoading" });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // These notifications arrive from outside React's event system. Flush them so
+    // the per-surface assertions below cannot depend on when React chose to commit
+    // them, rather than on a frame that happens to fall the right side of it.
+    flushSync(() => {
+        sidebar.input({ type: "sidebarLoading" });
+        chat.input({ type: "chatLoading" });
+        composer.getState().textUpdate("typed locally");
+        search.store.getState().queryUpdate("relay");
+        search.input({ type: "searchLoading", query: "relay" });
+        files.input({ type: "filesLoading" });
+        directory.input({ type: "directoryLoading" });
+        admin.input({ type: "adminLoading" });
+        images.input({ type: "imagesLoading" });
+        secrets.input({ type: "secretsLoading" });
+        notifications.input({ type: "notificationsLoading" });
+        calls.input({ type: "callsLoading" });
+        settings.input({ type: "settingsLoadFailed", error: new UserError("offline") });
+        workspace.input({ type: "workspaceLoading" });
+        workspaceFile.input({ type: "fileLoading" });
+    });
     for (const id of [
         "sidebar",
         "chat",

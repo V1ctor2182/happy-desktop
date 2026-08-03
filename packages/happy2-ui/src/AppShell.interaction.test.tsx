@@ -1,5 +1,6 @@
 import "./styles.css";
 import type { CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import { expect, it } from "vitest";
 import { AppShell } from "./AppShell";
 import { createRenderer, type RenderedElement } from "./testing";
@@ -23,13 +24,20 @@ async function drag(handle: RenderedElement<Element>, deltaX: number) {
             clientY: startY,
         }),
     );
-    handle.element.dispatchEvent(
-        new PointerEvent("pointermove", {
-            ...common,
-            buttons: 1,
-            clientX: startX + deltaX,
-            clientY: startY,
-        }),
+    // React treats pointermove as a continuous-priority event, so the width this
+    // sets is committed from a scheduler task rather than during the dispatch.
+    // ready() only awaits a frame, and a starved main thread can reach that frame
+    // before the commit and measure the pre-drag width; flush the dispatch so the
+    // caller measures the width this gesture actually asked for.
+    flushSync(() =>
+        handle.element.dispatchEvent(
+            new PointerEvent("pointermove", {
+                ...common,
+                buttons: 1,
+                clientX: startX + deltaX,
+                clientY: startY,
+            }),
+        ),
     );
     handle.element.dispatchEvent(
         new PointerEvent("pointerup", {

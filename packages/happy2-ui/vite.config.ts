@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -30,6 +31,21 @@ export default defineConfig({
         // tight under ordinary desktop contention even when every assertion
         // is healthy.
         testTimeout: 30_000,
+        /* The three engines below run as three parallel projects, and Vitest sizes
+         * each project's browser pool on its own at min(12, cpus - 1). That is 36
+         * concurrent tabs on a 16-core machine, every one a real browser painting a
+         * 1660² surface at 2x — roughly 20 GB resident and far more runnable threads
+         * than cores. The result is not a uniformly slower suite but a starved one:
+         * measured against this file's own timeout, the slowest optical test stretched
+         * from 6.2s to 48.1s, so whichever test lost the scheduler that run either blew
+         * the timeout or lost an ordinary render race, and a different one failed every
+         * time. Size each pool so all three engines together ask for about three
+         * quarters of the machine, and keep Vitest's own ceiling of 12 per pool: past
+         * that the single node process driving all three chokes, which is what the cap
+         * in its source is for. Bounding it this way is also strictly faster in wall
+         * clock (61.6s against 89.6s), so developers and release validation share one
+         * setting. */
+        maxWorkers: Math.max(1, Math.min(12, Math.round((availableParallelism() * 0.75) / 3))),
         browser: {
             enabled: true,
             headless: true,

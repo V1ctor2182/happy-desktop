@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { type HappyState, UserError } from "happy2-state";
 import { settingsStoreFixtureCreate } from "happy2-state/testing";
 import { expect, it, onTestFinished, vi } from "vitest";
@@ -114,17 +115,16 @@ it("shows quiet pending copy for dirty, saving, and avatar-uploading states", as
 
     const status = () =>
         view.container.querySelector('[data-happy2-ui="settings-save-status"]')?.textContent;
-    fixture.store.getState().displayNameUpdate("Grace", "Hopper");
-    await nextFrame();
+    // Store work driven from the test body lands outside React's event system.
+    // Flush each one so the status read below cannot depend on when React committed.
+    flushSync(() => fixture.store.getState().displayNameUpdate("Grace", "Hopper"));
     expect(status()).toBe("Saving…");
 
     const submitted = fixture.store.getState().profile;
-    fixture.input({ type: "profileSaving" });
-    await nextFrame();
+    flushSync(() => fixture.input({ type: "profileSaving" }));
     expect(status()).toBe("Saving…");
 
-    fixture.input({ type: "profileSaved", profile: submitted, submitted });
-    await nextFrame();
+    flushSync(() => fixture.input({ type: "profileSaved", profile: submitted, submitted }));
     expect(status()).toBe("");
 
     const fileInput = view.container.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -214,11 +214,12 @@ it("keeps save and local failures loud with source-specific titles", async () =>
     const [saveSurface, localSurface] =
         view.container.querySelectorAll<HTMLElement>("[data-gym-surface]");
 
-    saveFixture.input({
-        type: "profileSaveFailed",
-        error: new UserError("Profile rejected"),
-    });
-    await nextFrame();
+    flushSync(() =>
+        saveFixture.input({
+            type: "profileSaveFailed",
+            error: new UserError("Profile rejected"),
+        }),
+    );
     const saveAlert = saveSurface!.querySelector<HTMLElement>('[role="alert"]')!;
     expect(saveAlert.querySelector('[data-happy2-ui="banner-title"]')?.textContent).toBe(
         "Changes were not saved",
@@ -227,8 +228,7 @@ it("keeps save and local failures loud with source-specific titles", async () =>
         "Profile rejected",
     );
     expect(saveAlert.getAttribute("data-tone")).toBe("danger");
-    saveFixture.store.getState().availabilityUpdate("away");
-    await nextFrame();
+    flushSync(() => saveFixture.store.getState().availabilityUpdate("away"));
     expect(saveSurface!.querySelector('[data-happy2-ui="settings-save-status"]')).toBeNull();
     expect(saveSurface!.querySelector('[role="alert"]')?.textContent).toContain("Profile rejected");
 
@@ -255,28 +255,26 @@ it("moves from failure through retry and saving back to silence", async () => {
     view.render(() => <SettingsPage store={fixture.store} />, { width: 1024, height: 704 });
     await view.ready();
 
-    fixture.input({ type: "profileSaveFailed", error: new UserError("Profile rejected") });
-    await nextFrame();
+    flushSync(() =>
+        fixture.input({ type: "profileSaveFailed", error: new UserError("Profile rejected") }),
+    );
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
         "Profile rejected",
     );
 
-    fixture.store.getState().displayNameUpdate("Grace", "Hopper");
-    await nextFrame();
+    flushSync(() => fixture.store.getState().displayNameUpdate("Grace", "Hopper"));
     expect(view.container.querySelector('[role="alert"]')).toBeNull();
     expect(
         view.container.querySelector('[data-happy2-ui="settings-save-status"]')?.textContent,
     ).toBe("Saving…");
 
     const submitted = fixture.store.getState().profile;
-    fixture.input({ type: "profileSaving" });
-    await nextFrame();
+    flushSync(() => fixture.input({ type: "profileSaving" }));
     expect(
         view.container.querySelector('[data-happy2-ui="settings-save-status"]')?.textContent,
     ).toBe("Saving…");
 
-    fixture.input({ type: "profileSaved", profile: submitted, submitted });
-    await nextFrame();
+    flushSync(() => fixture.input({ type: "profileSaved", profile: submitted, submitted }));
     expect(
         view.container.querySelector('[data-happy2-ui="settings-save-status"]')?.textContent,
     ).toBe("");
@@ -363,7 +361,9 @@ it("holds save-status geometry, typography, alignment, and profile identity", as
         profileNode.getBoundingClientRect().y - status.element.getBoundingClientRect().bottom,
     ).toBe(16);
 
-    fixture.store.getState().displayNameUpdate("Grace", "Hopper");
+    // Commit the store change, then still wait a frame: the geometry, text metrics,
+    // and ink below read painted output, not just the committed tree.
+    flushSync(() => fixture.store.getState().displayNameUpdate("Grace", "Hopper"));
     await nextFrame();
     expect(surface!.querySelector('[data-happy2-ui="profile-card"]')).toBe(profileNode);
     expect(rect(status.element)).toEqual(initialStatusRect);
@@ -395,13 +395,13 @@ it("holds save-status geometry, typography, alignment, and profile identity", as
     expect(ink.bounds.x + ink.bounds.width).toBeLessThanOrEqual(statusLabel.bounds().width);
 
     const submitted = fixture.store.getState().profile;
-    fixture.input({ type: "profileSaving" });
+    flushSync(() => fixture.input({ type: "profileSaving" }));
     await nextFrame();
     expect(surface!.querySelector('[data-happy2-ui="profile-card"]')).toBe(profileNode);
     expect(rect(status.element)).toEqual(initialStatusRect);
     expect(rect(profileNode)).toEqual(initialProfileRect);
 
-    fixture.input({ type: "profileSaved", profile: submitted, submitted });
+    flushSync(() => fixture.input({ type: "profileSaved", profile: submitted, submitted }));
     await nextFrame();
     expect(surface!.querySelector('[data-happy2-ui="profile-card"]')).toBe(profileNode);
     expect(rect(status.element)).toEqual(initialStatusRect);
@@ -433,7 +433,7 @@ it("holds save-status geometry, typography, alignment, and profile identity", as
         failedProfile.getBoundingClientRect().y - failedBanner.getBoundingClientRect().bottom,
     ).toBeCloseTo(16, 3);
 
-    fixture.store.getState().emailUpdate("grace@example.com");
+    flushSync(() => fixture.store.getState().emailUpdate("grace@example.com"));
     await nextFrame();
     await view.screenshot("SettingsPage.test");
 });
@@ -454,19 +454,23 @@ it("renders ready settings, routes typed field actions, and follows authoritativ
         lastName: "Hopper",
     });
 
-    fixture.input({
-        type: "settingsLoaded",
-        ...loaded,
-        profile: { ...loaded.profile, username: "remote-ada" },
-        avatarRevision: 0,
-    });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // Authoritative input arrives outside React's event system; flush it so the
+    // field read below cannot depend on when React committed it.
+    flushSync(() =>
+        fixture.input({
+            type: "settingsLoaded",
+            ...loaded,
+            profile: { ...loaded.profile, username: "remote-ada" },
+            avatarRevision: 0,
+        }),
+    );
     expect(view.container.querySelector<HTMLInputElement>("#settings-username")?.value).toBe(
         "remote-ada",
     );
 
-    fixture.input({ type: "profileSaveFailed", error: new UserError("Profile rejected") });
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    flushSync(() =>
+        fixture.input({ type: "profileSaveFailed", error: new UserError("Profile rejected") }),
+    );
     expect(view.container.textContent).toContain("Profile rejected");
 });
 
