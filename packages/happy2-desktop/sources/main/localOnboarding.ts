@@ -1,5 +1,6 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
     DesktopRuntimeSnapshot,
@@ -116,8 +117,6 @@ function recordParse(
     };
 }
 
-let recordWriteSequence = 0;
-
 /**
  * Writes the record atomically, and only for a reader who is still the one being
  * written for.
@@ -125,27 +124,43 @@ let recordWriteSequence = 0;
  * The prepared copy is put down beside the record and made authoritative by a
  * rename, so an interrupted write leaves the previous answers intact. That
  * rename is the instant the answer becomes this machine's, so `authorized` is
- * asked immediately before it: a document, a window, or a Rig may have been
- * replaced while the bytes were being written, and answers given to a reader who
- * has since gone must not be committed on their successor's behalf. An abandoned
- * write takes its temporary file with it and returns false, having changed
- * nothing.
+ * asked immediately before it and nowhere else: a document, a window, or a Rig
+ * may have been replaced while the bytes were being written, and answers given
+ * to a reader who has since gone must not be committed on their successor's
+ * behalf. Saying who a write is for is not optional, because a write with nobody
+ * to answer for it is the thing this exists to prevent.
+ *
+ * The temporary name is random rather than counted, so two writers — including
+ * two copies of Happy sharing a home directory — cannot pick the same one, and
+ * it is created exclusively so an existing file is never written through. Every
+ * path out of here that did not commit takes the temporary file with it, and a
+ * failure to tidy up never replaces the failure worth reporting.
  */
 export async function localOnboardingRecordWrite(
     path: string,
     record: LocalOnboardingRecord,
-    authorized?: () => boolean,
+    authorized: () => boolean,
 ): Promise<boolean> {
     await mkdir(dirname(path), { recursive: true });
-    recordWriteSequence += 1;
-    const temporary = `${path}.${process.pid}.${recordWriteSequence}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(record, undefined, 2)}\n`, { mode: 0o600 });
-    if (authorized && !authorized()) {
-        await rm(temporary, { force: true });
-        return false;
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    const handle = await open(temporary, "wx", 0o600);
+    let committed = false;
+    try {
+        await handle.writeFile(`${JSON.stringify(record, undefined, 2)}\n`);
+        await handle.close();
+        // The last look, taken with the bytes already on disk and nothing left to
+        // do but make them the record.
+        if (!authorized()) return false;
+        await rename(temporary, path);
+        committed = true;
+        return true;
+    } finally {
+        await handle.close().catch(() => undefined);
+        // Whatever went wrong, or whoever went away, the half-written copy is not
+        // left lying beside the record — and tidying up is never allowed to
+        // become the error that gets reported.
+        if (!committed) await rm(temporary, { force: true }).catch(() => undefined);
     }
-    await rename(temporary, path);
-    return true;
 }
 
 /** The daemon capability first-run setup needs, and no more of it. */
