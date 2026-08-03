@@ -1,11 +1,19 @@
 /*
  * Friends: who you are here, who is asking for you, and who you already know.
  *
- * The reading sits on the grouped paper the product uses for a screen that is a
- * list of things rather than a document, and the only object drawn on it is a
+ * The reading sits on the product's ordinary content surface, the same paper
+ * the inbox, the usage screen, and settings are read on, so moving between them
+ * does not change what a page is made of. The only object drawn on it is a
  * request — the one thing waiting on a decision. People carry nothing around
  * them: a face, a name, and a fill under the pointer. Colors and type come only
  * from theme roles.
+ *
+ * Two left edges hold the page together. Objects with a fill of their own — a
+ * request card, a person's hover pill — start at the column's own edge, 12px in.
+ * Everything that is only text — the header title, a section label, the line
+ * saying nobody is here — starts 12px further along at 24px, which is exactly
+ * where the padding inside those objects puts a name or a face. So the title
+ * reads down onto the names beneath it in one line.
  */
 
 .happy2-friends {
@@ -14,21 +22,21 @@
     flex-direction: column;
     min-height: 0;
     width: 100%;
-    background: var(--groupped-background);
+    background: var(--surface);
     font-family: var(--happy2-font-ui);
 }
 
-/* The header shares the column the people are read in, so the title sits above
-   them rather than out at the window's edge. The toolbar insets its own title
-   by 16px, which is exactly the column's own side padding. */
+/* The header shares the column the people are read in, so the title sits
+   directly above them. The toolbar insets its own title by 16px, so the strip
+   carries the remaining 8px that lands that title on the text edge. */
 .happy2-friends__header {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
-    margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
+    padding: 0 8px;
 }
 
 /* The scrollport is flush; spacing belongs to the column inside it. */
@@ -41,28 +49,30 @@
     overflow-y: auto;
 }
 
-/* The reading column. Its side padding is wide enough to hold a card's edge and
-   a focus ring clear of the scrollbar. */
+/* The reading column. It is held to a comfortable measure but anchored to the
+   surface's leading edge, like every other page in the product: a column centred
+   in the window drifts away from the sidebar on a wide display and puts this
+   page's content somewhere else than the page the reader just came from. */
 .happy2-friends__content {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     gap: 24px;
-    margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
-    padding: 8px 16px 48px;
+    padding: 8px 12px 48px;
 }
 
-/* You, at the top of your own screen. */
+/* You, at the top of your own screen: your face on the same lane as everybody
+   else's, so the page reads as one list that happens to begin with you. */
 .happy2-friends__hero {
     display: flex;
     align-items: center;
     gap: 14px;
     box-sizing: border-box;
     width: 100%;
-    padding: 4px 16px;
+    padding: 4px 12px;
 }
 
 .happy2-friends__hero-identity {
@@ -104,7 +114,7 @@
     align-items: baseline;
     gap: 8px;
     margin: 0;
-    padding: 0;
+    padding: 0 12px;
 }
 
 .happy2-friends__section-label {
@@ -124,7 +134,7 @@
 
 .happy2-friends__nobody {
     margin: 0;
-    padding: 0 16px 0 0;
+    padding: 0 12px;
     font-size: 15px;
     line-height: 22px;
     color: var(--text-secondary);
@@ -155,7 +165,7 @@
     margin: 0;
     box-sizing: border-box;
     width: 100%;
-    padding: 10px 16px;
+    padding: 10px 12px;
     background: transparent;
     border: 0;
     border-radius: var(--happy2-radius-md);
@@ -170,7 +180,7 @@ button.happy2-friends__row {
 }
 
 button.happy2-friends__row:hover {
-    background: var(--surface-high);
+    background: var(--surface-ripple);
 }
 
 button.happy2-friends__row:active {
@@ -215,7 +225,10 @@ button.happy2-friends__row:focus-visible {
 
 /*
  * A request is the one thing on this screen waiting on a decision, so it is the
- * one thing given an object to sit in.
+ * one thing given an object to sit in: a grouped-paper block on the content
+ * surface, closed by a hairline. Its 12px inset puts the face inside it on the
+ * same lane as every other face on the page, so the card reads as a person the
+ * page has drawn a box around rather than a different kind of row.
  */
 .happy2-friend-request {
     display: flex;
@@ -224,8 +237,8 @@ button.happy2-friends__row:focus-visible {
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    padding: 16px;
-    background: var(--surface);
+    padding: 12px;
+    background: var(--groupped-background);
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-shell);
 }
@@ -312,7 +325,7 @@ button.happy2-friends__row:focus-visible {
     flex-direction: column;
     min-height: 0;
     width: 100%;
-    background: var(--groupped-background);
+    background: var(--surface);
     font-family: var(--happy2-font-ui);
 }
 
@@ -373,14 +386,16 @@ button.happy2-friends__row:focus-visible {
     box-sizing: border-box;
     width: 96px;
     height: 96px;
-    background: var(--surface);
+    /* The well is an empty slot on the content surface, so it takes the grouped
+       paper: a surface-on-surface fill would leave nothing but its hairline. */
+    background: var(--groupped-background);
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-pill);
     color: var(--text-secondary);
 }
 
 .happy2-friend-setup__photo:hover .happy2-friend-setup__photo-well {
-    background: var(--surface-high);
+    background: var(--surface-selected);
 }
 
 .happy2-friend-setup__photo-input:focus-visible + .happy2-friend-setup__photo-well {

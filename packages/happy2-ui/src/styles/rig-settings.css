@@ -43,6 +43,9 @@
     background: var(--surface);
 }
 
+/* Held to a comfortable measure but anchored to the surface's leading edge,
+   like every other page: a column centred in the window drifts away from the
+   category list beside it on a wide display. */
 .happy2-rig-settings__content {
     box-sizing: border-box;
     display: flex;
@@ -51,7 +54,6 @@
     gap: 32px;
     width: 100%;
     max-width: 720px;
-    margin: 0 auto;
     padding: 8px 24px 48px;
 }
 

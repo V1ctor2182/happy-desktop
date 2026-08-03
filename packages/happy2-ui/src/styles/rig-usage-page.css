@@ -26,12 +26,11 @@
 }
 
 /* The header shares the column the sections are read in, so the title sits
- * above them rather than out at the window's edge. */
+ * directly above them. */
 .happy2-rig-usage-page__header {
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
-    margin: 0 auto;
     box-sizing: border-box;
     width: 100%;
     max-width: 720px;
@@ -50,11 +49,13 @@
     overflow-y: auto;
 }
 
+/* Held to a comfortable measure but anchored to the surface's leading edge,
+   like every other page: a column centred in the window drifts away from the
+   sidebar on a wide display and lands somewhere else than the page before it. */
 .happy2-rig-usage-page__content {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    margin: 0 auto;
     padding: 8px 24px 48px;
     box-sizing: border-box;
     width: 100%;
