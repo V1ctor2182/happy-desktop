@@ -52,36 +52,53 @@ const inventoryListeners = new Set<(inventory: DesktopPluginInventory) => void>(
 let inventoryReceive:
     | ((event: Electron.IpcRendererEvent, inventory: DesktopPluginInventory) => void)
     | undefined;
+/**
+ * Which projection this window is on. It advances every time the projection is
+ * opened again after the last reader left, so an answer to a follow made during
+ * an earlier one is recognizably not about this one. Without it a reply that
+ * crossed a release could be handed to whoever has since taken that reader's
+ * place, as a reading from a lifetime they were never part of.
+ */
+let inventoryEpoch = 0;
+/**
+ * How many readings this window has been pushed. A follow's answer is the state
+ * as it was when the answer was made, and it travels back across a process
+ * boundary, so a push can overtake it. Comparing this against what it was when
+ * the follow was asked is how an overtaken answer is recognized — applying it
+ * would roll the reader back to an older reading and leave them there until the
+ * machine happens to change again.
+ */
+let inventoryRevision = 0;
 
 function pluginInventoryFollow(listener: (inventory: DesktopPluginInventory) => void): () => void {
     inventoryListeners.add(listener);
     if (inventoryListeners.size === 1) {
+        inventoryEpoch += 1;
         inventoryReceive = (_event, inventory) => {
+            inventoryRevision += 1;
             // A copy, because a listener is free to stop following as it is told.
             const told = Array.from(inventoryListeners);
             for (const each of told) each(inventory);
         };
         ipcRenderer.on(desktopIpc.pluginInventoryChanged, inventoryReceive);
-        void ipcRenderer
-            .invoke(desktopIpc.pluginInventoryFollow)
-            .then((inventory: DesktopPluginInventory) => {
-                // The answer belongs to the follow that asked for it. If everyone
-                // has left in the meantime the projection is already closed and
-                // this reading is nobody's.
-                if (inventoryListeners.size === 0) return;
-                const told = Array.from(inventoryListeners);
-                for (const each of told) each(inventory);
-            });
-    } else {
-        // A later listener joins a projection that is already open, so it is
-        // given what this window last heard rather than waiting for a change.
-        void ipcRenderer
-            .invoke(desktopIpc.pluginInventoryFollow)
-            .then((inventory: DesktopPluginInventory) => {
-                if (!inventoryListeners.has(listener)) return;
-                listener(inventory);
-            });
     }
+    /*
+     * Every reader asks for the opening reading itself, and is the only one told
+     * the answer. The push listener is already installed by the time the ask goes
+     * out, so a reader who is not told this answer has not missed anything: they
+     * were told something newer instead, which is exactly the case the two
+     * guards below are for.
+     */
+    const epoch = inventoryEpoch;
+    const revision = inventoryRevision;
+    void ipcRenderer
+        .invoke(desktopIpc.pluginInventoryFollow)
+        .then((inventory: DesktopPluginInventory) => {
+            if (epoch !== inventoryEpoch) return;
+            if (revision !== inventoryRevision) return;
+            if (!inventoryListeners.has(listener)) return;
+            listener(inventory);
+        });
     let released = false;
     return () => {
         if (released) return;
