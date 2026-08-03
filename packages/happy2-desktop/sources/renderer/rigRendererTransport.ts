@@ -25,7 +25,6 @@ import type {
     RigSessionUsage,
     RigShellCommandResult,
     RigSlotEntry,
-    RigSlotsContext,
     RigSubagentSummary,
     RigTerminal,
     RigTerminalId,
@@ -204,12 +203,7 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             });
             return preview.url;
         },
-        slotsRead: (context: RigSlotsContext) =>
-            getJson<readonly RigSlotEntry[]>("/slots", {
-                projectId: context.projectId,
-                workspaceId: context.workspaceId,
-                sessionId: context.sessionId,
-            }),
+        slotsRead: () => getJson<readonly RigSlotEntry[]>("/slots"),
         webappsRead: () => getJson<readonly RigWebapp[]>("/webapps"),
         webappPreviewOpen: async (name) => {
             const preview = await getJson<{ readonly url: string }>("/webapp-preview", { name });

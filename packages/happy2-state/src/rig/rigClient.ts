@@ -16,7 +16,7 @@ import {
     type RigSessionListStore,
 } from "./rigSessionListStore.js";
 import type { RigTransport } from "./rigTransport.js";
-import { rigSlotsStoreCreate, type RigSlotsContext, type RigSlotsStore } from "./rigSlotsStore.js";
+import { rigSlotsStoreCreate, type RigSlotsStore } from "./rigSlotsStore.js";
 import type {
     RigChangedFileDocument,
     RigFileSearchResult,
@@ -153,8 +153,11 @@ export interface RigClient {
      * that renders the document rather than its source.
      */
     htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
-    /** The context-filtered slots/webapps surface, stable for the client's lifetime. */
-    slots(context?: RigSlotsContext): RigSlotsStore;
+    /**
+     * The slots/webapps surface: one instance for the client's lifetime, because
+     * both catalogs are Rig-global. What the window has open never replaces it.
+     */
+    slots(): RigSlotsStore;
     /** Resolves the current webapp version into the host's isolated preview site. */
     webappPreviewOpen(name: string): Promise<string>;
     /** Writes one existing text file back to its checkout. */
@@ -286,7 +289,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let pluginApplicationStore: RigPluginApplicationStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
-    const slotsStores = new Map<string, RigSlotsStore>();
+    let slotsStore: RigSlotsStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
 
@@ -304,19 +307,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
         workspaceFileBytesRead: (groupId, path, signal) =>
             transport.workspaceFileBytesRead(groupId, path, signal),
         htmlPreviewOpen: (groupId, path) => transport.htmlPreviewOpen(groupId, path),
-        slots(context = {}) {
+        slots() {
             if (disposed) throw new Error("The Rig client is disposed.");
-            const key = JSON.stringify([
-                context.projectId ?? null,
-                context.workspaceId ?? null,
-                context.sessionId ?? null,
-            ]);
-            let slots = slotsStores.get(key);
-            if (!slots) {
-                slots = rigSlotsStoreCreate({ transport, context });
-                slotsStores.set(key, slots);
-            }
-            return slots;
+            slotsStore ??= rigSlotsStoreCreate({ transport });
+            return slotsStore;
         },
         webappPreviewOpen: (name) => transport.webappPreviewOpen(name),
         workspaceFileWrite: (groupId, path, content, expectedHash) =>
@@ -554,8 +548,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             pluginApplicationStore?.[Symbol.dispose]();
             pluginApplicationStore = undefined;
             instructionsStore?.[Symbol.dispose]();
-            for (const slots of slotsStores.values()) slots[Symbol.dispose]();
-            slotsStores.clear();
+            slotsStore?.[Symbol.dispose]();
+            slotsStore = undefined;
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();
             securityPolicyStore = undefined;

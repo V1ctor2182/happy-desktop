@@ -357,10 +357,12 @@ export interface RigTransport {
      */
     htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
 
-    /** Reads the slot entries Rig resolves against one addressed route context. */
-    slotsRead(
-        context: import("./rigSlotsStore.js").RigSlotsContext,
-    ): Promise<readonly import("./rigSlotsStore.js").RigSlotEntry[]>;
+    /**
+     * Reads Rig's whole durable slot catalog. Which entries a placement shows is
+     * resolved against the addressed context by the state layer, so this read
+     * does not depend on what the window currently has open.
+     */
+    slotsRead(): Promise<readonly import("./rigSlotsStore.js").RigSlotEntry[]>;
 
     /** Reads every imported webapp and its version history from this Rig. */
     webappsRead(): Promise<readonly import("./rigSlotsStore.js").RigWebapp[]>;

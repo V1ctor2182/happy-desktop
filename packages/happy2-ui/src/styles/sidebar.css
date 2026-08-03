@@ -270,6 +270,17 @@
     margin-top: 12px;
 }
 
+/* A window with nothing hung here holds no lane open: the clear space belongs to
+   the group, so with no group there is none, and the sections keep the same
+   rhythm they would have if the host had passed no accessory at all. */
+.happy2-sidebar__body-accessory:empty {
+    margin-top: 0;
+}
+
+.happy2-sidebar__body-accessory:empty + .happy2-sidebar__section {
+    margin-top: 2px;
+}
+
 .happy2-sidebar__section-head {
     display: flex;
     flex: none;

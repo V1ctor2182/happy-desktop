@@ -13,7 +13,6 @@ import {
     type RigModelStore,
     type RigSessionCatalogSnapshot,
     type RigSessionLocation,
-    type RigSlotsContext,
     type RigSlotsStore,
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
@@ -76,8 +75,8 @@ export interface RigSession {
     readonly models: RigModelStore;
     /** The joined session-list + active-chat workspace store for this connection. */
     readonly workspace: RigWorkspaceStore;
-    /** Context-addressed reactive slot and webapp surface. */
-    readonly slots: (context: RigSlotsContext) => RigSlotsStore;
+    /** This Rig's reactive slot and webapp catalogs, one surface per connection. */
+    readonly slots: () => RigSlotsStore;
     /** Every question this Rig's agents are waiting on, across all its sessions. */
     readonly inbox: RigInboxStore | undefined;
     /** How much of each provider account's plan this machine's agents have spent. */
@@ -249,7 +248,7 @@ export function rigConnectionOpen(input: {
                             else input.deps.groupOpen(event.groupId);
                         },
                     }),
-                    slots: (context) => client.slots(context),
+                    slots: () => client.slots(),
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
                     friends: client.friends(),

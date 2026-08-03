@@ -371,6 +371,8 @@ export function SlotEntriesPage() {
                 <div style={column(16)}>
                     <SidebarHost entries={MIXED} height={460} />
                     <DimensionRule label="heading names the authorship · long labels ellipsise · rows keep the 10px inset" />
+                    <SidebarHost entries={[]} height={260} />
+                    <DimensionRule label="nothing contributed · the accessory holds no lane open · the first section keeps its 2px" />
                 </div>
             </Specimen>
             <Specimen

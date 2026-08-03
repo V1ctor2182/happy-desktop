@@ -65,7 +65,12 @@ export interface RigWebapp {
     readonly updatedAt: number;
 }
 
-/** The route-owned context Rig uses to include matching scoped entries. */
+/**
+ * What the window is currently addressing, against which a scoped entry is
+ * resolved. It is a property of the route, not of this surface: the catalog
+ * below is the same catalog whatever is open, so moving between chats resolves
+ * the entries already held instead of asking for another set.
+ */
 export interface RigSlotsContext {
     readonly projectId?: RigProjectId;
     readonly workspaceId?: RigWorktreeId;
@@ -73,14 +78,13 @@ export interface RigSlotsContext {
 }
 
 /**
- * The four render-ready slot collections for one addressed context, plus the
- * Rig-global webapp catalog used to validate open-webapp actions.
+ * Rig's whole durable slot catalog and its webapp catalog. Both are Rig-global,
+ * so this surface has one lifetime per connection: which entries a placement
+ * shows is decided by `rigSlotEntriesInScope` at render time, and never by
+ * replacing this store when the reader opens something else.
  */
 export interface RigSlotsSnapshot {
-    readonly statusLine: readonly RigSlotEntry[];
-    readonly aboveComposer: readonly RigSlotEntry[];
-    readonly title: readonly RigSlotEntry[];
-    readonly sidebar: readonly RigSlotEntry[];
+    readonly entries: readonly RigSlotEntry[];
     readonly webapps: readonly RigWebapp[];
     readonly loading: boolean;
     readonly error?: UserError;
@@ -93,17 +97,13 @@ export interface RigSlotsStore {
 }
 
 export interface RigSlotsStoreOptions {
-    readonly context?: RigSlotsContext;
     readonly transport: RigTransport;
 }
 
 const NO_ENTRIES: readonly RigSlotEntry[] = [];
 const NO_WEBAPPS: readonly RigWebapp[] = [];
 const EMPTY_SNAPSHOT: RigSlotsSnapshot = {
-    statusLine: NO_ENTRIES,
-    aboveComposer: NO_ENTRIES,
-    title: NO_ENTRIES,
-    sidebar: NO_ENTRIES,
+    entries: NO_ENTRIES,
     webapps: NO_WEBAPPS,
     loading: true,
 };
@@ -116,13 +116,20 @@ type SlotsInput =
     | { readonly type: "webappsFailed"; readonly error: UserError };
 
 /**
- * Creates the slot surface for one immutable route context.
+ * Creates the slot surface for one Rig connection.
  *
- * Construction opens no transport. The first subscriber reads the filtered
- * slot catalog and webapps together and opens one global-event subscription;
- * the last subscriber tears that stream down. Realtime events are hints only:
- * each matching event re-reads its durable endpoint instead of accepting the
- * full event payload as authority.
+ * Construction opens no transport. The first subscriber reads the whole slot
+ * catalog and the webapps together and opens one global-event subscription; the
+ * last subscriber tears that stream down. Realtime events are hints only: each
+ * matching event re-reads its durable endpoint instead of accepting the full
+ * event payload as authority.
+ *
+ * The catalog is read whole rather than per addressed context, because what the
+ * reader has open is not a fact about the catalog. Resolving a scope is a
+ * projection of state already held, so an entry that stays in scope while the
+ * reader moves between chats is the same object across that move — the surface
+ * never empties, reloads, or hands the view a different entry for the same
+ * contribution.
  */
 export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStore {
     const listeners = new Set<() => void>();
@@ -149,21 +156,9 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
         if (input.type === "slotsLoaded") {
             slotsSettled = true;
             slotsError = undefined;
-            const entries = entriesPreserve(
-                [
-                    ...snapshot.statusLine,
-                    ...snapshot.aboveComposer,
-                    ...snapshot.title,
-                    ...snapshot.sidebar,
-                ],
-                input.entries,
-            );
             publish({
                 ...snapshot,
-                statusLine: slotEntries(entries, "status-line", snapshot.statusLine),
-                aboveComposer: slotEntries(entries, "above-composer", snapshot.aboveComposer),
-                title: slotEntries(entries, "title", snapshot.title),
-                sidebar: slotEntries(entries, "sidebar", snapshot.sidebar),
+                entries: entriesPreserve(snapshot.entries, input.entries),
                 loading: !(slotsSettled && webappsSettled),
                 error: webappsError,
             });
@@ -197,7 +192,7 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
     const slotsLoad = async (): Promise<void> => {
         const generation = ++slotsGeneration;
         try {
-            const entries = await options.transport.slotsRead(options.context ?? {});
+            const entries = await options.transport.slotsRead();
             if (!active || disposed || generation !== slotsGeneration) return;
             slotsInput({ type: "slotsLoaded", entries });
         } catch (error) {
@@ -290,23 +285,51 @@ export const rigSlotsStoreNoop: RigSlotsStore = {
     [Symbol.dispose]: () => undefined,
 };
 
+/**
+ * The entries of one slot that the addressed context still resolves, in the
+ * catalog's own order.
+ *
+ * An everywhere entry resolves everywhere, by definition: nothing about what is
+ * open can withdraw it, so moving between chats never takes one off screen. A
+ * scoped entry resolves only against its own project, workspace, or session, so
+ * an entry addressed at a chat leaves with that chat and never leaks into a
+ * window that is addressing nothing.
+ */
+export function rigSlotEntriesInScope(
+    entries: readonly RigSlotEntry[],
+    slot: RigSlotName,
+    context: RigSlotsContext,
+): readonly RigSlotEntry[] {
+    return entries.filter((entry) => entry.slot === slot && entryResolves(entry, context));
+}
+
+function entryResolves(entry: RigSlotEntry, context: RigSlotsContext): boolean {
+    switch (entry.scope) {
+        case "everywhere":
+            return true;
+        case "project":
+            return entry.projectId !== undefined && entry.projectId === context.projectId;
+        case "workspace":
+            return entry.workspaceId !== undefined && entry.workspaceId === context.workspaceId;
+        case "session":
+            return entry.sessionId !== undefined && entry.sessionId === context.sessionId;
+    }
+}
+
+/**
+ * Keeps the object an unchanged entry already had, so a re-read of the catalog
+ * leaves everything it did not change alone: a view holding one contribution is
+ * looking at the same object it was before an unrelated entry arrived.
+ */
 function entriesPreserve(
     previous: readonly RigSlotEntry[],
     incoming: readonly RigSlotEntry[],
 ): readonly RigSlotEntry[] {
     const before = new Map(previous.map((entry) => [entry.id, entry]));
-    return incoming.map((entry) => {
+    const next = incoming.map((entry) => {
         const candidate = before.get(entry.id);
         return candidate?.updatedAt === entry.updatedAt ? candidate : entry;
     });
-}
-
-function slotEntries(
-    entries: readonly RigSlotEntry[],
-    slot: RigSlotName,
-    previous: readonly RigSlotEntry[],
-): readonly RigSlotEntry[] {
-    const next = entries.filter((entry) => entry.slot === slot);
     return next.length === previous.length &&
         next.every((entry, index) => entry === previous[index])
         ? previous

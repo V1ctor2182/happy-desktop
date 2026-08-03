@@ -688,22 +688,7 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 return true;
             }
             if (path === "/slots") {
-                const slot = query.get("slot");
-                const entries = (
-                    await client.listSlots({
-                        ...(slot === "status-line" ||
-                        slot === "above-composer" ||
-                        slot === "title" ||
-                        slot === "sidebar"
-                            ? { slot }
-                            : {}),
-                        ...(query.get("projectId") ? { projectId: query.get("projectId")! } : {}),
-                        ...(query.get("workspaceId")
-                            ? { workspaceId: query.get("workspaceId")! }
-                            : {}),
-                        ...(query.get("sessionId") ? { sessionId: query.get("sessionId")! } : {}),
-                    })
-                ).entries.map(rigSlotEntryProject);
+                const entries = (await client.listSlots()).entries.map(rigSlotEntryProject);
                 writeJson(response, 200, entries);
                 return true;
             }

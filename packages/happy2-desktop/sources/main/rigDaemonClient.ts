@@ -26,7 +26,6 @@ import type {
     RunShellCommandResponse,
     SessionEvent,
     SessionSummary,
-    SlotName,
     SubagentSummary,
 } from "./rigDaemonTypes";
 
@@ -212,20 +211,13 @@ export class RigDaemonClient {
         return this.#requestJson("GET", "/catalog");
     }
 
-    /** Reads the entries Rig resolves for one currently viewed product context. */
-    listSlots(filters: {
-        readonly slot?: SlotName;
-        readonly projectId?: string;
-        readonly workspaceId?: string;
-        readonly sessionId?: string;
-    }): Promise<ListSlotEntriesResponse> {
-        const query = new URLSearchParams();
-        if (filters.slot) query.set("slot", filters.slot);
-        if (filters.projectId) query.set("projectId", filters.projectId);
-        if (filters.workspaceId) query.set("workspaceId", filters.workspaceId);
-        if (filters.sessionId) query.set("sessionId", filters.sessionId);
-        const suffix = query.size > 0 ? `?${query.toString()}` : "";
-        return this.#requestJson("GET", `/slots${suffix}`);
+    /**
+     * Reads Rig's whole slot catalog. Scope is resolved against what the window
+     * is addressing in the app, so this asks the daemon for everything rather
+     * than for one context's answer.
+     */
+    listSlots(): Promise<ListSlotEntriesResponse> {
+        return this.#requestJson("GET", "/slots");
     }
 
     /** Reads Rig's global catalog of imported, versioned webapps. */

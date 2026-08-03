@@ -48,6 +48,7 @@ import type {
     RigSlotAction,
     RigSlotEntry,
     RigSlotEntryAuthor,
+    RigSlotName,
     RigSlotsContext,
     RigSlotsSnapshot,
     RigSlotsStore,
@@ -71,6 +72,7 @@ import {
     rigNavigationOrderStoreNoop,
     rigPluginApplicationStoreNoop,
     rigProviderUsageStoreNoop,
+    rigSlotEntriesInScope,
     rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
@@ -189,8 +191,8 @@ export interface AppRigSession {
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
-    /** Materializes the reactive slot surface for one immutable route context. */
-    readonly slots?: (context: RigSlotsContext) => RigSlotsStore;
+    /** Materializes this Rig's slot and webapp catalogs, one surface per machine. */
+    readonly slots?: () => RigSlotsStore;
     /**
      * Every question this Rig's agents are waiting on. Absent when the machine
      * offers no question feed, which is why the inbox row is absent too rather
@@ -1006,6 +1008,12 @@ const BLUEPRINT_ITEM = "blueprint";
  */
 const PLUGINS_ITEM = "plugins";
 
+/**
+ * What the window is addressing, read off the route: the open project, the
+ * worktree inside it when the route names one, and the open conversation. A
+ * worktree carries its project too, so a contribution addressed at a project is
+ * in scope in every checkout of it.
+ */
 function slotsContext(
     projects: readonly RigProjectGroup[],
     groupId: string | undefined,
@@ -1220,19 +1228,16 @@ export function AppRigView(props: AppRigViewProps) {
         : localRig.session.friends
           ? undefined
           : "This Rig does not carry the friends service yet. Update it to connect with people.";
-    const slotsStore =
-        active?.session?.slots?.(slotsContext(active.projects, props.groupId, props.chatId)) ??
-        rigSlotsStoreNoop;
+    // One surface for the machine's whole slot catalog, subscribed once for as
+    // long as this window addresses this Rig. What the reader has open is read
+    // off the route below and resolved against entries already held, so moving
+    // between chats never swaps this store, empties it, or reloads it.
+    const slotsStore = active?.session?.slots?.() ?? rigSlotsStoreNoop;
     const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
+    const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
     const webapps = new Set(slots.webapps.map((webapp) => webapp.name));
-    const slotEntries = [
-        ...slots.statusLine,
-        ...slots.aboveComposer,
-        ...slots.title,
-        ...slots.sidebar,
-    ];
     const slotAction = (entryId: string): void => {
-        const entry = slotEntries.find((candidate) => candidate.id === entryId);
+        const entry = slots.entries.find((candidate) => candidate.id === entryId);
         if (!entry || entry.content.type !== "button" || !active?.session) return;
         void slotActionRun(active.session.workspace, entry.content.action).catch(() => undefined);
     };
@@ -1390,7 +1395,7 @@ export function AppRigView(props: AppRigViewProps) {
             bodyAccessory={
                 <SlotEntries
                     entries={slotVisualEntries(
-                        slots.sidebar,
+                        rigSlotEntriesInScope(slots.entries, "sidebar", slotsScope),
                         active?.projects ?? [],
                         webapps,
                         props.chatId !== undefined,
@@ -1796,6 +1801,7 @@ export function AppRigView(props: AppRigViewProps) {
                     projects={active.projects}
                     sidebar={sidebar}
                     slots={slots}
+                    slotsScope={slotsScope}
                     slotAction={slotAction}
                     windowState={props.windowState}
                     workspace={active.session.workspace}
@@ -2061,6 +2067,8 @@ interface RigWorkspaceSurfaceProps {
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
     sidebar: ReactNode;
     slots: RigSlotsSnapshot;
+    /** What this window addresses, against which a scoped entry is resolved. */
+    slotsScope: RigSlotsContext;
     slotAction(entryId: string): void;
     groupId?: string;
     chatId?: string;
@@ -2145,20 +2153,17 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
     const webapps = new Set(props.slots.webapps.map((webapp) => webapp.name));
+    const slotPlacement = (slot: RigSlotName): readonly SlotVisualEntry[] =>
+        slotVisualEntries(
+            rigSlotEntriesInScope(props.slots.entries, slot, props.slotsScope),
+            rows,
+            webapps,
+            props.chatId !== undefined,
+        );
     const slotViews: RigSlotViews = {
-        statusLine: slotVisualEntries(
-            props.slots.statusLine,
-            rows,
-            webapps,
-            props.chatId !== undefined,
-        ),
-        aboveComposer: slotVisualEntries(
-            props.slots.aboveComposer,
-            rows,
-            webapps,
-            props.chatId !== undefined,
-        ),
-        title: slotVisualEntries(props.slots.title, rows, webapps, props.chatId !== undefined),
+        statusLine: slotPlacement("status-line"),
+        aboveComposer: slotPlacement("above-composer"),
+        title: slotPlacement("title"),
     };
     const openGroup = openGroupFind(rows, props.groupId);
     const groupFileTabs = openGroup

@@ -1,4 +1,5 @@
 export {
+    rigSlotEntriesInScope,
     rigSlotsStoreCreate,
     rigSlotsStoreNoop,
     type RigSlotAction,
