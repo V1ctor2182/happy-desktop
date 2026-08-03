@@ -1,7 +1,7 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
+import { ProjectRegistrationError } from "@slopus/rig-connect";
 import type {
     DesktopRuntimeSnapshot,
     LocalOnboardingCloudChoice,
@@ -168,7 +168,11 @@ export interface LocalOnboardingDaemon {
     listCatalog(): Promise<{
         readonly projects: readonly { readonly archivedAt?: number; readonly kind: string }[];
     }>;
-    createSession(request: Record<string, unknown>): Promise<unknown>;
+}
+
+/** Rig's authoritative project registration, reduced to the one call setup makes. */
+export interface LocalOnboardingProjects {
+    add(path: string): Promise<{ readonly path: string }>;
 }
 
 /** The desktop runtime as first-run setup sees it: state to follow, never a connection to own. */
@@ -177,6 +181,7 @@ export interface LocalOnboardingRuntime {
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void;
     retry(): Promise<void>;
     localClient(): LocalOnboardingDaemon | undefined;
+    localProjects(): LocalOnboardingProjects | undefined;
 }
 
 /** The installation-terminal manager, reduced to what setup asks of it. */
@@ -196,7 +201,6 @@ export interface LocalOnboardingOptions {
     readonly probe?: () => Promise<LocalRuntimeProbe>;
     /** Opens the native folder picker; resolves to undefined when cancelled. */
     readonly directoryPick: () => Promise<string | undefined>;
-    readonly gitRootRead?: (path: string) => Promise<string | undefined>;
     /**
      * Identity of the window currently presenting setup. It is read again at
      * every step of a long operation, so work started by a window that has since
@@ -259,6 +263,12 @@ export class LocalOnboarding implements Disposable {
     private freshness: LocalOnboardingFreshness = "checking";
     /** The runtime connection the current freshness answer was read from. */
     private freshnessConnection?: number;
+    /**
+     * Whether the message on screen is only saying that Rig is being asked what
+     * happened. It stops being true the moment Rig answers, so it is cleared then
+     * rather than left standing over a step that has since moved on.
+     */
+    private messageAwaitsFreshness = false;
     /** The discovered `rig` path a connection retry has already been asked for. */
     private retryRequestedFor?: string;
     private runtimeKey?: string;
@@ -326,7 +336,7 @@ export class LocalOnboarding implements Disposable {
         // started only for the reader and the runtime that are current when it
         // starts — never on behalf of a document that has already gone.
         const generation = this.generation();
-        this.message = undefined;
+        this.messageClear();
         // The attempt being retried is over. Releasing it before opening another
         // keeps one terminal per reader at a time, so "run it again" works as
         // often as someone is willing to press it.
@@ -364,7 +374,7 @@ export class LocalOnboarding implements Disposable {
             return;
         }
         this.install = { ownerId: input.ownerId, terminalId, running: true };
-        this.message = undefined;
+        this.messageClear();
         if (this.generation() !== generation) {
             this.installRelease();
             this.publish();
@@ -462,12 +472,17 @@ export class LocalOnboarding implements Disposable {
     }
 
     /**
-     * Asks for a folder, requires it to be the root of a Git repository, and
-     * opens it as this Rig's first project. Rig registers a project when work is
-     * started in a directory, so opening the folder starts that project's first
-     * chat rather than writing a project row behind the daemon's back — and it
-     * happens only while this Rig is demonstrably unused, so an established Rig
-     * is never written to on Happy's initiative.
+     * Asks for a folder and registers it with Rig as this machine's first
+     * project.
+     *
+     * Rig owns what a project is: `projects.add` decides whether the folder is a
+     * Git top level, canonicalizes it, mints the project's identity, and answers
+     * with the project entity. Happy asks no questions about the folder itself,
+     * so there is nothing here that could disagree with the daemon about which
+     * folders are acceptable. No session or chat is started — registering the
+     * project is the whole of what the person asked for. It happens only while
+     * this Rig is demonstrably unused, so an established Rig is never written to
+     * on Happy's initiative.
      */
     async projectChoose(): Promise<void> {
         await this.durable("Happy could not open that project", ["project"], async (working) => {
@@ -482,59 +497,56 @@ export class LocalOnboarding implements Disposable {
             // replaced connection are all the same outcome here: nothing was
             // asked for, so nothing is said about it.
             if (!picked || !mine()) return;
-            const path = await pathCanonicalize(picked);
-            const root = await (this.options.gitRootRead ?? gitRootRead)(path);
-            if (!mine()) return;
-            if (!root) {
-                this.message =
-                    "That folder is not a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.";
-                return;
-            }
-            if (root !== path) {
-                this.message = `That folder is inside the Git repository at ${root}. Choose that folder instead.`;
-                return;
-            }
-            const client = this.options.runtime.localClient();
-            if (!client || this.freshness !== "fresh") {
+            const projects = this.options.runtime.localProjects();
+            if (!projects || this.freshness !== "fresh") {
                 this.message = "Rig is not ready for a first project yet.";
                 return;
             }
             // Last look before the one thing here that changes someone else's
             // state.
             if (!mine()) return;
+            let path: string;
             try {
-                await client.createSession({
-                    cwd: path,
-                    archiveOnIdle: false,
-                    permissionMode: "auto",
-                    trackUnread: true,
-                });
+                // Rig answers with the project it holds, whose path is the
+                // canonical one it stored — which is what setup shows, rather
+                // than whatever the picker happened to hand over.
+                path = (await projects.add(picked)).path;
             } catch (error) {
+                if (!mine()) return;
+                const refusal = registrationRefusal(error);
+                if (refusal) {
+                    // Rig examined the folder and said no. Nothing was written,
+                    // so the step stays exactly as it is and the person can
+                    // choose again.
+                    this.message = refusal;
+                    return;
+                }
                 // Rig may have committed the project before the answer was lost,
                 // so nothing may be concluded from this — least of all that it is
                 // safe to ask again. Freshness stops being an answer and that Rig
                 // is asked afresh; the step comes back only if its own catalog
                 // still says it is unused. If the connection is already gone, its
                 // failure is not the successor's to inherit either.
-                if (!mine()) return;
                 this.freshnessInvalidate();
-                this.message = `Happy could not confirm whether that project was opened: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`;
+                this.message = `Happy could not confirm whether that project was registered: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`;
+                this.messageAwaitsFreshness = true;
                 return;
             }
-            // The Rig this succeeded against now holds a project of its own,
-            // which is exactly what freshness means for that Rig — and only for
-            // it. A connection that replaced it has already been asked its own
-            // question, and this answer is not about it.
             if (!mine()) return;
-            this.freshness = "used";
             try {
                 await this.recordWrite({ ...this.record, projectPath: path }, mine);
             } catch {
-                // The project is open in Rig, and Rig is what setup reads back.
-                // The remembered path is for display alone, so failing to write
-                // it must never be reported as a project that did not open.
+                // The project is registered with Rig, and Rig is what setup reads
+                // back. The remembered path is for display alone, so failing to
+                // write it must never be reported as a project that was not
+                // registered.
                 this.publish();
             }
+            if (!mine()) return;
+            // Whether setup is finished is Rig's answer, not an assumption drawn
+            // from a call that returned: the catalog that decided this step is
+            // read again, and it now holds the project that was just added.
+            this.freshnessInvalidate();
         });
     }
 
@@ -546,6 +558,12 @@ export class LocalOnboarding implements Disposable {
         this.runtimeUnsubscribe?.();
         this.runtimeUnsubscribe = undefined;
         this.listeners.clear();
+    }
+
+    /** Takes the message off screen, and with it the reason it was there. */
+    private messageClear(): void {
+        this.message = undefined;
+        this.messageAwaitsFreshness = false;
     }
 
     /** Refuses an action that does not belong to the stage setup is actually on. */
@@ -584,7 +602,7 @@ export class LocalOnboarding implements Disposable {
         };
         this.durablePending = true;
         this.busy = true;
-        this.message = undefined;
+        this.messageClear();
         this.publish();
         const run = this.durableQueue.then(async () => {
             try {
@@ -788,6 +806,10 @@ export class LocalOnboarding implements Disposable {
         }
         if (this.closed || this.freshnessConnection !== connectionId) return;
         this.freshness = freshness;
+        // Rig has now said what happened — used, fresh, or unreadable — so a
+        // message that existed only to say it was being asked has nothing left
+        // to report.
+        if (this.messageAwaitsFreshness) this.messageClear();
         this.publish();
     }
 
@@ -807,7 +829,7 @@ export class LocalOnboarding implements Disposable {
         );
         if (!committed) return false;
         this.record = record;
-        this.message = undefined;
+        this.messageClear();
         this.publish();
         return true;
     }
@@ -978,32 +1000,37 @@ function installFailureMessage(message: string | undefined): string {
         : `The installation ended without a usable \`rig\` command. Install it yourself with \`${rigInstallCommand}\` in a terminal, then Happy will pick it up.`;
 }
 
-/** The repository root containing `path`, or undefined when it is not in one. */
-async function gitRootRead(path: string): Promise<string | undefined> {
-    try {
-        const root = await new Promise<string>((resolvePromise, reject) => {
-            execFileCallback(
-                "git",
-                ["rev-parse", "--show-toplevel"],
-                { cwd: path, encoding: "utf8", timeout: 10_000 },
-                (error, stdout) => {
-                    if (error) reject(error);
-                    else resolvePromise(stdout);
-                },
-            );
-        });
-        const trimmed = root.trim();
-        return trimmed ? await pathCanonicalize(trimmed) : undefined;
-    } catch {
-        return undefined;
-    }
-}
-
-async function pathCanonicalize(path: string): Promise<string> {
-    try {
-        return await realpath(path);
-    } catch {
-        return path;
+/**
+ * What to tell the person when Rig examined the folder and refused it, or
+ * nothing when the failure was not Rig's verdict on the folder.
+ *
+ * A verdict is a decision: Rig looked, said no, and wrote nothing, so the step
+ * simply stays and another folder can be chosen. Anything else — a transport
+ * failure, an unreadable response — leaves the outcome unknown and is handled as
+ * an ambiguous write instead. Rig's own message is deliberately not shown: these
+ * are the few things that can be wrong with a chosen folder, and each one is
+ * said here in terms of the choice the person just made.
+ */
+function registrationRefusal(error: unknown): string | undefined {
+    if (!(error instanceof ProjectRegistrationError)) return undefined;
+    switch (error.code) {
+        case "not_git_repository":
+            return "That folder is not in a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.";
+        case "not_git_top_level":
+            return "That folder is inside a Git repository rather than at its root. Choose the repository's own folder instead.";
+        case "not_directory":
+            return "That is a file, not a folder. Choose the folder holding your repository.";
+        case "path_missing":
+            return "That folder no longer exists. Choose one that does.";
+        case "path_inaccessible":
+            return "Rig cannot read that folder. Choose one you have access to.";
+        case "managed_workspace_unavailable":
+            return "Rig cannot prepare workspaces for that repository yet. Choose another project to start with.";
+        default:
+            // `invalid_request` and `project_id_conflict` describe the request
+            // Happy sent rather than the folder, so they are not the person's to
+            // act on and are reported as the failure they are.
+            return undefined;
     }
 }
 

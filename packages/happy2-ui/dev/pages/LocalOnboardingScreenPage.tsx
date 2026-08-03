@@ -187,7 +187,7 @@ export function LocalOnboardingScreenPage() {
                 {screen({ kind: "examining" })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Native folder picker; a folder that is not a Git repository is refused"
+                detail="Native folder picker; Rig refuses a folder that is not a Git top level"
                 label="First project"
                 number="15"
             >
@@ -201,7 +201,7 @@ export function LocalOnboardingScreenPage() {
                 {screen({ busy: true, kind: "project" })}
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A refused folder keeps the step and says exactly what is wrong"
+                detail="Rig examined the folder and refused it; the step stays and says what is wrong"
                 label="First project · rejected"
                 number="17"
             >
@@ -209,7 +209,7 @@ export function LocalOnboardingScreenPage() {
                     busy: false,
                     kind: "project",
                     message:
-                        "That folder is not a Git repository. Choose a folder with a Git repository in it, or run `git init` there first.",
+                        "That folder is inside a Git repository rather than at its root. Choose the repository's own folder instead.",
                 })}
             </FullScreenSpecimen>
             <FullScreenSpecimen

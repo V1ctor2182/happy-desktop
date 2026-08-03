@@ -300,9 +300,9 @@ function LocalOnboardingBody(props: LocalOnboardingScreenProps) {
                         className="happy2-local-onboarding__lead"
                         data-happy2-ui="local-onboarding-lead"
                     >
-                        A project is a folder on this machine that agents work in. It has to be a
-                        Git repository, so their work can be reviewed, undone, and branched into
-                        workspaces.
+                        A project is a folder on this machine that agents work in. It has to be the
+                        root of a Git repository, so their work can be reviewed, undone, and
+                        branched into workspaces. Rig checks the folder and registers it.
                     </p>
                     {view.message ? (
                         <Banner icon="shield" tone="warning">

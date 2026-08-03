@@ -26,6 +26,7 @@ import {
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
+import { connectRig, type RigConnection, type RigProjects } from "@slopus/rig-connect";
 import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
@@ -68,6 +69,10 @@ export class DesktopRuntime implements AsyncDisposable {
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
     private rigConnection?: LocalRigConnection;
+    private rigProjectsConnection?: {
+        readonly generation: number;
+        readonly connection: RigConnection;
+    };
     private rigProxy?: RigHttpProxyHandle;
     private settings?: DesktopSettings;
     private snapshotValue: DesktopRuntimeSnapshot;
@@ -158,6 +163,37 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.snapshotValue.phase === "ready" && this.snapshotValue.mode === "local"
             ? this.rigConnection?.client
             : undefined;
+    }
+
+    /**
+     * Rig's authoritative project registration for the connected local Rig, or
+     * nothing while none is connected.
+     *
+     * It is `rig-connect`'s own `projects` surface rather than a hand-rolled
+     * request, because registration's contract — validating the folder, minting
+     * one project identity, and converging on that identity when a response is
+     * lost after the daemon already committed — belongs to the released client.
+     * The connector is made once per activation and closed with the connection
+     * it belongs to, so a Rig that has been replaced cannot still be registered
+     * against.
+     */
+    localProjects(): RigProjects | undefined {
+        if (this.snapshotValue.phase !== "ready" || this.snapshotValue.mode !== "local")
+            return undefined;
+        const endpoint = this.rigProxy?.url;
+        if (!endpoint) return undefined;
+        const generation = this.activationGeneration;
+        if (this.rigProjectsConnection?.generation !== generation) {
+            this.rigProjectsConnection?.connection.close();
+            this.rigProjectsConnection = {
+                connection: connectRig({
+                    endpoint: `${endpoint.replace(/\/$/u, "")}/rig-connect`,
+                    token: "happy2-local-capability",
+                }),
+                generation,
+            };
+        }
+        return this.rigProjectsConnection.connection.projects;
     }
 
     /** Opens one authenticated browser-proxy tunnel through the active local Rig daemon. */
@@ -356,6 +392,8 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private localDispose(): void {
+        this.rigProjectsConnection?.connection.close();
+        this.rigProjectsConnection = undefined;
         this.rigProxy?.close();
         this.rigProxy = undefined;
         this.rigConnection?.close();
