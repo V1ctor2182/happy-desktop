@@ -274,6 +274,11 @@ export function rigConnectionOpen(input: {
                     host: input.host,
                     models: client.models,
                     workspace: rigWorkspaceStoreCreate(client, {
+                        // Choosing a folder is the window's act to perform, so
+                        // the workspace is handed the window rather than
+                        // reaching for one. It is the same host every other
+                        // window-level act already goes through.
+                        host: input.host,
                         output: (event) => {
                             switch (event.type) {
                                 case "conversationOpenRequested":

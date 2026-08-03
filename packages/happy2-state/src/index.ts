@@ -500,6 +500,7 @@ export {
     type RigFileLayout,
     type RigFileScope,
     type RigFileViewMode,
+    type RigProjectAddSnapshot,
     type RigRenameSnapshot,
     type RigProjectArchiveSnapshot,
     type RigConversationSnapshot,

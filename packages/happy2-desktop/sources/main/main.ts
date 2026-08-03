@@ -1256,9 +1256,21 @@ void app
             const window = BrowserWindow.fromWebContents(event.sender);
             if (window && window === mediaPreviewWindow) window.close();
         });
-        ipcMain.handle(desktopIpc.directoryPick, (event) =>
-            directoryPickShow(BrowserWindow.fromWebContents(event.sender) ?? undefined),
-        );
+        ipcMain.handle(desktopIpc.directoryPick, async (event) => {
+            const owner = BrowserWindow.fromWebContents(event.sender);
+            const options: OpenDialogOptions = {
+                buttonLabel: "Add",
+                // No `createDirectory`: what is chosen here becomes a project,
+                // and Rig only accepts the top level of a Git repository — so a
+                // folder made in this dialog could only ever be refused.
+                properties: ["openDirectory"],
+                title: "Choose a project folder",
+            };
+            const result = owner
+                ? await dialog.showOpenDialog(owner, options)
+                : await dialog.showOpenDialog(options);
+            return result.canceled ? undefined : result.filePaths[0];
+        });
         ipcMain.handle(desktopIpc.onboardingGet, (event) => {
             onboardingSenderRequire(event.sender);
             return onboarding.get();

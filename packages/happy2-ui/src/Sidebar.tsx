@@ -95,11 +95,30 @@ export type SidebarItem = {
 export const SIDEBAR_ROW_PADDING_X = 10;
 /** Additional left inset applied per nesting level so children sit under their parent. */
 export const SIDEBAR_ROW_INDENT = 16;
+/** The one control a section heading offers, beside the section's own label. */
+export type SidebarSectionAction = {
+    icon: IconName;
+    label: string;
+    /**
+     * True while the act it starts is still running. The control shows a spinner
+     * in place of its glyph and refuses to be pressed again, so an act that takes
+     * long enough to be pressed twice cannot be started twice from here.
+     */
+    busy?: boolean;
+    /**
+     * `hover` keeps the control out of the way until the heading is hovered or the
+     * control is focused, for a secondary act on a list someone is reading. `always`
+     * keeps it visible, for a control the section exists to offer. Hover is the
+     * default because that is what a heading control has always done here.
+     */
+    reveal?: "hover" | "always";
+};
+
+/** Which control in a section reported an act: its heading, or its empty state. */
+export type SidebarSectionActionSource = "heading" | "empty";
+
 export type SidebarSection = {
-    action?: {
-        icon: IconName;
-        label: string;
-    };
+    action?: SidebarSectionAction;
     empty?: {
         actionLabel: string;
         description: string;
@@ -111,6 +130,12 @@ export type SidebarSection = {
     headingOnly?: boolean;
     items: SidebarItem[];
     label?: string;
+    /**
+     * What went wrong with the section's own action, said under its heading
+     * until it clears. It is the section's, not a row's: an add that is refused
+     * has no row to fail on, and the reader has to be told where they pressed.
+     */
+    error?: string;
 };
 /**
  * The one move a reorder drag made: the row that travelled and the row it now
@@ -176,7 +201,13 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * changes.
      */
     onItemReorder?: (sectionId: string, move: SidebarReorder) => void;
-    onSectionAction?: (sectionId: string) => void;
+    /**
+     * Invoked by a section's heading control or by the button in its empty
+     * state. The two are reported apart because they are different acts on the
+     * same section — adding something to it, and the one act an empty section
+     * offers instead — and a caller that conflated them would run the wrong one.
+     */
+    onSectionAction?: (sectionId: string, source: SidebarSectionActionSource) => void;
     sections: SidebarSection[];
     style?: CSSProperties;
     subtitle?: string;
@@ -1314,19 +1345,36 @@ export function Sidebar(props: SidebarProps) {
                                     {section.action
                                         ? ((action) => (
                                               <button
+                                                  aria-busy={action.busy ? true : undefined}
                                                   aria-label={action.label}
                                                   className="happy2-sidebar__section-action"
+                                                  data-busy={action.busy ? "" : undefined}
                                                   data-happy2-ui="sidebar-section-action"
+                                                  data-reveal={action.reveal ?? "hover"}
+                                                  disabled={action.busy}
                                                   onClick={() =>
-                                                      local.onSectionAction?.(section.id)
+                                                      local.onSectionAction?.(section.id, "heading")
                                                   }
                                                   type="button"
                                               >
-                                                  <Icon name={action.icon} size={12} />
+                                                  {action.busy ? (
+                                                      <Spinner size={12} tone="muted" />
+                                                  ) : (
+                                                      <Icon name={action.icon} size={12} />
+                                                  )}
                                               </button>
                                           ))(section.action)
                                         : null}
                                 </div>
+                            ) : null}
+                            {section.error !== undefined ? (
+                                <p
+                                    className="happy2-sidebar__section-error"
+                                    data-happy2-ui="sidebar-section-error"
+                                    role="status"
+                                >
+                                    {section.error}
+                                </p>
                             ) : null}
                             {!section.headingOnly
                                 ? section.items.map((item, index) => {
@@ -1443,7 +1491,9 @@ export function Sidebar(props: SidebarProps) {
                                           </span>
                                           <Button
                                               className="happy2-sidebar__empty-action"
-                                              onClick={() => local.onSectionAction?.(section.id)}
+                                              onClick={() =>
+                                                  local.onSectionAction?.(section.id, "empty")
+                                              }
                                               size="small"
                                               variant="ghost"
                                           >

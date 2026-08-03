@@ -1,5 +1,6 @@
 import type { TerminalDriverCreate } from "../modules/terminal/terminalState.js";
-import type { UserError } from "../types.js";
+import { UserError } from "../types.js";
+import { rigProjectAddError } from "./rigProjectRegistration.js";
 import type { MutationRejectedDelta, RigConnection } from "@slopus/rig-connect";
 import { rigTerminalOpen, type RigTerminalHandle } from "./rigTerminalStore.js";
 import {
@@ -26,6 +27,7 @@ import type {
     RigWorkspaceFileDocument,
     RigWorkspaceFiles,
     RigModelCatalog,
+    RigProjectId,
     RigSessionId,
 } from "./rigTypes.js";
 import { rigModelStoreCreate, type RigModelStore } from "./rigModelStore.js";
@@ -190,6 +192,17 @@ export interface RigClient {
         name: string,
         content: string,
     ): Promise<{ readonly path: string }>;
+    /**
+     * Registers one folder on this Rig's machine as a project and resolves with
+     * the identity Rig gave it. Nothing is started in it: a project is a folder
+     * Rig knows about, and a conversation in it is a separate decision.
+     *
+     * Rig is authoritative for what may become a project and answers by
+     * canonical path, so registering a folder it already holds returns the
+     * project it already has rather than a second copy of it. A refusal arrives
+     * as a displayable `UserError`.
+     */
+    projectAdd(path: string): Promise<RigProjectId>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<RigOpenInTargets>;
     /** Opens one project or worktree root in one of those applications. */
@@ -343,6 +356,21 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             transport.workspaceFileWrite(groupId, path, content, expectedHash),
         attachmentWrite: (groupId, name, content) =>
             transport.attachmentWrite(groupId, name, content),
+        async projectAdd(path) {
+            // Registration is Rig's own decision, so it goes to Rig directly
+            // rather than through the projected transport: the daemon validates
+            // the folder, names the project, and is idempotent by canonical
+            // path. A connection that carries no rig-connect actions cannot ask,
+            // and says so rather than pretending the folder was added.
+            const actions = deps.connectActions;
+            if (!actions) throw new UserError("This Rig cannot add projects.");
+            try {
+                const project = await actions.projects.add(path);
+                return project.id as RigProjectId;
+            } catch (error) {
+                throw rigProjectAddError(error, path);
+            }
+        },
         openInTargetsRead: () => transport.openInTargetsRead(),
         openIn: (groupId, targetId) => transport.openIn(groupId, targetId),
         sessionList() {

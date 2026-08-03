@@ -1,6 +1,7 @@
 import type {
     RigHost,
     RigModelPreferencePersistence,
+    RigProjectAddSnapshot,
     RigProjectGroup,
     RigSessionLocation,
 } from "happy2-state";
@@ -31,6 +32,12 @@ export interface RigDirectoryEntry {
     readonly projects: readonly RigProjectGroup[];
     /** Where that project list is: still arriving, ready, or refused by the daemon. */
     readonly projectsStatus: "loading" | "ready" | "error";
+    /**
+     * Where adding a folder to this Rig as a project stands. Projected beside the
+     * projects because the sidebar shows both in one place — the list, and the
+     * control that adds to it — through this one subscription.
+     */
+    readonly projectAdd: RigProjectAddSnapshot;
     /** The product stores for this Rig, present once its connection is up. */
     readonly session?: RigSession;
 }
@@ -87,6 +94,9 @@ interface LiveRig {
 }
 
 const ADD_EMPTY: RigDirectoryAddSnapshot = { destination: "", label: "", open: false };
+
+/** What a Rig with no connection reports about adding a project: nothing is happening. */
+const PROJECT_ADD_IDLE: RigProjectAddSnapshot = { pending: false };
 
 export interface RigDirectoryDeps {
     /** Navigates to a conversation the named Rig just created. */
@@ -168,14 +178,16 @@ export function rigDirectoryStoreCreate(
             ...rig.entry,
             projects: [],
             projectsStatus: "loading",
+            projectAdd: PROJECT_ADD_IDLE,
             session: undefined,
         };
     };
 
     const projectsRead = (
         session: RigSession,
-    ): Pick<RigDirectoryEntry, "projects" | "projectsStatus"> => {
-        const projects = session.workspace.get().list.projects;
+    ): Pick<RigDirectoryEntry, "projects" | "projectsStatus" | "projectAdd"> => {
+        const workspace = session.workspace.get();
+        const projects = workspace.list.projects;
         return {
             projects: projects.type === "ready" ? projects.value : [],
             projectsStatus:
@@ -184,6 +196,7 @@ export function rigDirectoryStoreCreate(
                     : projects.type === "error"
                       ? "error"
                       : "loading",
+            projectAdd: workspace.projectAdd,
         };
     };
 
@@ -242,6 +255,7 @@ export function rigDirectoryStoreCreate(
                 label: "This Mac",
                 projects: [],
                 projectsStatus: "loading",
+                projectAdd: PROJECT_ADD_IDLE,
                 status: "connecting",
             },
         };
@@ -285,6 +299,7 @@ export function rigDirectoryStoreCreate(
                     label: source.label,
                     projects: [],
                     projectsStatus: "loading",
+                    projectAdd: PROJECT_ADD_IDLE,
                     status: source.status,
                 },
             };

@@ -27,6 +27,7 @@ import type {
     RigPanelFileKind,
     RigPanelFileSnapshot,
     RigPanelSnapshot,
+    RigProjectAddSnapshot,
     RigPanelStore,
     RigPanelTabId,
     RigPanelTabSnapshot,
@@ -187,6 +188,12 @@ export interface AppRigEntry {
     readonly destination?: string;
     readonly projects: readonly RigProjectGroup[];
     readonly projectsStatus: "loading" | "ready" | "error";
+    /**
+     * Where adding a folder to this Rig as a project stands. Absent on a host
+     * that does not report it, which reads as nothing being added — the same way
+     * a host with no live stores supplies no `session`.
+     */
+    readonly projectAdd?: RigProjectAddSnapshot;
     /** The live stores for this Rig, present once its connection is up. */
     readonly session?: AppRigSession;
 }
@@ -995,6 +1002,22 @@ function rigSections(directory: AppRigDirectorySnapshot): SidebarSection[] {
             ...item,
             id: rigItemId(rig.id, item.id),
         })),
+        // Adding a folder is this machine's act: the picker opens on the disk
+        // the window is running on, so a folder chosen here means nothing to a
+        // Rig somewhere else. Another machine's projects are added on that
+        // machine. It is offered only once the daemon is actually up, since a
+        // folder cannot be registered with a Rig that is not answering.
+        ...(rig.kind === "local" && rig.status === "connected" && rig.session
+            ? {
+                  action: {
+                      busy: rig.projectAdd?.pending === true,
+                      icon: "plus" as const,
+                      label: "Add project",
+                      reveal: "always" as const,
+                  },
+                  ...(rig.projectAdd?.error !== undefined ? { error: rig.projectAdd.error } : {}),
+              }
+            : {}),
         ...(rig.projects.length === 0
             ? {
                   empty:
@@ -1586,10 +1609,19 @@ export function AppRigView(props: AppRigViewProps) {
             {...(active?.session?.workspace
                 ? { onCompose: () => active.session?.workspace.createOpen() }
                 : {})}
-            // A section with nothing in it offers the one act that would fill
-            // it: starting work here, or connecting the machine that holds it.
-            onSectionAction={(sectionId) => {
+            // Two acts on one machine's section. Its heading adds a folder on
+            // that machine as a project; a section with nothing in it offers the
+            // one act that would fill it instead — starting work here, or
+            // connecting the machine that holds it.
+            onSectionAction={(sectionId, source) => {
                 const rig = rigOf(sectionId.slice("rig:".length));
+                if (source === "heading") {
+                    // Silent when there is nothing to ask: the control is only
+                    // offered on a connected local machine, and a section
+                    // without one carries no heading control at all.
+                    rig?.session?.workspace.projectAdd();
+                    return;
+                }
                 if (rig?.status !== "connected") {
                     props.onSettingsOpen();
                     return;

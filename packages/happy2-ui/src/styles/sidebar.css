@@ -305,6 +305,10 @@
     transform: translateY(var(--happy2-sidebar-section-optical-y, 0px));
 }
 
+/* The whole control is one target in a desktop window: a native title-bar drag
+   region that overlapped this heading would otherwise hand the press to the
+   window manager instead of to the button. Stated here rather than relying on
+   the shell so the guarantee travels with the control. */
 .happy2-sidebar__section-action {
     display: flex;
     flex: none;
@@ -312,6 +316,8 @@
     justify-content: center;
     width: 18px;
     height: 18px;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
     margin: 0;
     margin-right: -3px; /* optical: align the glyph with the row meta lane */
     padding: 0;
@@ -333,6 +339,20 @@
     opacity: 1;
 }
 
+/* A control the section exists to offer is not something to go looking for: it
+   stands whether or not the heading is under the pointer, and it keeps standing
+   while the act it started is still running. */
+.happy2-sidebar__section-action[data-reveal="always"],
+.happy2-sidebar__section-action[data-busy] {
+    opacity: 1;
+}
+
+.happy2-sidebar__section-action[data-busy],
+.happy2-sidebar__section-action[data-busy]:hover {
+    background: transparent;
+    cursor: default;
+}
+
 .happy2-sidebar__section-action:hover {
     background: var(--surface-ripple);
     color: var(--text-secondary);
@@ -341,6 +361,18 @@
 .happy2-sidebar__section-action:focus-visible {
     outline: 2px solid var(--surface-selected);
     outline-offset: 1px;
+}
+
+.happy2-sidebar__section-error {
+    display: block;
+    flex: none;
+    margin: 0;
+    padding: 0 10px 2px;
+    color: var(--text-destructive);
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 15px;
 }
 
 .happy2-sidebar__empty {

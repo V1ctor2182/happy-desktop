@@ -551,6 +551,60 @@ function Frame(props: { children: ReactNode; height: number }) {
     );
 }
 
+/** The rows a machine's section holds, reused by each heading-action state. */
+const HEADING_ACTION_ITEMS: SidebarItem[] = [
+    { id: "happy2", initials: "H", kind: "project", label: "happy2" },
+    { id: "rig", initials: "R", kind: "project", label: "rig" },
+];
+
+const HEADING_ACTION_STATES: readonly {
+    readonly label: string;
+    readonly rule: string;
+    readonly section: SidebarSection;
+}[] = [
+    {
+        label: "Resting",
+        rule: "18 px control · always visible · glyph 12",
+        section: {
+            action: { icon: "plus", label: "Add project", reveal: "always" },
+            id: "rig:local",
+            items: HEADING_ACTION_ITEMS,
+            label: "This Mac",
+        },
+    },
+    {
+        label: "Pending",
+        rule: "spinner 12 in the 18 px control · not pressable",
+        section: {
+            action: { busy: true, icon: "plus", label: "Add project", reveal: "always" },
+            id: "rig:local",
+            items: HEADING_ACTION_ITEMS,
+            label: "This Mac",
+        },
+    },
+    {
+        label: "Refused",
+        rule: "error under the 24 px heading · 11/15 · pad 0 10",
+        section: {
+            action: { icon: "plus", label: "Add project", reveal: "always" },
+            error: "“notes” is not a Git repository. Add a folder with a repository in it.",
+            id: "rig:local",
+            items: HEADING_ACTION_ITEMS,
+            label: "This Mac",
+        },
+    },
+    {
+        label: "Hover-revealed",
+        rule: "default reveal · appears on heading hover or focus",
+        section: {
+            action: { icon: "plus", label: "Add channel" },
+            id: "hover",
+            items: HEADING_ACTION_ITEMS,
+            label: "Hover to reveal",
+        },
+    },
+];
+
 const UPDATE_STATES: readonly {
     readonly label: string;
     readonly update: SidebarUpdateActionProps;
@@ -772,6 +826,33 @@ export function SidebarPage() {
                 stage="app"
             >
                 <PinnedReorderDemo />
+            </Specimen>
+
+            <Specimen
+                detail="A heading control the section exists to offer stands without hover (reveal: always), spins in place while its act runs, and refuses a second press. A refusal is said under the heading in the reader's terms, because the thing it would have added never came into being and has no row to fail on."
+                label="Section heading action — resting, pending, refused"
+                number="02d"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {HEADING_ACTION_STATES.map((state) => (
+                        <div
+                            key={state.label}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={200}>
+                                <Sidebar
+                                    activeItemId=""
+                                    onItemSelect={() => {}}
+                                    onSectionAction={() => {}}
+                                    sections={[state.section]}
+                                    title="This Mac"
+                                />
+                            </Frame>
+                            <DimensionRule label={state.rule} />
+                        </div>
+                    ))}
+                </div>
             </Specimen>
 
             <Specimen

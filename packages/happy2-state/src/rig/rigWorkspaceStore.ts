@@ -8,6 +8,7 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
+import type { RigHost } from "./rigHost.js";
 import type {
     RigChatSnapshot,
     RigChatStore,
@@ -383,6 +384,33 @@ export interface RigWorkspaceSnapshot {
     readonly workspaceFilesLoading: boolean;
     /** The create dialog, when it is open. */
     readonly create?: RigCreateSnapshot;
+    /** Where adding a folder to this machine as a project stands. */
+    readonly projectAdd: RigProjectAddSnapshot;
+}
+
+/**
+ * Adding a folder on this machine as a project: whether one is being added right
+ * now, and why the last attempt was refused.
+ *
+ * Both halves exist because the act spans a native dialog and a daemon round
+ * trip, which is long enough for the reader to press the control again — and a
+ * refusal has no row of its own to be reported on, since the project it would
+ * have been never came into being.
+ */
+export interface RigProjectAddSnapshot {
+    /**
+     * True from the moment the folder picker is asked for until the project has
+     * been registered or the attempt has ended. It is what makes a second press
+     * do nothing rather than open a second picker.
+     */
+    readonly pending: boolean;
+    /**
+     * Why the last attempt was refused, in the reader's terms. Starting another
+     * attempt clears it: the refusal described a folder the reader has already
+     * gone back to the picker over. Cancelling that attempt reports nothing of
+     * its own, since choosing nothing is a complete act with nothing to say.
+     */
+    readonly error?: string;
 }
 
 /**
@@ -551,6 +579,14 @@ export type RigWorkspaceOutput =
 
 export interface RigWorkspaceDeps {
     readonly output?: (event: RigWorkspaceOutput) => void;
+    /**
+     * The window this workspace is shown in, for the one act that needs it:
+     * choosing a folder is something only the application window can ask, and
+     * the answer is a path this store then hands to Rig. Absent leaves the
+     * workspace unable to add a project, which is the honest state of a host
+     * with no folder picker — Blueprint and tests included.
+     */
+    readonly host?: RigHost;
 }
 
 export interface RigWorkspaceNewChatInput {
@@ -628,6 +664,22 @@ export interface RigWorkspaceStore {
      * cannot order a strip that also holds files.
      */
     tabReorder(tabId: string, afterId: string | null): void;
+    /**
+     * Adds a folder on this machine to the list as a project: asks the host for
+     * one, registers it with Rig, and addresses it.
+     *
+     * Returns immediately and reports through the snapshot, because the act
+     * spans a native dialog the reader may take any amount of time over. Exactly
+     * one is ever in flight: asking again while one is pending does nothing at
+     * all, so a second press cannot open a second picker or register a second
+     * time. Cancelling the picker ends the act silently.
+     *
+     * Nothing is started in the project. The new project is addressed the way a
+     * new worktree already is — as a group holding no conversation, whose
+     * composer starts the first one when something is sent into it — so adding a
+     * project never leaves an unwanted session behind.
+     */
+    projectAdd(): void;
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     /**
@@ -870,6 +922,9 @@ function noOpenConversation(): Promise<never> {
     return Promise.reject(new Error("No local conversation is open."));
 }
 
+/** Nothing is being added and nothing was refused: one shared idle value. */
+const PROJECT_ADD_IDLE: RigProjectAddSnapshot = { pending: false };
+
 /**
  * The creation fields one selection names. Absent optionals are left out rather
  * than sent as undefined, so a create request carries only what was chosen and
@@ -981,6 +1036,12 @@ export function rigWorkspaceStoreCreate(
     let fileSelectionAnchor: string | undefined;
     let fileRevert: RigFileRevertSnapshot | undefined;
     let create: RigCreateSnapshot | undefined;
+    /**
+     * Where adding a folder as a project stands. One value for the workspace
+     * rather than one per attempt, because exactly one add is ever in flight —
+     * which is the thing `pending` both reports and enforces.
+     */
+    let projectAdd: RigProjectAddSnapshot = PROJECT_ADD_IDLE;
     let createDraft: RigSessionDraftStore | undefined;
     let unsubscribeCreateDraft: (() => void) | undefined;
     let createDraftGeneration = 0;
@@ -1084,6 +1145,7 @@ export function rigWorkspaceStoreCreate(
         fileTreeCollapsed,
         fileSelection,
         workspaceFilesLoading,
+        projectAdd,
     };
 
     const notify = (): void => {
@@ -1412,7 +1474,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileRevert === fileRevert &&
             snapshot.workspaceFiles === workspaceFiles &&
             snapshot.workspaceFilesLoading === workspaceFilesLoading &&
-            snapshot.create === create
+            snapshot.create === create &&
+            snapshot.projectAdd === projectAdd
         )
             return;
         snapshot = {
@@ -1434,6 +1497,7 @@ export function rigWorkspaceStoreCreate(
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
+            projectAdd,
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
             ...(panelFile ? { panelFile } : {}),
@@ -2669,6 +2733,7 @@ export function rigWorkspaceStoreCreate(
             ...(workspaceFiles ? { workspaceFiles } : {}),
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
+            projectAdd,
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
         };
@@ -2948,6 +3013,49 @@ export function rigWorkspaceStoreCreate(
             client.memory.groupOrderWrite(groupId, order);
             memoryRevision += 1;
             recompute();
+        },
+        projectAdd() {
+            if (disposed || projectAdd.pending) return;
+            const host = deps.host;
+            if (!host) {
+                projectAdd = { pending: false, error: "This window cannot choose a folder." };
+                recompute();
+                return;
+            }
+            // Pending from before the dialog opens, not from when the daemon is
+            // asked: the picker is the slow part, and a control that stayed
+            // pressable across it would open a second one over the first.
+            projectAdd = { pending: true };
+            recompute();
+            void (async () => {
+                try {
+                    const path = await host.directoryPick();
+                    if (disposed) return;
+                    // Choosing nothing is a finished act with nothing to say, so
+                    // it says nothing. Any earlier refusal went away when this
+                    // act started: it described a folder this reader has already
+                    // moved on from.
+                    if (path === undefined) {
+                        projectAdd = PROJECT_ADD_IDLE;
+                        recompute();
+                        return;
+                    }
+                    const projectId = await client.projectAdd(path);
+                    if (disposed) return;
+                    projectAdd = PROJECT_ADD_IDLE;
+                    recompute();
+                    // The row itself arrives through the catalog stream, which
+                    // is what carries a project created by anything on this
+                    // machine. Addressing it is this store's part: the reader
+                    // asked for this project, so the window goes to it — empty,
+                    // as a new worktree does, so nothing is started in it.
+                    output({ type: "groupOpenRequested", groupId: projectId });
+                } catch (error) {
+                    if (disposed) return;
+                    projectAdd = { pending: false, error: rigUserError(error).message };
+                    recompute();
+                }
+            })();
         },
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
         projectArchive: (projectId) => list.projectArchive(projectId),
