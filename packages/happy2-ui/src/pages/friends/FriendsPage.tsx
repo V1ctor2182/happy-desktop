@@ -7,6 +7,7 @@ import type {
     RigFriendRequestId,
     RigFriendsAccount,
     RigFriendsAnswerState,
+    RigFriendsInviteDraft,
     RigFriendsProfileDraft,
     UserError,
 } from "happy2-state";
@@ -16,6 +17,7 @@ import { Banner } from "../../Banner";
 import { EmptyState } from "../../EmptyState";
 import { SURFACE_HEADER_HEIGHT } from "../../InfoPanel";
 import { Toolbar } from "../../Toolbar";
+import { FriendInvite } from "./FriendInvite";
 import { FriendProfileSetup } from "./FriendProfileSetup";
 import { FriendRequestCard } from "./FriendRequestCard";
 
@@ -40,6 +42,14 @@ export interface FriendsPageProps {
     onPhotoSelect?: (file: File) => void;
     onPhotoRemove?: () => void;
     onProfileCreate?: () => void;
+    /**
+     * The code being pasted in to reach someone. Absent leaves the exchange off
+     * the surface entirely, which is the honest state where there is nowhere to
+     * carry a request to.
+     */
+    invite?: RigFriendsInviteDraft;
+    onInviteTokenChange?: (value: string) => void;
+    onInviteSend?: () => void;
     /** Why this machine cannot do Friends at all, when it cannot. */
     unavailable?: string;
     /** Opens one person. Omit it while there is nowhere for a row to go. */
@@ -57,10 +67,12 @@ export interface FriendsPageProps {
  * FriendsPage — who you are here, who is asking for you, and who you already
  * know.
  *
- * The three are one screen because they are one story: a request means nothing
+ * They are one screen because they are one story: a request means nothing
  * without a profile to accept it with, and the list of people is what accepting
  * produces. So an account that does not exist yet is not an empty list — it is
- * the greeting, and the whole surface becomes the question of who you are.
+ * the greeting, and the whole surface becomes the question of who you are. Once
+ * it does exist, the code that reaches it sits directly under the face it
+ * belongs to, because handing it over is the first thing anyone does here.
  *
  * People are drawn as people: a face, a name, and nothing around them, on the
  * quiet grouped paper the rest of the product uses for a reading. Requests are
@@ -144,6 +156,15 @@ export function FriendsPage(props: FriendsPageProps) {
 
                     {account ? <ProfileHero account={account} /> : null}
 
+                    {account && props.invite ? (
+                        <FriendInvite
+                            code={account.token}
+                            draft={props.invite}
+                            onCodeChange={(value) => props.onInviteTokenChange?.(value)}
+                            onSend={() => props.onInviteSend?.()}
+                        />
+                    ) : null}
+
                     {requests.length > 0 ? (
                         <section
                             className="happy2-friends__section"
@@ -181,7 +202,7 @@ export function FriendsPage(props: FriendsPageProps) {
                                     className="happy2-friends__nobody"
                                     data-happy2-ui="friends-nobody"
                                 >
-                                    Nobody yet. When someone asks to connect, they arrive here.
+                                    Nobody yet. Send someone your code, or paste theirs above.
                                 </p>
                             ) : (
                                 <div className="happy2-friends__list" data-happy2-ui="friends-list">

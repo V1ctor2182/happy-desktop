@@ -23,9 +23,10 @@ export interface FriendProfileSetupProps {
  *
  * Connecting to someone means giving them a name and a face, so this is a
  * greeting rather than a form. The picture is the largest thing on the page
- * because it is the part that makes the exchange feel like people; the name is
- * the only thing actually required, and the last name is offered without being
- * asked for, because plenty of people are known here by one name.
+ * because it is the part that makes the exchange feel like people, and it is
+ * the part that may be left out. Both names are asked for: the network this
+ * profile is created in stores a full name and refuses half of one, so a form
+ * that accepted a single name was promising something the account could not be.
  *
  * It renders exactly the draft it is handed and reports every keystroke and the
  * decision upward. It holds no profile of its own, so the page it becomes is
@@ -34,7 +35,8 @@ export interface FriendProfileSetupProps {
 export function FriendProfileSetup(props: FriendProfileSetupProps) {
     const draft = props.draft;
     const photo = draft.photo;
-    const ready = draft.firstName.trim() !== "" && !draft.submitting;
+    const ready =
+        draft.firstName.trim() !== "" && draft.lastName.trim() !== "" && !draft.submitting;
     return (
         <div
             className={["happy2-friend-setup", props.className].filter(Boolean).join(" ")}
@@ -133,10 +135,10 @@ export function FriendProfileSetup(props: FriendProfileSetupProps) {
                             autoComplete="family-name"
                             disabled={draft.submitting}
                             fullWidth
-                            hint="Optional"
                             label="Last name"
                             onValueChange={props.onLastNameChange}
                             placeholder="Lovelace"
+                            required
                             size="large"
                             value={draft.lastName}
                         />

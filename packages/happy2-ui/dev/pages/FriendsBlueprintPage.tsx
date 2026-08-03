@@ -6,6 +6,7 @@ import {
     type RigFriendRequestId,
     type RigFriendsAccount,
     type RigFriendsAnswerState,
+    type RigFriendsInviteDraft,
     type RigFriendsProfileDraft,
 } from "happy2-state";
 import { FriendsPage } from "../../src/pages/friends/FriendsPage";
@@ -28,6 +29,24 @@ const PORTRAIT =
 const account: RigFriendsAccount = {
     id: "self",
     profile: { firstName: "Steve", lastName: "Korshakov", photoUrl: PORTRAIT },
+    token: "mur_7Qc4Kk2ZpN8vWx1LdT6hRjF3sYbA0eGuMn5oPqI9CvXzHlSrEt",
+};
+
+const emptyInvite: RigFriendsInviteDraft = { token: "", submitting: false, sent: false };
+
+const sendingInvite: RigFriendsInviteDraft = {
+    token: "mur_3Bd9Nn5XkQ2rTy8MfW1jHcZ4pLvA6eGsUo0iRqK7CtYbEmSxDl",
+    submitting: true,
+    sent: false,
+};
+
+const sentInvite: RigFriendsInviteDraft = { token: "", submitting: false, sent: true };
+
+const refusedInvite: RigFriendsInviteDraft = {
+    token: "not-a-code",
+    submitting: false,
+    sent: false,
+    error: new UserError("That code is not one this network knows."),
 };
 
 const requests: readonly RigFriendRequest[] = [
@@ -172,7 +191,7 @@ export function FriendsBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="A profile, two people asking, and three already connected. Requests are the only thing given a card, because they are the only thing waiting on a decision."
+                detail="A profile, the code that reaches it, two people asking, and three already connected. Requests are the only thing given a card of their own, because they are the only thing waiting on a decision."
                 label="Requests and people"
                 number="05"
             >
@@ -180,6 +199,9 @@ export function FriendsBlueprintPage() {
                     account={account}
                     friends={friends}
                     friendTime={friendTime}
+                    invite={emptyInvite}
+                    onInviteSend={noop}
+                    onInviteTokenChange={noop}
                     onRequestAnswer={noop}
                     profileDraft={emptyDraft}
                     requests={requests}
@@ -205,13 +227,67 @@ export function FriendsBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="A profile with nobody in it yet. The screen still names what it is and says where people will arrive from."
+                detail="A profile with nobody in it yet: the exchange is the whole screen, which is right, because handing the code over is the only thing left to do."
                 label="Nobody yet"
                 number="07"
             >
                 <FriendsPage
                     account={account}
                     friends={[]}
+                    invite={emptyInvite}
+                    onInviteSend={noop}
+                    onInviteTokenChange={noop}
+                    profileDraft={emptyDraft}
+                    requests={[]}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A pasted code on its way to the daemon: the field and the button are held, and the button says what is happening rather than going quiet."
+                label="Sending a request"
+                number="11"
+            >
+                <FriendsPage
+                    account={account}
+                    friends={friends}
+                    friendTime={friendTime}
+                    invite={sendingInvite}
+                    onInviteSend={noop}
+                    onInviteTokenChange={noop}
+                    profileDraft={emptyDraft}
+                    requests={[]}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The request left. An outgoing request is in none of the lists here, so this line is the only word that it happened, and it holds until the next code is typed."
+                label="Request sent"
+                number="12"
+            >
+                <FriendsPage
+                    account={account}
+                    friends={friends}
+                    friendTime={friendTime}
+                    invite={sentInvite}
+                    onInviteSend={noop}
+                    onInviteTokenChange={noop}
+                    profileDraft={emptyDraft}
+                    requests={[]}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The code was refused: what the daemon said sits under the field, and the code stays in it, because a refused code is usually one to look at again rather than retype."
+                label="Code refused"
+                number="13"
+            >
+                <FriendsPage
+                    account={account}
+                    friends={friends}
+                    friendTime={friendTime}
+                    invite={refusedInvite}
+                    onInviteSend={noop}
+                    onInviteTokenChange={noop}
                     profileDraft={emptyDraft}
                     requests={[]}
                 />

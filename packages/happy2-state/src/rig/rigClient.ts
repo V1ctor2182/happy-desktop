@@ -399,9 +399,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                         source
                             .signup({
                                 firstName: event.firstName,
-                                ...(event.lastName === undefined
-                                    ? {}
-                                    : { lastName: event.lastName }),
+                                lastName: event.lastName,
                                 ...(event.photo === undefined ? {} : { photo: event.photo }),
                             })
                             .then(
@@ -409,6 +407,14 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                                 (error: unknown) =>
                                     store.friendsInput({ type: "profileCreateFailed", error }),
                             );
+                        return;
+                    }
+                    if (event.type === "requestSendSubmitted") {
+                        source.requestSend(event.token).then(
+                            () => store.friendsInput({ type: "requestSendSucceeded" }),
+                            (error: unknown) =>
+                                store.friendsInput({ type: "requestSendFailed", error }),
+                        );
                         return;
                     }
                     source.requestAnswer(event.requestId, event.answer).then(

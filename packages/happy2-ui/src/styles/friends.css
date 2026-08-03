@@ -457,3 +457,108 @@ button.happy2-friends__row:focus-visible {
     color: var(--text-destructive);
     text-align: center;
 }
+
+/*
+ * Reaching someone: the code you hand out, and the one you were handed. It is
+ * one card because it is one act performed from both ends, and it sits directly
+ * under the face it belongs to.
+ *
+ * It is an object with a fill, so it starts at the column's own edge and takes
+ * the grouped paper a request card takes; its 12px inset puts the labels inside
+ * it on the same lane as every name on the page.
+ */
+.happy2-friend-invite {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px;
+    background: var(--groupped-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-shell);
+}
+
+.happy2-friend-invite__half {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-friend-invite__label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    color: var(--text);
+}
+
+/* The code's well takes TextField's medium control height, inset fill, and
+   hairline so it and the field below it read as one pair of controls, and it
+   carries the copy where a caret would be. A label sits above it and a hint
+   below, so it never occupies one of the card's rounded corners and its radius
+   is its own rather than a nested curve. */
+.happy2-friend-invite__well {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 36px;
+    width: 100%;
+    padding: 0 6px 0 10px;
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-sm);
+}
+
+/* There is one code and one action on it, so the copy stays out: in a transcript
+   it hides until its row is hovered because every line carries one, but a
+   control nobody can see is a control nobody uses. */
+.happy2-friend-invite__well .happy2-copy-button {
+    opacity: 1;
+}
+
+/* The code is long and nobody reads it: it is evidence that one exists, and it
+   is copied rather than transcribed. */
+.happy2-friend-invite__code {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-friend-invite__form {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+}
+
+.happy2-friend-invite__field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy2-friend-invite__hint {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy2-friend-invite__error {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-destructive);
+}
+
+.happy2-friend-invite__sent {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--success);
+}

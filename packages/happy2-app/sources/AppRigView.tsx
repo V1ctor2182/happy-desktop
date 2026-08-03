@@ -1960,8 +1960,11 @@ function RigFriendsSurface(props: {
             {...(snapshot.error ? { error: snapshot.error } : {})}
             friends={snapshot.friends}
             friendTime={(friend) => friendsConnectedTime(friend.addedAt)}
+            invite={snapshot.invite}
             loading={snapshot.loading}
             onFirstNameChange={(value) => store?.firstNameUpdate(value)}
+            onInviteSend={() => store?.requestSend()}
+            onInviteTokenChange={(value) => store?.requestTokenUpdate(value)}
             onLastNameChange={(value) => store?.lastNameUpdate(value)}
             onPhotoRemove={() => store?.photoRemove()}
             onPhotoSelect={(file) => {

@@ -629,6 +629,7 @@ export {
     type RigInboxPageProps,
 } from "./pages/inbox/RigInboxPage";
 export { FriendsPage, type FriendsPageProps } from "./pages/friends/FriendsPage";
+export { FriendInvite, type FriendInviteProps } from "./pages/friends/FriendInvite";
 export {
     FriendProfileSetup,
     type FriendProfileSetupProps,

@@ -388,6 +388,7 @@ export {
     type RigFriendsAccount,
     type RigFriendsAnswerState,
     type RigFriendsInput,
+    type RigFriendsInviteDraft,
     type RigFriendsOutput,
     type RigFriendsPhotoDraft,
     type RigFriendsProfileDraft,

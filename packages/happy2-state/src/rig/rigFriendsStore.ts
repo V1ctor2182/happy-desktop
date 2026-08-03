@@ -30,6 +30,12 @@ export interface RigFriendProfile {
 export interface RigFriendsAccount {
     readonly id: string;
     readonly profile: RigFriendProfile;
+    /**
+     * What this account hands to someone who wants to connect to it. The `id`
+     * names the account inside this machine; this is the only part of it that
+     * means anything to another one, so it is the thing a person shares.
+     */
+    readonly token: string;
 }
 
 /** Someone asking to connect, and when they asked. */
@@ -73,6 +79,26 @@ export interface RigFriendsProfileDraft {
     readonly error?: UserError;
 }
 
+/**
+ * The token someone is pasting in to reach another machine, and how the last
+ * attempt to use it went. Like the profile draft, it lives here so a half-pasted
+ * code survives leaving the surface and coming back.
+ */
+export interface RigFriendsInviteDraft {
+    readonly token: string;
+    /** True while the daemon is carrying the request to the other machine. */
+    readonly submitting: boolean;
+    /** Why the last attempt failed. */
+    readonly error?: UserError;
+    /**
+     * True once a request left successfully. An outgoing request appears nowhere
+     * else — the lists on this surface are people asking for *us* — so this is
+     * the only evidence the send happened, and it is cleared the moment another
+     * code is typed.
+     */
+    readonly sent: boolean;
+}
+
 /** How one answer to a request is going, for the card that shows it. */
 export type RigFriendsAnswerState =
     | { readonly type: "pending"; readonly answer: RigFriendAnswer }
@@ -99,6 +125,8 @@ export interface RigFriendsSourceProfile {
 export interface RigFriendsSourceAccount {
     readonly id: string;
     readonly profile: RigFriendsSourceProfile;
+    /** The code another machine needs in order to ask for this one. */
+    readonly token: string;
 }
 
 export interface RigFriendsSourceRequest {
@@ -114,20 +142,24 @@ export interface RigFriendsSourceFriend {
     readonly addedAt: number;
 }
 
-/** What signing up sends: the name someone gave, and the picture if they gave one. */
+/**
+ * What signing up sends: the full name someone gave, and the picture if they
+ * gave one. Both names are required because the account being created carries a
+ * full name; a signup missing half of it is refused rather than stored.
+ */
 export interface RigFriendsSignupInput {
     readonly firstName: string;
-    readonly lastName?: string;
+    readonly lastName: string;
     readonly photo?: { readonly data: string; readonly mediaType: string };
 }
 
 /**
- * The friends feed for one Rig, and the two things that can be done to it.
+ * The friends feed for one Rig, and the things that can be done to it.
  *
  * The daemon reports requests on request rather than pushing them, so the source
  * repeats the read for as long as something is subscribed and stops when nothing
- * is: a surface nobody is looking at asks the machine nothing. Both actions
- * resolve when the daemon has carried them out, and the source is expected to
+ * is: a surface nobody is looking at asks the machine nothing. Every action
+ * resolves when the daemon has carried it out, and the source is expected to
  * read again immediately afterwards so the surface never waits a whole interval
  * to catch up with a decision that was just made.
  */
@@ -140,6 +172,8 @@ export interface RigFriendsSource {
     signup(input: RigFriendsSignupInput): Promise<void>;
     /** Answers one waiting request. */
     requestAnswer(requestId: string, answer: RigFriendAnswer): Promise<void>;
+    /** Asks the machine behind one shared code to connect. */
+    requestSend(token: string): Promise<void>;
 }
 
 export interface RigFriendsSnapshot {
@@ -155,6 +189,8 @@ export interface RigFriendsSnapshot {
     readonly error?: UserError;
     /** The profile being filled in, whether or not one exists yet. */
     readonly draft: RigFriendsProfileDraft;
+    /** The code being pasted in to reach someone, and how the last send went. */
+    readonly invite: RigFriendsInviteDraft;
     /** In-flight and failed answers, by request. */
     readonly answers: ReadonlyMap<RigFriendRequestId, RigFriendsAnswerState>;
 }
@@ -164,14 +200,15 @@ export type RigFriendsOutput =
     | {
           readonly type: "profileCreateSubmitted";
           readonly firstName: string;
-          readonly lastName?: string;
+          readonly lastName: string;
           readonly photo?: { readonly data: string; readonly mediaType: string };
       }
     | {
           readonly type: "requestAnswerSubmitted";
           readonly requestId: RigFriendRequestId;
           readonly answer: RigFriendAnswer;
-      };
+      }
+    | { readonly type: "requestSendSubmitted"; readonly token: string };
 
 /** Authoritative results of the work the owner carried out. */
 export type RigFriendsInput =
@@ -182,14 +219,16 @@ export type RigFriendsInput =
           readonly type: "requestAnswerFailed";
           readonly requestId: RigFriendRequestId;
           readonly error: unknown;
-      };
+      }
+    | { readonly type: "requestSendSucceeded" }
+    | { readonly type: "requestSendFailed"; readonly error: unknown };
 
 export interface RigFriendsStore {
     get(): RigFriendsSnapshot;
     subscribe(listener: () => void): () => void;
     /** Types the first name of the profile being created. */
     firstNameUpdate(value: string): void;
-    /** Types the last name, which may stay empty. */
+    /** Types the last name, which the account being created also requires. */
     lastNameUpdate(value: string): void;
     /** Chooses the picture for the profile being created. */
     photoAttach(photo: RigFriendsPhotoDraft): void;
@@ -208,6 +247,14 @@ export interface RigFriendsStore {
      * reading drops it: an answer is the daemon's to confirm.
      */
     requestAnswer(requestId: RigFriendRequestId, answer: RigFriendAnswer): void;
+    /** Types or pastes the code of the machine to be asked. */
+    requestTokenUpdate(value: string): void;
+    /**
+     * Asks the machine behind the pasted code to connect. A blank code is not a
+     * request, so nothing leaves; nothing here claims the request arrived, only
+     * that the daemon accepted it.
+     */
+    requestSend(): void;
     /** Private authoritative input: how the owner's attempt actually ended. */
     friendsInput(event: RigFriendsInput): void;
     [Symbol.dispose](): void;
@@ -221,6 +268,8 @@ export interface RigFriendsStoreDeps {
 const EMPTY_ANSWERS: ReadonlyMap<RigFriendRequestId, RigFriendsAnswerState> = new Map();
 
 const EMPTY_DRAFT: RigFriendsProfileDraft = { firstName: "", lastName: "", submitting: false };
+
+const EMPTY_INVITE: RigFriendsInviteDraft = { token: "", submitting: false, sent: false };
 
 /**
  * Who this account is, who wants to know it, and who it already knows — as one
@@ -241,6 +290,7 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
         friends: [],
         loading: true,
         draft: EMPTY_DRAFT,
+        invite: EMPTY_INVITE,
         answers: EMPTY_ANSWERS,
     }));
 
@@ -250,6 +300,10 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
 
     const draftUpdate = (change: Partial<RigFriendsProfileDraft>): void => {
         store.setState({ draft: { ...store.getState().draft, ...change } }, false);
+    };
+
+    const inviteUpdate = (change: Partial<RigFriendsInviteDraft>): void => {
+        store.setState({ invite: { ...store.getState().invite, ...change } }, false);
     };
 
     const start = (): void => {
@@ -287,6 +341,7 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
                             ? {}
                             : { error: rigUserError(reading.error) }),
                         draft: current.draft,
+                        invite: current.invite,
                         answers,
                     },
                     true,
@@ -336,13 +391,16 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
             const draft = store.getState().draft;
             if (draft.submitting) return;
             const firstName = draft.firstName.trim();
-            if (firstName === "") return;
             const lastName = draft.lastName.trim();
+            // A half-filled name is not submitted at all. The account carries a
+            // full name, so sending one and letting the daemon reject it spends
+            // a round trip to reach the state this form is already in.
+            if (firstName === "" || lastName === "") return;
             draftUpdate({ submitting: true, error: undefined });
             output({
                 type: "profileCreateSubmitted",
                 firstName,
-                ...(lastName === "" ? {} : { lastName }),
+                lastName,
                 ...(draft.photo
                     ? { photo: { data: draft.photo.data, mediaType: draft.photo.mediaType } }
                     : {}),
@@ -357,6 +415,19 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
             store.setState({ answers }, false);
             output({ type: "requestAnswerSubmitted", requestId, answer });
         },
+        requestTokenUpdate(value) {
+            // Typing again is the start of a new attempt, so neither the last
+            // failure nor the last confirmation is left standing over it.
+            inviteUpdate({ token: value, error: undefined, sent: false });
+        },
+        requestSend() {
+            const invite = store.getState().invite;
+            if (invite.submitting) return;
+            const token = invite.token.trim();
+            if (token === "") return;
+            inviteUpdate({ submitting: true, error: undefined, sent: false });
+            output({ type: "requestSendSubmitted", token });
+        },
         friendsInput(event) {
             if (event.type === "profileCreateSucceeded") {
                 // The daemon still owes us the reading that carries the account;
@@ -367,6 +438,19 @@ export function rigFriendsStoreCreate(deps: RigFriendsStoreDeps): RigFriendsStor
             }
             if (event.type === "profileCreateFailed") {
                 draftUpdate({ submitting: false, error: rigUserError(event.error) });
+                return;
+            }
+            if (event.type === "requestSendSucceeded") {
+                // The code is spent: it named one machine and that machine has
+                // been asked. The confirmation stands in for the outgoing
+                // request, which appears in none of the lists on this surface.
+                store.setState({ invite: { token: "", submitting: false, sent: true } }, false);
+                return;
+            }
+            if (event.type === "requestSendFailed") {
+                // The code stays in the field: a refused one is usually a code
+                // to look at again rather than one to type out from scratch.
+                inviteUpdate({ submitting: false, error: rigUserError(event.error), sent: false });
                 return;
             }
             const answers = new Map(store.getState().answers);
@@ -398,6 +482,7 @@ const INERT_SNAPSHOT: RigFriendsSnapshot = {
     friends: [],
     loading: false,
     draft: EMPTY_DRAFT,
+    invite: EMPTY_INVITE,
     answers: EMPTY_ANSWERS,
 };
 
@@ -416,6 +501,8 @@ export const rigFriendsStoreNoop: RigFriendsStore = {
     photoRemove: () => undefined,
     profileCreate: () => undefined,
     requestAnswer: () => undefined,
+    requestTokenUpdate: () => undefined,
+    requestSend: () => undefined,
     friendsInput: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
@@ -431,7 +518,7 @@ function profileProject(profile: RigFriendsSourceProfile): RigFriendProfile {
 }
 
 function accountProject(account: RigFriendsSourceAccount): RigFriendsAccount {
-    return { id: account.id, profile: profileProject(account.profile) };
+    return { id: account.id, profile: profileProject(account.profile), token: account.token };
 }
 
 /** Newest first: a request that just arrived is the one being looked for. */

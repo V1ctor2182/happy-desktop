@@ -74,7 +74,7 @@ interface MurmurContact {
 interface MurmurCalls {
     getMurmurAccount(options?: MurmurCallOptions): Promise<MurmurAccountResponse>;
     signupMurmurAccount(
-        request: { firstName: string; lastName?: string; photo?: MurmurPhoto },
+        request: { firstName: string; lastName: string; photo?: MurmurPhoto },
         options?: MurmurCallOptions,
     ): Promise<MurmurAccountResponse>;
     startMurmurService(
@@ -89,6 +89,7 @@ interface MurmurCalls {
         answer: RigFriendAnswer,
         options?: MurmurCallOptions,
     ): Promise<unknown>;
+    sendMurmurFriendRequest(token: string, options?: MurmurCallOptions): Promise<unknown>;
     listMurmurContacts(
         options?: MurmurCallOptions,
     ): Promise<{ contacts: readonly MurmurContact[] }>;
@@ -100,6 +101,7 @@ const MURMUR_METHODS = [
     "startMurmurService",
     "listMurmurFriendRequests",
     "answerMurmurFriendRequest",
+    "sendMurmurFriendRequest",
     "listMurmurContacts",
 ] as const satisfies readonly (keyof MurmurCalls)[];
 
@@ -219,6 +221,14 @@ export function rigConnectFriendsSourceCreate(rig: RigConnection): RigFriendsSou
             await calls.answerMurmurFriendRequest(requestId, answer);
             refresh();
         },
+        async requestSend(token: string) {
+            await calls.sendMurmurFriendRequest(token);
+            // An outgoing request changes nothing in this machine's own lists,
+            // but the other machine may already have answered — a code exchanged
+            // in person usually is — so the reading is taken again rather than
+            // assuming there is nothing new to see.
+            refresh();
+        },
     };
 }
 
@@ -229,14 +239,12 @@ function documentHidden(): boolean {
 
 function signupRequest(input: RigFriendsSignupInput): {
     firstName: string;
-    lastName?: string;
+    lastName: string;
     photo?: MurmurPhoto;
 } {
     return {
         firstName: input.firstName,
-        // Someone who gave only one name keeps only one here as well rather
-        // than being handed a blank or fabricated surname.
-        ...(input.lastName === undefined ? {} : { lastName: input.lastName }),
+        lastName: input.lastName,
         ...(input.photo
             ? { photo: { data: input.photo.data, mediaType: input.photo.mediaType } }
             : {}),
@@ -274,7 +282,11 @@ async function readingRead(
         calls.listMurmurContacts({ signal }),
     ]);
     return {
-        account: { id: account.id, profile: profileRead(account.profile) },
+        account: {
+            id: account.id,
+            profile: profileRead(account.profile),
+            token: account.token,
+        },
         requests: requests.requests.map((request) => ({
             id: request.id,
             senderId: request.senderId,
