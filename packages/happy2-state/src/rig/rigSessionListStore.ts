@@ -8,7 +8,12 @@ import {
     rigSessionGroupIdOf,
     type RigProjectGroup,
 } from "./rigProjectGroupProject.js";
-import { rigProjectWriteRefusal, rigWorktreeWriteRefusal } from "./rigGroupAccess.js";
+import {
+    RIG_GROUP_UNLISTED_REFUSAL,
+    RIG_GROUP_UNREAD_REFUSAL,
+    rigProjectWriteRefusal,
+    rigWorktreeWriteRefusal,
+} from "./rigGroupAccess.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import type { RigEventObserver, RigGlobalEvent, RigTransport } from "./rigTransport.js";
@@ -295,6 +300,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // rebuilt without refetching and so unchanged rows keep their references.
     let sessions: readonly RigSessionSummary[] = [];
     let catalog: RigProjectCatalog = EMPTY_CATALOG;
+    // Whether the catalog has ever been read. An empty catalog is not the same
+    // claim as an unread one, and neither of them is permission: before the
+    // first read nothing is known, and after it an id that is not there has
+    // been withdrawn. Both refuse, and they say different things.
+    let catalogListed = false;
     // Callers waiting for a freshly reserved worktree to finish initializing.
     // Settled from every reconcile, so the wait is driven by the host's own
     // catalog rather than by polling it. Each waiter keeps both halves: a
@@ -438,6 +448,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // this one never happened just because the host had nothing new.
                 appliedSequence = token;
                 catalog = snapshot.catalog;
+                catalogListed = true;
                 sessions = snapshot.sessions;
                 const projected = rigProjectGroupsProject(catalog, sessions);
                 // Judged against the previous authoritative read, so a row this
@@ -673,7 +684,8 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
             if (worktree !== undefined) return rigWorktreeWriteRefusal(worktree);
             const project = catalog.projects.find((entry) => entry.id === groupId);
-            return project === undefined ? undefined : rigProjectWriteRefusal(project);
+            if (project !== undefined) return rigProjectWriteRefusal(project);
+            return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
         },
         sessionRead(sessionId) {
             const session = sessions.find((candidate) => candidate.id === sessionId);

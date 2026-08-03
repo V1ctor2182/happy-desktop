@@ -2263,7 +2263,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // Inside an open project the directory is already decided, so every "new
     // session" affordance here starts one in it rather than asking again.
     const groupConversationCreate = (group: OpenGroup) => {
-        void props.workspace.conversationCreate(group.create).catch(() => undefined);
+        void props.workspace.conversationCreate(group.id, group.create).catch(() => undefined);
     };
 
     const projects = workspace.list.projects;
@@ -2342,6 +2342,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         detachedConversationId !== undefined
             ? "Subagent chats are read-only"
             : openGroupWorkRefusal;
+    // Stopping is not writing. An unusable checkout still has whatever was
+    // already running in it, and leaving the reader unable to end that would be
+    // work they can see, cannot write to, and cannot stop either.
+    const conversationCanAbort = detachedConversationId === undefined && access.canAbort;
     // One strip, holding the group's sessions and its open files together in
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
@@ -2409,6 +2413,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 groupName={openGroup?.name}
                 onChatSelect={props.onChatSelect}
                 projects={rows}
+                canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
                 {...(conversationReadOnlyReason === undefined
                     ? {}
@@ -2960,6 +2965,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                                 panelFileKind(target),
                                             );
                                         }}
+                                        canAbort={conversationCanAbort}
                                         readOnly={conversationReadOnly}
                                         {...(conversationReadOnlyReason === undefined
                                             ? {}
@@ -3305,6 +3311,14 @@ function RigConversationBody(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /**
+     * Whether a run already going here may be stopped. Separate from `readOnly`
+     * on purpose: a checkout that has gone away closes the input, but the run
+     * inside it is a process the host owns and the reader must still be able to
+     * end it. Only a subagent's own runner takes Stop away, because that run
+     * belongs to the parent that started it.
+     */
+    canAbort: boolean;
     /** Why nothing here may write into the checkout, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
@@ -3322,6 +3336,7 @@ function RigConversationBody(props: {
                 now={props.now}
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
+                canAbort={props.canAbort}
                 readOnly={props.readOnly}
                 {...(props.readOnlyReason === undefined
                     ? {}
@@ -3395,6 +3410,14 @@ function RigConversationSurface(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /**
+     * Whether a run already going here may be stopped. Separate from `readOnly`
+     * on purpose: a checkout that has gone away closes the input, but the run
+     * inside it is a process the host owns and the reader must still be able to
+     * end it. Only a subagent's own runner takes Stop away, because that run
+     * belongs to the parent that started it.
+     */
+    canAbort: boolean;
     /** Why nothing here may write into the checkout, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
@@ -3518,7 +3541,7 @@ function RigConversationSurface(props: {
                     }
                 />
             }
-            onAbort={props.readOnly ? undefined : () => swallow(workspace.runAbort())}
+            onAbort={props.canAbort ? () => swallow(workspace.runAbort()) : undefined}
             onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
             onComposerAttachmentRemove={(attachmentId) =>
                 workspace.composerAttachmentRemove(attachmentId)
@@ -3662,6 +3685,14 @@ function RigPanelComposer(props: {
     readOnly: boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /**
+     * Whether a run already going here may be stopped. Separate from `readOnly`
+     * on purpose: a checkout that has gone away closes the input, but the run
+     * inside it is a process the host owns and the reader must still be able to
+     * end it. Only a subagent's own runner takes Stop away, because that run
+     * belongs to the parent that started it.
+     */
+    canAbort: boolean;
     /** Why nothing here may write into the checkout, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
@@ -3768,7 +3799,7 @@ function RigPanelComposer(props: {
                         }
                     />
                 }
-                onAbort={props.readOnly ? undefined : () => swallow(workspace.runAbort())}
+                onAbort={props.canAbort ? () => swallow(workspace.runAbort()) : undefined}
                 onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
                 onComposerAttachmentRemove={(attachmentId) =>
                     workspace.composerAttachmentRemove(attachmentId)

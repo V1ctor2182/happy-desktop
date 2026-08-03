@@ -26,6 +26,18 @@ export interface RigGroupAccess {
 export const RIG_GROUP_ACCESS_OPEN: RigGroupAccess = { canWrite: true, canAbort: true };
 
 /**
+ * Why an id the catalog does not describe is refused.
+ *
+ * Not finding a group is never permission to write into it. There are exactly
+ * two ways an id can be absent and they are not the same situation, so they are
+ * not the same sentence: the catalog has not been read yet and nothing is known,
+ * or it has been read and this id is not in it, which means the host has
+ * withdrawn it. Both refuse; only the second is a removal.
+ */
+export const RIG_GROUP_UNREAD_REFUSAL = "Happy is still reading this Rig's workspaces.";
+export const RIG_GROUP_UNLISTED_REFUSAL = "That project or workspace is no longer listed.";
+
+/**
  * Why work cannot be written into this worktree's checkout, read from the host's
  * raw record, or `undefined` when it can.
  *
@@ -40,7 +52,7 @@ export const RIG_GROUP_ACCESS_OPEN: RigGroupAccess = { canWrite: true, canAbort:
  */
 export function rigWorktreeWriteRefusal(worktree: RigWorktree): string | undefined {
     if (worktree.status === "initializing") return "This workspace is still being created.";
-    if (worktree.status === "failed" || worktree.status === "archive_failed") {
+    if (worktree.status === "failed") {
         return worktree.error === undefined
             ? "This workspace could not be created."
             : `This workspace could not be created. ${worktree.error}`;

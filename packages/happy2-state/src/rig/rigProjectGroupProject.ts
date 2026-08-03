@@ -294,16 +294,10 @@ const LIFECYCLE_FAILED: RigWorktreeLifecycle = { phase: "failed" };
  * only their combination says what the reader is looking at: a checkout that was
  * never made is not the same thing as one that was made and then removed, and
  * showing both as "not there" would hide which of the two happened.
- *
- * `archive_failed` reads as `failed` rather than as a phase of its own. It is a
- * value Happy's transport type still admits and the host no longer produces —
- * archival either finishes or leaves the worktree listed as it was — so giving
- * it its own presentation would be building a screen for something nothing
- * sends.
  */
 export function rigWorktreeLifecycleOf(worktree: RigWorktree): RigWorktreeLifecycle {
     if (worktree.status === "initializing") return LIFECYCLE_CREATING;
-    if (worktree.status === "failed" || worktree.status === "archive_failed") {
+    if (worktree.status === "failed") {
         return worktree.error === undefined
             ? LIFECYCLE_FAILED
             : { phase: "failed", reason: worktree.error };

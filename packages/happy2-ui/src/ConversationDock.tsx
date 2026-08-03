@@ -20,7 +20,14 @@ export type ConversationDockProps = {
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
     "data-testid"?: string;
-    /** Stops the current run; the send control becomes this while running. */
+    /**
+     * Stops the current run; the send control becomes this while running.
+     *
+     * Deliberately not folded into `disabled`: a closed composer is not the
+     * same claim as a run that cannot be stopped, and a caller that closes
+     * typing may still want the reader able to end what is going. Whether
+     * stopping is offered is said by giving this or withholding it.
+     */
     onAbort?: () => void;
     onCommandInvoke?: (commandId: string) => void;
     onComposerAttachmentRemove?: (attachmentId: string) => void;
@@ -123,7 +130,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     onContextRemove={props.disabled ? undefined : props.onComposerAttachmentRemove}
                     onFocusChange={props.onComposerFocusChange}
                     onSend={props.onComposerSend}
-                    onStop={props.disabled ? undefined : props.onAbort}
+                    onStop={props.onAbort}
                     onValueChange={props.onComposerValueChange}
                     pending={composer.submission.status === "pending"}
                     placeholder={props.composerPlaceholder ?? "Message the agent…"}

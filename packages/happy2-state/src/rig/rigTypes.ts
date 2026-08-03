@@ -467,13 +467,7 @@ export interface RigWorktree {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
-    readonly status:
-        | "initializing"
-        | "ready"
-        | "failed"
-        | "archiving"
-        | "archive_failed"
-        | "archived";
+    readonly status: "initializing" | "ready" | "failed" | "archiving" | "archived";
     /**
      * Whether the checkout this worktree names is still on disk. The host
      * watches for it, so a directory removed outside Happy turns a listed

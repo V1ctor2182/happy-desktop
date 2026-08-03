@@ -127,7 +127,7 @@ describe("rigWorkspaceStore", () => {
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
 
-        await workspace.conversationCreate({ cwd: "/work/happy2" });
+        await workspace.conversationCreate(DEFAULT_PROJECT.id, { cwd: "/work/happy2" });
         await flush();
 
         // Creation is a navigation request: nothing is open until the router

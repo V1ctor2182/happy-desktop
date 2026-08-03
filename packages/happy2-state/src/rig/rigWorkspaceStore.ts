@@ -25,7 +25,11 @@ import {
     type RigSessionDraftSnapshot,
     type RigSessionDraftStore,
 } from "./rigSessionDraftStore.js";
-import { rigGroupAccessOf, RIG_GROUP_ACCESS_OPEN, type RigGroupAccess } from "./rigGroupAccess.js";
+import {
+    rigGroupAccessOf,
+    RIG_GROUP_UNLISTED_REFUSAL,
+    type RigGroupAccess,
+} from "./rigGroupAccess.js";
 import { rigUserError } from "./rigSupport.js";
 import { orderKeyAfter } from "../utils/orderKeyAfter.js";
 import { orderKeySequence } from "../utils/orderKeySequence.js";
@@ -604,7 +608,12 @@ export interface RigWorkspaceStore {
         path?: string,
         query?: Readonly<Record<string, string>>,
     ): Promise<void>;
-    conversationCreate(input: RigSessionCreateInput): Promise<void>;
+    /**
+     * Starts a conversation in the named group. The group is named rather than
+     * inferred: `input.worktreeId` is absent for a project-root session, and an
+     * absent id identifies nothing, so it can neither be checked nor refused.
+     */
+    conversationCreate(groupId: RigGroupId, input: RigSessionCreateInput): Promise<void>;
     conversationFork(conversationId: RigSessionId): Promise<void>;
     /**
      * Closes a conversation: it leaves the list durably without ending the
@@ -1063,7 +1072,7 @@ export function rigWorkspaceStoreCreate(
         address: addressPublic(),
         list: list.get(),
         conversation,
-        groupAccess: RIG_GROUP_ACCESS_OPEN,
+        groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
         fileTabs,
         tabOrder,
         groupResume,
@@ -2294,7 +2303,7 @@ export function rigWorkspaceStoreCreate(
        from them its absence would look exactly like permission.
     */
     const groupWorkRefusalFind = (groupId: RigGroupId | undefined): string | undefined =>
-        groupId === undefined ? undefined : list.groupWriteRefusal(groupId);
+        groupId === undefined ? RIG_GROUP_UNLISTED_REFUSAL : list.groupWriteRefusal(groupId);
 
     /**
      * Why an operation naming one session rather than a place is refused: it is
@@ -2645,7 +2654,7 @@ export function rigWorkspaceStoreCreate(
             address: addressPublic(),
             list: list.get(),
             conversation,
-            groupAccess: RIG_GROUP_ACCESS_OPEN,
+            groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
             fileTabs,
             tabOrder,
             groupResume,
@@ -2889,8 +2898,8 @@ export function rigWorkspaceStoreCreate(
             }
         },
         // Anything the caller names wins over the connection's last selection.
-        conversationCreate: (input) => {
-            const refusal = groupWorkRefusalFind(input.worktreeId);
+        conversationCreate: (groupId, input) => {
+            const refusal = groupWorkRefusalFind(groupId);
             if (refusal) return Promise.reject(new Error(refusal));
             const models = client.models.get();
             const selection = models.type === "ready" ? models.lastUsedSelection : undefined;

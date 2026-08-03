@@ -75,13 +75,7 @@ export interface Project {
     readonly changes?: readonly GitChangedFile[];
 }
 
-export type ProjectWorkspaceStatus =
-    | "initializing"
-    | "ready"
-    | "failed"
-    | "archiving"
-    | "archive_failed"
-    | "archived";
+export type ProjectWorkspaceStatus = "initializing" | "ready" | "failed" | "archiving" | "archived";
 
 export interface ProjectWorkspace {
     readonly id: string;

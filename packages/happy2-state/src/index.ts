@@ -332,6 +332,8 @@ export {
     rigWorktreeWritable,
     rigWorktreeWriteRefusal,
     RIG_GROUP_ACCESS_OPEN,
+    RIG_GROUP_UNLISTED_REFUSAL,
+    RIG_GROUP_UNREAD_REFUSAL,
     type RigGroupAccess,
 } from "./rig/rigGroupAccess.js";
 export {
