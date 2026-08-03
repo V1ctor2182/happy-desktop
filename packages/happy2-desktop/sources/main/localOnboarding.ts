@@ -493,6 +493,11 @@ export class LocalOnboarding implements Disposable {
             const connection = this.freshnessConnection;
             const mine = () => working.current() && this.freshnessConnection === connection;
             const picked = await this.options.directoryPick();
+            // Whether Rig's own state changed is a fact about that Rig, and it
+            // outlives the document that asked. A reload cannot leave the same
+            // still-connected Rig described as unused when a project was just
+            // registered with it, so this is asked for the connection alone.
+            const reread = () => this.freshnessRecheck(connection);
             // A cancelled picker, a replaced window, a reloaded document, and a
             // replaced connection are all the same outcome here: nothing was
             // asked for, so nothing is said about it.
@@ -512,41 +517,45 @@ export class LocalOnboarding implements Disposable {
                 // than whatever the picker happened to hand over.
                 path = (await projects.add(picked)).path;
             } catch (error) {
-                if (!mine()) return;
                 const refusal = registrationRefusal(error);
                 if (refusal) {
-                    // Rig examined the folder and said no. Nothing was written,
-                    // so the step stays exactly as it is and the person can
-                    // choose again.
-                    this.message = refusal;
+                    // Rig decoded the request, examined it, and said no. That is a
+                    // decision, not a lost answer: nothing was registered, so the
+                    // step stays exactly as it is and nothing about this Rig needs
+                    // rereading. Only the reader who asked is told.
+                    if (mine()) this.message = refusal;
                     return;
                 }
-                // Rig may have committed the project before the answer was lost,
-                // so nothing may be concluded from this — least of all that it is
-                // safe to ask again. Freshness stops being an answer and that Rig
-                // is asked afresh; the step comes back only if its own catalog
-                // still says it is unused. If the connection is already gone, its
-                // failure is not the successor's to inherit either.
-                this.freshnessInvalidate();
-                this.message = `Happy could not confirm whether that project was registered: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`;
-                this.messageAwaitsFreshness = true;
+                // The answer was lost rather than given, so Rig may have committed
+                // the project before it went. Nothing may be concluded — least of
+                // all that it is safe to ask again. Freshness stops being an answer
+                // and that Rig is asked afresh, which is about the Rig rather than
+                // the document, so a reload does not leave a registered project
+                // described as an unused Rig. The step comes back only if its own
+                // catalog still says it is unused.
+                const rereading = reread();
+                if (!mine()) return;
+                this.message = rereading
+                    ? `Happy could not confirm whether that project was registered: ${displayError(error)} Nothing has been repeated; Happy is asking Rig what actually happened.`
+                    : `Happy could not confirm whether that project was registered: ${displayError(error)} Nothing has been repeated.`;
+                this.messageAwaitsFreshness = rereading;
                 return;
             }
-            if (!mine()) return;
-            try {
-                await this.recordWrite({ ...this.record, projectPath: path }, mine);
-            } catch {
-                // The project is registered with Rig, and Rig is what setup reads
-                // back. The remembered path is for display alone, so failing to
-                // write it must never be reported as a project that was not
-                // registered.
-                this.publish();
+            if (mine()) {
+                try {
+                    await this.recordWrite({ ...this.record, projectPath: path }, mine);
+                } catch {
+                    // The project is registered with Rig, and Rig is what setup
+                    // reads back. The remembered path is for display alone, so
+                    // failing to write it must never be reported as a project that
+                    // was not registered.
+                    this.publish();
+                }
             }
-            if (!mine()) return;
             // Whether setup is finished is Rig's answer, not an assumption drawn
-            // from a call that returned: the catalog that decided this step is
-            // read again, and it now holds the project that was just added.
-            this.freshnessInvalidate();
+            // from a call that returned: the catalog that decided this step is read
+            // again, and it now holds the project that was just registered.
+            reread();
         });
     }
 
@@ -741,6 +750,34 @@ export class LocalOnboarding implements Disposable {
         this.freshness = "checking";
         this.freshnessConnection = undefined;
         this.freshnessSynchronize(this.options.runtime.get());
+    }
+
+    /**
+     * Asks one particular Rig about itself again, and says whether it was asked.
+     *
+     * This is the connection half of ownership, deliberately separate from the
+     * document half. Whether a Rig still holds no projects is a fact about that
+     * Rig: once something has been registered with it, or may have been, the
+     * answer Happy holds is stale no matter which window is on screen — so a
+     * reload during the write must not leave a used Rig described as unused, with
+     * its first-project step still offered. The reread is bound to the runtime's
+     * own connection identity, so an answer for a Rig that has since been
+     * replaced is discarded rather than landing on its successor, and a
+     * connection that is already gone is left entirely alone: its successor was
+     * asked its own question and this is not about it.
+     */
+    private freshnessRecheck(connection: number | undefined): boolean {
+        const runtime = this.options.runtime.get();
+        if (
+            this.closed ||
+            connection === undefined ||
+            runtime.phase !== "ready" ||
+            runtime.mode !== "local" ||
+            runtime.connectionId !== connection
+        )
+            return false;
+        this.freshnessInvalidate();
+        return true;
     }
 
     /**
@@ -1001,15 +1038,22 @@ function installFailureMessage(message: string | undefined): string {
 }
 
 /**
- * What to tell the person when Rig examined the folder and refused it, or
- * nothing when the failure was not Rig's verdict on the folder.
+ * What to tell the person when Rig refused the registration, or nothing when the
+ * answer never arrived at all.
  *
- * A verdict is a decision: Rig looked, said no, and wrote nothing, so the step
- * simply stays and another folder can be chosen. Anything else — a transport
- * failure, an unreadable response — leaves the outcome unknown and is handled as
- * an ambiguous write instead. Rig's own message is deliberately not shown: these
- * are the few things that can be wrong with a chosen folder, and each one is
- * said here in terms of the choice the person just made.
+ * Every decoded `ProjectRegistrationError` is a decision Rig reached and
+ * reported: it read the request, refused it, and registered nothing. So all of
+ * them are definitive, none of them leaves the outcome in doubt, and none of them
+ * is a reason to go back and ask Rig what happened — there is nothing to
+ * reconcile. Only a lost or unreadable answer is ambiguous, and that arrives as a
+ * `ProjectRegistrationProtocolError` or a transport failure, which this reports
+ * nothing about.
+ *
+ * Most codes describe the chosen folder, and each is said in terms of the choice
+ * the person just made rather than by repeating Rig's own wording. The two that
+ * describe Happy's request instead are still definitive, and are said as what
+ * they are: nothing was registered, and choosing the same folder again is a
+ * reasonable thing to try.
  */
 function registrationRefusal(error: unknown): string | undefined {
     if (!(error instanceof ProjectRegistrationError)) return undefined;
@@ -1026,11 +1070,10 @@ function registrationRefusal(error: unknown): string | undefined {
             return "Rig cannot read that folder. Choose one you have access to.";
         case "managed_workspace_unavailable":
             return "Rig cannot prepare workspaces for that repository yet. Choose another project to start with.";
-        default:
-            // `invalid_request` and `project_id_conflict` describe the request
-            // Happy sent rather than the folder, so they are not the person's to
-            // act on and are reported as the failure they are.
-            return undefined;
+        case "invalid_request":
+            return "Rig did not accept how Happy asked for that project, so nothing was registered. Try choosing the folder again.";
+        case "project_id_conflict":
+            return "Rig is already using the identity Happy chose for that project, so nothing was registered. Try choosing the folder again.";
     }
 }
 
