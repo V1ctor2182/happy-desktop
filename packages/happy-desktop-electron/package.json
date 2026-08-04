@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-electron",
-    "version": "0.0.48",
+    "version": "0.0.49",
     "private": true,
     "description": "Happy Place macOS desktop app",
     "author": "Slopus",
@@ -70,7 +70,7 @@
     },
     "packageManager": "pnpm@10.28.1",
     "build": {
-        "appId": "com.slopus.happy2",
+        "appId": "com.slopus.happy",
         "productName": "Happy",
         "asar": true,
         "asarUnpack": [
@@ -117,7 +117,7 @@
         "dmg": {
             "sign": false
         },
-        "artifactName": "Happy-2-${version}-${arch}.${ext}",
+        "artifactName": "Happy-${version}-${arch}.${ext}",
         "publish": {
             "provider": "github",
             "owner": "slopus",

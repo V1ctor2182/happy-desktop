@@ -115,7 +115,7 @@ function standardBuilderConfiguration(base, output, app) {
 function localBuilderConfiguration(base, output, app) {
     return {
         ...sharedBuilderConfiguration(base, output, app),
-        appId: "com.slopus.happy2.nightly",
+        appId: "com.slopus.happy.nightly",
         productName: "Happy Nightly",
         files: ["dist/main.js", "dist/preload.cjs", "package.json"],
         artifactName: "Happy-Nightly-${version}-${arch}.${ext}",
