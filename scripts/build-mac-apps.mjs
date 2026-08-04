@@ -3,6 +3,8 @@ import { createRequire } from "node:module";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
+import { desktopFlavorNames, desktopFlavorRead } from "./desktopFlavors.mjs";
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const desktopDirectory = join(workspace, "packages", "happy-desktop-electron");
@@ -10,9 +12,9 @@ const require = createRequire(join(desktopDirectory, "package.json"));
 const { Arch, Platform, build } = require("electron-builder");
 const packageJson = JSON.parse(await readFile(join(desktopDirectory, "package.json"), "utf8"));
 const localWebOrigin = "https://local.app.happy.engineering";
-const flavor = argument("--flavor", ["all", "standard", "local-web"], "all");
+const flavor = argument("--flavor", ["all", ...desktopFlavorNames], "all");
 const architecture = argument("--arch", ["all", "arm64", "x64"], "all");
-const flavors = flavor === "all" ? ["standard", "local-web"] : [flavor];
+const flavors = flavor === "all" ? desktopFlavorNames : [flavor];
 const architectures = architecture === "all" ? ["arm64", "x64"] : [architecture];
 
 if (process.platform !== "darwin")
@@ -23,16 +25,17 @@ await keychainSigningIdentityValidate();
 await run("pnpm", ["desktop:assets"]);
 await run("pnpm", ["--dir", "packages/happy-desktop-electron", "typecheck"]);
 
-for (const selectedFlavor of flavors) {
+for (const selectedFlavorName of flavors) {
+    const selectedFlavor = desktopFlavorRead(selectedFlavorName);
     await rm(join(desktopDirectory, "dist"), { force: true, recursive: true });
     const environment =
-        selectedFlavor === "local-web"
+        selectedFlavorName === "local-web"
             ? {
                   HAPPY2_DESKTOP_FLAVOR: "local-web",
                   HAPPY2_LOCAL_WEB_ORIGIN: localWebOrigin,
               }
             : {};
-    if (selectedFlavor === "standard")
+    if (selectedFlavorName === "standard")
         await run("pnpm", ["--dir", "packages/happy-desktop-electron", "exec", "vite", "build"]);
     await run(
         "pnpm",
@@ -57,7 +60,7 @@ for (const selectedFlavor of flavors) {
         "vite.preload.config.ts",
     ]);
 
-    const staging = join("release", ".staging", selectedFlavor);
+    const staging = join("release", ".staging", selectedFlavorName);
     await rm(join(desktopDirectory, staging), { force: true, recursive: true });
     await run("pnpm", [
         "--config.inject-workspace-packages=true",
@@ -71,14 +74,17 @@ for (const selectedFlavor of flavors) {
         "--prod",
         join("packages", "happy-desktop-electron", staging),
     ]);
-    await stagedPackagePrepare(join(desktopDirectory, staging, "package.json"));
-    const output = join("release", selectedFlavor);
+    await stagedPackagePrepare(join(desktopDirectory, staging, "package.json"), selectedFlavor);
+    const output = join("release", selectedFlavor.output);
     await rm(join(desktopDirectory, output), { force: true, recursive: true });
     await mkdir(join(desktopDirectory, output), { recursive: true });
-    const config =
-        selectedFlavor === "local-web"
-            ? localBuilderConfiguration(packageJson.build, output, staging)
-            : standardBuilderConfiguration(packageJson.build, output, staging);
+    const config = builderConfiguration(
+        packageJson.build,
+        output,
+        staging,
+        selectedFlavorName,
+        selectedFlavor,
+    );
     try {
         await build({
             config,
@@ -92,14 +98,13 @@ for (const selectedFlavor of flavors) {
     } finally {
         await rm(join(desktopDirectory, staging), { force: true, recursive: true });
     }
-    await releaseVerify(selectedFlavor, output, config.productName);
+    await releaseVerify(selectedFlavor, output);
     if (architectures.length === 2)
         await run(
             process.execPath,
-            ["scripts/create-mac-update-manifest.mjs", join(desktopDirectory, output)],
+            ["scripts/create-mac-update-manifest.mjs", selectedFlavorName],
             {
                 RELEASE_VERSION: packageJson.version,
-                ...(selectedFlavor === "local-web" ? { RELEASE_CHANNEL: "nightly" } : {}),
             },
         );
 }
@@ -108,26 +113,14 @@ console.log(
     `Built, signed, notarized, stapled, and verified ${flavors.join(", ")} for ${architectures.join(", ")}.`,
 );
 
-function standardBuilderConfiguration(base, output, app) {
-    return sharedBuilderConfiguration(base, output, app);
-}
-
-function localBuilderConfiguration(base, output, app) {
-    return {
-        ...sharedBuilderConfiguration(base, output, app),
-        appId: "com.slopus.happy.nightly",
-        productName: "Happy Nightly",
-        files: ["dist/main.js", "dist/preload.cjs", "package.json"],
-        artifactName: "Happy-Nightly-${version}-${arch}.${ext}",
-        publish: { ...structuredClone(base.publish), channel: "nightly" },
-    };
-}
-
-function sharedBuilderConfiguration(base, output, app) {
+function builderConfiguration(base, output, app, flavorName, selectedFlavor) {
     const buildResources = join(desktopDirectory, "build");
     const entitlements = join(buildResources, "entitlements.mac.plist");
     return {
         ...structuredClone(base),
+        appId: selectedFlavor.appId,
+        productName: selectedFlavor.productName,
+        artifactName: `${selectedFlavor.artifactPrefix}-\${version}-\${arch}.\${ext}`,
         beforeBuild: () => false,
         electronVersion: packageJson.devDependencies.electron.replace(/^\D+/u, ""),
         directories: {
@@ -147,25 +140,58 @@ function sharedBuilderConfiguration(base, output, app) {
                 ],
             },
         ],
+        ...(flavorName === "local-web"
+            ? { files: ["dist/main.js", "dist/preload.cjs", "package.json"] }
+            : {}),
         mac: {
             ...base.mac,
             entitlements,
             entitlementsInherit: entitlements,
             icon: join(buildResources, "icon.icns"),
         },
+        publish: { ...structuredClone(base.publish), channel: selectedFlavor.channel },
     };
 }
 
-async function releaseVerify(selectedFlavor, output, productName) {
+/*
+ * Reads back what was actually packaged, because the updater is configured in one
+ * place and consumed in another and only the built app says which one won.
+ *
+ * It confirms the app asks for the manifest and updater cache this flavor
+ * declares. It does not inspect the published manifest, which is written later in
+ * the release job; that file no longer disagreeing is a property of both sides
+ * reading `desktopFlavors.mjs` rather than something checked here.
+ */
+async function releaseVerify(selectedFlavor, output) {
     const releaseDirectory = join(desktopDirectory, output);
     for (const selectedArchitecture of architectures) {
         const applicationDirectory = selectedArchitecture === "arm64" ? "mac-arm64" : "mac";
-        const application = join(releaseDirectory, applicationDirectory, `${productName}.app`);
-        const artifactPrefix = selectedFlavor === "local-web" ? "Happy-Nightly" : "Happy";
+        const application = join(
+            releaseDirectory,
+            applicationDirectory,
+            `${selectedFlavor.productName}.app`,
+        );
         const dmg = join(
             releaseDirectory,
-            `${artifactPrefix}-${packageJson.version}-${selectedArchitecture}.dmg`,
+            `${selectedFlavor.artifactPrefix}-${packageJson.version}-${selectedArchitecture}.dmg`,
         );
+        const updaterConfigurationPath = join(
+            application,
+            "Contents",
+            "Resources",
+            "app-update.yml",
+        );
+        const updaterConfiguration = parse(await readFile(updaterConfigurationPath, "utf8"));
+        const packagedManifest = `${String(updaterConfiguration.channel)}-mac.yml`;
+        const publishedManifest = `${selectedFlavor.channel}-mac.yml`;
+        if (packagedManifest !== publishedManifest)
+            throw new Error(
+                `${updaterConfigurationPath} requests ${packagedManifest}, but this flavor publishes ${publishedManifest}.`,
+            );
+        if (updaterConfiguration.updaterCacheDirName !== selectedFlavor.updaterCacheDirName)
+            throw new Error(
+                `${updaterConfigurationPath} uses updater cache ${String(updaterConfiguration.updaterCacheDirName)}, expected ${selectedFlavor.updaterCacheDirName}.`,
+            );
         await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", application]);
         await run("xcrun", ["stapler", "validate", application]);
         await run("spctl", ["--assess", "--type", "execute", "--verbose=4", application]);
@@ -173,10 +199,19 @@ async function releaseVerify(selectedFlavor, output, productName) {
     }
 }
 
-async function stagedPackagePrepare(path) {
+async function stagedPackagePrepare(path, selectedFlavor) {
     const metadata = JSON.parse(await readFile(path, "utf8"));
     delete metadata.build;
     delete metadata.devDependencies;
+    const updaterSuffix = "-updater";
+    if (!selectedFlavor.updaterCacheDirName.endsWith(updaterSuffix))
+        throw new Error(
+            `Updater cache ${selectedFlavor.updaterCacheDirName} must end in ${updaterSuffix}.`,
+        );
+    // electron-builder derives updaterCacheDirName by appending `-updater` to
+    // the staged package name. Each distribution therefore needs its own name
+    // here even though both are built from the same source package.
+    metadata.name = selectedFlavor.updaterCacheDirName.slice(0, -updaterSuffix.length);
     await writeFile(path, `${JSON.stringify(metadata, null, 4)}\n`);
 }
 

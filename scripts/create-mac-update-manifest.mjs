@@ -1,18 +1,32 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import { desktopFlavorNames, desktopFlavorRead } from "./desktopFlavors.mjs";
 
-const releaseDirectory = resolve(process.argv[2] ?? "packages/happy-desktop-electron/release");
+/*
+ * Takes the distribution to publish for, not a directory and a channel. Those
+ * two used to be given separately and could name different distributions, which
+ * is exactly how the nightly app ended up asking for a manifest nobody wrote.
+ */
+const flavorName = process.argv[2];
+if (!flavorName)
+    throw new Error(
+        `Name the distribution to write a manifest for: ${desktopFlavorNames.join(", ")}.`,
+    );
+const flavor = desktopFlavorRead(flavorName);
+const releaseDirectory = resolve("packages/happy-desktop-electron/release", flavor.output);
 const version = process.env.RELEASE_VERSION ?? process.env.GITHUB_REF_NAME?.replace(/^v/u, "");
 if (!version) throw new Error("Set RELEASE_VERSION or run from a v* GitHub tag.");
-const channel = process.env.RELEASE_CHANNEL ?? "latest";
-if (!/^[a-z][a-z0-9-]*$/u.test(channel))
-    throw new Error("RELEASE_CHANNEL must be a lower-case channel name.");
+const channel = flavor.channel;
 const names = (await readdir(releaseDirectory))
-    .filter((name) => name.endsWith(".zip") && /-(arm64|x64)\.zip$/u.test(name))
+    .filter(
+        (name) => name.startsWith(`${flavor.artifactPrefix}-`) && /-(arm64|x64)\.zip$/u.test(name),
+    )
     .sort();
 if (names.length !== 2)
-    throw new Error(`Expected one arm64 and one x64 update zip, found: ${names.join(", ")}`);
+    throw new Error(
+        `Expected one arm64 and one x64 ${flavor.productName} update zip in ${releaseDirectory}, found: ${names.join(", ")}`,
+    );
 const files = await Promise.all(
     names.map(async (name) => {
         const path = join(releaseDirectory, name);

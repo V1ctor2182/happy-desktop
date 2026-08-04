@@ -132,17 +132,14 @@ jobs:
                   path: packages/happy-desktop-electron/release
                   merge-multiple: true
 
-            - name: Create architecture-aware updater manifest
+            - name: Create architecture-aware updater manifests
               env:
                   RELEASE_VERSION: ${{ github.ref_name }}
               run: |
                   RELEASE_VERSION="${RELEASE_VERSION#v}" \
-                    node scripts/create-mac-update-manifest.mjs \
-                    packages/happy-desktop-electron/release/standard
+                    node scripts/create-mac-update-manifest.mjs standard
                   RELEASE_VERSION="${RELEASE_VERSION#v}" \
-                    RELEASE_CHANNEL="local" \
-                    node scripts/create-mac-update-manifest.mjs \
-                    packages/happy-desktop-electron/release/local-web
+                    node scripts/create-mac-update-manifest.mjs local-web
 
             - name: Publish release assets
               env:
@@ -154,22 +151,22 @@ jobs:
                       packages/happy-desktop-electron/release/standard/*.dmg \
                       packages/happy-desktop-electron/release/standard/*.zip \
                       packages/happy-desktop-electron/release/standard/*.blockmap \
-                      packages/happy-desktop-electron/release/standard/latest-mac.yml \
+                      packages/happy-desktop-electron/release/standard/*-mac.yml \
                       packages/happy-desktop-electron/release/local-web/*.dmg \
                       packages/happy-desktop-electron/release/local-web/*.zip \
                       packages/happy-desktop-electron/release/local-web/*.blockmap \
-                      packages/happy-desktop-electron/release/local-web/local-mac.yml \
+                      packages/happy-desktop-electron/release/local-web/*-mac.yml \
                       --clobber
                   else
                     gh release create "$RELEASE_TAG" \
                       packages/happy-desktop-electron/release/standard/*.dmg \
                       packages/happy-desktop-electron/release/standard/*.zip \
                       packages/happy-desktop-electron/release/standard/*.blockmap \
-                      packages/happy-desktop-electron/release/standard/latest-mac.yml \
+                      packages/happy-desktop-electron/release/standard/*-mac.yml \
                       packages/happy-desktop-electron/release/local-web/*.dmg \
                       packages/happy-desktop-electron/release/local-web/*.zip \
                       packages/happy-desktop-electron/release/local-web/*.blockmap \
-                      packages/happy-desktop-electron/release/local-web/local-mac.yml \
+                      packages/happy-desktop-electron/release/local-web/*-mac.yml \
                       --generate-notes \
                       --title "Happy $RELEASE_TAG"
                   fi
