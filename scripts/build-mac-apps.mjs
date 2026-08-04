@@ -161,7 +161,7 @@ async function releaseVerify(selectedFlavor, output, productName) {
     for (const selectedArchitecture of architectures) {
         const applicationDirectory = selectedArchitecture === "arm64" ? "mac-arm64" : "mac";
         const application = join(releaseDirectory, applicationDirectory, `${productName}.app`);
-        const artifactPrefix = selectedFlavor === "local-web" ? "Happy-Nightly" : "Happy-2";
+        const artifactPrefix = selectedFlavor === "local-web" ? "Happy-Nightly" : "Happy";
         const dmg = join(
             releaseDirectory,
             `${artifactPrefix}-${packageJson.version}-${selectedArchitecture}.dmg`,
