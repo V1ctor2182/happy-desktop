@@ -218,7 +218,28 @@ export function rigDirectoryStoreCreate(
                 changed: () => {
                     const current = rigs.get(id);
                     const session = current?.connection?.get();
-                    if (!current || !session) return;
+                    if (!current) return;
+                    const failure = current.connection?.failure();
+                    if (failure) {
+                        /*
+                         * A legacy endpoint can supply enough state to construct a
+                         * partial session after rig-connect has refused the daemon.
+                         * The refusal still wins: that session cannot produce the
+                         * live workspace catalog, and accepting it as success is
+                         * what leaves the list loading forever.
+                         */
+                        current.entry = {
+                            ...current.entry,
+                            status: "error",
+                            message: failure,
+                            // The projects are not merely late; there is nothing
+                            // coming to fill them until the machine is readable.
+                            projectsStatus: "error",
+                        };
+                        publish();
+                        return;
+                    }
+                    if (!session) return;
                     current.workspaceUnsubscribe?.();
                     current.workspaceUnsubscribe = session.workspace.subscribe(() => {
                         const live = rigs.get(id);
@@ -232,6 +253,10 @@ export function rigDirectoryStoreCreate(
                         // This machine's Rig has no separate status source: its
                         // connection being up is what "connected" means for it.
                         ...(current.entry.kind === "local" ? { status: "connected" as const } : {}),
+                        // A session arriving is the answer to whatever this row
+                        // was last refused for, so the refusal goes with it. Left
+                        // behind, it would keep accusing a machine that is working.
+                        message: undefined,
                         session,
                     };
                     publish();
@@ -269,9 +294,19 @@ export function rigDirectoryStoreCreate(
             publish();
             return;
         }
+        // A runtime reading says where the daemon is, not whether this build can
+        // read it. Recomputing the status from the runtime alone would talk over
+        // a connection that has already refused itself and put the row back to
+        // "connecting", where it would wait out a daemon it can never read.
+        const failure = rig.connection?.failure();
         rig.entry = {
             ...rig.entry,
-            status: rig.entry.session ? "connected" : "connecting",
+            ...(failure
+                ? { status: "error" as const, message: failure }
+                : {
+                      status: rig.entry.session ? ("connected" as const) : ("connecting" as const),
+                      message: undefined,
+                  }),
             version: target.rigVersion,
         };
         if (rig.url !== target.rigHttpUrl) connectionOpen(LOCAL_RIG_ID, target.rigHttpUrl);
@@ -304,13 +339,19 @@ export function rigDirectoryStoreCreate(
                 },
             };
             rigs.set(source.id, rig);
+            // The main process reports whether it can reach that machine, not
+            // whether this build can read the daemon there. It republishes every
+            // machine whenever any one of them changes, so letting it speak over
+            // a refusal would erase the reason as soon as anything else happened.
+            const failure = rig.connection?.failure();
             rig.entry = {
                 ...rig.entry,
                 connected: source.connected,
                 destination: source.destination,
                 label: source.label,
-                message: source.message,
-                status: source.status,
+                ...(failure
+                    ? { message: failure, status: "error" as const }
+                    : { message: source.message, status: source.status }),
                 version: source.version,
             };
             if (source.status === "connected" && source.rigHttpUrl) {

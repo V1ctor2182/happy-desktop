@@ -28,8 +28,10 @@ import {
 } from "happy-desktop-state";
 import {
     connectRig,
+    describeServerCompatibility,
     type MutationRejectedDelta,
     type RigConnection as RigConnectConnection,
+    type ServerCompatibility,
 } from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy-desktop-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
@@ -140,6 +142,13 @@ export interface RigSessionDeps {
  */
 export interface RigConnectionHandle {
     get(): RigSession | undefined;
+    /**
+     * Why this Rig cannot be used, while that is the case. A connection that
+     * cannot produce a session looks from the outside exactly like one that has
+     * not produced a session yet; without somewhere to tell them apart, the
+     * surface waits on an unreadable daemon forever.
+     */
+    failure(): string | undefined;
     dispose(): void;
 }
 
@@ -173,6 +182,10 @@ export function rigConnectionOpen(input: {
     let disposed = false;
     let session: RigSession | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    /** rig-connect's refusal of this daemon's protocol, in its own words. */
+    let compatibilityFailure: string | undefined;
+    /** The last thing to go wrong reading the catalog, while it keeps going wrong. */
+    let catalogFailure: string | undefined;
     const transport = rigRendererTransportCreate(input.rigHttpUrl);
     const mutationListeners = new Set<(rejection: MutationRejectedDelta) => void>();
     const rigConnect: RigConnectConnection = connectRig({
@@ -180,6 +193,18 @@ export function rigConnectionOpen(input: {
         token: "happy2-local-capability",
         onMutationRejected: (rejection) => {
             for (const listener of mutationListeners) listener(rejection);
+        },
+        // A daemon this build cannot read is a fact about the machine, not a
+        // transient failure, so it is published as soon as the handshake says so
+        // rather than inferred later from work that keeps not finishing. It
+        // clears the same way: a replaced daemon announces itself here too.
+        onCompatibilityChange: (compatibility: ServerCompatibility) => {
+            if (disposed) return;
+            compatibilityFailure =
+                compatibility.status === "compatible" || compatibility.status === "checking"
+                    ? undefined
+                    : describeServerCompatibility(compatibility);
+            input.deps.changed();
         },
         onSessionFinished: () => completionChimePlay(),
     });
@@ -301,10 +326,20 @@ export function rigConnectionOpen(input: {
                     securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),
                 };
+                catalogFailure = undefined;
                 input.deps.changed();
             },
-            () => {
+            (error: unknown) => {
                 if (disposed) return;
+                // Kept rather than discarded: this read is the last step before a
+                // Rig has stores at all, so while it keeps failing the machine has
+                // nothing behind it. It still retries, because the usual reason is
+                // a daemon that is starting or being replaced.
+                catalogFailure =
+                    error instanceof Error && error.message
+                        ? error.message
+                        : "Happy could not read this Rig's model catalog.";
+                input.deps.changed();
                 retry = setTimeout(modelsLoad, 1_000);
             },
         );
@@ -312,6 +347,10 @@ export function rigConnectionOpen(input: {
     modelsLoad();
     return {
         get: () => session,
+        // The handshake outranks a partial session built from legacy endpoints,
+        // and outranks whatever failed afterwards: an unreadable daemon is the
+        // cause, and the catalog error is only its symptom.
+        failure: () => compatibilityFailure ?? (session ? undefined : catalogFailure),
         dispose() {
             if (disposed) return;
             disposed = true;
