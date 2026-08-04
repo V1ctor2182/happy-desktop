@@ -1,0 +1,411 @@
+/*
+ * AgentActivityRow: one glanceable row per tool call, reasoning block, or shell
+ * run, expanding into its detail. Layout is flexbox throughout; colors and type
+ * come only from theme roles.
+ */
+
+.happy2-agent-activity-row {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.happy2-agent-activity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    font-family: var(--happy2-font-ui);
+}
+
+/* The header and its copy action share one row; only the header stretches. */
+.happy2-agent-activity__line {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.happy2-agent-activity__line .happy2-agent-activity__header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy2-agent-activity-row:hover .happy2-copy-button,
+.happy2-agent-activity-row:focus-within .happy2-copy-button {
+    opacity: 1;
+}
+
+/* Opening the file the tool worked on: the same quiet, hover-revealed action
+   as the copy beside it, so the row keeps one trailing control group. */
+.happy2-agent-activity__open {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-agent-activity__open:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
+
+.happy2-agent-activity__open:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-agent-activity-row:hover .happy2-agent-activity__open,
+.happy2-agent-activity-row:focus-within .happy2-agent-activity__open {
+    opacity: 1;
+}
+
+.happy2-agent-activity__header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 2px 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy2-agent-activity__header:disabled {
+    cursor: default;
+}
+
+.happy2-agent-activity__dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+}
+
+.happy2-agent-activity__dot[data-tone="success"] {
+    background: var(--success);
+}
+
+.happy2-agent-activity__dot[data-tone="warning"] {
+    background: var(--box-warning-text);
+}
+
+.happy2-agent-activity__dot[data-tone="error"] {
+    background: var(--status-error);
+}
+
+.happy2-agent-activity__dot[data-tone="neutral"] {
+    background: var(--text-secondary);
+}
+
+/* Grey, and quieter than the verb it sits beside: the glyph is a scanning aid
+   down the left of a long transcript, not a second thing competing to be read
+   first. Fixed square so every row's verb starts on the same column. */
+.happy2-agent-activity__glyph {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity[data-failed] .happy2-agent-activity__glyph,
+.happy2-agent-activity[data-presentation="shell"][data-tone="error"] .happy2-agent-activity__glyph {
+    color: var(--status-error);
+}
+
+/* The name of what the agent did. It is a label, not a link, and it is the
+   first word of the row: weight carries it, so it reads at full contrast
+   instead of in the interactive colour it never responded to. */
+.happy2-agent-activity__verb {
+    flex: none;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* A command or path longer than the row scrolls sideways (see ScrollingText)
+   rather than losing its tail, so nothing an agent did is unreadable. */
+.happy2-agent-activity__text {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text);
+}
+
+.happy2-agent-activity__file-summary {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.happy2-agent-activity__file-summary .happy2-agent-activity__text {
+    flex: 0 1 auto;
+    font-weight: 600;
+}
+
+.happy2-agent-activity__stats {
+    flex: none;
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+}
+
+.happy2-agent-activity__added {
+    color: var(--git-added-text);
+}
+
+.happy2-agent-activity__deleted {
+    color: var(--git-removed-text);
+}
+
+.happy2-agent-activity__chevron {
+    flex: none;
+    display: inline-flex;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__time {
+    flex: none;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.happy2-agent-activity-row:hover .happy2-agent-activity__time,
+.happy2-agent-activity-row:focus-within .happy2-agent-activity__time {
+    opacity: 1;
+}
+
+.happy2-agent-activity__child,
+.happy2-agent-activity__review {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    padding-left: 16px;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__child-marker {
+    flex: none;
+    color: var(--divider);
+}
+
+.happy2-agent-activity__child-text {
+    min-width: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__child[data-tone="error"] {
+    color: var(--status-error);
+}
+
+.happy2-agent-activity__review-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-agent-activity__review-title {
+    font-weight: 600;
+    color: var(--review-accent);
+}
+
+.happy2-agent-activity__review-risk[data-risk="high"] {
+    color: var(--status-error);
+}
+
+.happy2-agent-activity__body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 16px;
+}
+
+.happy2-agent-activity__diff {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.happy2-agent-activity__output {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--diff-context-bg);
+    border-radius: var(--happy2-radius-sm);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__output-elide {
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.happy2-agent-activity__args {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--diff-context-bg);
+    border-radius: var(--happy2-radius-sm);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.happy2-agent-activity__terminal {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy2-agent-activity__status {
+    flex: 0 0 auto;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.happy2-agent-activity__status[data-failed="true"] {
+    color: var(--text-destructive);
+}
+
+.happy2-agent-activity__reasoning {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-secondary);
+}
+
+/*
+ * Transcript layout. Every activity row — reasoning, shell run, tool call, or a
+ * step a server already labeled — shares the agent message measure and its block
+ * spacing, so thinking reads as one more block of the reply rather than
+ * something pinned to the pane edge. The contract lives with the component.
+ */
+.happy2-agent-activity-row {
+    flex: none;
+    /* The subject ellipsizes, so it is the one line that always reaches its
+       boundary: it stops short of where prose wraps, or a truncated command
+       reads as running off the surface. */
+    padding: 8px 96px 8px 30px;
+}
+
+/* Tool calls remain compact single lines, but each owns 6px above and below so
+ * a run scans as distinct actions rather than one dense paragraph. */
+.happy2-agent-activity-row[data-kind="tool"],
+.happy2-agent-activity-row[data-kind="labeled"] {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* A tool-first turn puts its first row inside the Message that owns the agent
+ * identity line. Message already supplies the transcript inset, so applying
+ * the activity inset again would double-indent the tool. */
+.happy2-message--activity-lead .happy2-agent-activity-row {
+    padding-right: 0;
+    padding-left: 0;
+}
+
+.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity,
+.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity {
+    gap: 0;
+}
+
+.happy2-agent-activity-row[data-kind="tool"] .happy2-agent-activity__header,
+.happy2-agent-activity-row[data-kind="labeled"] .happy2-agent-activity__header {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0;
+    cursor: default;
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__verb {
+    flex: none;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* A call that went through a permission review is worth spotting in a scan
+   down the transcript, so its whole line turns amber: glyph, verb, subject,
+   and trailing status, not one word of it. Muted well below the warning
+   orange, because a review is a fact about the call rather than a failure and
+   a transcript where most calls were reviewed should still read as prose.
+   These follow the single-line rules because they must win over them at equal
+   specificity, and they yield to a failure, which is the louder fact. */
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__header,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__glyph,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__verb,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__text,
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__status {
+    color: var(--review-accent);
+}
+
+.happy2-agent-activity[data-single-line] .happy2-agent-activity__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--warning);
+}
+
+.happy2-agent-activity[data-single-line][data-presentation="execCommand"]
+    .happy2-agent-activity__text,
+.happy2-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
+    .happy2-agent-activity__text,
+.happy2-agent-activity[data-single-line][data-mono] .happy2-agent-activity__text {
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+}
+
+.happy2-agent-activity[data-single-line][data-presentation="fileDiff"]
+    .happy2-agent-activity__file-summary
+    .happy2-agent-activity__text {
+    flex: 0 1 auto;
+    font-weight: 600;
+    color: var(--text-secondary);
+}

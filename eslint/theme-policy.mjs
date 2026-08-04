@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const THEME_FILE = "/packages/happy2-ui/src/theme.css";
-const THEME_PATH = fileURLToPath(new URL("../packages/happy2-ui/src/theme.css", import.meta.url));
+const THEME_FILE = "/packages/happy-desktop-ui/src/theme.css";
+const THEME_PATH = fileURLToPath(
+    new URL("../packages/happy-desktop-ui/src/theme.css", import.meta.url),
+);
 
 const directColorPattern = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\s*\(/iu;
 
@@ -40,7 +42,7 @@ const noDirectColor = {
         },
         messages: {
             useThemeToken:
-                "Direct color values belong in packages/happy2-ui/src/theme.css. Reference a theme token with var(--token) here.",
+                "Direct color values belong in packages/happy-desktop-ui/src/theme.css. Reference a theme token with var(--token) here.",
         },
         schema: [],
     },
@@ -65,7 +67,7 @@ const themeColorVariablesOnly = {
         },
         messages: {
             defineThemeToken:
-                "Color custom properties may only be defined in packages/happy2-ui/src/theme.css. Define a theme token there, then reference it with var(--token).",
+                "Color custom properties may only be defined in packages/happy-desktop-ui/src/theme.css. Define a theme token there, then reference it with var(--token).",
         },
         schema: [],
     },
@@ -90,7 +92,7 @@ const themeColorVariableReferencesOnly = {
         },
         messages: {
             missingThemeVariable:
-                "{{variable}} is not declared in packages/happy2-ui/src/theme.css. Define it there before referencing it.",
+                "{{variable}} is not declared in packages/happy-desktop-ui/src/theme.css. Define it there before referencing it.",
         },
         schema: [],
     },

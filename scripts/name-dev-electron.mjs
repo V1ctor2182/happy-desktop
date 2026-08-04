@@ -14,7 +14,7 @@
  * name from electron-builder), and it is idempotent: reinstalling Electron
  * restores the stock name and the next development run renames it again.
  *
- * The label is derived the way `packages/happy2-desktop/sources/main/buildIdentity.ts`
+ * The label is derived the way `packages/happy-desktop-electron/sources/main/buildIdentity.ts`
  * derives it, and the two must keep agreeing: one build, one name.
  */
 import { execFileSync } from "node:child_process";
@@ -58,7 +58,7 @@ function electronBundle() {
     const entry = join(
         workspace,
         "packages",
-        "happy2-desktop",
+        "happy-desktop-electron",
         "node_modules",
         "electron",
         "index.js",

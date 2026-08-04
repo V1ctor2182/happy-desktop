@@ -15,9 +15,8 @@ __screenshots__
 *.db
 *.db-shm
 *.db-wal
-packages/happy2-server/files
-packages/happy2-desktop/build/icon.icns
-packages/happy2-desktop/release
+packages/happy-desktop-electron/build/icon.icns
+packages/happy-desktop-electron/release
 
 # local drafts, 3d party repos we pull in for research etc
 .local/

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const desktopDirectory = join(workspace, "packages", "happy2-desktop");
+const desktopDirectory = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktopDirectory, "package.json"));
 const { Arch, Platform, build } = require("electron-builder");
 const packageJson = JSON.parse(await readFile(join(desktopDirectory, "package.json"), "utf8"));
@@ -21,8 +21,7 @@ releaseEnvironmentValidate();
 await keychainSigningIdentityValidate();
 
 await run("pnpm", ["desktop:assets"]);
-await run("pnpm", ["plugins:build"]);
-await run("pnpm", ["--dir", "packages/happy2-desktop", "typecheck"]);
+await run("pnpm", ["--dir", "packages/happy-desktop-electron", "typecheck"]);
 
 for (const selectedFlavor of flavors) {
     await rm(join(desktopDirectory, "dist"), { force: true, recursive: true });
@@ -34,12 +33,12 @@ for (const selectedFlavor of flavors) {
               }
             : {};
     if (selectedFlavor === "standard")
-        await run("pnpm", ["--dir", "packages/happy2-desktop", "exec", "vite", "build"]);
+        await run("pnpm", ["--dir", "packages/happy-desktop-electron", "exec", "vite", "build"]);
     await run(
         "pnpm",
         [
             "--dir",
-            "packages/happy2-desktop",
+            "packages/happy-desktop-electron",
             "exec",
             "vite",
             "build",
@@ -50,7 +49,7 @@ for (const selectedFlavor of flavors) {
     );
     await run("pnpm", [
         "--dir",
-        "packages/happy2-desktop",
+        "packages/happy-desktop-electron",
         "exec",
         "vite",
         "build",
@@ -67,10 +66,10 @@ for (const selectedFlavor of flavors) {
         "darwin",
         ...architectures.flatMap((value) => ["--cpu", value]),
         "--filter",
-        "happy2-desktop",
+        "happy-desktop-electron",
         "deploy",
         "--prod",
-        join("packages", "happy2-desktop", staging),
+        join("packages", "happy-desktop-electron", staging),
     ]);
     await stagedPackagePrepare(join(desktopDirectory, staging, "package.json"));
     const output = join("release", selectedFlavor);

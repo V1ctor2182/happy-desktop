@@ -1,0 +1,1022 @@
+/*
+ * C-009 Sidebar — responsive native navigation column.
+ *
+ * Contract: 30% of the desktop width, clamped to 250–360px. It fills height
+ * on the grouped surface, with a 56px header, 32px rows, and a 56px footer.
+ */
+
+.happy2-sidebar,
+.happy2-sidebar * {
+    box-sizing: border-box;
+}
+
+.happy2-sidebar {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: clamp(250px, 30vw, 360px);
+    height: 100%;
+    background: var(--groupped-background);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy2-sidebar__item-menu {
+    position: fixed;
+    z-index: 40;
+}
+
+/* ---- Header ----------------------------------------------------------- */
+
+.happy2-sidebar__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 56px;
+    padding: 0 16px;
+}
+
+.happy2-sidebar__heading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy2-sidebar__title-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.happy2-sidebar__brand-logo {
+    display: block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy2-sidebar__title {
+    display: block;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-header-optical-y, 0px));
+}
+
+/*
+ * The lockup heads a list of muted rows, so it is stated in their colour rather
+ * than in the full-strength text one row's own selection earns. Its weight is
+ * what makes it the heading; the colour does not need to shout as well.
+ *
+ * It also sits a pixel low of the row it names: the logo is a solid disc whose
+ * ink fills its box, while a row's glyph and label leave air above and below, so
+ * matching their boxes exactly reads as the mark riding high.
+ */
+.happy2-sidebar__title-row--brand {
+    transform: translateY(1px);
+}
+
+.happy2-sidebar__title--brand {
+    color: var(--text-secondary);
+}
+
+.happy2-sidebar__title-chevron {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+    transform: translateY(var(--happy2-sidebar-chevron-optical-y, 0px));
+}
+
+.happy2-sidebar__subtitle {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-header-optical-y, 0px));
+}
+
+.happy2-sidebar__header-accessory {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy2-sidebar__header-trailing {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    transform: translateY(2px);
+}
+
+.happy2-sidebar__header-trailing > .happy2-build-identity-pill {
+    max-width: 100%;
+}
+
+/* ---- Back / drill-down header ----------------------------------------- */
+
+.happy2-sidebar[data-back] .happy2-sidebar__heading {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy2-sidebar__back {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-left: -6px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    appearance: none;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+/* Mirror the right chevron into a back (left) chevron. Icon uses a font span,
+   not an SVG, so the transform belongs on the shared Icon element. */
+.happy2-sidebar__back .happy2-icon {
+    transform: scaleX(-1);
+}
+
+.happy2-sidebar__back:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy2-sidebar__back:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+}
+
+.happy2-sidebar__title--back {
+    font-weight: 700;
+}
+
+/* Drill-in morph: the "Administration" title rises from the row position up
+   into the header while the back chevron eases in from the left and the sub-nav
+   settles in below it — so the tapped row reads as flying up into a back header.
+   The distance (26px) is one row + gap, matching the row's original offset. */
+@media (prefers-reduced-motion: no-preference) {
+    .happy2-sidebar[data-back] .happy2-sidebar__back {
+        animation: happy2-sidebar-back-in 260ms ease both;
+    }
+
+    .happy2-sidebar[data-back] .happy2-sidebar__title--back {
+        animation: happy2-sidebar-title-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .happy2-sidebar[data-back] .happy2-sidebar__body-content {
+        animation: happy2-sidebar-detail-body 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        animation-delay: 40ms;
+    }
+}
+
+@keyframes happy2-sidebar-back-in {
+    from {
+        opacity: 0;
+        transform: translateX(-6px);
+    }
+}
+
+@keyframes happy2-sidebar-title-rise {
+    from {
+        opacity: 0;
+        transform: translateY(26px);
+    }
+}
+
+@keyframes happy2-sidebar-detail-body {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+/* ---- Body ------------------------------------------------------------- */
+
+/* Scrollport: edge-to-edge, no padding of its own. */
+.happy2-sidebar__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Inner content wrapper carries the 8px inset around the sections. */
+.happy2-sidebar__body-content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    padding: 8px;
+}
+
+/* The pinned rows are their own column so a reorder drag measures them and
+   nothing else. They keep the compose row's tight rhythm: this wrapper is a
+   grouping, not a group the reader can see. */
+.happy2-sidebar__actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+}
+
+.happy2-sidebar__section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy2-sidebar__section + .happy2-sidebar__section {
+    margin-top: 12px;
+}
+
+/* New chat is a SidebarRow; keep the same 2px row rhythm before the first menu. */
+.happy2-sidebar__compose + .happy2-sidebar__section,
+.happy2-sidebar__actions + .happy2-sidebar__section {
+    margin-top: 2px;
+}
+
+/* Whatever an agent hangs here is a group in this column like any other, so the
+   sidebar — not the guest — owns the clear space on both sides of it. */
+.happy2-sidebar__body-accessory {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy2-sidebar__compose + .happy2-sidebar__body-accessory,
+.happy2-sidebar__actions + .happy2-sidebar__body-accessory,
+.happy2-sidebar__body-accessory + .happy2-sidebar__section {
+    margin-top: 12px;
+}
+
+/* A window with nothing hung here holds no lane open: the clear space belongs to
+   the group, so with no group there is none, and the sections keep the same
+   rhythm they would have if the host had passed no accessory at all. */
+.happy2-sidebar__body-accessory:empty {
+    margin-top: 0;
+}
+
+.happy2-sidebar__body-accessory:empty + .happy2-sidebar__section {
+    margin-top: 2px;
+}
+
+.happy2-sidebar__section-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    height: 24px;
+    padding: 0 10px;
+}
+
+.happy2-sidebar__section-label {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-section-optical-y, 0px));
+}
+
+/* The whole control is one target in a desktop window: a native title-bar drag
+   region that overlapped this heading would otherwise hand the press to the
+   window manager instead of to the button. Stated here rather than relying on
+   the shell so the guarantee travels with the control. */
+.happy2-sidebar__section-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+    margin: 0;
+    margin-right: -3px; /* optical: align the glyph with the row meta lane */
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-sidebar__section-head:hover .happy2-sidebar__section-action,
+.happy2-sidebar__section-action:focus-visible {
+    opacity: 1;
+}
+
+/* A control the section exists to offer is not something to go looking for: it
+   stands whether or not the heading is under the pointer, and it keeps standing
+   while the act it started is still running. */
+.happy2-sidebar__section-action[data-reveal="always"],
+.happy2-sidebar__section-action[data-busy] {
+    opacity: 1;
+}
+
+.happy2-sidebar__section-action[data-busy],
+.happy2-sidebar__section-action[data-busy]:hover {
+    background: transparent;
+    cursor: default;
+}
+
+.happy2-sidebar__section-action:hover {
+    background: var(--surface-ripple);
+    color: var(--text-secondary);
+}
+
+.happy2-sidebar__section-action:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+.happy2-sidebar__section-error {
+    display: block;
+    flex: none;
+    margin: 0;
+    padding: 0 10px 2px;
+    color: var(--text-destructive);
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 15px;
+}
+
+.happy2-sidebar__empty {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    padding: 0 6px 0 10px;
+}
+
+.happy2-sidebar__empty-description {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 15px;
+    flex: 1;
+    min-width: 0;
+}
+
+.happy2-sidebar__empty-action {
+    flex: none;
+    max-width: 100%;
+}
+
+/* ---- Rows ------------------------------------------------------------- */
+
+.happy2-sidebar__item {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    text-align: left;
+    appearance: none;
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+/* Rows only animate their transform while a reorder is in flight. Once the move
+   is reported the list is rearranged and every transform drops to none in the
+   same commit; if that drop were transitioned, each row would glide in from
+   wherever it had been pushed to — the dropped row appearing to fly in from
+   above — instead of simply being where the new order puts it. */
+.happy2-sidebar__section[data-reordering] .happy2-sidebar__item,
+.happy2-sidebar__actions[data-reordering] .happy2-sidebar__item {
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The row under the pointer rides above its neighbours and drops its transition,
+   so it tracks the pointer exactly while the rows it displaces still glide. The
+   shadow is what lifts it off the column: a row being carried is the one thing
+   in the sidebar that is not lying flat in the list. */
+.happy2-sidebar__item[data-dragging] {
+    z-index: 1;
+    background: var(--surface-ripple);
+    box-shadow: 0 4px 12px var(--shadow-subtle);
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-sidebar__section[data-reordering] .happy2-sidebar__item,
+    .happy2-sidebar__actions[data-reordering] .happy2-sidebar__item {
+        transition:
+            background-color 120ms ease,
+            color 120ms ease;
+    }
+}
+
+/* Said out loud, never drawn: the region reports a keyboard move to a screen
+   reader and must not take a line of the sidebar to do it. */
+.happy2-sidebar__announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.happy2-sidebar__item:hover {
+    background: var(--surface-ripple);
+}
+
+.happy2-sidebar__item:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+}
+
+.happy2-sidebar__item[data-active] {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+/*
+ * ASCII tree connector for a nested row, drawn as hairlines rather than glyphs so
+ * the stem lands exactly on the parent glyph's centre lane. The span is pulled back
+ * over the row's own indent to occupy that lane exactly (same 20px box as a leading
+ * slot), and stretches the row height so the stem can reach across the 2px row gap.
+ */
+.happy2-sidebar__item-branch {
+    position: relative;
+    flex: none;
+    align-self: stretch;
+    width: 20px;
+    margin-left: -16px;
+}
+
+/*
+ * The tree is structure, not row state: it holds one tone whatever the row's own
+ * colour is (active/unread go to --text), so it never bands from row to row. Each
+ * row draws upward into the gap above it only, so neighbouring segments meet
+ * without doubling their alpha at the joint.
+ */
+.happy2-sidebar__item-branch::before,
+.happy2-sidebar__item-branch::after {
+    position: absolute;
+    background: var(--text-secondary);
+    content: "";
+    opacity: 0.28;
+}
+
+/* Vertical: through the row for a tee, stopping at the elbow for the last child. */
+.happy2-sidebar__item-branch::before {
+    top: -2px;
+    left: calc(50% - 0.5px);
+    width: 1px;
+}
+
+/*
+ * The first child rises into the parent row and stops 2px short of the parent
+ * glyph's ink, so the tree reads as hanging off that row rather than floating
+ * below it. Later siblings stay at -2px, so no two segments ever overlap.
+ */
+.happy2-sidebar__item-branch[data-branch-first]::before {
+    top: -8px;
+}
+
+.happy2-sidebar__item-branch[data-branch="tee"]::before {
+    bottom: 0;
+}
+
+/* Anchored to the centre, not sized, so it still meets the elbow when the stem
+   also rises into the parent row as the first child. */
+.happy2-sidebar__item-branch[data-branch="end"]::before {
+    bottom: 50%;
+}
+
+/* Horizontal: from the stem out to the row's label lane. */
+.happy2-sidebar__item-branch::after {
+    top: 50%;
+    left: calc(50% - 0.5px);
+    width: 10px;
+    height: 1px;
+}
+
+/* Cancel the archived row's 0.55 dimming so the shared line keeps one tone. */
+.happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::before,
+.happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::after {
+    opacity: 0.509;
+}
+
+.happy2-sidebar__item-leading {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--text-secondary);
+}
+
+/*
+ * A scheduled wait's clock in the leading slot. Accent-tinted so a row whose
+ * agent is deliberately doing nothing still stands apart from an idle one,
+ * without the spinner's claim that work is happening.
+ */
+.happy2-sidebar__item-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-link);
+}
+
+/*
+ * The leading glyph of a row whose place could not be made or is no longer
+ * there. It carries the same tone as the trailing label below so the two halves
+ * of the row read as one statement rather than as two unrelated marks.
+ */
+.happy2-sidebar__item-lifecycle-glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.happy2-sidebar__item-lifecycle-glyph[data-lifecycle="failed"] {
+    color: var(--box-error-text);
+}
+
+.happy2-sidebar__item-lifecycle-glyph[data-lifecycle="unavailable"] {
+    color: var(--box-warning-text);
+}
+
+.happy2-sidebar__item-leading-unread {
+    position: absolute;
+    top: 1px;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--surface);
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text-link);
+}
+
+/* The compose pencil's ink is bottom-heavy; lift it to the row's optical center. */
+.happy2-sidebar__compose .happy2-sidebar__item-leading {
+    transform: translateY(-1px);
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-leading {
+    color: var(--text);
+}
+
+.happy2-sidebar__item-label {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-label-optical-y, 0px));
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-label {
+    font-weight: 600;
+}
+
+.happy2-sidebar__item[data-unread] {
+    color: var(--text);
+}
+
+.happy2-sidebar__item[data-unread] .happy2-sidebar__item-label {
+    font-weight: 700;
+}
+
+.happy2-sidebar__item[data-kind="action"] {
+    color: var(--text-secondary);
+}
+/* Archived channels stay in place and clickable but dim uniformly so the state
+   reads distinctly from an ordinary resting (already secondary-grey) row. The
+   uniform alpha keeps every child glyph's optical centroid unchanged. */
+.happy2-sidebar__item[data-archived] {
+    opacity: 0.55;
+}
+.happy2-sidebar__item[data-archived] .happy2-sidebar__item-label {
+    font-weight: 500;
+}
+
+.happy2-sidebar__item-badge {
+    flex: none;
+}
+
+.happy2-sidebar__item-change-stats {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--text-secondary);
+    transition: opacity 120ms ease;
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-change-stats [data-tone="added"],
+.happy2-sidebar__item:focus-visible .happy2-sidebar__item-change-stats [data-tone="added"] {
+    color: var(--git-added-text);
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-change-stats [data-tone="deleted"],
+.happy2-sidebar__item:focus-visible .happy2-sidebar__item-change-stats [data-tone="deleted"] {
+    color: var(--git-removed-text);
+}
+
+/* The controls are overlaid, so they contribute no width of their own; the lane
+   reserves it here instead. Without that a short delta — a lone `+1` — leaves a
+   lane narrower than the controls, and on hover they reach back out of it and
+   over the name. One control is 18px and each further one adds its own 18 plus
+   the 4px gap; the 3px overhang comes back off the end. */
+.happy2-sidebar__item-trailing-swap {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 15px;
+    height: 18px;
+}
+
+.happy2-sidebar__item-trailing-swap[data-controls="2"] {
+    min-width: 37px;
+}
+
+/*
+ * The controls and the Git stats intentionally occupy one trailing lane:
+ * overlaying the smaller controls prevents the workspace name or the counters
+ * from shifting on hover.
+ */
+.happy2-sidebar__item-trailing-swap .happy2-sidebar__item-actions {
+    position: absolute;
+    right: 0;
+}
+
+.happy2-sidebar__item:hover .happy2-sidebar__item-trailing-swap .happy2-sidebar__item-change-stats,
+.happy2-sidebar__item-trailing-swap:focus-within .happy2-sidebar__item-change-stats {
+    opacity: 0;
+}
+
+.happy2-sidebar__item-unread {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin: 0 6px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text-link);
+}
+
+/* Meta never claims free space, but it must give space back and it must never
+   take more than half the row. A meta longer than the row (a filesystem path,
+   say) would otherwise overflow it and — because the label absorbs the row's
+   free space rather than reserving width of its own — squeeze the name the
+   reader actually scans down to nothing. Capped and clipped, it ellipsizes and
+   the name always keeps at least half the row. */
+.happy2-sidebar__item-meta {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50%;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-meta-optical-y, 0px));
+}
+
+/* The row's controls, in one lane at its trailing edge. The lane reserves its
+   width whether or not the controls are showing, so a row that reveals one on
+   hover does not push its own name aside to do it. The negative right margin is
+   the lane's optical overhang into the row's padding — not spacing between
+   siblings, which the flex gap owns — so the outermost glyph lines up with the
+   rows above and below it. */
+.happy2-sidebar__item-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin-right: -3px;
+}
+
+/* One control. It sits inside the row button so it tracks the row's hover, and
+   takes the lane's height so the hit target is the full square rather than the
+   glyph. */
+.happy2-sidebar__item-action {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-sidebar__item-action[data-reveal="hover"] {
+    opacity: 0;
+}
+
+.happy2-sidebar__item:hover .happy2-sidebar__item-action[data-reveal="hover"],
+.happy2-sidebar__item-action[data-reveal="hover"]:focus-visible {
+    opacity: 1;
+}
+
+.happy2-sidebar__item-action:hover {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy2-sidebar__item-action:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+.happy2-sidebar__item-working {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    transform: translateY(var(--happy2-sidebar-working-optical-y, 0px));
+}
+
+/*
+ * The trailing word for a row's own phase, set in the same mono lane the
+ * "working" marker uses so a row never shifts as it moves between the two. It
+ * is plain text rather than a pill: the row is already carrying a tinted glyph,
+ * and a second filled shape at the other edge would out-shout the row's name.
+ */
+.happy2-sidebar__item-lifecycle {
+    display: block;
+    flex: none;
+    max-width: 88px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateY(var(--happy2-sidebar-working-optical-y, 0px));
+}
+
+.happy2-sidebar__item-lifecycle[data-lifecycle="failed"] {
+    color: var(--box-error-text);
+}
+
+.happy2-sidebar__item-lifecycle[data-lifecycle="unavailable"] {
+    color: var(--box-warning-text);
+}
+
+.happy2-sidebar__item-status {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-right: 1px; /* optical: match the 18px badge lane edge */
+    border-radius: var(--happy2-radius-pill);
+}
+
+.happy2-sidebar__item-status[data-status="ready"] {
+    background: var(--status-connected);
+}
+
+.happy2-sidebar__item-status[data-status="working"] {
+    background: var(--status-connecting);
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+
+.happy2-sidebar__footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 56px;
+    padding: 0 12px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-sidebar-update-action {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.happy2-sidebar-update-action--status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy2-sidebar-update-action__icon {
+    display: flex;
+    flex: none;
+    color: var(--text-link);
+}
+
+.happy2-sidebar-update-action__label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-sidebar-update-action--ready.happy2-button {
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__content,
+.happy2-sidebar-update-action--ready .happy2-button__label {
+    min-width: 0;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__content {
+    flex: 0 1 auto;
+}
+
+.happy2-sidebar-update-action--ready .happy2-button__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Profile control pinned in the sidebar footer: avatar + name that opens the
+   viewer's profile, grows to fill the row beside a trailing control. */
+.happy2-sidebar__profile {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+    transition: background-color 120ms ease;
+}
+
+.happy2-sidebar__profile:hover {
+    background: var(--surface-ripple);
+}
+
+/* A surface with no profile to open renders the same identity row as inert
+   text: same geometry and type, without the affordances of a control. */
+.happy2-sidebar__profile--static {
+    cursor: default;
+}
+
+.happy2-sidebar__profile--static:hover {
+    background: transparent;
+}
+
+.happy2-sidebar__profile:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: -2px;
+}
+
+.happy2-sidebar__profile-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/*
+ * Optical vertical corrections, measured per engine at the fixed 1600×1600
+ * tester viewport (true-2x captures) via alpha-weighted ink centroids in
+ * Sidebar.test.tsx: every row kind and state, section labels, header, footer.
+ * Each var centers the mean painted centroid of its text family inside its
+ * lane; per-row residual is content bias (ascenders/descenders) only. Raw
+ * means before correction — labels: Blink +0.37, Gecko +0.87, WebKit +0.83
+ * (low); meta 11px: Blink -1.0 (high), Gecko/WebKit 0; working: +0.8 low in
+ * all engines; section labels: within 0.26 everywhere (no correction);
+ * heading ink vs header center: Blink -0.45, Gecko +0.22, WebKit -0.06;
+ * chevron ink vs title ink: Blink -0.57, Gecko -1.06, WebKit -0.52 (high).
+ * Engine scopes: only Gecko parses -moz-appearance, only WebKit parses
+ * -webkit-named-image().
+ */
+
+.happy2-sidebar {
+    --happy2-sidebar-label-optical-y: -0.4px;
+    --happy2-sidebar-meta-optical-y: 1px;
+    --happy2-sidebar-working-optical-y: -0.6px;
+    --happy2-sidebar-section-optical-y: 0px;
+    --happy2-sidebar-header-optical-y: 0.5px;
+    --happy2-sidebar-chevron-optical-y: 1px;
+}
+
+@supports (-moz-appearance: none) {
+    .happy2-sidebar {
+        --happy2-sidebar-label-optical-y: -0.7px;
+        --happy2-sidebar-meta-optical-y: 0px;
+        --happy2-sidebar-header-optical-y: 0px;
+        --happy2-sidebar-chevron-optical-y: 0.75px;
+    }
+}
+
+@supports (background: -webkit-named-image(i)) {
+    .happy2-sidebar {
+        --happy2-sidebar-label-optical-y: -0.85px;
+        --happy2-sidebar-meta-optical-y: 0px;
+        --happy2-sidebar-working-optical-y: -0.8px;
+        --happy2-sidebar-header-optical-y: 0px;
+        --happy2-sidebar-chevron-optical-y: 0.5px;
+    }
+}

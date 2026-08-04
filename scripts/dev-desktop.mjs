@@ -3,11 +3,11 @@ import { join, resolve } from "node:path";
 
 const workspace = resolve(import.meta.dirname, "..");
 const portless = join(workspace, "node_modules", ".bin", "portless");
-console.log("Happy (2) desktop development: managed local runtime");
+console.log("Happy Desktop development: Electron");
 
-const portlessArguments = ["run", "--name", "happy2-desktop"];
+const portlessArguments = ["run", "--name", "happy-desktop-electron"];
 if (process.env.PORT) portlessArguments.push("--app-port", process.env.PORT);
-portlessArguments.push("pnpm", "--filter", "happy2-desktop", "dev");
+portlessArguments.push("pnpm", "--filter", "happy-desktop-electron", "dev:electron");
 
 const child = spawn(portless, portlessArguments, {
     cwd: workspace,

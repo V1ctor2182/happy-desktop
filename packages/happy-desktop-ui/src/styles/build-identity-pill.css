@@ -1,0 +1,202 @@
+/*
+ * C-177 BuildIdentityPill — dev-only build identity mark (tone dot + mono
+ * label) shown in the sidebar header so one dev window reads apart from
+ * another: main checkout vs. a git worktree. Tone tints reuse Avatar's
+ * direct Happy color roles through the same data-tone mechanism, repeated
+ * per tone (no local color custom property — the theme lint requires every
+ * referenced color variable to resolve directly to a token in theme.css).
+ */
+
+.happy2-build-identity-pill,
+.happy2-build-identity-pill * {
+    box-sizing: border-box;
+}
+
+.happy2-build-identity-pill {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    margin: 0;
+    padding: 0 8px;
+    appearance: none;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-pill);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-synthesis: none;
+    text-align: left;
+    white-space: nowrap;
+}
+
+button.happy2-build-identity-pill {
+    cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease;
+}
+
+button.happy2-build-identity-pill:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy2-build-identity-pill__dot {
+    display: block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text-secondary);
+}
+
+.happy2-build-identity-pill__label {
+    display: block;
+    overflow: hidden;
+    max-width: 132px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Tones ------------------------------------------------------------ */
+
+.happy2-build-identity-pill[data-tone="violet"] {
+    border-color: color-mix(in srgb, var(--radio-active) 35%, var(--divider));
+    background: color-mix(in srgb, var(--radio-active) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="violet"] .happy2-build-identity-pill__dot {
+    background: var(--radio-active);
+}
+
+button.happy2-build-identity-pill[data-tone="violet"]:hover {
+    background: color-mix(in srgb, var(--radio-active) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="violet"]:active {
+    background: color-mix(in srgb, var(--radio-active) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="ember"] {
+    border-color: color-mix(in srgb, var(--text-destructive) 35%, var(--divider));
+    background: color-mix(in srgb, var(--text-destructive) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="ember"] .happy2-build-identity-pill__dot {
+    background: var(--text-destructive);
+}
+
+button.happy2-build-identity-pill[data-tone="ember"]:hover {
+    background: color-mix(in srgb, var(--text-destructive) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="ember"]:active {
+    background: color-mix(in srgb, var(--text-destructive) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="mint"] {
+    border-color: color-mix(in srgb, var(--success) 35%, var(--divider));
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="mint"] .happy2-build-identity-pill__dot {
+    background: var(--success);
+}
+
+button.happy2-build-identity-pill[data-tone="mint"]:hover {
+    background: color-mix(in srgb, var(--success) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="mint"]:active {
+    background: color-mix(in srgb, var(--success) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="ocean"] {
+    border-color: color-mix(in srgb, var(--text-link) 35%, var(--divider));
+    background: color-mix(in srgb, var(--text-link) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="ocean"] .happy2-build-identity-pill__dot {
+    background: var(--text-link);
+}
+
+button.happy2-build-identity-pill[data-tone="ocean"]:hover {
+    background: color-mix(in srgb, var(--text-link) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="ocean"]:active {
+    background: color-mix(in srgb, var(--text-link) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="rose"] {
+    border-color: color-mix(in srgb, var(--delete-action) 35%, var(--divider));
+    background: color-mix(in srgb, var(--delete-action) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="rose"] .happy2-build-identity-pill__dot {
+    background: var(--delete-action);
+}
+
+button.happy2-build-identity-pill[data-tone="rose"]:hover {
+    background: color-mix(in srgb, var(--delete-action) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="rose"]:active {
+    background: color-mix(in srgb, var(--delete-action) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="amber"] {
+    border-color: color-mix(in srgb, var(--box-warning-border) 35%, var(--divider));
+    background: color-mix(in srgb, var(--box-warning-border) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="amber"] .happy2-build-identity-pill__dot {
+    background: var(--box-warning-border);
+}
+
+button.happy2-build-identity-pill[data-tone="amber"]:hover {
+    background: color-mix(in srgb, var(--box-warning-border) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="amber"]:active {
+    background: color-mix(in srgb, var(--box-warning-border) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="slate"] {
+    border-color: color-mix(in srgb, var(--text-secondary) 35%, var(--divider));
+    background: color-mix(in srgb, var(--text-secondary) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="slate"] .happy2-build-identity-pill__dot {
+    background: var(--text-secondary);
+}
+
+button.happy2-build-identity-pill[data-tone="slate"]:hover {
+    background: color-mix(in srgb, var(--text-secondary) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="slate"]:active {
+    background: color-mix(in srgb, var(--text-secondary) 26%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="brand"] {
+    border-color: color-mix(in srgb, var(--fab-background) 35%, var(--divider));
+    background: color-mix(in srgb, var(--fab-background) 10%, var(--surface));
+}
+
+.happy2-build-identity-pill[data-tone="brand"] .happy2-build-identity-pill__dot {
+    background: var(--fab-background);
+}
+
+button.happy2-build-identity-pill[data-tone="brand"]:hover {
+    background: color-mix(in srgb, var(--fab-background) 18%, var(--surface));
+}
+
+button.happy2-build-identity-pill[data-tone="brand"]:active {
+    background: color-mix(in srgb, var(--fab-background) 26%, var(--surface));
+}

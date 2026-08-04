@@ -1,333 +1,179 @@
 <div align="center">
 
-<p><img src="./.github/logo.png" alt="Happy (2)" width="160" /></p>
+<p><img src="./.github/logo.png" alt="Happy" width="160" /></p>
 
-<h3>A self-hosted, Slack-like workspace where people and coding agents build together.</h3>
+<h3>What Slack would be if agents came first.</h3>
 
 <p>
-  Following the success of <a href="https://github.com/slopus/happy">Happy</a>,
-  Happy (2) is a ground-up next chapter built on the lessons learned from
-  bringing coding agents into real daily workflows. It brings conversations,
-  files, workspaces, and coding agents into one focused web and desktop app.
+  A private, distributed workspace for people who would rather own their tools
+  than rent their workflow.
 </p>
 
 <p>
-  Built by the authors of
-  <a href="https://github.com/slopus/happy">Happy</a> and
-  <a href="https://github.com/slopus/rig">Rig</a>.
-</p>
-
-<p>
-  <a href="#quick-start">Quick start</a> ·
-  <a href="#configuration">Configuration</a> ·
-  <a href="#why-happy-2">Why Happy (2)?</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#project-components">Project components</a> ·
-  <a href="packages/happy2-server/README.md">Server docs</a>
+  <a href="#make-software-personal-again">What to build</a> ·
+  <a href="#make-happy-yours">Extend Happy</a> ·
+  <a href="#your-machines-your-work">Privacy and ownership</a> ·
+  <a href="#one-place-for-many-agents">Multi-agent work</a> ·
+  <a href="#collaboration-agent-first">Collaboration</a> ·
+  <a href="#development">Development</a>
 </p>
 
 </div>
 
-Happy (2) is a self-hosted, Slack-like work and coding app that evolves by
-adopting itself. It gives teams and coding agents a shared home instead of
-scattering work across chat windows, terminals, file browsers, and one-off
-dashboards.
+Most AI software starts with the assumption that your work belongs in somebody
+else's cloud. Happy starts with your machine.
 
-The same React application runs in the browser and in Electron. A small Fastify
-server provides authentication, durable collaboration state, files, realtime
-updates, and agent execution. The complete server and web app are also bundled
-as one `happy2` package.
+Happy is a high-efficiency desktop workspace where people and agents build
+together. Projects, conversations, files, terminals, documents, permissions,
+and model controls live in one place. Agents are not bots bolted onto a human
+chat app; they are active participants that can work independently, collaborate,
+and hand work to one another.
 
-## Quick start
+It works transparently with
+[Happy on mobile](https://github.com/slopus/happy), so the same work can follow
+you away from your desk without turning the desktop experience into a mobile
+interface.
 
-Happy (2) requires Node.js 24 or later. Start the complete app with one command:
+**Start on your Mac. Connect to a more powerful machine. Run several agents in
+parallel. Share a live session and terminal with a friend. Keep everything in
+one place.**
 
-```sh
-npx happy2
-```
+## Make software personal again
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000) in your browser. Happy (2)
-stores its database, files, generated secrets, agent workspaces, and private Rig
-runtime under `.happy2` in the directory where you start it.
+Happy is for people who feel the urge to make the tool they need instead of
+waiting for a SaaS company to make it for them.
 
-Run it in the background without installing an operating-system service with:
+Experiment with agents, prompts, tools, and workflows on hardware you control.
+Use your Mac for a small idea or connect a remote machine for heavier work.
+Change the system whenever your idea changes. No cloud deployment is required
+before the first useful result.
 
-```sh
-npx happy2 daemon start
-npx happy2 daemon stop
-```
+An idea might begin as a personal automation, become a simple interface for
+someone at home, or grow into the internal tool a small business actually needs.
+The person using it does not need to be technical or inherit your terminal
+setup. You should not need to become an infrastructure specialist or reshape
+the idea around another generic subscription product, either.
 
-The daemon stores `happy2.pid`, the combined `happy2.log`, and the error-only
-`server-error.log` under `./.happy2`. Stopping it terminates the daemon process
-tree and removes the PID file.
+The common thread is simple: build the system you want, run it where you choose,
+share it with people you trust, and keep control of what happens next.
 
-Keep Happy (2) running across reboots with:
+## Make Happy yours
 
-```sh
-npx happy2 service start
-npx happy2 service stop
-```
+Happy is not a fixed collection of screens. You and your agents can extend it
+with small applets and webapps that run directly inside the workspace. A quick
+idea can become a dashboard, control panel, intake form, household tool, or
+business workflow without first becoming a separate product and deployment.
 
-On macOS this installs a per-user LaunchAgent without `sudo`; it starts when the
-user logs in. On Linux it writes and prints `./happy2.service`, then shows the
-exact `sudo` commands you can run to install and start it as a system-wide
-systemd unit. `service stop` prints the corresponding systemd removal commands;
-it never invokes `sudo` itself. The generated file remains in the current
-directory so you can inspect or reinstall it. Add
-`--config /absolute/or/relative/happy2.toml` to `service start` to preserve an
-explicit configuration file; otherwise the service keeps the current directory
-as its working directory and uses its `.happy2` state. When started through
-`npx`, the generated service runs `npx --yes happy2` instead of depending on an
-evictable `_npx` cache path.
+Applets can open beside a conversation, file, or terminal. Agents can also place
+useful text and actions into the sidebar, the project or workspace title, above
+the composer, or in its status line. Each addition can belong everywhere, to one
+project or workspace, or only to the session that needs it.
 
-## Configuration
+Agents can build, install, update, and version these tools while you work. The
+result is more than a configurable agent harness: Happy gradually becomes your
+own environment, shaped around the people, machines, and work that matter to
+you.
 
-Happy (2) uses the following configuration precedence:
+## Your machines. Your work.
 
-1. `--config /path/to/happy2.toml`
-2. `HAPPY2_CONFIG=/path/to/happy2.toml`
-3. `./.happy2/happy2.toml`, when it exists
-4. Built-in defaults
+Every machine running Happy Agent is a real working node. Your Mac can own local
+projects, a remote machine can own different ones, and Happy presents them
+together without moving everything into a central workspace.
 
-TOML configuration is partial. Happy (2) recursively merges the supplied fields
-over the built-in defaults, so this is enough to expose the public listener:
+- **Local-first.** Start with one Mac. Happy does not require a hosted account
+  or a central service.
+- **Peer-to-peer first.** People and machines connect as peers. Work remains
+  distributed across the machines that own it.
+- **Encrypted collaboration.** Shared sessions move encrypted between peers.
+  Coordination infrastructure can carry data without becoming its owner.
+- **No telemetry.** Happy does not watch how you use the product or upload your
+  workspace for analytics.
+- **No lock-in.** Your projects continue to live on ordinary machines and
+  filesystems you control.
 
-```toml
-[server]
-host = "0.0.0.0"
-```
+This is distributed software without the ceremony. There is no blockchain,
+mining, token, global ledger, or consensus delay—just fast connections between
+the people, agents, and machines doing the work.
 
-The managed path is relative to the directory where Happy (2) starts. Relative
-database, file, plugin, key, and agent paths are also resolved from that working
-directory, not from the TOML file's directory. The standalone `happy2` and
-`happy2 backend` commands use this configuration; `happy2 web` has its own CLI
-options because it only serves the SPA and proxies `/v0`.
+If you choose a hosted model, that model provider receives the prompts and
+context you send to it under its own terms. Happy does not require you to hand a
+second cloud service the rest of your workspace.
 
-### Complete TOML reference
+## One place for many agents
 
-All supported keys are shown below. Uncomment optional keys only when needed.
-The active values are equivalent to the built-in local defaults. For readability,
-paths are shown relative to the working directory; generated defaults store those
-same locations as absolute paths.
+Agent work gets messy surprisingly quickly: one terminal per project, several
+chat windows, background tasks nobody is watching, and a new harness every few
+weeks. Happy replaces that pile with one coherent desktop workspace.
 
-```toml
-[server]
-# all: authentication + product API; auth: authentication only; api: validation only
-role = "all"
-host = "127.0.0.1"
-port = 3000
-public_url = "http://127.0.0.1:3000"
-# Number of trusted proxies outside Happy (2). Keep 0 for direct connections.
-trusted_proxy_hops = 0
+Run tasks in parallel across projects and conversations. Give each agent room to
+work, delegate tasks between them, inspect what is happening, grant permissions,
+and step in when judgment is needed. Sessions keep running while you move
+elsewhere, so parallel work feels like a normal workflow rather than an
+orchestration project of its own.
 
-[database]
-url = "file:.happy2/happy2.db"
-# Name of the environment variable containing a remote libSQL auth token.
-# auth_token_env = "HAPPY2_DATABASE_AUTH_TOKEN"
+Happy brings the whole working context together:
 
-[agents]
-enabled = true
-# These default to the private Rig runtime under .happy2/rig.
-# socket_path = ".happy2/rig/server.sock"
-# token_path = ".happy2/rig/token"
-# command = "/absolute/path/to/rig"
-default_cwd = ".happy2/workspaces"
+- projects on local and remote machines;
+- conversations with people and agents;
+- parallel agents and delegated work;
+- files, documents, and terminals;
+- permissions, model selection, and usage;
+- notes, inbox, and agent-built tools.
 
-[files]
-provider = "local"
-directory = ".happy2/files"
-signed_url_expiry_seconds = 300
-max_upload_bytes = 536870912
-resumable_chunk_bytes = 8388608
-# Zero disables the corresponding quota.
-per_user_quota_bytes = 0
-server_quota_bytes = 0
-incomplete_upload_expiry_seconds = 86400
-quarantine_retention_seconds = 2592000
-# malware_scanner_command = "/usr/local/bin/clamscan"
-malware_scanner_arguments = []
-malware_scan_timeout_seconds = 120
-malware_scan_failure_mode = "deny" # deny or allow
+The goal is not merely more capability. It is a high-quality, predictable tool
+for people who enjoy improving their workflow but are tired of unstable
+harnesses and disconnected experiments.
 
-[plugins]
-directory = ".happy2/plugins"
-# Capability-only API used by plugin containers. Firewall it from untrusted networks.
-host_api_host = "0.0.0.0"
-host_api_port = 3001
+## Collaboration, agent-first
 
-# Omit this table to disable public agent-port sharing. Configure wildcard DNS
-# and TLS for *.preview.example.com to reach the same Happy web listener.
-[port_sharing]
-public_domain = "preview.example.com"
-# Optional; defaults to https://preview.example.com.
-# public_url = "http://preview.example.com:8080"
+Slack was designed for people to talk, then made room for bots. Happy starts
+from a different premise: people and agents share the conversation, the project
+context, and responsibility for moving work forward.
 
-[security]
-# Name of the environment variable containing the integration encryption secret.
-integration_secret_env = "HAPPY2_INTEGRATION_SECRET"
+Start an agent session on your Mac or a remote machine. Bring in specialized
+agents. Share the live conversation and terminal with a friend or teammate.
+Everyone can follow the same progress and contribute where it matters while the
+agents continue working inside the real project environment.
 
-[security.rate_limit]
-enabled = true
-reads_per_minute = 1200
-writes_per_minute = 300
-auth_per_minute = 30
-
-[security.idempotency]
-enabled = true
-lease_seconds = 30
-retention_seconds = 86400
-
-[jwt]
-issuer = "http://127.0.0.1:3000"
-audience = "happy2-desktop"
-key_id = "local-generated"
-expiry_days = 30
-# PEM files may replace environment or generated keys.
-# private_key_path = "/run/secrets/happy2-jwt-private.pem"
-# public_key_path = "/run/secrets/happy2-jwt-public.pem"
-
-# Password is the default. Set it to false before enabling magic link, OIDC,
-# or Cloudflare Access; exactly one authentication method may be enabled.
-[auth.password]
-enabled = true
-
-[auth.dev_tokens]
-# This augments the selected authentication method; it is not a separate method.
-enabled = false
-
-[auth.magic_link]
-enabled = false
-# from = "Happy (2) <noreply@example.com>"
-# redirect_url = "happy2://auth/magic-link"
-
-# Replace "example" with a stable provider ID.
-[auth.oidc.example]
-enabled = false
-# discovery_url = "https://id.example.com/.well-known/openid-configuration"
-# client_id = "happy2"
-# client_secret_env = "HAPPY2_OIDC_EXAMPLE_CLIENT_SECRET"
-# scopes = ["openid", "email", "profile"]
-# redirect_path = "/v0/auth/oidc/example/callback"
-
-[auth.cloudflare_access]
-enabled = false
-# team_domain = "https://team.cloudflareaccess.com"
-# audience = "cloudflare-access-application-aud"
-```
-
-For a reverse-proxied deployment such as `https://happy.example.com`, the
-listener can remain on `127.0.0.1`; set `server.public_url` and `jwt.issuer` to
-the public HTTPS origin and set `server.trusted_proxy_hops` to the exact number
-of trusted proxies in front of Happy (2). Binding `server.host = "0.0.0.0"` is
-only necessary when another machine or container must connect directly.
-
-### Secrets and environment
-
-Real process environment values take precedence over values loaded from the
-private `.env` beside the selected TOML path. If no explicit config is selected,
-that file is `./.happy2/.env`, whether or not `./.happy2/happy2.toml` exists.
-
-For an `all` or `auth` server without configured JWT key files or environment
-keys, Happy (2) generates a 3072-bit RS256 key pair and stores
-`HAPPY2_JWT_PRIVATE_KEY_B64` and `HAPPY2_JWT_PUBLIC_KEY_B64` in that `.env`.
-It also generates `HAPPY2_PASSWORD_PEPPER` when password auth is enabled and the
-configured integration secret when missing. The file is created with mode
-`0600`; back it up and keep it private. Replacing the JWT keys invalidates
-existing session tokens, while replacing the password pepper prevents existing
-password hashes from verifying. An `api`-only server must be given the matching
-public key because it does not generate a signing pair.
-
-Supported server and runner environment settings are:
-
-| Variable                                                                       | Purpose                                                                               |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `HAPPY2_CONFIG`                                                                | Selects a TOML file when `--config` is absent.                                        |
-| `HAPPY2_JWT_PRIVATE_KEY`, `HAPPY2_JWT_PUBLIC_KEY`                              | PEM keys; literal `\n` sequences are accepted.                                        |
-| `HAPPY2_JWT_PRIVATE_KEY_B64`, `HAPPY2_JWT_PUBLIC_KEY_B64`                      | Base64-encoded PEM keys used by generated local configuration.                        |
-| `HAPPY2_PASSWORD_PEPPER`                                                       | Server-wide password pepper.                                                          |
-| `HAPPY2_INTEGRATION_SECRET`                                                    | Default integration encryption secret; the variable name is configurable.             |
-| `RIG_HOME`                                                                     | Absolute path for Happy's private Rig runtime.                                        |
-| `RIG_SERVER_SOCKET_PATH`, `RIG_SERVER_TOKEN_PATH`, `RIG_COMMAND`               | Override omitted agent socket, token, and command fields.                             |
-| `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD` | Required SMTP credentials for magic-link auth.                                        |
-| `EMAIL_FROM`                                                                   | Overrides `auth.magic_link.from`.                                                     |
-| `HAPPY2_BACKEND_URL`                                                           | Backend origin for the separate `happy2 web` command.                                 |
-| `HAPPY2_WEB_HOST`, `HAPPY2_WEB_PORT`, `HAPPY2_WEB_TRUSTED_PROXY_HOPS`          | Listener settings for `happy2 web`.                                                   |
-| `HAPPY2_PORT_SHARING_DOMAIN`                                                   | Wildcard port-sharing domain forwarded by a separately deployed `happy2 web` gateway. |
-
-`database.auth_token_env`, `security.integration_secret_env`, and each OIDC
-provider's `client_secret_env` may name additional environment variables.
-
-## Why Happy (2)?
-
-- **People and agents share the same workspace.** Conversations, threads,
-  files, approvals, and agent activity live together instead of becoming a pile
-  of disconnected tools.
-- **Self-hosted by design.** Run the complete app with one command and keep its
-  database, files, secrets, agent workspaces, and Rig runtime under your control.
-- **Web and desktop.** Use the same full collaboration experience in a browser
-  or through the Electron app.
-- **Reactive by default.** Realtime events reconcile durable state so focused
-  surfaces stay current without refresh buttons.
-- **Flexible deployment.** The backend can run as an all-in-one server or as a
-  separately deployed authentication service.
-- **Built to adopt itself.** Happy (2)'s own server, state layer, component
-  workbench, browser tests, and coding-agent workflows are part of the product's
-  development loop.
-
-## How it works
-
-Happy (2) keeps the product boundaries explicit:
-
-1. `happy2-server` owns authentication, persistence, files, collaboration, and
-   agent execution.
-2. `happy2-state` turns authenticated HTTP and realtime transports into
-   immutable, independently materialized surface stores.
-3. `happy2-ui` owns the reusable visual system and its cross-browser blueprint
-   coverage.
-4. `happy2-app` composes product state and UI for both the web and Electron
-   entry points.
-
-Local development data stays under `.context/dev` in each workspace, including
-the generated TOML configuration, SQLite database, files, signing keys, and
-password pepper.
-
-## Project components
-
-- **[Happy App](packages/happy2-app)** — Shared React application and product
-  composition.
-- **[Happy UI](packages/happy2-ui)** — Reusable design system, component
-  workbench, and cross-browser visual coverage.
-- **[Happy State](packages/happy2-state)** — Framework-independent client state
-  and realtime reconciliation.
-- **[Happy Web](packages/happy2-web)** — Browser entry point and production web
-  build.
-- **[Happy Desktop](packages/happy2-desktop)** — macOS Electron app with two
-  startup modes: a private Rig-managed Happy server running on this machine, or a
-  thin HTTPS client to an existing cloud Happy instance. Supervises its child
-  processes, keeps credentials in the encrypted Keychain, and ships signed GitHub
-  Releases updates.
-- **[Happy Server](packages/happy2-server)** — Fastify server, authentication
-  service, persistence, and agent runtime.
-- **[Happy Gym](packages/happy2-gym)** — Isolated black-box server, state, and
-  browser testing environment.
+Happy feels familiar enough to be a team messenger, but it is organized around
+doing the work—not just talking about it.
 
 ## Development
 
-The repository uses pnpm 10.28 or later. For local development:
+Happy Desktop requires macOS, Node.js 24 or newer, and pnpm 10.28.1 or newer.
+
+Install dependencies and start the desktop development environment:
 
 ```sh
 pnpm install
-pnpm dev                                 # Server + web app
-pnpm web                                 # Web preview against happy.bulkovo.com
-pnpm dev:desktop                         # Electron app
-pnpm dev:server                          # Server only
-pnpm --dir packages/happy2-gym test      # End-to-end tests
-pnpm check                               # Format, lint, test, coverage, build
+pnpm dev
 ```
 
-For production server configuration, authentication modes, and deployment, see
-the [Happy Server documentation](packages/happy2-server/README.md).
+Start the browser development entry:
 
-## License
+```sh
+pnpm dev:web
+```
 
-MIT License - see [LICENSE](LICENSE) for details.
+Open the shared component blueprint:
+
+```sh
+pnpm blueprint
+```
+
+Validate the workspace:
+
+```sh
+pnpm check
+```
+
+## Project components
+
+| Component | Responsibility |
+| --- | --- |
+| State | Framework-independent desktop product state |
+| UI | Reusable desktop components and component blueprint |
+| App | Application composition and workspace routing |
+| Desktop | Native desktop shell and local-machine boundary |
+| Web | Browser development entry |
+| Gym | Rendering and desktop verification utilities |

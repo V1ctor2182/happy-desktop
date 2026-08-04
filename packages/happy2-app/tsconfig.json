@@ -1,7 +1,0 @@
-{
-    "extends": "../../tsconfig.base.json",
-    "compilerOptions": {
-        "types": ["vite/client"]
-    },
-    "include": ["sources", "tests", "vite.config.ts", "vite.gym.config.ts"]
-}

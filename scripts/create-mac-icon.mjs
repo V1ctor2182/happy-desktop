@@ -7,8 +7,8 @@ import sharp from "sharp";
 
 const execute = promisify(execFile);
 const workspace = resolve(import.meta.dirname, "..");
-const source = join(workspace, "packages", "happy2-desktop", "public", "app-icon.png");
-const buildDirectory = join(workspace, "packages", "happy2-desktop", "build");
+const source = join(workspace, "packages", "happy-desktop-electron", "public", "app-icon.png");
+const buildDirectory = join(workspace, "packages", "happy-desktop-electron", "build");
 const destination = join(buildDirectory, "icon.icns");
 const temporary = await mkdtemp(join(tmpdir(), "happy2-icon-"));
 const iconset = join(temporary, "Happy2.iconset");

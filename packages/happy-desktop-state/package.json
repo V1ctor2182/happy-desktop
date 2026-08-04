@@ -1,0 +1,31 @@
+{
+    "name": "happy-desktop-state",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts",
+        "./testing": "./src/testing/index.ts"
+    },
+    "scripts": {
+        "build": "tsc --project tsconfig.json",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --project tsconfig.json",
+        "format": "oxfmt --write .",
+        "format:check": "oxfmt --check .",
+        "lint": "oxlint .",
+        "architecture:check": "node --import tsx scripts/architecture-check.mts",
+        "clean": "rm -rf coverage"
+    },
+    "dependencies": {
+        "@slopus/rig-connect": "0.0.34",
+        "yjs": "^13.6.31",
+        "zustand": "5.0.14"
+    },
+    "devDependencies": {
+        "oxc-parser": "^0.140.0",
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.10"
+    }
+}

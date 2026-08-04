@@ -53,7 +53,7 @@ jobs:
                   RELEASE_TAG: ${{ github.ref_name }}
               run: |
                   ROOT_VERSION="$(node -p "require('./package.json').version")"
-                  DESKTOP_VERSION="$(node -p "require('./packages/happy2-desktop/package.json').version")"
+                  DESKTOP_VERSION="$(node -p "require('./packages/happy-desktop-electron/package.json').version")"
                   printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
                   test "$RELEASE_TAG" = "v$ROOT_VERSION"
                   test "$DESKTOP_VERSION" = "$ROOT_VERSION"
@@ -78,8 +78,8 @@ jobs:
             - name: Typecheck desktop source
               if: matrix.arch == 'arm64'
               run: |
-                  pnpm --dir packages/happy2-desktop typecheck
-                  pnpm --dir packages/happy2-app typecheck
+                  pnpm --dir packages/happy-desktop-electron typecheck
+                  pnpm --dir packages/happy-desktop-app typecheck
 
             - name: Build, sign, notarize, and verify both desktop distributions
               run: pnpm desktop:mac:release -- --arch ${{ matrix.arch }} --flavor all
@@ -91,14 +91,14 @@ jobs:
             - name: Upload architecture artifacts
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: happy2-macos-${{ matrix.arch }}
+                  name: happy-desktop-macos-${{ matrix.arch }}
                   path: |
-                      packages/happy2-desktop/release/standard/*.dmg
-                      packages/happy2-desktop/release/standard/*.zip
-                      packages/happy2-desktop/release/standard/*.blockmap
-                      packages/happy2-desktop/release/local-web/*.dmg
-                      packages/happy2-desktop/release/local-web/*.zip
-                      packages/happy2-desktop/release/local-web/*.blockmap
+                      packages/happy-desktop-electron/release/standard/*.dmg
+                      packages/happy-desktop-electron/release/standard/*.zip
+                      packages/happy-desktop-electron/release/standard/*.blockmap
+                      packages/happy-desktop-electron/release/local-web/*.dmg
+                      packages/happy-desktop-electron/release/local-web/*.zip
+                      packages/happy-desktop-electron/release/local-web/*.blockmap
                   if-no-files-found: error
 
             - name: Build hosted local renderer
@@ -111,8 +111,8 @@ jobs:
               if: matrix.arch == 'arm64'
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: happy2-local-web-site
-                  path: packages/happy2-desktop/release/local-web-site
+                  name: happy-desktop-local-web-site
+                  path: packages/happy-desktop-electron/release/local-web-site
                   if-no-files-found: error
 
     release:
@@ -128,8 +128,8 @@ jobs:
             - name: Download signed artifacts
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
-                  pattern: happy2-macos-*
-                  path: packages/happy2-desktop/release
+                  pattern: happy-desktop-macos-*
+                  path: packages/happy-desktop-electron/release
                   merge-multiple: true
 
             - name: Create architecture-aware updater manifest
@@ -138,11 +138,11 @@ jobs:
               run: |
                   RELEASE_VERSION="${RELEASE_VERSION#v}" \
                     node scripts/create-mac-update-manifest.mjs \
-                    packages/happy2-desktop/release/standard
+                    packages/happy-desktop-electron/release/standard
                   RELEASE_VERSION="${RELEASE_VERSION#v}" \
                     RELEASE_CHANNEL="local" \
                     node scripts/create-mac-update-manifest.mjs \
-                    packages/happy2-desktop/release/local-web
+                    packages/happy-desktop-electron/release/local-web
 
             - name: Publish release assets
               env:
@@ -151,25 +151,25 @@ jobs:
               run: |
                   if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
                     gh release upload "$RELEASE_TAG" \
-                      packages/happy2-desktop/release/standard/*.dmg \
-                      packages/happy2-desktop/release/standard/*.zip \
-                      packages/happy2-desktop/release/standard/*.blockmap \
-                      packages/happy2-desktop/release/standard/latest-mac.yml \
-                      packages/happy2-desktop/release/local-web/*.dmg \
-                      packages/happy2-desktop/release/local-web/*.zip \
-                      packages/happy2-desktop/release/local-web/*.blockmap \
-                      packages/happy2-desktop/release/local-web/local-mac.yml \
+                      packages/happy-desktop-electron/release/standard/*.dmg \
+                      packages/happy-desktop-electron/release/standard/*.zip \
+                      packages/happy-desktop-electron/release/standard/*.blockmap \
+                      packages/happy-desktop-electron/release/standard/latest-mac.yml \
+                      packages/happy-desktop-electron/release/local-web/*.dmg \
+                      packages/happy-desktop-electron/release/local-web/*.zip \
+                      packages/happy-desktop-electron/release/local-web/*.blockmap \
+                      packages/happy-desktop-electron/release/local-web/local-mac.yml \
                       --clobber
                   else
                     gh release create "$RELEASE_TAG" \
-                      packages/happy2-desktop/release/standard/*.dmg \
-                      packages/happy2-desktop/release/standard/*.zip \
-                      packages/happy2-desktop/release/standard/*.blockmap \
-                      packages/happy2-desktop/release/standard/latest-mac.yml \
-                      packages/happy2-desktop/release/local-web/*.dmg \
-                      packages/happy2-desktop/release/local-web/*.zip \
-                      packages/happy2-desktop/release/local-web/*.blockmap \
-                      packages/happy2-desktop/release/local-web/local-mac.yml \
+                      packages/happy-desktop-electron/release/standard/*.dmg \
+                      packages/happy-desktop-electron/release/standard/*.zip \
+                      packages/happy-desktop-electron/release/standard/*.blockmap \
+                      packages/happy-desktop-electron/release/standard/latest-mac.yml \
+                      packages/happy-desktop-electron/release/local-web/*.dmg \
+                      packages/happy-desktop-electron/release/local-web/*.zip \
+                      packages/happy-desktop-electron/release/local-web/*.blockmap \
+                      packages/happy-desktop-electron/release/local-web/local-mac.yml \
                       --generate-notes \
-                      --title "Happy 2 $RELEASE_TAG"
+                      --title "Happy $RELEASE_TAG"
                   fi

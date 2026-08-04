@@ -1,0 +1,22 @@
+{
+    "name": "happy-desktop-web",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 127.0.0.1",
+        "build": "vite build",
+        "typecheck": "tsc --project tsconfig.json",
+        "format": "oxfmt --write .",
+        "format:check": "oxfmt --check .",
+        "lint": "oxlint .",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "happy-desktop-electron": "workspace:*"
+    },
+    "devDependencies": {
+        "typescript": "^7.0.2",
+        "vite": "^8.1.4"
+    }
+}

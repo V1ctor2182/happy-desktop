@@ -5,10 +5,10 @@ const MINIMUM_REASON_LENGTH = 12;
 /**
  * `useLayoutEffect` is a synchronous, imperative browser boundary: it cannot run
  * without a live DOM, so a surface that leans on it is neither fully drivable from
- * a `happy2-state` snapshot nor mockable the way the web app is. The default is to
+ * a `happy-desktop-state` snapshot nor mockable the way the web app is. The default is to
  * express the behavior declaratively (render-time derivation, an event handler, a
- * ref callback, or a `happy2-state` action). A genuine imperative measurement in a
- * reusable `happy2-ui` primitive may keep it behind one documented, local
+ * ref callback, or a `happy-desktop-state` action). A genuine imperative measurement in a
+ * reusable `happy-desktop-ui` primitive may keep it behind one documented, local
  * `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`.
  */
 const noLayoutEffect = {
@@ -19,7 +19,7 @@ const noLayoutEffect = {
                 "Ban useLayoutEffect; it is an imperative DOM boundary that makes a surface un-mockable.",
         },
         messages: {
-            banned: "useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy2-state (render derivation, event handler, or ref callback). A true imperative measurement in a happy2-ui primitive may keep one `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`.",
+            banned: "useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy-desktop-state (render derivation, event handler, or ref callback). A true imperative measurement in a happy-desktop-ui primitive may keep one `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`.",
         },
         schema: [],
     },
@@ -46,9 +46,9 @@ const noLayoutEffect = {
 /**
  * `useState`, `useReducer`, and `useEffect` keep authoritative product state and
  * side effects inside a React tree, which the desktop application is forbidden
- * from doing: all of its state and effects live in `happy2-state` so the shell can
+ * from doing: all of its state and effects live in `happy-desktop-state` so the shell can
  * be mocked and driven exactly like the web app. This rule is applied only to
- * application packages; reusable `happy2-ui` primitives may still own narrowly
+ * application packages; reusable `happy-desktop-ui` primitives may still own narrowly
  * scoped local UI state (but never `useEffect`, banned for them elsewhere).
  */
 const noLocalState = {
@@ -58,7 +58,7 @@ const noLocalState = {
             description: "Ban React-local product state and effects in the application layer.",
         },
         messages: {
-            banned: "{{hook}} keeps product state or side effects inside React. The desktop/app layer must be fully drivable from a happy2-state snapshot; move this into happy2-state.",
+            banned: "{{hook}} keeps product state or side effects inside React. The desktop/app layer must be fully drivable from a happy-desktop-state snapshot; move this into happy-desktop-state.",
         },
         schema: [],
     },
@@ -106,7 +106,7 @@ const requireReactExceptionReason = {
         },
         messages: {
             forbiddenLocalStateException:
-                "The local-state ban cannot be disabled in the application layer. Move the state into happy2-state.",
+                "The local-state ban cannot be disabled in the application layer. Move the state into happy-desktop-state.",
             missingReason:
                 "A useLayoutEffect exception must include a concrete reason after `--` (at least {{minimum}} characters).",
             nonLocalException:

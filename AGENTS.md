@@ -53,7 +53,7 @@ When the user does ask for tests, follow the rules in the sections below for
 where they live and what they must prove. Keep existing tests passing for the
 code you touch.
 
-The `happy2-ui` suite is very slow — it drives real browsers and takes many
+The `happy-desktop-ui` suite is very slow — it drives real browsers and takes many
 minutes. Do not run it more than once, and do not run it at all unless you
 actually need its result. `pnpm check` (and therefore `pnpm release`) already
 runs it, so never run the package suite separately alongside one of those. When
@@ -93,7 +93,7 @@ well.
 Before creating or changing any user interface, read and follow `DESIGN.md`.
 It is the authoritative contract for component ownership, blueprint coverage,
 layout dimensions, icon preparation, optical alignment, and cross-browser
-rendering tests. Reusable visual components belong in `happy2-ui`; application
+rendering tests. Reusable visual components belong in `happy-desktop-ui`; application
 packages may only compose them and supply product state and event handlers. Its
 rendering-test rules describe how such tests are written when they are asked
 for; they do not override the "Tests" section above.
@@ -107,7 +107,7 @@ See `DESIGN.md` → "Layout with flexbox".
 ## Icons
 
 Every icon is a font glyph from the two families Happy itself uses — Ionicons
-and Octicons, vendored under `packages/happy2-ui/src/assets/fonts/` and
+and Octicons, vendored under `packages/happy-desktop-ui/src/assets/fonts/` and
 addressed through the generated name maps in `src/vectorIcons/`. Use `Icon` for
 the curated house vocabulary and `Ionicon`/`Octicon` for a specific upstream
 glyph. Adding an icon means picking the upstream glyph a name maps to.
@@ -135,7 +135,7 @@ for fresh data, the screen is broken. Data updates arrive one of two ways:
 
 - Full reactivity via the realtime SSE stream. The primary, focused surface
   reconciles live: subscribe to sync events and reconcile durable state through
-  the `happy2-state` difference APIs (realtime events are delivery hints, never
+  the `happy-desktop-state` difference APIs (realtime events are delivery hints, never
   durable state — see "Client state principles"). This is the default; prefer it.
 - Polling only for a secondary surface that has no realtime channel yet. While
   that surface is on screen, poll every few seconds; stop polling the moment it
@@ -148,11 +148,11 @@ reload.
 
 ## React UI reactivity and identity
 
-React surfaces render immutable `happy2-state` snapshots. Keep component and
+React surfaces render immutable `happy-desktop-state` snapshots. Keep component and
 DOM identity stable across ordinary store notifications so focus, selection,
 scroll, measurements, and local UI state survive updates.
 
-- A framework adapter for a `happy2-state` surface owns one coarse
+- A framework adapter for a `happy-desktop-state` surface owns one coarse
   `useSyncExternalStore` subscription per materialized store. Repeated rows must
   not subscribe to the product store individually.
 - Treat a change of store identity as an explicit lifetime boundary. A changing
@@ -164,8 +164,8 @@ scroll, measurements, and local UI state survive updates.
 - Let React Compiler handle ordinary render memoization. Add manual memoization
   only for a measured identity or performance contract, and document that
   contract beside the code.
-- Product state belongs in `happy2-state`. `happy2-app` may not use `useState`
-  or `useEffect`; reusable `happy2-ui` components may own narrowly scoped local
+- Product state belongs in `happy-desktop-state`. `happy-desktop-app` may not use `useState`
+  or `useEffect`; reusable `happy-desktop-ui` components may own narrowly scoped local
   UI state, but may not use `useEffect`. Use an event handler, external-store
   subscription, ref callback, or render-time derivation instead. An imperative
   browser integration may use `useLayoutEffect` only when no declarative or
@@ -198,7 +198,7 @@ non-force push. If `main` advances or the push is rejected, fetch, rebase again,
 and retry until the push succeeds. Never force-push `main`.
 
 Keep sync validation proportional to the packages that changed. For a
-client-only diff limited to `happy2-app`, `happy2-state`, and `happy2-ui` (plus
+client-only diff limited to `happy-desktop-app`, `happy-desktop-state`, and `happy-desktop-ui` (plus
 their docs, assets, or development tooling), formatting plus a typecheck/build
 of the touched packages is enough; do not run server gym, server coverage, or
 another repository-wide test pass solely because the work is being synced.
@@ -206,79 +206,10 @@ These UI and client-state changes cannot corrupt durable server data or
 migrations. A server, schema, migration, authentication, or durable-state change
 runs the existing server checks for the code it touches.
 
-## Server principles
-
-`happy2-server` is a small desktop-app backend that may run as the complete
-server or as a separately deployed authentication service. Its behavior is
-configured from a TOML file; do not add deployment-specific switches to code.
-
-When server tests are requested, they belong end to end in `gym`, the
-repository's isolated black-box testing environment: put the coverage under
-`packages/happy2-gym/tests/server`, since unit tests do not replace end-to-end
-coverage. Name each test file after the observable behavior it proves so the
-directory reads like an index of supported workflows; do not use generic names
-such as `server.test.ts`, `integration.test.ts`, or issue numbers. Read
-`packages/happy2-gym/README.md` before writing gym tests for the full naming,
-organization, harness, and lifecycle instructions.
-
-- Keep `/` deliberately minimal. Versioned, useful HTTP APIs live under `/v0`.
-- Exactly one authentication mechanism is enabled in TOML at a time: OIDC,
-  password, or email magic links. SMTP credentials always come from environment
-  variables, never the TOML file.
-- Session JWTs are RS256 signed and intentionally long lived, but they are not
-  self-validating authority. Every authenticated request must confirm that the
-  session row still exists and is active in the shared Drizzle/SQLite database.
-- Do not make process-local state authoritative. Multiple server instances may
-  issue and validate sessions concurrently; use database transactions/locks for
-  one-time tokens and migrations.
-- Preserve request-security telemetry for each issued, refreshed, and revoked
-  session: proxy-aware client IP, provider location headers when supplied,
-  device, app version, and user agent. Only trust forwarded headers through the
-  configured proxy boundary.
-- Password hashes retain a unique random salt per user and use a server-wide
-  pepper. The pepper and JWT key pair may come from the environment; otherwise
-  they are generated once and persisted to the `.env` beside the TOML file.
-- Prefer CUID2 for every newly generated identifier, including accounts, users,
-  sessions, files, and other persisted records.
-- Keep every Drizzle table in the single authoritative
-  `packages/happy2-server/sources/modules/schema.ts` file. Persistence behavior
-  must not use `Database`, `*Repository`, store superclasses, or another
-  initialized database facade.
-- Put each durable server action in its own product-module file. The lower-camel
-  filename and exported async function must match exactly, with the entity first
-  and operation second (`userCreateProfile`, never `createUserProfile`). Pass the
-  `DrizzleExecutor`/transaction as the first argument, followed only by explicit
-  plain dependencies and input values.
-- Compose action transactions with `withTransaction`: it opens and retries one
-  complete top-level SQLite transaction, while a nested action reuses the outer
-  transaction and never starts or retries its own partial write. Do not wrap
-  `withTransaction` in an additional busy retry.
-- Put shared module-private SQL, projections, parsers, and caches only in that
-  module's `impl/` or `utils/` directory. Routes and long-lived services call
-  public actions, never persistence helpers. Keep helpers focused; do not
-  reconstruct a repository as a giant utility or barrel file.
-- Run `pnpm --dir packages/happy2-server architecture:check` for server changes;
-  it enforces the schema, facade, filename/export, entity-first, executor-first,
-  comment, and direct-mutation boundaries.
-- Every exported per-file server action must have a short doc comment directly
-  above the function. State its observable semantic purpose, the durable state
-  or invariant it changes, material side effects/transaction expectations, and
-  why this action boundary exists. The comment must be specific enough to
-  review the implementation against its promise without merely paraphrasing
-  the code.
-- Profiles are the product-level `User` model. Authentication `accounts` exist
-  only for credentials, activation, and session management; an account without
-  an active profile must not be usable by product routes.
-- Server URL paths must not use `me` (or other identity placeholders) as a
-  nested path segment. For the current authenticated user, use `/v0/me` and
-  its action routes directly.
-- Server APIs use only GET and POST. POST paths name explicit actions rather
-  than CRUD semantics: use `updateProfile`, for example, rather than PATCHing
-  a profile object.
 
 ## Client state principles
 
-`happy2-state` is the in-memory product-state boundary between application code
+`happy-desktop-state` is the in-memory product-state boundary between application code
 and the server. Keep authentication, UI framework bindings, persistence, and the
 decision to create a process-global instance outside this package.
 
@@ -341,5 +272,5 @@ decision to create a process-global instance outside this package.
   express intent or optimistic local state, but must not fabricate confirmed,
   saved, pinned, or otherwise server-authoritative state.
 - When tests for races and failure handling are requested, write them against
-  the programmable fake server in `happy2-state/testing`, and cover the same
+  the programmable fake server in `happy-desktop-state/testing`, and cover the same
   boundary against the real in-memory server through `gym/state`.

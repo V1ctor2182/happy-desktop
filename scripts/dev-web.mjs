@@ -14,7 +14,7 @@ const child = spawn(
     "pnpm",
     [
         "--filter",
-        "happy2-web",
+        "happy-desktop-web",
         "exec",
         "vite",
         "--host",

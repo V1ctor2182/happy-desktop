@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // Architecture check for React state boundaries in packages that are not linted
-// by the `happy2-react` ESLint plugin (currently happy2-desktop). It enforces the
-// same two contracts the plugin enforces for happy2-app and happy2-ui:
+// by the `happy2-react` ESLint plugin (currently happy-desktop-electron). It enforces the
+// same two contracts the plugin enforces for happy-desktop-app and happy-desktop-ui:
 //
 //   * useLayoutEffect is banned as an imperative DOM boundary. A genuine
 //     imperative measurement may keep one documented, local
 //     `eslint-disable-next-line happy2-react/no-layout-effect -- <concrete reason>`
 //     on the line directly above the call.
 //   * useEffect, useState, and useReducer are banned outright: the desktop shell
-//     must be fully drivable from a happy2-state snapshot and mockable like the
-//     web app, so its product state and side effects live in happy2-state, never
+//     must be fully drivable from a happy-desktop-state snapshot and mockable like the
+//     web app, so its product state and side effects live in happy-desktop-state, never
 //     inside a React tree.
 //
 // The check reads source directly (no bundler, no ESLint) so it runs anywhere.
@@ -18,7 +18,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const TARGETS = [join(repoRoot, "packages", "happy2-desktop", "sources")];
+const TARGETS = [join(repoRoot, "packages", "happy-desktop-electron", "sources")];
 const SOURCE = /\.(?:ts|tsx)$/u;
 const SKIP = /\.test\.(?:ts|tsx)$/u;
 const MINIMUM_REASON_LENGTH = 12;
@@ -60,17 +60,17 @@ for (const root of TARGETS) {
         lines.forEach((line, index) => {
             if (/\buseEffect\s*\(/u.test(line)) {
                 problems.push(
-                    `${where}:${index + 1}  useEffect runs side effects inside React. The desktop shell must be driven from happy2-state; move the effect there.`,
+                    `${where}:${index + 1}  useEffect runs side effects inside React. The desktop shell must be driven from happy-desktop-state; move the effect there.`,
                 );
             }
             if (/\b(?:useState|useReducer)\s*\(/u.test(line)) {
                 problems.push(
-                    `${where}:${index + 1}  useState/useReducer keeps product state in React. Move it into happy2-state.`,
+                    `${where}:${index + 1}  useState/useReducer keeps product state in React. Move it into happy-desktop-state.`,
                 );
             }
             if (/\buseLayoutEffect\s*\(/u.test(line) && !documentedLayoutEffect(lines[index - 1])) {
                 problems.push(
-                    `${where}:${index + 1}  useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy2-state, or add a documented local \`eslint-disable-next-line ${LAYOUT_EFFECT_RULE} -- <concrete reason>\`.`,
+                    `${where}:${index + 1}  useLayoutEffect is an imperative DOM boundary and is banned. Drive the surface from happy-desktop-state, or add a documented local \`eslint-disable-next-line ${LAYOUT_EFFECT_RULE} -- <concrete reason>\`.`,
                 );
             }
         });

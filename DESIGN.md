@@ -4,17 +4,17 @@ This document is the source of truth for visual work in Happy (2). The product i
 desktop application. Design for its desktop window and do not introduce mobile
 breakpoints, touch-only behavior, or mobile substitutes.
 
-The design system is implemented by `happy2-ui`. Its component workbench is the
+The design system is implemented by `happy-desktop-ui`. Its component workbench is the
 blueprint: run it through Portless with `pnpm blueprint`.
 
 ## Architecture and ownership
 
-Every visual element must be a reusable `happy2-ui` component before it is used
+Every visual element must be a reusable `happy-desktop-ui` component before it is used
 by the main app. This applies to small primitives such as Box, Button, Icon, and
 Avatar and to product-sized structures such as a rail, sidebar, title bar,
 inspector, editor shell, or dialog.
 
-A `happy2-ui` component must:
+A `happy-desktop-ui` component must:
 
 - render in isolation without an application store, router, API client, IPC
   bridge, authentication context, or knowledge of a product route;
@@ -28,8 +28,8 @@ A `happy2-ui` component must:
 The main app is glue and state management. It may load data, own stores, select
 the current route, translate product data into component props, and handle
 component callbacks. It must not define visual components, component-local
-styling systems, icons, or alternate copies of `happy2-ui` components. If the
-app needs a new visual element, implement and prove it in `happy2-ui`, add it to
+styling systems, icons, or alternate copies of `happy-desktop-ui` components. If the
+app needs a new visual element, implement and prove it in `happy-desktop-ui`, add it to
 the blueprint, and then import it into the app.
 
 Keep product decisions out of the component. For example, a rail may accept
@@ -42,7 +42,7 @@ Happy (2) follows the original Happy app's desktop, neutral visual language.
 It uses the system appearance automatically by default: light mode has white
 and #f5f5f5 grouped surfaces with black primary actions; dark mode has a
 #1e1e1e grouped root, #212121 primary surfaces, and black primary actions. A product surface may offer a
-controlled light/dark override only through the reusable `happy2-ui` theme
+controlled light/dark override only through the reusable `happy-desktop-ui` theme
 scope, such as the compact appearance control in the feature rail. The override
 must affect one stable application tree and remain fully keyboard accessible; it
 must not create a duplicate themed tree or introduce component-specific colors.
@@ -50,7 +50,7 @@ Happy teal communicates general interactive
 and link states; system blue remains the info colour for the original controls
 that use it. System green, orange, and red carry success, warning, and
 destructive meaning. The tokens live in
-`packages/happy2-ui/src/theme.css` and are the only source of color and
+`packages/happy-desktop-ui/src/theme.css` and are the only source of color and
 typography in the system. Its color roles are flattened directly from
 `~/Developer/happy/packages/happy-app/sources/theme.ts` and retain Happy's
 role names (for example `var(--surface)`, `var(--groupped-background)`, and
@@ -255,9 +255,9 @@ the browser actually renders before applying the formula. A descendant whose
 corner is outside the ancestor's corner field is an independent rounded shape
 and does not inherit this relationship.
 
-The shared `happy2-ui` renderer audits this contract after every test render in
+The shared `happy-desktop-ui` renderer audits this contract after every test render in
 Chromium, Firefox, and WebKit. Component fixtures must expose rounded visual
-parts with `data-happy2-ui` so nested geometry is included automatically. A
+parts with `data-happy-desktop-ui` so nested geometry is included automatically. A
 test must fail when a nested curve uses an independently selected radius or
 asymmetric horizontal and vertical insets, even if a screenshot looks close.
 
@@ -481,7 +481,7 @@ component integration. Font icons are exempt — see "Icon systems" below.
 
 Every icon in Happy (2) is a font glyph from the two families Happy itself
 relies on: **Ionicons** (~1357 glyphs) and **Octicons** (~331 glyphs), ported
-verbatim from Happy's `@expo/vector-icons` usage. Both live in `happy2-ui`, and
+verbatim from Happy's `@expo/vector-icons` usage. Both live in `happy-desktop-ui`, and
 application code never imports an icon font or draws its own glyph; it composes
 one of these components and passes a name, size, and optional color.
 
@@ -500,7 +500,7 @@ re-back `Icon` with path data. Adding a name to `IconName` means picking the
 upstream glyph it maps to. How the families are built:
 
 - The upstream TrueType fonts are vendored under
-  `packages/happy2-ui/src/assets/fonts/` (`Ionicons.ttf`, `Octicons.ttf`).
+  `packages/happy-desktop-ui/src/assets/fonts/` (`Ionicons.ttf`, `Octicons.ttf`).
   `@expo/vector-icons` ships no woff2, so the TTFs are used as-is through
   `@font-face` in `styles/vector-icon.css`; every engine renders them.
 - Each set is addressed by the upstream glyph name through the generated
@@ -541,7 +541,7 @@ For example, open a separate terminal at the repository root, start Codex, and
 ask:
 
 > Generate a background image and save the final asset at
-> `packages/happy2-ui/src/assets/backgrounds/agent-workspace.png`. Generate
+> `packages/happy-desktop-ui/src/assets/backgrounds/agent-workspace.png`. Generate
 > retro dithered technicolor gamma image, 20% muted. Show a late-1970s computer
 > operations room at night from a slightly elevated three-quarter perspective:
 > violet-black walls, low amber and magenta monitor glow, modular terminals,
@@ -556,7 +556,7 @@ ask:
 For a quieter abstract surface, ask:
 
 > Generate a seamless desktop application background and save it at
-> `packages/happy2-ui/src/assets/backgrounds/relay-field.png`. Generate retro
+> `packages/happy-desktop-ui/src/assets/backgrounds/relay-field.png`. Generate retro
 > dithered technicolor gamma image, 20% muted. Create an abstract field of broad
 > violet-black bands, faint rose and cyan signal arcs, and sparse amber relay
 > points, viewed as a flat graphic rather than a physical scene. Preserve a
@@ -603,7 +603,7 @@ as a group, then test them in their real component containers.
 ## Definition of done
 
 A visual change is complete only when the reusable component exists in
-`happy2-ui`, all supported states appear on its blueprint page, the main app uses
+`happy-desktop-ui`, all supported states appear on its blueprint page, the main app uses
 that component instead of defining its own UI, and cross-browser unit tests prove
 its dimensions, computed styles, visible bounds, colors, typography, and optical
 alignment at Retina scale.

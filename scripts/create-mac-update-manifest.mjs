@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
-const releaseDirectory = resolve(process.argv[2] ?? "packages/happy2-desktop/release");
+const releaseDirectory = resolve(process.argv[2] ?? "packages/happy-desktop-electron/release");
 const version = process.env.RELEASE_VERSION ?? process.env.GITHUB_REF_NAME?.replace(/^v/u, "");
 if (!version) throw new Error("Set RELEASE_VERSION or run from a v* GitHub tag.");
 const channel = process.env.RELEASE_CHANNEL ?? "latest";
