@@ -40,6 +40,10 @@ export type ConversationEntryViewProps = {
     grouped?: boolean;
     /** Answers a pending question request entry. */
     onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    /** Options ticked into this question so far, when the owner keeps them. */
+    requestSelection?: Readonly<Record<string, readonly string[]>>;
+    /** Reports each tick to an owner that keeps the selection. */
+    onRequestSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Approves or denies a pending gate request entry. */
     onRequestDecide?: (requestId: string, decision: ConversationRequestDecision) => void;
     /**
@@ -268,6 +272,10 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 defaultExpanded={props.activityDefaultExpanded}
                 error={props.requestError}
                 onAnswer={(requestId, answers) => props.onRequestAnswer?.(requestId, answers)}
+                {...(props.onRequestSelectionChange
+                    ? { onSelectionChange: props.onRequestSelectionChange }
+                    : {})}
+                {...(props.requestSelection ? { selection: props.requestSelection } : {})}
                 onDecide={(requestId, decision) => props.onRequestDecide?.(requestId, decision)}
                 pending={props.requestPending}
                 request={entry.request}

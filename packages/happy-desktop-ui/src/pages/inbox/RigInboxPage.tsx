@@ -8,6 +8,7 @@ import type {
 import { AvatarBrutalist } from "../../AvatarBrutalist";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
+import { Composer } from "../../Composer";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
 import { SURFACE_HEADER_HEIGHT } from "../../InfoPanel";
@@ -26,6 +27,20 @@ export interface RigInboxPageProps {
     /** In-flight and failed answer submissions, by item. */
     submissions?: ReadonlyMap<RigInboxItemId, RigInboxSubmission>;
     onAnswer: (itemId: RigInboxItemId, answers: RigInboxAnswerMap) => void;
+    /** Replies being written in the reader's own words, by item. */
+    messages?: ReadonlyMap<RigInboxItemId, string>;
+    /** Options ticked into a question but not yet submitted, by item. */
+    selections?: ReadonlyMap<RigInboxItemId, Readonly<Record<string, readonly string[]>>>;
+    /** Reports each tick to the owner that keeps the selections. */
+    onSelectionChange?: (itemId: RigInboxItemId, answers: RigInboxAnswerMap) => void;
+    /**
+     * Records typing in one question's reply box. Supplied with
+     * `onMessageSubmit`, it is what gives a question a written answer beside its
+     * options — the way out when none of them is what should happen.
+     */
+    onMessageChange?: (itemId: RigInboxItemId, text: string) => void;
+    /** Sends what was written as that question's answer. */
+    onMessageSubmit?: (itemId: RigInboxItemId) => void;
     /** Opens the session that asked, for the context a question does not carry. */
     onOpenSession?: (item: RigInboxItem) => void;
     /** Names the project or worktree an item belongs to. */
@@ -116,7 +131,20 @@ export function RigInboxPage(props: RigInboxPageProps) {
                             item={item}
                             key={item.id}
                             location={props.itemLocation?.(item)}
+                            message={props.messages?.get(item.id) ?? ""}
                             onAnswer={props.onAnswer}
+                            {...(props.onSelectionChange
+                                ? { onSelectionChange: props.onSelectionChange }
+                                : {})}
+                            {...(props.selections?.get(item.id)
+                                ? { selection: props.selections.get(item.id)! }
+                                : {})}
+                            {...(props.onMessageChange
+                                ? { onMessageChange: props.onMessageChange }
+                                : {})}
+                            {...(props.onMessageSubmit
+                                ? { onMessageSubmit: props.onMessageSubmit }
+                                : {})}
                             {...(props.onOpenSession ? { onOpenSession: props.onOpenSession } : {})}
                             submission={submissions?.get(item.id)}
                             time={props.itemTime?.(item)}
@@ -262,12 +290,21 @@ function InboxItemHeader(props: InboxItemHeaderProps & { status?: string }) {
 }
 
 interface InboxPendingItemProps extends InboxItemHeaderProps {
+    /** What has been written as this question's reply so far. */
+    message: string;
     onAnswer: (itemId: RigInboxItemId, answers: RigInboxAnswerMap) => void;
+    /** Options ticked into this question so far. */
+    selection?: Readonly<Record<string, readonly string[]>>;
+    onSelectionChange?: (itemId: RigInboxItemId, answers: RigInboxAnswerMap) => void;
+    onMessageChange?: (itemId: RigInboxItemId, text: string) => void;
+    onMessageSubmit?: (itemId: RigInboxItemId) => void;
     submission?: RigInboxSubmission;
 }
 
 function InboxPendingItem(props: InboxPendingItemProps) {
     const submission = props.submission;
+    const onMessageChange = props.onMessageChange;
+    const onMessageSubmit = props.onMessageSubmit;
     return (
         <article
             className="happy2-rig-inbox__item"
@@ -285,13 +322,35 @@ function InboxPendingItem(props: InboxPendingItemProps) {
             <RigUserInputPrompt
                 {...(submission?.type === "failed" ? { error: submission.error } : {})}
                 onAnswer={(_requestId, answers) => props.onAnswer(props.item.id, answers)}
+                {...(props.onSelectionChange
+                    ? {
+                          onSelectionChange: (_requestId: string, answers: RigInboxAnswerMap) =>
+                              props.onSelectionChange?.(props.item.id, answers),
+                      }
+                    : {})}
                 pending={submission?.type === "pending"}
+                {...(props.selection ? { selection: props.selection } : {})}
                 request={{
                     requestId: props.item.requestId,
                     questions: props.item.questions,
                 }}
                 variant="flat"
             />
+            {/* The answer for when none of the options is the answer. It is the
+                chat's own input, minus every knob that configures a session:
+                there is no session being configured here, only something to
+                say back. */}
+            {onMessageChange && onMessageSubmit ? (
+                <Composer
+                    className="happy2-rig-inbox__reply"
+                    data-testid="rig-inbox-reply"
+                    onSend={() => onMessageSubmit(props.item.id)}
+                    onValueChange={(value) => onMessageChange(props.item.id, value)}
+                    pending={submission?.type === "pending"}
+                    placeholder="Or say what to do instead…"
+                    value={props.message}
+                />
+            ) : null}
         </article>
     );
 }

@@ -131,6 +131,14 @@ export type ConversationViewProps = {
     onRequestAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
+    /**
+     * Options ticked into each pending question but not yet submitted, by
+     * request id. The owner keeps them because sending a message answers the
+     * question, and that answer must carry a choice already made.
+     */
+    requestSelections?: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
+    /** Reports each tick to the owner that keeps the selections. */
+    onRequestSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -326,6 +334,12 @@ export function ConversationView(props: ConversationViewProps) {
                                 onImageOpen={props.onImageOpen}
                                 onAttachmentOpen={props.onAttachmentOpen}
                                 onRequestAnswer={props.onRequestAnswer}
+                                onRequestSelectionChange={props.onRequestSelectionChange}
+                                requestSelection={
+                                    entry.kind === "request"
+                                        ? props.requestSelections?.get(entry.request.requestId)
+                                        : undefined
+                                }
                                 onToolSelect={props.onToolSelect}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                 onTraceToggle={props.onTraceToggle}

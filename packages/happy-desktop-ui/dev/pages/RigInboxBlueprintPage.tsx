@@ -125,6 +125,11 @@ const failed: ReadonlyMap<RigInboxItemId, RigInboxSubmission> = new Map([
     ],
 ]);
 
+/** A reply part-written into the first question, so the input shows its filled state. */
+const messages: ReadonlyMap<RigInboxItemId, string> = new Map([
+    ["one" as RigInboxItemId, "Neither — split the table first and migrate each half."],
+]);
+
 const location = (candidate: RigInboxItem): string =>
     candidate.worktreeId ? "happy2 · feature worktree" : "happy2";
 
@@ -140,7 +145,7 @@ export function RigInboxBlueprintPage() {
             title="RigInboxPage"
         >
             <FullScreenSpecimen
-                detail="Two waiting questions and two answered; the second answer is in flight, and the first question carries a required and an optional part."
+                detail="Two waiting questions and two answered; the second answer is in flight, the first question carries a required and an optional part, and each waiting question also takes a written reply for when no option fits."
                 label="Queue with history"
                 number="01"
             >
@@ -148,7 +153,10 @@ export function RigInboxBlueprintPage() {
                     answered={answered}
                     itemLocation={location}
                     itemTime={time}
+                    messages={messages}
                     onAnswer={() => undefined}
+                    onMessageChange={() => undefined}
+                    onMessageSubmit={() => undefined}
                     onOpenSession={() => undefined}
                     pending={pending}
                     submissions={submissions}

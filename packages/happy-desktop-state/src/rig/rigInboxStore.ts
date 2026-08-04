@@ -58,6 +58,14 @@ export interface RigInboxSnapshot {
     readonly error?: UserError;
     /** In-flight and failed answer submissions, by item. */
     readonly submissions: ReadonlyMap<RigInboxItemId, RigInboxSubmission>;
+    /** What is being written as a reply in a question's own words, by item. */
+    readonly messages: ReadonlyMap<RigInboxItemId, string>;
+    /**
+     * Options ticked into a question but not yet submitted, by item. They are
+     * kept here because sending the written reply answers the question, and that
+     * answer must carry a choice the reader has already made.
+     */
+    readonly selections: ReadonlyMap<RigInboxItemId, Readonly<Record<string, readonly string[]>>>;
 }
 
 /** What the store asks its owner to do; answering is the owner's transport work. */
@@ -88,6 +96,25 @@ export interface RigInboxStore {
      * to assume.
      */
     itemAnswer(itemId: RigInboxItemId, answers: Readonly<Record<string, readonly string[]>>): void;
+    /** Records what is being written as this question's reply, keystroke by keystroke. */
+    itemMessageUpdate(itemId: RigInboxItemId, text: string): void;
+    /** Records the options ticked into a question before it is submitted. */
+    itemSelectionUpdate(
+        itemId: RigInboxItemId,
+        answers: Readonly<Record<string, readonly string[]>>,
+    ): void;
+    /**
+     * Answers the question with what was written rather than with one of its
+     * options — the reply for when none of them is what should happen. The text
+     * goes back as the answer to every question the item asked, which is what
+     * both frees the waiting agent and takes the question out of the queue; a
+     * message sent beside the question would do neither, since the agent is
+     * inside the call that asked and reads nothing until it returns.
+     *
+     * Blank text sends nothing. As with a chosen option, the item leaves
+     * `pending` only when the Rig reports it resolved.
+     */
+    itemMessageSubmit(itemId: RigInboxItemId): void;
     /** Private authoritative input: how the owner's answer attempt actually ended. */
     inboxInput(event: RigInboxInput): void;
     [Symbol.dispose](): void;
@@ -99,6 +126,11 @@ export interface RigInboxStoreDeps {
 }
 
 const EMPTY_SUBMISSIONS: ReadonlyMap<RigInboxItemId, RigInboxSubmission> = new Map();
+const EMPTY_MESSAGES: ReadonlyMap<RigInboxItemId, string> = new Map();
+const EMPTY_SELECTIONS: ReadonlyMap<
+    RigInboxItemId,
+    Readonly<Record<string, readonly string[]>>
+> = new Map();
 
 /**
  * The Rig's question queue as one surface: everything its agents asked, across
@@ -117,6 +149,8 @@ export function rigInboxStoreCreate(deps: RigInboxStoreDeps): RigInboxStore {
         answered: [],
         loading: true,
         submissions: EMPTY_SUBMISSIONS,
+        messages: EMPTY_MESSAGES,
+        selections: EMPTY_SELECTIONS,
     }));
 
     const listeners = new Set<() => void>();
@@ -125,16 +159,39 @@ export function rigInboxStoreCreate(deps: RigInboxStoreDeps): RigInboxStore {
     let disposed = false;
 
     const commit = (): void => {
-        const submissions = store.getState().submissions;
+        const current = store.getState();
         store.setState(
             {
                 pending: items.filter((item) => item.status === "pending"),
                 answered: items.filter((item) => item.status === "answered"),
                 loading: false,
-                submissions,
+                submissions: current.submissions,
+                messages: current.messages,
+                selections: current.selections,
             },
             true,
         );
+    };
+
+    /**
+     * Shows one answer going out and asks the owner to send it. Choosing an
+     * option and replying in one's own words are the same act to the Rig — a
+     * question with an answer — so they leave through the same door.
+     */
+    const answerSubmit = (
+        item: RigInboxItem,
+        answers: Readonly<Record<string, readonly string[]>>,
+    ): void => {
+        const submissions = new Map(store.getState().submissions);
+        submissions.set(item.id, { type: "pending" });
+        store.setState({ submissions }, false);
+        output({
+            type: "itemAnswerSubmitted",
+            itemId: item.id,
+            sessionId: item.sessionId,
+            requestId: item.requestId,
+            answers,
+        });
     };
 
     const start = (): void => {
@@ -143,13 +200,19 @@ export function rigInboxStoreCreate(deps: RigInboxStoreDeps): RigInboxStore {
             (next) => {
                 if (disposed) return;
                 items = inboxItemsProject(next);
-                // A resolved question carries its own outcome now, so any
-                // submission we were showing for it has served its purpose.
+                // A resolved question carries its own outcome now, so the
+                // submission we were showing for it — and any reply still being
+                // written into it — have served their purpose.
                 const submissions = new Map(store.getState().submissions);
+                const messages = new Map(store.getState().messages);
+                const selections = new Map(store.getState().selections);
                 for (const item of items) {
-                    if (item.status === "answered") submissions.delete(item.id);
+                    if (item.status !== "answered") continue;
+                    submissions.delete(item.id);
+                    messages.delete(item.id);
+                    selections.delete(item.id);
                 }
-                store.setState({ submissions }, false);
+                store.setState({ submissions, messages, selections }, false);
                 commit();
             },
             (error) => {
@@ -183,16 +246,35 @@ export function rigInboxStoreCreate(deps: RigInboxStoreDeps): RigInboxStore {
         itemAnswer(itemId, answers) {
             const item = items.find((candidate) => candidate.id === itemId);
             if (!item || item.status !== "pending") return;
-            const submissions = new Map(store.getState().submissions);
-            submissions.set(itemId, { type: "pending" });
-            store.setState({ submissions }, false);
-            output({
-                type: "itemAnswerSubmitted",
-                itemId,
-                sessionId: item.sessionId,
-                requestId: item.requestId,
-                answers,
-            });
+            answerSubmit(item, answers);
+        },
+        itemMessageUpdate(itemId, text) {
+            const messages = new Map(store.getState().messages);
+            messages.set(itemId, text);
+            store.setState({ messages }, false);
+        },
+        itemSelectionUpdate(itemId, answers) {
+            const selections = new Map(store.getState().selections);
+            selections.set(itemId, answers);
+            store.setState({ selections }, false);
+        },
+        itemMessageSubmit(itemId) {
+            const item = items.find((candidate) => candidate.id === itemId);
+            if (!item || item.status !== "pending") return;
+            const text = (store.getState().messages.get(itemId) ?? "").trim();
+            if (text.length === 0) return;
+            // A ticked question is answered by its ticks: they are a deliberate
+            // choice, and a single-select question could not carry the words
+            // beside one anyway. The words answer whatever was left blank, so
+            // no required question is left unanswered and neither the choice
+            // nor the reply is dropped.
+            const ticked = store.getState().selections.get(itemId) ?? {};
+            const answers: Record<string, readonly string[]> = {};
+            for (const question of item.questions) {
+                const chosen = ticked[question.id] ?? [];
+                answers[question.id] = chosen.length > 0 ? [...chosen] : [text];
+            }
+            answerSubmit(item, answers);
         },
         inboxInput(event) {
             const submissions = new Map(store.getState().submissions);
@@ -223,6 +305,8 @@ const INERT_SNAPSHOT: RigInboxSnapshot = {
     answered: [],
     loading: false,
     submissions: EMPTY_SUBMISSIONS,
+    messages: EMPTY_MESSAGES,
+    selections: EMPTY_SELECTIONS,
 };
 
 /**
@@ -235,6 +319,9 @@ export const rigInboxStoreNoop: RigInboxStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
     itemAnswer: () => undefined,
+    itemMessageUpdate: () => undefined,
+    itemSelectionUpdate: () => undefined,
+    itemMessageSubmit: () => undefined,
     inboxInput: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

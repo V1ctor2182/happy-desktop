@@ -1828,6 +1828,7 @@ export function AppRigView(props: AppRigViewProps) {
                         rigId={active.id}
                         snapshot={inbox}
                         store={active.session.inbox}
+                        workspace={active.session.workspace}
                     />
                 </AppShell>
             );
@@ -1985,6 +1986,7 @@ function RigInboxSurface(props: {
     rigId: string;
     snapshot: RigInboxSnapshot;
     store: RigInboxStore;
+    workspace: RigWorkspaceStore;
 }) {
     const locate = (item: RigInboxItem) => {
         const project = props.projects.find((candidate) => candidate.id === item.projectId);
@@ -2003,12 +2005,28 @@ function RigInboxSurface(props: {
                 inboxItemTime(item.status === "answered" ? item.resolvedAt : item.createdAt)
             }
             loading={props.snapshot.loading}
+            messages={props.snapshot.messages}
             onAnswer={(itemId, answers) => props.store.itemAnswer(itemId, answers)}
+            onMessageChange={(itemId, text) => props.store.itemMessageUpdate(itemId, text)}
+            onMessageSubmit={(itemId) => props.store.itemMessageSubmit(itemId)}
+            onSelectionChange={(itemId, answers) =>
+                props.store.itemSelectionUpdate(itemId, answers)
+            }
+            selections={props.snapshot.selections}
             onOpenSession={(item) => {
                 // A question is answered here, but its argument lives in the
-                // conversation that raised it; the worktree is the group when
-                // the asking session is filed under one.
-                props.onOpenSession(props.rigId, item.worktreeId ?? item.projectId, item.sessionId);
+                // conversation that raised it. Where that conversation lives is
+                // asked of the machine rather than taken from the question: a
+                // question can be raised by a session the feed had never
+                // described — a subagent, or one started moments ago — and it
+                // then carries no usable project of its own.
+                void props.workspace
+                    .sessionLocationRead(item.sessionId)
+                    .then((location) => {
+                        if (location)
+                            props.onOpenSession(props.rigId, location.groupId, item.sessionId);
+                    })
+                    .catch(() => undefined);
             }}
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
@@ -4075,6 +4093,10 @@ function RigConversationSurface(props: {
                 ) : undefined
             }
             requestSubmissions={conversation.requestSubmissions}
+            requestSelections={conversation.requestSelections}
+            onRequestSelectionChange={(requestId, answers) =>
+                workspace.requestSelectionUpdate(requestId, answers)
+            }
             running={conversation.running}
             runningAgents={
                 conversation.subagents.filter((subagent) => subagent.status === "running").length

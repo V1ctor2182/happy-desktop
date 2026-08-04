@@ -9,6 +9,10 @@ export type ConversationRequestViewProps = {
     request: ConversationRequest;
     /** Answers a structured question request. */
     onAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    /** Options ticked into this question so far, when the owner keeps them. */
+    selection?: Readonly<Record<string, readonly string[]>>;
+    /** Reports each tick to an owner that keeps the selection. */
+    onSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Approves or denies a permission review. */
     onDecide?: (requestId: string, decision: ConversationRequestDecision) => void;
     /** Disables controls while a prior submission for this surface is in flight. */
@@ -36,8 +40,10 @@ export function ConversationRequestView(props: ConversationRequestViewProps) {
                 data-testid={props["data-testid"]}
                 error={props.error}
                 onAnswer={(requestId, answers) => props.onAnswer?.(requestId, answers)}
+                {...(props.onSelectionChange ? { onSelectionChange: props.onSelectionChange } : {})}
                 pending={props.pending}
                 request={request}
+                {...(props.selection ? { selection: props.selection } : {})}
                 style={props.style}
             />
         );

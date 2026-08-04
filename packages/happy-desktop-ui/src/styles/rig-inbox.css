@@ -159,6 +159,16 @@
     border-top: 1px solid var(--divider);
 }
 
+/*
+ * The written reply sits under the options as the last thing in the card, and
+ * is separated from them by more than the card's own rhythm: it is the other
+ * way to answer, not another option.
+ */
+.happy2-rig-inbox__reply {
+    width: 100%;
+    padding-top: 4px;
+}
+
 .happy2-rig-inbox__item-header {
     display: flex;
     align-items: center;

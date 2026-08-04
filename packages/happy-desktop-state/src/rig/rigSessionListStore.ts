@@ -134,6 +134,16 @@ export interface RigSessionListStore {
      */
     sessionsRefresh(): Promise<void>;
     /**
+     * Where one session lives, for a caller holding nothing but its id — a
+     * question in the machine's inbox names the session that asked and nothing
+     * more. A listed session answers from the rows already reconciled; anything
+     * else is read from the host, which is what keeps a subagent addressable: it
+     * syncs and opens by id, but it never takes a row to be found in. Resolves
+     * with `undefined` when the session is gone or its group is not listed,
+     * since then there is no address to send a reader to.
+     */
+    sessionLocationRead(sessionId: RigSessionId): Promise<RigSessionLocation | undefined>;
+    /**
      * Marks the session's latest completed work as seen. The mark is durable:
      * a session read before the window closed is not unread when it opens again.
      */
@@ -746,6 +756,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
     const storeUnsub = store.subscribe(notify);
 
+    /** Whether a group id still names something this list would show a reader. */
+    const groupListed = (groupId: RigGroupId): boolean =>
+        catalog.projects.some((project) => project.id === groupId) ||
+        catalog.worktrees.some((worktree) => worktree.id === groupId);
+
     /**
      * Remembers a mutation issued through `connectActions` so its later refusal
      * can be told apart from one belonging to another surface, and returns its
@@ -800,6 +815,20 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // not a change: the same sentence answers both questions.
             if (project !== undefined) return rigProjectWriteRefusal(project);
             return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
+        },
+        async sessionLocationRead(sessionId) {
+            const listed = sessions.find((candidate) => candidate.id === sessionId);
+            // A session the list does not carry is not necessarily gone: a
+            // subagent never takes a row, and a session started a moment ago
+            // may not have been reconciled yet. Asking the host is what tells
+            // those apart from a session that really has left.
+            const location = listed
+                ? sessionLocationOf(listed)
+                : await deps.transport.sessionRead(sessionId).then(
+                      (session) => sessionLocationOf(session),
+                      () => undefined,
+                  );
+            return location && groupListed(location.groupId) ? location : undefined;
         },
         sessionRead(sessionId) {
             const session = sessions.find((candidate) => candidate.id === sessionId);
@@ -1155,8 +1184,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
 }
 
-/** The address of a session the caller just created: its group, then itself. */
-function sessionLocationOf(session: RigSessionSummary): RigSessionLocation {
+/** The address of a session: its group, then itself. */
+function sessionLocationOf(session: {
+    readonly id: RigSessionId;
+    readonly projectId: RigProjectId;
+    readonly worktreeId?: RigWorktreeId;
+}): RigSessionLocation {
     return { sessionId: session.id, groupId: rigSessionGroupIdOf(session) };
 }
 

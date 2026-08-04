@@ -336,6 +336,13 @@ export interface RigChatSnapshot {
     readonly loadMoreError?: string;
     readonly pendingUserInputs: readonly RigUserInputRequest[];
     readonly requestSubmissions: readonly ConversationRequestSubmission[];
+    /**
+     * Options ticked into a pending question but not submitted yet, by request
+     * id. They live here rather than inside the card because sending a message
+     * answers the question, and that answer must carry a choice the reader has
+     * already made.
+     */
+    readonly requestSelections: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
     /** Pending steering command state; the messages themselves live in `entries`. */
     readonly queuedMessages: readonly RigQueuedMessage[];
     readonly tasks: readonly RigTask[];
@@ -405,11 +412,28 @@ export interface RigChatStore {
      * Submits when idle, steers when a run is active; rejects with a `UserError`.
      * `images` ride along inline with the turn, since a local session has no
      * upload step to reference bytes by id.
+     *
+     * While a question is pending this answers it instead of only queueing
+     * words: the agent is stopped inside the call that asked and reads nothing
+     * until that call returns, so a message sent beside the question would
+     * leave it waiting on a reader who believes they have replied. Options
+     * already ticked into the question are the answer to their own questions;
+     * the typed text answers whatever was left blank, and is sent as an
+     * ordinary message when the ticks already answered everything, so nothing
+     * written or chosen is dropped.
      */
     messageSend(text: string, images?: readonly RigImageInput[]): Promise<void>;
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
+    /**
+     * Records the options ticked into a pending question before it is submitted,
+     * so a message sent instead of pressing Submit can still carry them.
+     */
+    requestSelectionUpdate(
+        requestId: string,
+        answers: Readonly<Record<string, readonly string[]>>,
+    ): void;
     /*
      * Picking a model, effort, access mode, or tier states an intent; sending is
      * what applies it. These are local and synchronous — nothing reaches the
@@ -731,6 +755,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let error: UserError | undefined;
     const requestSubmissions = new Map<string, ConversationRequestSubmission>();
     const requestSubmissionPromises = new Map<string, Promise<void>>();
+    const requestSelections = new Map<string, Readonly<Record<string, readonly string[]>>>();
 
     const store = createStore<RigChatSnapshot>()(() => ({
         sessionId,
@@ -746,6 +771,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         activeTurnId: undefined,
         pendingUserInputs: [],
         requestSubmissions: [],
+        requestSelections: new Map(),
         queuedMessages: [],
         tasks: [],
         subagents: [],
@@ -903,6 +929,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 : {}),
             pendingUserInputs,
             requestSubmissions: [...requestSubmissions.values()],
+            requestSelections: new Map(requestSelections),
             queuedMessages:
                 transcriptSession === undefined
                     ? (session?.queuedMessages ?? [])
@@ -1413,6 +1440,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         );
         for (const requestId of requestSubmissions.keys())
             if (!pendingRequestIds.has(requestId)) requestSubmissions.delete(requestId);
+        // A question that is no longer being asked has nothing left to tick.
+        for (const requestId of requestSelections.keys())
+            if (!pendingRequestIds.has(requestId)) requestSelections.delete(requestId);
         status = "ready";
         error = undefined;
         // Keep the UI in the running state for the whole request-send clock, not
@@ -1859,6 +1889,83 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         );
     };
 
+    /** Sends one answer to the daemon; shared by Submit and by answering with a message. */
+    const answerInputRun = (input: RigUserInputAnswers): Promise<void> => {
+        if (deps.connectActions) {
+            connectMutationTrack(
+                deps.connectActions.answerUserInput(sessionId, input.requestId, {
+                    answers: input.answers,
+                }),
+            );
+            output({ type: "inputAnswered", sessionId, requestId: input.requestId });
+            return Promise.resolve();
+        }
+        const existing = requestSubmissionPromises.get(input.requestId);
+        if (existing) return existing;
+        const operation = (async (): Promise<void> => {
+            requestSubmissions.set(input.requestId, {
+                requestId: input.requestId,
+                status: "pending",
+            });
+            commit();
+            try {
+                const loaded = await deps.transport.answerUserInput(sessionId, input);
+                requestSubmissions.delete(input.requestId);
+                sessionReplace(loaded);
+                output({ type: "inputAnswered", sessionId, requestId: input.requestId });
+            } catch (caught) {
+                const submissionError = rigUserError(caught);
+                requestSubmissions.set(input.requestId, {
+                    requestId: input.requestId,
+                    status: "failed",
+                    error: submissionError,
+                });
+                commit();
+                throw submissionError;
+            } finally {
+                requestSubmissionPromises.delete(input.requestId);
+            }
+        })();
+        requestSubmissionPromises.set(input.requestId, operation);
+        return operation;
+    };
+
+    /**
+     * Answers the question the session is stopped on with what was just typed
+     * and whatever was already ticked into it, and says whether the words were
+     * used up doing so.
+     *
+     * Only the first pending request is answered: a session waits inside the one
+     * call that asked, so that request is what "the question" means to the
+     * reader looking at the composer.
+     *
+     * A ticked question is answered by its ticks — they are a deliberate choice,
+     * and a single-select question cannot carry the text beside one anyway. Only
+     * the questions left blank take the text. When every question was already
+     * ticked the text answers nothing, so the caller sends it as an ordinary
+     * message instead of discarding it.
+     */
+    const pendingQuestionAnswer = async (text: string): Promise<{ textUsed: boolean }> => {
+        const request = store.getState().pendingUserInputs[0];
+        const message = text.trim();
+        if (!request || message.length === 0) return { textUsed: false };
+        const ticked = requestSelections.get(request.requestId) ?? {};
+        const answers: Record<string, readonly string[]> = {};
+        let textUsed = false;
+        for (const question of request.questions) {
+            const chosen = ticked[question.id] ?? [];
+            if (chosen.length > 0) {
+                answers[question.id] = [...chosen];
+                continue;
+            }
+            answers[question.id] = [message];
+            textUsed = true;
+        }
+        await answerInputRun({ requestId: request.requestId, answers });
+        requestSelections.delete(request.requestId);
+        return { textUsed };
+    };
+
     // Tears down the poll timer and invalidates any in-flight fetch. Safe to call
     // when already stopped. Does not clear the open flag or last snapshot.
     const usagePollStop = (): void => {
@@ -1890,6 +1997,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         },
         messageSend: (text, images) =>
             rejecting(async () => {
+                // A session stopped on a question hears an answer, not a
+                // message. When the ticks already answered every question the
+                // words still have somewhere to go, and fall through to the
+                // ordinary send below.
+                if ((await pendingQuestionAnswer(text)).textUsed) return;
                 if (deps.connectActions) {
                     const mutationId = deps.connectActions.sendMessage(
                         sessionId,
@@ -1982,44 +2094,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 await deps.transport.runAbort(sessionId, runId);
                 output({ type: "runAborted", sessionId });
             }),
-        answerInput(input) {
-            if (deps.connectActions) {
-                connectMutationTrack(
-                    deps.connectActions.answerUserInput(sessionId, input.requestId, {
-                        answers: input.answers,
-                    }),
-                );
-                output({ type: "inputAnswered", sessionId, requestId: input.requestId });
-                return Promise.resolve();
-            }
-            const existing = requestSubmissionPromises.get(input.requestId);
-            if (existing) return existing;
-            const operation = (async (): Promise<void> => {
-                requestSubmissions.set(input.requestId, {
-                    requestId: input.requestId,
-                    status: "pending",
-                });
-                commit();
-                try {
-                    const loaded = await deps.transport.answerUserInput(sessionId, input);
-                    requestSubmissions.delete(input.requestId);
-                    sessionReplace(loaded);
-                    output({ type: "inputAnswered", sessionId, requestId: input.requestId });
-                } catch (caught) {
-                    const submissionError = rigUserError(caught);
-                    requestSubmissions.set(input.requestId, {
-                        requestId: input.requestId,
-                        status: "failed",
-                        error: submissionError,
-                    });
-                    commit();
-                    throw submissionError;
-                } finally {
-                    requestSubmissionPromises.delete(input.requestId);
-                }
-            })();
-            requestSubmissionPromises.set(input.requestId, operation);
-            return operation;
+        answerInput: (input) => answerInputRun(input),
+        requestSelectionUpdate(requestId, answers) {
+            requestSelections.set(requestId, answers);
+            commit();
         },
         modelUpdate(input) {
             if (deps.connectActions && transcriptSession) {

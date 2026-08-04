@@ -131,6 +131,7 @@ export interface RigConversationSnapshot {
     readonly loadMoreError?: string;
     readonly queuedMessages: readonly RigQueuedMessage[];
     readonly requestSubmissions: RigChatSnapshot["requestSubmissions"];
+    readonly requestSelections: RigChatSnapshot["requestSelections"];
     readonly tasks: readonly RigTask[];
     readonly goal?: RigGoal;
     readonly subagents: readonly RigSubagentSummary[];
@@ -693,6 +694,13 @@ export interface RigWorkspaceStore {
     conversationClose(): void;
     /** Retries a failed authoritative conversation-list read. */
     conversationListRetry(): void;
+    /**
+     * Where one session lives, for a surface that knows only its id — the
+     * machine's inbox names the session that asked a question and nothing else,
+     * and only its group makes it addressable. Resolves with `undefined` when
+     * there is nowhere to send a reader.
+     */
+    sessionLocationRead(sessionId: RigSessionId): Promise<RigSessionLocation | undefined>;
     /** Retries a failed acquisition for the currently open conversation. */
     conversationRetry(): void;
     /** Sends agent-authored slot text to the conversation currently addressed. */
@@ -895,6 +903,15 @@ export interface RigWorkspaceStore {
     // Conversation actions (forwarded to the currently open chat store).
     runAbort(): Promise<void>;
     answerInput(input: RigUserInputAnswers): Promise<void>;
+    /**
+     * Records the options ticked into the open conversation's pending question
+     * before it is submitted, so a message sent instead of pressing Submit still
+     * carries them.
+     */
+    requestSelectionUpdate(
+        requestId: string,
+        answers: Readonly<Record<string, readonly string[]>>,
+    ): void;
     compact(): Promise<void>;
     rewind(messageId: string): Promise<void>;
     conversationReset(): Promise<void>;
@@ -1308,6 +1325,7 @@ export function rigWorkspaceStoreCreate(
             ...(chat.loadMoreError ? { loadMoreError: chat.loadMoreError } : {}),
             queuedMessages: chat.queuedMessages,
             requestSubmissions: chat.requestSubmissions,
+            requestSelections: chat.requestSelections,
             tasks: chat.tasks,
             ...(chat.goal ? { goal: chat.goal } : {}),
             subagents: chat.subagents,
@@ -3214,6 +3232,7 @@ export function rigWorkspaceStoreCreate(
         conversationListRetry: () => {
             void list.sessionsRefresh();
         },
+        sessionLocationRead: (sessionId) => list.sessionLocationRead(sessionId),
         conversationRetry() {
             if (openId && conversation.type === "error") {
                 acquireConversation(openId);
@@ -3720,6 +3739,12 @@ export function rigWorkspaceStoreCreate(
         // able to end it; refusing here would leave them watching something they
         // can neither write to nor stop.
         runAbort: () => withChat((store) => store.runAbort()),
+        // Ticking an option is not yet an answer, so it is not a write into the
+        // checkout and is not guarded like one: nothing leaves this machine until
+        // the reader submits.
+        requestSelectionUpdate: (requestId, answers) => {
+            chatStore?.requestSelectionUpdate(requestId, answers);
+        },
         backgroundProcessStop: (processId) =>
             withChat((store) => store.backgroundProcessStop(processId)),
         // These four speak to the session rather than to the directory: the host
@@ -4141,6 +4166,7 @@ export function rigWorkspaceStoreCreate(
 const NO_ENTRIES: readonly ConversationEntry[] = [];
 const NO_QUEUED: readonly RigQueuedMessage[] = [];
 const NO_SUBMISSIONS: RigChatSnapshot["requestSubmissions"] = [];
+const NO_SELECTIONS: RigChatSnapshot["requestSelections"] = new Map();
 const NO_TASKS: readonly RigTask[] = [];
 const NO_SUBAGENTS: readonly RigSubagentSummary[] = [];
 const NO_PROCESSES: readonly RigBackgroundProcess[] = [];
@@ -4182,6 +4208,7 @@ function conversationAcquiring(
         loadingMore: false,
         queuedMessages: NO_QUEUED,
         requestSubmissions: NO_SUBMISSIONS,
+        requestSelections: NO_SELECTIONS,
         tasks: NO_TASKS,
         subagents: NO_SUBAGENTS,
         backgroundProcesses: NO_PROCESSES,

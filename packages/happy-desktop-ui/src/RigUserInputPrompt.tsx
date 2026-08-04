@@ -18,6 +18,16 @@ export type RigUserInputPromptVariant = "card" | "flat";
 export type RigUserInputPromptProps = {
     request: RigUserInputRequest;
     onAnswer: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    /**
+     * What is ticked right now, for an owner that keeps the selection. Supplying
+     * it with `onSelectionChange` is what lets something outside this card act on
+     * a half-made choice — sending a message that answers the question has to
+     * carry the options already ticked into it. Left out, the card keeps its own
+     * selection and stays a self-contained prompt.
+     */
+    selection?: Readonly<Record<string, readonly string[]>>;
+    /** Reports the whole selection after each tick, for an owner that keeps it. */
+    onSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Disables the controls while a prior submission is in flight. */
     pending?: boolean;
     /** Last failed answer submission; retry resubmits the retained selections. */
@@ -50,23 +60,36 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
 /**
  * RigUserInputPrompt — renders a `RigUserInputRequest` as one or more option
  * pickers. Single-select questions clear other options; multi-select questions
- * accumulate. The local selection map is the component's only state; submit calls
- * `onAnswer(requestId, { [questionId]: string[] })` with the chosen option labels.
- * Submit is blocked until every `required` question has at least one selection.
+ * accumulate. Submit calls `onAnswer(requestId, { [questionId]: string[] })` with
+ * the chosen option labels, and is blocked until every `required` question has at
+ * least one selection.
  *
  * Each question states its own selection rule beside its name, so a person can
  * tell a single choice from an accumulating one, and an optional question from
  * the one actually holding the submit, without trying an option to find out.
+ *
+ * The selection is the card's own state unless the owner keeps it through
+ * `selection`/`onSelectionChange`, which an owner does when something outside the
+ * card — a composer whose message answers this question — must be able to read a
+ * choice that has been made but not yet submitted.
  */
 export function RigUserInputPrompt(props: RigUserInputPromptProps) {
     const { request } = props;
-    const [answers, setAnswers] = useState<RigUserInputAnswerMap>({});
+    const [ownAnswers, setOwnAnswers] = useState<RigUserInputAnswerMap>({});
+    const controlled = props.selection !== undefined;
+    const answers: RigUserInputAnswerMap = controlled
+        ? Object.fromEntries(
+              Object.entries(props.selection ?? {}).map(([id, values]) => [id, [...values]]),
+          )
+        : ownAnswers;
 
     const select = (questionId: string, value: string, multiSelect: boolean) => {
-        setAnswers((previous) => ({
-            ...previous,
-            [questionId]: toggleValue(previous[questionId] ?? [], value, multiSelect),
-        }));
+        const next: RigUserInputAnswerMap = {
+            ...answers,
+            [questionId]: toggleValue(answers[questionId] ?? [], value, multiSelect),
+        };
+        if (!controlled) setOwnAnswers(next);
+        props.onSelectionChange?.(request.requestId, next);
     };
 
     const complete = request.questions.every(
