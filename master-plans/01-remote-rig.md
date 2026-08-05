@@ -7,41 +7,55 @@ local one. Not a lesser version of it, not a separate feature — the same
 projects, the same sessions, the same screens, the same code paths. The only
 thing that differs is which machine the work happens on.
 
-To reach a remote Rig we need two things: a token and an endpoint (socket or
-HTTP). That is the whole connection contract. SSH is how that pair is resolved:
-if you have access to the machine, you have access to its endpoint and token, so
-you name a machine the way you already reach it and Happy reads the rest itself.
+Happy does not resolve machines over SSH, and it does not discover or hold a
+credential for one. That approach is gone: no SSH destinations, no token and
+endpoint discovery in the app, no machine the reader has to name.
 
-There is already a prototype that connects remote projects. It builds a
-parallel state that behaves like the local one. That parallel structure is the
-right shape: local and remote Rigs are peers. The two Rigs never talk to each
-other directly. Happy is simply an interface onto several machines at once.
+What replaces it is the host Rig. Happy connects directly to its own host, and
+the host owns the trust and the transport: which machines it is peered with,
+when it dials them, and when it gives up. Every other machine is reached
+*through* that host, over the route the host already publishes for it.
 
 ## How it behaves
 
-You add a Rig to your local setup. From then on, the app opens a connection to
-that Rig when it starts, and every project on that machine appears in the left
-sidebar alongside your local projects. Opening one works exactly as it does
-locally.
+Happy holds one direct connection to its host Rig, and one further ordinary Rig
+connection per node the host is peered with. A node connection is not a special
+kind of connection: it is the same client, opened against the host's own peer
+route for that node, so the work on the other side arrives through the ordinary
+groups and session machinery and lands in the same stores and the same screens.
 
-Remote Rigs differ from the local one in one visible way: they have Connect and
-Disconnect. Sometimes you have access to a machine and sometimes you do not, so
-you can deliberately connect to a remote Rig and it starts working, and
-deliberately disconnect from it.
+The host never hands its credentials to anyone. It authenticates the request
+locally, forwards only the request itself, and the machine on the other end
+answers with its own daemon's authority. Nothing about a node's identity or its
+endpoint is app-level configuration; the app names a node only by the identity
+the host already published for it.
 
-Everything is proxied through the desktop app, as always. The same state, the
-same stores, the same reconnect logic that the local Rig already uses. Nothing
-about a remote Rig should be visible to the application above the connection
-boundary — it is transparent.
+The host's peer status feed remains what it has always been: discovery and
+status. It says which machines exist and how each link is doing. It carries no
+work. A node's projects and conversations arrive on that node's own connection,
+and Happy does not expect the host's own project feed to include them.
+
+Work from a node keeps its own namespace. A node's projects sit under that node
+in the sidebar, addressed through that node's connection, and its identities
+never collide with the host's or with another node's. Opening one is ordinary
+navigation, because there is a real connection behind it.
+
+Node status is live. The host Rig streams its P2P status as it changes, and the
+app shows it in Settings, as the list of nodes the host is peered with, and in
+the sidebar, beside that node's own work. Settings reports; it does not manage.
+A node the app cannot open work on is shown as status and nothing more, rather
+than as a control that would go nowhere.
 
 ## How we know it is done
 
-- A remote Rig is configured by naming the machine over SSH, and its token and
-  endpoint are resolved from that access rather than published or copied by hand.
-- Its projects appear in the sidebar next to local projects and open the same
-  screens through the same state.
-- Connect and Disconnect work on demand, and a disconnected Rig degrades
-  cleanly instead of breaking the app.
-- Reconnection after a dropped link is the existing reconnect behaviour, not a
-  second implementation.
-- No remote-specific branches in application code above the connection layer.
+- Happy opens one direct connection to its host, plus one ordinary Rig
+  connection per connected node, through the host's own peer route.
+- The app never names a machine, resolves an endpoint, or holds a credential for
+  one; the host authenticates locally and forwards no credential of its own.
+- A node's projects and chats arrive on that node's connection, through the same
+  groups and session code paths, with no sync implementation of their own.
+- Node work keeps a stable namespace under its node, and nothing it contributes
+  can collide with the host's or another node's.
+- Node and peer status is shown live in Settings and in the sidebar, from the
+  host Rig's streamed status rather than from anything the app polls or asks for.
+- No SSH remote-Rig code, contract, or setting remains.

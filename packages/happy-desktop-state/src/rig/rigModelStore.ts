@@ -84,9 +84,22 @@ export interface RigModelStoreOptions {
     readonly preferencePersistence?: RigModelPreferencePersistence;
 }
 
+/**
+ * The catalog read's failure as something a surface can show, without losing
+ * what actually refused.
+ *
+ * The cause travels because a refusal carries meaning its sentence does not: a
+ * daemon answering "this route is not shared" is a machine deliberately keeping
+ * its work to itself, and a caller telling that apart from a broken one reads
+ * the original rather than parsing this wording.
+ */
 function modelError(error: unknown): UserError {
     if (error instanceof UserError) return error;
-    return new UserError(error instanceof Error ? error.message : "Could not load Rig models.");
+    return new UserError(
+        error instanceof Error ? error.message : "Could not load Rig models.",
+        undefined,
+        error,
+    );
 }
 
 /** Creates the daemon-lifetime model store without opening transport work. */

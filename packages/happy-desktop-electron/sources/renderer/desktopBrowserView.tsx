@@ -149,7 +149,10 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     }
 
     componentDidUpdate(before: BrowserContentProps): void {
-        if (before.sessionId !== this.props.sessionId) this.proxyApply();
+        // Either half of the address changing is a different session: the same
+        // name on another machine is another conversation entirely.
+        if (before.sessionId !== this.props.sessionId || before.nodeId !== this.props.nodeId)
+            this.proxyApply();
     }
 
     componentWillUnmount(): void {
@@ -203,20 +206,25 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
             this.props.browserFailed({ message: "The browser has no Rig session." });
             return;
         }
-        void desktop.browserProxyApply(sessionId).then(
-            () => {
-                if (generation === this.proxyGeneration) this.setState({ ready: true });
-            },
-            (error: unknown) => {
-                if (generation !== this.proxyGeneration) return;
-                this.props.browserFailed({
-                    message:
-                        error instanceof Error
-                            ? error.message
-                            : "The Rig browser proxy could not be opened.",
-                });
-            },
-        );
+        void desktop
+            .browserProxyApply({
+                sessionId,
+                ...(this.props.nodeId === undefined ? {} : { nodeId: this.props.nodeId }),
+            })
+            .then(
+                () => {
+                    if (generation === this.proxyGeneration) this.setState({ ready: true });
+                },
+                (error: unknown) => {
+                    if (generation !== this.proxyGeneration) return;
+                    this.props.browserFailed({
+                        message:
+                            error instanceof Error
+                                ? error.message
+                                : "The Rig browser proxy could not be opened.",
+                    });
+                },
+            );
     }
 
     private locationPublish(candidate?: string): void {

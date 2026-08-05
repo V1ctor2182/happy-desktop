@@ -11,6 +11,7 @@ import {
 } from "./notesIpcValidation";
 import { NotesStore } from "./notesStore";
 import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
+import { rigNodeRouteMatch } from "./rigNodeRoute";
 import { rigProxyHandle } from "./rigProxyHandle";
 import { rigTerminalBridgeCreate } from "./rigTerminalBridge";
 
@@ -105,7 +106,13 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
             // upgrade — Vite's own HMR socket above all — to Vite's listeners.
             const terminals = rigTerminalBridgeCreate({
                 allowedOrigin: rendererOrigin,
-                client: () => runtime().then(({ connection }) => connection.client),
+                // The same rule the packaged proxy applies: the machine comes
+                // off the path, and a node is attached on that node's own
+                // client rather than on this one's.
+                client: (nodeId) =>
+                    runtime().then(({ connection }) =>
+                        nodeId === undefined ? connection.client : connection.client.peer(nodeId),
+                    ),
                 expectedHost: () => expectedHost,
                 prefix: endpoint,
             });
@@ -127,14 +134,31 @@ export function browserLocalRigPlugin(options: BrowserLocalRigOptions = {}): Plu
                     try {
                         pending = runtime();
                         const active = await pending;
+                        const bridgePath = path.slice(endpoint.length) || "/";
+                        // A node is addressed here exactly as it is in the
+                        // packaged app: same base, same peer client, same
+                        // projection. Development that could not reach a node
+                        // would be a different product from the one that ships.
+                        const node = rigNodeRouteMatch(bridgePath);
                         const handled = await rigProxyHandle({
-                            client: active.connection.client,
+                            client: node
+                                ? active.connection.client.peer(node.nodeId)
+                                : active.connection.client,
                             method: request.method ?? "GET",
-                            path: path.slice(endpoint.length) || "/",
+                            path: node ? node.path : bridgePath,
                             query: url.searchParams,
                             request,
                             response,
-                            onConnectionError: (error) => runtimeInvalidate(error, pending),
+                            // A node that stops answering is that node's
+                            // connection to notice and retry. Dropping this
+                            // bridge's host connection over it would take every
+                            // other Rig in the window down with it.
+                            ...(node
+                                ? {}
+                                : {
+                                      onConnectionError: (error) =>
+                                          runtimeInvalidate(error, pending),
+                                  }),
                         });
                         if (!handled && !response.headersSent) next();
                     } catch (error) {

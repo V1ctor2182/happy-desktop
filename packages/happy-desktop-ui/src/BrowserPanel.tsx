@@ -33,6 +33,13 @@ export interface BrowserFailure {
 export interface BrowserContentProps {
     /** Rig session whose network boundary owns this browser guest. */
     readonly sessionId?: string;
+    /**
+     * The machine that session belongs to, when it is not the one this window
+     * runs on. A session identity is only unique on its own machine, so the
+     * pair is the address: a host given a session id alone would answer with
+     * whichever of its own sessions carries that name.
+     */
+    readonly nodeId?: string;
     /** Initial location for the Chromium guest. Further navigation uses the controller. */
     readonly source: string;
     browserControllerReady(controller: BrowserController | undefined): void;

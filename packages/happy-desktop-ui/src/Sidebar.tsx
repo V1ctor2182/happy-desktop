@@ -17,6 +17,8 @@ import { Button } from "./Button";
 import { happyLogoUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
+import { RigPeerStatus, type RigPeerState } from "./RigPeerStatus";
+import { SidebarNodes, type SidebarNode } from "./SidebarNodes";
 import { Spinner } from "./Spinner";
 /** One control in a row's trailing lane: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
@@ -113,7 +115,14 @@ export type SidebarSectionActionSource = "heading" | "empty";
 export type SidebarSection = {
     action?: SidebarSectionAction;
     empty?: {
-        actionLabel: string;
+        /**
+         * The one act an empty section offers, reported through
+         * `onSectionAction`. Omit it when there is nothing the reader can do
+         * about the state being described — a section waiting on a machine it
+         * does not control states the wait and offers no button, rather than
+         * one that would go nowhere.
+         */
+        actionLabel?: string;
         description: string;
         icon?: IconName;
         title?: string;
@@ -124,9 +133,28 @@ export type SidebarSection = {
     items: SidebarItem[];
     label?: string;
     /**
-     * What went wrong with the section's own action, said under its heading
-     * until it clears. It is the section's, not a row's: an add that is refused
-     * has no row to fail on, and the reader has to be told where they pressed.
+     * Machines this Rig is peered with that there is nothing to open on,
+     * reported under the heading instead of being listed as rows. They are
+     * stated separately from `items` because they are not places to go — see
+     * `SidebarNodes` — and a section that has them has no rows of its own.
+     */
+    nodes?: readonly SidebarNode[];
+    /**
+     * Where the machine this section's rows come from currently is, shown as the
+     * shared peer marker beside the heading. A section that is not one machine's
+     * list supplies none and its heading is only a name.
+     */
+    status?: RigPeerState;
+    /**
+     * What went wrong with this section, said under its heading until it
+     * clears. It is the section's, not a row's, in both directions: an add that
+     * is refused has no row to fail on, and a section whose whole source is
+     * unreachable has no rows at all to carry the news.
+     *
+     * A section that lists one machine's work uses this for that machine's
+     * connection. The failure belongs here rather than in `empty`, because a
+     * source that cannot be reached is not the same as a source with nothing in
+     * it, and a reader shown "nothing here" would believe the wrong thing.
      */
     error?: string;
 };
@@ -1347,6 +1375,13 @@ export function Sidebar(props: SidebarProps) {
                                     >
                                         {section.label}
                                     </span>
+                                    {section.status ? (
+                                        <RigPeerStatus
+                                            className="happy2-sidebar__section-status"
+                                            name={section.label}
+                                            state={section.status}
+                                        />
+                                    ) : null}
                                     {section.action
                                         ? ((action) => (
                                               <button
@@ -1380,6 +1415,9 @@ export function Sidebar(props: SidebarProps) {
                                 >
                                     {section.error}
                                 </p>
+                            ) : null}
+                            {!section.headingOnly && section.nodes && section.nodes.length > 0 ? (
+                                <SidebarNodes label={section.label} nodes={section.nodes} />
                             ) : null}
                             {!section.headingOnly
                                 ? section.items.map((item, index) => {
@@ -1494,16 +1532,18 @@ export function Sidebar(props: SidebarProps) {
                                           >
                                               {empty.description}
                                           </span>
-                                          <Button
-                                              className="happy2-sidebar__empty-action"
-                                              onClick={() =>
-                                                  local.onSectionAction?.(section.id, "empty")
-                                              }
-                                              size="small"
-                                              variant="ghost"
-                                          >
-                                              {empty.actionLabel}
-                                          </Button>
+                                          {empty.actionLabel === undefined ? null : (
+                                              <Button
+                                                  className="happy2-sidebar__empty-action"
+                                                  onClick={() =>
+                                                      local.onSectionAction?.(section.id, "empty")
+                                                  }
+                                                  size="small"
+                                                  variant="ghost"
+                                              >
+                                                  {empty.actionLabel}
+                                              </Button>
+                                          )}
                                       </div>
                                   ))((section.items.length === 0 ? section.empty : undefined)!)
                                 : null}

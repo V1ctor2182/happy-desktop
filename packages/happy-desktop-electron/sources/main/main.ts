@@ -36,11 +36,11 @@ import {
     happyHtmlPreviewPartition,
     mediaPreviewArgument,
     mediaPreviewView,
+    type DesktopBrowserProxyTarget,
     type DesktopBrowserStatus,
     type DesktopMediaPreview,
     type DesktopPreviewNavigation,
     type DesktopPreviewNavigationStep,
-    type RemoteRigAddRequest,
 } from "../shared/desktopContract";
 import {
     mediaPreviewAddressAllowed,
@@ -57,11 +57,14 @@ import {
     noteTitleOptionalValidate,
     noteTitleValidate,
 } from "./notesIpcValidation";
-import { rigTerminalInputValidate, rigTerminalSizeValidate } from "./rigIpcValidation";
+import {
+    desktopBrowserProxyTargetValidate,
+    rigTerminalInputValidate,
+    rigTerminalSizeValidate,
+} from "./rigIpcValidation";
 import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
-import { RemoteRigManager } from "./remoteRigManager";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
@@ -135,13 +138,18 @@ let desktopConfigStore: DesktopConfigStore;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let onboarding: LocalOnboarding;
-let remoteRigManager: RemoteRigManager;
 let notesStore: NotesStore;
 let quitting = false;
 let happyBrowserUserAgent = "";
 let browserProxy: RigBrowserProxyHandle | undefined;
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
+/**
+ * Which machine and session the live tunnel was built for. Held beside the
+ * handle rather than inside it because the proxy itself is only a socket: what
+ * makes one tunnel the wrong one for a request is the Rig it was opened on.
+ */
+let browserProxyTarget: DesktopBrowserProxyTarget | undefined;
 let browserProxyOperation = Promise.resolve();
 const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
 const unavailableBrowserProxy = "http://127.0.0.1:9";
@@ -208,6 +216,7 @@ async function browserProxyFailClosed(): Promise<void> {
     browserProxy?.close();
     browserProxy = undefined;
     browserProxyConnectionId = undefined;
+    browserProxyTarget = undefined;
     const browserSession = browserSessionGet();
     await browserSession.setProxy({
         mode: "fixed_servers",
@@ -227,22 +236,28 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The daemon tunnel a browser tab's traffic goes through. The session belongs to
- * exactly one Rig; this machine's daemon is tried first, and a session it does
- * not own is opened on whichever connected remote machine does, so a browser tab
- * in a remote workspace works the way one in the local workspace does.
+ * The daemon tunnel a browser tab's traffic goes through, opened on the Rig the
+ * session belongs to.
+ *
+ * A session on a machine this host is peered with is tunnelled on that
+ * machine's own client, so the page loads against that machine's network and
+ * its checkout. The session is looked up there too, which is the point: a
+ * session identity means something only on the Rig that minted it, and asking
+ * the host for it would find some unrelated conversation of the same name or
+ * nothing at all.
  */
-function browserProxyOpen(sessionId: string): Promise<Duplex> {
-    return runtime.openHttpProxy(sessionId).catch(() => remoteRigManager.openHttpProxy(sessionId));
+function browserProxyOpen(target: DesktopBrowserProxyTarget): Promise<Duplex> {
+    return runtime.openHttpProxy(target.sessionId, target.nodeId);
 }
 
-function browserProxyApply(sessionId: string): Promise<void> {
+function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
     return browserProxySerial(async () => {
         const snapshot = runtime.get();
         if (snapshot.phase !== "ready" || snapshot.mode !== "local")
             throw new Error("The local Rig daemon is unavailable.");
         if (
-            browserProxy?.sessionId === sessionId &&
+            browserProxyTarget?.sessionId === target.sessionId &&
+            browserProxyTarget.nodeId === target.nodeId &&
             browserProxyConnectionId === snapshot.connectionId
         )
             return;
@@ -250,8 +265,8 @@ function browserProxyApply(sessionId: string): Promise<void> {
         await browserProxyFailClosed();
         const connectionId = snapshot.connectionId;
         const candidate = await rigBrowserProxyCreate({
-            sessionId,
-            openHttpProxy: () => browserProxyOpen(sessionId),
+            sessionId: target.sessionId,
+            openHttpProxy: () => browserProxyOpen(target),
         });
         const current = runtime.get();
         if (
@@ -272,6 +287,7 @@ function browserProxyApply(sessionId: string): Promise<void> {
             await browserSession.closeAllConnections();
             browserProxy = candidate;
             browserProxyConnectionId = connectionId;
+            browserProxyTarget = target;
         } catch (error) {
             candidate.close();
             await browserProxyFailClosed();
@@ -680,7 +696,6 @@ function mediaPreviewBases(): readonly (string | undefined)[] {
         snapshot.phase === "ready" && snapshot.activeTarget.authentication === "rig"
             ? snapshot.activeTarget.rigHttpUrl
             : undefined,
-        ...(remoteRigManager?.get() ?? []).map((rig) => rig.rigHttpUrl),
     ];
 }
 
@@ -916,16 +931,6 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
             },
         );
-        remoteRigManager = await RemoteRigManager.create(join(desktopRoot, "remote-rigs.json"), {
-            ...(rendererOrigin ? { rendererOrigin } : {}),
-            ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
-        });
-        remoteRigManager.subscribe((rigs) => {
-            const window = windowLifecycle.get();
-            if (window && !window.isDestroyed())
-                window.webContents.send(desktopIpc.remoteRigChanged, rigs);
-            mediaPreviewRevalidate();
-        });
         // Notes live in the user's home rather than in this app's private data
         // directory: the Markdown beside each note is meant to be found by an
         // agent working on this machine, and an application-support path is not
@@ -987,35 +992,9 @@ void app
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),
         );
-        ipcMain.handle(desktopIpc.remoteRigGet, () => remoteRigManager.get());
-        ipcMain.handle(desktopIpc.remoteRigAdd, (_event, request: unknown) => {
-            const value = request as RemoteRigAddRequest | undefined;
-            if (
-                !value ||
-                typeof value !== "object" ||
-                typeof value.destination !== "string" ||
-                (value.label !== undefined && typeof value.label !== "string")
-            )
-                throw new Error("The remote Rig destination is invalid.");
-            return remoteRigManager.add(value);
-        });
-        ipcMain.handle(desktopIpc.remoteRigRemove, (_event, id: unknown) => {
-            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
-            return remoteRigManager.remove(id);
-        });
-        ipcMain.handle(desktopIpc.remoteRigConnect, (_event, id: unknown) => {
-            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
-            return remoteRigManager.connect(id);
-        });
-        ipcMain.handle(desktopIpc.remoteRigDisconnect, (_event, id: unknown) => {
-            if (typeof id !== "string") throw new Error("The remote Rig identity is invalid.");
-            return remoteRigManager.disconnect(id);
-        });
-        ipcMain.handle(desktopIpc.browserProxyApply, (_event, sessionId: unknown) => {
-            if (typeof sessionId !== "string" || sessionId.length === 0)
-                throw new Error("The Rig browser session identity is invalid.");
-            return browserProxyApply(sessionId);
-        });
+        ipcMain.handle(desktopIpc.browserProxyApply, (_event, target: unknown) =>
+            browserProxyApply(desktopBrowserProxyTargetValidate(target)),
+        );
         ipcMain.handle(desktopIpc.applicationMenuOpen, () => {
             Menu.getApplicationMenu()?.popup();
         });
@@ -1197,11 +1176,7 @@ app.on("second-instance", () => {
 app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
-    void Promise.all([
-        runtime.close(),
-        remoteRigManager?.[Symbol.asyncDispose](),
-        desktopWindowStateStore?.flush(),
-    ]).finally(() => {
+    void Promise.all([runtime.close(), desktopWindowStateStore?.flush()]).finally(() => {
         browserProxy?.close();
         browserProxy = undefined;
         htmlPreviewProxy?.close();

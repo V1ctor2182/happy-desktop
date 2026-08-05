@@ -1,0 +1,68 @@
+/*
+ * C-214 RigPeerStatus — one Rig's connection as the same marker everywhere it is
+ * shown: an 8px dot in the shared status colours, with the state's word beside it
+ * when the surface is about the connection rather than about the work in it. The
+ * dot never animates, so a window holding several machines is still while they
+ * are being reached.
+ */
+
+.happy2-rig-peer-status,
+.happy2-rig-peer-status * {
+    box-sizing: border-box;
+}
+
+.happy2-rig-peer-status {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy2-rig-peer-status__dot {
+    display: block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--status-default);
+}
+
+.happy2-rig-peer-status[data-state="connected"] .happy2-rig-peer-status__dot {
+    background: var(--status-connected);
+}
+
+.happy2-rig-peer-status[data-state="connecting"] .happy2-rig-peer-status__dot {
+    background: var(--status-connecting);
+}
+
+/* A machine nobody is reaching for reads as absent rather than as a fault: the
+   dot is hollow, so only a connection that failed carries filled ink. */
+.happy2-rig-peer-status[data-state="disconnected"] .happy2-rig-peer-status__dot {
+    border: 1px solid var(--status-disconnected);
+    background: transparent;
+}
+
+.happy2-rig-peer-status[data-state="error"] .happy2-rig-peer-status__dot {
+    background: var(--status-error);
+}
+
+.happy2-rig-peer-status__label {
+    display: block;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy2-rig-peer-status[data-state="error"] .happy2-rig-peer-status__label {
+    color: var(--text-destructive);
+}
+
+/* Reachable and deliberately quiet: the link is up, so the dot keeps connected
+   ink, and the ring around it is what says the work behind it is not on offer. */
+.happy2-rig-peer-status[data-state="restricted"] .happy2-rig-peer-status__dot {
+    border: 2px solid var(--status-connecting);
+    background: var(--status-connected);
+}

@@ -564,12 +564,11 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
  * nearest address that is still true for a reader who was inside that group.
  *
  * It moves nobody who is not standing on the thing that went. A Rig reports the
- * removal of its own group whether or not the window is currently addressing
- * that Rig, and several Rigs are connected at once, so the current address is
- * what decides: only a route naming this exact Rig and this exact group is
- * replaced. Everything else — another Rig, another project, the Rig's own list,
- * Notes, settings, or the Rig's own list — is already a valid address, and a removal
- * elsewhere is inert against it.
+ * removal of its own group whether or not the window is currently showing it, so
+ * the current address is what decides: only a route naming this exact Rig and
+ * this exact group is replaced. Everything else — another project, the Rig's own
+ * list, Notes, or settings — is already a valid address, and a removal elsewhere
+ * is inert against it.
  *
  * Replace rather than push: the entry being left names a row that is gone, so
  * keeping it in history would only offer a Back that lands nowhere.

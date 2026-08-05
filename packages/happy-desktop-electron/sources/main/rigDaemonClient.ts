@@ -43,6 +43,22 @@ export const RIG_TERMINAL_MAX_WIRE_BYTES = 4 * 1024 * 1024;
 export interface RigDaemonClientOptions {
     readonly socketPath: string;
     readonly token: string;
+    /**
+     * Addresses a machine the host Rig is peered with rather than the host
+     * itself, by prefixing every daemon path with the host's own peer route.
+     *
+     * The host authenticates the request locally with the token this client
+     * already sends and then forwards the request alone: it does not pass that
+     * token on, and the machine at the other end answers with its own daemon's
+     * authority. Nothing else about the client changes, which is the point —
+     * the same projected surface is built over a peer as over the host.
+     */
+    readonly pathPrefix?: string;
+}
+
+/** The prefix that addresses one peer's daemon API through its host. */
+export function rigDaemonPeerPrefix(nodeId: string): string {
+    return `/p2p/peers/${encodeURIComponent(nodeId)}/api`;
 }
 
 export interface RigDaemonPaths {
@@ -110,10 +126,40 @@ function fileScopePath(scope: RigFileScope): string {
 export class RigDaemonClient {
     readonly socketPath: string;
     readonly #token: string;
+    readonly #pathPrefix: string;
 
     constructor(options: RigDaemonClientOptions) {
         this.socketPath = options.socketPath;
         this.#token = options.token;
+        this.#pathPrefix = options.pathPrefix ?? "";
+    }
+
+    /**
+     * Where one daemon path is actually asked for: on the host, itself; on a
+     * peer, the same path underneath the host's route to that machine.
+     *
+     * Everything that reaches the socket goes through here, so a client built
+     * for a peer cannot accidentally address its own host through a route that
+     * was written before peers existed.
+     */
+    #path(path: string): string {
+        return `${this.#pathPrefix}${path}`;
+    }
+
+    /**
+     * The same client, addressed at one machine this Rig is peered with.
+     *
+     * It reuses this connection whole — the same socket, the same token, the
+     * same projected surface above it — because that is what the host's peer
+     * route is: this daemon, answering for another one. Nothing about the peer
+     * is configured here; `nodeId` is the identity the host itself published.
+     */
+    peer(nodeId: string): RigDaemonClient {
+        return new RigDaemonClient({
+            pathPrefix: rigDaemonPeerPrefix(nodeId),
+            socketPath: this.socketPath,
+            token: this.#token,
+        });
     }
 
     health(): Promise<HealthResponse> {
@@ -176,7 +222,7 @@ export class RigDaemonClient {
                 {
                     headers,
                     method: options.method,
-                    path: options.path,
+                    path: this.#path(options.path),
                     socketPath: this.socketPath,
                 },
                 (response) => {
@@ -516,12 +562,25 @@ export class RigDaemonClient {
         return this.#requestJson("PUT", `${fileScopePath(scope)}/file`, request);
     }
 
+    /**
+     * Opens the browser tunnel for one session, on whichever Rig this client
+     * addresses. The session is read first on that same Rig, so the checkout
+     * the tunnel is scoped to is the one that session actually runs in.
+     *
+     * A peer is addressed the same way everything else here is, by prefixing
+     * the path: the host recognises a CONNECT under its own peer route, opens
+     * the tunnel to that machine, and the far daemon answers it with its own
+     * proxy and its own token. So a page loaded in a node's session resolves
+     * and fetches on that machine's network, not on this one's.
+     */
     async openHttpProxy(sessionId: string): Promise<Duplex> {
         const { session } = await this.getSession(sessionId);
-        const path = `${fileScopePath({
-            projectId: session.projectId,
-            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
-        })}/proxy`;
+        const path = this.#path(
+            `${fileScopePath({
+                projectId: session.projectId,
+                ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+            })}/proxy`,
+        );
         return new Promise((resolvePromise, reject) => {
             const request = httpRequest({
                 headers: { authorization: `Bearer ${this.#token}` },
@@ -532,12 +591,7 @@ export class RigDaemonClient {
             request.once("connect", (response, socket, head) => {
                 if (response.statusCode !== 200) {
                     socket.destroy();
-                    reject(
-                        new RigDaemonHttpError(
-                            response.statusCode ?? 500,
-                            `Rig HTTP proxy returned ${String(response.statusCode ?? 500)}.`,
-                        ),
-                    );
+                    reject(this.#proxyRefused(response.statusCode));
                     return;
                 }
                 if (head.length > 0) socket.unshift(head);
@@ -545,16 +599,21 @@ export class RigDaemonClient {
             });
             request.once("response", (response) => {
                 response.resume();
-                reject(
-                    new RigDaemonHttpError(
-                        response.statusCode ?? 500,
-                        `Rig HTTP proxy returned ${String(response.statusCode ?? 500)}.`,
-                    ),
-                );
+                reject(this.#proxyRefused(response.statusCode));
             });
             request.once("error", reject);
             request.end();
         });
+    }
+
+    /**
+     * What a refused tunnel means. The status is carried through whichever
+     * daemon refused it — this window's host, or the machine it forwarded to —
+     * because either way it is the answer to the address that was asked for.
+     */
+    #proxyRefused(statusCode: number | undefined): RigDaemonHttpError {
+        const status = statusCode ?? 500;
+        return new RigDaemonHttpError(status, `Rig HTTP proxy returned ${String(status)}.`);
     }
 
     getSessionUsage(sessionId: string): Promise<GetSessionUsageResponse> {
@@ -666,10 +725,18 @@ export class RigDaemonClient {
      * Unix socket — which the sandboxed renderer cannot open — and the renderer's
      * own socket, so terminal emulation and the protocol state machine stay in the
      * one client that owns them.
+     *
+     * A peer's attachment is the same upgrade under the host's peer route: the
+     * host recognises it, opens the tunnel, and the far daemon completes the
+     * handshake with its own token, so the bytes on this stream come from that
+     * machine's PTY. The scope is resolved on the same Rig for the usual reason
+     * — a session identity means something only where it was minted.
      */
     async attachTerminal(sessionId: string, terminalId: string): Promise<Duplex> {
         const scope = await this.#terminalScope(sessionId);
-        const path = `${this.#terminalCollectionPath(scope)}/${encodeURIComponent(terminalId)}/attach`;
+        const path = this.#path(
+            `${this.#terminalCollectionPath(scope)}/${encodeURIComponent(terminalId)}/attach`,
+        );
         return new Promise((resolvePromise, reject) => {
             const socket = new WebSocket(`ws+unix://${this.socketPath}:${path}`, {
                 handshakeTimeout: 10_000,
@@ -863,7 +930,7 @@ export class RigDaemonClient {
                 return;
             }
             const request = httpRequest(
-                { headers, method, path, socketPath: this.socketPath },
+                { headers, method, path: this.#path(path), socketPath: this.socketPath },
                 (response) => {
                     const chunks: Buffer[] = [];
                     response.on("data", (chunk: Buffer | string) =>
@@ -905,7 +972,7 @@ export class RigDaemonClient {
                 {
                     headers: { authorization: `Bearer ${this.#token}` },
                     method: "GET",
-                    path,
+                    path: this.#path(path),
                     socketPath: this.socketPath,
                 },
                 (response) => {
@@ -964,7 +1031,7 @@ export class RigDaemonClient {
                         authorization: `Bearer ${this.#token}`,
                     },
                     method: "GET",
-                    path: options.path,
+                    path: this.#path(options.path),
                     socketPath: this.socketPath,
                 },
                 (response) => {

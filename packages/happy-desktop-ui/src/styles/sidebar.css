@@ -318,6 +318,15 @@
     transform: translateY(var(--happy2-sidebar-section-optical-y, 0px));
 }
 
+/* The machine a section's rows come from, marked beside its name. It sits
+   between the label and the heading control and never grows, so a heading that
+   gains a status does not move the control the reader reaches for. */
+.happy2-sidebar__section-status {
+    flex: none;
+    margin-right: auto;
+    margin-left: 6px;
+}
+
 /* The whole control is one target in a desktop window: a native title-bar drag
    region that overlapped this heading would otherwise hand the press to the
    window manager instead of to the button. Stated here rather than relying on

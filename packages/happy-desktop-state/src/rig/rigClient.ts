@@ -48,6 +48,12 @@ import {
     type RigProviderUsageSource,
     type RigProviderUsageStore,
 } from "./rigProviderUsageStore.js";
+import { rigNodesStoreCreate, type RigNodesSource, type RigNodesStore } from "./rigNodesStore.js";
+import {
+    rigPairingStoreCreate,
+    type RigPairingSource,
+    type RigPairingStore,
+} from "./rigPairingStore.js";
 import {
     rigFriendsStoreCreate,
     type RigFriendsSource,
@@ -100,6 +106,22 @@ export interface RigClient {
      * empty for the wrong reason.
      */
     providerUsage(): RigProviderUsageStore | undefined;
+    /**
+     * The single nodes store for this Rig: the machines this host is peered with
+     * and how each link is doing. Materialized on first access and shared, so the
+     * settings list and the sidebar read one stream rather than two. Unavailable
+     * when the host supplied no P2P feed, so a surface can say the host does not
+     * peer rather than showing a list that is empty for the wrong reason.
+     */
+    nodes(): RigNodesStore | undefined;
+    /**
+     * The single pairing store for this Rig: trusting a new machine by
+     * comparing four emojis on both ends. Materialized on first access and
+     * shared. Unavailable on a connection that does not own trust — a node is
+     * reached because the host already trusts it, and this window does not
+     * negotiate trust on another machine's behalf.
+     */
+    pairing(): RigPairingStore | undefined;
     /**
      * The single friends store for this Rig: this account's own profile, the
      * people asking to connect, and the people it already knows. Materialized on
@@ -252,6 +274,17 @@ export interface RigClientDeps {
      */
     readonly providerUsageSource?: RigProviderUsageSource;
     /**
+     * Stream-owned feed of the host's P2P status: which machines it is peered
+     * with, and how each link is doing. Omitted leaves nodes unavailable rather
+     * than empty.
+     */
+    readonly nodesSource?: RigNodesSource;
+    /**
+     * The host's own pairing service. Omitted on a connection that does not
+     * own trust, which leaves pairing unavailable rather than idle.
+     */
+    readonly pairingSource?: RigPairingSource;
+    /**
      * Repeating read of this account's profile, waiting requests, and people,
      * together with the two decisions that change them. Omitted leaves friends
      * unavailable rather than empty.
@@ -319,6 +352,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let sessionListStore: RigSessionListStore | undefined;
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
+    let nodesStore: RigNodesStore | undefined;
+    let pairingStore: RigPairingStore | undefined;
     let friendsStore: RigFriendsStore | undefined;
     let sessionShareStore: RigSessionShareStore | undefined;
     let sharedSessionsStore: RigSharedSessionsStore | undefined;
@@ -429,6 +464,20 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             providerUsageStore ??= rigProviderUsageStoreCreate({ source });
             return providerUsageStore;
+        },
+        nodes() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.nodesSource;
+            if (!source) return undefined;
+            nodesStore ??= rigNodesStoreCreate({ source });
+            return nodesStore;
+        },
+        pairing() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.pairingSource;
+            if (!source) return undefined;
+            pairingStore ??= rigPairingStoreCreate({ source });
+            return pairingStore;
         },
         friends() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -659,6 +708,10 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             inboxStore = undefined;
             providerUsageStore?.[Symbol.dispose]();
             providerUsageStore = undefined;
+            nodesStore?.[Symbol.dispose]();
+            nodesStore = undefined;
+            pairingStore?.[Symbol.dispose]();
+            pairingStore = undefined;
             friendsStore?.[Symbol.dispose]();
             friendsStore = undefined;
             sessionShareStore?.[Symbol.dispose]();

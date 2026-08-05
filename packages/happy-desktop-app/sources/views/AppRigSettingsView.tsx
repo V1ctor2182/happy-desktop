@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
+    RigNodesSnapshot,
+    RigPairingSnapshot,
     RigInstructionsSnapshot,
     RigSecurityPolicySnapshot,
     RigModelCatalog,
@@ -17,26 +19,31 @@ import {
     rigModelKey,
     rigPermissionLabel,
     rigThinkingLabel,
+    rigNodesStoreNoop,
+    rigPairingStoreNoop,
     rigWindowStoreNoop,
 } from "happy-desktop-state";
 import {
     RigGeneralSettings,
     RigInstructionsSettings,
-    RigMachineSettings,
+    RigNodeSettings,
+    RigPairing,
     RigProviderSettings,
     RigSettingsShell,
-    type RigMachineRow,
+    type RigNodeRow,
+    type RigNodeTransportRow,
+    type RigPairingProgress,
     type RigProviderRow,
     type RigSettingsCategory,
 } from "happy-desktop-ui";
 import type { SelectOption } from "happy-desktop-ui";
-import type { AppRigDirectorySnapshot, AppRigDirectoryStore } from "../AppRigView";
+import { hostRig, type AppRigDirectorySnapshot, type AppRigDirectoryStore } from "../AppRigView";
 
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "doc", id: "instructions", label: "Instructions" },
-    { icon: "link", id: "machines", label: "Machines" },
+    { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
 ];
 
@@ -50,7 +57,7 @@ export function rigSettingsCategoryExists(section: string): boolean {
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     general: "How this window looks and what a new session starts with",
     instructions: "Machine-wide agent guidance and permission-review policy",
-    machines: "Every Rig this window works in, here and elsewhere",
+    nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
 };
 
@@ -88,7 +95,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
     // The catalog shown is this machine's: providers are configured in the Rig
     // the window runs on, and the defaults chosen here are the window's own.
-    const modelStore = directory.rigs.find((rig) => rig.kind === "local")?.session?.models;
+    const modelStore = hostRig(directory)?.session?.models;
     const models = useSyncExternalStore(
         modelStore?.subscribe ?? noSubscribe,
         modelStore?.get ?? modelsUnloaded,
@@ -101,20 +108,32 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
-    const instructionsStore = directory.rigs.find((rig) => rig.kind === "local")?.session
-        ?.instructions;
+    const instructionsStore = hostRig(directory)?.session?.instructions;
     const instructions = useSyncExternalStore(
         instructionsStore?.subscribe ?? noSubscribe,
         instructionsStore?.get ?? instructionsUnavailable,
         instructionsStore?.get ?? instructionsUnavailable,
     );
-    const securityPolicyStore = directory.rigs.find((rig) => rig.kind === "local")?.session
-        ?.securityPolicy;
+    const securityPolicyStore = hostRig(directory)?.session?.securityPolicy;
     const securityPolicy = useSyncExternalStore(
         securityPolicyStore?.subscribe ?? noSubscribe,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
     );
+    // The host's peering, subscribed only while this window is open: subscribing
+    // is what opens the status stream, and it closes again when the window does.
+    const nodesStore = hostRig(directory)?.session?.nodes ?? rigNodesStoreNoop;
+    const nodes = useSyncExternalStore(nodesStore.subscribe, nodesStore.get, nodesStore.get);
+    // Pairing belongs to the host as well, and only to it: a node is reached
+    // because the host already trusts it. Following a pairing lasts exactly as
+    // long as this subscription, so leaving the window stops asking about one.
+    const pairingStore = hostRig(directory)?.session?.pairing ?? rigPairingStoreNoop;
+    const pairing = useSyncExternalStore(
+        pairingStore.subscribe,
+        pairingStore.get,
+        pairingStore.get,
+    );
+    const pairingProgressView = pairingProgress(pairing);
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -190,20 +209,40 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         },
                     ]}
                 />
-            ) : props.section === "machines" ? (
-                <RigMachineSettings
-                    draft={{
-                        destination: directory.add.destination,
-                        label: directory.add.label,
-                        ...(directory.add.error ? { error: directory.add.error } : {}),
-                    }}
-                    machines={machineRows(directory)}
-                    onAdd={() => props.rigs.addSubmit()}
-                    onConnect={(id) => props.rigs.rigConnect(id)}
-                    onDisconnect={(id) => props.rigs.rigDisconnect(id)}
-                    onDestinationChange={(value) => props.rigs.destinationUpdate(value)}
-                    onForget={(id) => props.rigs.rigRemove(id)}
-                    onLabelChange={(value) => props.rigs.labelUpdate(value)}
+            ) : props.section === "nodes" ? (
+                <RigNodeSettings
+                    loading={nodes.loading}
+                    nodes={nodeRows(nodes, directory)}
+                    pairing={
+                        <RigPairing
+                            answering={pairing.answering}
+                            available={pairing.available}
+                            creating={pairing.creating}
+                            joining={pairing.join.submitting}
+                            joinValue={pairing.join.invitation}
+                            onInvitationCreate={() => pairingStore.invitationCreate()}
+                            onJoinSubmit={() => pairingStore.joinSubmit()}
+                            onJoinValueChange={(value) => pairingStore.joinInvitationUpdate(value)}
+                            onReset={() => pairingStore.pairingReset()}
+                            onVerificationAccept={() => pairingStore.verificationAnswer(true)}
+                            onVerificationReject={() => pairingStore.verificationAnswer(false)}
+                            {...(pairing.error ? { error: pairing.error.message } : {})}
+                            {...(pairing.invitation
+                                ? {
+                                      invitation: {
+                                          command: pairing.invitation.command,
+                                          invitation: pairing.invitation.invitation,
+                                      },
+                                  }
+                                : {})}
+                            {...(pairingProgressView ? { progress: pairingProgressView } : {})}
+                        />
+                    }
+                    transports={transportRows(nodes)}
+                    {...(nodes.instanceId ? { hostId: nodes.instanceId } : {})}
+                    {...(nodes.name ? { hostName: nodes.name } : {})}
+                    {...(nodes.publicKey ? { hostPublicKey: nodes.publicKey } : {})}
+                    {...(nodes.error ? { error: nodes.error.message } : {})}
                 />
             ) : props.section === "providers" ? (
                 <RigProviderSettings
@@ -258,19 +297,99 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
 }
 
-/** Every Rig as one row, this machine first and never offering its own controls. */
-function machineRows(directory: AppRigDirectorySnapshot): readonly RigMachineRow[] {
-    return directory.rigs.map((rig) => ({
-        connected: rig.connected,
-        id: rig.id,
-        label: rig.label,
-        local: rig.kind === "local",
-        projectCount: rig.projects.length,
-        status: rig.status,
-        ...(rig.destination ? { destination: rig.destination } : {}),
-        ...(rig.message ? { message: rig.message } : {}),
-        ...(rig.version ? { version: rig.version } : {}),
+/** Every node the host reports, in the order the host reports them. */
+function nodeRows(
+    nodes: RigNodesSnapshot,
+    directory: AppRigDirectorySnapshot,
+): readonly RigNodeRow[] {
+    // A node whose work this window actually holds is one of the Rigs in the
+    // directory, addressed by the identity the host published for it.
+    const open = new Set(
+        directory.rigs.flatMap((rig) =>
+            rig.nodeId !== undefined && rig.session ? [rig.nodeId] : [],
+        ),
+    );
+    // A machine that answered and declined to share its API said so on its own
+    // connection, so that fact is read off the Rig the window opened for it
+    // rather than off the host's peer status, which cannot know it.
+    const restricted = new Set(
+        directory.rigs.flatMap((rig) =>
+            rig.nodeId !== undefined && rig.accessRestricted === true ? [rig.nodeId] : [],
+        ),
+    );
+    return nodes.nodes.map((node) => ({
+        id: node.key,
+        // What the machine calls itself, then what it proved it is, then where
+        // it was dialled: a node still being reached has told the host nothing
+        // but an address, and pretending otherwise would name it wrongly.
+        name: node.name ?? node.peerId ?? node.routes[0]?.address ?? node.key,
+        routes: node.routes.map((route) => ({
+            address: route.address,
+            state: route.status,
+            transport: route.transport,
+        })),
+        state: node.status,
+        ...(node.error ? { message: node.error } : {}),
+        ...(node.peerId ? { peerId: node.peerId } : {}),
+        ...(node.rttMs === undefined ? {} : { rttMs: node.rttMs }),
+        ...(node.peerId !== undefined && open.has(node.peerId) ? { workOpen: true } : {}),
+        ...(node.peerId !== undefined && restricted.has(node.peerId)
+            ? { accessRestricted: true }
+            : {}),
     }));
+}
+
+/**
+ * The pairing under way, in the terms the surface draws.
+ *
+ * The store's state carries a couple of things the surface has no use for — the
+ * pairing's own id and when it expires — so this narrows rather than passes the
+ * object through, and the phases stay a closed union on both sides.
+ */
+function pairingProgress(pairing: RigPairingSnapshot): RigPairingProgress | undefined {
+    const state = pairing.state;
+    if (!state) return undefined;
+    switch (state.phase) {
+        case "connecting":
+        case "waiting":
+            return { phase: state.phase, role: state.role };
+        case "verifying":
+            return {
+                emojis: state.emojis,
+                peer: { instanceId: state.peer.instanceId, name: state.peer.name },
+                phase: "verifying",
+                role: state.role,
+            };
+        case "connected":
+            return {
+                peer: { instanceId: state.peer.instanceId, name: state.peer.name },
+                phase: "connected",
+                role: state.role,
+            };
+        default:
+            return {
+                phase: state.phase,
+                role: state.role,
+                ...(state.error === undefined ? {} : { message: state.error }),
+            };
+    }
+}
+
+/** Each transport the host runs, so an absent node list can explain itself. */
+function transportRows(nodes: RigNodesSnapshot): readonly RigNodeTransportRow[] {
+    return nodes.transports.map((transport) =>
+        transport.state === "ready"
+            ? {
+                  localAddress: transport.localAddress,
+                  state: "ready" as const,
+                  transport: transport.transport,
+              }
+            : {
+                  message: transport.error,
+                  state: "unavailable" as const,
+                  transport: transport.transport,
+              },
+    );
 }
 
 /**

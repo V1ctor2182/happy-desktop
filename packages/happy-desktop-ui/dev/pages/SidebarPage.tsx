@@ -954,6 +954,52 @@ export function SidebarPage() {
                     <DimensionRule label="empty row 28 px · copy 11/15 · ghost action" />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="A section whose source cannot be reached states the fault under its heading and does not claim to be empty; with nothing to press, it offers no button"
+                label="Unreachable source"
+                number="05"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Frame height={380}>
+                        <Sidebar
+                            activeItemId=""
+                            onCompose={() => {}}
+                            onItemSelect={() => {}}
+                            onSectionAction={() => {}}
+                            sections={[
+                                {
+                                    empty: {
+                                        description: "Connecting to this machine…",
+                                        icon: "link",
+                                        title: "Connecting…",
+                                    },
+                                    id: "connecting",
+                                    items: [],
+                                    label: "workshop",
+                                    status: "connecting",
+                                },
+                                {
+                                    empty: {
+                                        description:
+                                            "Its projects will appear once this machine can be reached again.",
+                                        icon: "link",
+                                        title: "Not reachable",
+                                    },
+                                    error: "The peer could not complete the request.",
+                                    id: "unreachable",
+                                    items: [],
+                                    label: "hjq4sq5xxwpw5ekbk7pug682",
+                                    status: "error",
+                                },
+                            ]}
+                            title="Nodes"
+                        />
+                    </Frame>
+                    <DimensionRule label="error line 11/15 destructive · empty copy 11/15 · no action" />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

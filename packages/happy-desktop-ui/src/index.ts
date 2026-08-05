@@ -190,6 +190,7 @@ export {
     type SidebarReorder,
     type SidebarSection,
 } from "./Sidebar";
+export { SidebarNodes, type SidebarNode, type SidebarNodesProps } from "./SidebarNodes";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
 export { SidebarUpdateAction, type SidebarUpdateActionProps } from "./SidebarUpdateAction";
 export {
@@ -199,14 +200,22 @@ export {
     type DesktopStartupUpdate,
     type DesktopStartupValues,
 } from "./DesktopStartupScreen";
-export {
-    DesktopInstanceSwitcher,
-    type DesktopInstanceStatus,
-    type DesktopInstanceSwitcherProps,
-    type DesktopInstanceTarget,
-    type DesktopInstanceUpdate,
-} from "./DesktopInstanceSwitcher";
 export { RigConnectionStatus, type RigConnectionStatusProps } from "./RigConnectionStatus";
+export {
+    RigPeerStatus,
+    rigPeerStatusLabel,
+    type RigPeerState,
+    type RigPeerStatusProps,
+} from "./RigPeerStatus";
+export {
+    RigPairing,
+    type RigPairingEmojis,
+    type RigPairingInvitationView,
+    type RigPairingPeer,
+    type RigPairingProgress,
+    type RigPairingProps,
+    type RigPairingRole,
+} from "./RigPairing";
 export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
@@ -447,12 +456,13 @@ export {
     type RigInstructionsSettingsProps,
 } from "./pages/settings/RigInstructionsSettings";
 export {
-    RigMachineSettings,
-    type RigMachineDraft,
-    type RigMachineRow,
-    type RigMachineSettingsProps,
-    type RigMachineStatus,
-} from "./pages/settings/RigMachineSettings";
+    RigNodeSettings,
+    type RigNodeRouteRow,
+    type RigNodeRow,
+    type RigNodeSettingsProps,
+    type RigNodeState,
+    type RigNodeTransportRow,
+} from "./pages/settings/RigNodeSettings";
 export {
     RigProviderSettings,
     type RigProviderModelRow,

@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { HealthResponse } from "@slopus/rig/types";
 import type { RigDaemonHealth } from "happy-desktop-state";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
+import { rigNodeRouteMatch } from "./rigNodeRoute";
 import { rigProxyHandle, type RigProxyClient } from "./rigProxyHandle";
 import { rigTerminalBridgeCreate, type RigTerminalClient } from "./rigTerminalBridge";
 
@@ -35,6 +36,25 @@ export interface RigHttpProxyOptions {
      * site; without one this proxy reports that it cannot render a document.
      */
     readonly htmlPreview?: HtmlPreviewProxyHandle;
+    /**
+     * Builds the same projected surface over one machine the host Rig is peered
+     * with, addressed by the identity the host published for it.
+     *
+     * The peer's work is reached through this one port, under `/nodes/<id>`, so
+     * a connection to a node is the ordinary connection with a different base
+     * URL rather than a second kind of client. A window whose host cannot peer
+     * supplies nothing and those paths are simply not found.
+     *
+     * The host's peer route forwards whole daemon paths — ordinary requests, a
+     * terminal's WebSocket upgrade, and the browser tunnel's CONNECT alike — so
+     * what comes back is the far machine's own catalog, models, sessions, and
+     * byte streams, and this projects them with the same code it projects its
+     * own host's, because they are the same protocol. That holds exactly as far
+     * as the two daemons agree on it: a machine running a Rig this build cannot
+     * read is classified during the connector's handshake and reported as such
+     * rather than projected into a surface that would be quietly wrong.
+     */
+    readonly peerClient?: (nodeId: string) => RigProxyClient & RigTerminalClient;
 }
 
 /** Projects Rig's protocol health into the minimal liveness shape the renderer loader consumes. */
@@ -57,11 +77,27 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * Resolves once the port is bound so the caller can advertise the URL.
  *
  * The same port also upgrades one route to a WebSocket: a terminal's byte channel,
- * which cannot be a request/response at all. That is the only upgrade this server
- * answers, so any other upgrade attempt is refused rather than left hanging.
+ * which cannot be a request/response at all. It is answered for this window's host
+ * and, under that node's own base, for each machine the host is peered with. That
+ * is the only upgrade this server answers, so any other upgrade attempt is refused
+ * rather than left hanging.
  */
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
     const preview = options.htmlPreview?.register(options.client);
+    // One client per node, kept for as long as this proxy lives. They are made
+    // on first use rather than from a list of nodes: the renderer decides which
+    // machines it is working on, and a client is only ever a way of addressing
+    // one — holding one costs nothing until a request goes through it.
+    const peers = new Map<string, RigProxyClient & RigTerminalClient>();
+    const peerClient = (nodeId: string): (RigProxyClient & RigTerminalClient) | undefined => {
+        const create = options.peerClient;
+        if (!create) return undefined;
+        const existing = peers.get(nodeId);
+        if (existing) return existing;
+        const client = create(nodeId);
+        peers.set(nodeId, client);
+        return client;
+    };
     const capability = randomBytes(32).toString("base64url");
     const capabilityPrefix = `/${capability}`;
     let expectedHost: string | undefined;
@@ -113,7 +149,18 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             response.end();
             return;
         }
-        const bridgePath = url.pathname.slice(capabilityPrefix.length) || "/";
+        const requestPath = url.pathname.slice(capabilityPrefix.length) || "/";
+        // A node's own base URL sits under this same port, so everything above
+        // — the renderer transport, the connector, the health probe — addresses
+        // a peer with the paths it already knows and only the base differs.
+        const node = rigNodeRouteMatch(requestPath);
+        const client = node ? peerClient(node.nodeId) : options.client;
+        if (!client) {
+            response.writeHead(404, { "content-type": "application/json" });
+            response.end(JSON.stringify({ error: "This Rig is not peered with that machine." }));
+            return;
+        }
+        const bridgePath = node ? node.path : requestPath;
         const rigConnectRequest =
             bridgePath === "/rig-connect" || bridgePath.startsWith("/rig-connect/");
         const hasBody =
@@ -130,14 +177,21 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             return;
         }
         void rigProxyHandle({
-            client: options.client,
+            client,
             method: request.method ?? "GET",
             path: bridgePath,
             query: url.searchParams,
             request,
             response,
-            onConnectionError: options.onConnectionError,
-            ...(preview
+            // A node that stops answering is that node's connection to notice
+            // and retry; it is not this window's host going down, and reporting
+            // it as one would tear down every other Rig in the window.
+            ...(node ? {} : { onConnectionError: options.onConnectionError }),
+            // The preview server publishes documents out of this window's own
+            // host checkouts. A node's file lives on the other machine, so
+            // handing back a host preview URL would serve the wrong bytes under
+            // a name that looks right; a node reports that it cannot preview.
+            ...(preview && !node
                 ? { htmlPreviewUrl: preview.workspace, webappPreviewUrl: preview.webapp }
                 : {}),
         }).then(
@@ -160,7 +214,18 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         );
     });
     const terminals = rigTerminalBridgeCreate({
-        client: () => Promise.resolve(options.client),
+        // The machine comes off the path the same way it does for every request
+        // above. A node this host is not peered with is refused rather than
+        // answered by the host's own client: the session ID in that path was
+        // minted on the other machine, and one that happens to name a real
+        // session here would open a shell on the wrong one.
+        client: (nodeId) => {
+            if (nodeId === undefined) return Promise.resolve(options.client);
+            const client = peerClient(nodeId);
+            return client
+                ? Promise.resolve(client)
+                : Promise.reject(new Error("This Rig is not peered with that machine."));
+        },
         capability,
         prefix: capabilityPrefix,
         expectedHost: () => expectedHost,

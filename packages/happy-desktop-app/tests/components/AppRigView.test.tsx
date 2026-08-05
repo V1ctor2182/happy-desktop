@@ -135,15 +135,12 @@ function modelStore(): RigModelStore {
 
 const MODELS_LOADING = { type: "loading" } as const;
 
-/** One connected local Rig holding the project above; no remote machines. */
+/** One connected host Rig holding the project above. */
 function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][number]["projects"]) {
     const snapshot: AppRigDirectorySnapshot = {
-        add: { destination: "", label: "", open: false },
         rigs: [
             {
-                connected: true,
                 id: "local",
-                kind: "local",
                 label: "This Mac",
                 projects,
                 projectsStatus: "ready",
@@ -161,14 +158,6 @@ function directory(host: RigHost, projects: AppRigDirectorySnapshot["rigs"][numb
     const store: AppRigDirectoryStore = {
         get: () => snapshot,
         subscribe: () => () => undefined,
-        addOpen: () => undefined,
-        addClose: () => undefined,
-        destinationUpdate: () => undefined,
-        labelUpdate: () => undefined,
-        addSubmit: () => undefined,
-        rigConnect: () => undefined,
-        rigDisconnect: () => undefined,
-        rigRemove: () => undefined,
         rigActivate: () => undefined,
     };
     return store;

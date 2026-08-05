@@ -40,6 +40,11 @@ import type {
     RigInboxStore,
     RigInstructionsStore,
     RigSecurityPolicyStore,
+    RigNode,
+    RigNodesSnapshot,
+    RigNodeStatus,
+    RigNodesStore,
+    RigPairingStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
@@ -81,6 +86,7 @@ import {
     rigInboxStoreNoop,
     rigNavigationOrderApply,
     rigNavigationOrderStoreNoop,
+    rigNodesStoreNoop,
     rigProviderUsageStoreNoop,
     rigSessionShareStoreNoop,
     rigSharedSessionsStoreNoop,
@@ -161,10 +167,12 @@ import {
     type TabTransferTarget,
     WindowDragRegion,
     rigComposerModelControlProps,
+    rigPeerStatusLabel,
     sidebarReorderMove,
     type MenuItem,
     type FileTreeNode,
     type FileTreeSelectModifiers,
+    type RigPeerState,
     type SidebarItem,
     type SidebarReorder,
     type SidebarSection,
@@ -185,21 +193,39 @@ export interface AppRigUpdate {
 }
 
 /**
- * One Rig this window can work in: the daemon on this machine, or a remembered
- * machine reached over SSH. Both carry the same product stores, which is what lets
- * another machine's projects open the same screens as this one's.
+ * One Rig this window works in: its host, or a machine the host is peered with
+ * and has reached.
+ *
+ * There is an entry per machine, each with its own stores, because each
+ * machine's work is its own — a node's projects and conversations arrive on
+ * that node's connection rather than being handed on by the host. What the host
+ * uniquely holds is the route to the others, and the facts about this account
+ * and this machine that no node can answer for.
  */
 export interface AppRigEntry {
     readonly id: string;
-    readonly kind: "local" | "remote";
     readonly label: string;
-    /** The reader's standing intent for a remote machine; this machine is always wanted. */
-    readonly connected: boolean;
+    /**
+     * Set on a Rig reached through this window's host: the node identity the
+     * host published for it. It is what separates a machine's own work from the
+     * host's in the sidebar, and what keeps the two from being offered the same
+     * acts — adding a folder opens a picker on this machine's disk, which means
+     * nothing to a Rig running somewhere else.
+     */
+    readonly nodeId?: string;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
+    /**
+     * True when this Rig is reachable and is not sharing its API.
+     *
+     * It is not a failure and is deliberately not folded into `status`: the two
+     * daemons are peered and the link is up, and the machine has simply not
+     * been asked to expose its work. Reporting it as unreachable would send the
+     * reader looking for a fault that is not there — the setting is on the
+     * other machine, and turning it on is what makes the projects appear.
+     */
+    readonly accessRestricted?: boolean;
     readonly message?: string;
     readonly version?: string;
-    /** The SSH destination a remote machine is reached at; absent for this machine. */
-    readonly destination?: string;
     readonly projects: readonly RigProjectGroup[];
     readonly projectsStatus: "loading" | "ready" | "error";
     /**
@@ -234,6 +260,19 @@ export interface AppRigSession {
      */
     readonly providerUsage?: RigProviderUsageStore;
     /**
+     * The machines this host Rig is peered with, and how each link is doing.
+     * Absent when the host does not peer, which is why the settings list can say
+     * so rather than showing an empty list that means the opposite.
+     */
+    readonly nodes?: RigNodesStore;
+    /**
+     * Trusting a new machine, by comparing four emojis at both ends. Present
+     * only on the Rig that owns trust — this window's host — and only when its
+     * daemon carries pairing at all, which is why a surface can state that
+     * rather than drawing a control that would answer nothing.
+     */
+    readonly pairing?: RigPairingStore;
+    /**
      * This account's own profile, the people asking to connect to it, and the
      * people it already knows. Absent when the machine does not carry the
      * friends service, which is why the surface can say so rather than offering
@@ -260,13 +299,6 @@ export interface AppRigSession {
     readonly securityPolicy?: RigSecurityPolicyStore;
 }
 
-export interface AppRigAddSnapshot {
-    readonly open: boolean;
-    readonly destination: string;
-    readonly label: string;
-    readonly error?: string;
-}
-
 export interface AppRigDirectorySnapshot {
     /**
      * The Rig this window is addressing, as `rigActivate` last recorded it. It
@@ -277,26 +309,16 @@ export interface AppRigDirectorySnapshot {
      * rather than aimed at a guess.
      */
     readonly activeRigId?: string;
-    readonly add: AppRigAddSnapshot;
     readonly rigs: readonly AppRigEntry[];
 }
 
 /**
- * Every Rig in the window, plus the draft state of the form that adds one. The
- * surface holds no local state of its own: adding a machine is typed into this
- * store, and connecting or disconnecting one is a call on it.
+ * The Rig this window works in. There is nothing to add or remove here: the host
+ * Rig owns which machines it is peered with, and the window only reads it.
  */
 export interface AppRigDirectoryStore {
     get(): AppRigDirectorySnapshot;
     subscribe(listener: () => void): () => void;
-    addOpen(): void;
-    addClose(): void;
-    destinationUpdate(value: string): void;
-    labelUpdate(value: string): void;
-    addSubmit(): void;
-    rigConnect(id: string): void;
-    rigDisconnect(id: string): void;
-    rigRemove(id: string): void;
     /**
      * Records which Rig the window is addressing. The URL decides it; the store
      * is told so that window-level events with no Rig of their own — a URL handed
@@ -317,7 +339,7 @@ export interface AppBuildIdentity {
 }
 
 export interface AppRigViewProps {
-    /** Every Rig in this window, and the form that adds another machine. */
+    /** The host Rig this window is an interface onto, and what it currently holds. */
     rigs: AppRigDirectoryStore;
     /**
      * This build's development identity, shown as a pill in the sidebar header.
@@ -997,56 +1019,190 @@ function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): 
     });
 }
 
-function rigSections(directory: AppRigDirectorySnapshot): SidebarSection[] {
-    return directory.rigs.map((rig) => ({
-        id: `rig:${rig.id}`,
-        label: rig.label,
-        items: rig.projects.flatMap(sidebarItems).map((item) => ({
-            ...item,
-            id: rigItemId(rig.id, item.id),
+function rigSections(
+    directory: AppRigDirectorySnapshot,
+    nodes: RigNodesSnapshot,
+): SidebarSection[] {
+    return [
+        ...directory.rigs.map((rig) => ({
+            id: `rig:${rig.id}`,
+            label: rig.label,
+            status: rigPeerState(rig),
+            items: rig.projects.flatMap(sidebarItems).map((item) => ({
+                ...item,
+                id: rigItemId(rig.id, item.id),
+            })),
+            // Adding a folder is this machine's act: the picker opens on the disk
+            // the window is running on, so only a folder that is actually here can
+            // be registered. A checkout that lives on a node is added on that
+            // machine, by the Rig running there, so the control is not offered
+            // there at all rather than offered and refused. It appears only once
+            // the daemon is actually up, since a folder cannot be registered with
+            // a Rig that is not answering.
+            ...(rig.nodeId === undefined && rig.status === "connected" && rig.session
+                ? {
+                      action: {
+                          busy: rig.projectAdd?.pending === true,
+                          icon: "plus" as const,
+                          label: "Add project",
+                          reveal: "always" as const,
+                      },
+                      ...(rig.projectAdd?.error !== undefined
+                          ? { error: rig.projectAdd.error }
+                          : {}),
+                  }
+                : {}),
+            // What a machine said when it failed belongs under its own heading,
+            // in the tone of a fault. It is the machine's own sentence — a node
+            // that could not be reached through its host answers with the host's
+            // words for that — and it is repeated rather than reworded, because
+            // it is the only account of what went wrong that anyone has.
+            ...(rig.status === "error" && rig.message !== undefined ? { error: rig.message } : {}),
+            ...(rig.projects.length === 0
+                ? {
+                      empty:
+                          rig.status === "connected"
+                              ? {
+                                    actionLabel: "Create",
+                                    description: "Start a session to begin working here.",
+                                    icon: "chat" as const,
+                                    title: "No projects yet",
+                                }
+                              : {
+                                    description: rigEmptyDescription(rig),
+                                    icon: "link" as const,
+                                    title: rigStatusLabel(rig),
+                                    // Settings is where this machine's own
+                                    // connection is made, so the offer is real
+                                    // there. A node is joined by the host it is
+                                    // peered through, and settings only reports
+                                    // how that is going, so there is nothing to
+                                    // press.
+                                    ...(rig.nodeId === undefined
+                                        ? { actionLabel: "Open settings" }
+                                        : {}),
+                                },
+                  }
+                : {}),
         })),
-        // Adding a folder is this machine's act: the picker opens on the disk
-        // the window is running on, so a folder chosen here means nothing to a
-        // Rig somewhere else. Another machine's projects are added on that
-        // machine. It is offered only once the daemon is actually up, since a
-        // folder cannot be registered with a Rig that is not answering.
-        ...(rig.kind === "local" && rig.status === "connected" && rig.session
-            ? {
-                  action: {
-                      busy: rig.projectAdd?.pending === true,
-                      icon: "plus" as const,
-                      label: "Add project",
-                      reveal: "always" as const,
-                  },
-                  ...(rig.projectAdd?.error !== undefined ? { error: rig.projectAdd.error } : {}),
-              }
-            : {}),
-        ...(rig.projects.length === 0
-            ? {
-                  empty:
-                      rig.status === "connected"
-                          ? {
-                                actionLabel: "Create",
-                                description: "Start a session to begin working here.",
-                                icon: "chat" as const,
-                                title: "No projects yet",
-                            }
-                          : {
-                                actionLabel: "Open settings",
-                                description:
-                                    rig.message ??
-                                    (rig.status === "connecting"
-                                        ? "Connecting to this machine…"
-                                        : "Connect this machine to see its projects."),
-                                icon: "link" as const,
-                                title: rigStatusLabel(rig),
-                            },
-              }
-            : {}),
-    }));
+        ...nodesSection(nodes, directory.rigs),
+    ];
+}
+
+/**
+ * The machines this Rig is peered with that the window has no connection to,
+ * reported under the projects.
+ *
+ * A node the window did reach is not here: it is one of the sections above,
+ * with its own projects under its own name, because there is a real connection
+ * behind it and opening its work is ordinary navigation. What is left are the
+ * machines with nothing to open — still being dialled, unreachable, or not far
+ * enough through their handshake to be addressed — and for those the only true
+ * thing to show is where the link stands. So they are shown as status and
+ * nothing else, rather than as rows that would go nowhere.
+ *
+ * A host peered with nothing, or peered only with machines already listed
+ * above, contributes no block at all.
+ */
+function nodesSection(nodes: RigNodesSnapshot, rigs: readonly AppRigEntry[]): SidebarSection[] {
+    const connected = new Set(
+        rigs.flatMap((rig) => (rig.nodeId === undefined ? [] : [rig.nodeId])),
+    );
+    const listed = nodes.nodes.filter(
+        (node) => node.peerId === undefined || !connected.has(node.peerId),
+    );
+    if (listed.length === 0) return [];
+    return [
+        {
+            id: "rig-nodes",
+            items: [],
+            label: "Nodes",
+            nodes: listed.map((node) => ({
+                // The machine's own key, which the store already made stable
+                // across the routes it is reached over. Addressing a row by one
+                // route's address would rename it the moment a second route
+                // appeared or the first one dropped.
+                id: `node:${node.key}`,
+                label: node.name ?? node.peerId ?? nodeAddress(node),
+                state: nodeState(node.status),
+                ...(node.name === undefined && node.peerId === undefined
+                    ? {}
+                    : { detail: nodeAddress(node) }),
+            })),
+        },
+    ];
+}
+
+/**
+ * Where a machine is, in one line. Every route is named because a machine
+ * reached two ways is still one machine, and the sidebar has to say which link
+ * the status it shows is about.
+ */
+function nodeAddress(node: RigNode): string {
+    return node.routes.map((route) => route.address).join(", ");
+}
+
+/** The host's word for a node's link, in the terms every peer marker uses. */
+function nodeState(status: RigNodeStatus): RigPeerState {
+    if (status === "connected") return "connected";
+    if (status === "connecting") return "connecting";
+    return "error";
+}
+
+/**
+ * One Rig's heading marker: where its connection is, with access folded in.
+ *
+ * A machine that answered and declined to share its API is not disconnected and
+ * not broken, so it gets its own state rather than being reported as either. It
+ * only means anything on a connection that is otherwise up: a Rig still being
+ * reached has not declined anything.
+ */
+function rigPeerState(rig: AppRigEntry): RigPeerState {
+    if (rig.accessRestricted === true && rig.status !== "error") return "restricted";
+    return rig.status === "error" ? "error" : rig.status;
+}
+
+/**
+ * The Rig this window is hosted by: the one it connects to directly, and the one
+ * every other machine is reached through.
+ *
+ * It is found by not being a node rather than by name, because the name belongs
+ * to the connection layer. It is deliberately not the Rig the window happens to
+ * be addressing: this account's identity, the machines it peers with, and what
+ * people are sharing with it are all facts about this machine, and reading them
+ * off a node would answer for the wrong one.
+ */
+export function hostRig(directory: AppRigDirectorySnapshot): AppRigEntry | undefined {
+    return directory.rigs.find((rig) => rig.nodeId === undefined);
+}
+
+/**
+ * What a section says when it is standing empty because its machine has not
+ * answered.
+ *
+ * It does not say there is nothing there. Whatever that machine holds is
+ * unknown while the connection is down, and telling the reader their work is
+ * gone would be a worse mistake than telling them nothing. So this says only
+ * where the connection stands; the failure itself is already stated under the
+ * heading, and is not repeated here.
+ */
+function rigEmptyDescription(rig: AppRigEntry): string {
+    // A machine that answered and declined to share is not being waited for.
+    // Saying "connecting…" would leave the reader watching a link that is
+    // already up for a setting that is on the other machine.
+    if (rigPeerState(rig) === "restricted")
+        return "This machine is not sharing its Rig API. Enable it there and its projects appear here.";
+    if (rig.status === "connecting") return "Connecting to this machine…";
+    if (rig.status === "error")
+        return rig.nodeId === undefined
+            ? "Its projects will appear once it answers again."
+            : "Its projects will appear once this machine can be reached again.";
+    return "Connect this machine to see its projects.";
 }
 
 function rigStatusLabel(rig: AppRigEntry): string {
+    const state = rigPeerState(rig);
+    if (state === "restricted") return rigPeerStatusLabel(state);
     if (rig.status === "connected") return "Connected";
     if (rig.status === "connecting") return "Connecting…";
     return rig.status === "error" ? "Not reachable" : "Disconnected";
@@ -1275,12 +1431,19 @@ export function AppRigView(props: AppRigViewProps) {
     const usageStore =
         (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
     const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
-    // Friends has no Rig in its address, so it is not the addressed machine's to
-    // answer: the identity people reach belongs to this account, and it is this
-    // machine's daemon that holds it. Reading it off whichever remote machine
-    // happened to be open would make the same account show different people
-    // depending on what the reader was last looking at.
-    const localRig = directory.rigs.find((rig) => rig.kind === "local");
+    // Friends has no Rig in its address, and it does not need one: the identity
+    // people reach belongs to this account, and it is this machine's own daemon
+    // that holds it. So it is read off the host, not off whichever Rig the
+    // window is addressing — a node the reader has open is a different machine
+    // and would answer for a different account.
+    const localRig = hostRig(directory);
+    // The machines the host is peered with. The sidebar shows them whenever the
+    // window is open rather than only on a settings screen: a node going quiet
+    // is why work stops arriving, and that has to be visible where the work is.
+    // The host is asked because the host is the one that peers; a node reached
+    // through it does not answer for the network it is on.
+    const nodesStore = localRig?.session?.nodes ?? rigNodesStoreNoop;
+    const nodes = useSyncExternalStore(nodesStore.subscribe, nodesStore.get, nodesStore.get);
     // Subscribed for the same reason usage is, and only while it is open: the
     // subscription is what starts the daemon being asked about requests, and it
     // has to stop the moment the reader looks elsewhere.
@@ -1308,10 +1471,9 @@ export function AppRigView(props: AppRigViewProps) {
           ? undefined
           : "This Rig does not carry the friends service yet. Update it to connect with people.";
     // Sessions other people are showing this machine belong to the same account
-    // as friends do, so they are read off this machine's own Rig rather than off
-    // whichever remote one happens to be addressed — and, like friends, only
-    // while the reader is looking at them, because the subscription is what
-    // starts the daemon being asked.
+    // as friends do, so they are read off this machine's own Rig for the same
+    // reason — and, like friends, only while the reader is looking at them,
+    // because the subscription is what starts the daemon being asked.
     const sharedSessionsStore =
         (props.sharedOpen ? localRig?.session?.sharedSessions : undefined) ??
         rigSharedSessionsStoreNoop;
@@ -1721,7 +1883,7 @@ export function AppRigView(props: AppRigViewProps) {
                           )
                 ).catch(() => undefined);
             }}
-            sections={rigSections(directory)}
+            sections={rigSections(directory, nodes)}
         />
     );
 
@@ -1858,6 +2020,12 @@ export function AppRigView(props: AppRigViewProps) {
                 <RigWorkspaceSurface
                     appearance={props.appearance}
                     browserContent={props.browserContent}
+                    // Which machine this workspace's browser tabs browse from.
+                    // It travels with the session all the way to the tunnel,
+                    // because a session identity is only unique on the Rig that
+                    // minted it and the host would otherwise answer for a name
+                    // that is not its.
+                    {...(active.nodeId === undefined ? {} : { nodeId: active.nodeId })}
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
                     chatId={props.chatId}
@@ -1882,10 +2050,10 @@ export function AppRigView(props: AppRigViewProps) {
                     workspace={active.session.workspace}
                 />
             );
-        // The addressed machine has no live stores yet — it is still connecting, the
-        // reader disconnected it, or it could not be reached. The sidebar stays, so
-        // the other machines' work is one click away; connecting this one is a
-        // settings act, which is where the control points.
+        // The host Rig has no live stores yet — it is still connecting, or it could
+        // not be reached. The sidebar stays so the window keeps its shape while
+        // that resolves; anything the reader can do about it is a settings act,
+        // which is where the control points.
         return (
             <AppShell
                 sidebarCollapsible
@@ -1903,10 +2071,10 @@ export function AppRigView(props: AppRigViewProps) {
                     description={
                         active
                             ? (active.message ??
-                              (active.connected
+                              (active.status === "connecting"
                                   ? `Connecting to ${active.label}…`
                                   : `${active.label} is disconnected.`))
-                            : "Connect a machine to start working."
+                            : "Waiting for this machine's Rig."
                     }
                     icon={active?.status === "error" ? "shield" : "link"}
                     size="panel"
@@ -2318,6 +2486,12 @@ interface RigWorkspaceSurfaceProps {
     platform?: "desktop" | "web";
     windowState?: RigWindowStore;
     browserContent?: BrowserContentRenderer;
+    /**
+     * The machine this workspace's Rig is, when it is not the one this window
+     * runs on. It addresses the browser tunnel: a session identity belongs to
+     * the Rig that minted it, so the machine travels with it.
+     */
+    nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     /** The window's sidebar, composed once for every Rig by `AppRigView`. */
@@ -2643,6 +2817,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     <RigPanelBody
                         canStartTerminal={props.chatId !== undefined}
                         browserContent={props.browserContent}
+                        {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
                         htmlPreview={props.htmlPreview}
                         mediaWindow={props.mediaWindow}
                         sessionId={props.chatId}
@@ -3022,6 +3197,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     {...(props.browserContent
                                         ? { browserContent: props.browserContent }
                                         : {})}
+                                    {...(props.nodeId === undefined
+                                        ? {}
+                                        : { nodeId: props.nodeId })}
                                     {...(props.htmlPreview
                                         ? { htmlPreview: props.htmlPreview }
                                         : {})}
@@ -4592,6 +4770,8 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 
 function RigPanelBody(props: {
     browserContent?: BrowserContentRenderer;
+    /** The machine the open session belongs to, absent on this window's own. */
+    nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
@@ -4793,6 +4973,7 @@ function RigPanelBody(props: {
                     <RigToolBodies
                         activeId={props.panel.activeViewId}
                         {...(props.browserContent ? { browserContent: props.browserContent } : {})}
+                        {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
                         {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                         {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
@@ -4985,6 +5166,8 @@ function RigToolBodies(props: {
     activeId: string | undefined;
     store: RigPanelStore;
     browserContent?: BrowserContentRenderer;
+    /** The machine the session below browses from, absent on this window's own. */
+    nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     sessionId?: string;
     /** Current version per imported webapp, used to live-reload an already open page. */
@@ -5007,6 +5190,12 @@ function RigToolBodies(props: {
                                 ? (browserProps) =>
                                       props.browserContent!({
                                           ...browserProps,
+                                          // Both halves of the address, bound
+                                          // here where the Rig behind this
+                                          // workspace is still known.
+                                          ...(props.nodeId === undefined
+                                              ? {}
+                                              : { nodeId: props.nodeId }),
                                           sessionId: props.sessionId,
                                       })
                                 : undefined

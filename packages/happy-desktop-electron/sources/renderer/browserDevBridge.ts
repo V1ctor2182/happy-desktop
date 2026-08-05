@@ -67,12 +67,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // The development bridge has no push channel, so a change made outside
         // this window is picked up the next time the surface reads.
         notesSubscribe: () => () => undefined,
-        remoteRigAdd: async () => undefined,
-        remoteRigConnect: async () => undefined,
-        remoteRigDisconnect: async () => undefined,
-        remoteRigGet: async () => [],
-        remoteRigRemove: async () => undefined,
-        remoteRigSubscribe: () => () => undefined,
         // Browser-local development runs against a machine that already has Rig
         // and a daemon, and it has no native picker or PTY to run setup with, so
         // it reports setup as finished rather than presenting steps it cannot

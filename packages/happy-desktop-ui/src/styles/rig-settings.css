@@ -269,11 +269,11 @@
     line-height: 18px;
 }
 
-/* ---- Machines ---------------------------------------------------------- */
+/* ---- Nodes ------------------------------------------------------------- */
 
-/* One machine reads as the same kind of card a provider does: they are both a
-   thing this window connects to, listed with what it currently offers. */
-.happy2-rig-machine {
+/* One node reads as the same kind of card a provider does: they are both a
+   thing this Rig is connected to, listed with what it currently reports. */
+.happy2-rig-node {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -284,13 +284,13 @@
     border-radius: 10px;
 }
 
-.happy2-rig-machine__header {
+.happy2-rig-node__header {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.happy2-rig-machine__identity {
+.happy2-rig-node__identity {
     display: flex;
     align-items: center;
     flex: 1 1 0%;
@@ -298,7 +298,7 @@
     min-width: 0;
 }
 
-.happy2-rig-machine__glyph {
+.happy2-rig-node__glyph {
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -314,18 +314,18 @@
     color: var(--text-secondary);
 }
 
-.happy2-rig-machine[data-status="connected"] .happy2-rig-machine__glyph {
+.happy2-rig-node[data-state="connected"] .happy2-rig-node__glyph {
     color: var(--text);
 }
 
-.happy2-rig-machine__naming {
+.happy2-rig-node__naming {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
 }
 
-.happy2-rig-machine__name {
+.happy2-rig-node__name {
     overflow: hidden;
     color: var(--text);
     font-size: 14px;
@@ -335,7 +335,7 @@
     white-space: nowrap;
 }
 
-.happy2-rig-machine__meta {
+.happy2-rig-node__meta {
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 12px;
@@ -344,27 +344,45 @@
     white-space: nowrap;
 }
 
-.happy2-rig-machine__message {
+.happy2-rig-node__message {
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 16px;
 }
 
-.happy2-rig-machine__actions {
+/* What this window actually holds from the machine, as distinct from the state
+   of the link above it. Accent ink because it is the good case, and the only
+   line on the card that is about this window rather than about the host. */
+.happy2-rig-node__work {
+    display: block;
+    color: var(--text-link);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* The host's own identity is a fact about this machine rather than a card of
+   its own, so it sits above the transports as one labelled line. */
+.happy2-rig-node__host {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
+    min-width: 0;
 }
 
-.happy2-rig-machine__form {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+.happy2-rig-node__host-label {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
 }
 
-.happy2-rig-machine__form-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
+.happy2-rig-node__host-value {
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

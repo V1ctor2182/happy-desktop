@@ -69,14 +69,18 @@ function openInRecentWrite(targetId: string): void {
  */
 export function rigRendererTransportCreate(baseUrl: string): RigTransport {
     const base = baseUrl.replace(/\/$/, "");
-    // The Electron shell hands over an absolute loopback origin whose last path
+    // The Electron shell hands over an absolute loopback origin whose first path
     // segment is the proxy capability; the browser development server hands over
     // a same-origin path instead, which is why the base is resolved against the
     // document rather than parsed as an absolute URL on its own.
+    //
+    // The first segment, not the last: a machine the host is peered with is
+    // addressed at `…/<capability>/nodes/<id>`, and reading the end of that would
+    // offer the node's own name as the authority and be refused.
     const capability = new URL(base, globalThis.location?.href).pathname
         .split("/")
         .filter(Boolean)
-        .at(-1);
+        .at(0);
 
     const url = (path: string, params?: Record<string, string | undefined>): string => {
         const query = new URLSearchParams();
@@ -381,6 +385,25 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
     };
 }
 
+/**
+ * A refusal from the Rig at the other end, carrying the status it refused with.
+ *
+ * The status travels because some refusals are a fact about a machine rather
+ * than a fault in it: a node that has not been asked to share its API answers
+ * 403 to every route, and that has to be told apart from a daemon that is broken
+ * or gone. Classifying on the number keeps that decision off the wording of a
+ * message.
+ */
+export class RigTransportHttpError extends Error {
+    constructor(
+        readonly statusCode: number,
+        message: string,
+    ) {
+        super(message);
+        this.name = "RigTransportHttpError";
+    }
+}
+
 async function readJson<T>(response: Response): Promise<T> {
     if (!response.ok) {
         let detail = `The Rig request failed (${response.status}).`;
@@ -390,7 +413,7 @@ async function readJson<T>(response: Response): Promise<T> {
         } catch {
             // Non-JSON error body; keep the status-based message.
         }
-        throw new Error(detail);
+        throw new RigTransportHttpError(response.status, detail);
     }
     return (await response.json()) as T;
 }

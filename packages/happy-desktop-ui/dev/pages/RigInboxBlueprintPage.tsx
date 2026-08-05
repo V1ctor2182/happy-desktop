@@ -72,20 +72,20 @@ const pending: readonly RigInboxItem[] = [
 
 const answered: readonly RigInboxItem[] = [
     item("three", {
-        sessionTitle: "Add the remote Rig connect flow",
+        sessionTitle: "Add the node status block",
         status: "answered",
         resolvedAt: 1_700_000_500_000,
-        answers: { transport: ["Over SSH"] },
+        answers: { placement: ["Sidebar"] },
         questions: [
             {
-                id: "transport",
-                header: "Transport",
-                question: "How should the token be resolved?",
+                id: "placement",
+                header: "Placement",
+                question: "Where should node status appear?",
                 multiSelect: false,
                 required: true,
                 options: [
-                    { label: "Over SSH", description: "Reuses existing machine access." },
-                    { label: "Pasted by hand", description: "Copied from the daemon." },
+                    { label: "Sidebar", description: "Beside the rest of the work." },
+                    { label: "Settings only", description: "One page, read on demand." },
                 ],
             },
         ],

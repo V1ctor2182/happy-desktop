@@ -28,6 +28,8 @@ export * from "./rig/rigInstructionsStore.js";
 export * from "./rig/rigMenusStore.js";
 export * from "./rig/rigModelStore.js";
 export * from "./rig/rigNavigationOrderStore.js";
+export * from "./rig/rigNodesStore.js";
+export * from "./rig/rigPairingStore.js";
 export * from "./rig/rigPanelStore.js";
 export * from "./rig/rigProjectGroupProject.js";
 export * from "./rig/rigProjectRegistration.js";

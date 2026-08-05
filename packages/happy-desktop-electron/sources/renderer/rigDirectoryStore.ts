@@ -1,33 +1,60 @@
 import type {
     RigHost,
+    RigNodesSnapshot,
     RigModelPreferencePersistence,
     RigProjectAddSnapshot,
     RigProjectGroup,
     RigSessionLocation,
 } from "happy-desktop-state";
-import type {
-    HappyDesktopBridge,
-    RemoteRigAddRequest,
-    RemoteRigSnapshot,
-} from "../shared/desktopContract";
-import { rigConnectionOpen, type RigConnectionHandle, type RigSession } from "./rigConnection";
+import type { HappyDesktopBridge } from "../shared/desktopContract";
+import {
+    rigConnectionOpen,
+    rigPeerConnectEndpoint,
+    type RigConnectionHandle,
+    type RigSession,
+} from "./rigConnection";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 
-/** The identity of the Rig running on the machine this window is on. */
+/** The identity of the Rig this window is hosted by, and the one it reaches the rest through. */
 export const LOCAL_RIG_ID = "local";
 
+/**
+ * The prefix that tells a node's entry from the host's, and from any other id.
+ *
+ * A Rig's id travels in the URL as a path parameter, and a node's identity is
+ * lower-case letters and digits, so this keeps the whole namespaced id inside
+ * the characters a path segment carries unescaped. The host is `local`, which
+ * cannot start with it, and two nodes cannot share one identity on one host.
+ */
+const NODE_RIG_PREFIX = "node-";
+
+/** One node's identity in this window, namespaced so it can collide with nothing. */
+export function rigNodeId(nodeId: string): string {
+    return `${NODE_RIG_PREFIX}${nodeId}`;
+}
+
 export interface RigDirectoryEntry {
-    /** `local`, or the durable identity the main process gave a remembered machine. */
+    /** The host Rig's identity, or one node's under `node:`. */
     readonly id: string;
-    readonly kind: "local" | "remote";
     readonly label: string;
-    /** The reader's standing intent for a remote machine; the local Rig is always wanted. */
-    readonly connected: boolean;
+    /**
+     * Set on a Rig reached through the host: the node identity the host itself
+     * published for it. It is what the sidebar groups that machine's work under
+     * and what the peer connection is addressed by.
+     */
+    readonly nodeId?: string;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
+    /**
+     * True when this Rig is reachable but is not sharing its API.
+     *
+     * Only a node can be in this state, and it is not an error: the host and
+     * that machine are peered and the link is up, but the machine has not been
+     * asked to expose its work. It stays connected and simply has nothing to
+     * show, which is what the surface says rather than calling it offline.
+     */
+    readonly accessRestricted?: boolean;
     readonly message?: string;
     readonly version?: string;
-    /** The SSH destination a remote machine is reached at; absent for this machine. */
-    readonly destination?: string;
     /** This machine's projects, kept live while the Rig is connected. */
     readonly projects: readonly RigProjectGroup[];
     /** Where that project list is: still arriving, ready, or refused by the daemon. */
@@ -40,13 +67,6 @@ export interface RigDirectoryEntry {
     readonly projectAdd: RigProjectAddSnapshot;
     /** The product stores for this Rig, present once its connection is up. */
     readonly session?: RigSession;
-}
-
-export interface RigDirectoryAddSnapshot {
-    readonly open: boolean;
-    readonly destination: string;
-    readonly label: string;
-    readonly error?: string;
 }
 
 export interface RigDirectorySnapshot {
@@ -62,21 +82,12 @@ export interface RigDirectorySnapshot {
      * torn down — there is nothing to address and a press has nowhere to land.
      */
     readonly activeRigId?: string;
-    readonly add: RigDirectoryAddSnapshot;
     readonly rigs: readonly RigDirectoryEntry[];
 }
 
 export interface RigDirectoryStore {
     get(): RigDirectorySnapshot;
     subscribe(listener: () => void): () => void;
-    addOpen(): void;
-    addClose(): void;
-    destinationUpdate(value: string): void;
-    labelUpdate(value: string): void;
-    addSubmit(): void;
-    rigConnect(id: string): void;
-    rigDisconnect(id: string): void;
-    rigRemove(id: string): void;
     /**
      * Records which Rig the window is addressing, so window-level host events —
      * a URL handed to the app to open — land in the workspace the reader is
@@ -87,13 +98,39 @@ export interface RigDirectoryStore {
 
 interface LiveRig {
     connection?: RigConnectionHandle;
+    /**
+     * What the connector made of this daemon's protocol, while the two cannot
+     * read each other. Held apart from the entry because it outlives the state
+     * the entry is rebuilt from: a Rig whose stores come up anyway must not
+     * publish itself as plainly connected and drop the reason its surfaces are
+     * empty.
+     */
+    compatibilityMessage?: string;
     entry: RigDirectoryEntry;
     /** The proxy URL the current connection was opened on, or none while down. */
     url?: string;
     workspaceUnsubscribe?: () => void;
 }
 
-const ADD_EMPTY: RigDirectoryAddSnapshot = { destination: "", label: "", open: false };
+/**
+ * The nodes a connection should be opened to, from one reading of the host's
+ * peer status.
+ *
+ * Only a node that is connected and has identified itself qualifies. The
+ * identity is the point: the host's route to a machine is addressed by the
+ * identity that machine proved during its handshake, so a peer that is still
+ * dialling has an address and nothing to address yet. A machine that is merely
+ * unreachable is not one to open a connection to either — the host is already
+ * retrying it, and its status is what the reader is shown meanwhile.
+ */
+function nodeTargets(nodes: RigNodesSnapshot): readonly string[] {
+    const seen = new Set<string>();
+    for (const node of nodes.nodes) {
+        if (node.status !== "connected" || node.peerId === undefined) continue;
+        seen.add(node.peerId);
+    }
+    return [...seen];
+}
 
 /** What a Rig with no connection reports about adding a project: nothing is happening. */
 const PROJECT_ADD_IDLE: RigProjectAddSnapshot = { pending: false };
@@ -109,20 +146,27 @@ export interface RigDirectoryDeps {
      * a time and a background one reporting a removal must not move the reader.
      */
     readonly listOpen: (rigId: string, groupId: string) => void;
-    /** Desktop-wide model memory shared by local and remote Rig connections. */
+    /** Desktop-wide model memory for this window's Rig connection. */
     readonly modelPreferencePersistence: RigModelPreferencePersistence;
 }
 
 /**
- * Every Rig this window can work in — the one on this machine and each remembered
- * remote one — as a single ordered list, each with its own live product stores.
+ * The Rigs this window works in: its host, and one for every machine that host
+ * is peered with and has reached.
  *
- * The store follows two sources it does not own: the desktop runtime for this
- * machine's daemon, and the main process's remote-Rig list for the others. Both
- * arrive as loopback proxy URLs, so a connection is opened the same way in both
- * cases and everything above this file is written against `RigSession` alone.
- * Projects are projected here so one subscription feeds the whole sidebar; a
- * screen still reads the addressed Rig's own workspace store directly.
+ * The host is the only one Happy connects to directly; it owns the trust and
+ * the transport, and every node is reached through its route to that machine. A
+ * node is not a different kind of thing once it is reached, though — it is an
+ * ordinary Rig connection with its own stores, its own projects, and its own
+ * conversations, because a machine's work belongs to that machine and does not
+ * travel to the host to be handed on. So this file keeps one connection per Rig
+ * and everything above it is written against `RigSession` alone, whichever
+ * machine that session is of.
+ *
+ * The store follows the desktop runtime for the host daemon's loopback proxy
+ * URL and the host's own peer status for the rest. Projects are projected here
+ * so one subscription feeds the whole sidebar; a screen still reads the
+ * workspace store directly.
  */
 export function rigDirectoryStoreCreate(
     bridge: HappyDesktopBridge,
@@ -131,14 +175,14 @@ export function rigDirectoryStoreCreate(
 ): RigDirectoryStore {
     const rigs = new Map<string, LiveRig>();
     const listeners = new Set<() => void>();
-    let add: RigDirectoryAddSnapshot = ADD_EMPTY;
-    let snapshot: RigDirectorySnapshot = { add, rigs: [] };
+    let snapshot: RigDirectorySnapshot = { rigs: [] };
     let order: readonly string[] = [];
     /** The reader's standing choice of machine, which may name one that has gone. */
     let activeRigId = LOCAL_RIG_ID;
     let runtimeUnsubscribe: (() => void) | undefined;
-    let remoteUnsubscribe: (() => void) | undefined;
     let browserOpenUnsubscribe: (() => void) | undefined;
+    /** Follows the host's peer status while the host connection is up. */
+    let nodesUnsubscribe: (() => void) | undefined;
 
     const host: RigHost = {
         applicationMenuOpen: () => void bridge.applicationMenuOpen().catch(() => undefined),
@@ -146,11 +190,8 @@ export function rigDirectoryStoreCreate(
     };
 
     /**
-     * The Rig a press lands on, which is the reader's choice while that machine
-     * is still here and otherwise the one the screens fall back to: this one, or
-     * whichever comes first when even it is missing. Resolving it here rather
-     * than reassigning the reader's choice means a remote machine that drops out
-     * and comes back is theirs again without them re-picking it.
+     * The Rig a press lands on: the host while it is here, and nothing at all
+     * before the directory is running or after it has been torn down.
      */
     const activeResolve = (): string | undefined =>
         rigs.has(activeRigId) ? activeRigId : order.find((id) => rigs.has(id));
@@ -159,7 +200,6 @@ export function rigDirectoryStoreCreate(
         const resolved = activeResolve();
         snapshot = {
             ...(resolved === undefined ? {} : { activeRigId: resolved }),
-            add,
             rigs: order.flatMap((id) => {
                 const rig = rigs.get(id);
                 return rig ? [rig.entry] : [];
@@ -176,6 +216,7 @@ export function rigDirectoryStoreCreate(
         rig.url = undefined;
         rig.entry = {
             ...rig.entry,
+            accessRestricted: false,
             projects: [],
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
@@ -200,21 +241,57 @@ export function rigDirectoryStoreCreate(
         };
     };
 
-    const connectionOpen = (id: string, rigHttpUrl: string): void => {
+    const connectionOpen = (id: string, rigHttpUrl: string, connectEndpoint: string): void => {
         const rig = rigs.get(id);
         if (!rig) return;
         connectionClose(rig);
         rig.url = rigHttpUrl;
         rig.connection = rigConnectionOpen({
             host,
-            local: rig.entry.kind === "local",
             rigId: id,
             rigHttpUrl,
+            connectEndpoint,
+            // Trust is the host's to give. A node is here because the host
+            // already decided to trust it, so its connection is never the one
+            // asked to pair with anything.
+            pairingOwner: id === LOCAL_RIG_ID,
             modelPreferencePersistence: deps.modelPreferencePersistence,
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(id, location),
                 groupOpen: (groupId) => deps.groupOpen(id, groupId),
                 listOpen: (groupId) => deps.listOpen(id, groupId),
+                compatibility: (message) => {
+                    const current = rigs.get(id);
+                    if (!current || current.compatibilityMessage === message) return;
+                    // Said whether or not the stores came up: a daemon this
+                    // build cannot read may still answer enough to look alive,
+                    // and the surfaces it leaves empty have no other
+                    // explanation.
+                    current.compatibilityMessage = message;
+                    current.entry = { ...current.entry, message };
+                    publish();
+                },
+                restricted: (value) => {
+                    const current = rigs.get(id);
+                    if (!current || (current.entry.accessRestricted ?? false) === value) return;
+                    // Reachable and deliberately quiet. The status stays
+                    // whatever the link is, because the link is genuinely up.
+                    current.entry = { ...current.entry, accessRestricted: value };
+                    publish();
+                },
+                unavailable: (error) => {
+                    const current = rigs.get(id);
+                    // A connection that has already come up and is reloading
+                    // says nothing: the stores it published are still the truth
+                    // on screen, and a transient read failure behind them is not
+                    // news the reader can act on.
+                    if (!current || current.connection?.get() || current.entry.session) return;
+                    const message = error instanceof Error ? error.message : String(error);
+                    if (current.entry.status === "error" && current.entry.message === message)
+                        return;
+                    current.entry = { ...current.entry, status: "error", message };
+                    publish();
+                },
                 changed: () => {
                     const current = rigs.get(id);
                     const session = current?.connection?.get();
@@ -250,19 +327,110 @@ export function rigDirectoryStoreCreate(
                     current.entry = {
                         ...current.entry,
                         ...projectsRead(session),
-                        // This machine's Rig has no separate status source: its
-                        // connection being up is what "connected" means for it.
-                        ...(current.entry.kind === "local" ? { status: "connected" as const } : {}),
-                        // A session arriving is the answer to whatever this row
-                        // was last refused for, so the refusal goes with it. Left
-                        // behind, it would keep accusing a machine that is working.
-                        message: undefined,
+                        // Being up is what "connected" means for a Rig here,
+                        // host or node alike: the connection has read the
+                        // daemon and published its stores.
+                        status: "connected" as const,
+                        // Clears whatever the connection failed with on its way
+                        // up, but not a protocol gap: that one is still true of
+                        // a daemon whose stores came up regardless.
+                        message: current.compatibilityMessage,
                         session,
                     };
                     publish();
+                    // The host coming up is what makes its peering readable, so
+                    // this is where a window learns which nodes it has.
+                    if (id === LOCAL_RIG_ID) nodesFollow(session);
                 },
             },
         });
+    };
+
+    /**
+     * Follows the host's peer status and keeps one ordinary Rig connection per
+     * connected node alongside it.
+     *
+     * The status feed is discovery, not work: it says which machines exist and
+     * how each link is doing, and each machine's projects and conversations
+     * arrive on that machine's own connection. So this reads the feed and does
+     * exactly one thing with it — opens a connection to a node that has one to
+     * open, and closes the one belonging to a node that has gone.
+     *
+     * A node keeps its connection while it stays connected. It is not
+     * reconnected because a reading arrived, and its work is not torn down and
+     * rebuilt because the host republished its status: the connection retries on
+     * its own, the way the host's does.
+     */
+    const nodesFollow = (session: RigSession): void => {
+        nodesUnsubscribe?.();
+        nodesUnsubscribe = undefined;
+        const nodes = session.nodes;
+        if (!nodes) {
+            nodesReconcile([]);
+            return;
+        }
+        const read = (): void => {
+            // A reading that arrives after this host connection was replaced
+            // describes a machine this window is no longer on.
+            if (rigs.get(LOCAL_RIG_ID)?.entry.session !== session) return;
+            nodesReconcile(nodeTargets(nodes.get()));
+        };
+        nodesUnsubscribe = nodes.subscribe(read);
+        read();
+    };
+
+    /** Opens what is newly here, closes what has gone, and leaves the rest alone. */
+    const nodesReconcile = (nodeIds: readonly string[]): void => {
+        const hostUrl = rigs.get(LOCAL_RIG_ID)?.url;
+        const wanted = new Set(hostUrl === undefined ? [] : nodeIds);
+        let changed = false;
+        // Chosen before anything is removed: the map is what is being changed,
+        // and deciding what goes while walking it is how a node survives its own
+        // removal.
+        const gone: string[] = [];
+        for (const [id, rig] of rigs) {
+            if (rig.entry.nodeId === undefined || wanted.has(rig.entry.nodeId)) continue;
+            gone.push(id);
+        }
+        for (const id of gone) {
+            const rig = rigs.get(id);
+            if (rig) connectionClose(rig);
+            rigs.delete(id);
+            order = order.filter((entry) => entry !== id);
+            changed = true;
+        }
+        for (const nodeId of wanted) {
+            const id = rigNodeId(nodeId);
+            if (rigs.has(id)) continue;
+            rigs.set(id, {
+                entry: {
+                    id,
+                    label: nodeId,
+                    nodeId,
+                    projects: [],
+                    projectsStatus: "loading",
+                    projectAdd: PROJECT_ADD_IDLE,
+                    status: "connecting",
+                },
+            });
+            order = [...order, id];
+            changed = true;
+            // The node's own base URL on this window's proxy. Everything above
+            // is the ordinary connection: the same client, the same stores, the
+            // same screens, addressed at a different machine.
+            const base = hostUrl!.replace(/\/$/, "");
+            connectionOpen(
+                id,
+                // The projected surface — health, files, Git — is served for
+                // this node on this window's own proxy, which addresses the far
+                // daemon through the same peer route underneath.
+                `${base}/nodes/${encodeURIComponent(nodeId)}`,
+                // The connector goes straight down that route, exactly as Rig
+                // publishes it.
+                rigPeerConnectEndpoint(base, nodeId),
+            );
+        }
+        if (changed) publish();
     };
 
     const localReconcile = (): void => {
@@ -274,9 +442,7 @@ export function rigDirectoryStoreCreate(
         const existing = rigs.get(LOCAL_RIG_ID);
         const rig: LiveRig = existing ?? {
             entry: {
-                connected: true,
                 id: LOCAL_RIG_ID,
-                kind: "local",
                 label: "This Mac",
                 projects: [],
                 projectsStatus: "loading",
@@ -289,8 +455,18 @@ export function rigDirectoryStoreCreate(
             order = [LOCAL_RIG_ID, ...order.filter((id) => id !== LOCAL_RIG_ID)];
         }
         if (!target) {
+            // The host going away takes its nodes with it: they are reached
+            // through it, so without it there is no route to any of them.
+            nodesUnsubscribe?.();
+            nodesUnsubscribe = undefined;
+            nodesReconcile([]);
             connectionClose(rig);
-            rig.entry = { ...rig.entry, status: "connecting", version: undefined };
+            rig.entry = {
+                ...rig.entry,
+                status: "connecting",
+                message: undefined,
+                version: undefined,
+            };
             publish();
             return;
         }
@@ -309,60 +485,12 @@ export function rigDirectoryStoreCreate(
                   }),
             version: target.rigVersion,
         };
-        if (rig.url !== target.rigHttpUrl) connectionOpen(LOCAL_RIG_ID, target.rigHttpUrl);
-        publish();
-    };
-
-    const remoteReconcile = (sources: readonly RemoteRigSnapshot[]): void => {
-        const present = new Set(sources.map(({ id }) => id));
-        for (const [id, rig] of rigs)
-            if (rig.entry.kind === "remote" && !present.has(id)) {
-                connectionClose(rig);
-                rigs.delete(id);
-            }
-        order = [
-            LOCAL_RIG_ID,
-            ...sources.filter(({ id }) => id !== LOCAL_RIG_ID).map(({ id }) => id),
-        ];
-        for (const source of sources) {
-            const rig: LiveRig = rigs.get(source.id) ?? {
-                entry: {
-                    connected: source.connected,
-                    destination: source.destination,
-                    id: source.id,
-                    kind: "remote",
-                    label: source.label,
-                    projects: [],
-                    projectsStatus: "loading",
-                    projectAdd: PROJECT_ADD_IDLE,
-                    status: source.status,
-                },
-            };
-            rigs.set(source.id, rig);
-            // The main process reports whether it can reach that machine, not
-            // whether this build can read the daemon there. It republishes every
-            // machine whenever any one of them changes, so letting it speak over
-            // a refusal would erase the reason as soon as anything else happened.
-            const failure = rig.connection?.failure();
-            rig.entry = {
-                ...rig.entry,
-                connected: source.connected,
-                destination: source.destination,
-                label: source.label,
-                ...(failure
-                    ? { message: failure, status: "error" as const }
-                    : { message: source.message, status: source.status }),
-                version: source.version,
-            };
-            if (source.status === "connected" && source.rigHttpUrl) {
-                if (rig.url !== source.rigHttpUrl) connectionOpen(source.id, source.rigHttpUrl);
-            } else if (rig.url) connectionClose(rig);
-        }
-        publish();
-    };
-
-    const addFail = (error: unknown): void => {
-        add = { ...add, error: error instanceof Error ? error.message : String(error) };
+        if (rig.url !== target.rigHttpUrl)
+            connectionOpen(
+                LOCAL_RIG_ID,
+                target.rigHttpUrl,
+                `${target.rigHttpUrl.replace(/\/$/, "")}/rig-connect`,
+            );
         publish();
     };
 
@@ -372,24 +500,25 @@ export function rigDirectoryStoreCreate(
             listeners.add(listener);
             if (listeners.size === 1) {
                 runtimeUnsubscribe = runtime.subscribe(localReconcile);
-                remoteUnsubscribe = bridge.remoteRigSubscribe(remoteReconcile);
+                // A URL the operating system hands this window opens where the
+                // reader is: the tab is addressed by the Rig it is added to, so
+                // it browses through that machine's network like any other.
                 browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
                     const resolved = activeResolve();
                     const active = resolved === undefined ? undefined : rigs.get(resolved);
                     active?.entry.session?.workspace.panel.browserAdd(url);
                 });
                 localReconcile();
-                void bridge.remoteRigGet().then(remoteReconcile, () => undefined);
             }
             return () => {
                 listeners.delete(listener);
                 if (listeners.size > 0) return;
                 runtimeUnsubscribe?.();
                 runtimeUnsubscribe = undefined;
-                remoteUnsubscribe?.();
-                remoteUnsubscribe = undefined;
                 browserOpenUnsubscribe?.();
                 browserOpenUnsubscribe = undefined;
+                nodesUnsubscribe?.();
+                nodesUnsubscribe = undefined;
                 for (const rig of rigs.values()) connectionClose(rig);
                 rigs.clear();
                 order = [];
@@ -397,38 +526,9 @@ export function rigDirectoryStoreCreate(
                 // answerable, and what it held names connections that have just
                 // been disposed. The window is on no machine until it subscribes
                 // again, and it says so rather than handing out the wreckage.
-                snapshot = { add, rigs: [] };
+                snapshot = { rigs: [] };
             };
         },
-        addOpen() {
-            add = { ...ADD_EMPTY, open: true };
-            publish();
-        },
-        addClose() {
-            add = ADD_EMPTY;
-            publish();
-        },
-        destinationUpdate(destination) {
-            add = { ...add, destination, error: undefined };
-            publish();
-        },
-        labelUpdate(label) {
-            add = { ...add, error: undefined, label };
-            publish();
-        },
-        addSubmit() {
-            const request: RemoteRigAddRequest = {
-                destination: add.destination,
-                ...(add.label.trim() ? { label: add.label.trim() } : {}),
-            };
-            void bridge.remoteRigAdd(request).then(() => {
-                add = ADD_EMPTY;
-                publish();
-            }, addFail);
-        },
-        rigConnect: (id) => void bridge.remoteRigConnect(id).catch(() => undefined),
-        rigDisconnect: (id) => void bridge.remoteRigDisconnect(id).catch(() => undefined),
-        rigRemove: (id) => void bridge.remoteRigRemove(id).catch(() => undefined),
         rigActivate(id) {
             if (activeRigId === id) return;
             const before = snapshot.activeRigId;

@@ -1,8 +1,12 @@
 import {
     RigGeneralSettings,
     RigInstructionsSettings,
+    RigNodeSettings,
+    RigPairing,
     RigProviderSettings,
     RigSettingsShell,
+    type RigNodeRow,
+    type RigNodeTransportRow,
     type RigProviderRow,
     type RigSettingsCategory,
 } from "../../src";
@@ -11,8 +15,66 @@ import { ComponentPage, FullScreenSpecimen } from "../kit";
 const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "doc", id: "instructions", label: "Instructions" },
+    { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
 ];
+
+const nodes: readonly RigNodeRow[] = [
+    // Reached two ways and still one machine: the routes are listed, the row is
+    // not doubled, and the whole of its work is opened over one connection.
+    {
+        id: "workshop",
+        name: "workshop",
+        peerId: "workshop",
+        routes: [
+            { address: "iroh:4f2a…c81b", state: "connected", transport: "iroh" },
+            { address: "10.0.0.4:4919", state: "connected", transport: "direct" },
+        ],
+        rttMs: 18,
+        state: "connected",
+        workOpen: true,
+    },
+    {
+        accessRestricted: true,
+        id: "builder",
+        name: "builder",
+        peerId: "builder",
+        routes: [{ address: "iroh:9d10…77ef", state: "connected", transport: "iroh" }],
+        rttMs: 142,
+        state: "connected",
+    },
+    // Still dialling, so it has an address and nothing to address: no identity
+    // has been proved yet, and nothing of its work can be opened.
+    {
+        id: "iroh:0b7c…31aa",
+        name: "iroh:0b7c…31aa",
+        routes: [{ address: "iroh:0b7c…31aa", state: "connecting", transport: "iroh" }],
+        state: "connecting",
+    },
+    {
+        id: "attic",
+        message: "No route to the node since 14:02.",
+        name: "attic",
+        peerId: "attic",
+        routes: [{ address: "iroh:6e55…b204", state: "unreachable", transport: "iroh" }],
+        state: "unreachable",
+    },
+];
+
+const transports: readonly RigNodeTransportRow[] = [
+    { localAddress: "iroh:2c9f…a017", state: "ready", transport: "iroh" },
+];
+
+const noPairing = {
+    available: true,
+    joinValue: "",
+    onInvitationCreate: () => {},
+    onJoinSubmit: () => {},
+    onJoinValueChange: () => {},
+    onReset: () => {},
+    onVerificationAccept: () => {},
+    onVerificationReject: () => {},
+} as const;
 
 const instructions = `# House rules
 
@@ -212,6 +274,144 @@ export function RigSettingsBlueprintPage() {
                                 value: "",
                             },
                         ]}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Nodes category: the machines this Rig is peered with, in every link state at once, the one act that adds another, and the transport it reaches them over. A connected link, open work, and a shared API are three separate facts: the first node says all three, the second is up and deliberately not sharing."
+                label="Rig settings — nodes"
+                number="02a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings
+                        hostId="desk"
+                        hostName="This Mac"
+                        nodes={nodes}
+                        pairing={<RigPairing {...noPairing} />}
+                        transports={transports}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The same category with a pairing under way. Comparing the four emojis is the trust decision, and it is taken here rather than by copying a key between machines."
+                label="Rig settings — pairing under way"
+                number="02e"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings
+                        hostId="desk"
+                        hostName="This Mac"
+                        nodes={nodes}
+                        pairing={
+                            <RigPairing
+                                {...noPairing}
+                                progress={{
+                                    emojis: ["🐙", "🌵", "🔔", "🚲"],
+                                    peer: { instanceId: "attic", name: "attic" },
+                                    phase: "verifying",
+                                    role: "inviter",
+                                }}
+                            />
+                        }
+                        transports={transports}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A Rig too old to pair says so where the control would have been, and its node list is unaffected: an older Rig still reports every machine it is already peered with."
+                label="Rig settings — pairing unsupported"
+                number="02f"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings
+                        hostId="desk"
+                        nodes={nodes}
+                        pairing={<RigPairing {...noPairing} available={false} />}
+                        transports={transports}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A Rig peered with nothing says so, and its transport explains whether it could peer at all"
+                label="Rig settings — no nodes"
+                number="02b"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings
+                        hostId="desk"
+                        nodes={[]}
+                        transports={[
+                            {
+                                message: "Iroh is disabled in this Rig's configuration.",
+                                state: "unavailable",
+                                transport: "iroh",
+                            },
+                        ]}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Before the host's first status arrives neither section is blank and neither claims emptiness: each says what it is waiting for, and swaps for the real list when it lands"
+                label="Rig settings — nodes loading"
+                number="02c"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings loading nodes={[]} transports={[]} />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A status feed that dropped is said once, above the last nodes it reported, because what it already told the reader did not stop being true"
+                label="Rig settings — nodes feed error"
+                number="02d"
+            >
+                <RigSettingsShell
+                    activeCategoryId="nodes"
+                    categories={categories}
+                    description="Machines this Rig is peered with, and how it reaches them"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Nodes"
+                >
+                    <RigNodeSettings
+                        error="Lost the status feed from this Rig."
+                        hostId="desk"
+                        nodes={nodes}
+                        transports={transports}
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>

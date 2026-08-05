@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-    DesktopRuntimeSnapshot,
-    HappyDesktopBridge,
-    RemoteRigSnapshot,
-} from "../shared/desktopContract";
+import type { DesktopRuntimeSnapshot, HappyDesktopBridge } from "../shared/desktopContract";
 import type { RigConnectionHandle, RigSession } from "./rigConnection";
 import type { DesktopRuntimeStore } from "./runtimeStore";
 
@@ -60,33 +56,18 @@ function runtimeStub(): DesktopRuntimeStore {
     };
 }
 
-const REMOTE: RemoteRigSnapshot = {
-    connected: true,
-    destination: "mac-mini",
-    id: "remote-1",
-    label: "Mac mini",
-    rigHttpUrl: "http://127.0.0.1:9998",
-    status: "connected",
-};
-
 /**
  * Opens the store on connections whose verdicts the test drives, and hands back
- * the levers: what each connection reports, the `changed` call that is the only
- * way it tells the store anything, and the main process's own remote list.
+ * the levers: what each connection reports and the `changed` call that is the
+ * only way it tells the store anything.
  */
 function fixtureCreate() {
     const connections = new Map<
         string,
         { changed: () => void; failure?: string; session?: RigSession }
     >();
-    let remoteEmit = (_sources: readonly RemoteRigSnapshot[]): void => undefined;
     const bridge = {
         browserOpenSubscribe: () => () => undefined,
-        remoteRigGet: () => Promise.resolve([]),
-        remoteRigSubscribe: (listener: (sources: readonly RemoteRigSnapshot[]) => void) => {
-            remoteEmit = listener;
-            return () => undefined;
-        },
     } as unknown as HappyDesktopBridge;
     connectionOpen.mockImplementation(
         (input: { rigId: string; deps: { changed: () => void } }): RigConnectionHandle => {
@@ -107,9 +88,7 @@ function fixtureCreate() {
     });
     store.subscribe(() => undefined);
     return {
-        entry: (id: string) => store.get().rigs.find((rig) => rig.id === id),
         local: () => store.get().rigs.find((rig) => rig.id === "local"),
-        remoteEmit: (sources: readonly RemoteRigSnapshot[]) => remoteEmit(sources),
         /** Replaces what the connection reports; anything omitted is now absent. */
         report(next: { failure?: string; session?: RigSession }, id = "local") {
             const state = connections.get(id);
@@ -154,20 +133,5 @@ describe("rig directory rows", () => {
         expect(local?.status).toBe("connected");
         expect(local?.message).toBeUndefined();
         expect(local?.session).toBeDefined();
-    });
-
-    it("keeps a remote refusal when the main process republishes the machine", () => {
-        const fixture = fixtureCreate();
-        fixture.remoteEmit([REMOTE]);
-        fixture.report({ failure: "Rig is too old." }, REMOTE.id);
-        expect(fixture.entry(REMOTE.id)?.status).toBe("error");
-
-        // The main process can still reach the machine and says so again, which it
-        // does whenever any machine changes — not because this one recovered.
-        fixture.remoteEmit([REMOTE]);
-
-        const remote = fixture.entry(REMOTE.id);
-        expect(remote?.status).toBe("error");
-        expect(remote?.message).toBe("Rig is too old.");
     });
 });

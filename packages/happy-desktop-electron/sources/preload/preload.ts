@@ -14,7 +14,6 @@ import {
     type HappyDesktopBridge,
     type HappyMediaPreviewBridge,
     type LocalOnboardingSnapshot,
-    type RemoteRigSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
 
@@ -38,7 +37,7 @@ const identity = buildIdentityRead();
 const bridge: HappyDesktopBridge = {
     ...(identity ? { buildIdentity: identity } : {}),
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
-    browserProxyApply: (sessionId) => ipcRenderer.invoke(desktopIpc.browserProxyApply, sessionId),
+    browserProxyApply: (target) => ipcRenderer.invoke(desktopIpc.browserProxyApply, target),
     browserOpenSubscribe(listener: (url: string) => void) {
         const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);
         ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
@@ -75,17 +74,6 @@ const bridge: HappyDesktopBridge = {
         const receive = () => listener();
         ipcRenderer.on(desktopIpc.notesChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.notesChanged, receive);
-    },
-    remoteRigAdd: (request) => ipcRenderer.invoke(desktopIpc.remoteRigAdd, request),
-    remoteRigConnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigConnect, id),
-    remoteRigDisconnect: (id) => ipcRenderer.invoke(desktopIpc.remoteRigDisconnect, id),
-    remoteRigGet: () => ipcRenderer.invoke(desktopIpc.remoteRigGet),
-    remoteRigRemove: (id) => ipcRenderer.invoke(desktopIpc.remoteRigRemove, id),
-    remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void) {
-        const receive = (_event: Electron.IpcRendererEvent, rigs: readonly RemoteRigSnapshot[]) =>
-            listener(rigs);
-        ipcRenderer.on(desktopIpc.remoteRigChanged, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.remoteRigChanged, receive);
     },
     onboardingGet: () => ipcRenderer.invoke(desktopIpc.onboardingGet),
     onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void) {

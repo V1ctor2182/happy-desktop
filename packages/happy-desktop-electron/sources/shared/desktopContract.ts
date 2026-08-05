@@ -133,30 +133,6 @@ export interface DesktopBuildIdentity {
 /** Launch argument prefix carrying `DesktopBuildIdentity` JSON into the preload. */
 export const buildIdentityArgument = "--happy2-build-identity=";
 
-/** An SSH destination — `host` or `user@host` — and the name to list it under. */
-export interface RemoteRigAddRequest {
-    readonly destination: string;
-    readonly label?: string;
-}
-
-/**
- * One remembered machine as the renderer sees it. `connected` is the reader's
- * standing intent and `status` is where the connection actually is, so a machine
- * that is reachable again shows up without the reader asking twice. `rigHttpUrl`
- * is the loopback proxy the renderer opens its transports on; nothing the SSH
- * connection reads from the machine crosses this boundary.
- */
-export interface RemoteRigSnapshot {
-    readonly connected: boolean;
-    readonly destination: string;
-    readonly id: string;
-    readonly label: string;
-    readonly message?: string;
-    readonly rigHttpUrl?: string;
-    readonly status: "connecting" | "connected" | "disconnected" | "error";
-    readonly version?: string;
-}
-
 export interface RigInstallTerminalOpenResponse {
     readonly terminalId: string;
     readonly command: "npm install --global @slopus/rig";
@@ -325,6 +301,22 @@ export interface DesktopBrowserStatus {
 }
 
 /**
+ * Which session's network a browser guest browses through, as a machine and a
+ * session together.
+ *
+ * The Rig is named rather than assumed. Every session this window can open
+ * belongs to some machine — this one, or one its host is peered with — and the
+ * identity a session carries is only unique on the machine that made it. Naming
+ * one half would leave the other to be guessed, and the guess would silently be
+ * "this machine".
+ */
+export interface DesktopBrowserProxyTarget {
+    /** The peered machine the session lives on, absent for this window's own. */
+    readonly nodeId?: string;
+    readonly sessionId: string;
+}
+
+/**
  * One step in the life of one main-frame document inside an HTML preview guest.
  *
  * A preview reloads in place whenever the file behind it changes, so one guest
@@ -388,7 +380,17 @@ export interface HappyDesktopBridge {
      * the application tree instead of independently following macOS.
      */
     appearanceSet(mode: DesktopAppearanceMode): void;
-    browserProxyApply(sessionId: string): Promise<void>;
+    /**
+     * Points this window's browser guests at one Rig session's network
+     * boundary: the tunnel is rebuilt to that session's machine and reapplied
+     * to Chromium.
+     *
+     * The machine travels with the session because a session identity is
+     * unique only on the Rig that minted it. Without it a conversation on a
+     * peered machine would be tunnelled through this one, and whichever local
+     * session happened to share the name would answer.
+     */
+    browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     /**
@@ -421,12 +423,6 @@ export interface HappyDesktopBridge {
     /** Fires whenever the collection changes, including edits made outside Happy. */
     notesSubscribe(listener: () => void): () => void;
     applicationMenuOpen(): Promise<void>;
-    remoteRigAdd(request: RemoteRigAddRequest): Promise<void>;
-    remoteRigConnect(id: string): Promise<void>;
-    remoteRigDisconnect(id: string): Promise<void>;
-    remoteRigGet(): Promise<readonly RemoteRigSnapshot[]>;
-    remoteRigRemove(id: string): Promise<void>;
-    remoteRigSubscribe(listener: (rigs: readonly RemoteRigSnapshot[]) => void): () => void;
     /** Where local first-run setup stands, without waiting for its next change. */
     onboardingGet(): Promise<LocalOnboardingSnapshot>;
     onboardingSubscribe(listener: (snapshot: LocalOnboardingSnapshot) => void): () => void;
@@ -506,12 +502,6 @@ export const desktopIpc = {
     onboardingGet: "happy2:onboarding:get",
     onboardingProjectChoose: "happy2:onboarding:project-choose",
     onboardingRigInstall: "happy2:onboarding:rig-install",
-    remoteRigAdd: "happy2:remote-rig:add",
-    remoteRigChanged: "happy2:remote-rig:changed",
-    remoteRigConnect: "happy2:remote-rig:connect",
-    remoteRigDisconnect: "happy2:remote-rig:disconnect",
-    remoteRigGet: "happy2:remote-rig:get",
-    remoteRigRemove: "happy2:remote-rig:remove",
     runtimeChanged: "happy2:runtime:changed",
     runtimeGet: "happy2:runtime:get",
     runtimeReset: "happy2:runtime:reset",

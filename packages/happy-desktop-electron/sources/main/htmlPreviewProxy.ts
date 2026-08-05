@@ -11,8 +11,8 @@ export interface HtmlPreviewProxyHandle {
     /**
      * Opens previews backed by one Rig. The returned function names the site a
      * document is served as; the client it closes over is what every asset of
-     * that site is read through, which is what makes a preview of a file on a
-     * remote machine work like one on this machine.
+     * that site is read through, so a file the host reaches through one of its
+     * nodes previews exactly like one on this machine's own disk.
      */
     register(client: RigProxyClient): {
         readonly workspace: (groupId: string, filePath: string) => string;
@@ -179,7 +179,7 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                 password,
                 register: (client) => {
                     // The registration separates identically named projects and
-                    // webapps reached through different local/remote Rig clients.
+                    // webapps reached through different Rig proxy clients.
                     const registration = randomBytes(16).toString("hex");
                     const remember = (name: string, site: PreviewSite): void => {
                         // Re-inserted so insertion order stays use order and the

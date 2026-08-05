@@ -321,9 +321,10 @@ function changedFileText(bytes: Buffer): string {
  * daemon's file routes are rooted in.
  *
  * Every file operation goes through the daemon, never through this machine's
- * own disk, because the checkout may be on another machine entirely: a remote
- * Rig's files are only reachable through it. That also means a file needs no
- * session behind it, which is what lets a project be read with nothing running.
+ * own disk, because the checkout may be on a node entirely: those files are
+ * reachable only through the host Rig that is peered with it. That also means a
+ * file needs no session behind it, which is what lets a project be read with
+ * nothing running.
  */
 async function fileScopeResolve(client: RigProxyClient, groupId: string): Promise<RigFileScope> {
     const catalog = await client.listCatalog();

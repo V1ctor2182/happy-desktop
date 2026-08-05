@@ -1,0 +1,80 @@
+/*
+ * C-249 SidebarNodes — the machines this Rig is peered with, reported in the
+ * sidebar rather than offered as navigation. The rows keep the column's 32px
+ * rhythm and 10px inset so the block belongs to the sidebar, but they carry no
+ * hover, no press, and no pointer: nothing here goes anywhere.
+ */
+
+.happy2-sidebar-nodes,
+.happy2-sidebar-nodes * {
+    box-sizing: border-box;
+}
+
+.happy2-sidebar-nodes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy2-sidebar-nodes__row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--happy2-radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+/* A machine nobody can reach is dimmed rather than marked: the status dot beside
+   it already carries the fault, and two statements of it would read as two. */
+.happy2-sidebar-nodes__row[data-state="disconnected"],
+.happy2-sidebar-nodes__row[data-state="error"] {
+    opacity: 0.6;
+}
+
+.happy2-sidebar-nodes__glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy2-sidebar-nodes__label {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-sidebar-nodes__detail {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50%;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-sidebar-nodes__status {
+    flex: none;
+}

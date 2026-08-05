@@ -88,6 +88,11 @@ export class DesktopRuntime implements AsyncDisposable {
             ((connection, onConnectionError) =>
                 rigHttpProxyCreate({
                     client: connection.client,
+                    // The same daemon connection, addressed at one machine it is
+                    // peered with. Built here because this is where the real
+                    // client lives; the proxy only needs to be able to ask for
+                    // one by the identity the host published.
+                    peerClient: (nodeId) => connection.client.peer(nodeId),
                     onConnectionError,
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                     ...(options.htmlPreview ? { htmlPreview: options.htmlPreview } : {}),
@@ -177,15 +182,25 @@ export class DesktopRuntime implements AsyncDisposable {
         return this.rigProjectsConnection.connection.projects;
     }
 
-    /** Opens one authenticated browser-proxy tunnel through the active local Rig daemon. */
-    openHttpProxy(sessionId: string): Promise<Duplex> {
+    /**
+     * Opens one authenticated browser-proxy tunnel for a session, on the Rig
+     * that session belongs to: this machine's daemon, or the client addressing
+     * the peered machine named here. The session is resolved on the same Rig
+     * the tunnel is opened on, so a name that exists on both machines can never
+     * be answered by the wrong one.
+     */
+    openHttpProxy(sessionId: string, nodeId?: string): Promise<Duplex> {
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.mode !== "local" ||
             !this.rigConnection
         )
             throw new Error("The local Rig daemon is unavailable.");
-        return this.rigConnection.client.openHttpProxy(sessionId);
+        const client =
+            nodeId === undefined
+                ? this.rigConnection.client
+                : this.rigConnection.client.peer(nodeId);
+        return client.openHttpProxy(sessionId);
     }
 
     start(request: DesktopStartRequest): Promise<void> {

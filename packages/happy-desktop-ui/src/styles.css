@@ -10,6 +10,7 @@
 @import "./styles/title-bar.css";
 @import "./styles/rail.css";
 @import "./styles/sidebar.css";
+@import "./styles/sidebar-nodes.css";
 @import "./styles/app-shell.css";
 @import "./styles/channel-header.css";
 @import "./styles/message.css";
@@ -91,11 +92,12 @@
 @import "./styles/sidebar-apps.css";
 @import "./styles/desktop-startup.css";
 @import "./styles/local-onboarding.css";
-@import "./styles/desktop-instance-switcher.css";
 @import "./styles/rig-install.css";
 @import "./styles/rig-client.css";
 @import "./styles/rig-chat.css";
 @import "./styles/rig-connection-status.css";
+@import "./styles/rig-pairing.css";
+@import "./styles/rig-peer-status.css";
 @import "./styles/agent-activity-row.css";
 @import "./styles/wait-ring.css";
 @import "./styles/tool-call-preview.css";

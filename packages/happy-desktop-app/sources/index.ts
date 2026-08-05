@@ -18,13 +18,7 @@ export {
     type RigRouter,
     type RigRouterContext,
 } from "./navigation/rigRouter";
-export {
-    type DesktopInstanceStatus,
-    type DesktopInstanceTarget,
-    type DesktopInstanceUpdate,
-    DesktopStartupScreen,
-    type DesktopStartupValues,
-} from "happy-desktop-ui";
+export { DesktopStartupScreen, type DesktopStartupValues } from "happy-desktop-ui";
 export {
     BrowserTerminalConnection,
     TERMINAL_PROTOCOL,
