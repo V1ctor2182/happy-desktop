@@ -152,8 +152,8 @@ importers:
         specifier: 0.0.136
         version: 0.0.136(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/rig-connect':
-        specifier: 0.0.34
-        version: 0.0.34
+        specifier: 0.0.36
+        version: 0.0.36
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0))
@@ -254,8 +254,8 @@ importers:
   packages/happy-desktop-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.0.34
-        version: 0.0.34
+        specifier: 0.0.36
+        version: 0.0.36
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2277,8 +2277,8 @@ packages:
     resolution: {integrity: sha512-lDiw2K9yePIwGPF97lDJSNDHCmnlcYOZDChCmtpTcVyVVzKq/y3ySBZ5SpLtoTPSmrt9vj+elG3F2QW7pzUCrA==}
     engines: {node: '>=20'}
 
-  '@slopus/rig-connect@0.0.34':
-    resolution: {integrity: sha512-nTVjM4HsYRAsaVLMZy+GzbkRzGH687dKmFJ4dJRxbBCKNFfU2nvmEWIAeBPgRmV6b6gx2O4yVAlTAEpSxybatg==}
+  '@slopus/rig-connect@0.0.36':
+    resolution: {integrity: sha512-FAj7Zv/Qq/F+S6ufyYRchKNDrgRxwtsKfFHWsTNm80t0DdgZ0iCO975KmzX2l/lLV9RR5XjFwXQwzROXQJ4K+Q==}
     engines: {node: '>=20'}
 
   '@slopus/rig@0.0.136':
@@ -7999,7 +7999,7 @@ snapshots:
       '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
 
-  '@slopus/rig-connect@0.0.34':
+  '@slopus/rig-connect@0.0.36':
     dependencies:
       '@sinclair/typebox': 0.34.52
 
