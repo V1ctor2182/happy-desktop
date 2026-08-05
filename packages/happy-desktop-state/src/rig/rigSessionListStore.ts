@@ -12,6 +12,7 @@ import {
     RIG_GROUP_UNLISTED_REFUSAL,
     RIG_GROUP_UNREAD_REFUSAL,
     rigProjectWriteRefusal,
+    rigWorktreeConversationRefusal,
     rigWorktreeWriteRefusal,
 } from "./rigGroupAccess.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
@@ -225,15 +226,31 @@ export interface RigSessionListStore {
     groupWriteRefusal(groupId: RigGroupId): string | undefined;
 
     /**
-     * Starts the first conversation in a worktree once the host reports its
-     * checkout usable, resolving with that conversation's address. Split from
-     * `worktreeCreate` so addressing the worktree does not wait on a git
-     * checkout — but a session pointed at a checkout that does not exist yet
-     * would fail on its first run, so the wait itself is not optional.
+     * Why a conversation cannot be started in a group or sent to, or `undefined`
+     * when it can. Broader than `groupWriteRefusal`: a workspace whose checkout
+     * the host is still preparing takes chats, because the host holds their work
+     * until it is ready. Answered from the raw catalog record for the same
+     * reason as its sibling.
+     */
+    groupConversationRefusal(groupId: RigGroupId): string | undefined;
+
+    /**
+     * Starts the first conversation in a worktree once the host has named where
+     * its checkout will be, resolving with that conversation's address. Split
+     * from `worktreeCreate` so addressing the worktree does not wait on the
+     * host at all.
+     *
+     * What is waited for is the canonical path and nothing more. Rig names a
+     * workspace's directory in the catalog before it has finished preparing it,
+     * and it holds the session's work until the workspace turns ready — so a
+     * session created against that name runs by itself the moment the checkout
+     * lands. Waiting for `ready` instead would make every new workspace a
+     * checkout the reader watches rather than a place they type into. A path is
+     * still not optional: a session with nowhere to run has no address at all.
      *
      * `create` configures that conversation. Its `cwd` and `worktreeId` are
-     * supplied here from the prepared checkout, since only this call knows where
-     * the checkout ended up.
+     * supplied here from the named checkout, since only this call knows where
+     * the host put it.
      */
     worktreeSessionStart(
         worktreeId: RigWorktreeId,
@@ -362,9 +379,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     // first read nothing is known, and after it an id that is not there has
     // been withdrawn. Both refuse, and they say different things.
     let catalogListed = false;
-    // Callers waiting for a freshly reserved worktree to finish initializing.
-    // Settled from every reconcile, so the wait is driven by the host's own
-    // catalog rather than by polling it. Each waiter keeps both halves: a
+    // Callers waiting for a freshly reserved worktree to be given its canonical
+    // path. Settled from every reconcile, so the wait is driven by the host's
+    // own catalog rather than by polling it. Each waiter keeps both halves: a
     // creation the host refuses, a checkout it could not prepare, a row it
     // withdrew, and disposal all have to end the wait, or the caller's action
     // never returns and its spinner never stops.
@@ -374,14 +391,32 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         /** Whether the catalog has ever listed this worktree, so a later absence is a withdrawal. */
         listed: boolean;
     }
-    const worktreeWaiters = new Map<RigWorktreeId, RigWorktreeWaiter>();
+    /**
+     * Several waits per worktree, not one.
+     *
+     * A workspace now takes work from the moment it is asked for, so two things
+     * can be waiting on the same one at once — the composer's first message and
+     * an agent's slot action, say. Holding a single waiter per id would let the
+     * second arrival silently replace the first, and the intent it displaced
+     * would never be consumed at all: no session, no message, no error, and a
+     * promise pending for the life of the window.
+     *
+     * Every settlement takes its waiter out of this structure before calling it,
+     * so an intent is acted on exactly once however many reconciles arrive.
+     */
+    const worktreeWaiters = new Map<RigWorktreeId, RigWorktreeWaiter[]>();
 
-    /** Ends one wait with a reason, if anyone is still waiting on that worktree. */
-    const worktreeWaiterReject = (worktreeId: RigWorktreeId, message: string): void => {
-        const waiter = worktreeWaiters.get(worktreeId);
-        if (!waiter) return;
+    /** Takes every waiter on one worktree out of the registry, ready to settle. */
+    const worktreeWaitersTake = (worktreeId: RigWorktreeId): readonly RigWorktreeWaiter[] => {
+        const waiting = worktreeWaiters.get(worktreeId);
+        if (!waiting) return [];
         worktreeWaiters.delete(worktreeId);
-        waiter.reject(new Error(message));
+        return waiting;
+    };
+
+    /** Ends every wait on one worktree with a reason. */
+    const worktreeWaiterReject = (worktreeId: RigWorktreeId, message: string): void => {
+        for (const waiter of worktreeWaitersTake(worktreeId)) waiter.reject(new Error(message));
     };
 
     /**
@@ -536,54 +571,66 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     };
 
     /**
-     * Settles anyone waiting on a worktree that has stopped initializing, and
-     * ends the wait for one the catalog has stopped listing after having listed
-     * it — a withdrawn row is an answer, not a reason to keep waiting.
+     * Settles everyone waiting on a worktree the host has now named a directory
+     * for, and ends the wait for one the catalog has stopped listing after
+     * having listed it — a withdrawn row is an answer, not a reason to keep
+     * waiting.
+     *
+     * The optimistic row a creation publishes carries no path, so an id that has
+     * only ever been predicted keeps waiting here until the host's own answer
+     * arrives with one. A worktree still being prepared is not waited on beyond
+     * that: its path is where it is going to be, and the host holds the
+     * session's work until the checkout is there.
      */
     const worktreesSettle = (): void => {
         if (worktreeWaiters.size === 0) return;
         const listed = new Set<RigWorktreeId>();
         for (const worktree of catalog.worktrees) {
-            const waiter = worktreeWaiters.get(worktree.id);
-            if (!waiter) continue;
+            const waiting = worktreeWaiters.get(worktree.id);
+            if (!waiting) continue;
             listed.add(worktree.id);
-            waiter.listed = true;
-            if (worktree.status === "initializing") continue;
-            worktreeWaiters.delete(worktree.id);
+            for (const waiter of waiting) waiter.listed = true;
             // The host's raw record decides, not the phase the rows are drawn
             // from: a worktree on its way out is a present directory that is
             // about to be deleted, and the reduced lifecycle cannot tell that
             // apart from one that is simply there.
-            const refusal = rigWorktreeWriteRefusal(worktree);
-            if (refusal === undefined) waiter.resolve(worktree);
-            else waiter.reject(new Error(refusal));
+            const refusal = rigWorktreeConversationRefusal(worktree);
+            if (refusal !== undefined) {
+                for (const waiter of worktreeWaitersTake(worktree.id))
+                    waiter.reject(new Error(refusal));
+                continue;
+            }
+            if (worktree.path === "") continue;
+            for (const waiter of worktreeWaitersTake(worktree.id)) waiter.resolve(worktree);
         }
-        for (const [worktreeId, waiter] of worktreeWaiters) {
-            if (waiter.listed && !listed.has(worktreeId)) {
+        for (const [worktreeId, waiting] of worktreeWaiters) {
+            if (waiting.some((waiter) => waiter.listed) && !listed.has(worktreeId)) {
                 worktreeWaiterReject(worktreeId, "The workspace is no longer listed.");
             }
         }
     };
 
     /**
-     * Resolves once the host reports the worktree usable, or rejects when it
-     * failed to prepare, was refused, or was withdrawn. A worktree still being
-     * prepared leaves this pending; the caller is a user action, so it is
-     * cancelled by disposal rather than by a timeout that would report a failure
-     * the host never had.
+     * Resolves once the host has named where this worktree's checkout is, or
+     * rejects when it failed to prepare, was refused, or was withdrawn. A
+     * worktree the host has not answered for yet leaves this pending; the caller
+     * is a user action, so it is cancelled by disposal rather than by a timeout
+     * that would report a failure the host never had.
      */
-    const worktreeReady = (worktreeId: RigWorktreeId): Promise<RigWorktree> => {
+    const worktreePathed = (worktreeId: RigWorktreeId): Promise<RigWorktree> => {
         const refused = store.getState().worktreeCreateFailures.get(worktreeId);
         if (refused) return Promise.reject(new Error(refused.message));
         const known = catalog.worktrees.find((candidate) => candidate.id === worktreeId);
-        if (known && known.status !== "initializing") {
-            const refusal = rigWorktreeWriteRefusal(known);
-            return refusal === undefined
-                ? Promise.resolve(known)
-                : Promise.reject(new Error(refusal));
+        if (known) {
+            const refusal = rigWorktreeConversationRefusal(known);
+            if (refusal !== undefined) return Promise.reject(new Error(refusal));
+            if (known.path !== "") return Promise.resolve(known);
         }
         return new Promise<RigWorktree>((resolve, reject) => {
-            worktreeWaiters.set(worktreeId, { resolve, reject, listed: known !== undefined });
+            const waiting = worktreeWaiters.get(worktreeId);
+            const waiter: RigWorktreeWaiter = { resolve, reject, listed: known !== undefined };
+            if (waiting) waiting.push(waiter);
+            else worktreeWaiters.set(worktreeId, [waiter]);
         });
     };
 
@@ -744,6 +791,16 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             if (project !== undefined) return rigProjectWriteRefusal(project);
             return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
         },
+        groupConversationRefusal(groupId) {
+            const worktree = catalog.worktrees.find((entry) => entry.id === groupId);
+            if (worktree !== undefined) return rigWorktreeConversationRefusal(worktree);
+            const project = catalog.projects.find((entry) => entry.id === groupId);
+            // A project is the folder Happy was pointed at rather than one Rig
+            // is making, so there is no interval where it can take a chat but
+            // not a change: the same sentence answers both questions.
+            if (project !== undefined) return rigProjectWriteRefusal(project);
+            return catalogListed ? RIG_GROUP_UNLISTED_REFUSAL : RIG_GROUP_UNREAD_REFUSAL;
+        },
         sessionRead(sessionId) {
             const session = sessions.find((candidate) => candidate.id === sessionId);
             if (session?.unreadReason === undefined) return;
@@ -845,12 +902,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }),
         worktreeSessionStart: (worktreeId, create) =>
             mutate(async () => {
-                const ready = await worktreeReady(worktreeId);
+                const pathed = await worktreePathed(worktreeId);
                 if (disposed) return undefined;
                 const session = await deps.transport.sessionCreate({
                     ...create,
-                    cwd: ready.path,
-                    worktreeId: ready.id,
+                    cwd: pathed.path,
+                    worktreeId: pathed.id,
                 });
                 if (disposed) return undefined;
                 sessions = [
@@ -1088,7 +1145,7 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // A wait that outlives its surface would leave its caller's promise
             // pending for the life of the process, so disposal answers it.
             const cancelled = new Error("The workspace list was closed.");
-            const waiters = [...worktreeWaiters.values()];
+            const waiters = [...worktreeWaiters.values()].flat();
             worktreeWaiters.clear();
             for (const waiter of waiters) waiter.reject(cancelled);
             stop();

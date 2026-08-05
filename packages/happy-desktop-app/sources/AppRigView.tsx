@@ -1166,16 +1166,16 @@ function slotUnavailable(
     action: RigSlotAction,
     webapps: ReadonlySet<string>,
     hasCurrentChat: boolean,
-    writeRefusal: string | undefined,
+    conversationRefusal: string | undefined,
 ): string | undefined {
     if (action.type === "send-current-chat" && !hasCurrentChat)
         return "No chat is open here to send this message to.";
     if (action.type === "open-webapp" && !webapps.has(action.webapp))
         return `This Rig is not serving a webapp named “${action.webapp}”.`;
     // Sending, drafting into, and starting a chat all land in the addressed
-    // checkout, so they carry that checkout's own reason rather than a second
-    // sentence about the same thing. Opening a webapp does not touch it.
-    if (action.type !== "open-webapp") return writeRefusal;
+    // group, so they carry that group's own reason rather than a second sentence
+    // about the same thing. Opening a webapp does not touch it.
+    if (action.type !== "open-webapp") return conversationRefusal;
     return undefined;
 }
 
@@ -1184,12 +1184,17 @@ function slotVisualEntries(
     projects: readonly RigProjectGroup[],
     webapps: ReadonlySet<string>,
     hasCurrentChat: boolean,
-    writeRefusal?: string,
+    conversationRefusal?: string,
 ): readonly SlotVisualEntry[] {
     return entries.map((entry) => {
         const unavailable =
             entry.content.type === "button"
-                ? slotUnavailable(entry.content.action, webapps, hasCurrentChat, writeRefusal)
+                ? slotUnavailable(
+                      entry.content.action,
+                      webapps,
+                      hasCurrentChat,
+                      conversationRefusal,
+                  )
                 : undefined;
         return {
             id: entry.id,
@@ -2421,13 +2426,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // same reason.
     const access = workspace.groupAccess;
     const openGroupWorkRefusal = access.writeRefusal;
+    // Why a chat cannot be started here or sent to. A workspace whose checkout
+    // Rig is still preparing refuses the second and not the first, so the two
+    // reasons are kept apart all the way down to the controls: a composer reads
+    // this one, a file save and a shell read the one above it.
+    const openGroupChatRefusal = access.conversationRefusal;
     const slotPlacement = (slot: RigSlotName): readonly SlotVisualEntry[] =>
         slotVisualEntries(
             rigSlotEntriesInScope(props.slots.entries, slot, props.slotsScope),
             rows,
             webapps,
             props.chatId !== undefined,
-            openGroupWorkRefusal,
+            openGroupChatRefusal,
         );
     const slotViews: RigSlotViews = {
         statusLine: slotPlacement("status-line"),
@@ -2439,6 +2449,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.
     const openGroupPhase = workspaceLifecyclePhase(openGroup?.lifecycle);
+    // Whether that phase is the whole screen rather than a lane over it. It is,
+    // and only is, when nothing has ever run here and nothing ever can: an empty
+    // workspace that failed, was refused, or has lost its folder has no composer
+    // worth drawing. One that is merely being prepared does — it takes chats
+    // already — so the phase goes in the lane above it instead.
+    const openGroupNotice =
+        openGroup !== undefined &&
+        openGroup.conversations.length === 0 &&
+        openGroupPhase !== undefined &&
+        !access.canConverse;
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — rig-connect withdrew
     // the one it had predicted — so the address answers for itself here rather
@@ -2478,16 +2498,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         : undefined;
     // Sessions without a list position are delegated children. They remain
     // readable by id, but their runner owns their input and configuration.
-    // A workspace that cannot take new work cannot take a message into an old
-    // conversation either: the session is pointed at a checkout that is not
-    // usable, so what it read before stays readable and its input closes with
-    // the reason it closed for.
+    // A workspace that cannot take a chat cannot take a message into an old
+    // conversation either: the session is pointed at a checkout that will never
+    // be usable, so what it read before stays readable and its input closes with
+    // the reason it closed for. A checkout merely still being prepared is not
+    // that: Rig holds the message until the directory arrives, so the input
+    // stays open and the reader can keep writing.
     const conversationReadOnly =
-        detachedConversationId !== undefined || openGroupWorkRefusal !== undefined;
+        detachedConversationId !== undefined || openGroupChatRefusal !== undefined;
     const conversationReadOnlyReason =
         detachedConversationId !== undefined
             ? "Subagent chats are read-only"
-            : openGroupWorkRefusal;
+            : openGroupChatRefusal;
     // Stopping is not writing. An unusable checkout still has whatever was
     // already running in it, and leaving the reader unable to end that would be
     // work they can see, cannot write to, and cannot stop either.
@@ -2767,7 +2789,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         project that is already open — so a workspace that cannot
                         host a session does not answer the shortcut at all,
                         rather than answering it with a failure. */}
-                    {openGroupWorkRefusal === undefined ? (
+                    {openGroupChatRefusal === undefined ? (
                         <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
                     ) : null}
                     {/* A worktree with work already in it keeps its tab strip and
@@ -2784,17 +2806,21 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             : {})}
                         name={openGroup.name}
                         {...(openGroup.path ? { path: openGroup.path } : {})}
-                        {...(openGroupPhase !== undefined && openGroup.conversations.length > 0
+                        {...(openGroupPhase !== undefined && !openGroupNotice
                             ? { phase: openGroupPhase }
                             : {})}
                     />
-                    {openGroup.conversations.length === 0 && openGroupPhase !== undefined ? (
-                        // Nothing has run here and the place itself is not ready
-                        // to be worked in: a composer would take a message the
-                        // checkout it is addressed to cannot receive. What
-                        // happened to the workspace is the whole screen instead,
-                        // and it gives way to the composer the moment the
-                        // checkout is there.
+                    {openGroupNotice ? (
+                        // Nothing has run here and the place itself will never
+                        // take one: a composer would collect a message for a
+                        // checkout that is not coming. What happened to the
+                        // workspace is the whole screen instead.
+                        //
+                        // A checkout Rig is still preparing is deliberately not
+                        // this case. Rig has already said where it will be and
+                        // holds a session's work until it is there, so an empty
+                        // new workspace shows its composer immediately with the
+                        // lane above saying what is happening to it.
                         <WorkspaceLifecycleNotice
                             {...(openGroup.lifecycle?.phase === "failed" &&
                             openGroup.lifecycle.reason !== undefined
@@ -3093,7 +3119,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         groupId={openGroup.id}
                                         groupName={openGroup.name}
                                         now={now}
-                                        {...(openGroupWorkRefusal === undefined
+                                        {...(openGroupChatRefusal === undefined
                                             ? {
                                                   onCreate: () =>
                                                       groupConversationCreate(openGroup),
@@ -3116,9 +3142,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         {...(conversationReadOnlyReason === undefined
                                             ? {}
                                             : { readOnlyReason: conversationReadOnlyReason })}
-                                        {...(openGroupWorkRefusal === undefined
+                                        {...(openGroupChatRefusal === undefined
                                             ? {}
-                                            : { writeRefusal: openGroupWorkRefusal })}
+                                            : { writeRefusal: openGroupChatRefusal })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
                                         share={sessionShare}
@@ -3524,7 +3550,7 @@ function RigConversationBody(props: {
      * belongs to the parent that started it.
      */
     canAbort: boolean;
-    /** Why nothing here may write into the checkout, or absent when it may. */
+    /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
@@ -3635,7 +3661,7 @@ function RigConversationSurface(props: {
      * belongs to the parent that started it.
      */
     canAbort: boolean;
-    /** Why nothing here may write into the checkout, or absent when it may. */
+    /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
@@ -4085,7 +4111,7 @@ function RigPanelComposer(props: {
      * belongs to the parent that started it.
      */
     canAbort: boolean;
-    /** Why nothing here may write into the checkout, or absent when it may. */
+    /** Why this conversation may not be written into, or absent when it may. */
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;

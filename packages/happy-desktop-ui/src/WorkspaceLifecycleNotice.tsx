@@ -56,7 +56,7 @@ const presentations: Record<WorkspaceLifecyclePhase, PhasePresentation> = {
     creating: {
         tone: "progress",
         title: (name) => `Creating “${name}”`,
-        body: "Rig is preparing this workspace's checkout. It can be opened and named now; work can start in it once the checkout is there.",
+        body: "Rig is preparing this workspace's checkout. Chats can be started and written into now; Rig runs their work as soon as the checkout is there.",
     },
     failed: {
         icon: "alert",
