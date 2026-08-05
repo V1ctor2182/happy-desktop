@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fakeRigSession, fakeRigSummary } from "../testing/fake-rig.js";
 import {
     rigAgentAuthor,
+    rigCompactionEntry,
     rigConversationBuild,
     rigConversationSummaryProject,
     rigOwnerAuthor,
@@ -9,6 +10,23 @@ import {
 import type { RigSessionId } from "./rigTypes.js";
 
 describe("rig conversation projection", () => {
+    it("uses humanized token subjects for compaction activity", () => {
+        expect(rigCompactionEntry("c1", "running", 249_234)).toMatchObject({
+            activity: {
+                label: "Compacting context",
+                subject: "from 249k tokens",
+                status: "running",
+            },
+        });
+        expect(rigCompactionEntry("c1", "success", 249_234, 5_330)).toMatchObject({
+            activity: {
+                label: "Compacted context",
+                subject: "249k → 5.3k tokens",
+                status: "success",
+            },
+        });
+    });
+
     it("projects a session row with its directory and live activity marker", () => {
         const idle = rigConversationSummaryProject(
             fakeRigSummary("s1", { title: "Fix the parser", updatedAt: 4_000 }),

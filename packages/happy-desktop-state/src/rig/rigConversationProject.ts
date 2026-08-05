@@ -19,6 +19,7 @@ import type {
     RigToolStatus,
     RigUserInputRequest,
 } from "./rigTypes.js";
+import { rigCompactionSubject } from "./rigTokenFormat.js";
 
 /** Stable identity of the machine owner, the only person in a local session. */
 export const rigOwnerAuthor: ConversationAuthor = {
@@ -152,8 +153,13 @@ export function rigNoticeEntry(
 export function rigCompactionEntry(
     id: string,
     status: "running" | "success",
-    subject?: string,
+    estimatedTokensBefore?: number,
+    estimatedTokensAfter?: number,
 ): ConversationEntry {
+    const subject =
+        estimatedTokensBefore === undefined
+            ? undefined
+            : rigCompactionSubject(estimatedTokensBefore, estimatedTokensAfter);
     return {
         kind: "agentActivity",
         id,

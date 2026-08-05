@@ -11,6 +11,7 @@ import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
 import type { RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
 import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import { rigCompactionSubject } from "./rigTokenFormat.js";
 import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 
 export interface RigConnectConversationInput {
@@ -365,11 +366,10 @@ function rigConnectGroupProject(
                             element.status === "running"
                                 ? "Compacting context"
                                 : "Compacted context",
-                        ...(element.estimatedTokensAfter === undefined
-                            ? {}
-                            : {
-                                  subject: `${String(element.estimatedTokensBefore)} → ${String(element.estimatedTokensAfter)} tokens`,
-                              }),
+                        subject: rigCompactionSubject(
+                            element.estimatedTokensBefore,
+                            element.estimatedTokensAfter,
+                        ),
                         status:
                             element.status === "running"
                                 ? "running"

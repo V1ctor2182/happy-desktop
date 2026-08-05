@@ -530,30 +530,11 @@ export interface RigChatStore {
     [Symbol.dispose](): void;
 }
 
-/**
- * Why a compaction pass happened, in the reader's words rather than the wire's.
- */
-const COMPACTION_REASON: Record<"context_window" | "manual" | "threshold", string> = {
-    context_window: "context window full",
-    manual: "requested",
-    threshold: "reached threshold",
-};
-
 /** Why an inference attempt is being retried, in the reader's words. */
 const RETRY_REASON: Record<"connection_lost" | "incomplete_response", string> = {
     connection_lost: "Connection lost",
     incomplete_response: "Incomplete response",
 };
-
-/**
- * Token counts as a reader scans them. Compaction figures run to six digits,
- * where the exact number is noise and the magnitude is the whole point.
- */
-function tokensFormat(tokens: number): string {
-    if (tokens < 1000) return String(Math.max(0, Math.round(tokens)));
-    const thousands = tokens / 1000;
-    return `${thousands < 100 ? thousands.toFixed(1).replace(/\.0$/, "") : String(Math.round(thousands))}k`;
-}
 
 /**
  * Room left in the window the reported tokens were counted against. The window
@@ -1164,11 +1145,17 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
      * (`context_compaction_finished`); whichever arrives first settles the row,
      * so a pass that never reports sizes still stops spinning.
      */
-    const compactionSettle = (subject?: string): void => {
+    const compactionSettle = (
+        estimatedTokensBefore?: number,
+        estimatedTokensAfter?: number,
+    ): void => {
         const id = compactionEntryId();
         const open = ephemeral.find((entry) => entryKey(entry) === id);
-        if (!open && subject === undefined) return;
-        upsertEphemeral(id, rigCompactionEntry(id, "success", subject));
+        if (!open && estimatedTokensBefore === undefined) return;
+        upsertEphemeral(
+            id,
+            rigCompactionEntry(id, "success", estimatedTokensBefore, estimatedTokensAfter),
+        );
     };
 
     /** Run notices are keyed by what produced them so a redelivered event does not stack. */
@@ -1305,11 +1292,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 // The pass reports what it compacted between. A manual
                 // `/compact` produces this without a start event, so the row is
                 // created here when it does not already exist.
-                compactionSettle(
-                    `${tokensFormat(event.estimatedTokensBefore)} → ${tokensFormat(
-                        event.estimatedTokensAfter,
-                    )} tokens · ${COMPACTION_REASON[event.reason]}`,
-                );
+                compactionSettle(event.estimatedTokensBefore, event.estimatedTokensAfter);
                 break;
             case "context_compaction_finished":
                 compactionSettle();

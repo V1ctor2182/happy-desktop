@@ -40,7 +40,7 @@ export function TurnSummary(props: TurnSummaryProps) {
         reason === "steering"
             ? ["Steered", "after"]
             : reason === "compaction"
-              ? ["Compacted", "after"]
+              ? ["Worked", "for"]
               : reason === "abort"
                 ? ["Stopped", "after"]
                 : reason === "error" || local.status === "failed"
