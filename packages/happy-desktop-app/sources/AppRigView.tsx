@@ -21,6 +21,7 @@ import type {
     RigFileViewMode,
     RigHost,
     RigGroupId,
+    RigMenusSnapshot,
     RigModelStore,
     RigModelSelection,
     RigNavigationOrderStore,
@@ -2496,6 +2497,16 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
               ...(detachedConversation?.running ? { busy: true } : {}),
           }
         : undefined;
+    // Whether this group has anything to put in a tab strip at all. A group with
+    // nothing open in it shows its composer alone; everywhere else the strip is
+    // the frame, and a group that still has no session puts that same composer
+    // underneath it rather than beside it.
+    const groupTabbedPane =
+        openGroup !== undefined &&
+        (openGroup.conversations.length > 0 ||
+            groupFileTabs.length > 0 ||
+            mainTools.length > 0 ||
+            detachedConversationTab !== undefined);
     // Sessions without a list position are delegated children. They remain
     // readable by id, but their runner owns their input and configuration.
     // A workspace that cannot take a chat cannot take a message into an old
@@ -2830,117 +2841,29 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             {...(openGroup.path ? { path: openGroup.path } : {})}
                             phase={openGroupPhase}
                         />
-                    ) : openGroup.conversations.length === 0 && workspace.groupComposer ? (
+                    ) : openGroup.conversations.length === 0 &&
+                      workspace.groupComposer &&
+                      !groupTabbedPane ? (
                         // A group with nothing in it gets no tab strip — an empty
                         // strip is a control that does nothing but take a row —
                         // and a live composer rather than a button: the first
                         // message is what starts the conversation, so opening a
                         // project or worktree to type into never leaves an empty
-                        // session behind.
-                        <ConversationView
-                            agentAuthor={rigAgentAuthor}
+                        // session behind. Once there is a strip the same composer
+                        // moves under it, so it is never drawn twice.
+                        <RigGroupComposer
                             composer={workspace.groupComposer}
-                            composerAboveControl={
-                                <SlotEntries
-                                    entries={slotViews.aboveComposer}
-                                    onAction={props.slotAction}
-                                    placement="above-composer"
-                                />
-                            }
-                            composerFocusOnType={composerClaimsTyping}
-                            composerPlaceholder={composerPlaceholder(openGroup.name)}
-                            entries={NO_ENTRIES}
-                            // The first message is what creates the session, so
-                            // its model, effort, and access mode have to be
-                            // choosable before it is sent rather than corrected
-                            // afterwards. These are the same pickers an open
-                            // conversation carries, over the draft instead of a
-                            // live session.
-                            composerControls={
-                                workspace.groupSessionDraft ? (
-                                    <ComposerModelControl
-                                        {...rigComposerModelControlProps(
-                                            workspace.groupSessionDraft.menus,
-                                            {
-                                                onEffortChange: (effort?: RigThinkingLevel) =>
-                                                    props.workspace.sessionEffortUpdate(effort),
-                                                onModelChange: (selection: RigModelSelection) =>
-                                                    props.workspace.sessionModelUpdate(selection),
-                                            },
-                                        )}
-                                    />
-                                ) : undefined
-                            }
-                            composerFooterControl={
-                                workspace.groupSessionDraft || slotViews.statusLine.length > 0 ? (
-                                    <ComposerFooterBar
-                                        leading={
-                                            <>
-                                                {workspace.groupSessionDraft ? (
-                                                    <RigSessionControls
-                                                        fields={["permission", "tier"]}
-                                                        menuPlacement="above"
-                                                        variant="ghost"
-                                                        menus={workspace.groupSessionDraft.menus}
-                                                        onEffortChange={(
-                                                            effort?: RigThinkingLevel,
-                                                        ) =>
-                                                            props.workspace.sessionEffortUpdate(
-                                                                effort,
-                                                            )
-                                                        }
-                                                        onModelChange={(
-                                                            selection: RigModelSelection,
-                                                        ) =>
-                                                            props.workspace.sessionModelUpdate(
-                                                                selection,
-                                                            )
-                                                        }
-                                                        onPermissionModeChange={(
-                                                            mode: RigPermissionMode,
-                                                        ) =>
-                                                            props.workspace.sessionPermissionModeUpdate(
-                                                                mode,
-                                                            )
-                                                        }
-                                                        onServiceTierChange={(
-                                                            tier?: RigServiceTier,
-                                                        ) =>
-                                                            props.workspace.sessionServiceTierUpdate(
-                                                                tier,
-                                                            )
-                                                        }
-                                                    />
-                                                ) : null}
-                                                <SlotEntries
-                                                    entries={slotViews.statusLine}
-                                                    onAction={props.slotAction}
-                                                    placement="status-line"
-                                                />
-                                            </>
-                                        }
-                                    />
-                                ) : undefined
-                            }
-                            onComposerAttachmentRemove={(attachmentId) =>
-                                props.workspace.composerAttachmentRemove(attachmentId)
-                            }
-                            onComposerAttachmentsSelect={(files) =>
-                                props.workspace.composerAttachmentsAdd(files)
-                            }
-                            onComposerFocusChange={(focused) =>
-                                props.workspace.composerFocusUpdate(focused)
-                            }
-                            onComposerSend={() => props.workspace.composerTextSubmit()}
-                            onComposerValueChange={(value) =>
-                                props.workspace.composerTextUpdate(value)
-                            }
+                            {...(workspace.groupSessionDraft
+                                ? { draftMenus: workspace.groupSessionDraft.menus }
+                                : {})}
+                            focusOnType={composerClaimsTyping}
+                            groupName={openGroup.name}
+                            slotAction={props.slotAction}
+                            slots={slotViews}
+                            workspace={props.workspace}
                         />
                     ) : null}
-                    {openGroup.conversations.length > 0 ||
-                    groupFileTabs.length > 0 ||
-                    mainTools.length > 0 ||
-                    detachedConversationTab ? (
+                    {groupTabbedPane ? (
                         <TabbedPane
                             actions={
                                 // A tab is a session, so adding one creates it
@@ -3110,6 +3033,26 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         {...(openGroupWorkRefusal === undefined
                                             ? {}
                                             : { writeRefusal: openGroupWorkRefusal })}
+                                        workspace={props.workspace}
+                                    />
+                                ) : openGroup.conversations.length === 0 &&
+                                  workspace.groupComposer ? (
+                                    // Files or tools are open here, but no
+                                    // session exists yet. The body under the
+                                    // strip is the same composer that starts the
+                                    // first one — telling the reader that no
+                                    // session is selected when there is none to
+                                    // select would only take away the place to
+                                    // begin.
+                                    <RigGroupComposer
+                                        composer={workspace.groupComposer}
+                                        {...(workspace.groupSessionDraft
+                                            ? { draftMenus: workspace.groupSessionDraft.menus }
+                                            : {})}
+                                        focusOnType={composerClaimsTyping}
+                                        groupName={openGroup.name}
+                                        slotAction={props.slotAction}
+                                        slots={slotViews}
                                         workspace={props.workspace}
                                     />
                                 ) : (
@@ -3526,6 +3469,107 @@ function fileSizeFormat(size: number): string {
     if (size < 1024) return `${String(size)} B`;
     if (size < 1024 * 1024) return `${String(Math.round(size / 102.4) / 10)} KB`;
     return `${String(Math.round(size / (102.4 * 1024)) / 10)} MB`;
+}
+
+/**
+ * The composer of a group that holds no conversation yet: a live input rather
+ * than a button, so opening a project or worktree and typing is what starts its
+ * first session. It is one surface wherever it stands — alone on a group with
+ * nothing open in it at all, or as the body under the tab strip when the only
+ * tabs are files and tools — because two of them on one screen would be two
+ * places to type the same first message.
+ */
+function RigGroupComposer(props: {
+    composer: ComposerSnapshot;
+    /**
+     * How that first conversation will be configured, and the options behind
+     * those choices. Absent until the model catalog has been read, which is
+     * what keeps the composer from waiting on it.
+     */
+    draftMenus?: RigMenusSnapshot;
+    focusOnType: boolean;
+    groupName: string;
+    slotAction(entryId: string): void;
+    slots: RigSlotViews;
+    workspace: RigWorkspaceStore;
+}) {
+    const workspace = props.workspace;
+    const draftMenus = props.draftMenus;
+    return (
+        <ConversationView
+            agentAuthor={rigAgentAuthor}
+            composer={props.composer}
+            composerAboveControl={
+                <SlotEntries
+                    entries={props.slots.aboveComposer}
+                    onAction={props.slotAction}
+                    placement="above-composer"
+                />
+            }
+            composerFocusOnType={props.focusOnType}
+            composerPlaceholder={composerPlaceholder(props.groupName)}
+            entries={NO_ENTRIES}
+            // The first message is what creates the session, so its model,
+            // effort, and access mode have to be choosable before it is sent
+            // rather than corrected afterwards. These are the same pickers an
+            // open conversation carries, over the draft instead of a live
+            // session.
+            composerControls={
+                draftMenus ? (
+                    <ComposerModelControl
+                        {...rigComposerModelControlProps(draftMenus, {
+                            onEffortChange: (effort?: RigThinkingLevel) =>
+                                workspace.sessionEffortUpdate(effort),
+                            onModelChange: (selection: RigModelSelection) =>
+                                workspace.sessionModelUpdate(selection),
+                        })}
+                    />
+                ) : undefined
+            }
+            composerFooterControl={
+                draftMenus || props.slots.statusLine.length > 0 ? (
+                    <ComposerFooterBar
+                        leading={
+                            <>
+                                {draftMenus ? (
+                                    <RigSessionControls
+                                        fields={["permission", "tier"]}
+                                        menuPlacement="above"
+                                        variant="ghost"
+                                        menus={draftMenus}
+                                        onEffortChange={(effort?: RigThinkingLevel) =>
+                                            workspace.sessionEffortUpdate(effort)
+                                        }
+                                        onModelChange={(selection: RigModelSelection) =>
+                                            workspace.sessionModelUpdate(selection)
+                                        }
+                                        onPermissionModeChange={(mode: RigPermissionMode) =>
+                                            workspace.sessionPermissionModeUpdate(mode)
+                                        }
+                                        onServiceTierChange={(tier?: RigServiceTier) =>
+                                            workspace.sessionServiceTierUpdate(tier)
+                                        }
+                                    />
+                                ) : null}
+                                <SlotEntries
+                                    entries={props.slots.statusLine}
+                                    onAction={props.slotAction}
+                                    placement="status-line"
+                                />
+                            </>
+                        }
+                    />
+                ) : undefined
+            }
+            onComposerAttachmentRemove={(attachmentId) =>
+                workspace.composerAttachmentRemove(attachmentId)
+            }
+            onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
+            onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
+            onComposerSend={() => workspace.composerTextSubmit()}
+            onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
+        />
+    );
 }
 
 /** The open conversation's materialization states, inside the directory's tabs. */
