@@ -22,6 +22,132 @@ export interface RigConnectionSnapshot {
     readonly attempt: number;
 }
 
+/**
+ * Product-facing availability for one already-known Rig.
+ *
+ * Connection and daemon health remain the transport facts above. This projection
+ * adds the one lifetime fact a surface needs to interpret them: whether this Rig
+ * has materialized confirmed state before. That is what distinguishes an initial
+ * connection from a reconnect without making `session` presence double as a
+ * connectivity flag.
+ */
+export type RigAvailabilityState = "connecting" | "online" | "reconnecting" | "offline" | "error";
+
+export interface RigAvailabilitySnapshot {
+    readonly state: RigAvailabilityState;
+    readonly online: boolean;
+    /** Last confirmed state may be shown, but network actions must not run. */
+    readonly stale: boolean;
+    /** Displayable reason for disabling an action that needs this Rig. */
+    readonly refusal?: string;
+    /** Short in-context status for a lane, banner, terminal, or sidebar. */
+    readonly message: string;
+}
+
+/** Outer route state, such as a host's current link to one remote Rig. */
+export interface RigAvailabilityLink {
+    readonly status: "connecting" | "connected" | "disconnected" | "error";
+    readonly message?: string;
+}
+
+/**
+ * Projects transport health into the closed availability vocabulary shared by
+ * product surfaces. `materialized` means the Rig has already supplied stores and
+ * confirmed state in this app lifetime; losing it is therefore a reconnect, not
+ * another startup.
+ */
+export function rigAvailabilityProject(
+    snapshot: RigConnectionSnapshot,
+    materialized: boolean,
+    link?: RigAvailabilityLink,
+): RigAvailabilitySnapshot {
+    if (link?.status === "error") {
+        const detail = link.message ?? "This Rig reported an error.";
+        return {
+            message: materialized ? `${detail} Showing the last confirmed state.` : detail,
+            online: false,
+            refusal: `This Rig is unavailable. ${detail}`,
+            stale: materialized,
+            state: "error",
+        };
+    }
+
+    if (link?.status === "disconnected") {
+        const detail = link.message ?? "This Rig is offline.";
+        return {
+            message: materialized
+                ? `${detail} Showing the last confirmed state while reconnecting automatically.`
+                : detail,
+            online: false,
+            refusal: `${detail} Reconnecting automatically.`,
+            stale: materialized,
+            state: materialized ? "offline" : "connecting",
+        };
+    }
+
+    if (link?.status === "connecting") {
+        const detail = link.message ?? "Connecting to this Rig.";
+        return {
+            message: materialized ? `${detail} Showing the last confirmed state.` : detail,
+            online: false,
+            refusal: materialized ? "This Rig is reconnecting." : "This Rig is still connecting.",
+            stale: materialized,
+            state: materialized ? "reconnecting" : "connecting",
+        };
+    }
+
+    if (snapshot.connection === "connected" && snapshot.daemon === "ready")
+        return {
+            message: snapshot.version ? `Rig ${snapshot.version} is online.` : "Rig is online.",
+            online: true,
+            stale: false,
+            state: "online",
+        };
+
+    if (snapshot.connection === "connected" && snapshot.daemon === "error") {
+        const detail = snapshot.message ?? "The Rig daemon reported an error.";
+        return {
+            message: detail,
+            online: false,
+            refusal: `This Rig is unavailable. ${detail}`,
+            stale: materialized,
+            state: "error",
+        };
+    }
+
+    if (!materialized)
+        return {
+            message:
+                snapshot.connection === "disconnected"
+                    ? "Waiting for this Rig to become reachable."
+                    : "Connecting to this Rig…",
+            online: false,
+            refusal: "This Rig is still connecting.",
+            stale: false,
+            state: "connecting",
+        };
+
+    if (snapshot.connection === "connecting" || snapshot.daemon === "starting")
+        return {
+            message: "Reconnecting to this Rig. Showing the last confirmed state.",
+            online: false,
+            refusal: "This Rig is reconnecting.",
+            stale: true,
+            state: "reconnecting",
+        };
+
+    return {
+        message:
+            snapshot.attempt > 1
+                ? `This Rig is offline. Reconnect attempt ${snapshot.attempt} is automatic.`
+                : "This Rig is offline. Reconnecting automatically.",
+        online: false,
+        refusal: "This Rig is offline. Reconnecting automatically.",
+        stale: true,
+        state: "offline",
+    };
+}
+
 export interface RigConnectionStore {
     get(): RigConnectionSnapshot;
     subscribe(listener: () => void): () => void;

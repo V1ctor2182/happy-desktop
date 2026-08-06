@@ -21,6 +21,15 @@ export interface TerminalPanelProps {
     error?: string;
     exitCode?: number | null;
     /**
+     * Availability of the Rig that owns this terminal, independently of the
+     * terminal session's own status. A missing value is treated as available.
+     * Reconnecting and unavailable terminals retain their grid as a readable,
+     * selectable surface but stop forwarding input and PTY resize requests.
+     */
+    rigAvailability?: "available" | "reconnecting" | "unavailable";
+    /** Human-readable context for a degraded Rig, such as the last route error. */
+    rigAvailabilityReason?: string;
+    /**
      * Fixed height in pixels, for a terminal docked at the bottom of a surface it
      * shares with other content. Omitting it — together with `onHeightChange` —
      * makes the terminal fill whatever box its parent gives it and drops the drag
@@ -99,12 +108,24 @@ export function TerminalPanel(props: TerminalPanelProps) {
     const previousScrollbackCount = useRef(0);
     const previousScrollbackTail = useRef<TerminalRowSnapshot | undefined>(undefined);
     const [focused, focusedSet] = useState(false);
+    const visualAvailability =
+        props.rigAvailability ??
+        (props.status === "connected"
+            ? undefined
+            : props.status === "connecting"
+              ? ("reconnecting" as const)
+              : ("unavailable" as const));
+    // A terminal transport failure has the same byte-safety rule as a whole-Rig
+    // outage: keep the grid, but never enqueue input while no live PTY can accept it.
+    const readOnly = visualAvailability === "reconnecting" || visualAvailability === "unavailable";
     // Whether new output should keep scrolling the screen into view. A terminal
     // follows its own output, but the moment the reader scrolls up into history
     // it must stay where they put it — otherwise the next line of output yanks
     // what they are reading off the screen.
     const following = useRef(true);
-    const resize = useEffectEvent((cols: number, rows: number) => props.onResize(cols, rows));
+    const resize = useEffectEvent((cols: number, rows: number) => {
+        if (!readOnly) props.onResize(cols, rows);
+    });
     // With nothing to show, a dead session collapses to its header line so it
     // does not push the conversation around; once output exists it stays
     // visible through disconnects for context.
@@ -114,10 +135,25 @@ export function TerminalPanel(props: TerminalPanelProps) {
     // Terminal autofocus is a mount/visibility concern, never a response to an
     // unrelated ChatPage render. Otherwise a freshly allocated callback prop
     // would steal the composer's focus whenever its draft changes.
+    const inputFocus = useEffectEvent(() => {
+        if (!readOnly) input.current?.focus({ preventScroll: true });
+    });
     // eslint-disable-next-line happy2-react/no-layout-effect -- move real keyboard focus to the capture field on mount
     useLayoutEffect(() => {
-        if (!collapsed) input.current?.focus({ preventScroll: true });
+        if (!collapsed) inputFocus();
     }, [collapsed]);
+    // A Rig outage can begin while its terminal owns keyboard capture. Release
+    // that invisible field immediately without disturbing selection in the
+    // retained grid, and do not steal focus back merely because the route heals.
+    // eslint-disable-next-line happy2-react/no-layout-effect -- synchronously release the imperative terminal capture field when it becomes read-only
+    useLayoutEffect(() => {
+        if (!readOnly) return;
+        composing.current = false;
+        if (input.current) {
+            input.current.value = "";
+            input.current.blur();
+        }
+    }, [readOnly]);
     // eslint-disable-next-line happy2-react/no-layout-effect -- observe the live screen box to size the PTY in cells
     useLayoutEffect(() => {
         const element = screen.current;
@@ -139,7 +175,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         });
         observer.observe(element);
         return () => observer.disconnect();
-    }, [collapsed]);
+    }, [collapsed, readOnly]);
 
     // WTerm gives one imperative renderer ownership of the grid DOM. Keeping it
     // alive for this screen lifetime preserves row nodes, selection, and scroll
@@ -196,13 +232,14 @@ export function TerminalPanel(props: TerminalPanelProps) {
             element.scrollHeight - element.scrollTop - element.clientHeight <= CELL_HEIGHT;
     }
     function inputSend(data: string) {
-        if (!data) return;
+        if (!data || readOnly) return;
         // Typing always returns to the live prompt, matching native terminals and
         // WTerm even when the user had been reading older history.
         screenScrollToBottom();
         props.onInput(data);
     }
     function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+        if (readOnly) return;
         if (composing.current || event.nativeEvent.isComposing) return;
         const key = event.key.toLowerCase();
         if ((event.metaKey || event.ctrlKey) && key === "c") {
@@ -243,6 +280,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         if (sequence) inputSend(sequence);
     }
     function inputPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+        if (readOnly) return;
         event.preventDefault();
         event.stopPropagation();
         const text = event.clipboardData.getData("text");
@@ -256,11 +294,15 @@ export function TerminalPanel(props: TerminalPanelProps) {
     }
     function compositionEnd(event: CompositionEvent<HTMLTextAreaElement>) {
         composing.current = false;
+        if (readOnly) {
+            event.currentTarget.value = "";
+            return;
+        }
         if (event.data) inputSend(event.data);
         event.currentTarget.value = "";
     }
     function inputFallback(event: React.FormEvent<HTMLTextAreaElement>) {
-        if (composing.current) return;
+        if (readOnly || composing.current) return;
         const value = event.currentTarget.value;
         if (value) {
             inputSend(value);
@@ -268,6 +310,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         }
     }
     function screenFocus() {
+        if (readOnly) return;
         // A terminal click returns keyboard capture unless the user has an
         // active grid selection they may be copying. This mirrors native
         // terminal selection behavior instead of cancelling the click early.
@@ -303,12 +346,15 @@ export function TerminalPanel(props: TerminalPanelProps) {
     }
     const cursor = props.grid?.cursor;
     const scrollback = props.grid?.scrollback ?? [];
+    const availability = rigAvailabilityLabel(props);
+    const terminalStatus = statusLabel(props);
     return (
         <section
             className="happy2-terminal-panel"
             data-collapsed={collapsed ? "" : undefined}
             data-fill={height === undefined ? "" : undefined}
             data-happy-desktop-ui="terminal-panel"
+            data-rig-availability={readOnly ? visualAvailability : undefined}
             style={
                 collapsed
                     ? undefined
@@ -341,7 +387,28 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 >
                     {props.grid?.title || "Terminal"}
                 </span>
-                <span className="happy2-terminal-panel__status">{statusLabel(props)}</span>
+                <span
+                    aria-label={
+                        availability
+                            ? `Terminal: ${terminalStatus}. ${availability}`
+                            : `Terminal: ${terminalStatus}`
+                    }
+                    aria-live="polite"
+                    className="happy2-terminal-panel__status"
+                    data-happy-desktop-ui="terminal-status"
+                    role="status"
+                    title={availability}
+                >
+                    <span>{terminalStatus}</span>
+                    {availability ? (
+                        <>
+                            <span aria-hidden> · </span>
+                            <span className="happy2-terminal-panel__availability">
+                                {availability}
+                            </span>
+                        </>
+                    ) : null}
+                </span>
                 <div className="happy2-terminal-panel__actions">
                     {props.status === "disconnected" || props.status === "error" ? (
                         <Button
@@ -367,8 +434,9 @@ export function TerminalPanel(props: TerminalPanelProps) {
             </header>
             {collapsed ? null : (
                 <div
+                    aria-label={availability ? `Terminal output. ${availability}` : undefined}
                     className="happy2-terminal-panel__screen"
-                    data-focused={focused ? "" : undefined}
+                    data-focused={focused && !readOnly ? "" : undefined}
                     data-happy-desktop-ui="terminal-screen"
                     onClick={screenClick}
                     onCopy={terminalSelectionCopy}
@@ -388,7 +456,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     onPointerMove={linkHover}
                     onScroll={screenScroll}
                     ref={screen}
-                    role="application"
+                    role={readOnly ? "region" : "application"}
                     tabIndex={-1}
                 >
                     <div
@@ -420,6 +488,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         autoCapitalize="off"
                         autoComplete="off"
                         className="happy2-terminal-panel__input"
+                        disabled={readOnly}
                         enterKeyHint="send"
                         /* `input` is the browser's text-entry event. Keeping the
                            terminal's byte forwarding on it provides the IME and
@@ -586,4 +655,11 @@ function statusLabel(props: TerminalPanelProps): string {
     if (props.error) return props.error;
     if (props.status === "exited") return `Exited ${props.exitCode ?? ""}`.trim();
     return props.status[0]!.toUpperCase() + props.status.slice(1);
+}
+
+function rigAvailabilityLabel(props: TerminalPanelProps): string | undefined {
+    if (props.rigAvailability === undefined || props.rigAvailability === "available") return;
+    const status =
+        props.rigAvailability === "reconnecting" ? "Rig reconnecting" : "Rig unavailable";
+    return props.rigAvailabilityReason ? `${status}: ${props.rigAvailabilityReason}` : status;
 }

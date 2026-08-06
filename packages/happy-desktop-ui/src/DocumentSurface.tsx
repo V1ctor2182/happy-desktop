@@ -47,6 +47,8 @@ export interface DocumentSurfaceProps {
     ) => Promise<readonly DocumentEditorCommentUser[]>;
     /** The document's text after each change, for a host that keeps a readable copy. */
     readonly onMarkdown?: (markdown: string) => void;
+    /** Shows the editor's block drag menu. */
+    readonly blockDragEnabled?: boolean;
 }
 
 const SAVE_LABELS = {
@@ -83,6 +85,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
             <DocumentEditor
                 commentUserId={props.commentUserId}
                 commentUsersResolve={props.commentUsersResolve}
+                blockDragEnabled={props.blockDragEnabled}
                 editable={props.editable}
                 onMarkdown={props.onMarkdown}
                 onPresence={props.onPresence}

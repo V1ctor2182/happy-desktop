@@ -101,6 +101,10 @@ export type ConversationViewProps = {
     composer: ComposerSnapshot;
     /** Keeps the conversation readable while disabling every composer action. */
     composerDisabled?: boolean;
+    /** Keeps the local draft editable while disabling submission to the Rig. */
+    composerSubmitDisabled?: boolean;
+    /** In-context reason submission is unavailable. */
+    composerUnavailable?: string;
     composerPlaceholder?: string;
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
@@ -364,6 +368,10 @@ export function ConversationView(props: ConversationViewProps) {
                 composerAboveControl={props.composerAboveControl}
                 composerControls={props.composerControls}
                 disabled={props.composerDisabled}
+                submitDisabled={props.composerSubmitDisabled === true}
+                {...(props.composerUnavailable === undefined
+                    ? {}
+                    : { unavailable: props.composerUnavailable })}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
                 composerPlaceholder={props.composerPlaceholder}

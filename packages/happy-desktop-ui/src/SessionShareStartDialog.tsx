@@ -24,6 +24,10 @@ export interface SessionShareStartDialogProps {
     onFriendMessagesChange: (value: boolean) => void;
     onStart: () => void;
     onCancel: () => void;
+    /** Disables only the network confirmation while keeping Cancel available. */
+    confirmDisabled?: boolean;
+    /** Explains why confirmation is unavailable. */
+    confirmDisabledReason?: string;
     /** True while the list of friends is still being read. */
     loading?: boolean;
     /** True while the share is being created. */
@@ -75,9 +79,10 @@ export function SessionShareStartDialog(props: SessionShareStartDialogProps) {
                     {empty ? null : (
                         <Button
                             data-testid="session-share-start-confirm"
-                            disabled={props.starting || chosen === 0}
+                            disabled={props.starting || props.confirmDisabled || chosen === 0}
                             icon="eye"
                             onClick={props.onStart}
+                            title={props.confirmDisabledReason}
                             variant="primary"
                         >
                             {props.starting

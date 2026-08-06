@@ -87,6 +87,8 @@ export interface DocumentEditorProps {
      * copy beside the document gets it from here rather than parsing Yjs itself.
      */
     onMarkdown?: (markdown: string) => void;
+    /** Shows BlockNote's block drag menu. */
+    blockDragEnabled?: boolean;
     "data-testid"?: string;
 }
 
@@ -231,6 +233,7 @@ export function DocumentEditor(props: DocumentEditorProps) {
                 data-testid={props["data-testid"]}
                 editable={props.editable ?? true}
                 editor={editor}
+                sideMenu={props.blockDragEnabled ?? true}
                 theme={props.theme ?? "light"}
             />
         </div>

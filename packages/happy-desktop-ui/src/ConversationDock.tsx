@@ -10,6 +10,10 @@ export type ConversationDockProps = {
     composer: ComposerSnapshot;
     /** Keeps the session configuration visible while making its write end inert. */
     disabled?: boolean;
+    /** Keeps the draft editable but disables submission to an unavailable Rig. */
+    submitDisabled?: boolean;
+    /** In-context reason the draft cannot currently be submitted. */
+    unavailable?: string;
     /** Controls rendered inside the composer toolbar, beside the send control. */
     composerControls?: ReactNode;
     /** Agent-authored contribution bar immediately above the composer card. */
@@ -102,7 +106,7 @@ export function ConversationDock(props: ConversationDockProps) {
             {composer.submission.status === "failed" ? (
                 <Banner
                     action={
-                        props.disabled
+                        props.disabled || props.submitDisabled
                             ? undefined
                             : { label: "Retry", onClick: props.onComposerSend }
                     }
@@ -111,6 +115,11 @@ export function ConversationDock(props: ConversationDockProps) {
                     title="Message not sent"
                 >
                     {composer.submission.error.message}
+                </Banner>
+            ) : null}
+            {props.unavailable ? (
+                <Banner icon="link" tone="neutral" title="Rig unavailable">
+                    {props.unavailable}
                 </Banner>
             ) : null}
             {props.composerAboveControl}
@@ -136,6 +145,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     placeholder={props.composerPlaceholder ?? "Message the agent…"}
                     running={props.running}
                     sendEnabled={sendEnabled}
+                    submitDisabled={props.submitDisabled === true}
                     value={composer.text}
                 />
             </div>

@@ -13,6 +13,8 @@ export interface FriendProfileSetupProps {
     onPhotoSelect: (file: File) => void;
     onPhotoRemove: () => void;
     onSubmit: () => void;
+    /** Keeps the profile draft editable while creation cannot reach the Rig. */
+    submitDisabled?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -36,7 +38,10 @@ export function FriendProfileSetup(props: FriendProfileSetupProps) {
     const draft = props.draft;
     const photo = draft.photo;
     const ready =
-        draft.firstName.trim() !== "" && draft.lastName.trim() !== "" && !draft.submitting;
+        draft.firstName.trim() !== "" &&
+        draft.lastName.trim() !== "" &&
+        !draft.submitting &&
+        !props.submitDisabled;
     return (
         <div
             className={["happy2-friend-setup", props.className].filter(Boolean).join(" ")}

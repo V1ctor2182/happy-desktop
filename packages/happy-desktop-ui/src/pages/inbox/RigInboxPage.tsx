@@ -24,6 +24,8 @@ export interface RigInboxPageProps {
     loading?: boolean;
     /** The question feed itself failed; retained items stay readable beneath it. */
     error?: UserError;
+    /** Why answers cannot currently be submitted. Drafts and selections remain local. */
+    unavailable?: string;
     /** In-flight and failed answer submissions, by item. */
     submissions?: ReadonlyMap<RigInboxItemId, RigInboxSubmission>;
     onAnswer: (itemId: RigInboxItemId, answers: RigInboxAnswerMap) => void;
@@ -99,6 +101,11 @@ export function RigInboxPage(props: RigInboxPageProps) {
                             {props.error.message}
                         </Banner>
                     ) : null}
+                    {props.unavailable ? (
+                        <Banner tone="neutral" title="Rig reconnecting">
+                            {props.unavailable}
+                        </Banner>
+                    ) : null}
 
                     {pendingCount === 0 && answeredCount === 0 ? (
                         <EmptyState
@@ -148,6 +155,9 @@ export function RigInboxPage(props: RigInboxPageProps) {
                             {...(props.onOpenSession ? { onOpenSession: props.onOpenSession } : {})}
                             submission={submissions?.get(item.id)}
                             time={props.itemTime?.(item)}
+                            {...(props.unavailable === undefined
+                                ? {}
+                                : { unavailable: props.unavailable })}
                         />
                     ))}
 
@@ -299,6 +309,7 @@ interface InboxPendingItemProps extends InboxItemHeaderProps {
     onMessageChange?: (itemId: RigInboxItemId, text: string) => void;
     onMessageSubmit?: (itemId: RigInboxItemId) => void;
     submission?: RigInboxSubmission;
+    unavailable?: string;
 }
 
 function InboxPendingItem(props: InboxPendingItemProps) {
@@ -329,6 +340,10 @@ function InboxPendingItem(props: InboxPendingItemProps) {
                       }
                     : {})}
                 pending={submission?.type === "pending"}
+                submitDisabled={props.unavailable !== undefined}
+                {...(props.unavailable === undefined
+                    ? {}
+                    : { submitDisabledReason: props.unavailable })}
                 {...(props.selection ? { selection: props.selection } : {})}
                 request={{
                     requestId: props.item.requestId,
@@ -348,6 +363,7 @@ function InboxPendingItem(props: InboxPendingItemProps) {
                     onValueChange={(value) => onMessageChange(props.item.id, value)}
                     pending={submission?.type === "pending"}
                     placeholder="Or say what to do instead…"
+                    submitDisabled={props.unavailable !== undefined}
                     value={props.message}
                 />
             ) : null}

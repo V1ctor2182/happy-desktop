@@ -110,6 +110,21 @@ export function BrowserPanelPage() {
                     />
                 </div>
             </Specimen>
+            <Specimen
+                detail="known Rig offline · retained guest stays mounted · navigation and retry are unavailable"
+                label="Rig offline"
+                number="05"
+                stage="app"
+            >
+                <div style={frame}>
+                    <BrowserPanel
+                        active
+                        initialUrl="https://happy.engineering/"
+                        renderContent={BrowserPreview}
+                        unavailable="Rig is offline. Showing the last loaded page."
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

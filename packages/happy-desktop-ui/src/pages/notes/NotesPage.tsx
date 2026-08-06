@@ -179,6 +179,7 @@ function NotePane(props: { readonly note?: NoteStore; readonly theme?: "light" |
         <DocumentSurface
             error={snapshot.status === "error" ? snapshot.error : undefined}
             loading={snapshot.status === "loading"}
+            blockDragEnabled={false}
             onMarkdown={(markdown) => note.noteMarkdownUpdate(markdown)}
             onTitleCommit={(title) => note.noteTitleUpdate(title)}
             saveState={snapshot.saveState}

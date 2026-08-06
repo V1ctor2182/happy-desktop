@@ -370,7 +370,9 @@
 }
 
 .happy2-sidebar__section-action[data-busy],
-.happy2-sidebar__section-action[data-busy]:hover {
+.happy2-sidebar__section-action[data-busy]:hover,
+.happy2-sidebar__section-action:disabled,
+.happy2-sidebar__section-action:disabled:hover {
     background: transparent;
     cursor: default;
 }
@@ -810,6 +812,13 @@
 .happy2-sidebar__item-action:hover {
     background: var(--surface-selected);
     color: var(--text);
+}
+
+.happy2-sidebar__item-action[data-disabled],
+.happy2-sidebar__item-action[data-disabled]:hover {
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: default;
 }
 
 .happy2-sidebar__item-action:focus-visible {

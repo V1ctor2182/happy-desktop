@@ -356,6 +356,41 @@ export function FileBrowserPage() {
             >
                 <LiveBrowser entries={bulk} height={480} width={360} />
             </Specimen>
+
+            <Specimen
+                detail="known Rig offline · retained rows and local selection remain · remote reads and writes are unavailable"
+                label="Rig offline"
+                number="10"
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: "12px" }}>
+                    {panelFrame(
+                        <FileBrowser
+                            addedLines={totals.added}
+                            count={changed.length}
+                            deletedLines={totals.deleted}
+                            layout="flat"
+                            nodes={fileTreeFlatten(changed)}
+                            scope="changed"
+                            scopeUnavailable={{
+                                all: "Rig must reconnect before loading all files.",
+                            }}
+                            selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
+                            unavailable="Rig is offline. Showing the last synced file list."
+                        />,
+                    )}
+                    {panelFrame(
+                        <FileBrowser
+                            count={everything.length}
+                            fileActionsUnavailable="Rig must reconnect before opening files."
+                            layout="tree"
+                            nodes={fileTreeBuild(everything, untouched)}
+                            scope="all"
+                            unavailable="Rig is offline. Showing the cached checkout."
+                        />,
+                    )}
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

@@ -65,6 +65,7 @@ const EMPTY: RigGlobalDocumentSnapshot = {
     bytes: 0,
     saving: false,
 };
+const DOCUMENT_POLL_INTERVAL_MS = 4_000;
 
 function byteLength(text: string): number {
     return new TextEncoder().encode(text).length;
@@ -81,8 +82,24 @@ export function rigGlobalDocumentStoreCreate(
     deps: RigGlobalDocumentStoreDeps,
 ): RigGlobalDocumentStore {
     const store = createStore<RigGlobalDocumentSnapshot>()(() => EMPTY);
+    const listeners = new Set<() => void>();
     let disposed = false;
     let controller: AbortController | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const timerCancel = (): void => {
+        if (timer === undefined) return;
+        clearTimeout(timer);
+        timer = undefined;
+    };
+
+    const schedule = (): void => {
+        if (disposed || listeners.size === 0 || timer !== undefined) return;
+        timer = setTimeout(() => {
+            timer = undefined;
+            load();
+        }, DOCUMENT_POLL_INTERVAL_MS);
+    };
 
     /**
      * Reconciles the draft against text the Rig has just confirmed. Someone who
@@ -106,17 +123,41 @@ export function rigGlobalDocumentStoreCreate(
     };
 
     const load = (): void => {
-        if (disposed || store.getState().stored.type !== "unloaded") return;
-        store.setState({ stored: { type: "loading" } }, false);
-        controller = new AbortController();
-        void deps.read(controller.signal).then(
+        if (disposed || listeners.size === 0 || controller !== undefined) return;
+        timerCancel();
+        const current = store.getState();
+        if (current.saving) {
+            schedule();
+            return;
+        }
+        const before = current.stored;
+        if (before.type === "unloaded") store.setState({ stored: { type: "loading" } }, false);
+        const currentController = new AbortController();
+        controller = currentController;
+        void deps.read(currentController.signal).then(
             (confirmed) => {
-                if (disposed) return;
+                if (disposed || controller !== currentController) return;
+                controller = undefined;
                 settle(confirmed);
+                schedule();
             },
             (error: unknown) => {
-                if (disposed || controller?.signal.aborted) return;
-                store.setState({ stored: { type: "error", error: rigUserError(error) } }, false);
+                if (
+                    disposed ||
+                    controller !== currentController ||
+                    currentController.signal.aborted
+                )
+                    return;
+                controller = undefined;
+                // A refresh failure never erases the last confirmed document or
+                // the draft being edited. Only an initial read has no retained
+                // value to keep and therefore owns the load error surface.
+                if (before.type !== "ready")
+                    store.setState(
+                        { stored: { type: "error", error: rigUserError(error) } },
+                        false,
+                    );
+                schedule();
             },
         );
     };
@@ -125,9 +166,20 @@ export function rigGlobalDocumentStoreCreate(
         get: () => store.getState(),
         subscribe(listener) {
             if (disposed) return () => undefined;
+            listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            load();
-            return unsubscribe;
+            if (listeners.size === 1) load();
+            let released = false;
+            return () => {
+                if (released) return;
+                released = true;
+                unsubscribe();
+                listeners.delete(listener);
+                if (listeners.size !== 0) return;
+                timerCancel();
+                controller?.abort();
+                controller = undefined;
+            };
         },
         draftUpdate(text) {
             const state = store.getState();
@@ -151,6 +203,9 @@ export function rigGlobalDocumentStoreCreate(
             // show. Refusing here instead would be a Save button that has
             // silently stopped working.
             if (disposed || state.saving || !state.dirty) return;
+            timerCancel();
+            controller?.abort();
+            controller = undefined;
             const { saveError: _cleared, ...rest } = state;
             store.setState({ ...rest, saving: true }, true);
             const sent = state.draft;
@@ -172,10 +227,12 @@ export function rigGlobalDocumentStoreCreate(
                         },
                         true,
                     );
+                    schedule();
                 },
                 (error: unknown) => {
                     if (disposed) return;
                     store.setState({ saving: false, saveError: rigUserError(error) }, false);
+                    schedule();
                 },
             );
         },
@@ -196,8 +253,10 @@ export function rigGlobalDocumentStoreCreate(
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            timerCancel();
             controller?.abort();
             controller = undefined;
+            listeners.clear();
         },
     };
 }

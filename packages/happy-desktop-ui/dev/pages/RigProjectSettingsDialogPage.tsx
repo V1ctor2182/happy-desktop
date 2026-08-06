@@ -492,6 +492,35 @@ export function RigProjectSettingsDialogPage() {
                     )}
                 </div>
             </Specimen>
+            <Specimen
+                detail="known Rig offline · local drafts remain editable · rename, compute and archive commits wait for reconnect"
+                label="Rig offline"
+                number="21"
+                stage="app"
+            >
+                {frame(
+                    <RigProjectSettingsDialog
+                        {...happy2}
+                        archive={{}}
+                        compute={{
+                            status: "ready",
+                            current: { type: "local" },
+                            mode: "docker",
+                            image: "node:22-bookworm",
+                        }}
+                        draft="Happy Desktop"
+                        onArchiveRequest={() => {}}
+                        onClose={() => {}}
+                        onComputeImageChange={() => {}}
+                        onComputeModeChange={() => {}}
+                        onComputeSubmit={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        submitDisabledReason="Rig is offline. Drafts are preserved."
+                    />,
+                    880,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

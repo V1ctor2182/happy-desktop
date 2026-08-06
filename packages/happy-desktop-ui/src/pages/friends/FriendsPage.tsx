@@ -90,7 +90,7 @@ export function FriendsPage(props: FriendsPageProps) {
 
     // The greeting is the whole surface: someone with no profile has no count to
     // read and no list to head, so the header stands down for it.
-    if (!props.unavailable && !account && !props.loading && draft)
+    if (!account && !props.loading && draft)
         return (
             <div
                 className={["happy2-friends", props.className].filter(Boolean).join(" ")}
@@ -99,6 +99,11 @@ export function FriendsPage(props: FriendsPageProps) {
                 data-testid={props["data-testid"]}
                 style={props.style}
             >
+                {props.unavailable ? (
+                    <Banner tone="neutral" title="Rig reconnecting">
+                        {props.unavailable}
+                    </Banner>
+                ) : null}
                 <FriendProfileSetup
                     draft={draft}
                     onFirstNameChange={(value) => props.onFirstNameChange?.(value)}
@@ -106,6 +111,7 @@ export function FriendsPage(props: FriendsPageProps) {
                     onPhotoRemove={() => props.onPhotoRemove?.()}
                     onPhotoSelect={(file) => props.onPhotoSelect?.(file)}
                     onSubmit={() => props.onProfileCreate?.()}
+                    submitDisabled={props.unavailable !== undefined}
                 />
             </div>
         );
@@ -138,11 +144,9 @@ export function FriendsPage(props: FriendsPageProps) {
                     ) : null}
 
                     {props.unavailable ? (
-                        <EmptyState
-                            description={props.unavailable}
-                            icon="users"
-                            title="Friends is not here yet"
-                        />
+                        <Banner tone="neutral" title="Rig reconnecting">
+                            {props.unavailable}
+                        </Banner>
                     ) : null}
 
                     {!props.unavailable && !account && props.loading ? (
@@ -162,6 +166,7 @@ export function FriendsPage(props: FriendsPageProps) {
                             draft={props.invite}
                             onCodeChange={(value) => props.onInviteTokenChange?.(value)}
                             onSend={() => props.onInviteSend?.()}
+                            submitDisabled={props.unavailable !== undefined}
                         />
                     ) : null}
 
@@ -178,6 +183,7 @@ export function FriendsPage(props: FriendsPageProps) {
                                     return (
                                         <FriendRequestCard
                                             {...(answer ? { answer } : {})}
+                                            disabled={props.unavailable !== undefined}
                                             key={request.id}
                                             onAnswer={(requestId, given) =>
                                                 props.onRequestAnswer?.(requestId, given)

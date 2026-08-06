@@ -19,6 +19,7 @@ import {
     rigModelKey,
     rigPermissionLabel,
     rigThinkingLabel,
+    rigAvailabilityProject,
     rigNodesStoreNoop,
     rigPairingStoreNoop,
     rigWindowStoreNoop,
@@ -93,9 +94,31 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.appearance.get,
     );
     const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const host = hostRig(directory);
+    const hostAvailability = host?.session
+        ? rigAvailabilityProject(host.session.connection.get(), true, {
+              status: host.status,
+              ...(host.message === undefined ? {} : { message: host.message }),
+          })
+        : undefined;
+    const unavailable =
+        hostAvailability?.online === false
+            ? (hostAvailability.refusal ?? hostAvailability.message)
+            : host?.session
+              ? undefined
+              : "The local Rig is unavailable.";
+    const rigOnline = (): boolean => {
+        const current = hostRig(props.rigs.get());
+        return current?.session
+            ? rigAvailabilityProject(current.session.connection.get(), true, {
+                  status: current.status,
+                  ...(current.message === undefined ? {} : { message: current.message }),
+              }).online
+            : false;
+    };
     // The catalog shown is this machine's: providers are configured in the Rig
     // the window runs on, and the defaults chosen here are the window's own.
-    const modelStore = hostRig(directory)?.session?.models;
+    const modelStore = host?.session?.models;
     const models = useSyncExternalStore(
         modelStore?.subscribe ?? noSubscribe,
         modelStore?.get ?? modelsUnloaded,
@@ -108,13 +131,13 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
-    const instructionsStore = hostRig(directory)?.session?.instructions;
+    const instructionsStore = host?.session?.instructions;
     const instructions = useSyncExternalStore(
         instructionsStore?.subscribe ?? noSubscribe,
         instructionsStore?.get ?? instructionsUnavailable,
         instructionsStore?.get ?? instructionsUnavailable,
     );
-    const securityPolicyStore = hostRig(directory)?.session?.securityPolicy;
+    const securityPolicyStore = host?.session?.securityPolicy;
     const securityPolicy = useSyncExternalStore(
         securityPolicyStore?.subscribe ?? noSubscribe,
         securityPolicyStore?.get ?? securityPolicyUnavailable,
@@ -122,12 +145,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
     // The host's peering, subscribed only while this window is open: subscribing
     // is what opens the status stream, and it closes again when the window does.
-    const nodesStore = hostRig(directory)?.session?.nodes ?? rigNodesStoreNoop;
+    const nodesStore = host?.session?.nodes ?? rigNodesStoreNoop;
     const nodes = useSyncExternalStore(nodesStore.subscribe, nodesStore.get, nodesStore.get);
     // Pairing belongs to the host as well, and only to it: a node is reached
     // because the host already trusts it. Following a pairing lasts exactly as
     // long as this subscription, so leaving the window stops asking about one.
-    const pairingStore = hostRig(directory)?.session?.pairing ?? rigPairingStoreNoop;
+    const pairingStore = host?.session?.pairing ?? rigPairingStoreNoop;
     const pairing = useSyncExternalStore(
         pairingStore.subscribe,
         pairingStore.get,
@@ -180,13 +203,21 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             loading: documentLoading(instructionsStore, instructions),
                             maximumBytes: RIG_INSTRUCTIONS_MAX_BYTES,
                             onRevert: () => instructionsStore?.revert(),
-                            onSave: () => instructionsStore?.save(),
+                            onSave: () => {
+                                if (rigOnline()) instructionsStore?.save();
+                            },
                             onValueChange: (value) => instructionsStore?.draftUpdate(value),
                             path: INSTRUCTIONS_PATH,
                             placeholder: "Anything every agent on this machine should know…",
                             saveError: instructions.saveError?.message,
                             saving: instructions.saving,
                             value: instructions.draft,
+                            ...(unavailable === undefined
+                                ? {}
+                                : {
+                                      saveDisabled: true,
+                                      saveDisabledReason: unavailable,
+                                  }),
                         },
                         {
                             bytes: securityPolicy.bytes,
@@ -199,13 +230,21 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             loading: documentLoading(securityPolicyStore, securityPolicy),
                             maximumBytes: RIG_SECURITY_POLICY_MAX_BYTES,
                             onRevert: () => securityPolicyStore?.revert(),
-                            onSave: () => securityPolicyStore?.save(),
+                            onSave: () => {
+                                if (rigOnline()) securityPolicyStore?.save();
+                            },
                             onValueChange: (value) => securityPolicyStore?.draftUpdate(value),
                             path: SECURITY_POLICY_PATH,
                             placeholder: "Rules for deciding which agent actions are allowed…",
                             saveError: securityPolicy.saveError?.message,
                             saving: securityPolicy.saving,
                             value: securityPolicy.draft,
+                            ...(unavailable === undefined
+                                ? {}
+                                : {
+                                      saveDisabled: true,
+                                      saveDisabledReason: unavailable,
+                                  }),
                         },
                     ]}
                 />
@@ -220,12 +259,21 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             creating={pairing.creating}
                             joining={pairing.join.submitting}
                             joinValue={pairing.join.invitation}
-                            onInvitationCreate={() => pairingStore.invitationCreate()}
-                            onJoinSubmit={() => pairingStore.joinSubmit()}
+                            onInvitationCreate={() => {
+                                if (rigOnline()) pairingStore.invitationCreate();
+                            }}
+                            onJoinSubmit={() => {
+                                if (rigOnline()) pairingStore.joinSubmit();
+                            }}
                             onJoinValueChange={(value) => pairingStore.joinInvitationUpdate(value)}
                             onReset={() => pairingStore.pairingReset()}
-                            onVerificationAccept={() => pairingStore.verificationAnswer(true)}
-                            onVerificationReject={() => pairingStore.verificationAnswer(false)}
+                            onVerificationAccept={() => {
+                                if (rigOnline()) pairingStore.verificationAnswer(true);
+                            }}
+                            onVerificationReject={() => {
+                                if (rigOnline()) pairingStore.verificationAnswer(false);
+                            }}
+                            {...(unavailable === undefined ? {} : { disabledReason: unavailable })}
                             {...(pairing.error ? { error: pairing.error.message } : {})}
                             {...(pairing.invitation
                                 ? {
@@ -249,9 +297,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     error={models.type === "error" ? models.error.message : undefined}
                     loading={models.type !== "ready" && models.type !== "error"}
                     onModelEnabledChange={(id, enabled) =>
-                        props.settings.modelEnabledUpdate(id as RigModelKey, enabled)
+                        rigOnline()
+                            ? props.settings.modelEnabledUpdate(id as RigModelKey, enabled)
+                            : undefined
                     }
                     providers={providerRows(catalog, settings, selection)}
+                    {...(unavailable === undefined ? {} : { unavailable })}
                 />
             ) : (
                 <RigGeneralSettings
@@ -277,20 +328,24 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                             .find((provider) => provider.id === providerId)
                             ?.models.find((candidate) => candidate.id === modelId);
                         if (!providerId || !selected) return;
+                        if (!rigOnline()) return;
                         props.settings.defaultModelUpdate(providerId, modelId);
                         props.settings.defaultEffortUpdate(selected.defaultThinkingLevel);
                     }}
-                    onEffortChange={(effort) =>
-                        props.settings.defaultEffortUpdate(effort as RigThinkingLevel)
-                    }
-                    onPermissionModeChange={(mode) =>
-                        props.settings.defaultPermissionModeUpdate(mode as RigPermissionMode)
-                    }
+                    onEffortChange={(effort) => {
+                        if (rigOnline())
+                            props.settings.defaultEffortUpdate(effort as RigThinkingLevel);
+                    }}
+                    onPermissionModeChange={(mode) => {
+                        if (rigOnline())
+                            props.settings.defaultPermissionModeUpdate(mode as RigPermissionMode);
+                    }}
                     permissionMode={settings.defaultPermissionMode}
                     permissionModeOptions={PERMISSION_MODES.map((mode) => ({
                         label: rigPermissionLabel(mode),
                         value: mode,
                     }))}
+                    {...(unavailable === undefined ? {} : { unavailable })}
                 />
             )}
         </RigSettingsShell>

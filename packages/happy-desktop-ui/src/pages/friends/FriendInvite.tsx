@@ -11,6 +11,8 @@ export interface FriendInviteProps {
     draft: RigFriendsInviteDraft;
     onCodeChange: (value: string) => void;
     onSend: () => void;
+    /** Keeps the pasted-code draft editable while its network submission is unavailable. */
+    submitDisabled?: boolean;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -36,7 +38,7 @@ export interface FriendInviteProps {
  */
 export function FriendInvite(props: FriendInviteProps) {
     const draft = props.draft;
-    const ready = draft.token.trim() !== "" && !draft.submitting;
+    const ready = draft.token.trim() !== "" && !draft.submitting && !props.submitDisabled;
     return (
         <div
             className={["happy2-friend-invite", props.className].filter(Boolean).join(" ")}

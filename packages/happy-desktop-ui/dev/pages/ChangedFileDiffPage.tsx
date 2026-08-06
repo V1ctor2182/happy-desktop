@@ -284,6 +284,28 @@ export function ChangedFileDiffPage() {
                     )}
                 </div>
             </Specimen>
+            <Specimen
+                detail="known Rig offline · the edit draft and diff remain · Save waits for reconnect"
+                label="Rig offline"
+                number="10"
+                stage="surface"
+            >
+                {frame(
+                    <ChangedFileDiff
+                        appearance="light"
+                        dirty
+                        mode="edit"
+                        newContent={source}
+                        oldContent={sourceBefore}
+                        onContentChange={() => {}}
+                        onSave={() => {}}
+                        path="packages/happy-desktop-ui/src/elapsed.ts"
+                        preview={preview("packages/happy-desktop-ui/src/elapsed.ts", source)}
+                        saveDisabled
+                    />,
+                    300,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

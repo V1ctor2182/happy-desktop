@@ -80,6 +80,8 @@ export type FileTreeProps = {
     onToggle?: (id: string, expanded: boolean) => void;
     /** Directory paging request (the "Show more" affordance). */
     onLoadMore?: (id: string) => void;
+    /** Why file-row selection/opening is unavailable while directory disclosure remains local. */
+    filesUnavailable?: string;
     /** Per-depth indentation step. Defaults to 16px. */
     indent?: number;
     /**
@@ -437,6 +439,7 @@ interface FileTreeRowViewProps {
     onOpen?: (id: string) => void;
     onToggle?: (id: string, expanded: boolean) => void;
     onLoadMore?: (id: string) => void;
+    filesUnavailable?: string;
     onFocusRow: (id: string) => void;
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
@@ -470,7 +473,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
         // looks like it should do. Reporting it as a selection asked the caller
         // to open a folder as though it were a file.
         if (directory) onToggle?.(node.id, !node.expanded);
-        else onSelect?.(node.id, modifiers);
+        else if (props.filesUnavailable === undefined) onSelect?.(node.id, modifiers);
     };
     if (row.kind === "loading")
         return (
@@ -487,6 +490,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
     return (
         <div
             aria-current={props.selected ? "true" : undefined}
+            aria-disabled={!directory && props.filesUnavailable !== undefined ? true : undefined}
             aria-expanded={directory && row.kind === "entry" ? node.expanded === true : undefined}
             aria-label={row.kind === "more" ? props.moreLabel : undefined}
             aria-level={row.depth + 1}
@@ -512,6 +516,11 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
             data-picked={props.picked ? "" : undefined}
             data-status={row.kind === "entry" ? node.gitStatus : undefined}
             data-tone={row.kind === "entry" ? status?.tone : undefined}
+            data-unavailable={
+                row.kind === "entry" && !directory && props.filesUnavailable !== undefined
+                    ? ""
+                    : undefined
+            }
             data-expanded={directory && node.expanded ? "" : undefined}
             onClick={(event) =>
                 activate({
@@ -523,11 +532,13 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 })
             }
             onDoubleClick={() => {
-                if (row.kind === "entry" && !directory) onOpen?.(node.id);
+                if (row.kind === "entry" && !directory && props.filesUnavailable === undefined)
+                    onOpen?.(node.id);
             }}
             onFocus={() => onFocusRow(row.id)}
             onKeyDown={onKeyDown}
             ref={onElement}
+            title={!directory ? props.filesUnavailable : undefined}
             role="treeitem"
             style={{ paddingLeft }}
             tabIndex={props.active ? 0 : -1}
@@ -616,6 +627,7 @@ export function FileTree(props: FileTreeProps) {
         "onOpen",
         "onToggle",
         "onLoadMore",
+        "filesUnavailable",
         "indent",
         "virtualize",
         "loading",
@@ -783,13 +795,14 @@ export function FileTree(props: FileTreeProps) {
                 event.preventDefault();
                 if (row.kind === "more") local.onLoadMore?.(node.id);
                 else if (directory) local.onToggle?.(node.id, node.expanded !== true);
-                else local.onOpen?.(node.id);
+                else if (local.filesUnavailable === undefined) local.onOpen?.(node.id);
                 return;
             case " ":
                 event.preventDefault();
                 if (row.kind === "more") local.onLoadMore?.(node.id);
                 else if (directory) local.onToggle?.(node.id, node.expanded !== true);
-                else local.onSelect?.(node.id, { toggle: false, extend: event.shiftKey });
+                else if (local.filesUnavailable === undefined)
+                    local.onSelect?.(node.id, { toggle: false, extend: event.shiftKey });
                 return;
             default:
         }
@@ -801,6 +814,7 @@ export function FileTree(props: FileTreeProps) {
             key={row.id}
             moreLabel={moreLabel}
             onFocusRow={focusedRowSet}
+            filesUnavailable={local.filesUnavailable}
             onKeyDown={keyDown}
             onLoadMore={local.onLoadMore}
             onOpen={local.onOpen}

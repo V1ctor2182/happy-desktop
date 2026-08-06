@@ -7,33 +7,80 @@ import type {
     RigNodeTransportState,
 } from "happy-desktop-state";
 
+const RETRY_INITIAL_MS = 250;
+const RETRY_MAXIMUM_MS = 5_000;
+
 /**
  * Adapts `rig-connect`'s P2P reader to the nodes store's source contract.
  *
  * The host Rig streams this: `connectP2p` delivers the current status once the
  * daemon answers and again on every `p2p_status_changed` it publishes, so this
  * source only opens the stream when something subscribes and closes it when the
- * last subscriber leaves. Nothing here polls, and nothing here reaches another
- * machine — the host owns its peering and this is only its report of it.
+ * last subscriber leaves. A stream transport failure is retried with bounded
+ * backoff; the nodes store keeps its latest reading while the next stream is
+ * being opened. Nothing here polls, and nothing here reaches another machine —
+ * the host owns its peering and this is only its report of it.
  */
 export function rigConnectNodesSourceCreate(rig: RigConnection): RigNodesSource {
     return {
         subscribe(listener, onError) {
             let closed = false;
-            const connection = rig.connectP2p({
-                onChange: (status) => {
-                    if (closed) return;
-                    listener(readingProject(status));
-                },
-                onError: (error) => {
-                    if (closed) return;
-                    onError(error);
-                },
-            });
+            let connection: ReturnType<RigConnection["connectP2p"]> | undefined;
+            let retry: ReturnType<typeof setTimeout> | undefined;
+            let failures = 0;
+            // A callback from a stream we have already replaced must not close
+            // or schedule work for the newer stream.
+            let generation = 0;
+
+            const retryCancel = (): void => {
+                if (retry === undefined) return;
+                clearTimeout(retry);
+                retry = undefined;
+            };
+
+            const open = (): void => {
+                if (closed) return;
+                retryCancel();
+                connection?.close();
+                connection = undefined;
+                const current = ++generation;
+                const opened = rig.connectP2p({
+                    onChange: (status) => {
+                        if (closed || generation !== current) return;
+                        failures = 0;
+                        listener(readingProject(status));
+                    },
+                    onError: (error) => {
+                        if (closed || generation !== current) return;
+                        generation += 1;
+                        connection?.close();
+                        connection = undefined;
+                        onError(error);
+                        const delay = Math.min(
+                            RETRY_INITIAL_MS * 2 ** Math.min(failures, 5),
+                            RETRY_MAXIMUM_MS,
+                        );
+                        failures += 1;
+                        retry = setTimeout(() => {
+                            retry = undefined;
+                            open();
+                        }, delay);
+                    },
+                });
+                if (closed || generation !== current) {
+                    opened.close();
+                    return;
+                }
+                connection = opened;
+            };
+
+            open();
             return () => {
                 if (closed) return;
                 closed = true;
-                connection.close();
+                generation += 1;
+                retryCancel();
+                connection?.close();
             };
         },
     };

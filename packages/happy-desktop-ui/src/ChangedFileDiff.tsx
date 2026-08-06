@@ -51,6 +51,8 @@ export type ChangedFileDiffProps = {
     onContentChange?: (content: string) => void;
     /** True while an edit is being written back; the field stays up and inert. */
     saving?: boolean;
+    /** Keeps the edit draft available while disabling persistence. */
+    saveDisabled?: boolean;
     /** True when there are unsaved edits, which is what puts Save on the bar. */
     dirty?: boolean;
     /** Writes the pending edit back. */
@@ -132,7 +134,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         whether it did anything. */}
                     {props.dirty && props.onSave ? (
                         <Button
-                            disabled={props.saving === true}
+                            disabled={props.saving === true || props.saveDisabled === true}
                             onClick={props.onSave}
                             size="small"
                             variant="primary"
@@ -156,7 +158,9 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         // The shortcut every editor has. Without it the only way
                         // to save is to stop typing and reach for a button,
                         // which is not how anyone edits a file.
-                        onSave={() => props.onSave?.()}
+                        onSave={() => {
+                            if (!props.saveDisabled) props.onSave?.();
+                        }}
                         onValueChange={(content) => props.onContentChange?.(content)}
                         readOnly={props.saving === true}
                         value={props.newContent}

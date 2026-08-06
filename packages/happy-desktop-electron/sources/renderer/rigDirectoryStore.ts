@@ -1,5 +1,7 @@
 import type {
+    RigConnectionSnapshot,
     RigHost,
+    RigNodeStatus,
     RigNodesSnapshot,
     RigModelPreferencePersistence,
     RigProjectAddSnapshot,
@@ -98,6 +100,7 @@ export interface RigDirectoryStore {
 
 interface LiveRig {
     connection?: RigConnectionHandle;
+    connectionUnsubscribe?: () => void;
     /**
      * What the connector made of this daemon's protocol, while the two cannot
      * read each other. Held apart from the entry because it outlives the state
@@ -107,29 +110,51 @@ interface LiveRig {
      */
     compatibilityMessage?: string;
     entry: RigDirectoryEntry;
+    /** The host's current view of this node's route, kept apart from Rig health. */
+    nodeLink?: {
+        readonly status: RigNodeStatus;
+        readonly message?: string;
+    };
     /** The proxy URL the current connection was opened on, or none while down. */
     url?: string;
     workspaceUnsubscribe?: () => void;
 }
 
 /**
- * The nodes a connection should be opened to, from one reading of the host's
- * peer status.
+ * The stable peers from one reading of the host's node directory.
  *
- * Only a node that is connected and has identified itself qualifies. The
- * identity is the point: the host's route to a machine is addressed by the
- * identity that machine proved during its handshake, so a peer that is still
- * dialling has an address and nothing to address yet. A machine that is merely
- * unreachable is not one to open a connection to either — the host is already
- * retrying it, and its status is what the reader is shown meanwhile.
+ * A peer becomes a Rig as soon as it has proved its identity. Its current link
+ * state only describes availability: connecting or unreachable peers still own
+ * the same connection, session, workspace, and UI lifetime as connected ones.
  */
-function nodeTargets(nodes: RigNodesSnapshot): readonly string[] {
+function nodeTargets(nodes: RigNodesSnapshot): readonly {
+    readonly label?: string;
+    readonly message?: string;
+    readonly nodeId: string;
+    readonly status: RigNodeStatus;
+}[] {
     const seen = new Set<string>();
+    const targets: {
+        label?: string;
+        message?: string;
+        nodeId: string;
+        status: RigNodeStatus;
+    }[] = [];
     for (const node of nodes.nodes) {
-        if (node.status !== "connected" || node.peerId === undefined) continue;
+        if (node.peerId === undefined || seen.has(node.peerId)) continue;
         seen.add(node.peerId);
+        targets.push({
+            nodeId: node.peerId,
+            status: node.status,
+            ...(node.name === undefined ? {} : { label: node.name }),
+            ...(node.status === "connecting"
+                ? { message: "The host is connecting to this Rig." }
+                : node.status === "unreachable"
+                  ? { message: node.error ?? "The host cannot reach this Rig." }
+                  : {}),
+        });
     }
-    return [...seen];
+    return targets;
 }
 
 /** What a Rig with no connection reports about adding a project: nothing is happening. */
@@ -209,6 +234,8 @@ export function rigDirectoryStoreCreate(
     };
 
     const connectionClose = (rig: LiveRig): void => {
+        rig.connectionUnsubscribe?.();
+        rig.connectionUnsubscribe = undefined;
         rig.workspaceUnsubscribe?.();
         rig.workspaceUnsubscribe = undefined;
         rig.connection?.dispose();
@@ -241,6 +268,62 @@ export function rigDirectoryStoreCreate(
         };
     };
 
+    /**
+     * Projects connection health onto a directory row without changing any of
+     * the product stores the row already owns. For remote Rigs the host's route
+     * is the outer connection, so its non-connected state wins immediately over
+     * a health reading that may still describe the last successful probe.
+     */
+    const connectionRead = (
+        rig: LiveRig,
+        connection: RigConnectionSnapshot,
+    ): Pick<RigDirectoryEntry, "message" | "status" | "version"> => {
+        if (rig.nodeLink?.status === "connecting")
+            return {
+                status: "connecting",
+                message: rig.nodeLink.message ?? "The host is connecting to this Rig.",
+                version: connection.version ?? rig.entry.version,
+            };
+        if (rig.nodeLink?.status === "unreachable")
+            return {
+                status: "disconnected",
+                message: rig.nodeLink.message ?? "The host cannot reach this Rig.",
+                version: connection.version ?? rig.entry.version,
+            };
+        if (connection.connection === "connecting")
+            return {
+                status: "connecting",
+                message: "Connecting to this Rig.",
+                version: connection.version ?? rig.entry.version,
+            };
+        if (connection.connection === "disconnected")
+            return {
+                status: "disconnected",
+                message: connection.message ?? "This Rig is disconnected.",
+                version: connection.version ?? rig.entry.version,
+            };
+        if (connection.daemon === "starting")
+            return {
+                status: "connecting",
+                message: "This Rig is starting.",
+                version: connection.version ?? rig.entry.version,
+            };
+        if (connection.daemon === "error")
+            return {
+                status: "error",
+                message: connection.message ?? "This Rig reported an error.",
+                version: connection.version ?? rig.entry.version,
+            };
+        return {
+            status: connection.daemon === "ready" ? "connected" : "connecting",
+            message:
+                connection.daemon === "ready"
+                    ? rig.compatibilityMessage
+                    : "Waiting for this Rig to become ready.",
+            version: connection.version ?? rig.entry.version,
+        };
+    };
+
     const connectionOpen = (id: string, rigHttpUrl: string, connectEndpoint: string): void => {
         const rig = rigs.get(id);
         if (!rig) return;
@@ -268,7 +351,24 @@ export function rigDirectoryStoreCreate(
                     // and the surfaces it leaves empty have no other
                     // explanation.
                     current.compatibilityMessage = message;
-                    current.entry = { ...current.entry, message };
+                    current.entry =
+                        current.nodeLink?.status === "connecting"
+                            ? {
+                                  ...current.entry,
+                                  status: "connecting",
+                                  message:
+                                      current.nodeLink.message ??
+                                      "The host is connecting to this Rig.",
+                              }
+                            : current.nodeLink?.status === "unreachable"
+                              ? {
+                                    ...current.entry,
+                                    status: "disconnected",
+                                    message:
+                                        current.nodeLink.message ??
+                                        "The host cannot reach this Rig.",
+                                }
+                              : { ...current.entry, message };
                     publish();
                 },
                 restricted: (value) => {
@@ -276,7 +376,13 @@ export function rigDirectoryStoreCreate(
                     if (!current || (current.entry.accessRestricted ?? false) === value) return;
                     // Reachable and deliberately quiet. The status stays
                     // whatever the link is, because the link is genuinely up.
-                    current.entry = { ...current.entry, accessRestricted: value };
+                    current.entry = {
+                        ...current.entry,
+                        accessRestricted: value,
+                        ...(value && current.nodeLink?.status === "connected"
+                            ? { status: "connected" as const, message: undefined }
+                            : {}),
+                    };
                     publish();
                 },
                 unavailable: (error) => {
@@ -285,7 +391,13 @@ export function rigDirectoryStoreCreate(
                     // says nothing: the stores it published are still the truth
                     // on screen, and a transient read failure behind them is not
                     // news the reader can act on.
-                    if (!current || current.connection?.get() || current.entry.session) return;
+                    if (
+                        !current ||
+                        current.connection?.get() ||
+                        current.entry.session ||
+                        (current.nodeLink !== undefined && current.nodeLink.status !== "connected")
+                    )
+                        return;
                     const message = error instanceof Error ? error.message : String(error);
                     if (current.entry.status === "error" && current.entry.message === message)
                         return;
@@ -305,10 +417,25 @@ export function rigDirectoryStoreCreate(
                          * live workspace catalog, and accepting it as success is
                          * what leaves the list loading forever.
                          */
+                        const availability =
+                            current.nodeLink?.status === "connecting"
+                                ? {
+                                      status: "connecting" as const,
+                                      message:
+                                          current.nodeLink.message ??
+                                          "The host is connecting to this Rig.",
+                                  }
+                                : current.nodeLink?.status === "unreachable"
+                                  ? {
+                                        status: "disconnected" as const,
+                                        message:
+                                            current.nodeLink.message ??
+                                            "The host cannot reach this Rig.",
+                                    }
+                                  : { status: "error" as const, message: failure };
                         current.entry = {
                             ...current.entry,
-                            status: "error",
-                            message: failure,
+                            ...availability,
                             // The projects are not merely late; there is nothing
                             // coming to fill them until the machine is readable.
                             projectsStatus: "error",
@@ -317,30 +444,36 @@ export function rigDirectoryStoreCreate(
                         return;
                     }
                     if (!session) return;
-                    current.workspaceUnsubscribe?.();
-                    current.workspaceUnsubscribe = session.workspace.subscribe(() => {
-                        const live = rigs.get(id);
-                        if (!live || live.connection?.get() !== session) return;
-                        live.entry = { ...live.entry, ...projectsRead(session) };
-                        publish();
-                    });
+                    const sessionChanged = current.entry.session !== session;
+                    if (sessionChanged) {
+                        current.connectionUnsubscribe?.();
+                        current.workspaceUnsubscribe?.();
+                        current.workspaceUnsubscribe = session.workspace.subscribe(() => {
+                            const live = rigs.get(id);
+                            if (!live || live.entry.session !== session) return;
+                            live.entry = { ...live.entry, ...projectsRead(session) };
+                            publish();
+                        });
+                        current.connectionUnsubscribe = session.connection.subscribe(() => {
+                            const live = rigs.get(id);
+                            if (!live || live.entry.session !== session) return;
+                            live.entry = {
+                                ...live.entry,
+                                ...connectionRead(live, session.connection.get()),
+                            };
+                            publish();
+                        });
+                    }
                     current.entry = {
                         ...current.entry,
                         ...projectsRead(session),
-                        // Being up is what "connected" means for a Rig here,
-                        // host or node alike: the connection has read the
-                        // daemon and published its stores.
-                        status: "connected" as const,
-                        // Clears whatever the connection failed with on its way
-                        // up, but not a protocol gap: that one is still true of
-                        // a daemon whose stores came up regardless.
-                        message: current.compatibilityMessage,
+                        ...connectionRead(current, session.connection.get()),
                         session,
                     };
                     publish();
                     // The host coming up is what makes its peering readable, so
                     // this is where a window learns which nodes it has.
-                    if (id === LOCAL_RIG_ID) nodesFollow(session);
+                    if (id === LOCAL_RIG_ID && sessionChanged) nodesFollow(session);
                 },
             },
         });
@@ -348,86 +481,133 @@ export function rigDirectoryStoreCreate(
 
     /**
      * Follows the host's peer status and keeps one ordinary Rig connection per
-     * connected node alongside it.
+     * identified node alongside it.
      *
      * The status feed is discovery, not work: it says which machines exist and
      * how each link is doing, and each machine's projects and conversations
      * arrive on that machine's own connection. So this reads the feed and does
-     * exactly one thing with it — opens a connection to a node that has one to
-     * open, and closes the one belonging to a node that has gone.
+     * exactly one thing with it — materializes every identified peer, retaining
+     * it through link changes, and removes it only when a current successful
+     * reading authoritatively stops publishing that peer.
      *
-     * A node keeps its connection while it stays connected. It is not
-     * reconnected because a reading arrived, and its work is not torn down and
-     * rebuilt because the host republished its status: the connection retries on
-     * its own, the way the host's does.
+     * A node keeps its connection across every link status. It is not reconnected
+     * because a reading arrived, and its work is not torn down and rebuilt
+     * because the host republished its status: the connection retries on its own,
+     * the way the host's does.
      */
     const nodesFollow = (session: RigSession): void => {
         nodesUnsubscribe?.();
         nodesUnsubscribe = undefined;
         const nodes = session.nodes;
-        if (!nodes) {
-            nodesReconcile([]);
-            return;
-        }
+        if (!nodes) return;
         const read = (): void => {
             // A reading that arrives after this host connection was replaced
             // describes a machine this window is no longer on.
             if (rigs.get(LOCAL_RIG_ID)?.entry.session !== session) return;
-            nodesReconcile(nodeTargets(nodes.get()));
+            nodesReconcile(nodes.get());
         };
         nodesUnsubscribe = nodes.subscribe(read);
         read();
     };
 
-    /** Opens what is newly here, closes what has gone, and leaves the rest alone. */
-    const nodesReconcile = (nodeIds: readonly string[]): void => {
+    /**
+     * Opens what is newly published, removes only what a successful current
+     * reading removed, and otherwise changes availability in place.
+     */
+    const nodesReconcile = (reading: RigNodesSnapshot): void => {
         const hostUrl = rigs.get(LOCAL_RIG_ID)?.url;
-        const wanted = new Set(hostUrl === undefined ? [] : nodeIds);
+        const targets = nodeTargets(reading);
+        const wanted = new Set(targets.map((target) => target.nodeId));
         let changed = false;
-        // Chosen before anything is removed: the map is what is being changed,
-        // and deciding what goes while walking it is how a node survives its own
-        // removal.
-        const gone: string[] = [];
-        for (const [id, rig] of rigs) {
-            if (rig.entry.nodeId === undefined || wanted.has(rig.entry.nodeId)) continue;
-            gone.push(id);
+        // A loading store has not read membership yet, an errored feed retains
+        // its last good reading, and an unavailable transport cannot report the
+        // peers behind it. None of those is authority to unmount a machine.
+        const membershipAuthoritative =
+            !reading.loading &&
+            reading.error === undefined &&
+            reading.transports.every((transport) => transport.state === "ready") &&
+            // A peer may temporarily lose its proved identity while its route
+            // reconnects. Such a reading can update reachability, but cannot say
+            // that the previously identified machine was unpaired.
+            reading.nodes.every((node) => node.peerId !== undefined);
+        if (membershipAuthoritative) {
+            const gone: string[] = [];
+            for (const [id, rig] of rigs) {
+                if (rig.entry.nodeId === undefined || wanted.has(rig.entry.nodeId)) continue;
+                gone.push(id);
+            }
+            for (const id of gone) {
+                const rig = rigs.get(id);
+                if (rig) connectionClose(rig);
+                rigs.delete(id);
+                order = order.filter((entry) => entry !== id);
+                changed = true;
+            }
         }
-        for (const id of gone) {
-            const rig = rigs.get(id);
-            if (rig) connectionClose(rig);
-            rigs.delete(id);
-            order = order.filter((entry) => entry !== id);
+        for (const target of targets) {
+            const id = rigNodeId(target.nodeId);
+            let rig = rigs.get(id);
+            if (!rig) {
+                rig = {
+                    entry: {
+                        id,
+                        label: target.label ?? target.nodeId,
+                        nodeId: target.nodeId,
+                        projects: [],
+                        projectsStatus: "loading",
+                        projectAdd: PROJECT_ADD_IDLE,
+                        status: "connecting",
+                    },
+                };
+                rigs.set(id, rig);
+                order = [...order, id];
+            }
+            rig.nodeLink = {
+                status: target.status,
+                ...(target.message === undefined ? {} : { message: target.message }),
+            };
+            const failure = rig.connection?.failure();
+            const availability =
+                target.status === "connecting"
+                    ? {
+                          status: "connecting" as const,
+                          message: target.message ?? "The host is connecting to this Rig.",
+                      }
+                    : target.status === "unreachable"
+                      ? {
+                            status: "disconnected" as const,
+                            message: target.message ?? "The host cannot reach this Rig.",
+                        }
+                      : rig.entry.session
+                        ? connectionRead(rig, rig.entry.session.connection.get())
+                        : rig.entry.accessRestricted === true
+                          ? { status: "connected" as const, message: undefined }
+                          : failure
+                            ? { status: "error" as const, message: failure }
+                            : {
+                                  status: "connecting" as const,
+                                  message: "Connecting to this Rig.",
+                              };
+            rig.entry = {
+                ...rig.entry,
+                ...(target.label === undefined ? {} : { label: target.label }),
+                ...availability,
+            };
             changed = true;
-        }
-        for (const nodeId of wanted) {
-            const id = rigNodeId(nodeId);
-            if (rigs.has(id)) continue;
-            rigs.set(id, {
-                entry: {
-                    id,
-                    label: nodeId,
-                    nodeId,
-                    projects: [],
-                    projectsStatus: "loading",
-                    projectAdd: PROJECT_ADD_IDLE,
-                    status: "connecting",
-                },
-            });
-            order = [...order, id];
-            changed = true;
+            if (rig.connection || hostUrl === undefined) continue;
             // The node's own base URL on this window's proxy. Everything above
             // is the ordinary connection: the same client, the same stores, the
             // same screens, addressed at a different machine.
-            const base = hostUrl!.replace(/\/$/, "");
+            const base = hostUrl.replace(/\/$/, "");
             connectionOpen(
                 id,
                 // The projected surface — health, files, Git — is served for
                 // this node on this window's own proxy, which addresses the far
                 // daemon through the same peer route underneath.
-                `${base}/nodes/${encodeURIComponent(nodeId)}`,
+                `${base}/nodes/${encodeURIComponent(target.nodeId)}`,
                 // The connector goes straight down that route, exactly as Rig
                 // publishes it.
-                rigPeerConnectEndpoint(base, nodeId),
+                rigPeerConnectEndpoint(base, target.nodeId),
             );
         }
         if (changed) publish();
@@ -455,17 +635,25 @@ export function rigDirectoryStoreCreate(
             order = [LOCAL_RIG_ID, ...order.filter((id) => id !== LOCAL_RIG_ID)];
         }
         if (!target) {
-            // The host going away takes its nodes with it: they are reached
-            // through it, so without it there is no route to any of them.
-            nodesUnsubscribe?.();
-            nodesUnsubscribe = undefined;
-            nodesReconcile([]);
-            connectionClose(rig);
+            // Runtime startup and failure are availability transitions, not
+            // ownership transitions. The established host session and every
+            // peer learned through it stay mounted while their transports retry.
+            const unavailable =
+                value?.phase === "starting"
+                    ? { status: "connecting" as const, message: value.message }
+                    : value?.phase === "error" || value?.phase === "installRequired"
+                      ? { status: "error" as const, message: value.message }
+                      : {
+                            status: rig.entry.session
+                                ? ("disconnected" as const)
+                                : ("connecting" as const),
+                            message: rig.entry.session
+                                ? "The local Rig is disconnected."
+                                : "Connecting to the local Rig.",
+                        };
             rig.entry = {
                 ...rig.entry,
-                status: "connecting",
-                message: undefined,
-                version: undefined,
+                ...unavailable,
             };
             publish();
             return;
@@ -479,10 +667,9 @@ export function rigDirectoryStoreCreate(
             ...rig.entry,
             ...(failure
                 ? { status: "error" as const, message: failure }
-                : {
-                      status: rig.entry.session ? ("connected" as const) : ("connecting" as const),
-                      message: undefined,
-                  }),
+                : rig.entry.session
+                  ? connectionRead(rig, rig.entry.session.connection.get())
+                  : { status: "connecting" as const, message: "Connecting to this Rig." }),
             version: target.rigVersion,
         };
         if (rig.url !== target.rigHttpUrl)

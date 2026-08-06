@@ -25,6 +25,8 @@ export type FileEditorProps = {
     dirty?: boolean;
     /** A save is in flight. */
     saving?: boolean;
+    /** Keeps source editing available while disabling persistence. */
+    saveDisabled?: boolean;
     readOnly?: boolean;
     /** Alert slot between header and body — a disk-change or conflict Banner. */
     banner?: ReactNode;
@@ -81,6 +83,7 @@ export function FileEditor(props: FileEditorProps) {
         "onClose",
         "dirty",
         "saving",
+        "saveDisabled",
         "readOnly",
         "banner",
         "rendered",
@@ -97,7 +100,8 @@ export function FileEditor(props: FileEditorProps) {
     const [face, setFace] = useState<"rendered" | "source">(props.initialFace ?? "rendered");
     const reading = local.rendered !== undefined && face === "rendered";
     const parts = () => splitPath(local.path);
-    const canSave = () => Boolean(local.dirty) && !local.saving && !local.readOnly;
+    const canSave = () =>
+        Boolean(local.dirty) && !local.saving && !local.readOnly && !local.saveDisabled;
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
             event.preventDefault();
@@ -177,7 +181,12 @@ export function FileEditor(props: FileEditorProps) {
                         </Button>
                     ) : null}
                     {!local.readOnly ? (
-                        <Button disabled={!canSave()} onClick={() => local.onSave?.()} size="small">
+                        <Button
+                            disabled={!canSave()}
+                            onClick={() => local.onSave?.()}
+                            size="small"
+                            title={local.saveDisabled ? local.status : undefined}
+                        >
                             {local.saving ? "Saving…" : (local.saveLabel ?? "Save")}
                         </Button>
                     ) : null}

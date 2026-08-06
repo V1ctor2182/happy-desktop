@@ -74,7 +74,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
                     (event.target === event.currentTarget ||
                         (local.placement === "top" &&
                             event.target instanceof HTMLElement &&
-                            event.target.dataset.happy2Ui === "modal-overlay-top-layout"))
+                            event.target.dataset.happyDesktopUi === "modal-overlay-top-layout"))
                 )
                     local.onDismiss();
             }}

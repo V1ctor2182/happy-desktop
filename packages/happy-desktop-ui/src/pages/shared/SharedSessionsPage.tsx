@@ -150,11 +150,9 @@ export function SharedSessionsPage(props: SharedSessionsPageProps) {
                     ) : null}
 
                     {props.unavailable ? (
-                        <EmptyState
-                            description={props.unavailable}
-                            icon="users"
-                            title="Shared sessions are not here yet"
-                        />
+                        <Banner icon="link" tone="neutral" title="Rig reconnecting">
+                            {props.unavailable}
+                        </Banner>
                     ) : null}
 
                     {!props.unavailable && props.loading && sessions.length === 0 ? (

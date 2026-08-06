@@ -256,6 +256,24 @@ export function RigCreateSessionDialogPage() {
                 )}
                 <DimensionRule label="720 × 480 minimum window" />
             </Specimen>
+            <Specimen
+                detail="known Rig offline · task and choices stay editable · only starting the session is unavailable"
+                label="Rig offline"
+                number="09"
+                stage="app"
+            >
+                {frame(
+                    <RigCreateSessionDialog
+                        {...HANDLERS}
+                        destinationId="prj_happy2"
+                        destinations={DESTINATIONS}
+                        keepOpen={false}
+                        menus={MENUS}
+                        submitDisabledReason="Rig is offline. The draft is preserved."
+                        text="Keep this task ready until the Rig reconnects."
+                    />,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

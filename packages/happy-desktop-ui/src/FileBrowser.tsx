@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
+import { Banner } from "./Banner";
 import { Icon } from "./Icon";
 /** Which files the listing is about: only what changed, or the whole checkout. */
 export type FileBrowserScope = "changed" | "all";
@@ -12,6 +13,8 @@ export type FileBrowserProps = {
     style?: CSSProperties;
     scope: FileBrowserScope;
     onScopeChange?: (scope: FileBrowserScope) => void;
+    /** Per-scope refusal; a cached scope remains available while an uncached one can be disabled. */
+    scopeUnavailable?: Partial<Readonly<Record<FileBrowserScope, string>>>;
     layout: FileBrowserLayout;
     onLayoutChange?: (layout: FileBrowserLayout) => void;
     /** Rows to list. Passed straight through to FileTree. */
@@ -43,6 +46,10 @@ export type FileBrowserProps = {
     deletedLines?: number;
     /** Optional truthfulness note under the controls (e.g. a truncated listing). */
     note?: string;
+    /** Why new remote file reads are unavailable while retained rows stay selectable. */
+    unavailable?: string;
+    /** Why file rows cannot open or select remote content; directory disclosure stays local. */
+    fileActionsUnavailable?: string;
 };
 const SCOPES: { id: FileBrowserScope; label: string }[] = [
     { id: "changed", label: "Changed" },
@@ -72,6 +79,7 @@ export function FileBrowser(props: FileBrowserProps) {
         "style",
         "scope",
         "onScopeChange",
+        "scopeUnavailable",
         "layout",
         "onLayoutChange",
         "nodes",
@@ -89,6 +97,8 @@ export function FileBrowser(props: FileBrowserProps) {
         "addedLines",
         "deletedLines",
         "note",
+        "unavailable",
+        "fileActionsUnavailable",
     ]);
     const added = local.addedLines !== undefined && local.addedLines > 0;
     const deleted = local.deletedLines !== undefined && local.deletedLines > 0;
@@ -111,8 +121,10 @@ export function FileBrowser(props: FileBrowserProps) {
                             className="happy2-file-browser__scope"
                             data-active={local.scope === scope.id ? "" : undefined}
                             data-happy-desktop-ui="file-browser-scope"
+                            disabled={local.scopeUnavailable?.[scope.id] !== undefined}
                             key={scope.id}
                             onClick={() => local.onScopeChange?.(scope.id)}
+                            title={local.scopeUnavailable?.[scope.id]}
                             type="button"
                         >
                             {scope.label}
@@ -191,6 +203,11 @@ export function FileBrowser(props: FileBrowserProps) {
                     {local.note}
                 </div>
             ) : null}
+            {local.unavailable ? (
+                <Banner tone="neutral" title="Rig reconnecting">
+                    {local.unavailable}
+                </Banner>
+            ) : null}
             {/* The tree does its own scrolling here, because a checkout listing
                 draws only the rows on screen and nothing outside it can know
                 how tall the rest would have been. */}
@@ -201,6 +218,7 @@ export function FileBrowser(props: FileBrowserProps) {
                     loading={local.loading}
                     loadingLabel={local.loadingLabel}
                     nodes={local.nodes}
+                    filesUnavailable={local.fileActionsUnavailable}
                     onLoadMore={local.onLoadMore}
                     onOpen={local.onOpen}
                     onSelect={local.onSelect}

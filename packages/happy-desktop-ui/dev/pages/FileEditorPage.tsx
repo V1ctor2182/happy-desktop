@@ -116,6 +116,26 @@ export function FileEditorPage() {
                     300,
                 )}
             </Specimen>
+            <Specimen
+                detail="known Rig offline · the unsaved draft remains editable · persistence waits for reconnect"
+                label="Rig offline"
+                number="05"
+                stage="surface"
+            >
+                {frame(
+                    <FileEditor
+                        dirty
+                        onClose={() => {}}
+                        onRevert={() => {}}
+                        onSave={() => {}}
+                        onValueChange={() => {}}
+                        path="src/components/Counter.tsx"
+                        saveDisabled
+                        status="Rig is offline. Draft preserved locally."
+                        value={sample.replace("Count:", "Total:")}
+                    />,
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

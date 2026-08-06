@@ -14,6 +14,7 @@ export interface FriendRequestCardProps {
     /** How the answer already given is going, when one has been given. */
     answer?: RigFriendsAnswerState;
     onAnswer: (requestId: RigFriendRequestId, answer: RigFriendAnswer) => void;
+    disabled?: boolean;
     /** When the request arrived, in the words the surface uses for time. */
     time?: string;
     className?: string;
@@ -83,7 +84,7 @@ export function FriendRequestCard(props: FriendRequestCardProps) {
                     </span>
                 ) : null}
                 <Button
-                    disabled={pending}
+                    disabled={pending || props.disabled}
                     onClick={() => props.onAnswer(request.id, "reject")}
                     size="medium"
                     variant="ghost"
@@ -91,7 +92,7 @@ export function FriendRequestCard(props: FriendRequestCardProps) {
                     Decline
                 </Button>
                 <Button
-                    disabled={pending}
+                    disabled={pending || props.disabled}
                     onClick={() => props.onAnswer(request.id, "accept")}
                     size="medium"
                     variant="primary"

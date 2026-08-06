@@ -70,6 +70,8 @@ export type RigPairingProps = {
     progress?: RigPairingProgress;
     /** Why the last attempt failed. */
     error?: string;
+    /** Why pairing mutations are temporarily unavailable. Local invitation text remains readable. */
+    disabledReason?: string;
     onInvitationCreate: () => void;
     onJoinValueChange: (value: string) => void;
     onJoinSubmit: () => void;
@@ -127,6 +129,7 @@ export function RigPairing(props: RigPairingProps) {
             {props.progress ? (
                 <RigPairingProgressView
                     answering={props.answering ?? false}
+                    mutationsDisabled={props.disabledReason !== undefined}
                     onReset={props.onReset}
                     onVerificationAccept={props.onVerificationAccept}
                     onVerificationReject={props.onVerificationReject}
@@ -143,7 +146,7 @@ export function RigPairing(props: RigPairingProps) {
                             machine.
                         </span>
                         <Button
-                            disabled={props.creating}
+                            disabled={props.creating || props.disabledReason !== undefined}
                             icon="link"
                             onClick={props.onInvitationCreate}
                             size="small"
@@ -170,7 +173,11 @@ export function RigPairing(props: RigPairingProps) {
                             value={props.joinValue}
                         />
                         <Button
-                            disabled={props.joining || props.joinValue.trim().length === 0}
+                            disabled={
+                                props.joining ||
+                                props.disabledReason !== undefined ||
+                                props.joinValue.trim().length === 0
+                            }
                             onClick={props.onJoinSubmit}
                             size="small"
                             variant="secondary"
@@ -214,6 +221,7 @@ function RigPairingInvitationCard(props: { invitation: RigPairingInvitationView 
 /** What the pairing under way is doing, and the only decision it may need. */
 function RigPairingProgressView(props: {
     answering: boolean;
+    mutationsDisabled: boolean;
     onReset: () => void;
     onVerificationAccept: () => void;
     onVerificationReject: () => void;
@@ -279,7 +287,7 @@ function RigPairingProgressView(props: {
                     </span>
                     <Box className="happy2-rig-pairing__actions">
                         <Button
-                            disabled={props.answering}
+                            disabled={props.answering || props.mutationsDisabled}
                             onClick={props.onVerificationAccept}
                             size="small"
                             variant="primary"
@@ -287,7 +295,7 @@ function RigPairingProgressView(props: {
                             Accept
                         </Button>
                         <Button
-                            disabled={props.answering}
+                            disabled={props.answering || props.mutationsDisabled}
                             onClick={props.onVerificationReject}
                             size="small"
                             variant="danger"

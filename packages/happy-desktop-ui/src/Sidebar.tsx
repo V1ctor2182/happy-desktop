@@ -24,6 +24,8 @@ import { Spinner } from "./Spinner";
 export type SidebarItemAction = {
     icon: IconName;
     label: string;
+    /** Keeps the control visible in its lane while refusing an unavailable action. */
+    disabled?: boolean;
     reveal?: "hover";
 };
 export type SidebarItem = {
@@ -94,6 +96,8 @@ export const SIDEBAR_ROW_INDENT = 16;
 export type SidebarSectionAction = {
     icon: IconName;
     label: string;
+    /** Keeps the heading action visible while its owning surface is unavailable. */
+    disabled?: boolean;
     /**
      * True while the act it starts is still running. The control shows a spinner
      * in place of its glyph and refuses to be pressed again, so an act that takes
@@ -436,23 +440,27 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
            inside another is invalid, and this control must sit inside the row
            so it tracks the row's hover. */
         <span
+            aria-disabled={props.action.disabled ? "true" : undefined}
             aria-label={props.action.label}
             className="happy2-sidebar__item-action"
             data-happy-desktop-ui="sidebar-item-action"
             data-reveal={props.action.reveal}
+            data-disabled={props.action.disabled ? "" : undefined}
             onClick={(event) => {
                 event.stopPropagation();
+                if (props.action.disabled) return;
                 props.onAction();
             }}
             onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 event.stopPropagation();
+                if (props.action.disabled) return;
                 props.onAction();
             }}
             onPointerDown={(event) => event.stopPropagation()}
             role="button"
-            tabIndex={0}
+            tabIndex={props.action.disabled ? -1 : 0}
         >
             <Icon name={props.action.icon} size={12} />
         </span>
@@ -1391,7 +1399,7 @@ export function Sidebar(props: SidebarProps) {
                                                   data-busy={action.busy ? "" : undefined}
                                                   data-happy-desktop-ui="sidebar-section-action"
                                                   data-reveal={action.reveal ?? "hover"}
-                                                  disabled={action.busy}
+                                                  disabled={action.busy || action.disabled}
                                                   onClick={() =>
                                                       local.onSectionAction?.(section.id, "heading")
                                                   }

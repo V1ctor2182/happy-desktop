@@ -37,6 +37,8 @@ export type RigProviderSettingsProps = {
     providers: readonly RigProviderRow[];
     loading?: boolean;
     error?: string;
+    /** Why model enablement cannot currently be changed. */
+    unavailable?: string;
     onModelEnabledChange: (id: string, enabled: boolean) => void;
 };
 
@@ -89,99 +91,113 @@ export function RigProviderSettings(props: RigProviderSettingsProps) {
             />
         );
     return (
-        <RigSettingsSection
-            description="Providers are configured in Rig itself. Switch off a model here to keep it out of the session pickers."
-            rows="cards"
-            title="Model providers"
-        >
-            {props.providers.map((provider) => (
-                <article
-                    className="happy2-rig-provider"
-                    data-happy2-ui="rig-provider"
-                    data-status={provider.status}
-                    key={provider.id}
-                >
-                    <header className="happy2-rig-provider__header">
-                        <Box className="happy2-rig-provider__identity">
-                            <span
-                                className="happy2-rig-provider__glyph"
-                                data-happy2-ui="rig-provider-glyph"
-                            >
-                                <Icon name="globe" size={16} />
-                            </span>
-                            <Box className="happy2-rig-provider__naming">
+        <>
+            {props.unavailable ? (
+                <Banner tone="neutral" title="Rig reconnecting">
+                    {props.unavailable}
+                </Banner>
+            ) : null}
+            <RigSettingsSection
+                description="Providers are configured in Rig itself. Switch off a model here to keep it out of the session pickers."
+                rows="cards"
+                title="Model providers"
+            >
+                {props.providers.map((provider) => (
+                    <article
+                        className="happy2-rig-provider"
+                        data-happy2-ui="rig-provider"
+                        data-status={provider.status}
+                        key={provider.id}
+                    >
+                        <header className="happy2-rig-provider__header">
+                            <Box className="happy2-rig-provider__identity">
                                 <span
-                                    className="happy2-rig-provider__name"
-                                    data-happy2-ui="rig-provider-name"
+                                    className="happy2-rig-provider__glyph"
+                                    data-happy2-ui="rig-provider-glyph"
                                 >
-                                    {provider.name}
+                                    <Icon name="globe" size={16} />
                                 </span>
-                                <span
-                                    className="happy2-rig-provider__meta"
-                                    data-happy2-ui="rig-provider-meta"
-                                >
-                                    {providerMeta(provider)}
-                                </span>
-                            </Box>
-                        </Box>
-                        <Badge
-                            label={STATUS_LABELS[provider.status]}
-                            variant={STATUS_VARIANTS[provider.status]}
-                        />
-                    </header>
-                    <Box className="happy2-rig-provider__models">
-                        {provider.models.map((model) => (
-                            <Box
-                                className="happy2-rig-provider__model"
-                                data-happy2-ui="rig-provider-model"
-                                key={model.id}
-                            >
-                                <Box className="happy2-rig-provider__model-text">
-                                    <Box className="happy2-rig-provider__model-title">
-                                        <span
-                                            className="happy2-rig-provider__model-name"
-                                            data-happy2-ui="rig-provider-model-name"
-                                        >
-                                            {model.name}
-                                        </span>
-                                        {model.isDefault ? (
-                                            <Badge label="Default" variant="accent" />
-                                        ) : null}
-                                    </Box>
+                                <Box className="happy2-rig-provider__naming">
                                     <span
-                                        className="happy2-rig-provider__model-meta"
-                                        data-happy2-ui="rig-provider-model-meta"
+                                        className="happy2-rig-provider__name"
+                                        data-happy2-ui="rig-provider-name"
                                     >
-                                        {modelMeta(model)}
+                                        {provider.name}
+                                    </span>
+                                    <span
+                                        className="happy2-rig-provider__meta"
+                                        data-happy2-ui="rig-provider-meta"
+                                    >
+                                        {providerMeta(provider)}
                                     </span>
                                 </Box>
-                                <Switch
-                                    aria-label={`${model.name} enabled`}
-                                    checked={model.enabled}
-                                    disabled={model.isDefault || provider.status !== "ready"}
-                                    onChange={(enabled) =>
-                                        props.onModelEnabledChange(model.id, enabled)
-                                    }
-                                />
                             </Box>
-                        ))}
-                        {provider.models.length === 0 ? (
-                            <span
-                                className="happy2-rig-provider__models-empty"
-                                data-happy2-ui="rig-provider-models-empty"
+                            <Badge
+                                label={STATUS_LABELS[provider.status]}
+                                variant={STATUS_VARIANTS[provider.status]}
+                            />
+                        </header>
+                        <Box className="happy2-rig-provider__models">
+                            {provider.models.map((model) => (
+                                <Box
+                                    className="happy2-rig-provider__model"
+                                    data-happy2-ui="rig-provider-model"
+                                    key={model.id}
+                                >
+                                    <Box className="happy2-rig-provider__model-text">
+                                        <Box className="happy2-rig-provider__model-title">
+                                            <span
+                                                className="happy2-rig-provider__model-name"
+                                                data-happy2-ui="rig-provider-model-name"
+                                            >
+                                                {model.name}
+                                            </span>
+                                            {model.isDefault ? (
+                                                <Badge label="Default" variant="accent" />
+                                            ) : null}
+                                        </Box>
+                                        <span
+                                            className="happy2-rig-provider__model-meta"
+                                            data-happy2-ui="rig-provider-model-meta"
+                                        >
+                                            {modelMeta(model)}
+                                        </span>
+                                    </Box>
+                                    <Switch
+                                        aria-label={`${model.name} enabled`}
+                                        checked={model.enabled}
+                                        disabled={
+                                            props.unavailable !== undefined ||
+                                            model.isDefault ||
+                                            provider.status !== "ready"
+                                        }
+                                        onChange={(enabled) =>
+                                            props.onModelEnabledChange(model.id, enabled)
+                                        }
+                                    />
+                                </Box>
+                            ))}
+                            {provider.models.length === 0 ? (
+                                <span
+                                    className="happy2-rig-provider__models-empty"
+                                    data-happy2-ui="rig-provider-models-empty"
+                                >
+                                    This provider offers no models right now.
+                                </span>
+                            ) : null}
+                        </Box>
+                        {STATUS_HINTS[provider.status] ? (
+                            <p
+                                className="happy2-rig-provider__hint"
+                                data-happy2-ui="rig-provider-hint"
                             >
-                                This provider offers no models right now.
-                            </span>
+                                {STATUS_HINTS[provider.status]}
+                            </p>
                         ) : null}
-                    </Box>
-                    {STATUS_HINTS[provider.status] ? (
-                        <p className="happy2-rig-provider__hint" data-happy2-ui="rig-provider-hint">
-                            {STATUS_HINTS[provider.status]}
-                        </p>
-                    ) : null}
-                </article>
-            ))}
-        </RigSettingsSection>
+                    </article>
+                ))}
+            </RigSettingsSection>
+        </>
     );
 }
 

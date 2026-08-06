@@ -12,6 +12,10 @@ export interface SessionShareStopDialogProps {
     watching?: number;
     onConfirm: () => void;
     onCancel: () => void;
+    /** Disables only the destructive network confirmation while keeping Cancel available. */
+    confirmDisabled?: boolean;
+    /** Explains why confirmation is unavailable. */
+    confirmDisabledReason?: string;
     working?: boolean;
     error?: string;
     className?: string;
@@ -48,9 +52,10 @@ export function SessionShareStopDialog(props: SessionShareStopDialogProps) {
                     </Button>
                     <Button
                         data-testid="session-share-stop-confirm"
-                        disabled={working}
+                        disabled={working || props.confirmDisabled}
                         icon={revoking ? "close" : "stop"}
                         onClick={props.onConfirm}
+                        title={props.confirmDisabledReason}
                         variant="danger"
                     >
                         {working

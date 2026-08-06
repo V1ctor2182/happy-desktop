@@ -96,6 +96,10 @@
     white-space: nowrap;
 }
 
+.happy2-terminal-panel__availability {
+    color: var(--warning);
+}
+
 .happy2-terminal-panel__actions {
     display: flex;
     align-items: center;
@@ -144,6 +148,27 @@
     text-decoration-line: underline;
     text-decoration-color: var(--text-link);
     text-underline-offset: 2px;
+}
+
+/*
+ * A terminal owned by a reconnecting or unavailable Rig retains the exact same
+ * grid DOM and scrollport. Solid secondary ink and the ordinary surface token
+ * remove live ANSI emphasis without opacity/filter tricks, so selection, copy,
+ * history, and links stay fully usable in either appearance.
+ */
+.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__rows {
+    color: var(--text-secondary);
+}
+
+.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__cell {
+    color: inherit !important;
+    background: var(--surface) !important;
+}
+
+.happy2-terminal-panel[data-rig-availability] .happy2-terminal-panel__cursor {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--text-secondary);
+    opacity: 1;
 }
 
 /*

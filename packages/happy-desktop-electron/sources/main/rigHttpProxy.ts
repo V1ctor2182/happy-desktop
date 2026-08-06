@@ -11,31 +11,18 @@ import { rigTerminalBridgeCreate, type RigTerminalClient } from "./rigTerminalBr
 export interface RigHttpProxyHandle {
     /** Loopback base URL, for example `http://127.0.0.1:52344`. */
     readonly url: string;
+    /**
+     * Atomically replaces the daemon connection projected through this already
+     * bound proxy. Its URL, capability, server, terminal bridge, and preview
+     * registration stay alive; subsequent work resolves through this backing.
+     */
+    replace(backing: RigHttpProxyBacking): void;
     close(): void;
 }
 
-export interface RigHttpProxyOptions {
+export interface RigHttpProxyBacking {
     /** The daemon client whose projected surface this proxy exposes. */
     readonly client: RigProxyClient & RigTerminalClient;
-    /**
-     * Invoked when a health request fails at the transport level (the daemon is
-     * unreachable), so the runtime can restart the connection. Daemon-reported
-     * `error`/`starting` states resolve normally and never trigger this.
-     */
-    readonly onConnectionError?: (error: unknown) => void;
-    /**
-     * The single browser origin allowed to call this proxy cross-origin. The
-     * development shell supplies its Vite origin; the local-web distribution
-     * supplies its immutable hosted renderer origin. The standard packaged app
-     * loads `file:` and passes nothing.
-     */
-    readonly allowedOrigin?: string;
-    /**
-     * The window's HTML preview proxy, if it has one. Registering this Rig's
-     * client with it is what lets a document of its checkouts be published as a
-     * site; without one this proxy reports that it cannot render a document.
-     */
-    readonly htmlPreview?: HtmlPreviewProxyHandle;
     /**
      * Builds the same projected surface over one machine the host Rig is peered
      * with, addressed by the identity the host published for it.
@@ -55,6 +42,28 @@ export interface RigHttpProxyOptions {
      * rather than projected into a surface that would be quietly wrong.
      */
     readonly peerClient?: (nodeId: string) => RigProxyClient & RigTerminalClient;
+}
+
+export interface RigHttpProxyOptions extends RigHttpProxyBacking {
+    /**
+     * Invoked when a health request fails at the transport level (the daemon is
+     * unreachable), so the runtime can restart the connection. Daemon-reported
+     * `error`/`starting` states resolve normally and never trigger this.
+     */
+    readonly onConnectionError?: (error: unknown) => void;
+    /**
+     * The single browser origin allowed to call this proxy cross-origin. The
+     * development shell supplies its Vite origin; the local-web distribution
+     * supplies its immutable hosted renderer origin. The standard packaged app
+     * loads `file:` and passes nothing.
+     */
+    readonly allowedOrigin?: string;
+    /**
+     * The window's HTML preview proxy, if it has one. Registering this Rig's
+     * client with it is what lets a document of its checkouts be published as a
+     * site; without one this proxy reports that it cannot render a document.
+     */
+    readonly htmlPreview?: HtmlPreviewProxyHandle;
 }
 
 /** Projects Rig's protocol health into the minimal liveness shape the renderer loader consumes. */
@@ -83,19 +92,39 @@ export function rigDaemonHealthProject(value: HealthResponse): RigDaemonHealth {
  * rather than left hanging.
  */
 export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHttpProxyHandle> {
-    const preview = options.htmlPreview?.register(options.client);
+    type Client = RigProxyClient & RigTerminalClient;
+    interface CurrentBacking {
+        readonly client: Client;
+        readonly peerClient?: (nodeId: string) => Client;
+        readonly peers: Map<string, Client>;
+    }
+    const backingCreate = (next: RigHttpProxyBacking): CurrentBacking => ({
+        client: next.client,
+        peers: new Map(),
+        ...(next.peerClient === undefined ? {} : { peerClient: next.peerClient }),
+    });
+    let backing = backingCreate(options);
+    // Preview sites outlive one daemon transport. Their stored client is this
+    // stable facade, whose every method lookup binds to the current host client.
+    const liveHostClient = new Proxy(options.client, {
+        get(_target, property) {
+            const client = backing.client;
+            const value = Reflect.get(client, property, client) as unknown;
+            return typeof value === "function" ? value.bind(client) : value;
+        },
+    });
+    const preview = options.htmlPreview?.register(liveHostClient);
     // One client per node, kept for as long as this proxy lives. They are made
-    // on first use rather than from a list of nodes: the renderer decides which
-    // machines it is working on, and a client is only ever a way of addressing
-    // one — holding one costs nothing until a request goes through it.
-    const peers = new Map<string, RigProxyClient & RigTerminalClient>();
-    const peerClient = (nodeId: string): (RigProxyClient & RigTerminalClient) | undefined => {
-        const create = options.peerClient;
+    // on first use for the current host connection rather than from a list of
+    // nodes. Replacing the host installs a fresh cache with its peer factory, so
+    // no route can retain a client made from the previous daemon transport.
+    const peerClient = (current: CurrentBacking, nodeId: string): Client | undefined => {
+        const create = current.peerClient;
         if (!create) return undefined;
-        const existing = peers.get(nodeId);
+        const existing = current.peers.get(nodeId);
         if (existing) return existing;
         const client = create(nodeId);
-        peers.set(nodeId, client);
+        current.peers.set(nodeId, client);
         return client;
     };
     const capability = randomBytes(32).toString("base64url");
@@ -154,7 +183,8 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         // — the renderer transport, the connector, the health probe — addresses
         // a peer with the paths it already knows and only the base differs.
         const node = rigNodeRouteMatch(requestPath);
-        const client = node ? peerClient(node.nodeId) : options.client;
+        const requestBacking = backing;
+        const client = node ? peerClient(requestBacking, node.nodeId) : requestBacking.client;
         if (!client) {
             response.writeHead(404, { "content-type": "application/json" });
             response.end(JSON.stringify({ error: "This Rig is not peered with that machine." }));
@@ -186,7 +216,16 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             // A node that stops answering is that node's connection to notice
             // and retry; it is not this window's host going down, and reporting
             // it as one would tear down every other Rig in the window.
-            ...(node ? {} : { onConnectionError: options.onConnectionError }),
+            ...(node
+                ? {}
+                : {
+                      onConnectionError: (error: unknown) => {
+                          // An old in-flight request may finish failing after a
+                          // replacement is already live. It cannot invalidate
+                          // the new connection or start another reconnect.
+                          if (backing === requestBacking) options.onConnectionError?.(error);
+                      },
+                  }),
             // The preview server publishes documents out of this window's own
             // host checkouts. A node's file lives on the other machine, so
             // handing back a host preview URL would serve the wrong bytes under
@@ -220,8 +259,9 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
         // minted on the other machine, and one that happens to name a real
         // session here would open a shell on the wrong one.
         client: (nodeId) => {
-            if (nodeId === undefined) return Promise.resolve(options.client);
-            const client = peerClient(nodeId);
+            const current = backing;
+            if (nodeId === undefined) return Promise.resolve(current.client);
+            const client = peerClient(current, nodeId);
             return client
                 ? Promise.resolve(client)
                 : Promise.reject(new Error("This Rig is not peered with that machine."));
@@ -246,9 +286,16 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
                 return;
             }
             expectedHost = `127.0.0.1:${address.port}`;
+            let closed = false;
             resolvePromise({
                 url: `http://${expectedHost}${capabilityPrefix}`,
+                replace: (next) => {
+                    if (closed) throw new Error("The Rig HTTP proxy is closed.");
+                    backing = backingCreate(next);
+                },
                 close: () => {
+                    if (closed) return;
+                    closed = true;
                     terminals.close();
                     server.close();
                 },

@@ -467,6 +467,72 @@ export function RigSettingsBlueprintPage() {
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Known Rig offline: appearance remains local, retained defaults stay visible, and daemon-backed changes wait for reconnect"
+                label="Rig settings — offline"
+                number="06"
+            >
+                <RigSettingsShell
+                    activeCategoryId="general"
+                    categories={categories}
+                    description="How this window looks and what a new session starts with"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="General"
+                >
+                    <RigGeneralSettings
+                        appearance="system"
+                        defaultModelKey="codex:openai/gpt-5.6-sol"
+                        effort="medium"
+                        effortOptions={effortOptions}
+                        modelOptions={modelOptions}
+                        onAppearanceChange={noop}
+                        onDefaultModelChange={noop}
+                        onEffortChange={noop}
+                        onPermissionModeChange={noop}
+                        permissionMode="auto"
+                        permissionModeOptions={permissionModeOptions}
+                        unavailable="Rig is offline. Showing the last synced defaults."
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Known Rig offline: instruction drafts remain editable and visible; Save waits for reconnect"
+                label="Rig settings — instructions offline"
+                number="07"
+            >
+                <RigSettingsShell
+                    activeCategoryId="instructions"
+                    categories={categories}
+                    description="Machine-wide agent guidance and permission-review policy"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Instructions"
+                >
+                    <RigInstructionsSettings
+                        documents={[
+                            {
+                                bytes: instructions.length,
+                                description:
+                                    "Given to every agent this machine starts, on top of the project's own AGENTS.md.",
+                                dirty: true,
+                                id: "agents",
+                                label: "AGENTS.md",
+                                maximumBytes: 32 * 1024,
+                                onRevert: noop,
+                                onSave: noop,
+                                onValueChange: noop,
+                                path: "~/Happy/Config/AGENTS.md",
+                                placeholder: "Anything every agent on this machine should know…",
+                                saveDisabled: true,
+                                saveDisabledReason:
+                                    "Rig is offline. Draft preserved until reconnect.",
+                                value: instructions,
+                            },
+                        ]}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
         </ComponentPage>
     );
 }

@@ -44,6 +44,7 @@ import type {
     RigNodesSnapshot,
     RigNodeStatus,
     RigNodesStore,
+    RigAvailabilitySnapshot,
     RigPairingStore,
     RigProviderUsageEntry,
     RigProviderUsageStore,
@@ -85,6 +86,7 @@ import {
     rigFriendsStoreNoop,
     rigInboxStoreNoop,
     rigNavigationOrderApply,
+    rigAvailabilityProject,
     rigNavigationOrderStoreNoop,
     rigNodesStoreNoop,
     rigProviderUsageStoreNoop,
@@ -129,7 +131,6 @@ import {
     FriendsPage,
     NotesPage,
     RigActivityPanel,
-    RigConnectionStatus,
     RigControlMenu,
     fileTreeBuild,
     fileTreeFlatten,
@@ -998,9 +999,9 @@ function rigItemParse(value: string): { readonly rigId: string; readonly id: str
  * machine is selected, renamed, archived, and reordered through exactly the same
  * controls as one on this machine — against that machine's own workspace store.
  *
- * A machine that is not connected contributes only its heading: what it holds is
- * unknown while it is away, and connecting it is a settings act rather than
- * something to reach for from a project list.
+ * A machine that is not connected keeps the projects and work last confirmed
+ * from it. Those rows remain navigation targets while their Rig-backed actions
+ * are disabled; reachability changes the section's state, not its membership.
  */
 /**
  * The pinned rows in the order this window keeps them. A row the reader has
@@ -1031,6 +1032,19 @@ function rigSections(
             items: rig.projects.flatMap(sidebarItems).map((item) => ({
                 ...item,
                 id: rigItemId(rig.id, item.id),
+                ...(rig.status === "connected"
+                    ? {}
+                    : {
+                          ...(item.action ? { action: { ...item.action, disabled: true } } : {}),
+                          ...(item.secondaryAction
+                              ? {
+                                    secondaryAction: {
+                                        ...item.secondaryAction,
+                                        disabled: true,
+                                    },
+                                }
+                              : {}),
+                      }),
             })),
             // Adding a folder is this machine's act: the picker opens on the disk
             // the window is running on, so only a folder that is actually here can
@@ -1160,6 +1174,15 @@ function nodeState(status: RigNodeStatus): RigPeerState {
 function rigPeerState(rig: AppRigEntry): RigPeerState {
     if (rig.accessRestricted === true && rig.status !== "error") return "restricted";
     return rig.status === "error" ? "error" : rig.status;
+}
+
+/** One directory entry's unified inner-health and outer-route availability. */
+function rigEntryAvailability(rig: AppRigEntry): RigAvailabilitySnapshot | undefined {
+    if (!rig.session) return undefined;
+    return rigAvailabilityProject(rig.session.connection.get(), true, {
+        status: rig.status,
+        ...(rig.message === undefined ? {} : { message: rig.message }),
+    });
 }
 
 /**
@@ -1417,6 +1440,13 @@ export function AppRigView(props: AppRigViewProps) {
     );
     const active =
         directory.rigs.find((rig) => rig.id === props.rigId) ?? directory.rigs[0] ?? undefined;
+    const activeAvailability = active ? rigEntryAvailability(active) : undefined;
+    const activeRigOnline = (): boolean => {
+        const current = props.rigs.get();
+        const rig =
+            current.rigs.find((entry) => entry.id === props.rigId) ?? current.rigs[0] ?? undefined;
+        return rig ? (rigEntryAvailability(rig)?.online ?? false) : false;
+    };
     const rigOf = (rigId: string) => directory.rigs.find((rig) => rig.id === rigId);
     // The pinned row carries a live count, so the window subscribes to the
     // addressed Rig's inbox whether or not the inbox itself is open: the point of
@@ -1437,6 +1467,15 @@ export function AppRigView(props: AppRigViewProps) {
     // window is addressing — a node the reader has open is a different machine
     // and would answer for a different account.
     const localRig = hostRig(directory);
+    const localAvailability = localRig ? rigEntryAvailability(localRig) : undefined;
+    const localConnectionRefusal =
+        localAvailability?.online === false
+            ? (localAvailability.refusal ?? localAvailability.message)
+            : undefined;
+    const localRigOnline = (): boolean => {
+        const current = hostRig(props.rigs.get());
+        return current ? (rigEntryAvailability(current)?.online ?? false) : false;
+    };
     // The machines the host is peered with. The sidebar shows them whenever the
     // window is open rather than only on a settings screen: a node going quiet
     // is why work stops arriving, and that has to be visible where the work is.
@@ -1467,9 +1506,11 @@ export function AppRigView(props: AppRigViewProps) {
     // neither one is an empty list.
     const friendsMessage = !localRig?.session
         ? "Waiting for this machine's Rig to connect before it can reach the people you know."
-        : localRig.session.friends
-          ? undefined
-          : "This Rig does not carry the friends service yet. Update it to connect with people.";
+        : localConnectionRefusal
+          ? localConnectionRefusal
+          : localRig.session.friends
+            ? undefined
+            : "This Rig does not carry the friends service yet. Update it to connect with people.";
     // Sessions other people are showing this machine belong to the same account
     // as friends do, so they are read off this machine's own Rig for the same
     // reason — and, like friends, only while the reader is looking at them,
@@ -1485,9 +1526,11 @@ export function AppRigView(props: AppRigViewProps) {
     // The same two different facts friends distinguishes, said about replicas.
     const sharedSessionsMessage = !localRig?.session
         ? "Waiting for this machine's Rig to connect before it can reach the sessions people are sharing with you."
-        : localRig.session.sharedSessions
-          ? undefined
-          : "This Rig cannot receive shared sessions yet. Update it to read what people share with you.";
+        : localConnectionRefusal
+          ? localConnectionRefusal
+          : localRig.session.sharedSessions
+            ? undefined
+            : "This Rig cannot receive shared sessions yet. Update it to read what people share with you.";
     // One surface for the machine's whole slot catalog, subscribed once for as
     // long as this window addresses this Rig. What the reader has open is read
     // off the route below and resolved against entries already held, so moving
@@ -1520,6 +1563,7 @@ export function AppRigView(props: AppRigViewProps) {
             : undefined;
         const sessionNow = rigNow?.session;
         if (!rigNow || !sessionNow?.slots) return;
+        if (rigEntryAvailability(rigNow)?.online !== true) return;
         const workspaceNow = sessionNow.workspace;
         const workspaceSnapshot = workspaceNow.get();
         const scopeNow = slotsContext(
@@ -1670,6 +1714,7 @@ export function AppRigView(props: AppRigViewProps) {
                         active?.projects ?? [],
                         webapps,
                         props.chatId !== undefined,
+                        activeAvailability?.refusal,
                     )}
                     onAction={slotAction}
                     placement="sidebar"
@@ -1726,13 +1771,15 @@ export function AppRigView(props: AppRigViewProps) {
             itemMenuItems={(item) => {
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
-                return rig ? rowMenuItems(rig.projects, { ...item, id: row.id }) : [];
+                return rig?.status === "connected"
+                    ? rowMenuItems(rig.projects, { ...item, id: row.id })
+                    : [];
             }}
             // Create is the window's, not a screen's: the dialog is mounted
             // beside whatever is showing, so this row answers from every route.
             // It is offered only while there is a machine to start a session on,
             // because a Create that opened nothing would be worse than no row.
-            {...(active?.session?.workspace
+            {...(activeAvailability?.online === true && active?.session?.workspace
                 ? { onCompose: () => active.session?.workspace.createOpen() }
                 : {})}
             // Two acts on one machine's section. Its heading adds a folder on
@@ -1745,7 +1792,7 @@ export function AppRigView(props: AppRigViewProps) {
                     // Silent when there is nothing to ask: the control is only
                     // offered on a connected local machine, and a section
                     // without one carries no heading control at all.
-                    rig?.session?.workspace.projectAdd();
+                    if (rig?.status === "connected") rig.session?.workspace.projectAdd();
                     return;
                 }
                 if (rig?.status !== "connected") {
@@ -1762,6 +1809,7 @@ export function AppRigView(props: AppRigViewProps) {
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
+                if (rig.status !== "connected") return;
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
@@ -1829,6 +1877,7 @@ export function AppRigView(props: AppRigViewProps) {
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
+                if (rig.status !== "connected") return;
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
@@ -1846,6 +1895,7 @@ export function AppRigView(props: AppRigViewProps) {
                 const row = rigItemParse(id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
+                if (rig.status !== "connected") return;
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || owner.worktreeId || !workspace) return;
@@ -1864,6 +1914,7 @@ export function AppRigView(props: AppRigViewProps) {
                 : {})}
             onItemReorder={(sectionId, move) => {
                 const rig = rigOf(sectionId.slice("rig:".length));
+                if (rig?.status !== "connected") return;
                 const workspace = rig?.session?.workspace;
                 if (!workspace) return;
                 const moved = rigItemParse(move.id).id;
@@ -1925,6 +1976,7 @@ export function AppRigView(props: AppRigViewProps) {
                 >
                     {desktop ? <WindowDragRegion /> : null}
                     <RigFriendsSurface
+                        rigOnline={localRigOnline}
                         snapshot={friends}
                         store={localRig?.session?.friends}
                         {...(friendsMessage === undefined ? {} : { unavailable: friendsMessage })}
@@ -1947,6 +1999,7 @@ export function AppRigView(props: AppRigViewProps) {
                     {desktop ? <WindowDragRegion /> : null}
                     <RigSharedSessionsSurface
                         friends={friends.friends}
+                        rigOnline={localRigOnline}
                         snapshot={sharedSessions}
                         store={localRig?.session?.sharedSessions}
                         {...(sharedSessionsMessage === undefined
@@ -1988,9 +2041,12 @@ export function AppRigView(props: AppRigViewProps) {
                         }
                         projects={active.projects}
                         rigId={active.id}
+                        rigOnline={activeRigOnline}
                         snapshot={inbox}
                         store={active.session.inbox}
-                        workspace={active.session.workspace}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
                     />
                 </AppShell>
             );
@@ -2018,6 +2074,13 @@ export function AppRigView(props: AppRigViewProps) {
         if (active?.session)
             return (
                 <RigWorkspaceSurface
+                    availability={
+                        activeAvailability ??
+                        rigAvailabilityProject(active.session.connection.get(), true, {
+                            status: active.status,
+                            ...(active.message === undefined ? {} : { message: active.message }),
+                        })
+                    }
                     appearance={props.appearance}
                     browserContent={props.browserContent}
                     // Which machine this workspace's browser tabs browse from.
@@ -2038,6 +2101,7 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     platform={props.platform}
                     projects={active.projects}
+                    rigOnline={activeRigOnline}
                     {...(active.session.sessionShare
                         ? { sessionShare: active.session.sessionShare }
                         : {})}
@@ -2095,7 +2159,14 @@ export function AppRigView(props: AppRigViewProps) {
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
             {active?.session?.workspace ? (
-                <RigWindowDialogs projects={active.projects} workspace={active.session.workspace} />
+                <RigWindowDialogs
+                    projects={active.projects}
+                    rigOnline={activeRigOnline}
+                    workspace={active.session.workspace}
+                    {...(activeAvailability?.refusal === undefined
+                        ? {}
+                        : { unavailable: activeAvailability.refusal })}
+                />
             ) : null}
         </>
     );
@@ -2152,9 +2223,10 @@ function RigInboxSurface(props: {
     onOpenSession(rigId: string, groupId: string, chatId: string): void;
     projects: readonly RigProjectGroup[];
     rigId: string;
+    rigOnline: () => boolean;
     snapshot: RigInboxSnapshot;
     store: RigInboxStore;
-    workspace: RigWorkspaceStore;
+    unavailable?: string;
 }) {
     const locate = (item: RigInboxItem) => {
         const project = props.projects.find((candidate) => candidate.id === item.projectId);
@@ -2174,30 +2246,25 @@ function RigInboxSurface(props: {
             }
             loading={props.snapshot.loading}
             messages={props.snapshot.messages}
-            onAnswer={(itemId, answers) => props.store.itemAnswer(itemId, answers)}
+            onAnswer={(itemId, answers) => {
+                if (props.rigOnline()) props.store.itemAnswer(itemId, answers);
+            }}
             onMessageChange={(itemId, text) => props.store.itemMessageUpdate(itemId, text)}
-            onMessageSubmit={(itemId) => props.store.itemMessageSubmit(itemId)}
+            onMessageSubmit={(itemId) => {
+                if (props.rigOnline()) props.store.itemMessageSubmit(itemId);
+            }}
             onSelectionChange={(itemId, answers) =>
                 props.store.itemSelectionUpdate(itemId, answers)
             }
             selections={props.snapshot.selections}
             onOpenSession={(item) => {
-                // A question is answered here, but its argument lives in the
-                // conversation that raised it. Where that conversation lives is
-                // asked of the machine rather than taken from the question: a
-                // question can be raised by a session the feed had never
-                // described — a subagent, or one started moments ago — and it
-                // then carries no usable project of its own.
-                void props.workspace
-                    .sessionLocationRead(item.sessionId)
-                    .then((location) => {
-                        if (location)
-                            props.onOpenSession(props.rigId, location.groupId, item.sessionId);
-                    })
-                    .catch(() => undefined);
+                // The feed already carries the durable project/worktree address,
+                // so opening context remains a local navigation act offline.
+                props.onOpenSession(props.rigId, item.worktreeId ?? item.projectId, item.sessionId);
             }}
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
+            {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
         />
     );
 }
@@ -2213,6 +2280,7 @@ function RigInboxSurface(props: {
  * decides what a picture is made of.
  */
 function RigFriendsSurface(props: {
+    rigOnline: () => boolean;
     snapshot: RigFriendsSnapshot;
     store?: RigFriendsStore;
     unavailable?: string;
@@ -2229,7 +2297,9 @@ function RigFriendsSurface(props: {
             invite={snapshot.invite}
             loading={snapshot.loading}
             onFirstNameChange={(value) => store?.firstNameUpdate(value)}
-            onInviteSend={() => store?.requestSend()}
+            onInviteSend={() => {
+                if (props.rigOnline()) store?.requestSend();
+            }}
             onInviteTokenChange={(value) => store?.requestTokenUpdate(value)}
             onLastNameChange={(value) => store?.lastNameUpdate(value)}
             onPhotoRemove={() => store?.photoRemove()}
@@ -2243,10 +2313,12 @@ function RigFriendsSurface(props: {
                     () => undefined,
                 );
             }}
-            onProfileCreate={() => store?.profileCreate()}
-            onRequestAnswer={(requestId: RigFriendRequestId, answer: RigFriendAnswer) =>
-                store?.requestAnswer(requestId, answer)
-            }
+            onProfileCreate={() => {
+                if (props.rigOnline()) store?.profileCreate();
+            }}
+            onRequestAnswer={(requestId: RigFriendRequestId, answer: RigFriendAnswer) => {
+                if (props.rigOnline()) store?.requestAnswer(requestId, answer);
+            }}
             profileDraft={snapshot.draft}
             requests={snapshot.requests}
             requestTime={(request) => friendsRequestTime(request.receivedAt)}
@@ -2311,6 +2383,7 @@ const SHARED_SESSION_ENDINGS: Record<"revoked" | "stopped" | "unreadable", strin
 function RigSharedSessionsSurface(props: {
     /** The people this account registered, which is where an owner's name comes from. */
     friends: readonly RigFriend[];
+    rigOnline: () => boolean;
     snapshot: RigSharedSessionsSnapshot;
     store?: RigSharedSessionsStore;
     unavailable?: string;
@@ -2337,7 +2410,9 @@ function RigSharedSessionsSurface(props: {
                 live={open.live}
                 loading={reading.loading}
                 loadingMore={reading.loadingMore}
-                onLoadMore={() => store?.sessionMoreLoad()}
+                onLoadMore={() => {
+                    if (props.rigOnline()) store?.sessionMoreLoad();
+                }}
                 onClose={() => store?.sessionClose()}
                 ownerInitials={owner.initials}
                 ownerName={owner.name}
@@ -2347,13 +2422,17 @@ function RigSharedSessionsSurface(props: {
                 viewerId={rigOwnerAuthor.id}
                 composer={sharedSessionComposer(reading)}
                 onComposerValueChange={(value) => store?.draftUpdate(value)}
-                onComposerSend={() => store?.draftSubmit()}
-                {...(ended
-                    ? {
-                          composerRefusal:
-                              "This session is no longer being shared with you, so nothing more can be sent.",
-                      }
-                    : {})}
+                onComposerSend={() => {
+                    if (props.rigOnline()) store?.draftSubmit();
+                }}
+                {...(props.unavailable
+                    ? { composerRefusal: props.unavailable }
+                    : ended
+                      ? {
+                            composerRefusal:
+                                "This session is no longer being shared with you, so nothing more can be sent.",
+                        }
+                      : {})}
             />
         );
     }
@@ -2361,7 +2440,14 @@ function RigSharedSessionsSurface(props: {
         <SharedSessionsPage
             {...(snapshot.error ? { error: snapshot.error.message } : {})}
             loading={snapshot.loading}
-            onSessionOpen={(sessionId) => store?.sessionOpen(sessionId as RigSharedSessionId)}
+            {...(props.unavailable === undefined
+                ? {
+                      onSessionOpen: (sessionId: string) =>
+                          props.rigOnline()
+                              ? store?.sessionOpen(sessionId as RigSharedSessionId)
+                              : undefined,
+                  }
+                : {})}
             sessions={snapshot.sessions.map((session): SharedSessionRow => {
                 const owner = sharedSessionOwner(session.ownerPeerId);
                 return {
@@ -2471,8 +2557,12 @@ function inboxItemTime(value: number | undefined): string | undefined {
 }
 
 interface RigWorkspaceSurfaceProps {
-    /** Daemon connection/health surface, used only to gate the workspace. */
+    /** Unified outer route and daemon health for this already materialized Rig. */
+    availability: RigAvailabilitySnapshot;
+    /** Daemon health owner; its retry action accelerates automatic recovery in place. */
     connection: RigConnectionStore;
+    /** Re-reads unified availability when a retained network handler fires. */
+    rigOnline: () => boolean;
     /** Joined conversation-list + active-conversation product store. */
     workspace: RigWorkspaceStore;
     /**
@@ -2540,11 +2630,6 @@ interface RigSlotViews {
  * pure projection.
  */
 function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
-    const status = useSyncExternalStore(
-        props.connection.subscribe,
-        props.connection.get,
-        props.connection.get,
-    );
     const workspace = useSyncExternalStore(
         props.workspace.subscribe,
         props.workspace.get,
@@ -2590,23 +2675,22 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         props.appearance.get,
     );
 
-    const ready = status.connection === "connected" && status.daemon === "ready";
-    if (!ready) {
-        return (
-            <RigConnectionStatus
-                attempt={status.attempt}
-                connection={status.connection}
-                daemon={status.daemon}
-                message={status.message}
-                onRetry={() => props.connection.retry()}
-                version={status.version}
-            />
-        );
-    }
+    // A materialized workspace is a Rig lifetime, not a connection lifetime.
+    // Health only changes what this mounted surface may do and what it says
+    // about the state already on screen.
+    const availability = props.availability;
+    const connectionRefusal = availability.refusal;
+    const rigOnline = props.rigOnline;
+    const terminalRigAvailability = availability.online
+        ? undefined
+        : availability.state === "reconnecting"
+          ? ("reconnecting" as const)
+          : ("unavailable" as const);
 
     // Inside an open project the directory is already decided, so every "new
     // session" affordance here starts one in it rather than asking again.
     const groupConversationCreate = (group: OpenGroup) => {
+        if (!rigOnline()) return;
         void props.workspace.conversationCreate(group.id, group.create).catch(() => undefined);
     };
 
@@ -2618,7 +2702,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // control that is not offered and an action that is refused always give the
     // same reason.
     const access = workspace.groupAccess;
-    const openGroupWorkRefusal = access.writeRefusal;
+    const openGroupWorkRefusal = connectionRefusal ?? access.writeRefusal;
     // Why a chat cannot be started here or sent to. A workspace whose checkout
     // Rig is still preparing refuses the second and not the first, so the two
     // reasons are kept apart all the way down to the controls: a composer reads
@@ -2630,7 +2714,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             rows,
             webapps,
             props.chatId !== undefined,
-            openGroupChatRefusal,
+            connectionRefusal ?? openGroupChatRefusal,
         );
     const slotViews: RigSlotViews = {
         statusLine: slotPlacement("status-line"),
@@ -2716,7 +2800,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // Stopping is not writing. An unusable checkout still has whatever was
     // already running in it, and leaving the reader unable to end that would be
     // work they can see, cannot write to, and cannot stop either.
-    const conversationCanAbort = detachedConversationId === undefined && access.canAbort;
+    const conversationCanAbort =
+        availability.online && detachedConversationId === undefined && access.canAbort;
     // One strip, holding the group's sessions and its open files together in
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
@@ -2724,7 +2809,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ...tabsOrdered(
             openGroup
                 ? [
-                      ...sessionTabs(openGroup),
+                      ...sessionTabs(openGroup).map((tab) =>
+                          availability.online ? tab : { ...tab, closable: false },
+                      ),
                       ...groupFileTabs.map(fileTabItem),
                       ...toolTabItems(mainTools),
                   ]
@@ -2742,7 +2829,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // so it never sits on a session that has just gone.
     const groupTabsClose = (tabIds: readonly string[], keepId?: string) => {
         if (!openGroup) return;
-        const targets = new Set(tabIds);
+        const online = rigOnline();
+        const sessionIds = new Set(openGroup.conversations.map((summary) => summary.id));
+        const closeableIds = tabIds.filter((tabId) => online || !sessionIds.has(tabId));
+        const targets = new Set(closeableIds);
         const rest = openGroup.conversations.filter((summary) => !targets.has(summary.id));
         if (props.chatId && targets.has(props.chatId)) {
             const next =
@@ -2751,7 +2841,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     : rest[0]?.id;
             props.onChatSelect(rest.length > 0 ? openGroup.id : undefined, next, true);
         }
-        for (const tabId of tabIds) {
+        for (const tabId of closeableIds) {
             if (groupFileTabs.some((tab) => tab.id === tabId)) {
                 props.workspace.fileClose(tabId);
                 continue;
@@ -2786,6 +2876,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 projects={rows}
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
+                rigOnline={rigOnline}
+                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
                 {...(conversationReadOnlyReason === undefined
                     ? {}
                     : { readOnlyReason: conversationReadOnlyReason })}
@@ -2815,7 +2907,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             panel={
                 panel.open ? (
                     <RigPanelBody
-                        canStartTerminal={props.chatId !== undefined}
+                        canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
                         {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
                         htmlPreview={props.htmlPreview}
@@ -2843,18 +2935,18 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 return;
                             }
                             if (picking) props.workspace.fileSelectionReplace(path);
-                            if (openGroup)
+                            if (openGroup && rigOnline())
                                 props.workspace.filePreview(
                                     openGroup.id,
                                     path,
                                     fileTabKind(path, workspace.fileScope),
                                 );
                         }}
-                        {...(access.canWrite
+                        {...(availability.online && access.canWrite
                             ? { onRevert: () => props.workspace.fileRevertPromptOpen() }
                             : {})}
                         onFileOpen={(path) => {
-                            if (openGroup)
+                            if (openGroup && rigOnline())
                                 props.workspace.fileOpen(
                                     openGroup.id,
                                     path,
@@ -2866,11 +2958,17 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
                         onPanelFileOpen={(path) => {
-                            if (!openGroup) return;
+                            if (!openGroup || !rigOnline()) return;
                             props.workspace.filePanelOpen(openGroup.id, path, panelFileKind(path));
                         }}
                         onScopeChange={(scope) => {
-                            if (openGroup) props.workspace.fileScopeUpdate(openGroup.id, scope);
+                            if (
+                                openGroup &&
+                                (scope === "changed" ||
+                                    workspace.workspaceFiles !== undefined ||
+                                    rigOnline())
+                            )
+                                props.workspace.fileScopeUpdate(openGroup.id, scope);
                         }}
                         onToggle={(path, expanded) =>
                             props.workspace.fileTreeExpandedUpdate(path, expanded)
@@ -2880,6 +2978,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         }
                         panel={panel}
                         previewTool={previewTool}
+                        {...(terminalRigAvailability === undefined
+                            ? {}
+                            : {
+                                  rigAvailability: terminalRigAvailability,
+                                  rigAvailabilityReason: availability.message,
+                              })}
                         scope={workspace.fileScope}
                         selection={workspace.fileSelection}
                         selectedPath={activeFile?.path}
@@ -2925,6 +3029,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             id: target.id,
                                             kind: "item" as const,
                                             label: target.label,
+                                            disabled: !availability.online,
                                             ...(target.iconUrl ? { iconUrl: target.iconUrl } : {}),
                                         })),
                                         ...(workspace.openInTargets.length > 0
@@ -2946,13 +3051,15 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     // while only the chevron opens the list.
                                     leadingIconUrl={openInRecent?.iconUrl}
                                     menuAlign="end"
-                                    {...(openInRecent
+                                    {...(openInRecent && availability.online
                                         ? {
-                                              onPrimary: () =>
-                                                  void props.workspace.openIn(
-                                                      openGroup.id,
-                                                      openInRecent.id,
-                                                  ),
+                                              onPrimary: () => {
+                                                  if (rigOnline())
+                                                      void props.workspace.openIn(
+                                                          openGroup.id,
+                                                          openInRecent.id,
+                                                      );
+                                              },
                                               primaryLabel: `Open in ${openInRecent.label}`,
                                           }
                                         : {})}
@@ -2963,7 +3070,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             );
                                             return;
                                         }
-                                        void props.workspace.openIn(openGroup.id, id);
+                                        if (rigOnline())
+                                            void props.workspace.openIn(openGroup.id, id);
                                     }}
                                 />
                                 {!panel.open ? (
@@ -2989,11 +3097,28 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             />
                         }
                     />
+                    {availability.online ? null : (
+                        <Banner
+                            action={{
+                                label: "Retry now",
+                                onClick: () => props.connection.retry(),
+                            }}
+                            icon="link"
+                            tone={availability.state === "error" ? "danger" : "neutral"}
+                            title={
+                                availability.state === "error"
+                                    ? "Rig needs attention"
+                                    : "Rig reconnecting"
+                            }
+                        >
+                            {availability.message}
+                        </Banner>
+                    )}
                     {/* Cmd+T opens a tab, and here a tab is a session in the
                         project that is already open — so a workspace that cannot
                         host a session does not answer the shortcut at all,
                         rather than answering it with a failure. */}
-                    {openGroupChatRefusal === undefined ? (
+                    {connectionRefusal === undefined && openGroupChatRefusal === undefined ? (
                         <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
                     ) : null}
                     {/* A worktree with work already in it keeps its tab strip and
@@ -3051,8 +3176,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 : {})}
                             focusOnType={composerClaimsTyping}
                             groupName={openGroup.name}
+                            rigOnline={rigOnline}
                             slotAction={props.slotAction}
                             slots={slotViews}
+                            {...(connectionRefusal === undefined
+                                ? {}
+                                : { unavailable: connectionRefusal })}
                             workspace={props.workspace}
                         />
                     ) : null}
@@ -3206,6 +3335,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     {...(props.chatId ? { sessionId: props.chatId } : {})}
                                     store={props.workspace.panel}
                                     tabs={mainTools}
+                                    {...(terminalRigAvailability === undefined
+                                        ? {}
+                                        : {
+                                              rigAvailability: terminalRigAvailability,
+                                              rigAvailabilityReason: availability.message,
+                                          })}
                                     webappRevisions={
                                         new Map(
                                             props.slots.webapps.map((webapp) => [
@@ -3219,6 +3354,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     <RigFileBody
                                         appearance={appearance.appearance}
                                         file={activeFile}
+                                        rigOnline={rigOnline}
                                         {...(props.htmlPreview
                                             ? { htmlPreview: props.htmlPreview }
                                             : {})}
@@ -3226,9 +3362,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             ? { mediaWindow: props.mediaWindow }
                                             : {})}
                                         mode={workspace.fileViewMode}
-                                        {...(openGroupWorkRefusal === undefined
+                                        {...(access.writeRefusal === undefined
                                             ? {}
-                                            : { writeRefusal: openGroupWorkRefusal })}
+                                            : { writeRefusal: access.writeRefusal })}
+                                        {...(connectionRefusal === undefined
+                                            ? {}
+                                            : { saveRefusal: connectionRefusal })}
                                         workspace={props.workspace}
                                     />
                                 ) : openGroup.conversations.length === 0 &&
@@ -3247,8 +3386,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             : {})}
                                         focusOnType={composerClaimsTyping}
                                         groupName={openGroup.name}
+                                        rigOnline={rigOnline}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
+                                        {...(connectionRefusal === undefined
+                                            ? {}
+                                            : { unavailable: connectionRefusal })}
                                         workspace={props.workspace}
                                     />
                                 ) : (
@@ -3258,7 +3401,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         groupId={openGroup.id}
                                         groupName={openGroup.name}
                                         now={now}
-                                        {...(openGroupChatRefusal === undefined
+                                        {...(connectionRefusal === undefined &&
+                                        openGroupChatRefusal === undefined
                                             ? {
                                                   onCreate: () =>
                                                       groupConversationCreate(openGroup),
@@ -3266,6 +3410,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             : {})}
                                         onChatSelect={props.onChatSelect}
                                         onFileOpen={(path) => {
+                                            if (!rigOnline()) return;
                                             const target = workspacePathRelative(
                                                 path,
                                                 openGroup.create.cwd,
@@ -3278,12 +3423,20 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         }}
                                         canAbort={conversationCanAbort}
                                         readOnly={conversationReadOnly}
+                                        rigOnline={rigOnline}
+                                        {...(connectionRefusal === undefined
+                                            ? {}
+                                            : { unavailable: connectionRefusal })}
                                         {...(conversationReadOnlyReason === undefined
                                             ? {}
                                             : { readOnlyReason: conversationReadOnlyReason })}
-                                        {...(openGroupChatRefusal === undefined
+                                        {...(connectionRefusal === undefined &&
+                                        openGroupChatRefusal === undefined
                                             ? {}
-                                            : { writeRefusal: openGroupChatRefusal })}
+                                            : {
+                                                  writeRefusal:
+                                                      connectionRefusal ?? openGroupChatRefusal,
+                                              })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
                                         share={sessionShare}
@@ -3304,6 +3457,23 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
+                    {availability.online ? null : (
+                        <Banner
+                            action={{
+                                label: "Retry now",
+                                onClick: () => props.connection.retry(),
+                            }}
+                            icon="link"
+                            tone={availability.state === "error" ? "danger" : "neutral"}
+                            title={
+                                availability.state === "error"
+                                    ? "Rig needs attention"
+                                    : "Rig reconnecting"
+                            }
+                        >
+                            {availability.message}
+                        </Banner>
+                    )}
                     {refusedCreate ? (
                         // This address was a workspace being made until Rig
                         // refused it. Saying "no project open" here would leave
@@ -3323,11 +3493,15 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                            where, so it answers from here as readily as anywhere
                            else, and it is the only move this screen has. */
                         <EmptyState
-                            action={{
-                                label: "Create",
-                                icon: "plus",
-                                onClick: () => props.workspace.createOpen(),
-                            }}
+                            {...(availability.online
+                                ? {
+                                      action: {
+                                          label: "Create",
+                                          icon: "plus" as const,
+                                          onClick: () => props.workspace.createOpen(),
+                                      },
+                                  }
+                                : {})}
                             description="Pick one in the sidebar, or start a session in any of them."
                             icon="files"
                             size="panel"
@@ -3353,8 +3527,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     Cancel
                                 </Button>
                                 <Button
-                                    disabled={workspace.fileRevert.submitting}
+                                    disabled={
+                                        workspace.fileRevert.submitting || !availability.online
+                                    }
                                     onClick={() => {
+                                        if (!rigOnline()) return;
                                         void props.workspace
                                             .fileRevertConfirm(openGroup.id)
                                             .catch(() => undefined);
@@ -3405,8 +3582,12 @@ function RigFileBody(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: RigFileViewMode;
+    /** Re-reads Rig availability when a retained file handler fires. */
+    rigOnline: () => boolean;
     /** Why this file cannot be edited or saved, or absent when it can. */
     writeRefusal?: string;
+    /** Why the current local draft cannot be persisted to the Rig. */
+    saveRefusal?: string;
     workspace: RigWorkspaceStore;
 }) {
     const { file, workspace } = props;
@@ -3414,6 +3595,7 @@ function RigFileBody(props: {
     // offering the editor at all: the reader loses what they typed and learns
     // why only when they try to save it.
     const writable = props.writeRefusal === undefined;
+    const saveDisabled = !writable || props.saveRefusal !== undefined;
     if (file.kind === "media")
         return (
             <RigFilePreview
@@ -3421,7 +3603,6 @@ function RigFileBody(props: {
                 {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 key={file.id}
                 loading={file.loading}
-                onRetry={() => workspace.fileRetry(file.id)}
                 path={file.path}
             />
         );
@@ -3472,6 +3653,7 @@ function RigFileBody(props: {
                                      another document, a picture — opens as the
                                      file itself, never as its diff. */
                                   onFileOpen={(href) => {
+                                      if (!props.rigOnline()) return;
                                       const target = documentLinkResolve(file.path, href);
                                       workspace.fileOpen(
                                           file.groupId,
@@ -3486,14 +3668,17 @@ function RigFileBody(props: {
                     : {})}
                 onRevert={() => workspace.fileDraftRevert(file.id)}
                 onSave={() => {
-                    void workspace.fileDraftSave(file.id).catch(() => undefined);
+                    if (!saveDisabled && props.rigOnline())
+                        void workspace.fileDraftSave(file.id).catch(() => undefined);
                 }}
                 onValueChange={(value) => workspace.fileDraftUpdate(file.id, value)}
                 path={file.path}
                 readOnly={file.saving || !writable}
+                saveDisabled={saveDisabled}
                 saving={file.saving}
                 status={
                     props.writeRefusal ??
+                    props.saveRefusal ??
                     (file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved")
                 }
                 value={text}
@@ -3524,10 +3709,12 @@ function RigFileBody(props: {
                           onContentChange: (content: string) =>
                               workspace.fileDraftUpdate(file.id, content),
                           onSave: () => {
-                              void workspace.fileDraftSave(file.id).catch(() => undefined);
+                              if (!saveDisabled && props.rigOnline())
+                                  void workspace.fileDraftSave(file.id).catch(() => undefined);
                           },
                       }
                     : {})}
+                saveDisabled={saveDisabled}
                 onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
                 // A change that deleted the file left no copy to look at, which
                 // the read reports by having no working-tree identity for it.
@@ -3538,6 +3725,8 @@ function RigFileBody(props: {
                           preview: (
                               <RigChangedFilePreview
                                   file={file}
+                                  openDisabled={props.saveRefusal !== undefined}
+                                  rigOnline={props.rigOnline}
                                   text={current}
                                   workspace={workspace}
                               />
@@ -3551,15 +3740,30 @@ function RigFileBody(props: {
     if (file.document.type === "error")
         return (
             <EmptyState
-                action={{
-                    label: "Retry",
-                    icon: "arrow-right",
-                    onClick: () => workspace.fileRetry(file.id),
-                }}
+                {...(props.saveRefusal === undefined
+                    ? {
+                          action: {
+                              label: "Retry",
+                              icon: "arrow-right" as const,
+                              onClick: () => {
+                                  if (props.rigOnline()) workspace.fileRetry(file.id);
+                              },
+                          },
+                      }
+                    : {})}
                 description={file.document.error.message}
                 icon="doc"
                 size="panel"
                 title="File unavailable"
+            />
+        );
+    if (props.saveRefusal)
+        return (
+            <EmptyState
+                description={props.saveRefusal}
+                icon="link"
+                size="panel"
+                title="File unavailable while Rig is offline"
             />
         );
     return (
@@ -3589,6 +3793,8 @@ function RigFileBody(props: {
  */
 function RigChangedFilePreview(props: {
     file: RigFileTabSnapshot;
+    openDisabled: boolean;
+    rigOnline: () => boolean;
     text: string;
     workspace: RigWorkspaceStore;
 }) {
@@ -3605,6 +3811,7 @@ function RigChangedFilePreview(props: {
             // A document followed out of the changed list lands beside it as the
             // file itself, the same way one followed out of a file tab does.
             onFileOpen={(href) => {
+                if (props.openDisabled || !props.rigOnline()) return;
                 const target = documentLinkResolve(file.path, href);
                 workspace.fileOpen(file.groupId, target, fileTabKind(target, "all"));
             }}
@@ -3625,7 +3832,6 @@ function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
     loading: boolean;
-    onRetry: () => void;
     path: string;
 }) {
     const document = props.document;
@@ -3685,8 +3891,12 @@ function RigGroupComposer(props: {
     draftMenus?: RigMenusSnapshot;
     focusOnType: boolean;
     groupName: string;
+    /** Reads current transport health when a Rig-backed action is invoked. */
+    rigOnline: () => boolean;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
+    /** Why this Rig cannot accept network actions while the local draft remains editable. */
+    unavailable?: string;
     workspace: RigWorkspaceStore;
 }) {
     const workspace = props.workspace;
@@ -3704,6 +3914,8 @@ function RigGroupComposer(props: {
             }
             composerFocusOnType={props.focusOnType}
             composerPlaceholder={composerPlaceholder(props.groupName)}
+            composerSubmitDisabled={props.unavailable !== undefined}
+            {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
             entries={NO_ENTRIES}
             // The first message is what creates the session, so its model,
             // effort, and access mode have to be choosable before it is sent
@@ -3762,7 +3974,9 @@ function RigGroupComposer(props: {
             }
             onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
             onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
-            onComposerSend={() => workspace.composerTextSubmit()}
+            onComposerSend={() => {
+                if (props.rigOnline()) workspace.composerTextSubmit();
+            }}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
         />
     );
@@ -3780,8 +3994,12 @@ function RigConversationBody(props: {
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    /** Reads current transport health when a Rig-backed action is invoked. */
+    rigOnline: () => boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why this Rig cannot currently accept network actions. */
+    unavailable?: string;
     /**
      * Whether a run already going here may be stopped. Separate from `readOnly`
      * on purpose: a checkout that has gone away closes the input, but the run
@@ -3817,6 +4035,8 @@ function RigConversationBody(props: {
                 onFileOpen={props.onFileOpen}
                 canAbort={props.canAbort}
                 readOnly={props.readOnly}
+                rigOnline={props.rigOnline}
+                {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
                 {...(props.readOnlyReason === undefined
                     ? {}
                     : { readOnlyReason: props.readOnlyReason })}
@@ -3828,6 +4048,15 @@ function RigConversationBody(props: {
                 shareLoading={props.shareLoading}
                 {...(props.shareStore ? { shareStore: props.shareStore } : {})}
                 workspace={props.workspace}
+            />
+        );
+    if (conversation.type === "loading" && props.unavailable !== undefined)
+        return (
+            <EmptyState
+                description={`${props.unavailable} The session will finish loading automatically after reconnect.`}
+                icon="link"
+                size="panel"
+                title="Session waiting for the Rig"
             />
         );
     if (conversation.type === "loading")
@@ -3843,11 +4072,17 @@ function RigConversationBody(props: {
     if (conversation.type === "error")
         return (
             <EmptyState
-                action={{
-                    label: "Retry",
-                    icon: "arrow-right",
-                    onClick: () => props.workspace.conversationRetry(),
-                }}
+                {...(props.unavailable === undefined
+                    ? {
+                          action: {
+                              label: "Retry",
+                              icon: "arrow-right" as const,
+                              onClick: () => {
+                                  if (props.rigOnline()) props.workspace.conversationRetry();
+                              },
+                          },
+                      }
+                    : {})}
                 description={conversation.error.message}
                 icon="shield"
                 size="panel"
@@ -3891,8 +4126,12 @@ function RigConversationSurface(props: {
     /** Opens a file the transcript names, in the panel beside it. */
     onFileOpen: (path: string) => void;
     readOnly: boolean;
+    /** Reads current transport health when a Rig-backed action is invoked. */
+    rigOnline: () => boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why this Rig cannot currently accept network actions. */
+    unavailable?: string;
     /**
      * Whether a run already going here may be stopped. Separate from `readOnly`
      * on purpose: a checkout that has gone away closes the input, but the run
@@ -3923,11 +4162,17 @@ function RigConversationSurface(props: {
     if (conversation.session.type === "error")
         return (
             <EmptyState
-                action={{
-                    label: "Retry",
-                    icon: "arrow-right",
-                    onClick: () => workspace.conversationRetry(),
-                }}
+                {...(props.unavailable === undefined
+                    ? {
+                          action: {
+                              label: "Retry",
+                              icon: "arrow-right" as const,
+                              onClick: () => {
+                                  if (props.rigOnline()) workspace.conversationRetry();
+                              },
+                          },
+                      }
+                    : {})}
                 description={conversation.session.error.message}
                 icon="shield"
                 size="panel"
@@ -3964,7 +4209,7 @@ function RigConversationSurface(props: {
                                 .filter((member) => member.access === "watching")
                                 .map((member) => member.name)}
                             onManage={() => shareStore?.panelToggle()}
-                            {...(shared.condition === "ended"
+                            {...(shared.condition === "ended" || props.unavailable !== undefined
                                 ? {}
                                 : { onStop: () => shareStore?.shareStopOpen() })}
                             watching={shared.watching}
@@ -3978,6 +4223,8 @@ function RigConversationSurface(props: {
                 </>
             }
             composerDisabled={props.readOnly}
+            composerSubmitDisabled={props.unavailable !== undefined}
+            {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
             composerFocusOnType={!props.readOnly && props.focusOnType}
             composerPlaceholder={
                 props.readOnly
@@ -3989,7 +4236,11 @@ function RigConversationSurface(props: {
             loading={!conversation.ready}
             scrollPosition={conversation.scrollPosition}
             onScrollPositionChange={(position) => {
-                if (position.scrollTop <= 64 && !conversation.transcriptComplete)
+                if (
+                    props.rigOnline() &&
+                    position.scrollTop <= 64 &&
+                    !conversation.transcriptComplete
+                )
                     workspace.historyLoadMore();
                 workspace.conversationScrollUpdate(
                     conversation.conversationId as RigSessionId,
@@ -4005,11 +4256,16 @@ function RigConversationSurface(props: {
                                 // is active or queued behind it, so the control
                                 // says so rather than accepting a choice the
                                 // next message could not apply.
-                                disabled: props.readOnly || conversation.modelLocked,
-                                onEffortChange: (effort?: RigThinkingLevel) =>
-                                    workspace.sessionEffortUpdate(effort),
-                                onModelChange: (selection: RigModelSelection) =>
-                                    workspace.sessionModelUpdate(selection),
+                                disabled:
+                                    props.readOnly ||
+                                    props.unavailable !== undefined ||
+                                    conversation.modelLocked,
+                                onEffortChange: (effort?: RigThinkingLevel) => {
+                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
+                                },
+                                onModelChange: (selection: RigModelSelection) => {
+                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
+                                },
                             })}
                         />
                     ) : null}
@@ -4020,23 +4276,24 @@ function RigConversationSurface(props: {
                     leading={
                         <>
                             <RigSessionControls
-                                disabled={props.readOnly}
+                                disabled={props.readOnly || props.unavailable !== undefined}
                                 fields={["permission", "tier"]}
                                 menuPlacement="above"
                                 variant="ghost"
                                 menus={conversation.menus}
-                                onEffortChange={(effort?: RigThinkingLevel) =>
-                                    workspace.sessionEffortUpdate(effort)
-                                }
-                                onModelChange={(selection: RigModelSelection) =>
-                                    workspace.sessionModelUpdate(selection)
-                                }
-                                onPermissionModeChange={(mode: RigPermissionMode) =>
-                                    workspace.sessionPermissionModeUpdate(mode)
-                                }
-                                onServiceTierChange={(tier?: RigServiceTier) =>
-                                    workspace.sessionServiceTierUpdate(tier)
-                                }
+                                onEffortChange={(effort?: RigThinkingLevel) => {
+                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
+                                }}
+                                onModelChange={(selection: RigModelSelection) => {
+                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
+                                }}
+                                onPermissionModeChange={(mode: RigPermissionMode) => {
+                                    if (props.rigOnline())
+                                        workspace.sessionPermissionModeUpdate(mode);
+                                }}
+                                onServiceTierChange={(tier?: RigServiceTier) => {
+                                    if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
+                                }}
                             />
                             {/* Showing this session to someone is a decision
                                 about the session, so it stands with the other
@@ -4049,6 +4306,7 @@ function RigConversationSurface(props: {
                                 only aim at nothing. */}
                             {share && shareStore ? (
                                 <Button
+                                    disabled={props.unavailable !== undefined}
                                     icon="eye"
                                     onClick={() =>
                                         shared
@@ -4086,19 +4344,38 @@ function RigConversationSurface(props: {
                     }
                 />
             }
-            onAbort={props.canAbort ? () => swallow(workspace.runAbort()) : undefined}
-            onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
+            onAbort={
+                props.canAbort
+                    ? () => {
+                          if (props.rigOnline()) swallow(workspace.runAbort());
+                      }
+                    : undefined
+            }
+            onCommandInvoke={
+                props.unavailable === undefined
+                    ? (commandId) => {
+                          if (props.rigOnline()) workspace.composerCommandInvoke(commandId);
+                      }
+                    : undefined
+            }
             onComposerAttachmentRemove={(attachmentId) =>
                 workspace.composerAttachmentRemove(attachmentId)
             }
             onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
             onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
-            onComposerSend={() => workspace.composerTextSubmit()}
+            onComposerSend={() => {
+                if (props.rigOnline()) workspace.composerTextSubmit();
+            }}
             onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
-            onFileOpen={(path) => props.onFileOpen(path)}
-            onImageOpen={(messageId, attachmentId) => workspace.imageOpen(messageId, attachmentId)}
+            onFileOpen={(path) => {
+                if (props.rigOnline()) props.onFileOpen(path);
+            }}
+            onImageOpen={(messageId, attachmentId) => {
+                if (props.rigOnline()) workspace.imageOpen(messageId, attachmentId);
+            }}
             onAttachmentOpen={(attachment) => {
                 if (attachment.attachmentKind === "webapp" && attachment.webapp) {
+                    if (!props.rigOnline()) return;
                     swallow(
                         workspace.webappOpen(
                             attachment.webapp,
@@ -4118,10 +4395,12 @@ function RigConversationSurface(props: {
                 }
                 workspace.panel.previewOpen(entryId);
             }}
-            {...(props.writeRefusal === undefined
+            {...(props.writeRefusal === undefined && props.unavailable === undefined
                 ? {
                       onRequestAnswer: (requestId: string, answers: RigUserInputAnswerMap) =>
-                          swallow(workspace.answerInput({ requestId, answers })),
+                          props.rigOnline()
+                              ? swallow(workspace.answerInput({ requestId, answers }))
+                              : undefined,
                   }
                 : {})}
             expandedTurnIds={conversation.expandedTurnIds}
@@ -4152,23 +4431,30 @@ function RigConversationSurface(props: {
                                 name: member.name,
                             }),
                         )}
-                        onFriendMessagesChange={(value) => shareStore?.friendMessagesUpdate(value)}
-                        {...(shared.condition === "ended"
+                        {...(props.unavailable === undefined
                             ? {
-                                  // The share is over for good, but the session
-                                  // can be shown again: that is a new share
-                                  // with nobody in it, so it opens the same
-                                  // picker starting one always does.
-                                  onShareAgain: () => shareStore?.choiceOpen("start"),
+                                  onFriendMessagesChange: (value: boolean) =>
+                                      shareStore?.friendMessagesUpdate(value),
                               }
-                            : {
-                                  onMemberAdd: () => shareStore?.choiceOpen("add"),
-                                  onMemberRevoke: (memberId: string) =>
-                                      shareStore?.memberRevokeOpen(
-                                          memberId as RigSessionShareMemberId,
-                                      ),
-                                  onStop: () => shareStore?.shareStopOpen(),
-                              })}
+                            : {})}
+                        {...(props.unavailable !== undefined
+                            ? {}
+                            : shared.condition === "ended"
+                              ? {
+                                    // The share is over for good, but the session
+                                    // can be shown again: that is a new share
+                                    // with nobody in it, so it opens the same
+                                    // picker starting one always does.
+                                    onShareAgain: () => shareStore?.choiceOpen("start"),
+                                }
+                              : {
+                                    onMemberAdd: () => shareStore?.choiceOpen("add"),
+                                    onMemberRevoke: (memberId: string) =>
+                                        shareStore?.memberRevokeOpen(
+                                            memberId as RigSessionShareMemberId,
+                                        ),
+                                    onStop: () => shareStore?.shareStopOpen(),
+                                })}
                         stopping={share.dialog?.type === "stop" && share.submitting}
                     />
                 ) : conversation.usagePanelOpen ? (
@@ -4182,9 +4468,14 @@ function RigConversationSurface(props: {
                         backgroundProcesses={conversation.backgroundProcesses}
                         goal={conversation.goal}
                         now={props.now}
-                        onBackgroundProcessStop={(processId) =>
-                            swallow(workspace.backgroundProcessStop(processId))
-                        }
+                        {...(props.unavailable === undefined
+                            ? {
+                                  onBackgroundProcessStop: (processId: number) => {
+                                      if (props.rigOnline())
+                                          swallow(workspace.backgroundProcessStop(processId));
+                                  },
+                              }
+                            : {})}
                         subagents={conversation.subagents}
                         tasks={conversation.tasks}
                     />
@@ -4221,7 +4512,9 @@ function RigConversationSurface(props: {
                             onFriendMessagesChange={(value) =>
                                 shareStore?.choiceFriendMessagesUpdate(value)
                             }
-                            onStart={() => shareStore?.dialogConfirm()}
+                            onStart={() => {
+                                if (props.rigOnline()) shareStore?.dialogConfirm();
+                            }}
                             onToggle={(candidateId) => {
                                 const friend = props.shareCandidates.find(
                                     (candidate) => candidate.id === candidateId,
@@ -4237,6 +4530,10 @@ function RigConversationSurface(props: {
                                 });
                             }}
                             selected={new Set(share.choices.map((choice) => choice.peerId))}
+                            confirmDisabled={props.unavailable !== undefined}
+                            {...(props.unavailable === undefined
+                                ? {}
+                                : { confirmDisabledReason: props.unavailable })}
                             starting={share.submitting}
                         />
                     </ModalOverlay>
@@ -4256,7 +4553,13 @@ function RigConversationSurface(props: {
                                   }
                                 : { watching: shared?.watching ?? 0 })}
                             onCancel={() => shareStore?.dialogClose()}
-                            onConfirm={() => shareStore?.dialogConfirm()}
+                            onConfirm={() => {
+                                if (props.rigOnline()) shareStore?.dialogConfirm();
+                            }}
+                            confirmDisabled={props.unavailable !== undefined}
+                            {...(props.unavailable === undefined
+                                ? {}
+                                : { confirmDisabledReason: props.unavailable })}
                             working={share.submitting}
                         />
                     </ModalOverlay>
@@ -4345,8 +4648,12 @@ function RigPanelComposer(props: {
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
+    /** Reads current transport health when a Rig-backed action is invoked. */
+    rigOnline: () => boolean;
     /** Why the input is closed, said in the words of whatever closed it. */
     readOnlyReason?: string;
+    /** Why this Rig cannot currently accept network actions. */
+    unavailable?: string;
     /**
      * Whether a run already going here may be stopped. Separate from `readOnly`
      * on purpose: a checkout that has gone away closes the input, but the run
@@ -4375,6 +4682,8 @@ function RigPanelComposer(props: {
                     />
                 }
                 disabled={props.readOnly}
+                submitDisabled={props.unavailable !== undefined}
+                {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
                 // This dock only exists while it covers the workspace column's
                 // composer, so it is the surface the reader writes into.
                 composerFocusOnType={!props.readOnly}
@@ -4387,11 +4696,16 @@ function RigPanelComposer(props: {
                     conversation.menus ? (
                         <ComposerModelControl
                             {...rigComposerModelControlProps(conversation.menus, {
-                                disabled: props.readOnly || conversation.modelLocked,
-                                onEffortChange: (effort?: RigThinkingLevel) =>
-                                    workspace.sessionEffortUpdate(effort),
-                                onModelChange: (selection: RigModelSelection) =>
-                                    workspace.sessionModelUpdate(selection),
+                                disabled:
+                                    props.readOnly ||
+                                    props.unavailable !== undefined ||
+                                    conversation.modelLocked,
+                                onEffortChange: (effort?: RigThinkingLevel) => {
+                                    if (props.rigOnline()) workspace.sessionEffortUpdate(effort);
+                                },
+                                onModelChange: (selection: RigModelSelection) => {
+                                    if (props.rigOnline()) workspace.sessionModelUpdate(selection);
+                                },
                             })}
                         />
                     ) : undefined
@@ -4401,23 +4715,27 @@ function RigPanelComposer(props: {
                         leading={
                             <>
                                 <RigSessionControls
-                                    disabled={props.readOnly}
+                                    disabled={props.readOnly || props.unavailable !== undefined}
                                     fields={["permission", "tier"]}
                                     menuPlacement="above"
                                     variant="ghost"
                                     menus={conversation.menus}
-                                    onEffortChange={(effort?: RigThinkingLevel) =>
-                                        workspace.sessionEffortUpdate(effort)
-                                    }
-                                    onModelChange={(selection: RigModelSelection) =>
-                                        workspace.sessionModelUpdate(selection)
-                                    }
-                                    onPermissionModeChange={(mode: RigPermissionMode) =>
-                                        workspace.sessionPermissionModeUpdate(mode)
-                                    }
-                                    onServiceTierChange={(tier?: RigServiceTier) =>
-                                        workspace.sessionServiceTierUpdate(tier)
-                                    }
+                                    onEffortChange={(effort?: RigThinkingLevel) => {
+                                        if (props.rigOnline())
+                                            workspace.sessionEffortUpdate(effort);
+                                    }}
+                                    onModelChange={(selection: RigModelSelection) => {
+                                        if (props.rigOnline())
+                                            workspace.sessionModelUpdate(selection);
+                                    }}
+                                    onPermissionModeChange={(mode: RigPermissionMode) => {
+                                        if (props.rigOnline())
+                                            workspace.sessionPermissionModeUpdate(mode);
+                                    }}
+                                    onServiceTierChange={(tier?: RigServiceTier) => {
+                                        if (props.rigOnline())
+                                            workspace.sessionServiceTierUpdate(tier);
+                                    }}
                                 />
                                 <SlotEntries
                                     entries={props.slots.statusLine}
@@ -4461,14 +4779,28 @@ function RigPanelComposer(props: {
                         }
                     />
                 }
-                onAbort={props.canAbort ? () => swallow(workspace.runAbort()) : undefined}
-                onCommandInvoke={(commandId) => workspace.composerCommandInvoke(commandId)}
+                onAbort={
+                    props.canAbort
+                        ? () => {
+                              if (props.rigOnline()) swallow(workspace.runAbort());
+                          }
+                        : undefined
+                }
+                onCommandInvoke={
+                    props.unavailable === undefined
+                        ? (commandId) => {
+                              if (props.rigOnline()) workspace.composerCommandInvoke(commandId);
+                          }
+                        : undefined
+                }
                 onComposerAttachmentRemove={(attachmentId) =>
                     workspace.composerAttachmentRemove(attachmentId)
                 }
                 onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
                 onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
-                onComposerSend={() => workspace.composerTextSubmit()}
+                onComposerSend={() => {
+                    if (props.rigOnline()) workspace.composerTextSubmit();
+                }}
                 onComposerValueChange={(value) => workspace.composerTextUpdate(value)}
                 running={conversation.running}
             />
@@ -4548,6 +4880,8 @@ function rigTurnElapsedMs(
  */
 function RigWindowDialogs(props: {
     projects: readonly RigProjectGroup[];
+    rigOnline: () => boolean;
+    unavailable?: string;
     workspace: RigWorkspaceStore;
 }) {
     const workspace = useSyncExternalStore(
@@ -4563,8 +4897,10 @@ function RigWindowDialogs(props: {
                 workspace.projectCompute,
                 props.projects,
                 props.workspace,
+                props.rigOnline,
+                props.unavailable,
             )}
-            {rigCreateDialog(workspace.create, props.workspace)}
+            {rigCreateDialog(workspace.create, props.workspace, props.rigOnline, props.unavailable)}
         </>
     );
 }
@@ -4585,6 +4921,8 @@ function rigNamingDialog(
     compute: RigWorkspaceSnapshot["projectCompute"],
     projects: readonly RigProjectGroup[],
     store: RigWorkspaceStore,
+    rigOnline: () => boolean,
+    unavailable?: string,
 ): ReactNode {
     if (!rename) return null;
     if (rename.worktreeId)
@@ -4597,9 +4935,10 @@ function rigNamingDialog(
                                 Cancel
                             </Button>
                             <Button
-                                disabled={rename.submitting}
+                                disabled={rename.submitting || unavailable !== undefined}
                                 onClick={() => {
-                                    void store.renameSubmit().catch(() => undefined);
+                                    if (rigOnline())
+                                        void store.renameSubmit().catch(() => undefined);
                                 }}
                                 variant="primary"
                             >
@@ -4616,7 +4955,7 @@ function rigNamingDialog(
                         fullWidth
                         label="Name"
                         onSubmit={() => {
-                            void store.renameSubmit().catch(() => undefined);
+                            if (rigOnline()) void store.renameSubmit().catch(() => undefined);
                         }}
                         onValueChange={(value) => store.renameDraftUpdate(value)}
                         value={rename.draft}
@@ -4695,20 +5034,21 @@ function rigNamingDialog(
             name={archiving?.name ?? rename.currentName}
             onArchiveCancel={() => store.projectArchiveCancel()}
             onArchiveConfirm={() => {
-                void store.projectArchiveSubmit().catch(() => undefined);
+                if (rigOnline()) void store.projectArchiveSubmit().catch(() => undefined);
             }}
             onArchiveRequest={() => store.projectArchiveOpen(rename.projectId)}
             onClose={() => store.renameCancel()}
             onComputeImageChange={(value) => store.projectComputeImageUpdate(value)}
             onComputeModeChange={(mode) => store.projectComputeModeUpdate(mode)}
             onComputeSubmit={() => {
-                void store.projectComputeSubmit().catch(() => undefined);
+                if (rigOnline()) void store.projectComputeSubmit().catch(() => undefined);
             }}
             onDraftChange={(value) => store.renameDraftUpdate(value)}
             onSubmit={() => {
-                void store.renameSubmit().catch(() => undefined);
+                if (rigOnline()) void store.renameSubmit().catch(() => undefined);
             }}
             submitting={rename.submitting}
+            {...(unavailable === undefined ? {} : { submitDisabledReason: unavailable })}
         />
     );
 }
@@ -4722,6 +5062,8 @@ function rigNamingDialog(
 function rigCreateDialog(
     create: RigWorkspaceSnapshot["create"],
     store: RigWorkspaceStore,
+    rigOnline: () => boolean,
+    unavailable?: string,
 ): ReactNode {
     if (!create) return null;
     return (
@@ -4745,10 +5087,11 @@ function rigCreateDialog(
             onPermissionModeChange={(mode) => store.createPermissionModeUpdate(mode)}
             onServiceTierChange={(tier) => store.createServiceTierUpdate(tier)}
             onSubmit={() => {
-                void store.createSubmit().catch(() => undefined);
+                if (rigOnline()) void store.createSubmit().catch(() => undefined);
             }}
             onTextChange={(text) => store.createTextUpdate(text)}
             submitting={create.submitting}
+            {...(unavailable === undefined ? {} : { submitDisabledReason: unavailable })}
             text={create.text}
         />
     );
@@ -4799,6 +5142,9 @@ function RigPanelBody(props: {
     onViewTransfer: (viewId: string) => void;
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
+    /** Owning Rig availability applied to every retained terminal tab. */
+    rigAvailability?: "reconnecting" | "unavailable";
+    rigAvailabilityReason?: string;
     scope: RigFileScope;
     selection: ReadonlySet<string>;
     sessionId?: string;
@@ -4978,6 +5324,14 @@ function RigPanelBody(props: {
                         {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
                         tabs={panelTools}
+                        {...(props.rigAvailability === undefined
+                            ? {}
+                            : {
+                                  rigAvailability: props.rigAvailability,
+                                  ...(props.rigAvailabilityReason === undefined
+                                      ? {}
+                                      : { rigAvailabilityReason: props.rigAvailabilityReason }),
+                              })}
                         webappRevisions={props.webappRevisions}
                     />
                     {props.panel.activeViewId === "files" ? (
@@ -4990,14 +5344,36 @@ function RigPanelBody(props: {
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
+                            {...(props.rigAvailabilityReason === undefined
+                                ? {}
+                                : { unavailable: props.rigAvailabilityReason })}
+                            {...(props.rigAvailability !== undefined && all
+                                ? {
+                                      fileActionsUnavailable:
+                                          props.rigAvailabilityReason ??
+                                          "Rig must reconnect before opening files.",
+                                  }
+                                : {})}
                             // A truncated listing says so rather than passing off
                             // part of a repository as the whole of it.
                             {...(all && props.workspaceFiles?.truncated
                                 ? { note: "Showing the first 20,000 files." }
                                 : {})}
                             onLayoutChange={(layout: RigFileLayout) => props.onLayoutChange(layout)}
-                            onOpen={props.onFileOpen}
+                            {...(props.rigAvailability === undefined
+                                ? { onOpen: props.onFileOpen }
+                                : {})}
                             onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
+                            {...(props.rigAvailability !== undefined &&
+                            props.workspaceFiles === undefined
+                                ? {
+                                      scopeUnavailable: {
+                                          all:
+                                              props.rigAvailabilityReason ??
+                                              "Rig must reconnect before loading all files.",
+                                      },
+                                  }
+                                : {})}
                             {...(props.onRevert ? { onRevert: props.onRevert } : {})}
                             onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
                                 props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))
@@ -5169,6 +5545,9 @@ function RigToolBodies(props: {
     /** The machine the session below browses from, absent on this window's own. */
     nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
+    /** Owning Rig availability applied to retained terminal tabs. */
+    rigAvailability?: "reconnecting" | "unavailable";
+    rigAvailabilityReason?: string;
     sessionId?: string;
     /** Current version per imported webapp, used to live-reload an already open page. */
     webappRevisions: ReadonlyMap<string, number>;
@@ -5185,6 +5564,13 @@ function RigToolBodies(props: {
                         key={tab.id}
                         onLocationChange={(url) => props.store.browserUpdate(tab.id, { url })}
                         onTitleChange={(title) => props.store.browserUpdate(tab.id, { title })}
+                        {...(props.rigAvailability === undefined
+                            ? {}
+                            : {
+                                  unavailable:
+                                      props.rigAvailabilityReason ??
+                                      "This Rig is reconnecting. Browser navigation is paused.",
+                              })}
                         renderContent={
                             props.browserContent && props.sessionId
                                 ? (browserProps) =>
@@ -5203,7 +5589,19 @@ function RigToolBodies(props: {
                     />
                 ))}
             {active?.kind === "terminal" ? (
-                <RigTerminalTab key={active.id} store={props.store} tabId={active.id} />
+                <RigTerminalTab
+                    key={active.id}
+                    store={props.store}
+                    tabId={active.id}
+                    {...(props.rigAvailability === undefined
+                        ? {}
+                        : {
+                              rigAvailability: props.rigAvailability,
+                              ...(props.rigAvailabilityReason === undefined
+                                  ? {}
+                                  : { rigAvailabilityReason: props.rigAvailabilityReason }),
+                          })}
+                />
             ) : active?.kind === "webapp" ? (
                 <HtmlPreviewFrame
                     {...(props.htmlPreview ? { renderContent: props.htmlPreview } : {})}
@@ -5215,7 +5613,12 @@ function RigToolBodies(props: {
     );
 }
 
-function RigTerminalTab(props: { store: RigPanelStore; tabId: RigPanelTabId }) {
+function RigTerminalTab(props: {
+    store: RigPanelStore;
+    tabId: RigPanelTabId;
+    rigAvailability?: "reconnecting" | "unavailable";
+    rigAvailabilityReason?: string;
+}) {
     const terminal: RigTerminalStore | undefined = props.store.terminal(props.tabId);
     if (!terminal)
         return (
@@ -5226,11 +5629,27 @@ function RigTerminalTab(props: { store: RigPanelStore; tabId: RigPanelTabId }) {
                 title="Terminal closed"
             />
         );
-    return <RigTerminalScreen terminal={terminal} />;
+    return (
+        <RigTerminalScreen
+            terminal={terminal}
+            {...(props.rigAvailability === undefined
+                ? {}
+                : {
+                      rigAvailability: props.rigAvailability,
+                      ...(props.rigAvailabilityReason === undefined
+                          ? {}
+                          : { rigAvailabilityReason: props.rigAvailabilityReason }),
+                  })}
+        />
+    );
 }
 
 /** The subscribed half of a terminal tab, split out so the store is non-optional. */
-function RigTerminalScreen(props: { terminal: RigTerminalStore }) {
+function RigTerminalScreen(props: {
+    terminal: RigTerminalStore;
+    rigAvailability?: "reconnecting" | "unavailable";
+    rigAvailabilityReason?: string;
+}) {
     const { terminal } = props;
     const snapshot = useSyncExternalStore(terminal.subscribe, terminal.get, terminal.get);
     return (
@@ -5242,6 +5661,14 @@ function RigTerminalScreen(props: { terminal: RigTerminalStore }) {
             onOpenLink={openExternalLink}
             onReconnect={() => terminal.terminalReconnect()}
             onResize={(cols, rows) => terminal.terminalResize(cols, rows)}
+            {...(props.rigAvailability === undefined
+                ? {}
+                : {
+                      rigAvailability: props.rigAvailability,
+                      ...(props.rigAvailabilityReason === undefined
+                          ? {}
+                          : { rigAvailabilityReason: props.rigAvailabilityReason }),
+                  })}
             status={snapshot.status}
         />
     );

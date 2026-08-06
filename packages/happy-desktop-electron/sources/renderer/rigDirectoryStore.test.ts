@@ -34,6 +34,14 @@ const READY: DesktopRuntimeSnapshot = {
  */
 function sessionStub(): RigSession {
     return {
+        connection: {
+            get: () => ({
+                attempt: 0,
+                connection: "connected",
+                daemon: "ready",
+            }),
+            subscribe: () => () => undefined,
+        },
         workspace: {
             get: () => ({
                 list: { projects: { type: "loading" } },

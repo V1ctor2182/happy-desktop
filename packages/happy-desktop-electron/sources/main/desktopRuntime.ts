@@ -226,10 +226,62 @@ export class DesktopRuntime implements AsyncDisposable {
         if (!rigDaemonConnectionUnavailable(error)) return Promise.resolve();
         if (this.reconnectTask) return this.reconnectTask;
         const topology = this.activeTopology;
-        if (!topology || topology.mode !== "local" || this.closed) return Promise.resolve();
+        const generation = this.activationGeneration;
+        const failedConnection = this.rigConnection;
+        const proxy = this.rigProxy;
+        if (
+            !topology ||
+            topology.mode !== "local" ||
+            this.closed ||
+            this.snapshotValue.phase !== "ready" ||
+            this.snapshotValue.mode !== "local" ||
+            !failedConnection ||
+            !proxy
+        )
+            return Promise.resolve();
         const task = this.serial(async () => {
-            if (this.closed || this.activeTopology?.id !== topology.id) return;
-            await this.startValidated(topology, false);
+            if (
+                this.closed ||
+                this.activationGeneration !== generation ||
+                this.activeTopology?.id !== topology.id ||
+                this.snapshotValue.phase !== "ready" ||
+                this.rigConnection !== failedConnection ||
+                this.rigProxy !== proxy
+            )
+                return;
+            const replacement = await this.connector.connect();
+            if (
+                this.closed ||
+                this.activationGeneration !== generation ||
+                this.activeTopology?.id !== topology.id ||
+                this.snapshotValue.phase !== "ready" ||
+                this.rigConnection !== failedConnection ||
+                this.rigProxy !== proxy
+            ) {
+                replacement.close();
+                return;
+            }
+            try {
+                proxy.replace({
+                    client: replacement.client,
+                    peerClient: (nodeId) => replacement.client.peer(nodeId),
+                });
+            } catch (replaceError) {
+                replacement.close();
+                throw replaceError;
+            }
+            this.rigConnection = replacement;
+            failedConnection.close();
+            const snapshot = this.snapshotValue;
+            if (snapshot.phase === "ready") {
+                this.publish({
+                    ...snapshot,
+                    activeTarget: {
+                        ...snapshot.activeTarget,
+                        rigVersion: replacement.version,
+                    },
+                });
+            }
         });
         const tracked = task.finally(() => {
             if (this.reconnectTask === tracked) this.reconnectTask = undefined;

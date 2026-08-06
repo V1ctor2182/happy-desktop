@@ -30,6 +30,9 @@ export type RigUserInputPromptProps = {
     onSelectionChange?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /** Disables the controls while a prior submission is in flight. */
     pending?: boolean;
+    /** Disables only submission while keeping local option selection editable. */
+    submitDisabled?: boolean;
+    submitDisabledReason?: string;
     /** Last failed answer submission; retry resubmits the retained selections. */
     error?: UserError;
     /** Defaults to `card`; see `RigUserInputPromptVariant`. */
@@ -175,10 +178,14 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
             </div>
             {props.error ? (
                 <Banner
-                    action={{
-                        label: "Retry",
-                        onClick: () => props.onAnswer(request.requestId, answers),
-                    }}
+                    {...(props.submitDisabled
+                        ? {}
+                        : {
+                              action: {
+                                  label: "Retry",
+                                  onClick: () => props.onAnswer(request.requestId, answers),
+                              },
+                          })}
                     data-testid="rig-user-input-error"
                     tone="danger"
                     title="Answer not sent"
@@ -189,9 +196,10 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
             <div className="happy2-rig-input__footer">
                 <Button
                     data-action="submit"
-                    disabled={!complete || props.pending}
+                    disabled={!complete || props.pending || props.submitDisabled}
                     onClick={() => props.onAnswer(request.requestId, answers)}
                     size="small"
+                    title={props.submitDisabledReason}
                 >
                     Submit
                 </Button>

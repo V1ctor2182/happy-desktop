@@ -54,6 +54,8 @@ export type RigCreateSessionDialogProps = {
     submitting?: boolean;
     /** A failed start, stated here rather than thrown away. */
     error?: string;
+    /** Why the draft cannot currently be submitted to its Rig. */
+    submitDisabledReason?: string;
     onDestinationSelect: (id: string) => void;
     onTextChange: (text: string) => void;
     onKeepOpenChange: (keepOpen: boolean) => void;
@@ -125,7 +127,11 @@ export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
     const chosen = props.destinations.find((destination) => destination.id === props.destinationId);
     // A task with nothing written and nowhere to run is not a session waiting to
     // start, and the commit says so by staying inert rather than failing when used.
-    const submittable = props.text.trim().length > 0 && chosen !== undefined && !submitting;
+    const submittable =
+        props.text.trim().length > 0 &&
+        chosen !== undefined &&
+        !submitting &&
+        props.submitDisabledReason === undefined;
     const destinationOptions: SelectOption[] = props.destinations.map((destination) => ({
         label: destinationLabel(destination),
         value: destination.id,
@@ -199,6 +205,7 @@ export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
                             <Button
                                 disabled={!submittable}
                                 onClick={() => props.onSubmit()}
+                                title={props.submitDisabledReason}
                                 variant="primary"
                             >
                                 {submitting ? "Starting…" : "Create"}
@@ -216,6 +223,11 @@ export function RigCreateSessionDialog(props: RigCreateSessionDialogProps) {
                     className="happy2-rig-create-session"
                     data-happy-desktop-ui="rig-create-session"
                 >
+                    {props.submitDisabledReason ? (
+                        <Banner tone="neutral" title="Rig reconnecting">
+                            {props.submitDisabledReason}
+                        </Banner>
+                    ) : null}
                     <div
                         className="happy2-rig-create-session__prompt"
                         data-happy-desktop-ui="rig-create-session-prompt"

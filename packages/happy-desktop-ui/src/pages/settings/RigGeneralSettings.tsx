@@ -22,6 +22,8 @@ export type RigGeneralSettingsProps = {
     /** Set while the catalog is still being read, so the pickers say so. */
     loading?: boolean;
     error?: string;
+    /** Why daemon-backed defaults cannot currently be changed. Appearance remains local. */
+    unavailable?: string;
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
@@ -46,6 +48,11 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
             {props.error ? (
                 <Banner tone="danger" title="Models unavailable">
                     {props.error}
+                </Banner>
+            ) : null}
+            {props.unavailable ? (
+                <Banner tone="neutral" title="Rig reconnecting">
+                    {props.unavailable}
                 </Banner>
             ) : null}
             <RigSettingsSection
@@ -82,6 +89,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                             <Box width={280}>
                                 <Select
                                     aria-label="Default model"
+                                    disabled={props.unavailable !== undefined}
                                     fullWidth
                                     id="rig-settings-default-model"
                                     onValueChange={props.onDefaultModelChange}
@@ -102,7 +110,10 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                         <Box width={280}>
                             <Select
                                 aria-label="Reasoning effort"
-                                disabled={props.effortOptions.length === 0}
+                                disabled={
+                                    props.unavailable !== undefined ||
+                                    props.effortOptions.length === 0
+                                }
                                 fullWidth
                                 id="rig-settings-effort"
                                 onValueChange={props.onEffortChange}
@@ -126,6 +137,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                         <Box width={280}>
                             <Select
                                 aria-label="Default access mode"
+                                disabled={props.unavailable !== undefined}
                                 fullWidth
                                 id="rig-settings-permission-mode"
                                 onValueChange={props.onPermissionModeChange}

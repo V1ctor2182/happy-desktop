@@ -59,6 +59,8 @@ export interface BrowserPanelProps {
     renderContent?: BrowserContentRenderer;
     onLocationChange?(url: string): void;
     onTitleChange?(title: string): void;
+    /** Why Rig-bound browser navigation is unavailable while the guest remains mounted. */
+    unavailable?: string;
 }
 
 interface BrowserViewState {
@@ -91,6 +93,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
     });
 
     const load = (url: string) => {
+        if (props.unavailable !== undefined) return;
         viewSet((current) => ({ ...current, address: url, failure: undefined, loading: true }));
         controller?.browserLoad(url);
     };
@@ -108,13 +111,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
     return (
         <section
             className="happy2-browser-panel"
+            data-unavailable={props.unavailable === undefined ? undefined : ""}
             data-happy-desktop-ui="browser-panel"
             hidden={!props.active}
         >
             <div className="happy2-browser-panel__toolbar" data-happy-desktop-ui="browser-toolbar">
                 <Button
                     aria-label="Back"
-                    disabled={!view.canGoBack}
+                    disabled={props.unavailable !== undefined || !view.canGoBack}
                     iconOnly
                     onClick={() => controller?.browserBack()}
                     size="small"
@@ -124,7 +128,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </Button>
                 <Button
                     aria-label="Forward"
-                    disabled={!view.canGoForward}
+                    disabled={props.unavailable !== undefined || !view.canGoForward}
                     iconOnly
                     onClick={() => controller?.browserForward()}
                     size="small"
@@ -134,6 +138,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </Button>
                 <Button
                     aria-label={view.loading ? "Stop loading" : "Reload"}
+                    disabled={props.unavailable !== undefined}
                     iconOnly
                     onClick={() => {
                         if (view.loading) controller?.browserStop();
@@ -161,6 +166,15 @@ export function BrowserPanel(props: BrowserPanelProps) {
                     value={view.address}
                 />
             </div>
+            {props.unavailable ? (
+                <div
+                    className="happy2-browser-panel__unavailable"
+                    data-happy-desktop-ui="browser-unavailable"
+                    role="status"
+                >
+                    {props.unavailable}
+                </div>
+            ) : null}
             <div className="happy2-browser-panel__content" data-happy-desktop-ui="browser-content">
                 {props.renderContent ? (
                     props.renderContent({
@@ -198,6 +212,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                             props.onTitleChange?.(title);
                         },
                         browserFailed(failure) {
+                            if (props.unavailable !== undefined) return;
                             viewSet((current) => ({
                                 ...current,
                                 failure,
@@ -221,7 +236,9 @@ export function BrowserPanel(props: BrowserPanelProps) {
                               role="alert"
                           >
                               <EmptyState
-                                  action={{ label: "Try again", onClick: retry }}
+                                  {...(props.unavailable === undefined
+                                      ? { action: { label: "Try again", onClick: retry } }
+                                      : {})}
                                   description={page.description}
                                   icon={page.icon}
                                   // Content-sized, so the raw engine code stays

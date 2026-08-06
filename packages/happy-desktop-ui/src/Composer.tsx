@@ -327,6 +327,11 @@ export type ComposerProps = {
     recentEmoji?: string[];
     /** Overrides the text-only send check when attached context is sendable. */
     sendEnabled?: boolean;
+    /**
+     * Keeps the local draft editable while withholding the network submission.
+     * This is distinct from `disabled`, which closes the whole composer.
+     */
+    submitDisabled?: boolean;
     style?: CSSProperties;
     value: string;
 };
@@ -482,7 +487,10 @@ export function Composer(props: ComposerProps) {
         textareaEl.current?.focus();
     };
     const canSend = () =>
-        !busy && !commandOpen() && (props.sendEnabled ?? props.value.trim().length > 0);
+        !busy &&
+        !props.submitDisabled &&
+        !commandOpen() &&
+        (props.sendEnabled ?? props.value.trim().length > 0);
     /*
      * One control, two acts. While the agent is running an empty draft has
      * nothing to send, so that same circle stops the run; the moment there is
@@ -960,6 +968,7 @@ export function Composer(props: ComposerProps) {
             data-disabled={props.disabled ? "" : undefined}
             data-dropping={dropActive && dropAccepted() ? "" : undefined}
             data-pending={props.pending ? "" : undefined}
+            data-submit-disabled={props.submitDisabled ? "" : undefined}
             data-happy-desktop-ui="composer"
             data-testid={props["data-testid"]}
             onDragEnter={dragOverSurface}

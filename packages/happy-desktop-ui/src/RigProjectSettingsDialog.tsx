@@ -68,6 +68,8 @@ export type RigProjectSettingsDialogProps = {
     };
     /** True while the host is being told; the dialog stays up and inert. */
     submitting?: boolean;
+    /** Why the current local drafts cannot be committed to the Rig. */
+    submitDisabledReason?: string;
     /**
      * Where sessions started in this project run. Absent leaves the section out
      * entirely — a worktree has no compute of its own, and a caller that has lost
@@ -210,8 +212,13 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                             Cancel
                         </Button>
                         <Button
-                            disabled={submitting || !committable}
+                            disabled={
+                                submitting ||
+                                !committable ||
+                                props.submitDisabledReason !== undefined
+                            }
                             onClick={() => props.onSubmit()}
+                            title={props.submitDisabledReason}
                             variant="primary"
                         >
                             {props.submitting === true ? "Saving…" : "Save"}
@@ -228,6 +235,11 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                     className="happy2-rig-project-settings"
                     data-happy-desktop-ui="rig-project-settings"
                 >
+                    {props.submitDisabledReason ? (
+                        <Banner tone="neutral" title="Rig reconnecting">
+                            {props.submitDisabledReason}
+                        </Banner>
+                    ) : null}
                     <div
                         className="happy2-rig-project-settings__identity"
                         data-happy-desktop-ui="rig-project-settings-identity"
@@ -399,7 +411,10 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                                               </span>
                                               <Button
                                                   data-testid="rig-project-compute-apply"
-                                                  disabled={submitting}
+                                                  disabled={
+                                                      submitting ||
+                                                      props.submitDisabledReason !== undefined
+                                                  }
                                                   onClick={() => props.onComputeSubmit?.()}
                                                   size="small"
                                                   variant="primary"
@@ -448,7 +463,10 @@ export function RigProjectSettingsDialog(props: RigProjectSettingsDialogProps) {
                                         </Button>
                                         <Button
                                             data-testid="rig-project-archive-confirm"
-                                            disabled={archiving}
+                                            disabled={
+                                                archiving ||
+                                                props.submitDisabledReason !== undefined
+                                            }
                                             icon="archive"
                                             onClick={() => props.onArchiveConfirm?.()}
                                             size="small"

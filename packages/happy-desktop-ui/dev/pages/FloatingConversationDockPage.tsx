@@ -44,7 +44,7 @@ const chatItems = [
     { kind: "item" as const, id: "wt3|ses_c", label: "Provider catalog" },
 ];
 
-function dock(value: string) {
+function dock(value: string, unavailable?: string) {
     return (
         <ConversationDock
             composer={composer({ text: value })}
@@ -87,6 +87,8 @@ function dock(value: string) {
             composerPlaceholder="Message Happy…"
             onComposerSend={noop}
             onComposerValueChange={noop}
+            submitDisabled={unavailable !== undefined}
+            unavailable={unavailable}
         />
     );
 }
@@ -221,6 +223,27 @@ export function FloatingConversationDockPage() {
                     <Box style={{ display: "flex", flex: "1 1 0%" }} />
                 </AppShell>
             </FullScreenSpecimen>
+            <Specimen
+                detail="known Rig offline · the draft remains editable while submission is unavailable"
+                label="Rig offline"
+                number="04"
+                stage="surface"
+            >
+                <Box
+                    style={{
+                        background: "var(--surface)",
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: "260px",
+                        justifyContent: "flex-end",
+                    }}
+                >
+                    {dock(
+                        "Keep this draft here until the Rig reconnects.",
+                        "Rig is offline. The draft is preserved.",
+                    )}
+                </Box>
+            </Specimen>
         </ComponentPage>
     );
 }

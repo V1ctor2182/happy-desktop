@@ -28,6 +28,9 @@ export type RigInstructionDocument = {
     error?: string;
     /** Why the last write was refused — the machine's own reason. */
     saveError?: string;
+    /** Why the local draft cannot currently be persisted. */
+    saveDisabled?: boolean;
+    saveDisabledReason?: string;
     /** Bytes the draft occupies, and the most the machine will keep. */
     bytes: number;
     maximumBytes: number;
@@ -97,7 +100,11 @@ export function RigInstructionsSettings(props: RigInstructionsSettingsProps) {
                         placeholder={active.placeholder}
                         rendered={<MarkdownDocument text={active.value} />}
                         saving={active.saving}
-                        status={`${bytesLabel(active.bytes)} of ${bytesLabel(active.maximumBytes)}`}
+                        saveDisabled={active.saveDisabled}
+                        status={
+                            active.saveDisabledReason ??
+                            `${bytesLabel(active.bytes)} of ${bytesLabel(active.maximumBytes)}`
+                        }
                         value={active.value}
                     />
                 </Box>

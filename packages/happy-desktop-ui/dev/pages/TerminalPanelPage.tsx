@@ -89,19 +89,43 @@ export function TerminalPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="disconnected · output retained · reconnect offered"
-                label="Reconnecting"
+                detail="Rig reconnecting · PTY status retained · grid mounted read-only"
+                label="Rig reconnecting"
                 number="02"
                 stage="app"
             >
                 <div style={frame}>
-                    <TerminalPanel grid={grid} height={280} status="disconnected" {...handlers} />
+                    <TerminalPanel
+                        grid={grid}
+                        height={280}
+                        rigAvailability="reconnecting"
+                        rigAvailabilityReason="Waiting for the peer route"
+                        status="connected"
+                        {...handlers}
+                    />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="Rig unavailable · reason in context · selection, copy, scroll, and links retained"
+                label="Rig unavailable"
+                number="03"
+                stage="app"
+            >
+                <div style={frame}>
+                    <TerminalPanel
+                        grid={grid}
+                        height={280}
+                        rigAvailability="unavailable"
+                        rigAvailabilityReason="The remote machine is offline"
+                        status="disconnected"
+                        {...handlers}
+                    />
                 </div>
             </Specimen>
             <Specimen
                 detail="exited · frameless session collapses to its header line"
                 label="Exited (collapsed)"
-                number="03"
+                number="04"
                 stage="app"
             >
                 <div style={{ ...frame, height: "120px" }}>
@@ -111,7 +135,7 @@ export function TerminalPanelPage() {
             <Specimen
                 detail="no height · fills a 320 × 360 panel column · no divider, no close"
                 label="Filling a panel column"
-                number="04"
+                number="05"
                 stage="app"
             >
                 <div style={{ ...frame, width: "320px" }}>

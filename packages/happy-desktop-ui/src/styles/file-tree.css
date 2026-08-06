@@ -99,6 +99,11 @@
     background: var(--surface-selected);
 }
 
+.happy2-file-tree__row[data-unavailable] {
+    color: var(--text-secondary);
+    cursor: default;
+}
+
 /* Picked as part of a set, which is a different fact from being the row that is
    open: both can be true of the same row at once. The one being read owns the
    selected fill, so a picked row is marked along its leading edge in the

@@ -27,6 +27,9 @@ export interface RigConnectCatalogFallback {
     subscribe(listener: () => void, onError: (error: unknown) => void): () => void;
 }
 
+const FALLBACK_RETRY_INITIAL_MS = 250;
+const FALLBACK_RETRY_MAXIMUM_MS = 5_000;
+
 /**
  * Adapts `rig-connect`'s complete live group tree to Happy's closed catalog
  * projection. The source owns one stream; all list reads return its latest
@@ -47,6 +50,8 @@ export function rigConnectCatalogSourceCreate(
     let fallbackUnsubscribe: (() => void) | undefined;
     let fallbackReading: Promise<void> | undefined;
     let fallbackReadingGeneration = -1;
+    let fallbackRetry: ReturnType<typeof setTimeout> | undefined;
+    let fallbackFailures = 0;
     // A hint arrived while a read was in flight, so one more read is owed.
     let fallbackRereadWanted = false;
     let live = false;
@@ -77,6 +82,65 @@ export function rigConnectCatalogSourceCreate(
         for (const listener of errorListeners) listener(error);
     };
 
+    const fallbackRetryCancel = (): void => {
+        if (fallbackRetry === undefined) return;
+        clearTimeout(fallbackRetry);
+        fallbackRetry = undefined;
+    };
+
+    const fallbackRetrySchedule = (readGeneration: number): void => {
+        if (disposed || live || generation !== readGeneration || fallbackRetry !== undefined) {
+            return;
+        }
+        const delay = Math.min(
+            FALLBACK_RETRY_INITIAL_MS * 2 ** Math.min(fallbackFailures, 5),
+            FALLBACK_RETRY_MAXIMUM_MS,
+        );
+        fallbackFailures += 1;
+        fallbackRetry = setTimeout(() => {
+            fallbackRetry = undefined;
+            if (!disposed && !live && generation === readGeneration) {
+                fallbackSubscribe(readGeneration);
+                void fallbackRead();
+            }
+        }, delay);
+    };
+
+    /**
+     * Follows durable-change hints while the complete reader is authoritative.
+     * The renderer SSE is a one-shot resource after an error, so an errored
+     * subscription is released and reopened by the same backoff that bridges
+     * failed reads. A successful read then keeps this fresh stream alive.
+     */
+    const fallbackSubscribe = (readGeneration: number): void => {
+        if (disposed || live || generation !== readGeneration || fallbackUnsubscribe !== undefined)
+            return;
+        let current = true;
+        let close = (): void => undefined;
+        fallbackUnsubscribe = () => {
+            if (!current) return;
+            current = false;
+            close();
+        };
+        const subscriptionClose = fallback.subscribe(
+            () => {
+                if (current && !disposed && !live && generation === readGeneration)
+                    void fallbackRead();
+            },
+            (error) => {
+                if (!current || disposed || live || generation !== readGeneration) return;
+                current = false;
+                fallbackUnsubscribe = undefined;
+                close();
+                fail(error);
+                fallbackRetrySchedule(readGeneration);
+            },
+        );
+        close = subscriptionClose;
+        // Covers a source that reports failure synchronously from subscribe.
+        if (!current) close();
+    };
+
     const fallbackStart = (): void => {
         if (disposed || fallbackUnsubscribe) return;
         connection?.close();
@@ -86,7 +150,8 @@ export function rigConnectCatalogSourceCreate(
         // reader before it starts is what lets its results be published at all.
         live = false;
         generation += 1;
-        fallbackUnsubscribe = fallback.subscribe(() => void fallbackRead(), fail);
+        fallbackFailures = 0;
+        fallbackSubscribe(generation);
         void fallbackRead();
     };
 
@@ -111,10 +176,19 @@ export function rigConnectCatalogSourceCreate(
         const readGeneration = generation;
         fallbackReadingGeneration = readGeneration;
         fallbackRereadWanted = false;
+        let succeeded = false;
         const reading = fallback
             .read()
             .then((next) => {
                 if (disposed || live || generation !== readGeneration) return;
+                succeeded = true;
+                fallbackFailures = 0;
+                // The SSE may have failed while this HTTP read was in flight.
+                // Restore a live hint source before cancelling the backoff;
+                // otherwise this successful snapshot would strand the catalog
+                // with neither a subscription nor another recovery attempt.
+                fallbackSubscribe(readGeneration);
+                if (fallbackUnsubscribe !== undefined) fallbackRetryCancel();
                 snapshot = next;
                 for (const waiter of waiting) waiter.resolve(next);
                 waiting.clear();
@@ -132,8 +206,10 @@ export function rigConnectCatalogSourceCreate(
                 // newer one, which is the thing the generation exists to stop.
                 const wanted = fallbackRereadWanted;
                 fallbackRereadWanted = false;
-                if (wanted && !disposed && !live && generation === readGeneration) {
+                if (succeeded && wanted && !disposed && !live && generation === readGeneration) {
                     void fallbackRead();
+                } else if (!succeeded) {
+                    fallbackRetrySchedule(readGeneration);
                 }
             });
         fallbackReading = reading;
@@ -149,6 +225,8 @@ export function rigConnectCatalogSourceCreate(
                     live = true;
                     generation += 1;
                 }
+                fallbackFailures = 0;
+                fallbackRetryCancel();
                 fallbackUnsubscribe?.();
                 fallbackUnsubscribe = undefined;
                 publish(projects);
@@ -183,6 +261,7 @@ export function rigConnectCatalogSourceCreate(
             connection = undefined;
             fallbackUnsubscribe?.();
             fallbackUnsubscribe = undefined;
+            fallbackRetryCancel();
             const error = new Error("The Rig catalog source was disposed.");
             for (const waiter of waiting) waiter.reject(error);
             waiting.clear();

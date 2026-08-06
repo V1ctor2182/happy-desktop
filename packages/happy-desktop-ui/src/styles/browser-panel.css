@@ -28,6 +28,17 @@
     min-width: 0;
 }
 
+.happy2-browser-panel__unavailable {
+    box-sizing: border-box;
+    flex: none;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--text-secondary) 8%, var(--surface));
+    font-size: 12px;
+    line-height: 16px;
+}
+
 .happy2-browser-panel__content {
     position: relative;
     display: flex;
