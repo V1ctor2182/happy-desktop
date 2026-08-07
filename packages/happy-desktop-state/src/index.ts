@@ -45,3 +45,4 @@ export * from "./rig/rigTypes.js";
 export * from "./rig/rigWindowStore.js";
 export * from "./rig/rigWorkspaceMemory.js";
 export * from "./rig/rigWorkspaceStore.js";
+export * from "./rig/rigViewPreferences.js";

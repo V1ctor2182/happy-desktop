@@ -8,6 +8,14 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
+import {
+    RIG_VIEW_PREFERENCES_EMPTY,
+    rigViewPreferencesParse,
+    rigViewPreferencesUpdate,
+    type RigGroupViewPreferences,
+    type RigViewPreferencesDocument,
+    type RigViewPreferencesPersistence,
+} from "./rigViewPreferences.js";
 import type { RigHost } from "./rigHost.js";
 import type {
     RigChatSnapshot,
@@ -364,6 +372,14 @@ export interface RigWorkspaceSnapshot {
     /** Whether the panel nests paths into folders or lists them whole. */
     readonly fileLayout: RigFileLayout;
     /**
+     * How wide the right panel is in the addressed checkout, in CSS pixels, or
+     * nothing where this reader has never sized it and the product's own default
+     * applies. Absent rather than pre-filled, because a remembered width and a
+     * width nobody chose are different things and only the first should survive
+     * a change to the default.
+     */
+    readonly panelWidth?: number;
+    /**
      * Directories the reader opened in the tree, by full path.
      *
      * What is recorded is the decision, not the shape it produced: the tree
@@ -644,6 +660,12 @@ export interface RigWorkspaceDeps {
      * with no folder picker — Blueprint and tests included.
      */
     readonly host?: RigHost;
+    /**
+     * Where this window keeps how each checkout is arranged — panel width, and
+     * how its files are listed. Omitted, the arrangements last as long as the
+     * window and no longer, which is what Blueprint and tests want.
+     */
+    readonly viewPreferences?: RigViewPreferencesPersistence;
 }
 
 export interface RigWorkspaceNewChatInput {
@@ -776,6 +798,18 @@ export interface RigWorkspaceStore {
     /** Opens one workspace file permanently, promoting its preview when present. */
     fileOpen(groupId: RigGroupId, path: string, kind: RigFileTabKind): void;
     /**
+     * Opens an attachment the agent produced on the host as a file of the
+     * checkout it lives in, reported by whether it could.
+     *
+     * An attachment names an absolute path on the machine Rig runs on, and a
+     * path inside a checkout this workspace already reads is a file like any
+     * other: it opens in a tab, and a document opens as a rendered page rather
+     * than as bytes to save. Anything outside every checkout — generated media,
+     * a file elsewhere on that machine — is not something this store can read,
+     * and saying so is what lets the surface fall back to downloading it.
+     */
+    attachmentFileOpen(source: string, kind: RigFileTabKind): boolean;
+    /**
      * Opens one workspace file in the panel's viewer, beside the conversation
      * that named it. This is what a link in a message and the file a tool call
      * worked on resolve to: the file is read for showing, the panel's viewer tab
@@ -817,8 +851,10 @@ export interface RigWorkspaceStore {
      * a reader who only ever looks at their own changes.
      */
     fileScopeUpdate(groupId: RigGroupId, scope: RigFileScope): void;
-    /** Chooses whether the panel nests paths into folders. */
-    fileLayoutUpdate(layout: RigFileLayout): void;
+    /** Chooses whether the panel nests paths into folders, for this checkout. */
+    fileLayoutUpdate(groupId: RigGroupId, layout: RigFileLayout): void;
+    /** Records how wide the reader left the right panel in this checkout. */
+    panelWidthUpdate(groupId: RigGroupId, width: number): void;
     /**
      * Records that the reader wants one directory open or closed.
      *
@@ -1151,11 +1187,45 @@ export function rigWorkspaceStoreCreate(
     /** Every group id the last authoritative read listed: projects and their worktrees. */
     let authoritativeGroupIds: ReadonlySet<string> = new Set();
     let fileViewMode: RigFileViewMode = "unified";
-    // Changed and flat by default: the panel opens on the work in progress,
-    // which is short and reads better as a list than as a tree of one-file
-    // folders. Asking for the whole repository is what switches both.
-    let fileScope: RigFileScope = "changed";
-    let fileLayout: RigFileLayout = "flat";
+    /**
+     * How each checkout this window has arranged is arranged, read once here.
+     *
+     * Per checkout rather than per workspace: how someone wants to look at a
+     * project is a fact about that project's work — a repository whose diffs are
+     * wide wants a wide panel, one with three changed files wants a flat list —
+     * and imposing one checkout's arrangement on the next is a setting rather
+     * than a memory of what they did.
+     */
+    let viewPreferences: RigViewPreferencesDocument = (() => {
+        try {
+            return (
+                rigViewPreferencesParse(deps.viewPreferences?.read()) ?? RIG_VIEW_PREFERENCES_EMPTY
+            );
+        } catch {
+            // Storage the host refused is a window that remembers nothing, which
+            // is the same as one nobody has arranged yet.
+            return RIG_VIEW_PREFERENCES_EMPTY;
+        }
+    })();
+    /**
+     * What the addressed checkout says about itself, or nothing where it has
+     * never been arranged. Changed and flat are the defaults it falls back to:
+     * the panel opens on the work in progress, which is short and reads better
+     * as a list than as a tree of one-file folders.
+     */
+    const groupView = (groupId: RigGroupId | undefined): RigGroupViewPreferences =>
+        groupId === undefined ? {} : (viewPreferences.groups[groupId] ?? {});
+    const fileScopeOf = (groupId: RigGroupId | undefined): RigFileScope =>
+        groupView(groupId).fileScope ?? "changed";
+    const viewPreferencesWrite = (groupId: RigGroupId, change: RigGroupViewPreferences): void => {
+        viewPreferences = rigViewPreferencesUpdate(viewPreferences, groupId, change);
+        try {
+            deps.viewPreferences?.write(viewPreferences);
+        } catch {
+            // A storage-denied window still keeps the arrangement on screen for
+            // as long as it stays open.
+        }
+    };
     let fileTreeExpanded: ReadonlySet<string> = new Set();
     let fileTreeCollapsed: ReadonlySet<string> = new Set();
     let fileSelection: ReadonlySet<string> = new Set();
@@ -1266,8 +1336,8 @@ export function rigWorkspaceStoreCreate(
         groupResume,
         openInTargets,
         fileViewMode,
-        fileScope,
-        fileLayout,
+        fileScope: "changed",
+        fileLayout: "flat",
         fileTreeExpanded,
         fileTreeCollapsed,
         fileSelection,
@@ -1570,6 +1640,13 @@ export function rigWorkspaceStoreCreate(
         const groupComposerDraft = groupComposer?.getState();
         const groupSessionDraft = groupDraft?.get();
         const nextAddress = addressPublic();
+        // How this checkout is arranged travels with the address: moving to
+        // another project shows that project the way it was left, rather than
+        // carrying the last one's panel width and listing across to it.
+        const nextView = groupView(nextAddress.groupId);
+        const nextFileScope = nextView.fileScope ?? "changed";
+        const nextFileLayout = nextView.fileLayout ?? "flat";
+        const nextPanelWidth = nextView.panelWidth;
         // Recomputed here rather than remembered: it is derived from the same
         // list snapshot this projection is built from, so it cannot lag behind
         // the rows it describes. The panel is told too, since a shell is started
@@ -1599,8 +1676,9 @@ export function rigWorkspaceStoreCreate(
             snapshot.projectArchive === projectArchive &&
             snapshot.projectCompute === projectCompute &&
             snapshot.fileViewMode === fileViewMode &&
-            snapshot.fileScope === fileScope &&
-            snapshot.fileLayout === fileLayout &&
+            snapshot.fileScope === nextFileScope &&
+            snapshot.fileLayout === nextFileLayout &&
+            snapshot.panelWidth === nextPanelWidth &&
             snapshot.fileTreeExpanded === fileTreeExpanded &&
             snapshot.fileTreeCollapsed === fileTreeCollapsed &&
             snapshot.fileSelection === fileSelection &&
@@ -1621,8 +1699,10 @@ export function rigWorkspaceStoreCreate(
             groupResume,
             openInTargets,
             fileViewMode,
-            fileScope,
-            fileLayout,
+            // Nothing is addressed here, so there is no checkout whose
+            // arrangement this could be: the defaults stand in.
+            fileScope: "changed",
+            fileLayout: "flat",
             fileTreeExpanded,
             fileTreeCollapsed,
             fileSelection,
@@ -2592,6 +2672,37 @@ export function rigWorkspaceStoreCreate(
     };
 
     /**
+     * The group one absolute host path lies in, and the path relative to it.
+     *
+     * The deepest checkout containing the path wins, because a worktree made
+     * inside its project is contained by both and only the worktree is the
+     * checkout the file is actually being read in.
+     */
+    const groupPathResolve = (
+        source: string,
+    ): { readonly groupId: RigGroupId; readonly path: string } | undefined => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        const normalized = source.replaceAll("\\", "/");
+        let best: { groupId: RigGroupId; path: string; rootLength: number } | undefined;
+        const consider = (groupId: RigGroupId, root: string): void => {
+            const prefix = `${root.replaceAll("\\", "/").replace(/\/+$/u, "")}/`;
+            if (!normalized.startsWith(prefix)) return;
+            if (best !== undefined && prefix.length <= best.rootLength) return;
+            best = {
+                groupId,
+                path: normalized.slice(prefix.length),
+                rootLength: prefix.length,
+            };
+        };
+        for (const project of projects.value) {
+            consider(project.id, project.path);
+            for (const worktree of project.worktrees) consider(worktree.id, worktree.path);
+        }
+        return best === undefined ? undefined : { groupId: best.groupId, path: best.path };
+    };
+
+    /**
      * This group's worktree id, or `undefined` when it is a project. It decides
      * which route a session start takes, and a project has no directory to wait
      * for: Happy was pointed at it.
@@ -2922,8 +3033,10 @@ export function rigWorkspaceStoreCreate(
             groupResume,
             openInTargets,
             fileViewMode,
-            fileScope,
-            fileLayout,
+            // Nothing is addressed here, so there is no checkout whose
+            // arrangement this could be: the defaults stand in.
+            fileScope: "changed",
+            fileLayout: "flat",
             fileTreeExpanded,
             fileTreeCollapsed,
             fileSelection,
@@ -3131,7 +3244,8 @@ export function rigWorkspaceStoreCreate(
                 fileTreeExpansionReset();
             }
             releaseGroup();
-            if (groupId !== undefined && fileScope === "all") workspaceFilesEnsure(groupId);
+            if (groupId !== undefined && fileScopeOf(groupId) === "all")
+                workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
                 addressedGroupId = groupId;
                 addressedGroupSeenUpdate();
@@ -3158,10 +3272,10 @@ export function rigWorkspaceStoreCreate(
             addressedGroupSeenUpdate();
             openConversation(undefined);
             groupRestore(groupId);
-            // The file scope belongs to the whole workspace, so "All files"
-            // survives navigation. Apply it to the newly addressed checkout
-            // even when this group already owns the empty-session composer.
-            if (fileScope === "all") workspaceFilesEnsure(groupId);
+            // The scope belongs to this checkout, so a group left listing every
+            // file opens on every file. Applied even when this group already
+            // owns the empty-session composer.
+            if (fileScopeOf(groupId) === "all") workspaceFilesEnsure(groupId);
             if (openGroupId === groupId) return;
             releaseGroup();
             openGroupId = groupId;
@@ -3426,6 +3540,12 @@ export function rigWorkspaceStoreCreate(
         },
         filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
         fileOpen: (groupId, path, kind) => fileTabOpen(groupId, path, kind, false),
+        attachmentFileOpen: (source, kind) => {
+            const resolved = groupPathResolve(source);
+            if (!resolved) return false;
+            fileTabOpen(resolved.groupId, resolved.path, kind, false);
+            return true;
+        },
         viewPlacementUpdate(viewId, placement) {
             if (disposed) return;
             // A live tool tab changes strips and nothing else: the shell keeps
@@ -3520,16 +3640,22 @@ export function rigWorkspaceStoreCreate(
             // may be enormous, so it is read when it is first wanted rather than
             // kept current against a group nobody is listing files for.
             if (scope === "all") workspaceFilesEnsure(groupId);
-            if (fileScope === scope) return;
-            fileScope = scope;
+            if (fileScopeOf(groupId) === scope) return;
+            viewPreferencesWrite(groupId, { fileScope: scope });
             // Picking files to revert is something only the changed listing
             // offers, so leaving the listing drops what was picked in it.
             fileSelectionReset();
             recompute();
         },
-        fileLayoutUpdate(layout) {
-            if (fileLayout === layout) return;
-            fileLayout = layout;
+        fileLayoutUpdate(groupId, layout) {
+            if ((groupView(groupId).fileLayout ?? "flat") === layout) return;
+            viewPreferencesWrite(groupId, { fileLayout: layout });
+            recompute();
+        },
+        panelWidthUpdate(groupId, width) {
+            const next = Math.round(width);
+            if (!Number.isFinite(next) || groupView(groupId).panelWidth === next) return;
+            viewPreferencesWrite(groupId, { panelWidth: next });
             recompute();
         },
         fileTreeExpandedUpdate(path, expanded) {

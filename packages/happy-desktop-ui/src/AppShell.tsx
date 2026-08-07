@@ -41,6 +41,18 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     panelResizable?: boolean;
     /** Initial panel width (clamped) once `panelResizable` is set; falls back to `panelWidth`. */
     panelDefaultWidth?: number;
+    /**
+     * Reports the width the reader has put the panel at, as they put it there.
+     *
+     * Supplying `panelWidth` alongside `panelResizable` hands the width to the
+     * caller the same way `panelMaximized` hands over the maximize state: the
+     * shell stops tracking it and only reports intent here. That is what lets a
+     * host keep a width per checkout, because a width the shell owned could only
+     * ever be seeded once and would then follow the reader from project to
+     * project. Without `panelWidth` the shell keeps owning it and this is simply
+     * a notification.
+     */
+    onPanelWidthChange?: (width: number) => void;
     panelMinWidth?: number;
     panelMaxWidth?: number;
     /** Enables the panel maximize/restore control that overlays the whole content region. */
@@ -76,6 +88,12 @@ const SIDEBAR_DEFAULT_WIDTH = 288;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
 const PANEL_DEFAULT_WIDTH = 340;
+/**
+ * The panel's width where nobody has chosen one. Exported so a host that
+ * remembers the width per checkout can offer this for a checkout that has never
+ * been sized, instead of restating the number and drifting from it.
+ */
+export const APP_SHELL_PANEL_DEFAULT_WIDTH = PANEL_DEFAULT_WIDTH;
 const PANEL_MIN_WIDTH = 280;
 const PANEL_MAX_WIDTH = 560;
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
@@ -211,6 +229,7 @@ export function AppShell(props: AppShellProps) {
         "sidebarExpandLabel",
         "sidebarResizeLabel",
         "panelResizable",
+        "onPanelWidthChange",
         "panelDefaultWidth",
         "panelMinWidth",
         "panelMaxWidth",
@@ -234,7 +253,7 @@ export function AppShell(props: AppShellProps) {
     const [sidebarWidth, setSidebarWidth] = useState(() =>
         clamp(local.sidebarDefaultWidth ?? SIDEBAR_DEFAULT_WIDTH, sidebarMin, sidebarMax),
     );
-    const [panelWidth, setPanelWidth] = useState(() =>
+    const [panelWidthState, setPanelWidthState] = useState(() =>
         clamp(
             local.panelDefaultWidth ?? local.panelWidth ?? PANEL_DEFAULT_WIDTH,
             panelMin,
@@ -254,6 +273,16 @@ export function AppShell(props: AppShellProps) {
     }
     const sidebarInteractive = local.sidebarCollapsible === true;
     const panelResizable = local.panelResizable === true;
+    // Controlled when a resizable panel is given a width; otherwise AppShell owns
+    // it, exactly as `panelMaximized` above.
+    const panelWidthControlled = panelResizable && local.panelWidth !== undefined;
+    const panelWidth = panelWidthControlled
+        ? clamp(local.panelWidth!, panelMin, panelMax)
+        : panelWidthState;
+    function applyPanelWidth(next: number) {
+        if (!panelWidthControlled) setPanelWidthState(next);
+        local.onPanelWidthChange?.(next);
+    }
     const panelMaximizable = local.panelMaximizable === true;
     const showSidebarHandle = sidebarInteractive && !sidebarCollapsed;
     const sidebarStyle: CSSProperties | undefined = sidebarInteractive
@@ -434,7 +463,7 @@ export function AppShell(props: AppShellProps) {
                             label={local.panelResizeLabel ?? "Resize panel"}
                             max={panelMax}
                             min={panelMin}
-                            onResize={setPanelWidth}
+                            onResize={applyPanelWidth}
                             value={panelWidth}
                         />
                     ) : null}

@@ -51,7 +51,7 @@ export {
     type ApprovalRequest,
     type ApprovalResolution,
 } from "./ApprovalCard";
-export { AppShell, type AppShellProps } from "./AppShell";
+export { AppShell, APP_SHELL_PANEL_DEFAULT_WIDTH, type AppShellProps } from "./AppShell";
 export {
     Avatar,
     type AvatarProps,

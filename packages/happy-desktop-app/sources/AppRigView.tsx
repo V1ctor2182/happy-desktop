@@ -86,6 +86,7 @@ import {
 import {
     type AgentWaitStatus,
     AppShell,
+    APP_SHELL_PANEL_DEFAULT_WIDTH,
     Banner,
     BrowserPanel,
     BuildIdentityPill,
@@ -2423,6 +2424,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             windowControls={desktop}
             windowFullScreen={windowState.fullScreen}
             panelResizable
+            // The width this checkout was last left at, or the shell's own
+            // default where nobody has sized it. Passed on every render rather
+            // than seeded once, so moving to another project shows that
+            // project's width instead of carrying this one's across.
+            panelWidth={workspace.panelWidth ?? APP_SHELL_PANEL_DEFAULT_WIDTH}
+            onPanelWidthChange={(width) => {
+                if (openGroup) props.workspace.panelWidthUpdate(openGroup.id, width);
+            }}
             // Widening the panel is one of its two chrome controls and lives in
             // its header beside the other, so the shell's floating tab on the
             // divider is deliberately not asked for here.
@@ -2478,7 +2487,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     fileTabKind(path, workspace.fileScope),
                                 );
                         }}
-                        onLayoutChange={(layout) => props.workspace.fileLayoutUpdate(layout)}
+                        onLayoutChange={(layout) => {
+                            if (openGroup) props.workspace.fileLayoutUpdate(openGroup.id, layout);
+                        }}
                         onPanelClose={() => props.workspace.panel.panelToggle()}
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
@@ -3872,6 +3883,20 @@ function RigConversationSurface(props: {
                             attachment.appletQuery,
                         ),
                     );
+                    return;
+                }
+                // An attached document is a page, not a file to save. When it
+                // lives in a checkout this workspace reads, it opens the way a
+                // document in the file list does — rendered, served from its own
+                // folder so its stylesheet and scripts resolve, with the source
+                // a toggle away. Only a document the workspace cannot reach
+                // falls back to the download the host offered.
+                if (
+                    attachment.attachmentKind === "file" &&
+                    filePreviewKind(attachment.source) === "html" &&
+                    props.rigOnline() &&
+                    workspace.attachmentFileOpen(attachment.source, "document")
+                ) {
                     return;
                 }
                 if (attachment.openUrl) openExternalLink(attachment.openUrl);

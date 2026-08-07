@@ -1,3 +1,4 @@
+import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
 import {
     rigClientCreate,
     rigClockStoreCreate,
@@ -408,6 +409,10 @@ export function rigConnectionOpen(input: {
                         // reaching for one. It is the same host every other
                         // window-level act already goes through.
                         host: input.host,
+                        // How each checkout is arranged is this machine's, not
+                        // this connection's: a Rig that goes away must not take
+                        // the reader's panel width with it.
+                        viewPreferences: desktopViewPreferencesPersistence(),
                         output: (event) => {
                             switch (event.type) {
                                 case "conversationOpenRequested":

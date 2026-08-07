@@ -95,7 +95,6 @@
 .happy2-setup-page__command {
     max-width: 100%;
     padding: 10px 14px;
-    overflow-x: auto;
     border: 1px solid var(--divider);
     border-radius: var(--happy2-radius-md);
     background: var(--surface-high);
@@ -103,7 +102,11 @@
     font-family: var(--happy2-font-mono);
     font-size: 13px;
     line-height: 20px;
-    white-space: pre;
+    /* Wraps rather than scrolling: a scrollport may carry no padding of its own,
+       and a horizontal scrollbar on a centred page is a worse way to read a long
+       command than a second line. */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     user-select: text;
 }
 
