@@ -4,6 +4,11 @@
  * It fills its host and centers a 64px mark on both axes. The surface is the one
  * the workspace and the onboarding card share, so the crossfade out of this
  * screen changes what is on the surface, never the surface itself.
+ *
+ * The note sits absolutely below the mark rather than as a second flex row, so
+ * the mark's position never depends on whether a note is present: adding or
+ * removing the reassurance line would otherwise recenter the pair and nudge the
+ * mark, which is the one thing this screen must never visibly do.
  */
 
 .happy2-splash-screen,
@@ -21,9 +26,33 @@
     background: var(--surface);
 }
 
+.happy2-splash-screen__body {
+    position: relative;
+    flex: none;
+}
+
 .happy2-splash-screen__mark {
+    display: block;
     flex: none;
     width: 64px;
     height: 64px;
     object-fit: contain;
+    /* Grayscale + faded: this screen means "still waking up", not the brand
+       mark in its own right, so the orange mark is deliberately muted here. */
+    filter: grayscale(1);
+    opacity: 0.35;
+}
+
+.happy2-splash-screen__note {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-top: 16px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 280px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
 }

@@ -3,6 +3,8 @@ node_modules
 .pnpm-store
 .context
 .happy2
+# throwaway HOME for scripts/dev-desktop-sandbox.mjs
+.happy-sandbox
 .worktrees/
 dist
 coverage

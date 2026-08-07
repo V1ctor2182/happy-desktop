@@ -29,6 +29,19 @@
     color: var(--text);
 }
 
+/* Hung on a surface that is already the room — the full-window lightbox. The
+   viewer contributes no surface of its own so the picture and its controls sit
+   on one flat dark, rather than banding the window into frame, bar, and card. */
+.happy2-image-viewer[data-tone="immersive"],
+.happy2-image-viewer[data-tone="immersive"] .happy2-image-viewer__frame,
+.happy2-image-viewer[data-tone="immersive"] .happy2-image-viewer__tools {
+    background: transparent;
+}
+
+.happy2-image-viewer[data-tone="immersive"] .happy2-image-viewer__tools {
+    border-top-color: transparent;
+}
+
 /* ---- Frame ------------------------------------------------------------- */
 
 /* The room the picture hangs in: one centered child, clipped at the frame edge

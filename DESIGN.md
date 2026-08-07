@@ -131,7 +131,7 @@ padding, content, and `box-sizing` must resolve to that size. Test fixed,
 content-sized, percentage, full-width, nested, and constrained-container cases
 as applicable.
 
-Every modal-class surface uses one of three widths and one of two sanctioned
+Every modal-class surface uses one of three widths and one of three sanctioned
 placements. The `Modal` card is `small` (360), `medium` (480), or `large` (640):
 confirmations and pickers are `small`, forms are `medium`, and content-heavy
 detail is `large`. It never sets its own position, scrim, or stacking — it is
@@ -142,11 +142,17 @@ safe-area gutter. The default `center` placement is for dialogs and forms. The
 an adaptive top gutter of
 `min(128px, max(48px, calc(100cqh - 552px)))` so the card sits 128 px from the
 top in the 1280 × 800 design reference and 48 px from the top at the actual
-720 × 480 Electron minimum. Application code composes `ModalOverlay` around a
-`Modal`, `Lightbox`, editor panel, or type-ahead instead of hand-rolling
-per-view scrims. Wire its `onDismiss` to close on a backdrop click; omit it for
-a surface that must not be lost to a stray click, such as an editor holding
-unsaved work.
+720 × 480 Electron minimum. The `fill` placement drops the gutter and gives the
+whole window to one immersive surface that paints its own background over the
+dim. It is not a third way to show a card: use it only where looking at
+something is a mode the window enters rather than a panel floating above the
+app, which today means `Lightbox` alone. Such a surface owns its own way out —
+Escape, an explicit close control, and a click on its own empty background —
+because there is no exposed backdrop left to click. Application code composes
+`ModalOverlay` around a `Modal`, `Lightbox`, editor panel, or type-ahead
+instead of hand-rolling per-view scrims. Wire its `onDismiss` to close on a
+backdrop click; omit it for a surface that must not be lost to a stray click,
+such as an editor holding unsaved work.
 
 ## Layout with flexbox
 

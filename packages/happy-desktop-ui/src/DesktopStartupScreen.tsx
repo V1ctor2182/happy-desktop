@@ -1,8 +1,4 @@
-import type { FormEvent } from "react";
-import { Banner } from "./Banner";
-import { Button } from "./Button";
-import { OnboardingScreen } from "./OnboardingScreen";
-import { WindowDragRegion } from "./TitleBar";
+import { SetupPage } from "./SetupPage";
 
 export type DesktopStartupPhase = "choosing" | "starting" | "error";
 export interface DesktopStartupValues {
@@ -24,44 +20,45 @@ export interface DesktopStartupScreenProps {
     update?: DesktopStartupUpdate;
     values: DesktopStartupValues;
 }
+
+/**
+ * The window before anything is running: a start button, a wait, or a failure.
+ *
+ * All three are the same centred page as the rest of setup, so starting Happy
+ * and setting it up read as one sequence rather than as two screens that happen
+ * to run back to back.
+ */
 export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
-    const submit = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        props.onSubmit();
-    };
-    return (
-        <>
-            <WindowDragRegion />
-            <OnboardingScreen
-                bodyKey={props.phase}
-                brand={{ name: "Happy" }}
+    if (props.phase === "error")
+        return (
+            <SetupPage
+                {...(props.onRetry
+                    ? { action: { label: "Try again", onSelect: props.onRetry } }
+                    : {})}
+                copy={props.error ?? "Happy could not start."}
                 data-testid="desktop-startup-screen"
-                kicker="Local desktop"
-                loadingLabel={props.message ?? "Starting Happy…"}
-                state={props.phase === "starting" ? "loading" : "form"}
-                title={
-                    props.phase === "error"
-                        ? "Happy couldn't start."
-                        : "Happy runs on this machine."
-                }
-                width="large"
-            >
-                {props.phase === "error" ? (
-                    <>
-                        <Banner icon="shield" title="Startup failed" tone="danger">
-                            {props.error ?? "Happy could not start."}
-                        </Banner>
-                        {props.onRetry ? <Button onClick={props.onRetry}>Try again</Button> : null}
-                    </>
-                ) : props.phase === "choosing" ? (
-                    <form onSubmit={submit}>
-                        <p>Projects, sessions, and Rig stay on this machine.</p>
-                        <Button fullWidth size="large" type="submit">
-                            Start locally
-                        </Button>
-                    </form>
-                ) : null}
-            </OnboardingScreen>
-        </>
+                scene="owl"
+                title="Happy couldn't start."
+            />
+        );
+
+    if (props.phase === "starting")
+        return (
+            <SetupPage
+                copy={props.message ?? "Starting Happy…"}
+                data-testid="desktop-startup-screen"
+                scene="snail"
+                title="Starting Happy…"
+            />
+        );
+
+    return (
+        <SetupPage
+            action={{ label: "Start locally", onSelect: props.onSubmit }}
+            copy="Happy runs on this machine, and can connect to others you own."
+            data-testid="desktop-startup-screen"
+            scene="sparkles"
+            title="Happy runs on this machine."
+        />
     );
 }

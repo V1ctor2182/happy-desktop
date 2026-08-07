@@ -38,6 +38,17 @@ export type RigHttpProxyStart = (
 ) => Promise<RigHttpProxyHandle>;
 
 const idleUpdate: DesktopUpdateSnapshot = { status: "idle" };
+/**
+ * How long to wait before each fresh attempt at reaching the daemon.
+ *
+ * A daemon Happy just asked to start is not listening the instant the command
+ * returns, and a socket refused half a second into a cold boot is not a broken
+ * machine — it is a machine that is still waking up. Reporting the first refusal
+ * as a failure puts a "could not reach Rig" screen in front of someone whose Rig
+ * was about to answer, so the first few refusals are simply waited out. The
+ * delays grow so a genuinely dead daemon still gives up quickly.
+ */
+const connectAttemptDelaysMs: readonly number[] = [0, 400, 1_200, 2_500];
 
 export interface DesktopRuntimePaths {
     readonly root: string;
@@ -217,7 +228,13 @@ export class DesktopRuntime implements AsyncDisposable {
     retry(): Promise<void> {
         return this.serial(async () => {
             if (!this.activeTopology) throw new Error("There is no desktop topology to retry.");
-            await this.startValidated(this.activeTopology, this.persistOnSuccess);
+            // A retry started from a failure keeps that failure on screen and
+            // only marks itself as running, so the window can put the waiting on
+            // the button the person pressed instead of replacing what they were
+            // reading with a loading screen and then the same error again.
+            const failure = this.snapshotValue.phase === "error" ? this.snapshotValue : undefined;
+            if (failure) this.publish({ ...failure, retrying: true });
+            await this.startValidated(this.activeTopology, this.persistOnSuccess, !!failure);
         });
     }
 
@@ -332,22 +349,53 @@ export class DesktopRuntime implements AsyncDisposable {
         await this.serial(async () => this.localDispose());
     }
 
-    private async startValidated(topology: DesktopTopology, persist: boolean): Promise<void> {
+    /**
+     * Reaches the daemon, waiting out the refusals that a starting daemon gives.
+     *
+     * Only a connection that failed for a reason another attempt could change is
+     * retried: a missing `rig` command and a daemon that refuses on its own terms
+     * — no signed-in coding assistant, for instance — will answer exactly the
+     * same way in two seconds, and waiting on them only makes the window feel
+     * broken. Returns nothing when this activation was superseded while waiting.
+     */
+    private async connectAttempt(generation: number): Promise<LocalRigConnection | undefined> {
+        let failure: unknown;
+        for (const [index, delay] of connectAttemptDelaysMs.entries()) {
+            if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+            if (generation !== this.activationGeneration) return undefined;
+            try {
+                return await this.connector.connect();
+            } catch (error) {
+                failure = error;
+                if (index === connectAttemptDelaysMs.length - 1) break;
+                if (!connectAttemptRetryable(error)) break;
+            }
+        }
+        throw failure;
+    }
+
+    private async startValidated(
+        topology: DesktopTopology,
+        persist: boolean,
+        inPlace = false,
+    ): Promise<void> {
         if (this.closed) throw new Error("The desktop runtime is closed.");
         const generation = ++this.activationGeneration;
         this.localDispose();
         this.activeTopology = topology;
         this.persistOnSuccess = persist;
         const request = desktopTopologyRequest(topology);
-        this.publish({
-            phase: "starting",
-            message: "Connecting to your local Rig daemon…",
-            request,
-            targets: this.targets(),
-            update: this.snapshotValue.update,
-        });
+        if (!inPlace)
+            this.publish({
+                phase: "starting",
+                message: "Connecting to your local Rig daemon…",
+                request,
+                targets: this.targets(),
+                update: this.snapshotValue.update,
+            });
         try {
-            const connection = await this.connector.connect();
+            const connection = await this.connectAttempt(generation);
+            if (connection === undefined) return;
             if (generation !== this.activationGeneration) {
                 connection.close();
                 return;
@@ -442,6 +490,19 @@ export class DesktopRuntime implements AsyncDisposable {
                 : [];
         return [...configured, ...active].map(desktopTopologyTarget);
     }
+}
+
+/**
+ * Whether waiting and asking again could plausibly answer differently.
+ *
+ * Only the transport's own refusals qualify — a socket that is not there yet, a
+ * connection dropped mid-handshake, an attempt that timed out. Anything the
+ * daemon said deliberately, and anything about this machine's setup, is a fact
+ * rather than a moment, and repeating the question just delays saying so.
+ */
+function connectAttemptRetryable(error: unknown): boolean {
+    if (error instanceof RigCommandMissingError) return false;
+    return rigDaemonConnectionUnavailable(error);
 }
 
 function displayError(error: unknown): string {

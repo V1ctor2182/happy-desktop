@@ -14,9 +14,11 @@ export type ModalOverlayProps = {
     /**
      * `center` (default) hosts dialogs and forms in the standard modal
      * location. `top` anchors transient type-ahead surfaces below the adaptive
-     * top gutter; it is not a form placement.
+     * top gutter; it is not a form placement. `fill` drops the gutter and gives
+     * the whole window to one immersive surface — the image viewer — which then
+     * paints its own dark instead of floating as a card on the dim.
      */
-    placement?: "center" | "top";
+    placement?: "center" | "top" | "fill";
 };
 const FOCUSABLE =
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -27,8 +29,9 @@ const FOCUSABLE =
  * to the app window, and a flex box that hosts exactly one card (Modal,
  * Lightbox, editor panel, or transient type-ahead) inside a 24px safe-area
  * gutter. The default placement centers dialogs and forms; `top` anchors a
- * transient type-ahead below an adaptive top gutter. Clicking the dim outside
- * the card calls `onDismiss` when wired; clicks inside the card never dismiss.
+ * transient type-ahead below an adaptive top gutter; `fill` hands the whole
+ * window to one immersive surface with no gutter at all. Clicking the dim
+ * outside the card calls `onDismiss` when wired; clicks inside never dismiss.
  *
  * The overlay owns modal focus: on mount it moves focus to the hosted card's
  * first focusable control (unless the card already focused itself, as the
@@ -67,7 +70,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
             {...rest}
             className={["happy2-modal-overlay", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="modal-overlay"
-            data-placement={local.placement === "top" ? "top" : undefined}
+            data-placement={local.placement === "center" ? undefined : local.placement}
             onClick={(event) => {
                 if (
                     local.onDismiss &&

@@ -1,12 +1,14 @@
 /*
  * C-046 Lightbox — full image preview inside a web modal.
  *
- * Like Modal, the root .happy2-lightbox is a transparent centering layer (no
- * scrim / no fixed positioning) so it renders as a screenshot-safe specimen; a
- * consuming app portals it over its own backdrop. The measured card is the
- * inner .happy2-lightbox__dialog: a raised surface with a 14px shell radius, a
- * strong hairline, an elevated shadow, an optional caption/actions header, and
- * the shared ImageViewer filling the frame beneath it.
+ * Not a card: hosted on ModalOverlay's `fill` placement it takes the whole app
+ * window and paints one flat dark over it. The root .happy2-lightbox declares
+ * no scrim and no fixed position of its own — it fills whatever box it is given,
+ * so it still renders as a screenshot-safe specimen — and the measured surface
+ * is the inner .happy2-lightbox__dialog: a chrome-less caption/actions header
+ * floating on the dark above the shared ImageViewer in its immersive tone. The
+ * dark is the theme's own dark surface, pinned in either appearance by the
+ * ThemeScope the component wraps itself in.
  */
 
 .happy2-lightbox,
@@ -18,37 +20,43 @@
     box-sizing: border-box;
 }
 
+/* Fills the box it is given — the whole window under ModalOverlay's `fill`
+   placement, the specimen frame in the blueprint — rather than sizing itself
+   to any one picture. */
 .happy2-lightbox {
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex: 1 1 auto;
+    align-items: stretch;
+    justify-content: stretch;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     margin: 0;
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
 }
 
-/* A fixed viewing room, not a box that shrinks to each picture: the viewer
-   inside carries controls, and a card that resized per image would move them.
-   The card hosts itself directly on ModalOverlay rather than through the Modal
-   collapse, so it bounds its own height against the window less that overlay's
-   documented 24px gutter on each side, which stays a whole number of pixels at
-   every integer window size. */
+/* One flat dark room, edge to edge: no radius, no hairline, and no shadow,
+   because there is nothing for it to be raised above — everything the app was
+   showing is behind this surface, not beside it. */
 .happy2-lightbox__dialog {
     display: flex;
-    flex: none;
+    flex: 1 1 auto;
     flex-direction: column;
-    width: min(880px, calc(100vw - 48px));
-    height: min(620px, calc(100vh - 48px));
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
     background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-shell);
-    box-shadow: 0 24px 64px var(--shadow-elevated);
 }
 
 /* ---- Header ---------------------------------------------------------- */
 
+/* Chrome-less: the name of the picture and the controls for it float on the
+   dark with no bar and no rule under them, so the room stays one surface. */
 .happy2-lightbox__header {
     display: flex;
     flex: none;
@@ -56,7 +64,6 @@
     gap: 12px;
     min-height: 52px;
     padding: 10px 12px 10px 16px;
-    border-bottom: 1px solid var(--divider);
 }
 
 .happy2-lightbox__caption {
@@ -94,6 +101,20 @@
     flex: none;
     align-items: center;
     gap: 4px;
+}
+
+/* "3 of 7" between the step controls. Tabular so the count does not shuffle the
+   controls beside it as the reader moves through the set. */
+.happy2-lightbox__position {
+    flex: none;
+    padding: 0 2px;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 20px;
+    white-space: nowrap;
 }
 
 /* ---- Frame ----------------------------------------------------------- */

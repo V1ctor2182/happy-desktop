@@ -1,0 +1,314 @@
+/*
+ * C-250 WelcomeScreen — the first-run deck: art, title, slogan, dots, button,
+ * centred on the workspace surface.
+ *
+ * The whole screen is one centred column with two overlays that are not part of
+ * it — the window-drag lane along the top and the appearance switcher in the
+ * bottom-right corner. Both are out of flow, so the column measures the same
+ * with or without them.
+ *
+ * The two measurements that matter are the ones that keep the column still
+ * while the deck advances. The art sits in a fixed 160px square, so a logo
+ * slide and a Lottie slide start their words at the same y. The words are
+ * stacked in a single cell (see `__panels`), so the block is as tall as the
+ * longest copy in the deck rather than as tall as whichever slide is showing —
+ * which is what stops the dots and the primary button from walking up and down
+ * the screen under the pointer.
+ *
+ * It paints the same surface onboarding and the splash paint, so arriving here
+ * and leaving here changes the content of the window rather than its scenery.
+ * Every dimension is on the 4px grid.
+ */
+
+.happy2-welcome-screen,
+.happy2-welcome-screen__view,
+.happy2-welcome-screen__body,
+.happy2-welcome-screen__slideshow,
+.happy2-welcome-screen__stage,
+.happy2-welcome-screen__mark,
+.happy2-welcome-screen__panels,
+.happy2-welcome-screen__panel,
+.happy2-welcome-screen__dots,
+.happy2-welcome-screen__dot,
+.happy2-welcome-screen__dot-mark {
+    box-sizing: border-box;
+}
+
+/*
+ * The root is the window, and it is the positioning context the window-drag
+ * lane pins itself to — `.happy2-window-drag-region` is absolute and expects
+ * its host surface to say what "top" means. The lane is deliberately *outside*
+ * the scrollport below it: an absolute box inside a scroll container scrolls
+ * away with the content, and a drag lane that leaves the top of the window is
+ * no drag lane at all. Being out of flow, it also cannot push the centred
+ * column down — this screen looks identical with and without it.
+ */
+.happy2-welcome-screen {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+/*
+ * Full-bleed scrollport: it owns scrolling for the whole screen, edge to edge,
+ * with no spacing of its own. `safe center` keeps the column optically centred
+ * while it fits and lets it scroll from the top at the 720 × 480 minimum
+ * window, where a 160px hero plus two lines of copy plus the action is taller
+ * than the glass.
+ */
+.happy2-welcome-screen__view {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    min-height: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+}
+
+/*
+ * The content wrapper owns every gap and gutter the scrollport is forbidden. Its
+ * 40px side gutter is also the focus-safe gutter: the dots' 2px ring and the
+ * action's own focus treatment are painted far inside it, so no scroll edge can
+ * clip a focus indicator.
+ */
+.happy2-welcome-screen__body {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    width: 100%;
+    padding: 32px 40px;
+}
+
+.happy2-welcome-screen__slideshow {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    width: 100%;
+}
+
+/* ---- Art -------------------------------------------------------------- */
+
+/*
+ * Fixed on both axes and the same box for both slide kinds. The height is the
+ * load-bearing half: the moment a scene box and a logo box differ, every slide
+ * change moves the title, the dots, and the button. 160 here is the same number
+ * as `ART_SIZE` in the component, which is what the Lottie renderer rasterises
+ * into.
+ */
+.happy2-welcome-screen__stage {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 160px;
+    height: 160px;
+}
+
+/*
+ * The mark at full strength, unlike the splash screen's grayscale one: this is
+ * the screen that introduces the product, not the one that admits it is still
+ * starting.
+ */
+.happy2-welcome-screen__mark {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ---- Slide words ------------------------------------------------------ */
+
+/*
+ * The one-cell stack. Every slide's words occupy the same cell, so this block
+ * measures the tallest slide in the deck and keeps that height whichever slide
+ * is on screen: a two-line slogan following a one-line slogan cannot push the
+ * dots and the button down, and a pointer already resting on the action never
+ * has it move away. Flexbox lays siblings out in sequence and has no way to say
+ * "these all share one box, size it to the biggest".
+ */
+.happy2-welcome-screen__panels {
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- one-cell stack: every slide shares grid-area 1/1 so the block is as tall as the tallest slide and the dots and action below it never move */
+    display: grid;
+    flex: none;
+    width: 100%;
+}
+
+/*
+ * Stacked, top-aligned, and crossfading. Top-aligned because the title should
+ * sit directly under the art on every slide rather than drift with its own
+ * copy's length. `visibility` rather than opacity alone: faded-out words are
+ * still read aloud, and a deck that says all four slogans at once is worse than
+ * one with no animation. It flips at the end of the fade out and at the start
+ * of the fade in, so the outgoing slide is hidden exactly when it stops being
+ * visible.
+ */
+.happy2-welcome-screen__panel {
+    grid-area: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 200ms ease,
+        visibility 0s linear 200ms;
+}
+
+.happy2-welcome-screen__panel[data-active] {
+    opacity: 1;
+    visibility: visible;
+    transition:
+        opacity 200ms ease,
+        visibility 0s;
+}
+
+/* The panel takes a tab stop because it holds no control of its own; its ring
+   is painted on the words rather than on the full-width cell. */
+.happy2-welcome-screen__panel:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 4px;
+    border-radius: var(--happy2-radius-md);
+}
+
+.happy2-welcome-screen__title {
+    margin: 0;
+    color: var(--text);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 40px;
+    letter-spacing: -0.03em;
+    text-align: center;
+}
+
+/*
+ * Narrow on purpose. Centred text is only readable in short lines, and the
+ * reference this screen is drawn from puts the slogan on two of them; 400px at
+ * 16px is about fifty characters a line.
+ */
+.happy2-welcome-screen__copy {
+    max-width: 400px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    text-align: center;
+}
+
+/* ---- Dots ------------------------------------------------------------- */
+
+/*
+ * No gap: the hit boxes tile so there is no dead pixel between two targets, and
+ * the rhythm the reader sees is the 8px mark inside each 20px box — 12px of
+ * surface between marks. A gap here would buy nothing visually and cost the
+ * clickable area between the dots.
+ */
+.happy2-welcome-screen__dots {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.happy2-welcome-screen__dot {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-pill);
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+}
+
+.happy2-welcome-screen__dot:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+/*
+ * The unselected control colour rather than the hairline: a dot the reader
+ * cannot see is not a position indicator. The selected one is plain ink — the
+ * deck carries position, not accent.
+ */
+.happy2-welcome-screen__dot-mark {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--radio-inactive);
+    transition: background-color 200ms ease;
+}
+
+.happy2-welcome-screen__dot[data-active] .happy2-welcome-screen__dot-mark {
+    background: var(--text);
+}
+
+/* ---- Action ----------------------------------------------------------- */
+
+/*
+ * Wide enough to read as the way out of this screen rather than as an ordinary
+ * button that happens to be centred, and never wider than the slogan measure.
+ */
+.happy2-welcome-screen__action {
+    flex: none;
+    min-width: 240px;
+}
+
+/* ---- Appearance switcher ---------------------------------------------- */
+
+/*
+ * The one corner control. Absolute against the root, so it takes nothing from
+ * the centred column: the deck is laid out identically whether or not this
+ * button is there, which is the same promise the one-cell slide stack makes.
+ *
+ * 24px from both edges — the safe-area gutter the system uses around a card in
+ * a window. The 28px ghost button plus its 2px focus ring at 2px offset ends
+ * 20px inside the glass, so the ring is nowhere near the root's `overflow`
+ * clip. It sits in the bottom-right because the drag lane owns the top band:
+ * the two are at opposite ends of the window and cannot contend for a pixel.
+ */
+.happy2-welcome-screen__appearance {
+    position: absolute;
+    z-index: 1;
+    right: 24px;
+    bottom: 24px;
+}
+
+/*
+ * Reduced motion turns off the crossfade as well as the auto-advance the
+ * component holds back: a reader who asked for less movement and then chose a
+ * dot should get the slide, not a dissolve into it.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .happy2-welcome-screen__panel,
+    .happy2-welcome-screen__panel[data-active],
+    .happy2-welcome-screen__dot-mark {
+        transition: none;
+    }
+}

@@ -29,6 +29,27 @@ const waitingPollMs = 3_000;
 const probeRetryMinimumMs = 1_000;
 const probeRetryMaximumMs = 30_000;
 
+/**
+ * Recognises the one daemon refusal that is a setup step rather than a fault.
+ *
+ * Rig only runs coding assistants that are already signed in on the machine, so
+ * a machine with none refuses to start with "No inference providers are
+ * available", followed by the ids it looked at. That is the truthful last step of
+ * setting a machine up, not a broken Rig, and the ids are exactly what the
+ * screen needs in order to say which assistants would satisfy it.
+ *
+ * Matching on the daemon's own sentence is the only channel available — it
+ * reports this as a start-up error rather than as a state — so anything that
+ * does not clearly say it returns nothing and the failure is shown as a failure.
+ */
+function providersMissingParse(message: string): readonly string[] | undefined {
+    if (!message.includes("No inference providers are available")) return undefined;
+    const named = [...message.matchAll(/'([a-z0-9_-]+)'/gi)].map(([, id]) => id as string);
+    // Named or not, this is still the "sign in somewhere" case; the list only
+    // decides how specific the screen can be about where.
+    return [...new Set(named)];
+}
+
 /** The decisions first-run setup writes down, and nothing it can observe instead. */
 export interface LocalOnboardingRecord {
     /** The last folder opened as a project, kept for display rather than for stages. */
@@ -818,11 +839,18 @@ export class LocalOnboarding implements Disposable {
             rig: !!rig,
         });
         const message = this.messageFor(stage, runtime);
+        const providers =
+            stage === "providersMissing" && runtime.phase === "error"
+                ? providersMissingParse(runtime.message)
+                : undefined;
+        const retrying = runtime.phase === "error" && runtime.retrying === true;
         return {
             busy: this.busy || stage === "checking" || stage === "examining",
             freshness: this.freshness,
             ...(this.install ? { install: this.installSnapshot(this.install) } : {}),
             ...(message ? { message } : {}),
+            ...(providers ? { providers } : {}),
+            ...(retrying ? { retrying } : {}),
             ...(node ? { node } : {}),
             ...(this.record.projectPath ? { projectPath: this.record.projectPath } : {}),
             ...(rig ? { rig } : {}),
@@ -847,7 +875,12 @@ export class LocalOnboarding implements Disposable {
         }
         if (!facts.ready) {
             const runtime = this.options.runtime.get();
-            return runtime.phase === "error" ? "connectFailed" : "connecting";
+            if (runtime.phase !== "error") return "connecting";
+            // A daemon that refuses only because no coding assistant is signed in
+            // is not a broken daemon. Telling someone their Rig is unreachable
+            // when it is running perfectly well sends them to repair the wrong
+            // thing, so this gets its own stage and its own, calmer screen.
+            return providersMissingParse(runtime.message) ? "providersMissing" : "connectFailed";
         }
         // Only this Rig's own answer decides whether it needs a first project. A
         // remembered folder proves nothing about the Rig connected now, and a Rig
@@ -891,7 +924,8 @@ export class LocalOnboarding implements Disposable {
             stage === "nodeMissing" ||
             stage === "rigMissing" ||
             stage === "rigInstallFailed" ||
-            stage === "connectFailed";
+            stage === "connectFailed" ||
+            stage === "providersMissing";
         if (waiting && !this.poll) {
             this.poll = setInterval(() => void this.probeRun(), waitingPollMs);
             this.poll.unref?.();

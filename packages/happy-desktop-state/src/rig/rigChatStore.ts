@@ -4,6 +4,7 @@ import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
     entryKey,
+    type ConversationAttachment,
     type ConversationEntry,
     type ConversationRequestSubmission,
 } from "../conversation/conversationEntry.js";
@@ -381,15 +382,21 @@ export interface RigChatSnapshot {
 }
 
 /**
- * The transcript image currently shown full size. Resolved when it is opened, so
- * the viewer renders from one value rather than the surface re-deriving a source
- * from the entry list on every notification.
+ * The transcript image currently shown full size, and where it sits among the
+ * transcript's other pictures. Resolved here rather than in the surface, so the
+ * viewer renders one value instead of re-deriving a source from the entry list,
+ * and so stepping to the next picture is a fact about the conversation rather
+ * than about what one screen happened to have drawn.
  */
 export interface RigOpenImage {
     readonly id: string;
     /** Displayable source for the image; a local image is a data URL. */
     readonly url: string;
     readonly alt: string;
+    /** Zero-based place among the transcript's images, in reading order. */
+    readonly index: number;
+    /** How many images the transcript holds, counting this one. */
+    readonly total: number;
 }
 
 export type RigChatOutput =
@@ -495,6 +502,15 @@ export interface RigChatStore {
      * source the moment it opens; an id that names nothing opens nothing.
      */
     imageOpen(messageId: string, attachmentId: string): void;
+    /**
+     * Shows the transcript's next image in the open viewer, wrapping past the
+     * last one back to the first. The pictures are a ring rather than a line so
+     * neither direction is ever a dead control; with nothing open, or with only
+     * one picture in the conversation, it does nothing.
+     */
+    imageNext(): void;
+    /** Shows the transcript's previous image, wrapping past the first. */
+    imagePrevious(): void;
     /** Closes the full-size image viewer. */
     imageClose(): void;
     /** Local view toggle: show or hide thinking entries. */
@@ -571,41 +587,83 @@ function contextGaugeDerive(
     };
 }
 
+/** One picture of the transcript, named the way the reader opened it. */
+interface RigImageRef {
+    readonly messageId: string;
+    readonly attachmentId: string;
+}
+
+/** The picture in the gallery, with the attachment it was found on. */
+interface RigGalleryImage extends RigImageRef {
+    readonly attachment: ConversationAttachment;
+}
+
 /**
- * Finds one message's image attachment and states it as a viewable source. A
- * local attachment carries its own bytes, so the data URL is built here and the
- * viewer needs no fetch; anything else (an unknown id, a non-image) resolves to
- * nothing rather than opening an empty viewer.
+ * States one attachment as a viewable source. A local attachment carries its own
+ * bytes, so the data URL is built here and the viewer needs no fetch; anything
+ * that is not a picture this surface can show resolves to nothing rather than
+ * opening an empty viewer.
  */
-function openImageResolve(
-    entries: readonly ConversationEntry[],
-    messageId: string,
-    attachmentId: string,
-): RigOpenImage | undefined {
-    for (const entry of entries) {
-        if (entry.kind !== "message" || entry.message.id !== messageId) continue;
-        for (const attachment of entry.message.attachments) {
-            if (attachment.id !== attachmentId) continue;
-            if (attachment.kind === "inlineImage")
-                return {
-                    id: attachment.id,
-                    url: `data:${attachment.mediaType};base64,${attachment.data}`,
-                    alt: "Attached image",
-                };
-            if (
-                attachment.kind === "linked" &&
-                attachment.attachmentKind === "image" &&
-                attachment.openUrl
-            )
-                return {
-                    id: attachment.id,
-                    url: attachment.openUrl,
-                    alt: attachment.name,
-                };
-        }
-        return undefined;
-    }
+function imageSourceOf(
+    attachment: ConversationAttachment,
+): { readonly url: string; readonly alt: string } | undefined {
+    if (attachment.kind === "inlineImage")
+        return {
+            url: `data:${attachment.mediaType};base64,${attachment.data}`,
+            alt: "Attached image",
+        };
+    if (attachment.attachmentKind === "image" && attachment.openUrl)
+        return { url: attachment.openUrl, alt: attachment.name };
     return undefined;
+}
+
+/**
+ * Every picture the transcript holds, in reading order. The attachment travels
+ * with each entry so the one being looked at is the only one whose bytes are
+ * turned into an address: a conversation full of inline images would otherwise
+ * rebuild every data URL on every notification just to count them.
+ */
+function imageGalleryOf(entries: readonly ConversationEntry[]): readonly RigGalleryImage[] {
+    const gallery: RigGalleryImage[] = [];
+    for (const entry of entries) {
+        if (entry.kind !== "message") continue;
+        for (const attachment of entry.message.attachments)
+            if (imageSourceOf(attachment))
+                gallery.push({
+                    messageId: entry.message.id,
+                    attachmentId: attachment.id,
+                    attachment,
+                });
+    }
+    return gallery;
+}
+
+/**
+ * The open picture as the viewer shows it: its source, and where it sits among
+ * the transcript's other pictures. Projected on every commit rather than frozen
+ * when the viewer opened, so an image that arrives while the reader is looking
+ * joins the set they can step through, and one that names nothing closes it.
+ */
+function openImageProject(
+    entries: readonly ConversationEntry[],
+    ref: RigImageRef | undefined,
+): RigOpenImage | undefined {
+    if (!ref) return undefined;
+    const gallery = imageGalleryOf(entries);
+    const index = gallery.findIndex(
+        (image) => image.messageId === ref.messageId && image.attachmentId === ref.attachmentId,
+    );
+    const found = gallery[index];
+    if (!found) return undefined;
+    const source = imageSourceOf(found.attachment);
+    if (!source) return undefined;
+    return {
+        id: found.attachmentId,
+        url: source.url,
+        alt: source.alt,
+        index,
+        total: gallery.length,
+    };
 }
 
 export interface RigChatDeps {
@@ -753,7 +811,10 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let usageTimer: unknown;
     let usageGeneration = 0;
     let activityPanelOpen = false;
-    let openImage: RigOpenImage | undefined;
+    // Which picture is open, not the picture itself: its source and its place in
+    // the transcript are projected on every commit from the entries as they
+    // stand, so the viewer stays true to the conversation while it is open.
+    let openImageRef: RigImageRef | undefined;
     // Entry ids hidden by a view-only `/clear`; new entries render as usual.
     let clearedIds = new Set<string>();
     let status: "loading" | "ready" | "error" = "loading";
@@ -969,7 +1030,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 return gauge ? { contextGauge: gauge } : {};
             })(),
             activityPanelOpen,
-            openImage,
+            openImage: openImageProject(entries, openImageRef),
             modelLocked: transcriptSession?.modelLocked ?? session?.modelLocked ?? false,
             // The pickers show the pending choice when there is one, so what the
             // reader selected stays selected until the message that applies it.
@@ -987,6 +1048,28 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         };
         if (deepEqual(previous, next)) return;
         store.setState(next, true);
+    };
+
+    /**
+     * Moves the open viewer one picture along the transcript. The gallery is a
+     * ring: stepping past either end lands on the other, so a reader flipping
+     * through a conversation never meets a control that does nothing.
+     */
+    const imageStep = (direction: 1 | -1): void => {
+        if (!openImageRef) return;
+        const entries = store.getState().entries;
+        const gallery = imageGalleryOf(entries);
+        if (gallery.length < 2) return;
+        const at = gallery.findIndex(
+            (image) =>
+                image.messageId === openImageRef?.messageId &&
+                image.attachmentId === openImageRef.attachmentId,
+        );
+        if (at < 0) return;
+        const next = gallery[(at + direction + gallery.length) % gallery.length];
+        if (!next) return;
+        openImageRef = { messageId: next.messageId, attachmentId: next.attachmentId };
+        commit();
     };
 
     // --- streaming block helpers ------------------------------------------
@@ -2283,14 +2366,20 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             commit();
         },
         imageOpen(messageId, attachmentId) {
-            const resolved = openImageResolve(store.getState().entries, messageId, attachmentId);
-            if (!resolved) return;
-            openImage = resolved;
+            const ref = { messageId, attachmentId };
+            if (!openImageProject(store.getState().entries, ref)) return;
+            openImageRef = ref;
             commit();
         },
+        imageNext() {
+            imageStep(1);
+        },
+        imagePrevious() {
+            imageStep(-1);
+        },
         imageClose() {
-            if (!openImage) return;
-            openImage = undefined;
+            if (!openImageRef) return;
+            openImageRef = undefined;
             commit();
         },
         reasoningToggle() {

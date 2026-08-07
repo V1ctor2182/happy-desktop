@@ -919,6 +919,10 @@ export interface RigWorkspaceStore {
     reasoningToggle(): void;
     /** Opens one transcript image of the open conversation full size. */
     imageOpen(messageId: string, attachmentId: string): void;
+    /** Shows the conversation's next image, wrapping past the last one. */
+    imageNext(): void;
+    /** Shows the conversation's previous image, wrapping past the first one. */
+    imagePrevious(): void;
     /** Closes the full-size image viewer. */
     imageClose(): void;
     /**
@@ -3762,6 +3766,8 @@ export function rigWorkspaceStoreCreate(
         activityPanelClose: () => chatStore?.activityPanelClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
+        imageNext: () => chatStore?.imageNext(),
+        imagePrevious: () => chatStore?.imagePrevious(),
         imageClose: () => chatStore?.imageClose(),
         openIn: (groupId, targetId) => {
             // The choice is the reader's, so the control wears it immediately;

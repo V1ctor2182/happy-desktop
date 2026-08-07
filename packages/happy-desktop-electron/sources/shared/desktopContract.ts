@@ -105,6 +105,12 @@ export type DesktopRuntimeSnapshot =
           message: string;
           request: DesktopStartRequest;
           retryable: boolean;
+          /**
+           * Another attempt is running right now, started from this failure. The
+           * failure stays published so the window can keep the screen the person
+           * is reading and put the waiting on its retry control instead.
+           */
+          retrying?: boolean;
           targets: readonly DesktopTopologyTarget[];
           update: DesktopUpdateSnapshot;
       };
@@ -174,6 +180,14 @@ export type LocalOnboardingStage =
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
     | "connectFailed"
+    /**
+     * Rig is installed and working, but no coding assistant on this machine is
+     * signed in, so it has nothing to run a session with. Kept apart from
+     * `connectFailed` because nothing is broken: this is the last ordinary step
+     * of setting the machine up, and it clears itself the moment an assistant is
+     * signed in.
+     */
+    | "providersMissing"
     /** Whether this Rig has ever been used is still being read from it. */
     | "examining"
     /** Everything else is settled and this Rig is demonstrably unused. */
@@ -238,6 +252,13 @@ export interface LocalOnboardingSnapshot {
     readonly busy: boolean;
     /** Displayable detail for the current stage: why it failed, or what to do. */
     readonly message?: string;
+    /**
+     * The coding assistants Rig looked for and found no credentials for, in the
+     * order it named them. Present only at `providersMissing`.
+     */
+    readonly providers?: readonly string[];
+    /** An attempt to reach Rig is running, started from a failed stage. */
+    readonly retrying?: boolean;
 }
 
 /**

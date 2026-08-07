@@ -373,13 +373,13 @@ export {
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
 export {
-    OnboardingScreen,
-    type OnboardingBrand,
-    type OnboardingScreenProps,
-    type OnboardingScreenState,
-    type OnboardingStep,
-    type OnboardingStepState,
-} from "./OnboardingScreen";
+    WelcomeScreen,
+    type WelcomeScreenProps,
+    type WelcomeSlide,
+    type WelcomeSlideArt,
+} from "./WelcomeScreen";
+export { SetupChoice, type SetupChoiceOption, type SetupChoiceProps } from "./SetupChoice";
+export { SetupPage, type SetupPageAction, type SetupPageProps } from "./SetupPage";
 export {
     SetupOptionCard,
     type SetupOptionCardProps,

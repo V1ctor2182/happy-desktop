@@ -1,0 +1,119 @@
+/*
+ * C-252 SetupPage — one step of setup as one centred column.
+ *
+ * The column is capped at a readable measure and centred in the window on both
+ * axes, so a page carrying only a title looks deliberate rather than stranded
+ * at the top of an empty screen. It paints the same surface the welcome screen
+ * and the splash paint, so moving between them changes the words rather than
+ * the scenery.
+ *
+ * The body scrolls when a page is taller than the window — the install terminal
+ * is — and centres while it fits, using `safe center` so a tall page never has
+ * its head clipped above the scroll origin.
+ *
+ * The drag lane is an absolutely positioned overlay outside the flow: the column
+ * is laid out as if it were not there, and it stays pinned to the window's top
+ * rather than scrolling away with the content. Every dimension is on the 4px
+ * grid.
+ */
+
+.happy2-setup-page,
+.happy2-setup-page__body,
+.happy2-setup-page__stage,
+.happy2-setup-page__title,
+.happy2-setup-page__copy,
+.happy2-setup-page__command,
+.happy2-setup-page__slot {
+    box-sizing: border-box;
+}
+
+.happy2-setup-page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+.happy2-setup-page__body {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    max-width: 560px;
+    padding: 40px;
+}
+
+/* Fixed square whether the art arrives or not: the scene renders nothing until
+   its worker runtime loads, and never in an engine that cannot have one, so
+   reserving the box here is what stops the title jumping when it appears. */
+.happy2-setup-page__stage {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 120px;
+}
+
+.happy2-setup-page__title {
+    margin: 0;
+    color: var(--text);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 40px;
+    letter-spacing: -0.03em;
+    text-align: center;
+}
+
+.happy2-setup-page__copy {
+    max-width: 400px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    text-align: center;
+}
+
+/*
+ * Something to type, so it is selectable and looks it: the monospace face on a
+ * raised well. `user-select` is set explicitly because the surrounding chrome
+ * of a desktop window is commonly unselectable, and a command nobody can copy
+ * is worse than no command at all.
+ */
+.happy2-setup-page__command {
+    max-width: 100%;
+    padding: 10px 14px;
+    overflow-x: auto;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    background: var(--surface-high);
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+    line-height: 20px;
+    white-space: pre;
+    user-select: text;
+}
+
+/* The page's own body takes the full measure: a fork, a terminal, or a notice
+   is a block, and shrink-wrapping it to its content would leave it ragged
+   against the centred words above. */
+.happy2-setup-page__slot {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}

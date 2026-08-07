@@ -68,8 +68,14 @@
     color: var(--button-primary-tint);
 }
 
+/* Lifted with a translucent overlay rather than swapped to a surface colour.
+   The primary button is black in every theme while its label stays white, so
+   hovering it onto `--surface-pressed` turned it near-white in the light theme
+   and took the label with it — white on #f0f0f2, which is a button that reads
+   as empty exactly while the pointer is on it. An overlay lifts the black it
+   actually has, so the label keeps its contrast in both themes. */
 .happy2-button[data-variant="primary"]:hover:not(:disabled) {
-    background: var(--surface-pressed);
+    background-image: linear-gradient(var(--button-primary-ripple), var(--button-primary-ripple));
 }
 
 .happy2-button[data-variant="secondary"] {

@@ -33,6 +33,14 @@ export type ImageViewerProps = {
     /** Leading controls in the tool bar, e.g. Open in a window of its own. */
     actions?: ReactNode;
     /**
+     * `panel` (default) paints the viewer's own room: a grouped frame and a
+     * ruled tool bar, for a viewer set into a page or a side panel. `immersive`
+     * paints no surface at all, for a viewer hung on something that is already
+     * the room — the full-window lightbox — so the picture sits on one flat
+     * dark instead of on three stacked bands of surface.
+     */
+    tone?: "panel" | "immersive";
+    /**
      * Takes keyboard focus on mount. For a surface that is only this picture — a
      * window of its own — so its zoom and pan keys work without a click first.
      */
@@ -248,6 +256,7 @@ export function ImageViewer(props: ImageViewerProps) {
         "content",
         "name",
         "actions",
+        "tone",
         "autoFocus",
         "onNaturalSize",
     ]);
@@ -408,6 +417,10 @@ export function ImageViewer(props: ImageViewerProps) {
     const keyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
         if (event.metaKey || event.ctrlKey || event.altKey || !showing) return;
         const key = event.key;
+        // An arrow is only the viewer's key while the picture has somewhere to
+        // go. With the whole of it on screen there is nothing to pan, so the key
+        // is left to whatever hosts the viewer — in a set, the next picture.
+        if (!pannable && key.startsWith("Arrow")) return;
         if (key === "+" || key === "=") zoomBy(1);
         else if (key === "-" || key === "_") zoomBy(-1);
         else if (key === "0") fitToView();
@@ -478,6 +491,7 @@ export function ImageViewer(props: ImageViewerProps) {
             className={["happy2-image-viewer", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="image-viewer"
             data-testid={local["data-testid"]}
+            data-tone={local.tone === "immersive" ? "immersive" : undefined}
             style={local.style}
         >
             <div

@@ -124,9 +124,34 @@ export function ImageViewerPage() {
             </Specimen>
 
             <Specimen
+                detail='tone="immersive" · no frame and no ruled bar of its own — the dark around it is the room, as in the full-window Lightbox'
+                label="Immersive tone"
+                number="05"
+                stage="surface"
+            >
+                <div className="happy2-theme-dark" style={{ display: "flex" }}>
+                    <div
+                        style={{
+                            background: "var(--surface-high)",
+                            display: "flex",
+                            height: "280px",
+                            overflow: "hidden",
+                            width: "560px",
+                        }}
+                    >
+                        <ImageViewer
+                            content={{ type: "url", url: wide }}
+                            name="relay-field.svg"
+                            tone="immersive"
+                        />
+                    </div>
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Opening, unviewable, and failed — one shape of answer"
                 label="States"
-                number="05"
+                number="06"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

@@ -81,9 +81,11 @@
 @import "./styles/media-gallery.css";
 @import "./styles/file-attachment.css";
 @import "./styles/emoji-picker.css";
-@import "./styles/onboarding-screen.css";
 @import "./styles/splash-screen.css";
+@import "./styles/welcome-screen.css";
 @import "./styles/split-column.css";
+@import "./styles/setup-page.css";
+@import "./styles/setup-choice.css";
 @import "./styles/setup-option-card.css";
 @import "./styles/default-agent-form.css";
 @import "./styles/build-progress-panel.css";
@@ -91,8 +93,6 @@
 @import "./styles/admin-page.css";
 @import "./styles/panel-header.css";
 @import "./styles/sidebar-apps.css";
-@import "./styles/desktop-startup.css";
-@import "./styles/local-onboarding.css";
 @import "./styles/rig-install.css";
 @import "./styles/rig-client.css";
 @import "./styles/rig-chat.css";

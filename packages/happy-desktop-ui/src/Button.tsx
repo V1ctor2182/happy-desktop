@@ -3,12 +3,20 @@ import { type ButtonHTMLAttributes, type CSSProperties } from "react";
 import type { Dimension } from "./dimensions";
 import { toCssDimension } from "./dimensions";
 import { Icon, type IconName } from "./Icon";
+import { Spinner } from "./Spinner";
 export type ButtonSize = "small" | "medium" | "large";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"> & {
     fullWidth?: boolean;
     icon?: IconName;
     iconOnly?: boolean;
+    /**
+     * The button's own work is running: a spinner takes the icon's place and the
+     * button stops accepting presses, while the label stays put. The work a
+     * button started belongs on that button — replacing the surface around it
+     * would throw away whatever the person was reading when they pressed it.
+     */
+    loading?: boolean;
     size?: ButtonSize;
     style?: CSSProperties;
     variant?: ButtonVariant;
@@ -26,6 +34,7 @@ export function Button(props: ButtonProps) {
         "fullWidth",
         "icon",
         "iconOnly",
+        "loading",
         "size",
         "style",
         "type",
@@ -40,6 +49,8 @@ export function Button(props: ButtonProps) {
             className={["happy2-button", local.className].filter(Boolean).join(" ")}
             data-icon-only={local.iconOnly ? "" : undefined}
             data-happy-desktop-ui="button"
+            data-loading={local.loading ? "" : undefined}
+            disabled={rest.disabled === true || local.loading === true}
             data-size={size()}
             data-variant={variant()}
             style={{
@@ -53,7 +64,18 @@ export function Button(props: ButtonProps) {
             type={local.type ?? "button"}
         >
             <span className="happy2-button__content" data-happy-desktop-ui="button-content">
-                {local.icon ? (
+                {local.loading ? (
+                    <span className="happy2-button__icon" data-happy-desktop-ui="button-icon">
+                        <Spinner
+                            size={iconSizes[size()]}
+                            tone={
+                                variant() === "secondary" || variant() === "ghost"
+                                    ? "default"
+                                    : "inverse"
+                            }
+                        />
+                    </span>
+                ) : local.icon ? (
                     ((name) => (
                         <span className="happy2-button__icon" data-happy-desktop-ui="button-icon">
                             <Icon name={name} size={iconSizes[size()]} />

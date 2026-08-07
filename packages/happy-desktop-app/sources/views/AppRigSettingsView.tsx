@@ -308,7 +308,6 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             ) : props.section === "providers" ? (
                 <RigProviderSettings
                     error={models.type === "error" ? models.error.message : undefined}
-                    experimentalFeaturesEnabled={experiments.experimentalFeaturesEnabled}
                     loading={models.type !== "ready" && models.type !== "error"}
                     onModelEnabledChange={(id, enabled) =>
                         rigOnline()
@@ -332,6 +331,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         value: level,
                     }))}
                     error={models.type === "error" ? models.error.message : undefined}
+                    experimentalFeaturesEnabled={experiments.experimentalFeaturesEnabled}
                     loading={models.type !== "ready" && models.type !== "error"}
                     modelOptions={modelOptions(catalog, settings)}
                     onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}

@@ -274,6 +274,13 @@ export function localOnboardingView(
             return {
                 kind: "connect-failed",
                 message: message ?? "Happy could not reach your Rig daemon.",
+                retrying: onboarding.retrying === true,
+            };
+        case "providersMissing":
+            return {
+                kind: "providers-missing",
+                providers: onboarding.providers ?? [],
+                retrying: onboarding.retrying === true,
             };
         case "examining":
             return { kind: "examining" };

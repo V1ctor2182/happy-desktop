@@ -11,6 +11,7 @@ export * from "./appearance/appearanceStore.js";
 export * from "./experiments/experimentsStore.js";
 export * from "./modules/composer/composerState.js";
 export * from "./modules/terminal/terminalState.js";
+export * from "./onboarding/welcomeStore.js";
 export * from "./notes/noteStore.js";
 export * from "./notes/notesSessionStore.js";
 export * from "./notes/notesStore.js";

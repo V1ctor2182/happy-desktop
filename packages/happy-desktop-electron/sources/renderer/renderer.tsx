@@ -15,11 +15,13 @@ import {
     appearanceStoreCreate,
     experimentsStoreCreate,
     notesSessionStoreCreate,
+    welcomeStoreCreate,
     rigNavigationOrderStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
     type ExperimentsStore,
     type NotesSessionStore,
+    type WelcomeStore,
     type RigNavigationOrderStore,
     type RigSettingsStore,
     type RigWindowStore,
@@ -28,6 +30,8 @@ import {
     CodeHighlightWorkers,
     LocalOnboardingScreen,
     ThemeScope,
+    WelcomeScreen,
+    type WelcomeSlide,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type MediaWindowOpener,
@@ -61,6 +65,7 @@ import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
+import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import {
     DesktopMediaPreviewWindow,
@@ -246,12 +251,43 @@ function RigBoundary(props: {
  * install, or a Rig that disappeared resumes here rather than in a remembered
  * position.
  */
-function DesktopOnboardingGate(props: { children: ReactNode; store: LocalOnboardingStore }) {
+function DesktopOnboardingGate(props: {
+    appearance: AppearanceStore;
+    children: ReactNode;
+    store: LocalOnboardingStore;
+    welcome: WelcomeStore;
+}) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const welcome = useSyncExternalStore(
+        props.welcome.subscribe,
+        props.welcome.get,
+        props.welcome.get,
+    );
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
     const view = localOnboardingView(snapshot);
     if (!view) return <>{props.children}</>;
+    // Only ever in front of setup that is genuinely still owed. A machine that
+    // is already working has nothing to introduce, so an unacknowledged welcome
+    // there stays unacknowledged rather than interrupting someone mid-flight.
+    if (!welcome.welcomeAcknowledged)
+        return (
+            <WelcomeScreen
+                appearance={appearance.mode}
+                onAction={() => props.welcome.welcomeAcknowledge()}
+                onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
+                slides={WELCOME_SLIDES}
+            />
+        );
     return (
         <LocalOnboardingScreen
+            // Nothing to run yet: choosing to stay in the app is a real product
+            // path that has no runtime behind it, so the option is on screen for
+            // the layout and does not pretend to do anything until it does.
+            onAppOnlyChoose={() => undefined}
             onConnectRetry={() => props.store.connectRetry()}
             onProjectChoose={() => props.store.projectChoose()}
             onRigInstall={() => props.store.rigInstall()}
@@ -261,6 +297,43 @@ function DesktopOnboardingGate(props: { children: ReactNode; store: LocalOnboard
         />
     );
 }
+
+/**
+ * What Happy says for itself before it has been set up, in the order it says it.
+ *
+ * The words live here rather than in the component because they are the product
+ * talking, not a layout: `WelcomeScreen` owns the centred column, the slideshow,
+ * and the button, and this is the only place that decides what any of it means.
+ * The first slide is the mark and the name, so the very first thing on screen is
+ * what the app is called; the rest each take one of the shipped animations and
+ * say one true thing about what Happy does with it.
+ */
+const WELCOME_SLIDES: readonly WelcomeSlide[] = [
+    {
+        art: { kind: "logo" },
+        copy: "A desktop home for the agents you work with, and the code they work on.",
+        id: "happy",
+        title: "Happy",
+    },
+    {
+        art: { kind: "scene", name: "robot" },
+        copy: "Start a session in any project and hand it real work. It keeps going while you look elsewhere.",
+        id: "agents",
+        title: "Agents that stay running.",
+    },
+    {
+        art: { kind: "scene", name: "wand" },
+        copy: "Every change lands in your own checkout, where you can read it, run it, and undo it.",
+        id: "workspaces",
+        title: "Your files, your machine.",
+    },
+    {
+        art: { kind: "scene", name: "sparkles" },
+        copy: "Work on your own files here, and reach the other machines you own from the same window.",
+        id: "local",
+        title: "Happy runs on your machine.",
+    },
+];
 
 /** True while the runtime is working on, or running, this machine's own Rig. */
 function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
@@ -285,6 +358,7 @@ interface DesktopRendererProps {
     settings: RigSettingsStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
+    welcome: WelcomeStore;
     localWebUpdate: LocalWebUpdateStore;
     windowState: RigWindowStore;
 }
@@ -307,7 +381,15 @@ function DesktopRenderer(props: DesktopRendererProps) {
     );
     // Local setup gates the workspace until this machine can run Rig.
     if (!snapshot || !desktopLocalPhase(snapshot)) return content;
-    return <DesktopOnboardingGate store={props.onboarding}>{content}</DesktopOnboardingGate>;
+    return (
+        <DesktopOnboardingGate
+            appearance={props.appearance}
+            store={props.onboarding}
+            welcome={props.welcome}
+        >
+            {content}
+        </DesktopOnboardingGate>
+    );
 }
 
 function DesktopRuntimeContent(
@@ -453,6 +535,10 @@ if (mediaPreviewBridge) {
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
         const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
+        // Whether this machine's owner has been welcomed. Kept beside the two
+        // above because it answers the same kind of question: what this
+        // installation shows, rather than anything a Rig knows.
+        const welcome = welcomeStoreCreate(desktopWelcomePersistence());
         // Every Rig in this window, each with its own product stores. The router is
         // told to resolve its address again whenever the set of connected Rigs
         // changes, so a machine that connects after the URL already named it opens
@@ -506,6 +592,7 @@ if (mediaPreviewBridge) {
                         settings={settings}
                         startupValues={startupValuesStoreCreate()}
                         store={runtimeStore}
+                        welcome={welcome}
                         windowState={windowStateStoreCreate(desktopBridge)}
                     />
                 </CodeHighlightWorkers>

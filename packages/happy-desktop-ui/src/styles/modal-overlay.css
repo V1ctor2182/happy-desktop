@@ -29,6 +29,15 @@
     padding: 0;
 }
 
+/* One immersive surface instead of a card: no gutter, and the hosted surface
+   stretches to every edge of the window. It paints its own dark over the dim,
+   so the app is the thing being covered rather than a card's neighbour. */
+.happy2-modal-overlay[data-placement="fill"] {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+}
+
 /* A container cannot resolve cqh units against itself. This top-only child
    fills the overlay's size container and owns its flex-safe gutters, keeping
    the default centered DOM and CSS path unchanged. */

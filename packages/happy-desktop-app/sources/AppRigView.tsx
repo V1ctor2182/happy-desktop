@@ -3896,11 +3896,21 @@ function RigConversationSurface(props: {
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             overlay={
                 conversation.openImage ? (
-                    <ModalOverlay onDismiss={() => workspace.imageClose()}>
+                    <ModalOverlay onDismiss={() => workspace.imageClose()} placement="fill">
                         <Lightbox
                             alt={conversation.openImage.alt}
                             imageUrl={conversation.openImage.url}
                             onClose={() => workspace.imageClose()}
+                            {...(conversation.openImage.total > 1
+                                ? {
+                                      position: {
+                                          index: conversation.openImage.index,
+                                          total: conversation.openImage.total,
+                                      },
+                                      onNext: () => workspace.imageNext(),
+                                      onPrevious: () => workspace.imagePrevious(),
+                                  }
+                                : {})}
                         />
                     </ModalOverlay>
                 ) : undefined
