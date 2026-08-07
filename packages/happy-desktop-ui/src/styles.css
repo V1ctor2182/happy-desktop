@@ -30,6 +30,7 @@
 @import "./styles/composer.css";
 @import "./styles/composer-model-control.css";
 @import "./styles/composer-dock.css";
+@import "./styles/composer-panel.css";
 @import "./styles/text-field.css";
 @import "./styles/select.css";
 @import "./styles/switch.css";

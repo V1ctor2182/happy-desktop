@@ -485,6 +485,11 @@ export interface RigChatStore {
      */
     activityPanelShow(): void;
     /**
+     * Closes the activity panel. Idempotent, and it stops nothing: the panel is
+     * a reading of state the session already keeps, so it starts no work.
+     */
+    activityPanelClose(): void;
+    /**
      * Opens one transcript image full size. The image is resolved from the named
      * message's attachments here rather than by the surface, so the viewer has a
      * source the moment it opens; an id that names nothing opens nothing.
@@ -2270,6 +2275,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 usagePollStop();
                 usageLoading = false;
             }
+            commit();
+        },
+        activityPanelClose() {
+            if (!activityPanelOpen) return;
+            activityPanelOpen = false;
             commit();
         },
         imageOpen(messageId, attachmentId) {

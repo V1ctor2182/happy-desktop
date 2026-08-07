@@ -5,6 +5,9 @@
  * The rate-limit rows use the same four fixed columns as the provider-usage
  * page — name, measure, share, reset — and stay the ink of the text until the
  * share is worth colouring, so one limit reads the same in both places.
+ *
+ * It is a content block, not a card: whatever carries the reading names and
+ * frames it, so there is no title row, no fill, and no border here.
  */
 
 .happy2-rig-usage {
@@ -13,29 +16,10 @@
     gap: 16px;
     width: 100%;
     box-sizing: border-box;
-    padding: 16px;
     color: var(--text);
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
     font-family: var(--happy2-font-ui);
 }
 
-.happy2-rig-usage__header {
-    display: flex;
-    flex-direction: row;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.happy2-rig-usage__title {
-    font-size: 15px;
-    font-weight: 700;
-    line-height: 20px;
-    letter-spacing: -0.01em;
-}
-
-.happy2-rig-usage__loading,
 .happy2-rig-usage__empty,
 .happy2-rig-usage__error {
     font-size: 13px;

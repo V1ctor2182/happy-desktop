@@ -117,6 +117,10 @@ function QuotaRow(props: { quota: RigUsageQuota }) {
  * surface fetches (and polls while visible) and passes the result down. Holds no
  * state and starts no work of its own.
  *
+ * It is a content block rather than a card: the reading is named and framed by
+ * whatever carries it — `ComposerPanel` above the composer — so it neither
+ * repeats that title nor draws a second border inside the first one.
+ *
  * A rate-limit window is drawn with the same grammar the provider-usage page
  * uses — name, measure, share, reset, in fixed columns, and monochrome until
  * the share is worth colouring — so the same limit read here and read there is
@@ -132,18 +136,6 @@ export function RigUsagePanel(props: RigUsagePanelProps) {
             data-testid={props["data-testid"]}
             style={props.style}
         >
-            <header className="happy2-rig-usage__header">
-                <span className="happy2-rig-usage__title">Session usage</span>
-                {props.loading ? (
-                    <span
-                        className="happy2-rig-usage__loading"
-                        data-happy-desktop-ui="rig-usage-loading"
-                    >
-                        Updating…
-                    </span>
-                ) : null}
-            </header>
-
             {props.error !== undefined ? (
                 <p className="happy2-rig-usage__error" data-happy-desktop-ui="rig-usage-error">
                     {props.error}

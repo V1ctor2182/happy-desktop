@@ -915,6 +915,7 @@ export interface RigWorkspaceStore {
     usagePanelOpen(): void;
     usagePanelClose(): void;
     activityPanelToggle(): void;
+    activityPanelClose(): void;
     reasoningToggle(): void;
     /** Opens one transcript image of the open conversation full size. */
     imageOpen(messageId: string, attachmentId: string): void;
@@ -3758,6 +3759,7 @@ export function rigWorkspaceStoreCreate(
         usagePanelOpen: () => chatStore?.usagePanelOpen(),
         usagePanelClose: () => chatStore?.usagePanelClose(),
         activityPanelToggle: () => chatStore?.activityPanelToggle(),
+        activityPanelClose: () => chatStore?.activityPanelClose(),
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageClose: () => chatStore?.imageClose(),

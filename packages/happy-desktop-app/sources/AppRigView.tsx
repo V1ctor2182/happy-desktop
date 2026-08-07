@@ -97,6 +97,7 @@ import {
     ChangedFileDiff,
     ComposerFooterBar,
     ComposerModelControl,
+    ComposerPanel,
     ConversationDock,
     ConversationView,
     EmptyState,
@@ -3666,11 +3667,56 @@ function RigConversationSurface(props: {
             agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
             composerAboveControl={
-                <SlotEntries
-                    entries={props.slots.aboveComposer}
-                    onAction={props.slotAction}
-                    placement="above-composer"
-                />
+                <>
+                    {/* What `/usage` and `/agents` were asked for. They sit here
+                        rather than over the transcript because they are readings
+                        about this session, not places to go: taking the body for
+                        one left the reader on a screen with no way back to the
+                        conversation it was describing. The store keeps at most
+                        one of the two open. */}
+                    {conversation.usagePanelOpen ? (
+                        <ComposerPanel
+                            onClose={() => workspace.usagePanelClose()}
+                            {...(conversation.usageLoading ? { status: "Updating…" } : {})}
+                            title="Session usage"
+                        >
+                            <RigUsagePanel
+                                error={conversation.usageError}
+                                loading={conversation.usageLoading}
+                                usage={conversation.usage}
+                            />
+                        </ComposerPanel>
+                    ) : null}
+                    {conversation.activityPanelOpen ? (
+                        <ComposerPanel
+                            onClose={() => workspace.activityPanelClose()}
+                            title="Session activity"
+                        >
+                            <RigActivityPanel
+                                backgroundProcesses={conversation.backgroundProcesses}
+                                goal={conversation.goal}
+                                now={props.now}
+                                {...(props.unavailable === undefined
+                                    ? {
+                                          onBackgroundProcessStop: (processId: number) => {
+                                              if (props.rigOnline())
+                                                  swallow(
+                                                      workspace.backgroundProcessStop(processId),
+                                                  );
+                                          },
+                                      }
+                                    : {})}
+                                subagents={conversation.subagents}
+                                tasks={conversation.tasks}
+                            />
+                        </ComposerPanel>
+                    ) : null}
+                    <SlotEntries
+                        entries={props.slots.aboveComposer}
+                        onAction={props.slotAction}
+                        placement="above-composer"
+                    />
+                </>
             }
             composerDisabled={props.readOnly}
             composerSubmitDisabled={props.unavailable !== undefined}
@@ -3831,31 +3877,6 @@ function RigConversationSurface(props: {
                 : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
-            panel={
-                conversation.usagePanelOpen ? (
-                    <RigUsagePanel
-                        error={conversation.usageError}
-                        loading={conversation.usageLoading}
-                        usage={conversation.usage}
-                    />
-                ) : conversation.activityPanelOpen ? (
-                    <RigActivityPanel
-                        backgroundProcesses={conversation.backgroundProcesses}
-                        goal={conversation.goal}
-                        now={props.now}
-                        {...(props.unavailable === undefined
-                            ? {
-                                  onBackgroundProcessStop: (processId: number) => {
-                                      if (props.rigOnline())
-                                          swallow(workspace.backgroundProcessStop(processId));
-                                  },
-                              }
-                            : {})}
-                        subagents={conversation.subagents}
-                        tasks={conversation.tasks}
-                    />
-                ) : undefined
-            }
             overlay={
                 conversation.openImage ? (
                     <ModalOverlay onDismiss={() => workspace.imageClose()}>

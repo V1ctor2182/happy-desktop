@@ -241,6 +241,7 @@ export {
     type ConversationDockProps,
     type FloatingConversationDockProps,
 } from "./ConversationDock";
+export { ComposerPanel, type ComposerPanelProps } from "./ComposerPanel";
 export {
     RigUserInputPrompt,
     type RigUserInputAnswerMap,
