@@ -222,7 +222,7 @@ export interface AppRigSession {
     /** This Rig's own model catalog, read by the settings window's pickers. */
     readonly models: RigModelStore;
     readonly workspace: RigWorkspaceStore;
-    /** Materializes this Rig's slot and webapp catalogs, one surface per machine. */
+    /** Materializes this Rig's slot and applet catalogs, one surface per machine. */
     readonly slots?: () => RigSlotsStore;
     /**
      * Every question this Rig's agents are waiting on. Absent when the machine
@@ -1266,7 +1266,7 @@ function slotActionIntent(action: RigSlotAction): SlotActionIntent {
             return "draft";
         case "new-chat":
             return "new-chat";
-        case "open-webapp":
+        case "open-applet":
             return "open";
     }
 }
@@ -1274,25 +1274,25 @@ function slotActionIntent(action: RigSlotAction): SlotActionIntent {
 /** Why an action cannot run in this context, or nothing when it can. */
 function slotUnavailable(
     action: RigSlotAction,
-    webapps: ReadonlySet<string>,
+    applets: ReadonlySet<string>,
     hasCurrentChat: boolean,
     conversationRefusal: string | undefined,
 ): string | undefined {
     if (action.type === "send-current-chat" && !hasCurrentChat)
         return "No chat is open here to send this message to.";
-    if (action.type === "open-webapp" && !webapps.has(action.webapp))
-        return `This Rig is not serving a webapp named “${action.webapp}”.`;
+    if (action.type === "open-applet" && !applets.has(action.applet))
+        return `This Rig is not serving a applet named “${action.applet}”.`;
     // Sending, drafting into, and starting a chat all land in the addressed
     // group, so they carry that group's own reason rather than a second sentence
-    // about the same thing. Opening a webapp does not touch it.
-    if (action.type !== "open-webapp") return conversationRefusal;
+    // about the same thing. Opening a applet does not touch it.
+    if (action.type !== "open-applet") return conversationRefusal;
     return undefined;
 }
 
 function slotVisualEntries(
     entries: readonly RigSlotEntry[],
     projects: readonly RigProjectGroup[],
-    webapps: ReadonlySet<string>,
+    applets: ReadonlySet<string>,
     hasCurrentChat: boolean,
     conversationRefusal?: string,
 ): readonly SlotVisualEntry[] {
@@ -1301,7 +1301,7 @@ function slotVisualEntries(
             entry.content.type === "button"
                 ? slotUnavailable(
                       entry.content.action,
-                      webapps,
+                      applets,
                       hasCurrentChat,
                       conversationRefusal,
                   )
@@ -1334,8 +1334,8 @@ function slotActionRun(workspace: RigWorkspaceStore, action: RigSlotAction): Pro
             return workspace.draftUpdate(action.sessionId, action.message);
         case "new-chat":
             return workspace.chatStart(action);
-        case "open-webapp":
-            return workspace.webappOpen(action.webapp);
+        case "open-applet":
+            return workspace.appletOpen(action.applet);
     }
 }
 
@@ -1421,13 +1421,13 @@ export function AppRigView(props: AppRigViewProps) {
     const slotsStore = active?.session?.slots?.() ?? rigSlotsStoreNoop;
     const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
     const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
-    const webapps = new Set(slots.webapps.map((webapp) => webapp.name));
+    const applets = new Set(slots.applets.map((applet) => applet.name));
     // A press is decided from where the reader is when they press, and nothing
     // else. Not one thing here comes from the render that drew the row: the
     // window's own directory says which machine is addressed, that machine's
     // workspace says which project, worktree, and conversation are addressed —
     // whether or not a conversation is materialized — and that machine's slot
-    // surface supplies the catalog and the webapps it is currently serving.
+    // surface supplies the catalog and the applets it is currently serving.
     // Where each answer comes from is what makes them one answer: the workspace
     // and the catalog are the addressed Rig's own, so a press can never be
     // resolved against one machine and performed on another.
@@ -1436,7 +1436,7 @@ export function AppRigView(props: AppRigViewProps) {
     // it, so no address can move part way through, and what is performed is
     // performed on the very workspace the decision was taken against. Every one
     // of the four placements reports here, so all four are decided this way. A
-    // contribution withdrawn, rewritten into text, pointing at a webapp this Rig
+    // contribution withdrawn, rewritten into text, pointing at a applet this Rig
     // no longer serves, or scoped to somewhere the reader has left does nothing
     // at all — the rule that decides what is shown decides what may be run.
     const slotAction = (entryId: string): void => {
@@ -1458,7 +1458,7 @@ export function AppRigView(props: AppRigViewProps) {
         const entry = catalogNow.entries.find((candidate) => candidate.id === entryId);
         if (!entry || entry.content.type !== "button") return;
         if (!rigSlotEntryInScope(entry, scopeNow)) return;
-        const served = new Set(catalogNow.webapps.map((webapp) => webapp.name));
+        const served = new Set(catalogNow.applets.map((applet) => applet.name));
         const openConversation = workspaceSnapshot.conversation.type !== "unloaded";
         // Read from the store at invocation, not from the render this handler
         // was made in: the checkout may have gone away since, and a retained
@@ -1573,7 +1573,7 @@ export function AppRigView(props: AppRigViewProps) {
                     entries={slotVisualEntries(
                         rigSlotEntriesInScope(slots.entries, "sidebar", slotsScope),
                         active?.projects ?? [],
-                        webapps,
+                        applets,
                         props.chatId !== undefined,
                         activeAvailability?.refusal,
                     )}
@@ -2221,7 +2221,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
-    const webapps = new Set(props.slots.webapps.map((webapp) => webapp.name));
+    const applets = new Set(props.slots.applets.map((applet) => applet.name));
     // What may be done in the addressed checkout, as the state decided it. Every
     // control below that has a side effect there reads this one value, so a
     // control that is not offered and an action that is refused always give the
@@ -2237,7 +2237,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         slotVisualEntries(
             rigSlotEntriesInScope(props.slots.entries, slot, props.slotsScope),
             rows,
-            webapps,
+            applets,
             props.chatId !== undefined,
             connectionRefusal ?? openGroupChatRefusal,
         );
@@ -2515,11 +2515,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
                         workspaceFilesLoading={workspace.workspaceFilesLoading}
-                        webappRevisions={
+                        appletRevisions={
                             new Map(
-                                props.slots.webapps.map((webapp) => [
-                                    webapp.name,
-                                    webapp.currentVersion,
+                                props.slots.applets.map((applet) => [
+                                    applet.name,
+                                    applet.currentVersion,
                                 ]),
                             )
                         }
@@ -2866,11 +2866,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                               rigAvailability: terminalRigAvailability,
                                               rigAvailabilityReason: availability.message,
                                           })}
-                                    webappRevisions={
+                                    appletRevisions={
                                         new Map(
-                                            props.slots.webapps.map((webapp) => [
-                                                webapp.name,
-                                                webapp.currentVersion,
+                                            props.slots.applets.map((applet) => [
+                                                applet.name,
+                                                applet.currentVersion,
                                             ]),
                                         )
                                     }
@@ -3863,13 +3863,13 @@ function RigConversationSurface(props: {
                 if (props.rigOnline()) workspace.imageOpen(messageId, attachmentId);
             }}
             onAttachmentOpen={(attachment) => {
-                if (attachment.attachmentKind === "webapp" && attachment.webapp) {
+                if (attachment.attachmentKind === "applet" && attachment.applet) {
                     if (!props.rigOnline()) return;
                     swallow(
-                        workspace.webappOpen(
-                            attachment.webapp,
-                            attachment.webappPath,
-                            attachment.webappQuery,
+                        workspace.appletOpen(
+                            attachment.applet,
+                            attachment.appletPath,
+                            attachment.appletQuery,
                         ),
                     );
                     return;
@@ -4494,8 +4494,8 @@ function RigPanelBody(props: {
     store: RigPanelStore;
     workspaceFiles?: RigWorkspaceFiles;
     workspaceFilesLoading: boolean;
-    /** Current version per imported webapp, used to live-reload an already open page. */
-    webappRevisions: ReadonlyMap<string, number>;
+    /** Current version per imported applet, used to live-reload an already open page. */
+    appletRevisions: ReadonlyMap<string, number>;
 }) {
     const all = props.scope === "all";
     // A checkout can hold twenty thousand paths, and putting them in reading
@@ -4674,7 +4674,7 @@ function RigPanelBody(props: {
                                       ? {}
                                       : { rigAvailabilityReason: props.rigAvailabilityReason }),
                               })}
-                        webappRevisions={props.webappRevisions}
+                        appletRevisions={props.appletRevisions}
                     />
                     {props.panel.activeViewId === "files" ? (
                         <FileBrowser
@@ -4867,7 +4867,7 @@ function RigPanelFileView(props: {
  *
  * Pages are all mounted together and only one is shown, because a page that
  * stopped being looked at is still loaded and unmounting it would throw the
- * session away; a terminal and a webapp are drawn only while they are on
+ * session away; a terminal and a applet are drawn only while they are on
  * screen, and a terminal's process outlives its view because the store, not
  * this component, is what holds it.
  *
@@ -4891,8 +4891,8 @@ function RigToolBodies(props: {
     rigAvailability?: "reconnecting" | "unavailable";
     rigAvailabilityReason?: string;
     sessionId?: string;
-    /** Current version per imported webapp, used to live-reload an already open page. */
-    webappRevisions: ReadonlyMap<string, number>;
+    /** Current version per imported applet, used to live-reload an already open page. */
+    appletRevisions: ReadonlyMap<string, number>;
 }) {
     const active = props.tabs.find((tab) => tab.id === props.activeId);
     return (
@@ -4944,10 +4944,10 @@ function RigToolBodies(props: {
                                   : { rigAvailabilityReason: props.rigAvailabilityReason }),
                           })}
                 />
-            ) : active?.kind === "webapp" ? (
+            ) : active?.kind === "applet" ? (
                 <HtmlPreviewFrame
                     {...(props.htmlPreview ? { renderContent: props.htmlPreview } : {})}
-                    revision={String(props.webappRevisions.get(active.label) ?? 0)}
+                    revision={String(props.appletRevisions.get(active.label) ?? 0)}
                     source={active.url}
                 />
             ) : null}

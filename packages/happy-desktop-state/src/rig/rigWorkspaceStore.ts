@@ -702,8 +702,8 @@ export interface RigWorkspaceStore {
     draftUpdate(sessionId: RigSessionId, message: string): Promise<void>;
     /** Starts the new conversation described by a slot action and optionally submits its prompt. */
     chatStart(input: RigWorkspaceNewChatInput): Promise<void>;
-    /** Opens one imported Rig webapp in the addressed group's isolated panel. */
-    webappOpen(
+    /** Opens one imported Rig applet in the addressed group's isolated panel. */
+    appletOpen(
         name: string,
         path?: string,
         query?: Readonly<Record<string, string>>,
@@ -788,7 +788,7 @@ export interface RigWorkspaceStore {
     /**
      * Moves one view to the other side of the workspace: the panel's file viewer
      * into a main-content tab, a file tab into the panel's viewer, or a live
-     * terminal, page, or webapp between the two strips.
+     * terminal, page, or applet between the two strips.
      *
      * This is a change of placement and nothing else. A file keeps its identity,
      * so a file moved into the main content is the tab it would already have
@@ -3270,8 +3270,8 @@ export function rigWorkspaceStoreCreate(
                 );
             }
         },
-        async webappOpen(name, path, query) {
-            const previewUrl = await client.webappPreviewOpen(name);
+        async appletOpen(name, path, query) {
+            const previewUrl = await client.appletPreviewOpen(name);
             const url = new URL(previewUrl);
             if (path) {
                 const basePath = url.pathname.endsWith("/")
@@ -3281,7 +3281,7 @@ export function rigWorkspaceStoreCreate(
             }
             if (query)
                 for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
-            panel.webappOpen(name, url.href);
+            panel.appletOpen(name, url.href);
             // The panel brings the page forward when it is the side holding it.
             // When the reader has moved that page into the main content, this is
             // the half that can bring it forward instead.
@@ -3289,7 +3289,7 @@ export function rigWorkspaceStoreCreate(
                 .get()
                 .tabs.find(
                     (tab) =>
-                        tab.kind === "webapp" && tab.label === name && tab.placement === "main",
+                        tab.kind === "applet" && tab.label === name && tab.placement === "main",
                 );
             if (opened) {
                 activeMainViewId = opened.id;

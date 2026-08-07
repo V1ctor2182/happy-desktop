@@ -9,7 +9,7 @@ export type SlotEntriesPlacement = "status-line" | "above-composer" | "title" | 
 /**
  * What pressing a contribution's button is going to do. The component never
  * performs the act — it only says which of the four kinds it is, so a reader can
- * tell a message being sent from a webapp being opened before pressing it.
+ * tell a message being sent from a applet being opened before pressing it.
  */
 export type SlotActionIntent = "send" | "open" | "draft" | "new-chat";
 
@@ -42,7 +42,7 @@ export interface SlotEntriesProps {
 /**
  * The four action kinds wear four glyphs, so the row says what the button does
  * before its author-written label is even read: a paper plane sends, a globe
- * opens a webapp the way the web preview does, a pencil writes a draft someone
+ * opens a applet the way the web preview does, a pencil writes a draft someone
  * still has to send, and a bubble starts a conversation that does not exist yet.
  */
 const INTENT_GLYPH: Record<SlotActionIntent, IconName> = {
@@ -54,7 +54,7 @@ const INTENT_GLYPH: Record<SlotActionIntent, IconName> = {
 
 const INTENT_SUMMARY: Record<SlotActionIntent, string> = {
     send: "Sends a message to a chat",
-    open: "Opens a webapp in this window",
+    open: "Opens a applet in this window",
     draft: "Writes a draft into a chat, unsent",
     "new-chat": "Starts a new chat",
 };

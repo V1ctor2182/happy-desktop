@@ -243,9 +243,9 @@ function attachmentEqual(
             left.thumbhash === right.thumbhash &&
             left.thumbnailUrl === right.thumbnailUrl &&
             left.openUrl === right.openUrl &&
-            left.webapp === right.webapp &&
-            left.webappPath === right.webappPath &&
-            JSON.stringify(left.webappQuery) === JSON.stringify(right.webappQuery)
+            left.applet === right.applet &&
+            left.appletPath === right.appletPath &&
+            JSON.stringify(left.appletQuery) === JSON.stringify(right.appletQuery)
         );
     return false;
 }

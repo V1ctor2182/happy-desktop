@@ -61,9 +61,9 @@ import type {
     RigUserInputRequest,
     RigWorktree,
     RigWorktreeId,
-    RigWebapp,
+    RigApplet,
 } from "happy-desktop-state";
-import type { SlotAction, SlotEntry, Webapp } from "./rigDaemonTypes";
+import type { SlotAction, SlotEntry, Applet } from "./rigDaemonTypes";
 
 /**
  * Pure projections from Rig's raw `@slopus/rig` protocol types into the closed,
@@ -528,7 +528,7 @@ export function rigGlobalEventProject(
     if ("live" in entry) {
         const live = entry.event as import("./rigDaemonTypes").GlobalLiveEvent;
         if (live.type === "slots_changed") return { type: "slots_changed" };
-        if (live.type === "webapps_changed") return { type: "webapps_changed" };
+        if (live.type === "applets_changed") return { type: "applets_changed" };
         if (live.type !== "project_git_changed" && live.type !== "workspace_git_changed")
             return undefined;
         return {
@@ -617,8 +617,8 @@ function rigSlotActionProject(action: SlotAction): RigSlotAction {
     switch (action.type) {
         case "send-current-chat":
             return { type: action.type, message: action.message };
-        case "open-webapp":
-            return { type: action.type, webapp: action.webapp };
+        case "open-applet":
+            return { type: action.type, applet: action.applet };
         case "send-chat":
         case "draft-chat":
             return {
@@ -638,22 +638,22 @@ function rigSlotActionProject(action: SlotAction): RigSlotAction {
     }
 }
 
-/** Projects one versioned webapp and its revision history into product state. */
-export function rigWebappProject(webapp: Webapp): RigWebapp {
+/** Projects one versioned applet and its revision history into product state. */
+export function rigAppletProject(applet: Applet): RigApplet {
     return {
-        name: webapp.name,
-        description: webapp.description,
-        purpose: webapp.purpose,
-        authorSessionId: webapp.authorSessionId,
-        ...(webapp.sourceDescription ? { sourceDescription: webapp.sourceDescription } : {}),
-        currentVersion: webapp.currentVersion,
-        versions: webapp.versions.map((version) => ({
+        name: applet.name,
+        description: applet.description,
+        purpose: applet.purpose,
+        authorSessionId: applet.authorSessionId,
+        ...(applet.sourceDescription ? { sourceDescription: applet.sourceDescription } : {}),
+        currentVersion: applet.currentVersion,
+        versions: applet.versions.map((version) => ({
             version: version.version,
             changeDescription: version.changeDescription,
             createdAt: version.createdAt,
         })),
-        createdAt: webapp.createdAt,
-        updatedAt: webapp.updatedAt,
+        createdAt: applet.createdAt,
+        updatedAt: applet.updatedAt,
     };
 }
 

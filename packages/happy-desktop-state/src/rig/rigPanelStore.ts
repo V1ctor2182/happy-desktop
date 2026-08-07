@@ -8,7 +8,7 @@ declare const rigPanelTabIdBrand: unique symbol;
 export type RigPanelTabId = string & { readonly [rigPanelTabIdBrand]: true };
 
 /** What a panel tab holds beside the conversation. */
-export type RigPanelTabKind = "terminal" | "browser" | "webapp";
+export type RigPanelTabKind = "terminal" | "browser" | "applet";
 
 /**
  * Which of the workspace's two tab strips a view is being shown in.
@@ -39,8 +39,8 @@ export type RigPanelTabSnapshot =
           readonly url: string;
       })
     | (RigPanelTabSnapshotBase & {
-          readonly kind: "webapp";
-          /** Isolated preview origin of the webapp's current version. */
+          readonly kind: "applet";
+          /** Isolated preview origin of the applet's current version. */
           readonly url: string;
       });
 
@@ -133,8 +133,8 @@ export interface RigPanelStore {
     terminalAdd(): void;
     /** Adds a browser tab to the open group, optionally at one safe web URL, and selects it. */
     browserAdd(url?: string): void;
-    /** Opens a named Rig webapp in the open group's isolated preview surface. */
-    webappOpen(name: string, url: string): void;
+    /** Opens a named Rig applet in the open group's isolated preview surface. */
+    appletOpen(name: string, url: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: RigPanelTabId, update: RigBrowserUpdate): void;
     tabSelect(tabId: RigPanelTabId): void;
@@ -276,7 +276,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             open,
             tabs: visible.map(
                 (tab): RigPanelTabSnapshot =>
-                    tab.kind === "browser" || tab.kind === "webapp"
+                    tab.kind === "browser" || tab.kind === "applet"
                         ? {
                               id: tab.id,
                               kind: tab.kind,
@@ -384,9 +384,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         activeViewId = id;
     };
 
-    const webappTabOpen = (group: RigGroupId, name: string, url: string): void => {
+    const appletTabOpen = (group: RigGroupId, name: string, url: string): void => {
         const existing = tabs.find(
-            (tab) => tab.groupId === group && tab.kind === "webapp" && tab.label === name,
+            (tab) => tab.groupId === group && tab.kind === "applet" && tab.label === name,
         );
         if (existing) {
             existing.url = url;
@@ -401,7 +401,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         }
         const id = `tab_${nextTabNumber}` as RigPanelTabId;
         nextTabNumber += 1;
-        tabs.push({ id, kind: "webapp", label: name, groupId: group, placement: "panel", url });
+        tabs.push({ id, kind: "applet", label: name, groupId: group, placement: "panel", url });
         activeByGroup.set(group, id);
         activeViewId = id;
     };
@@ -533,9 +533,9 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             remember();
             recompute();
         },
-        webappOpen(name, url) {
+        appletOpen(name, url) {
             if (disposed || !groupId) return;
-            webappTabOpen(groupId, name, url);
+            appletTabOpen(groupId, name, url);
             open = true;
             remember();
             recompute();

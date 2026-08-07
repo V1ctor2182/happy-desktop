@@ -260,7 +260,7 @@ export type RigGlobalEvent =
           readonly worktreeId?: RigWorktreeId;
       }
     | { readonly type: "slots_changed" }
-    | { readonly type: "webapps_changed" };
+    | { readonly type: "applets_changed" };
 
 export interface RigEventObserver<Event> {
     event(value: Event): void;
@@ -366,11 +366,11 @@ export interface RigTransport {
      */
     slotsRead(): Promise<readonly import("./rigSlotsStore.js").RigSlotEntry[]>;
 
-    /** Reads every imported webapp and its version history from this Rig. */
-    webappsRead(): Promise<readonly import("./rigSlotsStore.js").RigWebapp[]>;
+    /** Reads every imported applet and its version history from this Rig. */
+    appletsRead(): Promise<readonly import("./rigSlotsStore.js").RigApplet[]>;
 
-    /** Resolves one webapp's current version into the host's isolated preview site. */
-    webappPreviewOpen(name: string): Promise<string>;
+    /** Resolves one applet's current version into the host's isolated preview site. */
+    appletPreviewOpen(name: string): Promise<string>;
 
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(

@@ -128,7 +128,7 @@ export interface RigSession {
     readonly models: RigModelStore;
     /** The joined session-list + active-chat workspace store for this connection. */
     readonly workspace: RigWorkspaceStore;
-    /** This Rig's reactive slot and webapp catalogs, one surface per connection. */
+    /** This Rig's reactive slot and applet catalogs, one surface per connection. */
     readonly slots: () => RigSlotsStore;
     /** Every question this Rig's agents are waiting on, across all its sessions. */
     readonly inbox: RigInboxStore | undefined;

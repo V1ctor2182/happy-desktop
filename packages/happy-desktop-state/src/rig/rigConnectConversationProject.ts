@@ -246,19 +246,19 @@ function rigConnectGroupProject(
                                     : {}),
                                 openUrl: attachment.source,
                             };
-                        if (attachment.kind === "webapp")
+                        if (attachment.kind === "applet")
                             return {
                                 kind: "linked",
                                 id: attachment.id,
-                                attachmentKind: "webapp",
+                                attachmentKind: "applet",
                                 name: attachment.name,
-                                source: attachment.webapp,
+                                source: attachment.applet,
                                 description: attachment.description,
-                                webapp: attachment.webapp,
+                                applet: attachment.applet,
                                 thumbhash: attachment.thumbhash,
                                 thumbnailUrl: attachment.image,
-                                ...(attachment.path ? { webappPath: attachment.path } : {}),
-                                ...(attachment.query ? { webappQuery: attachment.query } : {}),
+                                ...(attachment.path ? { appletPath: attachment.path } : {}),
+                                ...(attachment.query ? { appletQuery: attachment.query } : {}),
                             };
                         return {
                             kind: "linked",

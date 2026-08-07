@@ -231,7 +231,7 @@ export function rigHttpProxyCreate(options: RigHttpProxyOptions): Promise<RigHtt
             // handing back a host preview URL would serve the wrong bytes under
             // a name that looks right; a node reports that it cannot preview.
             ...(preview && !node
-                ? { htmlPreviewUrl: preview.workspace, webappPreviewUrl: preview.webapp }
+                ? { htmlPreviewUrl: preview.workspace, appletPreviewUrl: preview.applet }
                 : {}),
         }).then(
             (handled) => {

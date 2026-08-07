@@ -16,7 +16,7 @@ export interface HtmlPreviewProxyHandle {
      */
     register(client: RigProxyClient): {
         readonly workspace: (groupId: string, filePath: string) => string;
-        readonly webapp: (name: string) => string;
+        readonly applet: (name: string) => string;
     };
     close(): void;
 }
@@ -84,7 +84,7 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  */
 const PREVIEW_SITE_LIMIT = 32;
 
-/** One isolated preview origin, backed by a workspace folder or a Rig webapp. */
+/** One isolated preview origin, backed by a workspace folder or a Rig applet. */
 type PreviewSite =
     | {
           readonly kind: "workspace";
@@ -93,7 +93,7 @@ type PreviewSite =
           readonly directory: string;
       }
     | {
-          readonly kind: "webapp";
+          readonly kind: "applet";
           readonly client: RigProxyClient;
           readonly name: string;
       };
@@ -179,7 +179,7 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                 password,
                 register: (client) => {
                     // The registration separates identically named projects and
-                    // webapps reached through different Rig proxy clients.
+                    // applets reached through different Rig proxy clients.
                     const registration = randomBytes(16).toString("hex");
                     const remember = (name: string, site: PreviewSite): void => {
                         // Re-inserted so insertion order stays use order and the
@@ -212,9 +212,9 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                                 .join("/");
                             return `http://${name}.localhost/${page}`;
                         },
-                        webapp: (webappName) => {
-                            const name = siteName(registration, "webapp", webappName);
-                            remember(name, { kind: "webapp", client, name: webappName });
+                        applet: (appletName) => {
+                            const name = siteName(registration, "applet", appletName);
+                            remember(name, { kind: "applet", client, name: appletName });
                             return `http://${name}.localhost/`;
                         },
                     };
@@ -285,8 +285,8 @@ async function serve(
     }
     let bytes: Buffer;
     try {
-        if (site.kind === "webapp") {
-            bytes = (await site.client.getWebappFile(site.name, within)).bytes;
+        if (site.kind === "applet") {
+            bytes = (await site.client.getAppletFile(site.name, within)).bytes;
         } else {
             const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
             const file = await workspaceFileLoad(site.client, site.groupId, filePath);

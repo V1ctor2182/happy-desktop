@@ -151,12 +151,12 @@ export interface RigClient {
      */
     htmlPreviewOpen(groupId: RigGroupId, path: string): Promise<string>;
     /**
-     * The slots/webapps surface: one instance for the client's lifetime, because
+     * The slots/applets surface: one instance for the client's lifetime, because
      * both catalogs are Rig-global. What the window has open never replaces it.
      */
     slots(): RigSlotsStore;
-    /** Resolves the current webapp version into the host's isolated preview site. */
-    webappPreviewOpen(name: string): Promise<string>;
+    /** Resolves the current applet version into the host's isolated preview site. */
+    appletPreviewOpen(name: string): Promise<string>;
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         groupId: RigGroupId,
@@ -320,7 +320,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             slotsStore ??= rigSlotsStoreCreate({ transport });
             return slotsStore;
         },
-        webappPreviewOpen: (name) => transport.webappPreviewOpen(name),
+        appletPreviewOpen: (name) => transport.appletPreviewOpen(name),
         workspaceFileWrite: (groupId, path, content, expectedHash) =>
             transport.workspaceFileWrite(groupId, path, content, expectedHash),
         attachmentWrite: (groupId, name, content) =>

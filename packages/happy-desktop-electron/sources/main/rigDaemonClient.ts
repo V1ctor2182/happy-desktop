@@ -16,7 +16,7 @@ import type {
     GlobalSecurityPolicyResponse,
     HealthResponse,
     ListSlotEntriesResponse,
-    ListWebappsResponse,
+    ListAppletsResponse,
     ModelCatalog,
     Project,
     ProjectAssetResponse,
@@ -268,20 +268,20 @@ export class RigDaemonClient {
         return this.#requestJson("GET", "/slots");
     }
 
-    /** Reads Rig's global catalog of imported, versioned webapps. */
-    listWebapps(): Promise<ListWebappsResponse> {
-        return this.#requestJson("GET", "/webapps");
+    /** Reads Rig's global catalog of imported, versioned applets. */
+    listApplets(): Promise<ListAppletsResponse> {
+        return this.#requestJson("GET", "/applets");
     }
 
-    /** Reads one static file from a webapp's current version. */
-    getWebappFile(name: string, filePath: string): Promise<ProjectAssetResponse> {
+    /** Reads one static file from a applet's current version. */
+    getAppletFile(name: string, filePath: string): Promise<ProjectAssetResponse> {
         const encodedPath = filePath
             .split("/")
             .filter(Boolean)
             .map((segment) => encodeURIComponent(segment))
             .join("/");
         return this.#requestBuffer(
-            `/webapps/${encodeURIComponent(name)}/files/${encodedPath || "index.html"}`,
+            `/applets/${encodeURIComponent(name)}/files/${encodedPath || "index.html"}`,
         );
     }
 

@@ -212,7 +212,7 @@ export type SlotScope = "everywhere" | "project" | "workspace" | "session";
 
 export type SlotAction =
     | { readonly type: "send-current-chat"; readonly message: string }
-    | { readonly type: "open-webapp"; readonly webapp: string }
+    | { readonly type: "open-applet"; readonly applet: string }
     | { readonly type: "send-chat"; readonly sessionId: string; readonly message: string }
     | { readonly type: "draft-chat"; readonly sessionId: string; readonly message: string }
     | {
@@ -247,20 +247,20 @@ export interface SlotEntry {
     readonly updatedAt: number;
 }
 
-export interface WebappVersion {
+export interface AppletVersion {
     readonly version: number;
     readonly changeDescription: string;
     readonly createdAt: number;
 }
 
-export interface Webapp {
+export interface Applet {
     readonly name: string;
     readonly description: string;
     readonly purpose: string;
     readonly authorSessionId: string;
     readonly sourceDescription?: string;
     readonly currentVersion: number;
-    readonly versions: readonly WebappVersion[];
+    readonly versions: readonly AppletVersion[];
     readonly createdAt: number;
     readonly updatedAt: number;
 }
@@ -269,8 +269,8 @@ export interface ListSlotEntriesResponse {
     readonly entries: readonly SlotEntry[];
 }
 
-export interface ListWebappsResponse {
-    readonly webapps: readonly Webapp[];
+export interface ListAppletsResponse {
+    readonly applets: readonly Applet[];
 }
 
 export type GlobalLiveEvent =
@@ -290,8 +290,8 @@ export type GlobalLiveEvent =
           readonly data: { readonly entries: readonly SlotEntry[] };
       }
     | {
-          readonly type: "webapps_changed";
-          readonly data: { readonly webapps: readonly Webapp[] };
+          readonly type: "applets_changed";
+          readonly data: { readonly applets: readonly Applet[] };
       }
     | {
           readonly type: "presence_changed" | "remote_terminals_changed";

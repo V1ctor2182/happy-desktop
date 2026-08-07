@@ -31,7 +31,7 @@ import type {
     RigThinkingLevel,
     RigTransport,
     RigUserInputAnswers,
-    RigWebapp,
+    RigApplet,
     RigWorktree,
 } from "happy-desktop-state";
 
@@ -208,9 +208,9 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             return preview.url;
         },
         slotsRead: () => getJson<readonly RigSlotEntry[]>("/slots"),
-        webappsRead: () => getJson<readonly RigWebapp[]>("/webapps"),
-        webappPreviewOpen: async (name) => {
-            const preview = await getJson<{ readonly url: string }>("/webapp-preview", { name });
+        appletsRead: () => getJson<readonly RigApplet[]>("/applets"),
+        appletPreviewOpen: async (name) => {
+            const preview = await getJson<{ readonly url: string }>("/applet-preview", { name });
             return preview.url;
         },
         workspaceFileWrite: async (groupId, path, content, expectedHash) => {

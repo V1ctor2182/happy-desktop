@@ -15,7 +15,7 @@ function attachmentUrlsResolve(
         return {
             ...element,
             attachments: element.attachments.map((attachment) => {
-                if (attachment.kind === "webapp")
+                if (attachment.kind === "applet")
                     return { ...attachment, image: bridgeUrl(attachment.image) };
                 if (!("downloadUrl" in attachment) || !attachment.downloadUrl) return attachment;
                 return { ...attachment, downloadUrl: bridgeUrl(attachment.downloadUrl) };

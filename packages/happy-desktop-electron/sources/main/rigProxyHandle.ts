@@ -32,7 +32,7 @@ import {
     rigSlotEntryProject,
     rigSubagentProject,
     rigTerminalProject,
-    rigWebappProject,
+    rigAppletProject,
     rigWorktreeProject,
 } from "./rigProjection";
 
@@ -647,8 +647,8 @@ export type RigProxyClient = Pick<
     | "listSessions"
     | "listCatalog"
     | "listSlots"
-    | "listWebapps"
-    | "getWebappFile"
+    | "listApplets"
+    | "getAppletFile"
     | "gitWatch"
     | "readGitChanges"
     | "getProject"
@@ -719,8 +719,8 @@ export interface RigProxyHandleOptions {
      * route then reports that this Rig cannot render a document.
      */
     readonly htmlPreviewUrl?: (groupId: string, filePath: string) => string;
-    /** Where one named Rig webapp is published inside the isolated preview profile. */
-    readonly webappPreviewUrl?: (name: string) => string;
+    /** Where one named Rig applet is published inside the isolated preview profile. */
+    readonly appletPreviewUrl?: (name: string) => string;
 }
 
 /**
@@ -765,23 +765,23 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 writeJson(response, 200, entries);
                 return true;
             }
-            if (path === "/webapps") {
+            if (path === "/applets") {
                 writeJson(
                     response,
                     200,
-                    (await client.listWebapps()).webapps.map(rigWebappProject),
+                    (await client.listApplets()).applets.map(rigAppletProject),
                 );
                 return true;
             }
-            if (path === "/webapp-preview") {
-                if (!options.webappPreviewUrl) {
+            if (path === "/applet-preview") {
+                if (!options.appletPreviewUrl) {
                     writeJson(response, 501, {
-                        error: "This Rig cannot show an imported webapp.",
+                        error: "This Rig cannot show an imported applet.",
                     });
                     return true;
                 }
                 writeJson(response, 200, {
-                    url: options.webappPreviewUrl(query.get("name") ?? ""),
+                    url: options.appletPreviewUrl(query.get("name") ?? ""),
                 });
                 return true;
             }

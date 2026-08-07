@@ -9,7 +9,7 @@ export type RigSlotScope = "everywhere" | "project" | "workspace" | "session";
 
 export type RigSlotAction =
     | { readonly type: "send-current-chat"; readonly message: string }
-    | { readonly type: "open-webapp"; readonly webapp: string }
+    | { readonly type: "open-applet"; readonly applet: string }
     | { readonly type: "send-chat"; readonly sessionId: RigSessionId; readonly message: string }
     | { readonly type: "draft-chat"; readonly sessionId: RigSessionId; readonly message: string }
     | {
@@ -46,21 +46,21 @@ export interface RigSlotEntry {
     readonly updatedAt: number;
 }
 
-export interface RigWebappVersion {
+export interface RigAppletVersion {
     readonly version: number;
     readonly changeDescription: string;
     readonly createdAt: number;
 }
 
-/** One imported, versioned webapp whose current static files Rig serves. */
-export interface RigWebapp {
+/** One imported, versioned applet whose current static files Rig serves. */
+export interface RigApplet {
     readonly name: string;
     readonly description: string;
     readonly purpose: string;
     readonly authorSessionId: string;
     readonly sourceDescription?: string;
     readonly currentVersion: number;
-    readonly versions: readonly RigWebappVersion[];
+    readonly versions: readonly RigAppletVersion[];
     readonly createdAt: number;
     readonly updatedAt: number;
 }
@@ -78,14 +78,14 @@ export interface RigSlotsContext {
 }
 
 /**
- * Rig's whole durable slot catalog and its webapp catalog. Both are Rig-global,
+ * Rig's whole durable slot catalog and its applet catalog. Both are Rig-global,
  * so this surface has one lifetime per connection: which entries a placement
  * shows is decided by `rigSlotEntriesInScope` at render time, and never by
  * replacing this store when the reader opens something else.
  */
 export interface RigSlotsSnapshot {
     readonly entries: readonly RigSlotEntry[];
-    readonly webapps: readonly RigWebapp[];
+    readonly applets: readonly RigApplet[];
     readonly loading: boolean;
     readonly error?: UserError;
 }
@@ -101,10 +101,10 @@ export interface RigSlotsStoreOptions {
 }
 
 const NO_ENTRIES: readonly RigSlotEntry[] = [];
-const NO_WEBAPPS: readonly RigWebapp[] = [];
+const NO_APPLETS: readonly RigApplet[] = [];
 const EMPTY_SNAPSHOT: RigSlotsSnapshot = {
     entries: NO_ENTRIES,
-    webapps: NO_WEBAPPS,
+    applets: NO_APPLETS,
     loading: true,
 };
 const NOOP_SNAPSHOT: RigSlotsSnapshot = { ...EMPTY_SNAPSHOT, loading: false };
@@ -112,14 +112,14 @@ const NOOP_SNAPSHOT: RigSlotsSnapshot = { ...EMPTY_SNAPSHOT, loading: false };
 type SlotsInput =
     | { readonly type: "slotsLoaded"; readonly entries: readonly RigSlotEntry[] }
     | { readonly type: "slotsFailed"; readonly error: UserError }
-    | { readonly type: "webappsLoaded"; readonly webapps: readonly RigWebapp[] }
-    | { readonly type: "webappsFailed"; readonly error: UserError };
+    | { readonly type: "appletsLoaded"; readonly applets: readonly RigApplet[] }
+    | { readonly type: "appletsFailed"; readonly error: UserError };
 
 /**
  * Creates the slot surface for one Rig connection.
  *
  * Construction opens no transport. The first subscriber reads the whole slot
- * catalog and the webapps together and opens one global-event subscription; the
+ * catalog and the applets together and opens one global-event subscription; the
  * last subscriber tears that stream down. Realtime events are hints only: each
  * matching event re-reads its durable endpoint instead of accepting the full
  * event payload as authority.
@@ -137,11 +137,11 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
     let active = false;
     let disposed = false;
     let slotsSettled = false;
-    let webappsSettled = false;
+    let appletsSettled = false;
     let slotsError: UserError | undefined;
-    let webappsError: UserError | undefined;
+    let appletsError: UserError | undefined;
     let slotsGeneration = 0;
-    let webappsGeneration = 0;
+    let appletsGeneration = 0;
     let unsubscribeGlobal: (() => void) | undefined;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -159,18 +159,18 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
             publish({
                 ...snapshot,
                 entries: entriesPreserve(snapshot.entries, input.entries),
-                loading: !(slotsSettled && webappsSettled),
-                error: webappsError,
+                loading: !(slotsSettled && appletsSettled),
+                error: appletsError,
             });
             return;
         }
-        if (input.type === "webappsLoaded") {
-            webappsSettled = true;
-            webappsError = undefined;
+        if (input.type === "appletsLoaded") {
+            appletsSettled = true;
+            appletsError = undefined;
             publish({
                 ...snapshot,
-                webapps: webappsPreserve(snapshot.webapps, input.webapps),
-                loading: !(slotsSettled && webappsSettled),
+                applets: appletsPreserve(snapshot.applets, input.applets),
+                loading: !(slotsSettled && appletsSettled),
                 error: slotsError,
             });
             return;
@@ -179,13 +179,13 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
             slotsSettled = true;
             slotsError = input.error;
         } else {
-            webappsSettled = true;
-            webappsError = input.error;
+            appletsSettled = true;
+            appletsError = input.error;
         }
         publish({
             ...snapshot,
-            loading: !(slotsSettled && webappsSettled),
-            error: slotsError ?? webappsError,
+            loading: !(slotsSettled && appletsSettled),
+            error: slotsError ?? appletsError,
         });
     };
 
@@ -201,15 +201,15 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
         }
     };
 
-    const webappsLoad = async (): Promise<void> => {
-        const generation = ++webappsGeneration;
+    const appletsLoad = async (): Promise<void> => {
+        const generation = ++appletsGeneration;
         try {
-            const webapps = await options.transport.webappsRead();
-            if (!active || disposed || generation !== webappsGeneration) return;
-            slotsInput({ type: "webappsLoaded", webapps });
+            const applets = await options.transport.appletsRead();
+            if (!active || disposed || generation !== appletsGeneration) return;
+            slotsInput({ type: "appletsLoaded", applets });
         } catch (error) {
-            if (!active || disposed || generation !== webappsGeneration) return;
-            slotsInput({ type: "webappsFailed", error: rigUserError(error) });
+            if (!active || disposed || generation !== appletsGeneration) return;
+            slotsInput({ type: "appletsFailed", error: rigUserError(error) });
         }
     };
 
@@ -227,11 +227,11 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
         event(event: RigGlobalEvent) {
             if (!active || disposed) return;
             if (event.type === "slots_changed") void slotsLoad();
-            else if (event.type === "webapps_changed") void webappsLoad();
+            else if (event.type === "applets_changed") void appletsLoad();
         },
         error() {
             if (!active || disposed) return;
-            void Promise.all([slotsLoad(), webappsLoad()]);
+            void Promise.all([slotsLoad(), appletsLoad()]);
             reconnect();
         },
         end() {
@@ -246,13 +246,13 @@ export function rigSlotsStoreCreate(options: RigSlotsStoreOptions): RigSlotsStor
     const start = (): void => {
         active = true;
         subscribeGlobal();
-        void Promise.all([slotsLoad(), webappsLoad()]);
+        void Promise.all([slotsLoad(), appletsLoad()]);
     };
 
     const stop = (): void => {
         active = false;
         slotsGeneration += 1;
-        webappsGeneration += 1;
+        appletsGeneration += 1;
         unsubscribeGlobal?.();
         unsubscribeGlobal = undefined;
         if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -356,14 +356,14 @@ function entriesPreserve(
     return arrayPreserve(previous, next);
 }
 
-function webappsPreserve(
-    previous: readonly RigWebapp[],
-    incoming: readonly RigWebapp[],
-): readonly RigWebapp[] {
-    const before = new Map(previous.map((webapp) => [webapp.name, webapp]));
-    const next = incoming.map((webapp) => {
-        const candidate = before.get(webapp.name);
-        return candidate !== undefined && webappEquals(candidate, webapp) ? candidate : webapp;
+function appletsPreserve(
+    previous: readonly RigApplet[],
+    incoming: readonly RigApplet[],
+): readonly RigApplet[] {
+    const before = new Map(previous.map((applet) => [applet.name, applet]));
+    const next = incoming.map((applet) => {
+        const candidate = before.get(applet.name);
+        return candidate !== undefined && appletEquals(candidate, applet) ? candidate : applet;
     });
     return arrayPreserve(previous, next);
 }
@@ -416,8 +416,8 @@ function slotActionEquals(a: RigSlotAction, b: RigSlotAction): boolean {
     switch (a.type) {
         case "send-current-chat":
             return b.type === "send-current-chat" && a.message === b.message;
-        case "open-webapp":
-            return b.type === "open-webapp" && a.webapp === b.webapp;
+        case "open-applet":
+            return b.type === "open-applet" && a.applet === b.applet;
         case "send-chat":
             return b.type === "send-chat" && a.sessionId === b.sessionId && a.message === b.message;
         case "draft-chat":
@@ -436,8 +436,8 @@ function slotActionEquals(a: RigSlotAction, b: RigSlotAction): boolean {
     }
 }
 
-/** Every field of one webapp, including its whole version history. */
-function webappEquals(a: RigWebapp, b: RigWebapp): boolean {
+/** Every field of one applet, including its whole version history. */
+function appletEquals(a: RigApplet, b: RigApplet): boolean {
     return (
         a.name === b.name &&
         a.description === b.description &&
@@ -448,11 +448,11 @@ function webappEquals(a: RigWebapp, b: RigWebapp): boolean {
         a.createdAt === b.createdAt &&
         a.updatedAt === b.updatedAt &&
         a.versions.length === b.versions.length &&
-        a.versions.every((version, index) => webappVersionEquals(version, b.versions[index]!))
+        a.versions.every((version, index) => appletVersionEquals(version, b.versions[index]!))
     );
 }
 
-function webappVersionEquals(a: RigWebappVersion, b: RigWebappVersion): boolean {
+function appletVersionEquals(a: RigAppletVersion, b: RigAppletVersion): boolean {
     return (
         a.version === b.version &&
         a.changeDescription === b.changeDescription &&
