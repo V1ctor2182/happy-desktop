@@ -1152,14 +1152,19 @@ export function Sidebar(props: SidebarProps) {
         // node, which drops `:hover` until the pointer moves again — so releasing
         // straight into the resting style would blink the highlight out and let
         // it fade back in, which is the flicker itself.
+        //
+        // Let go of through the animation's own promise rather than a `finish`
+        // listener. This effect has no dependency list — it has to run after
+        // whichever render applies the new order — so any teardown of its own
+        // runs on the very next render, and a live workspace renders constantly:
+        // a listener would be taken away long before the row arrived, and the
+        // pass that removed it finds no capture left to re-register one, leaving
+        // the row lit for good. The promise also settles when an animation is
+        // cancelled with its node, which `finish` never reports.
         const last = played[played.length - 1]!;
-        const rest = () => setDropped(undefined);
-        last.addEventListener("finish", rest);
-        // The animations are deliberately not cancelled here. This effect has no
-        // dependency list — it has to run after whichever render applies the new
-        // order — so cancelling on teardown would abort the drop animation on the
-        // next unrelated render, and a live workspace renders constantly.
-        return () => last.removeEventListener("finish", rest);
+        void last.finished.catch(() => undefined).then(() => setDropped(undefined));
+        // The animations are deliberately not cancelled either: cancelling on
+        // teardown would abort the drop animation on the next unrelated render.
     });
 
     const openItemMenu = (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => {

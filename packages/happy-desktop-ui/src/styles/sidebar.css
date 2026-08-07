@@ -470,6 +470,16 @@
     transition: none;
 }
 
+/* Said again inside the list being arranged, because that is where it has to
+   win: the rule above is one class and one attribute, the reordering rule two
+   classes and an attribute, so on its own it loses the transition it is trying
+   to drop and the carried row eases toward the pointer over 160ms instead of
+   tracking it — a lag under the hand, worst exactly when the hand moves fast. */
+.happy2-sidebar__section[data-reordering] .happy2-sidebar__item[data-dragging],
+.happy2-sidebar__actions[data-reordering] .happy2-sidebar__item[data-dragging] {
+    transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .happy2-sidebar__section[data-reordering] .happy2-sidebar__item,
     .happy2-sidebar__actions[data-reordering] .happy2-sidebar__item {
