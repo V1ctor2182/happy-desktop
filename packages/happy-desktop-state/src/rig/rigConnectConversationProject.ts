@@ -566,9 +566,7 @@ function toolProject(element: Extract<ChatElement, { kind: "tool_call" }>): Conv
             ? { display: element.result ?? element.progress }
             : {}),
         failed: element.status === "failed",
-        ...(element.presentation
-            ? { presentation: presentationProject(element.presentation) }
-            : {}),
+        ...presentationEntry(element.presentation),
         // A review still running has only the action it is weighing: no
         // verdict, no reason, no risk. The row states a decision, so it waits
         // for one rather than painting a blank verdict beside the call.
@@ -586,7 +584,24 @@ function toolProject(element: Extract<ChatElement, { kind: "tool_call" }>): Conv
     };
 }
 
-function presentationProject(presentation: ToolPresentation): ConversationActivityPresentation {
+/**
+ * The presentation key, present only when this surface can draw the kind.
+ *
+ * A kind it cannot draw is left off entirely rather than carried as an empty
+ * value, so the row falls back to the tool's own result text — which is what
+ * `display` already holds — instead of showing a shape with nothing in it.
+ */
+function presentationEntry(presentation: ToolPresentation | undefined): {
+    presentation?: ConversationActivityPresentation;
+} {
+    if (presentation === undefined) return {};
+    const projected = presentationProject(presentation);
+    return projected === undefined ? {} : { presentation: projected };
+}
+
+function presentationProject(
+    presentation: ToolPresentation,
+): ConversationActivityPresentation | undefined {
     switch (presentation.kind) {
         case "command":
             return {
@@ -610,6 +625,10 @@ function presentationProject(presentation: ToolPresentation): ConversationActivi
                 command: presentation.command,
                 input: presentation.input,
             };
+        // A search outside the workspace, which this surface has no row for yet.
+        // Its result text is what the reader sees until it does.
+        case "search":
+            return undefined;
     }
 }
 

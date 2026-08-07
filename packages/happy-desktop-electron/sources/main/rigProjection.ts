@@ -744,9 +744,7 @@ function blockProject(block: AgentBlock): RigBlock {
                 id: block.id,
                 name: block.name,
                 arguments: jsonProject(block.arguments),
-                ...(block.presentation
-                    ? { presentation: callPresentationProject(block.presentation) }
-                    : {}),
+                ...callPresentationEntry(block.presentation),
             };
         case "tool_result":
             return toolResultProject(block);
@@ -761,7 +759,7 @@ function toolResultProject(block: ToolResultBlock): RigBlock {
         display: block.display,
         failed: block.isError ?? Boolean(block.failure),
         ...(block.failure ? { failure: failureProject(block.failure) } : {}),
-        ...(block.presentation ? { presentation: presentationProject(block.presentation) } : {}),
+        ...presentationEntry(block.presentation),
     };
 }
 
@@ -769,7 +767,22 @@ function failureProject(failure: NonNullable<ToolResultBlock["failure"]>): RigTo
     return { kind: failure.kind, ...(failure.message ? { message: failure.message } : {}) };
 }
 
-function callPresentationProject(presentation: ToolCallPresentation): RigToolPresentation {
+/**
+ * The presentation key for a tool call, present only when this projection can
+ * carry the kind. A kind it cannot carry is left off, so the row falls back to
+ * the tool's own display text rather than to an empty shape.
+ */
+function callPresentationEntry(presentation: ToolCallPresentation | undefined): {
+    presentation?: RigToolPresentation;
+} {
+    if (presentation === undefined) return {};
+    const projected = callPresentationProject(presentation);
+    return projected === undefined ? {} : { presentation: projected };
+}
+
+function callPresentationProject(
+    presentation: ToolCallPresentation,
+): RigToolPresentation | undefined {
     if (presentation.type === "exec_command") {
         return {
             type: "execCommand",
@@ -777,13 +790,26 @@ function callPresentationProject(presentation: ToolCallPresentation): RigToolPre
             output: "",
         };
     }
+    // A search outside the workspace has no projection here yet.
+    if (presentation.type === "search") return undefined;
     return {
         type: "exploration",
         operations: presentation.operations.map((operation) => ({ ...operation })),
     };
 }
 
-function presentationProject(presentation: ToolResultPresentation): RigToolPresentation {
+/** The same, for the presentation a finished tool result carries. */
+function presentationEntry(presentation: ToolResultPresentation | undefined): {
+    presentation?: RigToolPresentation;
+} {
+    if (presentation === undefined) return {};
+    const projected = presentationProject(presentation);
+    return projected === undefined ? {} : { presentation: projected };
+}
+
+function presentationProject(
+    presentation: ToolResultPresentation,
+): RigToolPresentation | undefined {
     if (presentation.type === "file_diff") {
         return {
             type: "fileDiff",
@@ -803,6 +829,8 @@ function presentationProject(presentation: ToolResultPresentation): RigToolPrese
             operations: presentation.operations.map((operation) => ({ ...operation })),
         };
     }
+    // A search outside the workspace has no projection here yet.
+    if (presentation.type === "search") return undefined;
     return {
         type: "backgroundTerminalInteraction",
         command: presentation.command,
@@ -896,9 +924,7 @@ function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
                 toolCallId: event.toolCall.id,
                 toolName: event.toolCall.name,
                 arguments: jsonProject(event.toolCall.arguments),
-                ...(event.toolCall.presentation
-                    ? { presentation: callPresentationProject(event.toolCall.presentation) }
-                    : {}),
+                ...callPresentationEntry(event.toolCall.presentation),
             };
         case "tool_execution_progress":
             return {
@@ -914,9 +940,7 @@ function agentEventProject(event: AgentLoopEvent): RigAgentEvent | undefined {
                 display: event.result.display,
                 failed: event.result.isError ?? Boolean(event.result.failure),
                 ...(event.result.failure ? { failure: failureProject(event.result.failure) } : {}),
-                ...(event.result.presentation
-                    ? { presentation: presentationProject(event.result.presentation) }
-                    : {}),
+                ...presentationEntry(event.result.presentation),
             };
         default:
             return undefined;

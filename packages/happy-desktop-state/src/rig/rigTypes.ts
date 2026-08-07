@@ -609,13 +609,8 @@ export interface RigSessionSummary {
     readonly status: RigSessionStatus;
     /** Present while the agent is inside a scheduled `wait`/`wait_until`. */
     readonly wait?: RigSessionWait;
-    /**
-     * Why this chat is waiting for the person, as durably tracked by Rig.
-     * `friend_message` is somebody this account shared the session with having
-     * written into it, which is unread for a different reason than the agent
-     * finishing a turn: a person is waiting rather than a machine.
-     */
-    readonly unreadReason?: "attention_needed" | "friend_message" | "turn_finished";
+    /** Why this chat is waiting for the person, as durably tracked by Rig. */
+    readonly unreadReason?: "attention_needed" | "turn_finished";
     readonly title?: string;
     readonly recap?: string;
     /** Chronological sort key: when the session was first created. */
