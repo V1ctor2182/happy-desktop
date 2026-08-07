@@ -13,10 +13,12 @@ import {
 import {
     RIG_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
+    experimentsStoreCreate,
     notesSessionStoreCreate,
     rigNavigationOrderStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
+    type ExperimentsStore,
     type NotesSessionStore,
     type RigNavigationOrderStore,
     type RigSettingsStore,
@@ -58,6 +60,7 @@ import { windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
+import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import {
     DesktopMediaPreviewWindow,
@@ -189,6 +192,7 @@ function RigBoundary(props: {
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
+    experiments: ExperimentsStore;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
@@ -219,6 +223,7 @@ function RigBoundary(props: {
                           update: update.snapshot,
                       }
                     : {}),
+                experiments: props.experiments,
                 navigationOrder: props.navigationOrder,
                 notes: props.notes,
                 platform: props.platform,
@@ -271,6 +276,7 @@ interface DesktopRendererProps {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
+    experiments: ExperimentsStore;
     navigationOrder: RigNavigationOrderStore;
     notes: NotesSessionStore;
     platform: "desktop" | "web";
@@ -378,6 +384,7 @@ function DesktopRuntimeContent(
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
             mediaWindow={props.mediaWindow}
+            experiments={props.experiments}
             navigationOrder={props.navigationOrder}
             notes={props.notes}
             platform={props.platform}
@@ -442,6 +449,10 @@ if (mediaPreviewBridge) {
         // any machine is reachable, so the arrangement must outlive every
         // connection this window makes.
         const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
+        // Whether this window offers the features that are not finished yet. It
+        // is kept beside the arrangement above and for the same reason: it says
+        // what this installation shows, so no machine has a say in it.
+        const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
         // Every Rig in this window, each with its own product stores. The router is
         // told to resolve its address again whenever the set of connected Rigs
         // changes, so a machine that connects after the URL already named it opens
@@ -483,6 +494,7 @@ if (mediaPreviewBridge) {
                         mediaWindow={
                             browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
+                        experiments={experiments}
                         navigationOrder={navigationOrder}
                         notes={notes}
                         // Only the Electron window hides its title bar; the browser

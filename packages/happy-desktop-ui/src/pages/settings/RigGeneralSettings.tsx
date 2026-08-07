@@ -4,6 +4,7 @@ import { FormRow } from "../../FormRow";
 import { SegmentedControl } from "../../SegmentedControl";
 import { Select, type SelectOption } from "../../Select";
 import { Spinner } from "../../Spinner";
+import { Switch } from "../../Switch";
 import { RigSettingsSection } from "./RigSettingsShell";
 
 export type RigAppearanceChoice = "system" | "light" | "dark";
@@ -24,7 +25,10 @@ export type RigGeneralSettingsProps = {
     error?: string;
     /** Why daemon-backed defaults cannot currently be changed. Appearance remains local. */
     unavailable?: string;
+    /** Whether this window offers the features that are not finished yet. */
+    experimentalFeaturesEnabled: boolean;
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
+    onExperimentalFeaturesChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
     onPermissionModeChange: (mode: string) => void;
@@ -150,6 +154,25 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     description="How much of the machine a new session may touch without asking"
                     htmlFor="rig-settings-permission-mode"
                     label="Default access mode"
+                />
+            </RigSettingsSection>
+            <RigSettingsSection
+                description="Work that is still being built. It can change or disappear between releases."
+                title="Experimental features"
+            >
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label="Enable experimental features"
+                            checked={props.experimentalFeaturesEnabled}
+                            id="rig-settings-experimental-features"
+                            onChange={props.onExperimentalFeaturesChange}
+                            size="small"
+                        />
+                    }
+                    description="Shows Notes and the inbox in the sidebar. Kept on this machine only."
+                    htmlFor="rig-settings-experimental-features"
+                    label="Enable experimental features"
                 />
             </RigSettingsSection>
         </>

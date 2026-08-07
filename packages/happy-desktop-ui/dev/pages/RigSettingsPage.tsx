@@ -220,8 +220,10 @@ export function RigSettingsBlueprintPage() {
                         defaultModelKey="codex:openai/gpt-5.6-sol"
                         effort="medium"
                         effortOptions={effortOptions}
+                        experimentalFeaturesEnabled
                         modelOptions={modelOptions}
                         onAppearanceChange={noop}
+                        onExperimentalFeaturesChange={noop}
                         onDefaultModelChange={noop}
                         onEffortChange={noop}
                         onPermissionModeChange={noop}
@@ -485,10 +487,12 @@ export function RigSettingsBlueprintPage() {
                         defaultModelKey="codex:openai/gpt-5.6-sol"
                         effort="medium"
                         effortOptions={effortOptions}
+                        experimentalFeaturesEnabled={false}
                         modelOptions={modelOptions}
                         onAppearanceChange={noop}
                         onDefaultModelChange={noop}
                         onEffortChange={noop}
+                        onExperimentalFeaturesChange={noop}
                         onPermissionModeChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}

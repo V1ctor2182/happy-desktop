@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-router";
 import type {
     AppearanceStore,
+    ExperimentsStore,
     NotesSessionStore,
     RigGroupId,
     RigNavigationOrderStore,
@@ -77,6 +78,11 @@ export interface RigRouterContext {
      * the rows in the order the window offers them.
      */
     readonly navigationOrder?: RigNavigationOrderStore;
+    /**
+     * Whether this window offers the features that are not finished yet. Absent
+     * in a host that remembers no such choice, which withholds them.
+     */
+    readonly experiments?: ExperimentsStore;
     /**
      * Which shell hosts this router. The Electron window has no native title bar,
      * so the workspace draws the traffic-light inset and drag lanes itself; the
@@ -364,6 +370,7 @@ function RigWorkspaceLayout(
             chatId={params.chatId}
             groupId={params.groupId}
             noteId={params.noteId}
+            {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             notes={context.notes}
             notesOpen={props.notes}
@@ -439,6 +446,7 @@ function RigSettingsRoute() {
     return (
         <AppRigSettingsView
             appearance={context.appearance}
+            {...(context.experiments ? { experiments: context.experiments } : {})}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })
             }

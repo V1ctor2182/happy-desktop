@@ -3,6 +3,7 @@ import type {
     AppearanceStore,
     ConversationEntry,
     ComposerSnapshot,
+    ExperimentsStore,
     ConversationSummary,
     ConversationToolCall,
     RigClockStore,
@@ -69,6 +70,7 @@ import type {
 import {
     RIG_PANEL_FILE_VIEW_ID,
     rigAgentAuthor,
+    experimentsStoreNoop,
     rigInboxStoreNoop,
     rigNavigationOrderApply,
     rigAvailabilityProject,
@@ -325,6 +327,11 @@ export interface AppRigViewProps {
      * order the next launch would forget.
      */
     navigationOrder?: RigNavigationOrderStore;
+    /**
+     * Whether this window offers the features that are not finished yet. A host
+     * that remembers no such choice supplies none, and they stay withheld.
+     */
+    experiments?: ExperimentsStore;
     /** Native or hosted-renderer update projected by the desktop host. */
     update?: AppRigUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
@@ -1349,6 +1356,16 @@ export function AppRigView(props: AppRigViewProps) {
     // The order the reader arranged the pinned rows in. It belongs to the window
     // rather than to any one Rig — Notes and the inbox outlive every connection
     // — so a machine going away rearranges nothing.
+    const experimentsStore = props.experiments ?? experimentsStoreNoop;
+    // Notes and the inbox are still being built, so they are offered only to a
+    // reader who has asked for unfinished work in settings. The switch is read
+    // here rather than at each of their rows so that the sidebar and the routes
+    // can never disagree about whether they exist.
+    const experimental = useSyncExternalStore(
+        experimentsStore.subscribe,
+        experimentsStore.get,
+        experimentsStore.get,
+    ).experimentalFeaturesEnabled;
     const navigationOrderStore = props.navigationOrder ?? rigNavigationOrderStoreNoop;
     const navigationOrder = useSyncExternalStore(
         navigationOrderStore.subscribe,
@@ -1474,7 +1491,7 @@ export function AppRigView(props: AppRigViewProps) {
         // Notes follow the two rows that give the window somewhere to
         // work, because they are the third thing this window holds that
         // is not a session: the reader's own writing on this machine.
-        ...(props.notes
+        ...(experimental && props.notes
             ? [
                   {
                       icon: "doc" as const,
@@ -1487,7 +1504,7 @@ export function AppRigView(props: AppRigViewProps) {
         // The inbox belongs to the addressed machine, so it appears only
         // while that machine is reachable: a queue of questions is
         // meaningless from a Rig that cannot say what it is waiting on.
-        ...(active?.session?.inbox
+        ...(experimental && active?.session?.inbox
             ? [
                   {
                       badge: inboxPending,
@@ -1532,9 +1549,9 @@ export function AppRigView(props: AppRigViewProps) {
         <Sidebar
             actions={pinned}
             activeItemId={
-                props.notesOpen
+                experimental && props.notesOpen
                     ? NOTES_ITEM
-                    : props.inboxOpen
+                    : experimental && props.inboxOpen
                       ? INBOX_ITEM
                       : props.usageOpen
                         ? USAGE_ITEM
@@ -1781,7 +1798,7 @@ export function AppRigView(props: AppRigViewProps) {
     const routeContent = (): ReactNode => {
         // The notes surface is the window's, not a Rig's, so it is shown whatever the
         // addressed machine is doing — including while none of them is reachable.
-        if (props.notesOpen && props.notes)
+        if (experimental && props.notesOpen && props.notes)
             return (
                 <AppShell
                     sidebarCollapsible
@@ -1816,7 +1833,7 @@ export function AppRigView(props: AppRigViewProps) {
 
         // The inbox belongs to the addressed machine, so it is shown only while that
         // machine has stores to answer through.
-        if (props.inboxOpen && active?.session?.inbox)
+        if (experimental && props.inboxOpen && active?.session?.inbox)
             return (
                 <AppShell
                     sidebarCollapsible

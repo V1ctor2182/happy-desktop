@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
+    ExperimentsStore,
     RigNodesSnapshot,
     RigPairingSnapshot,
     RigInstructionsSnapshot,
@@ -19,6 +20,7 @@ import {
     rigModelKey,
     rigPermissionLabel,
     rigThinkingLabel,
+    experimentsStoreNoop,
     rigAvailabilityProject,
     rigNodesStoreNoop,
     rigPairingStoreNoop,
@@ -71,6 +73,11 @@ const PERMISSION_MODES: readonly RigPermissionMode[] = [
 
 export interface AppRigSettingsViewProps {
     appearance: AppearanceStore;
+    /**
+     * Whether this window offers the features that are not finished yet. Absent
+     * in a host that remembers no such choice, which withholds them.
+     */
+    experiments?: ExperimentsStore;
     /** Every Rig in this window: the Machines category, and whose catalog is read. */
     rigs: AppRigDirectoryStore;
     onClose(): void;
@@ -92,6 +99,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.appearance.subscribe,
         props.appearance.get,
         props.appearance.get,
+    );
+    const experimentsStore = props.experiments ?? experimentsStoreNoop;
+    const experiments = useSyncExternalStore(
+        experimentsStore.subscribe,
+        experimentsStore.get,
+        experimentsStore.get,
     );
     const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
     const host = hostRig(directory);
@@ -295,6 +308,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             ) : props.section === "providers" ? (
                 <RigProviderSettings
                     error={models.type === "error" ? models.error.message : undefined}
+                    experimentalFeaturesEnabled={experiments.experimentalFeaturesEnabled}
                     loading={models.type !== "ready" && models.type !== "error"}
                     onModelEnabledChange={(id, enabled) =>
                         rigOnline()
@@ -321,6 +335,9 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     loading={models.type !== "ready" && models.type !== "error"}
                     modelOptions={modelOptions(catalog, settings)}
                     onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
+                    onExperimentalFeaturesChange={(enabled) =>
+                        experimentsStore.experimentalFeaturesUpdate(enabled)
+                    }
                     onDefaultModelChange={(key) => {
                         const [providerId, ...rest] = key.split(":");
                         const modelId = rest.join(":");
