@@ -54,21 +54,6 @@ import {
     type RigPairingSource,
     type RigPairingStore,
 } from "./rigPairingStore.js";
-import {
-    rigFriendsStoreCreate,
-    type RigFriendsSource,
-    type RigFriendsStore,
-} from "./rigFriendsStore.js";
-import {
-    rigSessionShareStoreCreate,
-    type RigSessionShareSource,
-    type RigSessionShareStore,
-} from "./rigSessionShareStore.js";
-import {
-    rigSharedSessionsStoreCreate,
-    type RigSharedSessionsSource,
-    type RigSharedSessionsStore,
-} from "./rigSharedSessionsStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -122,32 +107,6 @@ export interface RigClient {
      * negotiate trust on another machine's behalf.
      */
     pairing(): RigPairingStore | undefined;
-    /**
-     * The single friends store for this Rig: this account's own profile, the
-     * people asking to connect, and the people it already knows. Materialized on
-     * first access and shared, so two surfaces reading the same people cost one
-     * set of daemon reads. Unavailable when the host supplied no friends feed, so
-     * a surface can say the machine cannot reach the network rather than showing
-     * a list that is empty for the wrong reason.
-     */
-    friends(): RigFriendsStore | undefined;
-    /**
-     * The share on the conversation the reader is in: who can see it, how well
-     * it is keeping up, and the decisions only its owner may make. Materialized
-     * on first access and shared, because the indicator over the transcript and
-     * the panel beside it are one surface that has to agree with itself.
-     * Unavailable when this machine cannot share sessions at all, so a surface
-     * can say so rather than offering a control that would fail.
-     */
-    sessionShare(): RigSessionShareStore | undefined;
-    /**
-     * The sessions other people are showing this machine, and the one being
-     * read. Materialized on first access and shared, because the list and the
-     * replica opened out of it are one surface. Unavailable when this machine
-     * cannot receive shared sessions at all, so a surface can say so rather
-     * than showing a list that is empty for the wrong reason.
-     */
-    sharedSessions(): RigSharedSessionsStore | undefined;
     /**
      * This Rig's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -284,24 +243,6 @@ export interface RigClientDeps {
      * own trust, which leaves pairing unavailable rather than idle.
      */
     readonly pairingSource?: RigPairingSource;
-    /**
-     * Repeating read of this account's profile, waiting requests, and people,
-     * together with the two decisions that change them. Omitted leaves friends
-     * unavailable rather than empty.
-     */
-    readonly friendsSource?: RigFriendsSource;
-    /**
-     * Repeating read of the focused session's share, together with the five
-     * decisions that change it. Omitted leaves sharing unavailable rather than
-     * showing a session that merely is not shared.
-     */
-    readonly sessionShareSource?: RigSessionShareSource;
-    /**
-     * Repeating read of the replicas other people are showing this machine,
-     * together with reading one of them and writing back into it. Omitted
-     * leaves shared sessions unavailable rather than empty.
-     */
-    readonly sharedSessionsSource?: RigSharedSessionsSource;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -354,9 +295,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let providerUsageStore: RigProviderUsageStore | undefined;
     let nodesStore: RigNodesStore | undefined;
     let pairingStore: RigPairingStore | undefined;
-    let friendsStore: RigFriendsStore | undefined;
-    let sessionShareStore: RigSessionShareStore | undefined;
-    let sharedSessionsStore: RigSharedSessionsStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
     let slotsStore: RigSlotsStore | undefined;
@@ -479,127 +417,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             pairingStore ??= rigPairingStoreCreate({ source });
             return pairingStore;
         },
-        friends() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.friendsSource;
-            if (!source) return undefined;
-            friendsStore ??= rigFriendsStoreCreate({
-                source,
-                output: (event) => {
-                    const store = friendsStore;
-                    if (!store) return;
-                    if (event.type === "profileCreateSubmitted") {
-                        source
-                            .signup({
-                                firstName: event.firstName,
-                                lastName: event.lastName,
-                                ...(event.photo === undefined ? {} : { photo: event.photo }),
-                            })
-                            .then(
-                                () => store.friendsInput({ type: "profileCreateSucceeded" }),
-                                (error: unknown) =>
-                                    store.friendsInput({ type: "profileCreateFailed", error }),
-                            );
-                        return;
-                    }
-                    if (event.type === "requestSendSubmitted") {
-                        source.requestSend(event.token).then(
-                            () => store.friendsInput({ type: "requestSendSucceeded" }),
-                            (error: unknown) =>
-                                store.friendsInput({ type: "requestSendFailed", error }),
-                        );
-                        return;
-                    }
-                    source.requestAnswer(event.requestId, event.answer).then(
-                        () =>
-                            store.friendsInput({
-                                type: "requestAnswerSucceeded",
-                                requestId: event.requestId,
-                            }),
-                        (error: unknown) =>
-                            store.friendsInput({
-                                type: "requestAnswerFailed",
-                                requestId: event.requestId,
-                                error,
-                            }),
-                    );
-                },
-            });
-            return friendsStore;
-        },
-        sessionShare() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.sessionShareSource;
-            if (!source) return undefined;
-            // Every decision is issued through the machine's own mutation queue,
-            // which reports a refusal rather than rejecting the call, so this
-            // store has nothing left to carry out on its behalf: the output is
-            // observed only so a host that wants to log or announce a decision
-            // can, and the store's own reading is what settles it.
-            sessionShareStore ??= rigSessionShareStoreCreate({ source });
-            return sessionShareStore;
-        },
-        sharedSessions() {
-            if (disposed) throw new Error("The Rig client is disposed.");
-            const source = deps.sharedSessionsSource;
-            if (!source) return undefined;
-            sharedSessionsStore ??= rigSharedSessionsStoreCreate({
-                source,
-                output: (event) => {
-                    const store = sharedSessionsStore;
-                    if (!store) return;
-                    if (event.type === "sessionHistorySubmitted") {
-                        source.historyRead(event.id, event.after).then(
-                            (page) =>
-                                store.sharedSessionsInput({
-                                    type: "sessionHistorySucceeded",
-                                    id: event.id,
-                                    page,
-                                }),
-                            (error: unknown) =>
-                                store.sharedSessionsInput({
-                                    type: "sessionHistoryFailed",
-                                    id: event.id,
-                                    error,
-                                }),
-                        );
-                        return;
-                    }
-                    source
-                        .messagePost({
-                            clientMessageId: event.clientMessageId,
-                            grant: event.grant,
-                            text: event.text,
-                        })
-                        .then(
-                            // A machine that answered the request and then refused
-                            // the message has not sent it. Turning that into a
-                            // failure here is what keeps a refused message out of
-                            // the transcript the reader believes they wrote to.
-                            (result) =>
-                                result.accepted
-                                    ? store.sharedSessionsInput({
-                                          type: "draftSucceeded",
-                                          id: event.id,
-                                      })
-                                    : store.sharedSessionsInput({
-                                          type: "draftFailed",
-                                          id: event.id,
-                                          error: new UserError(
-                                              "That message was not delivered. The person sharing this session may have just taken your access away.",
-                                          ),
-                                      }),
-                            (error: unknown) =>
-                                store.sharedSessionsInput({
-                                    type: "draftFailed",
-                                    id: event.id,
-                                    error,
-                                }),
-                        );
-                },
-            });
-            return sharedSessionsStore;
-        },
         instructions() {
             if (disposed) throw new Error("The Rig client is disposed.");
             instructionsStore ??= rigInstructionsStoreCreate({ transport });
@@ -712,12 +529,6 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             nodesStore = undefined;
             pairingStore?.[Symbol.dispose]();
             pairingStore = undefined;
-            friendsStore?.[Symbol.dispose]();
-            friendsStore = undefined;
-            sessionShareStore?.[Symbol.dispose]();
-            sessionShareStore = undefined;
-            sharedSessionsStore?.[Symbol.dispose]();
-            sharedSessionsStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             slotsStore?.[Symbol.dispose]();
             slotsStore = undefined;

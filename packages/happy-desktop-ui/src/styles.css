@@ -112,11 +112,4 @@
 @import "./styles/rig-usage-page.css";
 @import "./styles/rig-project-settings.css";
 @import "./styles/rig-create-session.css";
-@import "./styles/friends.css";
 @import "./styles/workspace-lifecycle-notice.css";
-@import "./styles/session-share-indicator.css";
-@import "./styles/session-share-panel.css";
-@import "./styles/session-share-start-dialog.css";
-@import "./styles/session-share-stop-dialog.css";
-@import "./styles/shared-sessions-page.css";
-@import "./styles/shared-session-view.css";

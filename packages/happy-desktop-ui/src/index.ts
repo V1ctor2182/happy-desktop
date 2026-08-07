@@ -427,13 +427,6 @@ export {
     type RigInboxAnswerMap,
     type RigInboxPageProps,
 } from "./pages/inbox/RigInboxPage";
-export { FriendsPage, type FriendsPageProps } from "./pages/friends/FriendsPage";
-export { FriendInvite, type FriendInviteProps } from "./pages/friends/FriendInvite";
-export {
-    FriendProfileSetup,
-    type FriendProfileSetupProps,
-} from "./pages/friends/FriendProfileSetup";
-export { FriendRequestCard, type FriendRequestCardProps } from "./pages/friends/FriendRequestCard";
 export {
     RigProviderUsagePage,
     type RigProviderUsagePageProps,
@@ -470,27 +463,3 @@ export {
     type RigProviderSettingsProps,
     type RigProviderStatus,
 } from "./pages/settings/RigProviderSettings";
-export {
-    SESSION_SHARE_CONDITION_LABELS,
-    SessionShareIndicator,
-    type SessionShareCondition,
-    type SessionShareIndicatorProps,
-} from "./SessionShareIndicator";
-export {
-    SessionSharePanel,
-    type SessionShareHealthSummary,
-    type SessionShareMemberRow,
-    type SessionSharePanelProps,
-} from "./SessionSharePanel";
-export {
-    SessionShareStartDialog,
-    type SessionShareCandidate,
-    type SessionShareStartDialogProps,
-} from "./SessionShareStartDialog";
-export { SessionShareStopDialog, type SessionShareStopDialogProps } from "./SessionShareStopDialog";
-export {
-    SharedSessionsPage,
-    type SharedSessionRow,
-    type SharedSessionsPageProps,
-} from "./pages/shared/SharedSessionsPage";
-export { SharedSessionView, type SharedSessionViewProps } from "./pages/shared/SharedSessionView";

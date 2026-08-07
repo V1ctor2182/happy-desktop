@@ -684,7 +684,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="a standing fact about the message, printed once under the name it is a fact about — where a friend's message stands with respect to the agent's context. Unlike the hover metadata it never appears or disappears with the pointer, and an own message never carries one."
+                detail="a standing fact about the message, printed once under the name it is a fact about — where another person's message stands with respect to the agent's context. Unlike the hover metadata it never appears or disappears with the pointer, and an own message never carries one."
                 label="Message — context note"
                 number="17"
                 stage="app"

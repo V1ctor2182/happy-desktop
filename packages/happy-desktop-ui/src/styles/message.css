@@ -190,8 +190,8 @@
     margin-left: 12px;
 }
 
-/* A standing fact about an incoming message — where a friend's message stands
-   with respect to the agent's context, say — printed once under the name it is
+/* A standing fact about an incoming message — where another person's message
+   stands with respect to the agent's context, say — printed once under the name it is
    a fact about. It takes the author line's own inset so the two read as one
    identity block, and it stays quiet enough not to compete with the message.
    Unlike the hover metadata it never appears or disappears under the pointer.

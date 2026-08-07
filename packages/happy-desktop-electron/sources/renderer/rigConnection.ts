@@ -16,16 +16,12 @@ import {
     type RigSlotsStore,
     type RigWorkspaceMemoryDocument,
     type RigWorkspaceMemoryPersistence,
-    type RigFriendsStore,
     type RigInboxStore,
     type RigInstructionsStore,
     type RigSecurityPolicyStore,
     type RigNodesStore,
     type RigPairingStore,
     type RigProviderUsageStore,
-    type RigSessionId,
-    type RigSessionShareStore,
-    type RigSharedSessionsStore,
     type RigWorkspaceStore,
 } from "happy-desktop-state";
 import {
@@ -37,13 +33,10 @@ import {
 } from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy-desktop-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
-import { rigConnectFriendsSourceCreate } from "./rigConnectFriendsSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectNodesSourceCreate } from "./rigConnectNodesSource";
 import { rigConnectPairingSourceCreate } from "./rigConnectPairingSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
-import { rigConnectSessionShareSourceCreate } from "./rigConnectSessionShareSource";
-import { rigConnectSharedSessionsSourceCreate } from "./rigConnectSharedSessionsSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate, RigTransportHttpError } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -154,25 +147,6 @@ export interface RigSession {
      * there is nothing to negotiate on a node's own connection.
      */
     readonly pairing: RigPairingStore | undefined;
-    /**
-     * This machine's own profile in the network, who is asking to connect to it,
-     * and who it already knows. Absent on a daemon that does not carry Murmur
-     * yet, which is why the surface can say so instead of showing an empty list.
-     */
-    readonly friends: RigFriendsStore | undefined;
-    /**
-     * The share on the conversation the reader has open here: who can see it,
-     * how well it is keeping up, and the decisions only its owner may make.
-     * Absent on a daemon started without session sharing, which is why the
-     * conversation can say so rather than offering a control that would fail.
-     */
-    readonly sessionShare: RigSessionShareStore | undefined;
-    /**
-     * The sessions other people are showing this machine, and the one being
-     * read. Absent on a daemon that cannot receive them, which is why the
-     * surface can say so instead of showing an empty list.
-     */
-    readonly sharedSessions: RigSharedSessionsStore | undefined;
     /** The machine-wide instructions every agent this Rig starts is given. */
     readonly instructions: RigInstructionsStore;
     /** The machine-wide policy its permission reviewer applies to agent actions. */
@@ -377,32 +351,6 @@ export function rigConnectionOpen(input: {
               },
           })
         : undefined;
-    // Friends is read the same way usage is, and for the same reason: the daemon
-    // answers about it rather than announcing it. A daemon that does not carry
-    // Murmur offers no source at all, so the surface says the machine cannot do
-    // this rather than showing an account that is missing for the wrong reason.
-    const friendsSource = rigConnectFriendsSourceCreate(rigConnect);
-    // Sharing is read the same way, and issued through rig-connect's own
-    // mutation queue: a decision comes back as an identity, and its refusal
-    // arrives on the same channel every other refused mutation does. A daemon
-    // started without session sharing offers no source at all, so the
-    // conversation says the machine cannot do this rather than showing a
-    // session that merely happens not to be shared.
-    const sessionShareSource = rigConnectSessionShareSourceCreate(
-        rigConnect,
-        input.rigHttpUrl,
-        (listener) => {
-            const forward = (rejection: MutationRejectedDelta): void => {
-                listener({ mutationId: rejection.mutationId, message: rejection.message });
-            };
-            mutationListeners.add(forward);
-            return () => mutationListeners.delete(forward);
-        },
-    );
-    // The other side of the same feature: what other people are showing this
-    // machine. It is read rather than announced for the same reason, and a
-    // daemon that cannot receive replicas offers no source at all.
-    const sharedSessionsSource = rigConnectSharedSessionsSourceCreate(rigConnect);
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -427,9 +375,6 @@ export function rigConnectionOpen(input: {
         providerUsageSource,
         nodesSource,
         ...(pairingSource ? { pairingSource } : {}),
-        ...(friendsSource ? { friendsSource } : {}),
-        ...(sessionShareSource ? { sessionShareSource } : {}),
-        ...(sharedSessionsSource ? { sharedSessionsSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -451,7 +396,6 @@ export function rigConnectionOpen(input: {
                 // its work, so this is where a node that was holding it back
                 // stops being reported that way.
                 input.deps.restricted?.(false);
-                const sessionShare = client.sessionShare();
                 session = {
                     connection: rigConnectionLoaderCreate({
                         probe: healthProbe(input.rigHttpUrl),
@@ -464,13 +408,6 @@ export function rigConnectionOpen(input: {
                         // reaching for one. It is the same host every other
                         // window-level act already goes through.
                         host: input.host,
-                        // The share belongs to the conversation the reader is
-                        // in, so it follows the address the workspace applies
-                        // rather than being pointed at a session by whichever
-                        // view happened to render.
-                        conversationFocus: (conversationId?: RigSessionId) => {
-                            sessionShare?.sessionFocus(conversationId);
-                        },
                         output: (event) => {
                             switch (event.type) {
                                 case "conversationOpenRequested":
@@ -490,9 +427,6 @@ export function rigConnectionOpen(input: {
                     providerUsage: client.providerUsage(),
                     nodes: client.nodes(),
                     pairing: client.pairing(),
-                    friends: client.friends(),
-                    sessionShare,
-                    sharedSessions: client.sharedSessions(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
                     clock: rigClockStoreCreate(),

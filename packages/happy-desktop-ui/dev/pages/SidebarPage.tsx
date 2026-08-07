@@ -492,7 +492,6 @@ const PINNED_ROWS: SidebarItem[] = [
     { icon: "doc", id: "notes", kind: "action", label: "Notes" },
     { badge: 3, icon: "bell", id: "inbox", kind: "action", label: "Inbox" },
     { icon: "zap", id: "usage", kind: "action", label: "Usage" },
-    { icon: "users", id: "friends", kind: "action", label: "Friends" },
 ];
 
 /**

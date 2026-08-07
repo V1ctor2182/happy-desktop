@@ -235,29 +235,6 @@ const usageRoute = createRoute({
 });
 
 /**
- * The account's friends, addressed without a Rig: who a person is connected to
- * does not belong to one machine, so no machine appears in the address.
- */
-const friendsRoute = createRoute({
-    component: RigFriendsRoute,
-    getParentRoute: () => rootRoute,
-    path: "/friends",
-});
-
-/**
- * The sessions other people are showing this account, addressed without a Rig
- * for the same reason friends is: a replica belongs to the account rather than
- * to the machine that happens to be holding it. Which replica is open is not in
- * the address — it is not a place this machine has, so there is nothing to come
- * back to.
- */
-const sharedRoute = createRoute({
-    component: RigSharedRoute,
-    getParentRoute: () => rootRoute,
-    path: "/shared",
-});
-
-/**
  * The component workbench, addressed without a Rig because it renders component
  * pages rather than anything a machine holds. The route is registered only in a
  * development build, which is also the only build whose sidebar offers it.
@@ -307,8 +284,6 @@ const routeTree = rootRoute.addChildren([
     noteRoute,
     inboxRoute,
     usageRoute,
-    friendsRoute,
-    sharedRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
     settingsSectionRoute,
@@ -341,22 +316,6 @@ function RigUsageRoute() {
 }
 
 /**
- * The friends address renders the same window a conversation does: the shell and
- * its sidebar stay, and only the content area changes.
- */
-function RigFriendsRoute() {
-    return <RigWorkspaceLayout friends />;
-}
-
-/**
- * The shared-sessions address renders the same window a conversation does: the
- * shell and its sidebar stay, and only the content area changes.
- */
-function RigSharedRoute() {
-    return <RigWorkspaceLayout shared />;
-}
-
-/**
  * The workbench address renders the same window a conversation does: the shell
  * and its sidebar stay, and only the content area changes.
  */
@@ -367,9 +326,7 @@ function RigBlueprintRoute() {
 function RigWorkspaceLayout(
     props: {
         blueprint?: boolean;
-        friends?: boolean;
         inbox?: boolean;
-        shared?: boolean;
         notes?: boolean;
         usage?: boolean;
     } = {},
@@ -412,16 +369,12 @@ function RigWorkspaceLayout(
             notesOpen={props.notes}
             inboxOpen={props.inbox}
             usageOpen={props.usage}
-            friendsOpen={props.friends}
-            sharedOpen={props.shared}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the
             // workbench row in a development sidebar and nowhere else.
             {...(import.meta.env.DEV
                 ? { onBlueprintOpen: () => void navigate({ to: "/blueprint" }) }
                 : {})}
-            onFriendsOpen={() => void navigate({ to: "/friends" })}
-            onSharedOpen={() => void navigate({ to: "/shared" })}
             onInboxOpen={() =>
                 void navigate({
                     params: { rigId: params.rigId ?? rigDefaultId(context) },

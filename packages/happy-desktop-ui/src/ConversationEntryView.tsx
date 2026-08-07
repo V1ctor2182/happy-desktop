@@ -31,9 +31,9 @@ export type ConversationEntryViewProps = {
     viewerId?: string;
     /**
      * A short standing fact about this message, printed under the author name:
-     * where a friend's message stands with respect to the agent's context, for
-     * example. The owning surface supplies the finished sentence, since only it
-     * knows what the message is and what became of it.
+     * where another person's message stands with respect to the agent's
+     * context, for example. The owning surface supplies the finished sentence,
+     * since only it knows what the message is and what became of it.
      */
     contextNote?: string;
     /** Consecutive entry from the same author: no avatar/author row. */

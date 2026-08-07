@@ -11,11 +11,6 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
-    RigFriend,
-    RigFriendAnswer,
-    RigFriendRequestId,
-    RigFriendsSnapshot,
-    RigFriendsStore,
     RigWorkspaceFiles,
     RigFileScope,
     RigFileViewMode,
@@ -54,12 +49,6 @@ import type {
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
-    RigSessionShareMemberId,
-    RigSessionShareSnapshot,
-    RigSessionShareStore,
-    RigSharedSessionId,
-    RigSharedSessionsSnapshot,
-    RigSharedSessionsStore,
     RigSlotAction,
     RigSlotEntry,
     RigSlotEntryAuthor,
@@ -80,18 +69,12 @@ import type {
 import {
     RIG_PANEL_FILE_VIEW_ID,
     rigAgentAuthor,
-    rigFriendInitials,
-    rigFriendName,
-    rigFriendsPhotoRead,
-    rigFriendsStoreNoop,
     rigInboxStoreNoop,
     rigNavigationOrderApply,
     rigAvailabilityProject,
     rigNavigationOrderStoreNoop,
     rigNodesStoreNoop,
     rigProviderUsageStoreNoop,
-    rigSessionShareStoreNoop,
-    rigSharedSessionsStoreNoop,
     rigSlotEntriesInScope,
     rigSlotEntryInScope,
     rigSlotsStoreNoop,
@@ -128,7 +111,6 @@ import {
     MarkdownDocument,
     Modal,
     ModalOverlay,
-    FriendsPage,
     NotesPage,
     RigActivityPanel,
     RigControlMenu,
@@ -151,15 +133,6 @@ import {
     type SlotVisualEntry,
     RigInboxPage,
     RigProviderUsagePage,
-    SessionShareIndicator,
-    SessionSharePanel,
-    SessionShareStartDialog,
-    SessionShareStopDialog,
-    type SessionShareCandidate,
-    type SessionShareMemberRow,
-    SharedSessionsPage,
-    SharedSessionView,
-    type SharedSessionRow,
     TabbedPane,
     TextField,
     TerminalPanel,
@@ -273,27 +246,6 @@ export interface AppRigSession {
      * rather than drawing a control that would answer nothing.
      */
     readonly pairing?: RigPairingStore;
-    /**
-     * This account's own profile, the people asking to connect to it, and the
-     * people it already knows. Absent when the machine does not carry the
-     * friends service, which is why the surface can say so rather than offering
-     * a greeting nothing would answer.
-     */
-    readonly friends?: RigFriendsStore;
-    /**
-     * The share on the conversation this window has open on this machine: who
-     * can see it, how well it is keeping up, and the decisions only its owner
-     * may make. Absent when the machine cannot share sessions at all, which is
-     * why the conversation then says so rather than offering a control that
-     * would fail.
-     */
-    readonly sessionShare?: RigSessionShareStore;
-    /**
-     * The sessions other people are showing this machine. Absent when the
-     * machine cannot receive them, which is why the surface says so rather than
-     * showing a list that is empty for the wrong reason.
-     */
-    readonly sharedSessions?: RigSharedSessionsStore;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
@@ -428,19 +380,6 @@ export interface AppRigViewProps {
     usageOpen?: boolean;
     /** Addresses that usage. */
     onUsageOpen?(): void;
-    /** Whether the URL addresses the account's friends. */
-    friendsOpen?: boolean;
-    /** Addresses friends. */
-    onFriendsOpen?(): void;
-    /**
-     * Whether the URL addresses the sessions other people are sharing here.
-     * Which one of them is open is deliberately not in the address: a replica
-     * is not a place this machine holds, so there is nothing here to come back
-     * to — the reading is a state of the surface and ends with it.
-     */
-    sharedOpen?: boolean;
-    /** Addresses shared sessions. */
-    onSharedOpen?(): void;
     /** Whether the URL addresses the component workbench, in a development build. */
     blueprintOpen?: boolean;
     /** Addresses the workbench. */
@@ -1254,23 +1193,6 @@ const INBOX_ITEM = "inbox";
 const USAGE_ITEM = "usage";
 
 /**
- * The pinned row that opens the people this account is connected to. It comes
- * last of the pinned rows because it is the only one that is not about this
- * machine's work: notes and the inbox are what there is to do here, and friends
- * are who is beyond it.
- */
-const FRIENDS_ITEM = "friends";
-
-/**
- * The pinned row that opens the sessions other people are showing this account.
- * It sits beside friends because it is the same relationship read the other way
- * round: friends is who is beyond this machine, and this is what they are
- * letting it see. Nothing here is this machine's work, and nothing opened from
- * it becomes this machine's work.
- */
-const SHARED_ITEM = "shared";
-
-/**
  * The pinned row that opens the component workbench. It exists only in a
  * development build: it is a tool for the people building this window, not
  * something the reader's own work ever passes through.
@@ -1424,8 +1346,8 @@ export function AppRigView(props: AppRigViewProps) {
         props.appearance.get,
     );
     // The order the reader arranged the pinned rows in. It belongs to the window
-    // rather than to any one Rig — Notes and Friends outlive every connection —
-    // so a machine going away rearranges nothing.
+    // rather than to any one Rig — Notes and the inbox outlive every connection
+    // — so a machine going away rearranges nothing.
     const navigationOrderStore = props.navigationOrder ?? rigNavigationOrderStoreNoop;
     const navigationOrder = useSyncExternalStore(
         navigationOrderStore.subscribe,
@@ -1461,21 +1383,9 @@ export function AppRigView(props: AppRigViewProps) {
     const usageStore =
         (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
     const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
-    // Friends has no Rig in its address, and it does not need one: the identity
-    // people reach belongs to this account, and it is this machine's own daemon
-    // that holds it. So it is read off the host, not off whichever Rig the
-    // window is addressing — a node the reader has open is a different machine
-    // and would answer for a different account.
+    // The host answers for this account rather than whichever Rig the window is
+    // addressing: a node the reader has open is a different machine.
     const localRig = hostRig(directory);
-    const localAvailability = localRig ? rigEntryAvailability(localRig) : undefined;
-    const localConnectionRefusal =
-        localAvailability?.online === false
-            ? (localAvailability.refusal ?? localAvailability.message)
-            : undefined;
-    const localRigOnline = (): boolean => {
-        const current = hostRig(props.rigs.get());
-        return current ? (rigEntryAvailability(current)?.online ?? false) : false;
-    };
     // The machines the host is peered with. The sidebar shows them whenever the
     // window is open rather than only on a settings screen: a node going quiet
     // is why work stops arriving, and that has to be visible where the work is.
@@ -1486,51 +1396,6 @@ export function AppRigView(props: AppRigViewProps) {
     // Subscribed for the same reason usage is, and only while it is open: the
     // subscription is what starts the daemon being asked about requests, and it
     // has to stop the moment the reader looks elsewhere.
-    // Shared sessions read this too: a replica carries only the peer identity of
-    // whoever is sharing it, and the only honest name for that person is the one
-    // this account registered for them — never one supplied over the network.
-    // The share picker inside a conversation reads a different machine's people
-    // on purpose: this window addresses the account, but a share is created by
-    // the machine holding the session, so who it can be shown to is that
-    // machine's registry rather than this one's.
-    const friendsStore =
-        (props.friendsOpen || props.sharedOpen ? localRig?.session?.friends : undefined) ??
-        rigFriendsStoreNoop;
-    const friends = useSyncExternalStore(
-        friendsStore.subscribe,
-        friendsStore.get,
-        friendsStore.get,
-    );
-    // Why this window cannot show people, when it cannot: this machine not being
-    // up and this machine not carrying the service are two different facts, and
-    // neither one is an empty list.
-    const friendsMessage = !localRig?.session
-        ? "Waiting for this machine's Rig to connect before it can reach the people you know."
-        : localConnectionRefusal
-          ? localConnectionRefusal
-          : localRig.session.friends
-            ? undefined
-            : "This Rig does not carry the friends service yet. Update it to connect with people.";
-    // Sessions other people are showing this machine belong to the same account
-    // as friends do, so they are read off this machine's own Rig for the same
-    // reason — and, like friends, only while the reader is looking at them,
-    // because the subscription is what starts the daemon being asked.
-    const sharedSessionsStore =
-        (props.sharedOpen ? localRig?.session?.sharedSessions : undefined) ??
-        rigSharedSessionsStoreNoop;
-    const sharedSessions = useSyncExternalStore(
-        sharedSessionsStore.subscribe,
-        sharedSessionsStore.get,
-        sharedSessionsStore.get,
-    );
-    // The same two different facts friends distinguishes, said about replicas.
-    const sharedSessionsMessage = !localRig?.session
-        ? "Waiting for this machine's Rig to connect before it can reach the sessions people are sharing with you."
-        : localConnectionRefusal
-          ? localConnectionRefusal
-          : localRig.session.sharedSessions
-            ? undefined
-            : "This Rig cannot receive shared sessions yet. Update it to read what people share with you.";
     // One surface for the machine's whole slot catalog, subscribed once for as
     // long as this window addresses this Rig. What the reader has open is read
     // off the route below and resolved against entries already held, so moving
@@ -1645,24 +1510,6 @@ export function AppRigView(props: AppRigViewProps) {
                   },
               ]
             : []),
-        // Friends belong to the account rather than to a machine, so
-        // this row is always here: it opens whether or not any Rig is
-        // reachable.
-        {
-            icon: "users" as const,
-            id: FRIENDS_ITEM,
-            kind: "action" as const,
-            label: "Friends",
-        },
-        // What those people are showing this account, on the same footing and
-        // for the same reason: it belongs to the account rather than to any one
-        // machine, so the row is always here.
-        {
-            icon: "eye" as const,
-            id: SHARED_ITEM,
-            kind: "action" as const,
-            label: "Shared with me",
-        },
         // The component workbench is a development tool. Its row is a
         // capability the host grants rather than an environment this
         // component reads for itself: the router registers the workbench
@@ -1690,15 +1537,11 @@ export function AppRigView(props: AppRigViewProps) {
                       ? INBOX_ITEM
                       : props.usageOpen
                         ? USAGE_ITEM
-                        : props.friendsOpen
-                          ? FRIENDS_ITEM
-                          : props.sharedOpen
-                            ? SHARED_ITEM
-                            : props.blueprintOpen
-                              ? BLUEPRINT_ITEM
-                              : props.groupId
-                                ? rigItemId(props.rigId, props.groupId)
-                                : ""
+                        : props.blueprintOpen
+                          ? BLUEPRINT_ITEM
+                          : props.groupId
+                            ? rigItemId(props.rigId, props.groupId)
+                            : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -1847,14 +1690,6 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onUsageOpen?.();
                     return;
                 }
-                if (id === FRIENDS_ITEM) {
-                    props.onFriendsOpen?.();
-                    return;
-                }
-                if (id === SHARED_ITEM) {
-                    props.onSharedOpen?.();
-                    return;
-                }
                 if (id === BLUEPRINT_ITEM) {
                     props.onBlueprintOpen?.();
                     return;
@@ -1963,52 +1798,6 @@ export function AppRigView(props: AppRigViewProps) {
                 </AppShell>
             );
 
-        // Friends belong to the account rather than to a machine, so like notes the
-        // surface is shown whatever the addressed machine is doing — and answered
-        // by this machine's Rig rather than by the addressed one.
-        if (props.friendsOpen)
-            return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
-                    {desktop ? <WindowDragRegion /> : null}
-                    <RigFriendsSurface
-                        rigOnline={localRigOnline}
-                        snapshot={friends}
-                        store={localRig?.session?.friends}
-                        {...(friendsMessage === undefined ? {} : { unavailable: friendsMessage })}
-                    />
-                </AppShell>
-            );
-
-        // Replicas belong to the account the same way friends do, so the surface
-        // is shown whatever the addressed machine is doing. Nothing opened here
-        // is this machine's work: the reader is being shown somebody else's
-        // session, and the surface never leaves the shell to say so.
-        if (props.sharedOpen)
-            return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
-                    {desktop ? <WindowDragRegion /> : null}
-                    <RigSharedSessionsSurface
-                        friends={friends.friends}
-                        rigOnline={localRigOnline}
-                        snapshot={sharedSessions}
-                        store={localRig?.session?.sharedSessions}
-                        {...(sharedSessionsMessage === undefined
-                            ? {}
-                            : { unavailable: sharedSessionsMessage })}
-                    />
-                </AppShell>
-            );
-
         // The workbench belongs to no machine and needs no connection: it renders the
         // component pages themselves, so it is shown exactly like notes are.
         if (props.blueprintOpen)
@@ -2102,10 +1891,6 @@ export function AppRigView(props: AppRigViewProps) {
                     platform={props.platform}
                     projects={active.projects}
                     rigOnline={activeRigOnline}
-                    {...(active.session.sessionShare
-                        ? { sessionShare: active.session.sessionShare }
-                        : {})}
-                    {...(active.session.friends ? { friends: active.session.friends } : {})}
                     sidebar={sidebar}
                     slots={slots}
                     slotsScope={slotsScope}
@@ -2270,254 +2055,6 @@ function RigInboxSurface(props: {
 }
 
 /**
- * The account's friends inside the window's shell. It subscribes to nothing:
- * the window already holds this store's snapshot, and its subscription is what
- * starts and stops the daemon being asked about requests, so the reading belongs
- * to the window's lifetime rather than to this component's.
- *
- * Turning a chosen file into the bytes a profile carries is glue, which is why
- * it happens here: the page reports the file someone picked, and the window
- * decides what a picture is made of.
- */
-function RigFriendsSurface(props: {
-    rigOnline: () => boolean;
-    snapshot: RigFriendsSnapshot;
-    store?: RigFriendsStore;
-    unavailable?: string;
-}) {
-    const store = props.store;
-    const snapshot = props.snapshot;
-    return (
-        <FriendsPage
-            {...(snapshot.account ? { account: snapshot.account } : {})}
-            answers={snapshot.answers}
-            {...(snapshot.error ? { error: snapshot.error } : {})}
-            friends={snapshot.friends}
-            friendTime={(friend) => friendsConnectedTime(friend.addedAt)}
-            invite={snapshot.invite}
-            loading={snapshot.loading}
-            onFirstNameChange={(value) => store?.firstNameUpdate(value)}
-            onInviteSend={() => {
-                if (props.rigOnline()) store?.requestSend();
-            }}
-            onInviteTokenChange={(value) => store?.requestTokenUpdate(value)}
-            onLastNameChange={(value) => store?.lastNameUpdate(value)}
-            onPhotoRemove={() => store?.photoRemove()}
-            onPhotoSelect={(file) => {
-                if (!store) return;
-                // A picture that cannot be read is simply not attached: nothing
-                // was promised about it yet, and the well still says "add a
-                // photo".
-                void rigFriendsPhotoRead(file).then(
-                    (photo) => store.photoAttach(photo),
-                    () => undefined,
-                );
-            }}
-            onProfileCreate={() => {
-                if (props.rigOnline()) store?.profileCreate();
-            }}
-            onRequestAnswer={(requestId: RigFriendRequestId, answer: RigFriendAnswer) => {
-                if (props.rigOnline()) store?.requestAnswer(requestId, answer);
-            }}
-            profileDraft={snapshot.draft}
-            requests={snapshot.requests}
-            requestTime={(request) => friendsRequestTime(request.receivedAt)}
-            {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-        />
-    );
-}
-
-/** When a request arrived, as an absolute local date and time. */
-function friendsRequestTime(receivedAt: number): string {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-        new Date(receivedAt),
-    );
-}
-
-/** When a person was connected. The day is enough; the minute is not the point. */
-function friendsConnectedTime(addedAt: number): string {
-    return `Connected ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(addedAt))}`;
-}
-
-/**
- * A person's initials from the name the owner registered for them. The member
- * list carries only that name — never a profile the member's own machine
- * supplied — so this is everything there is to draw them with.
- */
-function shareInitials(name: string): string {
-    const words = name.split(/\s+/).filter((word) => word.length > 0);
-    const letters = [words[0], words.length > 1 ? words[words.length - 1] : undefined]
-        .filter((word): word is string => word !== undefined)
-        .map((word) => word[0]!.toUpperCase());
-    return letters.join("") || "?";
-}
-
-/** A moment in this reader's own words, to the minute. */
-function shareMoment(at: number): string {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-        new Date(at),
-    );
-}
-
-/**
- * Why a replica stopped receiving content, said as something that happened to
- * the reader rather than as the word the wire used.
- */
-const SHARED_SESSION_ENDINGS: Record<"revoked" | "stopped" | "unreadable", string> = {
-    revoked: "Your access was taken away",
-    stopped: "The owner stopped sharing",
-    unreadable: "This machine could no longer read it",
-};
-
-/**
- * The sessions other people are showing this account, and the one being read.
- *
- * They are one surface because they are one act: a replica is opened out of the
- * list and closed back into it. Nothing here creates a project, a workspace, or
- * a chat, and the reading is not in the window's address, because a replica is
- * not a place this machine holds.
- *
- * It subscribes to nothing: every value arrives as a prop and every act goes
- * straight back to the store.
- */
-function RigSharedSessionsSurface(props: {
-    /** The people this account registered, which is where an owner's name comes from. */
-    friends: readonly RigFriend[];
-    rigOnline: () => boolean;
-    snapshot: RigSharedSessionsSnapshot;
-    store?: RigSharedSessionsStore;
-    unavailable?: string;
-}) {
-    const store = props.store;
-    const snapshot = props.snapshot;
-    const reading = snapshot.reading;
-    const sharedSessionOwner = (peerId: string) => sharedSessionOwnerOf(props.friends, peerId);
-    const open = reading
-        ? snapshot.sessions.find((session) => session.id === reading.id)
-        : undefined;
-    if (reading && open) {
-        // The owner is somebody this account knows, but the replica carries only
-        // their peer identity, so the name is resolved from the people this
-        // machine registered rather than from anything the network supplied.
-        const owner = sharedSessionOwner(open.ownerPeerId);
-        const ended = !open.live;
-        return (
-            <SharedSessionView
-                complete={reading.complete}
-                {...(open.ended ? { endedReason: SHARED_SESSION_ENDINGS[open.ended] } : {})}
-                entries={reading.entries}
-                {...(reading.error ? { error: reading.error.message } : {})}
-                live={open.live}
-                loading={reading.loading}
-                loadingMore={reading.loadingMore}
-                onLoadMore={() => {
-                    if (props.rigOnline()) store?.sessionMoreLoad();
-                }}
-                onClose={() => store?.sessionClose()}
-                ownerInitials={owner.initials}
-                ownerName={owner.name}
-                {...(owner.photoUrl ? { ownerPhotoUrl: owner.photoUrl } : {})}
-                title={open.title}
-                agentAuthor={rigAgentAuthor}
-                viewerId={rigOwnerAuthor.id}
-                composer={sharedSessionComposer(reading)}
-                onComposerValueChange={(value) => store?.draftUpdate(value)}
-                onComposerSend={() => {
-                    if (props.rigOnline()) store?.draftSubmit();
-                }}
-                {...(props.unavailable
-                    ? { composerRefusal: props.unavailable }
-                    : ended
-                      ? {
-                            composerRefusal:
-                                "This session is no longer being shared with you, so nothing more can be sent.",
-                        }
-                      : {})}
-            />
-        );
-    }
-    return (
-        <SharedSessionsPage
-            {...(snapshot.error ? { error: snapshot.error.message } : {})}
-            loading={snapshot.loading}
-            {...(props.unavailable === undefined
-                ? {
-                      onSessionOpen: (sessionId: string) =>
-                          props.rigOnline()
-                              ? store?.sessionOpen(sessionId as RigSharedSessionId)
-                              : undefined,
-                  }
-                : {})}
-            sessions={snapshot.sessions.map((session): SharedSessionRow => {
-                const owner = sharedSessionOwner(session.ownerPeerId);
-                return {
-                    id: session.id,
-                    live: session.live,
-                    ownerInitials: owner.initials,
-                    ownerName: owner.name,
-                    time: shareMoment(session.endedAt ?? session.startedAt),
-                    title: session.title,
-                    watching: session.watching,
-                    ...(owner.photoUrl ? { ownerPhotoUrl: owner.photoUrl } : {}),
-                    ...(session.ended
-                        ? { endedReason: SHARED_SESSION_ENDINGS[session.ended] }
-                        : {}),
-                };
-            })}
-            {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-        />
-    );
-}
-
-/**
- * Who is sharing, by whatever this machine can honestly say about them. A peer
- * this account has not registered is named as an unknown person rather than by
- * the identity string, which is not a name and would read as one.
- */
-function sharedSessionOwnerOf(
-    friends: readonly RigFriend[],
-    peerId: string,
-): { initials: string; name: string; photoUrl?: string } {
-    const friend = friends.find((candidate) => candidate.id === peerId);
-    if (!friend) return { initials: "?", name: "Someone not in your people" };
-    return {
-        initials: rigFriendInitials(friend.profile),
-        name: rigFriendName(friend.profile),
-        ...(friend.profile.photoUrl ? { photoUrl: friend.profile.photoUrl } : {}),
-    };
-}
-
-/**
- * The message being written back to the owner, as the shared composer reads it.
- *
- * A replica's composer has no commands, no mentions, and no shell: none of them
- * are the reader's to run — they would be acts inside somebody else's session —
- * and a friend message is only ever text.
- */
-function sharedSessionComposer(reading: {
-    readonly draft: string;
-    readonly id: string;
-    readonly sending: boolean;
-    readonly sendError?: UserError;
-}): ComposerSnapshot {
-    return {
-        agentUserIds: [],
-        attachments: [],
-        capabilities: { commands: [], mentions: false, shellMode: false },
-        focused: false,
-        mentionCandidates: [],
-        revision: 0,
-        scopeId: reading.id,
-        submission: reading.sendError
-            ? { status: "failed", revision: 0, error: reading.sendError }
-            : reading.sending
-              ? { status: "pending", revision: 0 }
-              : { status: "idle" },
-        text: reading.draft,
-    };
-}
-
-/**
  * When a usage reading was taken, as an absolute local time. A reading is only
  * as good as its age — a plan can be spent in the minutes since — so the card
  * says when it was taken rather than implying it is live.
@@ -2593,14 +2130,6 @@ interface RigWorkspaceSurfaceProps {
     groupId?: string;
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
-    /**
-     * The share on whichever conversation is open here. Absent on a machine
-     * that cannot share sessions at all, which is why the conversation then
-     * offers nothing rather than offering a control that would fail.
-     */
-    sessionShare?: RigSessionShareStore;
-    /** The people this account knows, which is who a session can be shown to. */
-    friends?: RigFriendsStore;
 }
 
 interface RigSlotViews {
@@ -2647,28 +2176,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         windowStateStore.get,
     );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
-    // The share follows whichever conversation the workspace has open — the
-    // store is told which one inside `openConversation` — so it is subscribed
-    // for as long as this surface is, not only while the panel is. That is the
-    // whole point of the indicator: it has to be there before anyone looks for
-    // it.
-    const sessionShareStore = props.sessionShare ?? rigSessionShareStoreNoop;
-    const sessionShare = useSyncExternalStore(
-        sessionShareStore.subscribe,
-        sessionShareStore.get,
-        sessionShareStore.get,
-    );
-    // Who a session can be shown to is only ever asked while the picker is
-    // open, so the daemon is not read about people the rest of the time.
-    const shareFriendsStore =
-        (sessionShare.dialog?.type === "start" || sessionShare.dialog?.type === "add"
-            ? props.friends
-            : undefined) ?? rigFriendsStoreNoop;
-    const shareFriends = useSyncExternalStore(
-        shareFriendsStore.subscribe,
-        shareFriendsStore.get,
-        shareFriendsStore.get,
-    );
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
@@ -3439,12 +2946,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                               })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
-                                        share={sessionShare}
-                                        shareCandidates={shareFriends.friends}
-                                        shareLoading={shareFriends.loading}
-                                        {...(props.sessionShare
-                                            ? { shareStore: props.sessionShare }
-                                            : {})}
                                         workspace={props.workspace}
                                     />
                                 )}
@@ -4012,14 +3513,6 @@ function RigConversationBody(props: {
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
-    /** The share on this conversation, as the machine last read it. */
-    share: RigSessionShareSnapshot;
-    /** The people it could be shown to, read only while the picker is open. */
-    shareCandidates: readonly RigFriend[];
-    /** True before that reading arrives, so an unread list is not called empty. */
-    shareLoading: boolean;
-    /** Absent on a machine that cannot share sessions at all. */
-    shareStore?: RigSessionShareStore;
     workspace: RigWorkspaceStore;
 }) {
     const conversation = props.conversation;
@@ -4043,10 +3536,6 @@ function RigConversationBody(props: {
                 {...(props.writeRefusal === undefined ? {} : { writeRefusal: props.writeRefusal })}
                 slotAction={props.slotAction}
                 slots={props.slots}
-                share={props.share}
-                shareCandidates={props.shareCandidates}
-                shareLoading={props.shareLoading}
-                {...(props.shareStore ? { shareStore: props.shareStore } : {})}
                 workspace={props.workspace}
             />
         );
@@ -4144,14 +3633,6 @@ function RigConversationSurface(props: {
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
-    /** The share on this conversation, as the machine last read it. */
-    share: RigSessionShareSnapshot;
-    /** The people it could be shown to, read only while the picker is open. */
-    shareCandidates: readonly RigFriend[];
-    /** True before that reading arrives, so an unread list is not called empty. */
-    shareLoading: boolean;
-    /** Absent on a machine that cannot share sessions at all. */
-    shareStore?: RigSessionShareStore;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -4180,47 +3661,16 @@ function RigConversationSurface(props: {
             />
         );
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
-    // The share reading is about whichever conversation the workspace last
-    // opened, so it is only this one's while the two agree. A reading that has
-    // not caught up with a session switch must not be shown against the wrong
-    // session, and a machine that cannot share sessions has none at all.
-    const shareStore = props.shareStore;
-    const share =
-        shareStore && props.share.sessionId === conversation.conversationId
-            ? props.share
-            : undefined;
-    const shared = share?.share;
     return (
         <ConversationView
             agentAuthor={rigAgentAuthor}
             composer={conversation.composer}
             composerAboveControl={
-                <>
-                    {/* The reminder that someone else is reading this session.
-                        It sits immediately above the place the reader types,
-                        because that is the one part of the surface they cannot
-                        scroll away from, and it stays there for as long as the
-                        share exists — including after it has ended, which is
-                        the reading that says nothing more will reach anyone. */}
-                    {shared ? (
-                        <SessionShareIndicator
-                            condition={shared.condition}
-                            names={(share?.members ?? [])
-                                .filter((member) => member.access === "watching")
-                                .map((member) => member.name)}
-                            onManage={() => shareStore?.panelToggle()}
-                            {...(shared.condition === "ended" || props.unavailable !== undefined
-                                ? {}
-                                : { onStop: () => shareStore?.shareStopOpen() })}
-                            watching={shared.watching}
-                        />
-                    ) : null}
-                    <SlotEntries
-                        entries={props.slots.aboveComposer}
-                        onAction={props.slotAction}
-                        placement="above-composer"
-                    />
-                </>
+                <SlotEntries
+                    entries={props.slots.aboveComposer}
+                    onAction={props.slotAction}
+                    placement="above-composer"
+                />
             }
             composerDisabled={props.readOnly}
             composerSubmitDisabled={props.unavailable !== undefined}
@@ -4295,30 +3745,6 @@ function RigConversationSurface(props: {
                                     if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
                                 }}
                             />
-                            {/* Showing this session to someone is a decision
-                                about the session, so it stands with the other
-                                session-level controls. Once it is shared the
-                                strip above the composer carries the state and
-                                this only opens the panel, which is why the word
-                                changes rather than the control moving. It is
-                                offered only once the share store agrees which
-                                session this is, because until then it could
-                                only aim at nothing. */}
-                            {share && shareStore ? (
-                                <Button
-                                    disabled={props.unavailable !== undefined}
-                                    icon="eye"
-                                    onClick={() =>
-                                        shared
-                                            ? shareStore.panelToggle()
-                                            : shareStore.choiceOpen("start")
-                                    }
-                                    size="small"
-                                    variant="ghost"
-                                >
-                                    {shared ? "Sharing" : "Share"}
-                                </Button>
-                            ) : null}
                             <SlotEntries
                                 entries={props.slots.statusLine}
                                 onAction={props.slotAction}
@@ -4406,58 +3832,7 @@ function RigConversationSurface(props: {
             expandedTurnIds={conversation.expandedTurnIds}
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             panel={
-                share?.panelOpen && shared ? (
-                    <SessionSharePanel
-                        condition={shared.condition}
-                        {...(share.error ? { error: share.error.message } : {})}
-                        friendMessagesInContext={shared.friendMessagesInContext}
-                        {...(share.health
-                            ? {
-                                  health: {
-                                      condition: share.health.condition,
-                                      pendingEntries: share.health.pendingEntries,
-                                      pendingSize: fileSizeFormat(share.health.pendingBytes),
-                                      checkedTime: shareMoment(share.health.checkedAt),
-                                  },
-                              }
-                            : {})}
-                        loading={share.loading}
-                        members={share.members.map(
-                            (member): SessionShareMemberRow => ({
-                                access: member.access,
-                                addedTime: `Added ${shareMoment(member.addedAt)}`,
-                                id: member.id,
-                                initials: shareInitials(member.name),
-                                name: member.name,
-                            }),
-                        )}
-                        {...(props.unavailable === undefined
-                            ? {
-                                  onFriendMessagesChange: (value: boolean) =>
-                                      shareStore?.friendMessagesUpdate(value),
-                              }
-                            : {})}
-                        {...(props.unavailable !== undefined
-                            ? {}
-                            : shared.condition === "ended"
-                              ? {
-                                    // The share is over for good, but the session
-                                    // can be shown again: that is a new share
-                                    // with nobody in it, so it opens the same
-                                    // picker starting one always does.
-                                    onShareAgain: () => shareStore?.choiceOpen("start"),
-                                }
-                              : {
-                                    onMemberAdd: () => shareStore?.choiceOpen("add"),
-                                    onMemberRevoke: (memberId: string) =>
-                                        shareStore?.memberRevokeOpen(
-                                            memberId as RigSessionShareMemberId,
-                                        ),
-                                    onStop: () => shareStore?.shareStopOpen(),
-                                })}
-                        stopping={share.dialog?.type === "stop" && share.submitting}
-                    />
-                ) : conversation.usagePanelOpen ? (
+                conversation.usagePanelOpen ? (
                     <RigUsagePanel
                         error={conversation.usageError}
                         loading={conversation.usageLoading}
@@ -4482,88 +3857,7 @@ function RigConversationSurface(props: {
                 ) : undefined
             }
             overlay={
-                share?.dialog?.type === "start" || share?.dialog?.type === "add" ? (
-                    <ModalOverlay onDismiss={() => shareStore?.dialogClose()}>
-                        <SessionShareStartDialog
-                            candidates={props.shareCandidates
-                                .filter(
-                                    (friend) =>
-                                        !share.members.some(
-                                            (member) =>
-                                                member.peerId === friend.id &&
-                                                member.access === "watching",
-                                        ),
-                                )
-                                .map(
-                                    (friend): SessionShareCandidate => ({
-                                        id: friend.id,
-                                        initials: rigFriendInitials(friend.profile),
-                                        name: rigFriendName(friend.profile),
-                                        ...(friend.profile.photoUrl
-                                            ? { photoUrl: friend.profile.photoUrl }
-                                            : {}),
-                                    }),
-                                )}
-                            {...(share.submitError ? { error: share.submitError.message } : {})}
-                            friendMessagesInContext={share.choiceFriendMessages}
-                            loading={props.shareLoading}
-                            mode={share.dialog.type}
-                            onCancel={() => shareStore?.dialogClose()}
-                            onFriendMessagesChange={(value) =>
-                                shareStore?.choiceFriendMessagesUpdate(value)
-                            }
-                            onStart={() => {
-                                if (props.rigOnline()) shareStore?.dialogConfirm();
-                            }}
-                            onToggle={(candidateId) => {
-                                const friend = props.shareCandidates.find(
-                                    (candidate) => candidate.id === candidateId,
-                                );
-                                if (!friend) return;
-                                // The name registered with the share is the one
-                                // this account chose for this person, so their
-                                // messages are attributed by it later rather
-                                // than by anything their machine claims.
-                                shareStore?.choiceToggle({
-                                    displayName: rigFriendName(friend.profile),
-                                    peerId: friend.id,
-                                });
-                            }}
-                            selected={new Set(share.choices.map((choice) => choice.peerId))}
-                            confirmDisabled={props.unavailable !== undefined}
-                            {...(props.unavailable === undefined
-                                ? {}
-                                : { confirmDisabledReason: props.unavailable })}
-                            starting={share.submitting}
-                        />
-                    </ModalOverlay>
-                ) : share?.dialog?.type === "revoke" || share?.dialog?.type === "stop" ? (
-                    <ModalOverlay onDismiss={() => shareStore?.dialogClose()}>
-                        <SessionShareStopDialog
-                            {...(share.submitError ? { error: share.submitError.message } : {})}
-                            kind={share.dialog.type}
-                            {...(share.dialog.type === "revoke"
-                                ? {
-                                      name:
-                                          share.members.find(
-                                              (member) =>
-                                                  share.dialog?.type === "revoke" &&
-                                                  member.id === share.dialog.memberId,
-                                          )?.name ?? "This person",
-                                  }
-                                : { watching: shared?.watching ?? 0 })}
-                            onCancel={() => shareStore?.dialogClose()}
-                            onConfirm={() => {
-                                if (props.rigOnline()) shareStore?.dialogConfirm();
-                            }}
-                            confirmDisabled={props.unavailable !== undefined}
-                            {...(props.unavailable === undefined
-                                ? {}
-                                : { confirmDisabledReason: props.unavailable })}
-                            working={share.submitting}
-                        />
-                    </ModalOverlay>
-                ) : conversation.openImage ? (
+                conversation.openImage ? (
                     <ModalOverlay onDismiss={() => workspace.imageClose()}>
                         <Lightbox
                             alt={conversation.openImage.alt}

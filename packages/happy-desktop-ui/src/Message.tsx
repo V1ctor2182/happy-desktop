@@ -129,8 +129,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     audienceLabel?: string;
     /**
      * A short standing fact about this incoming message, printed as a quiet
-     * second line under the author name — where a friend's message stands with
-     * respect to the agent's context, for example. It is display text chosen by
+     * second line under the author name — where another person's message stands
+     * with respect to the agent's context, for example. It is display text chosen by
      * the producer, never a state name, and a message with nothing to say about
      * itself simply omits it. An own message has no author line, so it never
      * carries one.

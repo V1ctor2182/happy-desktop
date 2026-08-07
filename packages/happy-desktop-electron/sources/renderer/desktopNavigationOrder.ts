@@ -7,7 +7,7 @@ const NAVIGATION_ORDER_KEY = "happy2.sidebar-order.v1";
 
 /**
  * Where the order the reader arranged the sidebar's pinned rows in is kept on
- * this machine. It is the window's, not a Rig's: Notes and Friends are here
+ * this machine. It is the window's, not a Rig's: Notes and the inbox are here
  * whether or not any machine is reachable, so an arrangement that lived inside a
  * connection would come undone every time one went away.
  */
