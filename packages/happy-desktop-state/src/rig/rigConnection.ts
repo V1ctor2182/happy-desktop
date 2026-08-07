@@ -115,7 +115,17 @@ export function rigAvailabilityProject(
         };
     }
 
-    if (!materialized)
+    // Nothing has resolved yet in this connection's lifetime: no probe has
+    // succeeded and none has failed. That is a first connection even on a Rig
+    // this app has seen before, because there is no confirmed state that has
+    // been lost — and calling it a reconnect is what makes every page load flash
+    // a "reconnecting" banner for as long as the first probe takes.
+    const pristine =
+        snapshot.connection === "connecting" &&
+        snapshot.daemon === "unknown" &&
+        snapshot.attempt === 0;
+
+    if (!materialized || pristine)
         return {
             message:
                 snapshot.connection === "disconnected"
@@ -164,6 +174,8 @@ export interface RigConnectionLoaderOptions {
     readonly probe: () => Promise<RigDaemonHealth>;
     /** Poll interval, in milliseconds, while a probe has succeeded (connected). */
     readonly heartbeatMs?: number;
+    /** Consecutive failed probes tolerated before reporting a live Rig as lost. */
+    readonly failureTolerance?: number;
     /** Reconnect delay for the given zero-based failure index, in milliseconds. */
     readonly backoff?: (attempt: number) => number;
     readonly now?: () => number;
@@ -172,6 +184,21 @@ export interface RigConnectionLoaderOptions {
 }
 
 const DEFAULT_HEARTBEAT_MS = 2_000;
+/**
+ * Consecutive refused probes tolerated before a live connection is called lost.
+ *
+ * One refused heartbeat is a moment, not a state. A daemon busy enough to miss a
+ * probe, a machine waking up, or a page reloading mid-heartbeat all recover
+ * inside the first backoff, and announcing each of them turns every surface's
+ * connection banner into a flicker that says nothing anyone can act on. Silence
+ * still has to be reported — so this only defers the report by the couple of
+ * hundred milliseconds it takes to find out, and the attempt count keeps
+ * running underneath so the eventual message is truthful about how long.
+ *
+ * It applies only after a probe has succeeded: a connection that has never
+ * answered has nothing to protect and says so immediately.
+ */
+const DEFAULT_FAILURE_TOLERANCE = 2;
 
 function defaultBackoff(attempt: number): number {
     return Math.min(5_000, 250 * 2 ** Math.min(attempt, 5));
@@ -196,6 +223,7 @@ function snapshotsEqual(left: RigConnectionSnapshot, right: RigConnectionSnapsho
  */
 export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): RigConnectionStore {
     const heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
+    const failureTolerance = options.failureTolerance ?? DEFAULT_FAILURE_TOLERANCE;
     const backoff = options.backoff ?? defaultBackoff;
     const setTimer =
         options.setTimer ?? ((handler, milliseconds) => setTimeout(handler, milliseconds));
@@ -211,6 +239,10 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
     let active = false;
     let disposed = false;
     let timer: unknown;
+    // Refused probes since the last success, including the ones being waited out
+    // before anything is said. `snapshot.attempt` only carries the ones already
+    // reported, so it cannot double as this.
+    let failures = 0;
     // Invalidates in-flight probes when the loader stops, disposes, or retries so
     // a late resolution cannot revive or corrupt a newer connection lifetime.
     let generation = 0;
@@ -242,6 +274,7 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
         void options.probe().then(
             (health) => {
                 if (disposed || !active || current !== generation) return;
+                failures = 0;
                 publish({
                     connection: "connected",
                     daemon: health.status,
@@ -255,13 +288,18 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
             },
             (error: unknown) => {
                 if (disposed || !active || current !== generation) return;
-                const previous = snapshot.attempt;
-                publish({
-                    connection: "disconnected",
-                    daemon: "unknown",
-                    message: error instanceof Error ? error.message : String(error),
-                    attempt: previous + 1,
-                });
+                const previous = failures;
+                failures += 1;
+                // Keep the last confirmed state on screen while a live connection
+                // misses a beat or two; say nothing until the silence outlasts
+                // what a recovering daemon takes to answer again.
+                if (snapshot.connection !== "connected" || failures > failureTolerance)
+                    publish({
+                        connection: "disconnected",
+                        daemon: "unknown",
+                        message: error instanceof Error ? error.message : String(error),
+                        attempt: failures,
+                    });
                 schedule(probeNow, backoff(previous));
             },
         );
@@ -273,6 +311,7 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
             listeners.add(listener);
             if (listeners.size === 1 && !disposed) {
                 active = true;
+                failures = 0;
                 probeNow();
             }
             return () => {
@@ -288,6 +327,7 @@ export function rigConnectionLoaderCreate(options: RigConnectionLoaderOptions): 
             if (disposed) return;
             generation += 1;
             cancelTimer();
+            failures = 0;
             publish({ connection: "connecting", daemon: "unknown", attempt: 0 });
             if (active) probeNow();
         },

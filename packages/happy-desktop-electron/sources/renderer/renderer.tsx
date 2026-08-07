@@ -67,6 +67,7 @@ import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
+import { DesktopBootGate } from "./DesktopBootGate";
 import {
     DesktopMediaPreviewWindow,
     desktopMediaPreviewEscapeBind,
@@ -268,6 +269,11 @@ function DesktopOnboardingGate(props: {
         props.appearance.get,
         props.appearance.get,
     );
+    // Nothing has answered yet, so nothing is known to be owed. Deciding here
+    // would put the welcome — a full-colour mark and a slogan — in front of a
+    // machine that turns out to need no setup at all, for exactly as long as the
+    // main process takes to say so. The boot cover holds the window meanwhile.
+    if (!snapshot.onboarding) return null;
     const view = localOnboardingView(snapshot);
     if (!view) return <>{props.children}</>;
     // Only ever in front of setup that is genuinely still owed. A machine that
@@ -370,6 +376,17 @@ interface DesktopRendererProps {
  * itself is always reachable.
  */
 function DesktopRenderer(props: DesktopRendererProps) {
+    return (
+        // Outside every screen below, so one mark spans the whole run-up to a
+        // workspace instead of being unmounted and remounted as the window moves
+        // between the screens that boot crosses.
+        <DesktopBootGate onboarding={props.onboarding} rigs={props.rigs} runtime={props.store}>
+            <DesktopScreens {...props} />
+        </DesktopBootGate>
+    );
+}
+
+function DesktopScreens(props: DesktopRendererProps) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const hostedUpdate = useSyncExternalStore(
         props.localWebUpdate.subscribe,

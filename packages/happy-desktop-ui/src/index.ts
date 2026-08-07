@@ -6,6 +6,7 @@ export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
+export { SplashCover, type SplashCoverProps } from "./SplashCover";
 export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,

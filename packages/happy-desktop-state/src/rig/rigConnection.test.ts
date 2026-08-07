@@ -125,23 +125,39 @@ describe("rigConnectionLoaderCreate", () => {
         });
     });
 
-    it("detects a heartbeat drop, then reconnects with capped backoff", async () => {
+    it("keeps a live connection through a missed heartbeat, then reconnects", async () => {
         const { store, timers, probe } = loader();
         store.subscribe(() => undefined);
         await probe.settle(0, ready);
-        // Heartbeat probe rejects: the connection has dropped.
+        // One refused heartbeat is a moment, not a state: the confirmed
+        // connection stays on screen while the next attempt finds out.
         timers.fire(2_000);
         await probe.settle(1, { error: new Error("ECONNREFUSED") });
+        expect(store.get()).toMatchObject({ connection: "connected", attempt: 0 });
+        // First backoff is 250ms (2^0). It reconnects on success, having said
+        // nothing about a drop that never happened.
+        timers.fire(250);
+        await probe.settle(2, ready);
+        expect(store.get()).toMatchObject({ connection: "connected", attempt: 0 });
+    });
+
+    it("reports a live connection lost once the silence outlasts the tolerance", async () => {
+        const { store, timers, probe } = loader();
+        store.subscribe(() => undefined);
+        await probe.settle(0, ready);
+        timers.fire(2_000);
+        await probe.settle(1, { error: new Error("ECONNREFUSED") });
+        timers.fire(250);
+        await probe.settle(2, { error: new Error("ECONNREFUSED") });
+        expect(store.get()).toMatchObject({ connection: "connected" });
+        timers.fire(500);
+        await probe.settle(3, { error: new Error("ECONNREFUSED") });
         expect(store.get()).toEqual({
             connection: "disconnected",
             daemon: "unknown",
             message: "ECONNREFUSED",
-            attempt: 1,
+            attempt: 3,
         });
-        // First backoff is 250ms (2^0). It reconnects on success.
-        timers.fire(250);
-        await probe.settle(2, ready);
-        expect(store.get()).toMatchObject({ connection: "connected", attempt: 0 });
     });
 
     it("grows and caps the backoff across consecutive failures", async () => {

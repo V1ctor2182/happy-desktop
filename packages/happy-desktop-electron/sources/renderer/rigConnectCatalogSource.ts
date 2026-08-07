@@ -220,7 +220,24 @@ export function rigConnectCatalogSourceCreate(
         if (disposed || connection || fallbackUnsubscribe) return;
         connection = rig.connectGroups({
             onChange: (projects, state) => {
-                if (state.connection !== "live") return;
+                // A stream that closes reports it here and nowhere else: its
+                // `onError` fires only for a rejected subscription, so a group
+                // stream that simply ended used to leave the catalog with no
+                // authority and no recovery — the first read parked forever and
+                // the surface above it stayed on "loading" for the life of the
+                // window. Handing authority to the complete reader is the only
+                // thing that can answer it now.
+                if (state.connection === "closed") {
+                    fallbackStart();
+                    return;
+                }
+                // A stream that is coming back keeps whatever it already
+                // published; the reader only takes over when there is nothing
+                // published at all, because then something must answer the read.
+                if (state.connection !== "live") {
+                    if (!snapshot) fallbackStart();
+                    return;
+                }
                 if (!live) {
                     live = true;
                     generation += 1;

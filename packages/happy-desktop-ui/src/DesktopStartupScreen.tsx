@@ -1,4 +1,6 @@
 import { SetupPage } from "./SetupPage";
+import { SplashScreen } from "./SplashScreen";
+import { WindowDragRegion } from "./TitleBar";
 
 export type DesktopStartupPhase = "choosing" | "starting" | "error";
 export interface DesktopStartupValues {
@@ -22,11 +24,17 @@ export interface DesktopStartupScreenProps {
 }
 
 /**
- * The window before anything is running: a start button, a wait, or a failure.
+ * The window before anything is running: a wait, a start button, or a failure.
  *
- * All three are the same centred page as the rest of setup, so starting Happy
- * and setting it up read as one sequence rather than as two screens that happen
- * to run back to back.
+ * Waiting is the mark and nothing else. It is the shortest-lived screen in the
+ * product — a few frames on a machine whose Rig is already up — and a headline
+ * on it announces itself for exactly long enough to be read as a flash. It is
+ * also the same mark the boot gate holds afterwards and then dissolves, so a
+ * normal start is one continuous mark from the first frame to the mounted app
+ * rather than a headline appearing between two other screens.
+ *
+ * A choice and a failure are screens someone reads and acts on, so those stay
+ * the same centred page as the rest of setup.
  */
 export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
     if (props.phase === "error")
@@ -44,12 +52,13 @@ export function DesktopStartupScreen(props: DesktopStartupScreenProps) {
 
     if (props.phase === "starting")
         return (
-            <SetupPage
-                copy={props.message ?? "Starting Happy…"}
-                data-testid="desktop-startup-screen"
-                scene="snail"
-                title="Starting Happy…"
-            />
+            <>
+                <WindowDragRegion />
+                {/* No note: `message` narrates a step that normally passes in a
+                    few frames, and a line appearing under a mark that is about
+                    to leave is the flicker this screen exists to avoid. */}
+                <SplashScreen data-testid="desktop-startup-screen" />
+            </>
         );
 
     return (
