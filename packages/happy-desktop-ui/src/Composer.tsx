@@ -360,6 +360,27 @@ const MAX_LINES = 8;
 const MAX_FADE = 10;
 
 /**
+ * The half-leading between a line box's edge and its glyphs: (22 - 16) / 2 for
+ * the draft's 16px text on 22px lines. A cut no deeper than this takes leading
+ * only — no glyph is sliced — so it needs no fade. Browsers park the draft
+ * exactly there: scrolling the caret into view reveals the caret's own box, not
+ * the leading below it, leaving the line a couple of pixels short of aligned.
+ * Without this the caret's own line, fully legible, was fed to the bottom fade.
+ */
+const LINE_LEADING = 3;
+
+/**
+ * The fade for one cut line, from how much of it the scrollport hides. It never
+ * exceeds the hidden part — softening a cut is proportional to the cut, so a
+ * line missing 2px is not covered by a 10px band — nor the visible fragment, so
+ * a whole line, its selection, and its caret are never painted over.
+ */
+function cutLineFade(hidden: number) {
+    if (hidden <= LINE_LEADING) return 0;
+    return Math.min(LINE_HEIGHT - hidden, hidden, MAX_FADE);
+}
+
+/**
  * Points inside the card that already belong to something: a control, a link,
  * an editable area, an attachment chip whose name stays selectable, or a
  * popover that owns its own pointer and keyboard interaction. Everything else
@@ -538,10 +559,10 @@ export function Composer(props: ComposerProps) {
      * exactly LINE_HEIGHT tall, so what the scrollport cuts at each end is the
      * remainder of the offset: none of it at a line-aligned position — which is
      * where the draft rests after typing or an arrow key, and where both fades
-     * collapse to nothing — and up to a line elsewhere. A fade covers that
-     * fragment and stops, capped so a badly cut line is softened rather than
-     * erased, which is what keeps whole lines, selections, and the caret out of
-     * it entirely.
+     * collapse to nothing — and up to a line elsewhere. cutLineFade turns that
+     * cut into a band, so a badly cut line is softened rather than erased and a
+     * barely cut one is left alone, which is what keeps whole lines, selections,
+     * and the caret out of the fades entirely.
      *
      * The measurement is written straight to the wrapper because it comes from
      * the committed textarea, like the auto-grown height above: only the browser
@@ -552,13 +573,14 @@ export function Composer(props: ComposerProps) {
         const wrapper = inputEl.current;
         if (!wrapper) return;
         // How much of the first visible line the top edge has taken, and how
-        // much of the next line the bottom edge is showing. Either being zero
-        // means that end cuts nothing and gets no fade.
+        // much of the last one the bottom edge is holding back. Either being
+        // zero means that end cuts nothing and gets no fade.
         const cutAbove = el.scrollTop % LINE_HEIGHT;
-        const shownBelow = (el.scrollTop + el.clientHeight) % LINE_HEIGHT;
+        const cutBelow =
+            (LINE_HEIGHT - ((el.scrollTop + el.clientHeight) % LINE_HEIGHT)) % LINE_HEIGHT;
         const hasBelow = el.scrollHeight - el.clientHeight - el.scrollTop > 0.5;
-        const top = cutAbove > 0.5 ? Math.min(LINE_HEIGHT - cutAbove, MAX_FADE) : 0;
-        const bottom = hasBelow && shownBelow > 0.5 ? Math.min(shownBelow, MAX_FADE) : 0;
+        const top = cutLineFade(cutAbove);
+        const bottom = hasBelow ? cutLineFade(cutBelow) : 0;
         wrapper.style.setProperty("--happy2-composer-fade-top", `${top}px`);
         wrapper.style.setProperty("--happy2-composer-fade-bottom", `${bottom}px`);
     };
