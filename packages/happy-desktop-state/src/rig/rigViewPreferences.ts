@@ -45,7 +45,7 @@ export interface RigViewPreferencesPersistence {
 
 /** Wider than the widest panel and narrower than the narrowest; anything else is not a width. */
 const PANEL_WIDTH_MIN = 120;
-const PANEL_WIDTH_MAX = 2000;
+const PANEL_WIDTH_MAX = 8000;
 
 /**
  * How many checkouts one window will remember the arrangement of. Far past the

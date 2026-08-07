@@ -1699,10 +1699,9 @@ export function rigWorkspaceStoreCreate(
             groupResume,
             openInTargets,
             fileViewMode,
-            // Nothing is addressed here, so there is no checkout whose
-            // arrangement this could be: the defaults stand in.
-            fileScope: "changed",
-            fileLayout: "flat",
+            fileScope: nextFileScope,
+            fileLayout: nextFileLayout,
+            ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
             fileTreeExpanded,
             fileTreeCollapsed,
             fileSelection,

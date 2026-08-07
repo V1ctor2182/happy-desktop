@@ -95,7 +95,26 @@ const PANEL_DEFAULT_WIDTH = 340;
  */
 export const APP_SHELL_PANEL_DEFAULT_WIDTH = PANEL_DEFAULT_WIDTH;
 const PANEL_MIN_WIDTH = 280;
+/**
+ * How much of the window the panel may take, and the cap where the window's
+ * width cannot be read.
+ *
+ * The panel holds a terminal, a file, and a composer, so on a wide display it
+ * is often the side being worked in — a fixed few hundred pixels made that
+ * impossible. A fraction rather than a number keeps the workspace column a real
+ * column at every size: the remaining 30% is what stops a panel dragged to the
+ * end from swallowing the transcript beside it.
+ *
+ * It is read at render, and a drag re-renders on every step, so the bound
+ * follows a window being resized without this component watching for it.
+ */
+const PANEL_MAX_FRACTION = 0.7;
 const PANEL_MAX_WIDTH = 560;
+function panelMaxWidthOf(): number {
+    const viewport = typeof window === "undefined" ? 0 : window.innerWidth;
+    if (!(viewport > 0)) return PANEL_MAX_WIDTH;
+    return Math.max(PANEL_MIN_WIDTH, Math.round(viewport * PANEL_MAX_FRACTION));
+}
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const RESIZE_HANDLE_WIDTH = 8;
 const REVEAL_WIDTH = 48;
@@ -246,7 +265,7 @@ export function AppShell(props: AppShellProps) {
     const sidebarMin = local.sidebarMinWidth ?? SIDEBAR_MIN_WIDTH;
     const sidebarMax = local.sidebarMaxWidth ?? SIDEBAR_MAX_WIDTH;
     const panelMin = local.panelMinWidth ?? PANEL_MIN_WIDTH;
-    const panelMax = local.panelMaxWidth ?? PANEL_MAX_WIDTH;
+    const panelMax = local.panelMaxWidth ?? panelMaxWidthOf();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(
         local.sidebarDefaultCollapsed ?? false,
     );
@@ -298,7 +317,15 @@ export function AppShell(props: AppShellProps) {
           ? {
                 width: `${panelWidth}px`,
                 minWidth: `${panelMin}px`,
-                maxWidth: `${panelMax}px`,
+                // Where the bound is this component's own it is also stated as
+                // a fraction of the viewport, which the browser keeps current:
+                // a window shrunk between renders narrows the panel with it
+                // rather than waiting for the next one. A caller that named a
+                // width means that width.
+                maxWidth:
+                    local.panelMaxWidth === undefined
+                        ? `min(${panelMax}px, ${String(PANEL_MAX_FRACTION * 100)}vw)`
+                        : `${panelMax}px`,
             }
           : local.panelWidth === undefined
             ? undefined
