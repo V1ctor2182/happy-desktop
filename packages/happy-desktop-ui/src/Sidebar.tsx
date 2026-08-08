@@ -57,6 +57,8 @@ export type SidebarItem = {
     initials?: string;
     kind: "view" | "channel" | "workspace" | "project" | "person" | "agent" | "folder" | "action";
     label: string;
+    /** Whether a busy or creating row shimmers its label. Defaults to true. */
+    labelShimmer?: boolean;
     meta?: string;
     /**
      * A control at the trailing edge of the row, reported through
@@ -594,6 +596,7 @@ function SidebarRow({
      * names would leave the sidebar permanently in motion and say nothing.
      */
     const shimmerLabel = () =>
+        item().labelShimmer !== false &&
         (item().kind === "project" || item().kind === "workspace") &&
         (lifecycle() === "creating" || (lifecycle() === undefined && item().status === "working"));
     /*

@@ -21,6 +21,7 @@ import type {
     RigSessionId,
     RigSessionLocation,
     RigSettingsStore,
+    TitleShimmerStore,
     RigWindowStore,
     RigWorkspaceStore,
 } from "happy-desktop-state";
@@ -83,6 +84,8 @@ export interface RigRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
+    /** Window-local preference for animated activity titles. */
+    readonly titleShimmer?: TitleShimmerStore;
     /**
      * Which shell hosts this router. The Electron window has no native title bar,
      * so the workspace draws the traffic-light inset and drag lanes itself; the
@@ -349,6 +352,7 @@ function RigWorkspaceLayout(
             groupId={params.groupId}
             noteId={params.noteId}
             {...(context.experiments ? { experiments: context.experiments } : {})}
+            {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             notes={context.notes}
             notesOpen={props.notes}
@@ -426,6 +430,7 @@ function RigSettingsRoute() {
             platform={context.platform}
             section={params.section ?? RIG_SETTINGS_DEFAULT_CATEGORY}
             settings={context.settings}
+            {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             windowState={context.windowState}
         />
     );

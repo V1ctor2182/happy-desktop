@@ -15,6 +15,7 @@ import {
     appearanceStoreCreate,
     experimentsStoreCreate,
     notesSessionStoreCreate,
+    titleShimmerStoreCreate,
     welcomeStoreCreate,
     rigNavigationOrderStoreCreate,
     rigSettingsStoreCreate,
@@ -24,6 +25,7 @@ import {
     type WelcomeStore,
     type RigNavigationOrderStore,
     type RigSettingsStore,
+    type TitleShimmerStore,
     type RigWindowStore,
 } from "happy-desktop-state";
 import {
@@ -68,6 +70,7 @@ import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
+import { desktopTitleShimmerPersistence } from "./desktopTitleShimmer";
 import { DesktopBootGate } from "./DesktopBootGate";
 import {
     DesktopMediaPreviewWindow,
@@ -206,6 +209,7 @@ function RigBoundary(props: {
     navigationOrder: RigNavigationOrderStore;
     rigs: RigDirectoryStore;
     settings: RigSettingsStore;
+    titleShimmer: TitleShimmerStore;
     update?: WorkspaceUpdate;
     windowState: RigWindowStore;
 }) {
@@ -236,6 +240,7 @@ function RigBoundary(props: {
                 platform: props.platform,
                 rigs: props.rigs,
                 settings: props.settings,
+                titleShimmer: props.titleShimmer,
                 windowState: props.windowState,
             }}
             router={props.router}
@@ -363,6 +368,7 @@ interface DesktopRendererProps {
     rigRouter: RigRouter;
     rigs: RigDirectoryStore;
     settings: RigSettingsStore;
+    titleShimmer: TitleShimmerStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
     welcome: WelcomeStore;
@@ -573,6 +579,7 @@ function DesktopRuntimeContent(
             router={props.rigRouter}
             rigs={props.rigs}
             settings={props.settings}
+            titleShimmer={props.titleShimmer}
             update={workspaceUpdate(snapshot.update, hostedUpdate)}
             windowState={props.windowState}
         />
@@ -635,6 +642,10 @@ if (mediaPreviewBridge) {
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
         const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
+        // Active-title motion is also this window's own choice. The store keeps
+        // the product default in memory and writes only after the reader changes
+        // the switch, so untouched installations follow future defaults.
+        const titleShimmer = titleShimmerStoreCreate(desktopTitleShimmerPersistence());
         // Whether this machine's owner has been welcomed. Kept beside the two
         // above because it answers the same kind of question: what this
         // installation shows, rather than anything a Rig knows.
@@ -690,6 +701,7 @@ if (mediaPreviewBridge) {
                         rigs={rigs}
                         localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
                         settings={settings}
+                        titleShimmer={titleShimmer}
                         startupValues={startupValuesStoreCreate()}
                         store={runtimeStore}
                         welcome={welcome}

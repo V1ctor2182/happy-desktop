@@ -9,6 +9,7 @@ export * from "./conversation/inlineImageSize.js";
 export * from "./conversation/loadable.js";
 export * from "./appearance/appearanceStore.js";
 export * from "./experiments/experimentsStore.js";
+export * from "./titleShimmer/titleShimmerStore.js";
 export * from "./modules/composer/composerState.js";
 export * from "./modules/terminal/terminalState.js";
 export * from "./onboarding/welcomeStore.js";

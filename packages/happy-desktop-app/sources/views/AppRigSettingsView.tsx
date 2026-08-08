@@ -13,6 +13,7 @@ import type {
     RigSettingsStore,
     RigThinkingLevel,
     RigWindowStore,
+    TitleShimmerStore,
 } from "happy-desktop-state";
 import {
     RIG_INSTRUCTIONS_MAX_BYTES,
@@ -26,6 +27,7 @@ import {
     rigPairingStoreNoop,
     rigProviderUsageStoreNoop,
     rigWindowStoreNoop,
+    titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
     RigGeneralSettings,
@@ -91,6 +93,8 @@ export interface AppRigSettingsViewProps {
     platform?: "desktop" | "web";
     section: string;
     settings: RigSettingsStore;
+    /** Window-local preference for animated activity titles. */
+    titleShimmer?: TitleShimmerStore;
     windowState?: RigWindowStore;
 }
 
@@ -111,6 +115,12 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         experimentsStore.subscribe,
         experimentsStore.get,
         experimentsStore.get,
+    );
+    const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
+    const titleShimmer = useSyncExternalStore(
+        titleShimmerStore.subscribe,
+        titleShimmerStore.get,
+        titleShimmerStore.get,
     );
     const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
     const host = hostRig(directory);
@@ -366,6 +376,9 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     onExperimentalFeaturesChange={(enabled) =>
                         experimentsStore.experimentalFeaturesUpdate(enabled)
                     }
+                    onTitleShimmerChange={(enabled) =>
+                        titleShimmerStore.titleShimmerUpdate(enabled)
+                    }
                     onDefaultModelChange={(key) => {
                         const [providerId, ...rest] = key.split(":");
                         const modelId = rest.join(":");
@@ -390,6 +403,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                         label: rigPermissionLabel(mode),
                         value: mode,
                     }))}
+                    titleShimmerEnabled={titleShimmer.titleShimmerEnabled}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
             )}

@@ -27,8 +27,11 @@ export type RigGeneralSettingsProps = {
     unavailable?: string;
     /** Whether this window offers the features that are not finished yet. */
     experimentalFeaturesEnabled: boolean;
+    /** Whether active session, project, and workspace titles shimmer. */
+    titleShimmerEnabled: boolean;
     onAppearanceChange: (appearance: RigAppearanceChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
+    onTitleShimmerChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
     onPermissionModeChange: (mode: string) => void;
@@ -60,7 +63,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                 </Banner>
             ) : null}
             <RigSettingsSection
-                description="Happy follows the system appearance until you pin one."
+                description="How Happy looks and moves in this window."
                 title="Appearance"
             >
                 <FormRow
@@ -76,6 +79,20 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                     }
                     description="Applies to this window immediately"
                     label="Theme"
+                />
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label="Shimmer active titles"
+                            checked={props.titleShimmerEnabled}
+                            id="rig-settings-title-shimmer"
+                            onChange={props.onTitleShimmerChange}
+                            size="small"
+                        />
+                    }
+                    description="Animates running session, project, and workspace names"
+                    htmlFor="rig-settings-title-shimmer"
+                    label="Shimmer active titles"
                 />
             </RigSettingsSection>
             <RigSettingsSection

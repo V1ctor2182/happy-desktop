@@ -63,6 +63,7 @@ import type {
     RigSubagentSummary,
     RigTerminalStore,
     RigThinkingLevel,
+    TitleShimmerStore,
     RigWindowStore,
     RigWorkspaceSnapshot,
     RigWorkspaceStore,
@@ -88,6 +89,7 @@ import {
     rigSlotsStoreNoop,
     rigOwnerAuthor,
     rigWindowStoreNoop,
+    titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
     type AgentWaitStatus,
@@ -347,6 +349,11 @@ export interface AppRigViewProps {
      * that remembers no such choice supplies none, and they stay withheld.
      */
     experiments?: ExperimentsStore;
+    /**
+     * Whether running session, project, and workspace titles shimmer. A host
+     * without this preference uses the current product default.
+     */
+    titleShimmer?: TitleShimmerStore;
     /** Native or hosted-renderer update projected by the desktop host. */
     update?: AppRigUpdate;
     /** Applies the ready update. Absent in a plain browser surface. */
@@ -442,7 +449,7 @@ interface OpenGroup {
  * it has no remote to derive a picture from, and an "H" plaque would read as one
  * more repository, so it wears a house instead.
  */
-function sidebarItems(project: RigProjectGroup): SidebarItem[] {
+function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): SidebarItem[] {
     const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
     // Anything the row reports about itself — its delta, or the spinner and
     // clock it wears while work runs in it — lives in the trailing lane, in the
@@ -454,6 +461,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             id: project.id,
             kind: "project",
             label: project.name,
+            labelShimmer: titleShimmerEnabled,
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
@@ -503,6 +511,7 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             kind: "workspace" as const,
             depth: 1,
             label: worktree.name,
+            labelShimmer: titleShimmerEnabled,
             // Archiving throws away a checkout, so it stays out of sight until
             // the reader is actually on the row.
             action: {
@@ -748,10 +757,11 @@ function subagentForTool(
 }
 
 /** One tab per session in the open group, marked while the agent is working. */
-function sessionTabs(group: OpenGroup): TabItem[] {
+function sessionTabs(group: OpenGroup, titleShimmerEnabled: boolean): TabItem[] {
     return group.conversations.map((summary) => ({
         id: summary.id,
         label: summary.title,
+        labelShimmer: titleShimmerEnabled,
         // The session's own id, so the mark survives every rename of the title.
         avatarId: summary.id,
         // Both are stated even when false: a session tab holds its leading lane
@@ -1141,29 +1151,34 @@ function foldersSection(
 function rigSections(
     directory: AppRigDirectorySnapshot,
     nodes: RigNodesSnapshot,
+    titleShimmerEnabled: boolean,
 ): SidebarSection[] {
     return [
         ...directory.rigs.map((rig) => ({
             id: `rig:${rig.id}`,
             label: rig.label,
             status: rigPeerState(rig),
-            items: rig.projects.flatMap(sidebarItems).map((item) => ({
-                ...item,
-                id: rigItemId(rig.id, item.id),
-                ...(rig.status === "connected"
-                    ? {}
-                    : {
-                          ...(item.action ? { action: { ...item.action, disabled: true } } : {}),
-                          ...(item.secondaryAction
-                              ? {
-                                    secondaryAction: {
-                                        ...item.secondaryAction,
-                                        disabled: true,
-                                    },
-                                }
-                              : {}),
-                      }),
-            })),
+            items: rig.projects
+                .flatMap((project) => sidebarItems(project, titleShimmerEnabled))
+                .map((item) => ({
+                    ...item,
+                    id: rigItemId(rig.id, item.id),
+                    ...(rig.status === "connected"
+                        ? {}
+                        : {
+                              ...(item.action
+                                  ? { action: { ...item.action, disabled: true } }
+                                  : {}),
+                              ...(item.secondaryAction
+                                  ? {
+                                        secondaryAction: {
+                                            ...item.secondaryAction,
+                                            disabled: true,
+                                        },
+                                    }
+                                  : {}),
+                          }),
+                })),
             // Adding a folder is this machine's act: the picker opens on the disk
             // the window is running on, so only a folder that is actually here can
             // be registered. A checkout that lives on a node is added on that
@@ -1517,6 +1532,12 @@ export function AppRigView(props: AppRigViewProps) {
         props.appearance.get,
         props.appearance.get,
     );
+    const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
+    const titleShimmerEnabled = useSyncExternalStore(
+        titleShimmerStore.subscribe,
+        titleShimmerStore.get,
+        titleShimmerStore.get,
+    ).titleShimmerEnabled;
     // The order the reader arranged the pinned rows in. It belongs to the window
     // rather than to any one Rig — Notes and the inbox outlive every connection
     // — so a machine going away rearranges nothing.
@@ -2008,7 +2029,7 @@ export function AppRigView(props: AppRigViewProps) {
                 ...(active?.session?.folders
                     ? foldersSection(active.id, folders, activeAvailability?.online === true)
                     : []),
-                ...rigSections(directory, nodes),
+                ...rigSections(directory, nodes, titleShimmerEnabled),
             ]}
         />
     );
@@ -2116,6 +2137,7 @@ export function AppRigView(props: AppRigViewProps) {
                     slots={slots}
                     slotsScope={slotsScope}
                     slotAction={slotAction}
+                    titleShimmerEnabled={titleShimmerEnabled}
                     windowState={props.windowState}
                     workspace={active.session.workspace}
                 />
@@ -2344,6 +2366,8 @@ interface RigWorkspaceSurfaceProps {
     /** What this window addresses, against which a scoped entry is resolved. */
     slotsScope: RigSlotsContext;
     slotAction(entryId: string): void;
+    /** Whether active session titles shimmer in the tab strip. */
+    titleShimmerEnabled: boolean;
     groupId?: string;
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
@@ -2502,6 +2526,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
               id: detachedConversationId,
               icon: "agents",
               label: detachedConversation?.title ?? "Subagent",
+              labelShimmer: props.titleShimmerEnabled,
               ...(detachedConversation?.running ? { busy: true } : {}),
           }
         : undefined;
@@ -2541,7 +2566,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ...tabsOrdered(
             openGroup
                 ? [
-                      ...sessionTabs(openGroup).map((tab) =>
+                      ...sessionTabs(openGroup, props.titleShimmerEnabled).map((tab) =>
                           availability.online ? tab : { ...tab, closable: false },
                       ),
                       ...groupFileTabs.map(fileTabItem),

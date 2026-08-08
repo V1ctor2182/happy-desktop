@@ -27,6 +27,8 @@ export type TabsSize = "small" | "medium" | "large";
 export type TabItem = {
     id: string;
     label: string;
+    /** Whether a busy tab shimmers its label. Defaults to true. */
+    labelShimmer?: boolean;
     icon?: IconName;
     badge?: number;
     /** False keeps a permanent tab visible when sibling tabs can be closed. */
@@ -649,7 +651,7 @@ export function Tabs(props: TabsProps) {
                                 title again here would stack a second emphasis
                                 on top of one the tab had already earned. Only
                                 the travelling band is new. */}
-                            {tab.busy ? (
+                            {tab.busy && tab.labelShimmer !== false ? (
                                 <ShimmerText sweep="sheen" tone="inherit">
                                     {tab.label}
                                 </ShimmerText>
