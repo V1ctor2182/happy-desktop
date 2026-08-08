@@ -126,6 +126,12 @@ interface LiveRig {
         readonly status: RigNodeStatus;
         readonly message?: string;
     };
+    /** What the host's pinned peer record calls this node, when it names it at all. */
+    hostName?: string;
+    /** What the node itself says it is called, once its own connection is up. */
+    selfName?: string;
+    /** Follows the node's own name while its connection lasts. */
+    selfNameUnsubscribe?: () => void;
     /** The proxy URL the current connection was opened on, or none while down. */
     url?: string;
     workspaceUnsubscribe?: () => void;
@@ -166,6 +172,20 @@ function nodeTargets(nodes: RigNodesSnapshot): readonly {
         });
     }
     return targets;
+}
+
+/**
+ * What to call a node.
+ *
+ * A machine is named by itself first. The host's peer record is a copy of that
+ * name taken when the two were paired: it goes stale when the machine is
+ * renamed, and a machine paired before it had a name is one the host can only
+ * report by identity. So the node's own reading wins whenever it has arrived,
+ * the pinned record stands in until then, and the identity is the last resort —
+ * a row still has to be distinguishable from the other unnamed machines.
+ */
+function nodeLabel(rig: LiveRig): string {
+    return rig.selfName ?? rig.hostName ?? rig.entry.nodeId ?? rig.entry.label;
 }
 
 /** What a Rig with no connection reports about adding a project: nothing is happening. */
@@ -244,11 +264,48 @@ export function rigDirectoryStoreCreate(
         for (const listener of listeners) listener();
     };
 
+    /**
+     * Follows what a node calls itself, on that node's own connection.
+     *
+     * Only a node has a name to learn: this machine is "This Mac" because that
+     * is what it is to the person reading, not because of anything it published.
+     * The name outlives the reading it came from, so nothing clears it when the
+     * link drops — a machine that has gone quiet is still the machine it said it
+     * was, and falling back to its identity mid-outage would only make the row
+     * unrecognisable exactly when someone is looking to see what happened.
+     */
+    const selfNameFollow = (id: string, session: RigSession): (() => void) | undefined => {
+        const nodes = session.nodes;
+        if (id === LOCAL_RIG_ID || !nodes) return undefined;
+        // A follower left over from a replaced session must not rename the row
+        // the current one is describing, and it cannot tell by comparing
+        // sessions: the first reading happens while this session is still being
+        // installed on the entry.
+        let following = true;
+        const read = (): void => {
+            const rig = rigs.get(id);
+            if (!following || !rig) return;
+            const name = nodes.get().name;
+            if (name === undefined || name === rig.selfName) return;
+            rig.selfName = name;
+            rig.entry = { ...rig.entry, label: nodeLabel(rig) };
+            publish();
+        };
+        const unsubscribe = nodes.subscribe(read);
+        read();
+        return () => {
+            following = false;
+            unsubscribe();
+        };
+    };
+
     const connectionClose = (rig: LiveRig): void => {
         rig.connectionUnsubscribe?.();
         rig.connectionUnsubscribe = undefined;
         rig.workspaceUnsubscribe?.();
         rig.workspaceUnsubscribe = undefined;
+        rig.selfNameUnsubscribe?.();
+        rig.selfNameUnsubscribe = undefined;
         rig.connection?.dispose();
         rig.connection = undefined;
         rig.url = undefined;
@@ -467,6 +524,8 @@ export function rigDirectoryStoreCreate(
                     if (sessionChanged) {
                         current.connectionUnsubscribe?.();
                         current.workspaceUnsubscribe?.();
+                        current.selfNameUnsubscribe?.();
+                        current.selfNameUnsubscribe = selfNameFollow(id, session);
                         current.workspaceUnsubscribe = session.workspace.subscribe(() => {
                             const live = rigs.get(id);
                             if (!live || live.entry.session !== session) return;
@@ -487,6 +546,7 @@ export function rigDirectoryStoreCreate(
                         ...current.entry,
                         ...projectsRead(session),
                         ...connectionRead(current, session.connection.get()),
+                        label: nodeLabel(current),
                         session,
                     };
                     publish();
@@ -581,6 +641,7 @@ export function rigDirectoryStoreCreate(
                 rigs.set(id, rig);
                 order = [...order, id];
             }
+            if (target.label !== undefined) rig.hostName = target.label;
             rig.nodeLink = {
                 status: target.status,
                 ...(target.message === undefined ? {} : { message: target.message }),
@@ -609,7 +670,7 @@ export function rigDirectoryStoreCreate(
                               };
             rig.entry = {
                 ...rig.entry,
-                ...(target.label === undefined ? {} : { label: target.label }),
+                label: nodeLabel(rig),
                 ...availability,
             };
             changed = true;

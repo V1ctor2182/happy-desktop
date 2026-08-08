@@ -389,12 +389,26 @@ function nodeRows(
             rig.nodeId !== undefined && rig.accessRestricted === true ? [rig.nodeId] : [],
         ),
     );
+    // The host's peer status carries the name it pinned when the two were
+    // paired, which a machine renamed since then has outgrown and a machine
+    // paired before it had a name never had. The Rig opened for that machine
+    // carries what the machine itself last said, so it answers first.
+    const named = new Map(
+        directory.rigs.flatMap((rig) =>
+            rig.nodeId !== undefined && rig.label !== rig.nodeId ? [[rig.nodeId, rig.label]] : [],
+        ),
+    );
     return nodes.nodes.map((node) => ({
         id: node.key,
         // What the machine calls itself, then what it proved it is, then where
         // it was dialled: a node still being reached has told the host nothing
         // but an address, and pretending otherwise would name it wrongly.
-        name: node.name ?? node.peerId ?? node.routes[0]?.address ?? node.key,
+        name:
+            (node.peerId === undefined ? undefined : named.get(node.peerId)) ??
+            node.name ??
+            node.peerId ??
+            node.routes[0]?.address ??
+            node.key,
         routes: node.routes.map((route) => ({
             address: route.address,
             state: route.status,
