@@ -548,6 +548,7 @@ export function rigConversationSummaryProject(session: RigSessionSummary): Conve
         subtitle: session.displayCwd || session.cwd,
         activity,
         updatedAt: session.lastMessageAt ?? session.updatedAt,
+        ...(session.folderId === undefined ? {} : { folderId: session.folderId }),
         ...(session.unreadReason === undefined ? {} : { unread: true }),
         participants: [rigOwnerAuthor, rigAgentAuthor],
     };

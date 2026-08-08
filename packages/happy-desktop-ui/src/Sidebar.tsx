@@ -18,6 +18,7 @@ import { happyLogoUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
 import { RigPeerStatus, type RigPeerState } from "./RigPeerStatus";
+import { ShimmerText } from "./ShimmerText";
 import { SidebarNodes, type SidebarNode } from "./SidebarNodes";
 import { Spinner } from "./Spinner";
 /** One control in a row's trailing lane: its glyph, what it does, and when it shows. */
@@ -39,12 +40,22 @@ export type SidebarItem = {
     };
     /** Nesting level. `0`/absent is top level; each level adds `SIDEBAR_ROW_INDENT` of left inset. */
     depth?: number;
+    /**
+     * A single emoji in the row's leading slot instead of a house glyph, for a
+     * row whose mark the reader chose themselves — a folder, say.
+     *
+     * It is content rather than an icon, so it is stated apart from `icon`: the
+     * house vocabulary is a closed set this component resolves, and an arbitrary
+     * character is not in it. A row carrying both shows the emoji, because a
+     * mark the reader picked outranks the one the caller fell back to.
+     */
+    emoji?: string;
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
     id: string;
     imageUrl?: string;
     initials?: string;
-    kind: "view" | "channel" | "workspace" | "project" | "person" | "agent" | "action";
+    kind: "view" | "channel" | "workspace" | "project" | "person" | "agent" | "folder" | "action";
     label: string;
     meta?: string;
     /**
@@ -244,19 +255,23 @@ function leadingIcon(item: SidebarItem): IconName {
     if (item.kind === "workspace") return item.icon ?? "branch";
     if (item.kind === "channel") return item.icon ?? "hash";
     if (item.kind === "action") return item.icon ?? "plus";
+    if (item.kind === "folder") return item.icon ?? "archive";
     return item.icon ?? "inbox";
 }
 /**
  * Nested rows are introduced by an ASCII branch instead of repeating the parent's
- * glyph, so the hash only ever marks a top-level channel. A row keeps an explicitly
- * supplied icon (a private channel's lock, say) because that carries information the
- * branch cannot.
+ * glyph, so the hash only ever marks a top-level channel and the worktree mark only a
+ * top-level workspace: under a project the branch line already says the row is a
+ * worktree, and a branch glyph beside a branch line says it twice. A row keeps an
+ * explicitly supplied icon (a private channel's lock, say) because that carries
+ * information the branch cannot — and an emoji is the strongest case of that, since
+ * it is the mark the reader picked for this row and nothing else in the column
+ * carries it.
  */
 function showsLeadingSlot(item: SidebarItem): boolean {
     if ((item.depth ?? 0) === 0) return true;
-    if (item.kind === "workspace") return true;
     if (item.kind === "person" || item.kind === "agent" || item.kind === "project") return true;
-    return item.icon !== undefined;
+    return item.icon !== undefined || item.emoji !== undefined;
 }
 /** `true` when no later sibling sits at this row's depth before the group closes. */
 function isLastAtDepth(items: readonly SidebarItem[], index: number): boolean {
@@ -380,25 +395,39 @@ export function sidebarReorderMove(
     return undefined;
 }
 
+/** The rows one row carries with it: itself, then the rows nested beneath it. */
+function subtreeOf(items: readonly SidebarItem[], index: number): readonly number[] {
+    const depth = items[index]?.depth ?? 0;
+    const rows = [index];
+    for (let row = index + 1; row < items.length && (items[row]!.depth ?? 0) > depth; row += 1)
+        rows.push(row);
+    return rows;
+}
+
 /**
  * What a drag starting on `index` rearranges, and among which peers. Dragging a
  * top-level row rearranges the top level, each row carrying its children;
  * dragging a nested row rearranges that row's siblings inside their own parent,
  * so a worktree can be ordered within its project but never dragged out of it.
+ * The parent is the nearest row above that sits one level shallower, whatever
+ * the depth: a folder tree nests as far as its owner nests it, and a folder
+ * three levels down is ordered among the children of the folder holding it
+ * rather than among everything under its top-level ancestor.
  */
 function dragUnitsOf(
     items: readonly SidebarItem[],
     index: number,
 ): { units: readonly (readonly number[])[]; parentId?: string } {
-    const blocks = blocksOf(items);
-    if ((items[index]?.depth ?? 0) === 0) return { units: blocks };
-    const block = blocks.find((candidate) => candidate.includes(index)) ?? [];
-    const parent = items[block[0]!];
-    const depth = items[index]!.depth ?? 0;
-    const siblings = block.filter((row) => row !== block[0] && (items[row]?.depth ?? 0) === depth);
+    const depth = items[index]?.depth ?? 0;
+    if (depth === 0) return { units: blocksOf(items) };
+    let parent = index - 1;
+    while (parent >= 0 && (items[parent]!.depth ?? 0) >= depth) parent -= 1;
+    const siblings: number[] = [];
+    for (let row = parent + 1; row < items.length && (items[row]!.depth ?? 0) >= depth; row += 1)
+        if ((items[row]!.depth ?? 0) === depth) siblings.push(row);
     return {
-        units: siblings.map((row) => [row]),
-        ...(parent ? { parentId: parent.id } : {}),
+        units: siblings.map((row) => subtreeOf(items, row)),
+        ...(items[parent] ? { parentId: items[parent]!.id } : {}),
     };
 }
 
@@ -524,10 +553,9 @@ function SidebarRow({
                 ? { key: "primary", action: item().action!, onAction: props.onAction }
                 : undefined,
         ].filter((control) => control !== undefined);
-    // The lane can hold the Git delta instead, and only swaps to the controls
-    // when every one of them is waiting for hover anyway.
+    // Every control is waiting for hover anyway, so what the row reports at rest
+    // may occupy the same lane and step aside when they arrive.
     const swapsTrailing = () =>
-        hasChangeStats() &&
         trailingActions().length > 0 &&
         trailingActions().every((control) => control.action.reveal === "hover");
     const trailingLane = () => (
@@ -554,6 +582,62 @@ function SidebarRow({
     const showLifecycle = () => lifecycle() !== undefined && item().lifecycleLabel !== undefined;
     const showMeta = () =>
         item().meta !== undefined && !unread() && !mentioned() && !showStatus() && !showLifecycle();
+    /*
+     * A place that is being made, or has work running inside it, says so in its
+     * own name: the name shimmers for as long as that lasts. It is the same
+     * report the leading glyph already makes, but it survives the row being
+     * skimmed — the eye is on the names when it goes down the list, and a 14px
+     * spinner in the gutter is easy to pass over.
+     *
+     * Only a place: a channel or a person is not something that can be busy, and
+     * an agent already spends most of its life running, so shimmering those
+     * names would leave the sidebar permanently in motion and say nothing.
+     */
+    const shimmerLabel = () =>
+        (item().kind === "project" || item().kind === "workspace") &&
+        (lifecycle() === "creating" || (lifecycle() === undefined && item().status === "working"));
+    /*
+     * What the row is doing, as one glyph at the trailing edge. It is the last
+     * thing in the row so it lands in a column of its own down the right side,
+     * where a spinner can start and stop without any of the row's own contents
+     * moving.
+     *
+     * The row's own news comes before what is happening inside it: a place still
+     * being made, or already gone, reports that rather than reporting that
+     * nothing is running in it. `creating` spins in the accent colour where
+     * `working` spins muted, because the same glyph would otherwise mean two
+     * different things — this place is being made, against work happening inside
+     * a place that already exists.
+     */
+    const activity = ():
+        | { kind: "spinner"; tone: "accent" | "muted"; label: string }
+        | { kind: "glyph"; icon: IconName; label: string; lifecycle: string }
+        | undefined => {
+        if (lifecycle() === "creating")
+            return {
+                kind: "spinner",
+                tone: "accent",
+                label: `${item().label} is being created`,
+            };
+        if (lifecycle() !== undefined)
+            return {
+                kind: "glyph",
+                icon: lifecycle() === "failed" ? "alert" : "unlink",
+                label: `${item().label}: ${item().lifecycleLabel ?? "unavailable"}`,
+                lifecycle: lifecycle()!,
+            };
+        if (item().kind !== "workspace" && item().kind !== "project") return undefined;
+        if (item().status === "working")
+            return { kind: "spinner", tone: "muted", label: `${item().label} is working` };
+        if (item().status === "waiting")
+            return {
+                kind: "glyph",
+                icon: "clock",
+                label: `${item().label} is waiting`,
+                lifecycle: "waiting",
+            };
+        return undefined;
+    };
     return (
         <button
             aria-current={props.active ? "page" : undefined}
@@ -604,44 +688,14 @@ function SidebarRow({
                     className="happy2-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
                 >
-                    {/* Accent rather than the muted tone the working spinner
-                        wears: the same glyph in the same slot would otherwise
-                        mean two different things — this place is being made, or
-                        work is happening inside a place that already exists —
-                        and the two have to be told apart at a glance rather
-                        than by reading the trailing word. */}
-                    {lifecycle() === "creating" ? (
-                        <Spinner
-                            label={`${item().label} is being created`}
-                            size={14}
-                            tone="accent"
-                        />
-                    ) : lifecycle() !== undefined ? (
-                        <span
-                            aria-label={`${item().label}: ${item().lifecycleLabel ?? "unavailable"}`}
-                            className="happy2-sidebar__item-lifecycle-glyph"
-                            data-happy-desktop-ui="sidebar-item-lifecycle-glyph"
-                            data-lifecycle={lifecycle()}
-                            role="img"
-                        >
-                            <Icon name={lifecycle() === "failed" ? "alert" : "unlink"} size={14} />
-                        </span>
-                    ) : (item().kind === "workspace" || item().kind === "project") &&
-                      item().status === "working" ? (
-                        <Spinner label={`${item().label} is working`} size={14} tone="muted" />
-                    ) : (item().kind === "workspace" || item().kind === "project") &&
-                      item().status === "waiting" ? (
-                        <span
-                            aria-label={`${item().label} is waiting`}
-                            className="happy2-sidebar__item-waiting"
-                            data-happy-desktop-ui="sidebar-item-waiting"
-                            role="img"
-                        >
-                            <Icon name="clock" size={14} />
-                        </span>
-                    ) : item().kind === "person" ||
-                      item().kind === "agent" ||
-                      item().kind === "project" ? (
+                    {/* Identity only. What the row is doing is reported at the
+                        trailing edge instead, so a busy row still shows the face
+                        or glyph the reader picks it out by — a column of
+                        spinners where the avatars were is a column with nothing
+                        left to aim at. */}
+                    {item().kind === "person" ||
+                    item().kind === "agent" ||
+                    item().kind === "project" ? (
                         <Avatar
                             icon={item().icon}
                             imageUrl={item().imageUrl}
@@ -655,6 +709,23 @@ function SidebarRow({
                                     : "human"
                             }
                         />
+                    ) : item().emoji !== undefined ? (
+                        /* The character the reader chose, in a fixed square the
+                           same size as the glyph lane beside it, so a row whose
+                           emoji is wide or tall still occupies exactly one lane
+                           and the column of names below it never shifts. */
+                        <span
+                            aria-hidden="true"
+                            className="happy2-sidebar__item-emoji"
+                            data-happy-desktop-ui="sidebar-item-emoji"
+                        >
+                            <span
+                                className="happy2-sidebar__item-emoji-glyph"
+                                data-happy-desktop-ui="sidebar-item-emoji-glyph"
+                            >
+                                {item().emoji}
+                            </span>
+                        </span>
                     ) : (
                         <Icon name={leadingIcon(item())} size={16} />
                     )}
@@ -668,7 +739,19 @@ function SidebarRow({
                 </span>
             ) : null}
             <span className="happy2-sidebar__item-label" data-happy-desktop-ui="sidebar-item-label">
-                {item().label}
+                {/* The row's own colour, with a near-white band wiping through
+                    it. Busy is a passing state, so it may not restyle the name:
+                    an unread row is already heavier and darker than its
+                    neighbours, and painting the name again here would stack a
+                    second emphasis on top of one the row had already earned.
+                    Only the travelling band is new. */}
+                {shimmerLabel() ? (
+                    <ShimmerText sweep="sheen" tone="inherit">
+                        {item().label}
+                    </ShimmerText>
+                ) : (
+                    item().label
+                )}
             </span>
             {unread() && !unreadOnLeading() && !mentioned() ? (
                 <span
@@ -680,58 +763,7 @@ function SidebarRow({
             {mentioned() ? (
                 <CountBadge className="happy2-sidebar__item-badge" count={item().badge!} />
             ) : null}
-            {swapsTrailing()
-                ? ((stats) => (
-                      <span
-                          className="happy2-sidebar__item-trailing-swap"
-                          data-controls={String(trailingActions().length)}
-                          data-happy-desktop-ui="sidebar-item-trailing-swap"
-                      >
-                          <span
-                              aria-label={[
-                                  stats.added > 0
-                                      ? `${String(stats.added)} lines added`
-                                      : undefined,
-                                  stats.deleted > 0
-                                      ? `${String(stats.deleted)} lines deleted`
-                                      : undefined,
-                              ]
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              className="happy2-sidebar__item-change-stats"
-                              data-happy-desktop-ui="sidebar-item-change-stats"
-                          >
-                              {stats.added > 0 ? (
-                                  <span data-tone="added">+{stats.added}</span>
-                              ) : null}
-                              {stats.deleted > 0 ? (
-                                  <span data-tone="deleted">−{stats.deleted}</span>
-                              ) : null}
-                          </span>
-                          {trailingLane()}
-                      </span>
-                  ))(item().changeStats!)
-                : hasChangeStats()
-                  ? ((stats) => (
-                        <span
-                            aria-label={[
-                                stats.added > 0 ? `${String(stats.added)} lines added` : undefined,
-                                stats.deleted > 0
-                                    ? `${String(stats.deleted)} lines deleted`
-                                    : undefined,
-                            ]
-                                .filter(Boolean)
-                                .join(", ")}
-                            className="happy2-sidebar__item-change-stats"
-                            data-happy-desktop-ui="sidebar-item-change-stats"
-                        >
-                            {stats.added > 0 ? <span data-tone="added">+{stats.added}</span> : null}
-                            {stats.deleted > 0 ? (
-                                <span data-tone="deleted">−{stats.deleted}</span>
-                            ) : null}
-                        </span>
-                    ))(item().changeStats!)
-                  : null}
+
             {showLifecycle() ? (
                 <span
                     className="happy2-sidebar__item-lifecycle"
@@ -767,7 +799,71 @@ function SidebarRow({
                     {item().meta}
                 </span>
             ) : null}
-            {trailingActions().length > 0 && !swapsTrailing() ? trailingLane() : null}
+            {((state, controls, stats) =>
+                /* One lane at the trailing edge, holding everything the row says
+                   about itself on the right: the Git delta it reports at rest,
+                   what it is doing, and the controls that act on it. They all
+                   share one right-aligned column rather than queueing up beside
+                   each other, so every row's delta ends at the same x whether or
+                   not it also has controls, and hovering a row swaps the delta
+                   and the spinner for the controls in place. */
+                state || controls || stats ? (
+                    <span
+                        className="happy2-sidebar__item-trailing"
+                        data-controls={controls ? String(trailingActions().length) : undefined}
+                        data-happy-desktop-ui="sidebar-item-trailing"
+                        data-swaps={controls && swapsTrailing() ? "" : undefined}
+                    >
+                        {/* The one child left in flow, so the lane is as wide as
+                            the delta it has to show; everything else overlays
+                            it. */}
+                        {stats ? (
+                            <span
+                                aria-label={[
+                                    stats.added > 0
+                                        ? `${String(stats.added)} lines added`
+                                        : undefined,
+                                    stats.deleted > 0
+                                        ? `${String(stats.deleted)} lines deleted`
+                                        : undefined,
+                                ]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                className="happy2-sidebar__item-change-stats"
+                                data-happy-desktop-ui="sidebar-item-change-stats"
+                            >
+                                {stats.added > 0 ? (
+                                    <span data-tone="added">+{stats.added}</span>
+                                ) : null}
+                                {stats.deleted > 0 ? (
+                                    <span data-tone="deleted">−{stats.deleted}</span>
+                                ) : null}
+                            </span>
+                        ) : null}
+                        {state ? (
+                            <span
+                                className="happy2-sidebar__item-activity"
+                                data-activity={
+                                    state.kind === "spinner" ? "spinner" : state.lifecycle
+                                }
+                                data-happy-desktop-ui="sidebar-item-activity"
+                            >
+                                {state.kind === "spinner" ? (
+                                    <Spinner label={state.label} size={14} tone={state.tone} />
+                                ) : (
+                                    <span aria-label={state.label} role="img">
+                                        <Icon name={state.icon} size={14} />
+                                    </span>
+                                )}
+                            </span>
+                        ) : null}
+                        {controls ? trailingLane() : null}
+                    </span>
+                ) : null)(
+                activity(),
+                trailingActions().length > 0,
+                hasChangeStats() ? item().changeStats! : undefined,
+            )}
         </button>
     );
 }

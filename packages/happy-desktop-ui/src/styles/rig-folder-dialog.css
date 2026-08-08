@@ -1,0 +1,98 @@
+/*
+ * C-255 RigFolderDialog — naming a folder and choosing the mark it wears.
+ *
+ * Two controls in one row: a square mark that opens the picker in place, and
+ * the name field beside it taking the rest of the width. The picker drops below
+ * the row rather than floating over it, so the dialog grows to hold it and
+ * nothing the reader was looking at is covered up.
+ */
+
+.happy2-rig-folder-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy2-rig-folder-dialog__identity {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    min-width: 0;
+}
+
+/*
+ * The mark. A fixed 36px square — exactly the height of the medium TextField
+ * control beside it — so bottom-aligning the two makes their boxes coincide
+ * rather than leaving the tile standing proud of the field. The size is stated
+ * here rather than taken from the glyph because emoji metrics vary wildly
+ * between families, and a box that sized itself would change height as the
+ * reader picked.
+ */
+.happy2-rig-folder-dialog__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    appearance: none;
+    overflow: hidden;
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-rig-folder-dialog__mark:hover:not(:disabled) {
+    border-color: var(--text-secondary);
+    background: var(--surface-ripple);
+}
+
+.happy2-rig-folder-dialog__mark:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
+}
+
+.happy2-rig-folder-dialog__mark:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+/*
+ * A mark nobody chose is shown at reduced strength: it says what the folder will
+ * look like while admitting it is a stand-in rather than a decision. Choosing
+ * any emoji brings it to full strength, which is the only difference between the
+ * two states — the glyph itself may well be the same one.
+ */
+.happy2-rig-folder-dialog__mark-glyph {
+    display: block;
+    font-family: var(--happy2-font-emoji);
+    font-size: 20px;
+    line-height: 24px;
+    opacity: 0.45;
+}
+
+.happy2-rig-folder-dialog__mark[data-chosen] .happy2-rig-folder-dialog__mark-glyph {
+    opacity: 1;
+}
+
+.happy2-rig-folder-dialog__picker {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy2-rig-folder-dialog__reset {
+    flex: none;
+    align-self: flex-start;
+}

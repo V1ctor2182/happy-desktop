@@ -10,6 +10,7 @@ declare const rigEventIdBrand: unique symbol;
 declare const rigProjectIdBrand: unique symbol;
 declare const rigWorktreeIdBrand: unique symbol;
 declare const rigTerminalIdBrand: unique symbol;
+declare const rigFolderIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
@@ -32,6 +33,13 @@ export type RigEventId = string & { readonly [rigEventIdBrand]: true };
 
 /** Branded identifier of one interactive terminal the daemon runs for a session. */
 export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
+
+/**
+ * Branded identifier of one folder in the Rig's virtual tree (CUID2 on the
+ * wire). A folder is not a group: it holds chats rather than a checkout, so its
+ * id is deliberately not interchangeable with a project's or a worktree's.
+ */
+export type RigFolderId = string & { readonly [rigFolderIdBrand]: true };
 
 /**
  * One interactive terminal the daemon has started, as its create/stop actions
@@ -589,6 +597,14 @@ export interface RigSessionSummary {
     readonly projectId: RigProjectId;
     /** Set when the session runs inside one of the project's worktrees. */
     readonly worktreeId?: RigWorktreeId;
+    /**
+     * The folder this chat was filed into, absent while it is still unsorted.
+     *
+     * Filing is the reader's own arrangement and says nothing about where the
+     * session runs: a folder holds chats from any project, and the project it
+     * belongs to is `projectId` whatever folder it sits in.
+     */
+    readonly folderId?: RigFolderId;
     /**
      * Fractional index the host sorts sessions by within their own group.
      *

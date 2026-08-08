@@ -20,6 +20,7 @@ import {
     type RigInboxStore,
     type RigInstructionsStore,
     type RigSecurityPolicyStore,
+    type RigFoldersStore,
     type RigNodesStore,
     type RigPairingStore,
     type RigProviderUsageStore,
@@ -34,6 +35,7 @@ import {
 } from "@slopus/rig-connect";
 import { terminalDriverCreate } from "happy-desktop-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
+import { rigConnectFoldersSourceCreate } from "./rigConnectFoldersSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectNodesSourceCreate } from "./rigConnectNodesSource";
 import { rigConnectPairingSourceCreate } from "./rigConnectPairingSource";
@@ -177,6 +179,12 @@ export interface RigSession {
      * rather than showing a list that is empty for the wrong reason.
      */
     readonly nodes: RigNodesStore | undefined;
+    /**
+     * The virtual tree this Rig files its chats into. It belongs to the machine
+     * rather than to any project, which is why it hangs off the session beside
+     * the workspace rather than inside it.
+     */
+    readonly folders: RigFoldersStore | undefined;
     /**
      * Trusting a new machine, by comparing four emojis at both ends. Present
      * only on this window's host Rig, and only when its daemon's protocol
@@ -374,6 +382,10 @@ export function rigConnectionOpen(input: {
     // lazily like usage: it is the host's report of the machines it is peered
     // with, and a window looking at something else need not hold that stream.
     const nodesSource = rigConnectNodesSourceCreate(rigConnect);
+    // The folder tree rides the same catalog and stream the groups do, so
+    // following it opens no transport of its own. Lazy like the rest: a window
+    // showing no folders holds no subscriber on it.
+    const foldersSource = rigConnectFoldersSourceCreate(rigConnect);
     // Trust, which only the host owns. The source follows the negotiated
     // protocol rather than capturing it: the handshake settles after this is
     // built, and a store that fixed the answer here would call every Rig too
@@ -412,6 +424,7 @@ export function rigConnectionOpen(input: {
         inboxSource,
         providerUsageSource,
         nodesSource,
+        foldersSource,
         ...(pairingSource ? { pairingSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
@@ -468,6 +481,7 @@ export function rigConnectionOpen(input: {
                     inbox: client.inbox(),
                     providerUsage: client.providerUsage(),
                     nodes: client.nodes(),
+                    folders: client.folders(),
                     pairing: client.pairing(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),

@@ -12,6 +12,10 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
+    RigFolder,
+    RigFolderId,
+    RigFoldersSnapshot,
+    RigFoldersStore,
     RigWorkspaceFiles,
     RigFileScope,
     RigFileViewMode,
@@ -75,6 +79,11 @@ import {
     rigNavigationOrderApply,
     rigAvailabilityProject,
     rigNavigationOrderStoreNoop,
+    folderFind,
+    rigFolderGroupId,
+    rigFolderGroupParse,
+    rigFoldersFlatten,
+    rigFoldersStoreNoop,
     rigNodesStoreNoop,
     rigProviderUsageStoreNoop,
     rigSlotEntriesInScope,
@@ -124,6 +133,8 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigCreateSessionDialog,
+    RigFolderDialog,
+    RIG_FOLDER_DEFAULT_EMOJI,
     RigProjectSettingsDialog,
     RigSessionControls,
     type RigUserInputAnswerMap,
@@ -243,6 +254,12 @@ export interface AppRigSession {
      * so rather than showing an empty list that means the opposite.
      */
     readonly nodes?: RigNodesStore;
+    /**
+     * The virtual tree this Rig files its chats into. Absent when the machine
+     * offers no folder feed, which is why the Folders section is absent too
+     * rather than standing over a tree that is empty for the wrong reason.
+     */
+    readonly folders?: RigFoldersStore;
     /**
      * Trusting a new machine, by comparing four emojis at both ends. Present
      * only on the Rig that owns trust — this window's host — and only when its
@@ -890,8 +907,30 @@ function documentLinkResolve(from: string, href: string): string {
 function openGroupFind(
     projects: readonly RigProjectGroup[],
     groupId: string | undefined,
+    folders: readonly RigFolder[] = [],
 ): OpenGroup | undefined {
     if (groupId === undefined) return undefined;
+    // A folder is a place to work like any other: it owns a directory holding
+    // its files, so a chat started in it runs there. What it holds is gathered
+    // from every project rather than read off one, because filing cuts across
+    // the project tree — two chats in a folder are routinely in different
+    // repositories, which is most of the point of filing them together.
+    const folderId = rigFolderGroupParse(groupId);
+    if (folderId !== undefined) {
+        const folder = folderFind(folders, folderId);
+        if (!folder) return undefined;
+        return {
+            id: groupId as RigGroupId,
+            name: folder.name,
+            home: false,
+            conversations: folderConversations(projects, folderId),
+            // A folder is not a checkout, so there is no working tree to report
+            // on and nothing here is ever asked to draw one.
+            changes: [],
+            create: { cwd: folder.path },
+            path: folder.path,
+        };
+    }
     for (const project of projects) {
         if (project.id === groupId)
             return {
@@ -917,6 +956,27 @@ function openGroupFind(
                 };
     }
     return undefined;
+}
+
+/**
+ * The chats filed into one folder, newest first.
+ *
+ * Newest first because a folder is opened to see what is happening in it rather
+ * than what was put in it first. A filed chat still belongs to the project it
+ * runs in and still takes its row there: filing is an arrangement laid over the
+ * list, not a move.
+ */
+function folderConversations(
+    projects: readonly RigProjectGroup[],
+    folderId: RigFolderId,
+): RigProjectGroup["conversations"] {
+    const filed = projects.flatMap((project) => [
+        ...project.conversations.filter((entry) => entry.folderId === folderId),
+        ...project.worktrees.flatMap((worktree) =>
+            worktree.conversations.filter((entry) => entry.folderId === folderId),
+        ),
+    ]);
+    return [...filed].sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 /**
@@ -966,6 +1026,117 @@ function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): 
         const row = byId.get(id);
         return row ? [row] : [];
     });
+}
+
+/**
+ * The folders block in the sidebar. One id, because there is one tree: folders
+ * belong to the Rig the window is addressing rather than to a project, so unlike
+ * the project blocks below there is never more than one of them on screen.
+ */
+const FOLDERS_SECTION = "folders";
+
+/**
+ * Starts a folder inside this one. Nesting is stated here rather than by
+ * dragging, because a drag that could both order a row and swallow it into its
+ * neighbour makes every ordinary reordering a near miss.
+ */
+const FOLDER_MENU_NEST = "folder-nest";
+/** Opens the folder's own surface: what it is called, and the mark it wears. */
+const FOLDER_MENU_EDIT = "folder-edit";
+/** Puts the folder away, and everything nested under it with it. */
+const FOLDER_MENU_ARCHIVE = "folder-archive";
+
+/**
+ * A folder's sidebar row, which is an ordinary Rig group row: a folder is a
+ * place to work like a project or a worktree, so it is addressed the same way
+ * and `rigFolderGroupId` is what keeps the three id spaces apart.
+ */
+function folderRowId(rigId: string, folderId: RigFolderId): string {
+    return rigItemId(rigId, rigFolderGroupId(folderId));
+}
+
+/** The folder a sidebar row names, or undefined when it names something else. */
+function folderRowParse(value: string): RigFolderId | undefined {
+    return rigFolderGroupParse(rigItemParse(value).id);
+}
+
+/**
+ * What the folder dialog calls the folder it is landing in, when it is landing
+ * in one. Read from the tree rather than carried by the editor, because the name
+ * is the tree's to state and the editor holds only what is being written.
+ */
+function folderParentNameProps(folders: RigFoldersSnapshot): { parentName?: string } {
+    const parentId = folders.editor?.parentId;
+    if (parentId === undefined) return {};
+    const parent = folderFind(folders.folders, parentId);
+    return parent ? { parentName: parent.name } : {};
+}
+
+/**
+ * The addressed Rig's folder tree, as one block above its projects.
+ *
+ * One machine's, not every machine's: a folder is where this reader files their
+ * chats on the Rig they are working in, and stacking one tree per connected
+ * machine would turn a place to put things into a list of places to put things.
+ * It follows the addressed Rig the same way the inbox and usage rows do.
+ *
+ * Every folder is drawn, however deep, with the tree's own nesting carried on
+ * each row — agents create folders inside folders, and a tree that showed only
+ * its top level would quietly lose them.
+ *
+ * A folder always wears a mark. One the reader chose is shown; one they have not
+ * chosen shows the default, so the column reads as one family of rows rather
+ * than as marked and unmarked halves.
+ */
+function foldersSection(
+    rigId: string,
+    folders: RigFoldersSnapshot,
+    online: boolean,
+): SidebarSection[] {
+    const items: SidebarItem[] = rigFoldersFlatten(folders.folders).map((row) => ({
+        depth: row.depth,
+        emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
+        id: folderRowId(rigId, row.folder.id),
+        kind: "folder" as const,
+        label: row.folder.name,
+    }));
+    // A refused act outranks a dropped feed: the tree on screen is still
+    // current, and what the reader needs told is that the thing they just did
+    // did not happen.
+    const error = folders.actionError ?? folders.error?.message;
+    return [
+        {
+            id: FOLDERS_SECTION,
+            items,
+            label: "Folders",
+            // Making a folder is what this block is for, so its control stands
+            // rather than waiting to be found — but only while the machine that
+            // would store it is answering.
+            ...(online
+                ? {
+                      action: {
+                          icon: "plus" as const,
+                          label: "New folder",
+                          reveal: "always" as const,
+                      },
+                  }
+                : {}),
+            ...(error === undefined ? {} : { error }),
+            // Nothing is claimed about a tree that has not arrived: a Rig still
+            // being asked has no folders yet in the sense of "not answered",
+            // which is not the same sentence as "none".
+            ...(items.length === 0 && !folders.loading
+                ? {
+                      empty: {
+                          description: "Group chats by what they are about.",
+                          icon: "archive" as const,
+                          title: "No folders yet",
+                          ...(online ? { actionLabel: "New folder" } : {}),
+                      },
+                  }
+                : {}),
+        },
+    ];
 }
 
 function rigSections(
@@ -1421,6 +1592,16 @@ export function AppRigView(props: AppRigViewProps) {
     // between chats never swaps this store, empties it, or reloads it.
     const slotsStore = active?.session?.slots?.() ?? rigSlotsStoreNoop;
     const slots = useSyncExternalStore(slotsStore.subscribe, slotsStore.get, slotsStore.get);
+    // The addressed machine's folder tree, subscribed for as long as this window
+    // addresses that machine. The subscription is what opens the feed, and the
+    // feed is what keeps the block current when a folder is made, renamed, or
+    // moved somewhere else — including in another window, or by an agent.
+    const foldersStore = active?.session?.folders ?? rigFoldersStoreNoop;
+    const folders = useSyncExternalStore(
+        foldersStore.subscribe,
+        foldersStore.get,
+        foldersStore.get,
+    );
     const slotsScope = slotsContext(active?.projects ?? [], props.groupId, props.chatId);
     const applets = new Set(slots.applets.map((applet) => applet.name));
     // A press is decided from where the reader is when they press, and nothing
@@ -1631,6 +1812,34 @@ export function AppRigView(props: AppRigViewProps) {
                 ) : undefined
             }
             itemMenuItems={(item) => {
+                // A folder is a group, but not one of the host's checkouts, so
+                // the acts on it are its own: the project menu below would offer
+                // to rename and archive a repository that is not there.
+                if (folderRowParse(item.id) !== undefined)
+                    return activeRigOnline()
+                        ? [
+                              {
+                                  icon: "plus" as const,
+                                  id: FOLDER_MENU_NEST,
+                                  kind: "item" as const,
+                                  label: "New folder inside…",
+                              },
+                              {
+                                  icon: "edit" as const,
+                                  id: FOLDER_MENU_EDIT,
+                                  kind: "item" as const,
+                                  label: "Rename and mark…",
+                              },
+                              { kind: "separator" as const },
+                              {
+                                  danger: true,
+                                  icon: "archive" as const,
+                                  id: FOLDER_MENU_ARCHIVE,
+                                  kind: "item" as const,
+                                  label: "Archive folder",
+                              },
+                          ]
+                        : [];
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 return rig?.status === "connected"
@@ -1649,6 +1858,13 @@ export function AppRigView(props: AppRigViewProps) {
             // one act that would fill it instead — starting work here, or
             // connecting the machine that holds it.
             onSectionAction={(sectionId, source) => {
+                // Both of the folder block's controls do the same thing, because
+                // there is only one act it offers: the heading's plus and the
+                // button an empty block shows instead both make a folder.
+                if (sectionId === FOLDERS_SECTION) {
+                    if (activeRigOnline()) foldersStore.folderCreateOpen();
+                    return;
+                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (source === "heading") {
                     // Silent when there is nothing to ask: the control is only
@@ -1668,6 +1884,19 @@ export function AppRigView(props: AppRigViewProps) {
                 rig.session?.workspace.createOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
+                const folderId = folderRowParse(item.id);
+                if (folderId !== undefined) {
+                    if (!activeRigOnline()) return;
+                    if (actionId === FOLDER_MENU_NEST) foldersStore.folderCreateOpen(folderId);
+                    else if (actionId === FOLDER_MENU_EDIT) foldersStore.folderEditOpen(folderId);
+                    // Deliberately no confirmation and no navigation. Archiving
+                    // a folder throws away a name, a mark, and an arrangement;
+                    // the chats filed into it are not touched and go back to
+                    // being unsorted under the projects they always ran in.
+                    else if (actionId === FOLDER_MENU_ARCHIVE)
+                        void foldersStore.folderArchive(folderId);
+                    return;
+                }
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -1724,7 +1953,8 @@ export function AppRigView(props: AppRigViewProps) {
                     // left falls back to its most recent conversation, which is
                     // also what a workspace without the memory at all does.
                     rig.session?.workspace.get().groupResume?.get(groupId) ??
-                        openGroupFind(rig.projects, row.id)?.conversations[0]?.id,
+                        openGroupFind(rig.projects, row.id, rig.session?.folders?.get().folders)
+                            ?.conversations[0]?.id,
                 );
             }}
             onItemAction={(id) => {
@@ -1767,6 +1997,23 @@ export function AppRigView(props: AppRigViewProps) {
                   }
                 : {})}
             onItemReorder={(sectionId, move) => {
+                if (sectionId === FOLDERS_SECTION) {
+                    const moved = folderRowParse(move.id);
+                    if (moved === undefined || !activeRigOnline()) return;
+                    // The drop names where the folder landed, not an order key:
+                    // the parent it was dragged inside — the root when it was
+                    // dragged at the top level — and the sibling it now follows.
+                    // Rig derives the key from that pair, which is why nothing
+                    // is predicted here and the moved tree arrives on the feed.
+                    void foldersStore.folderMove(
+                        moved,
+                        move.parentId === undefined
+                            ? null
+                            : (folderRowParse(move.parentId) ?? null),
+                        move.afterId === null ? null : (folderRowParse(move.afterId) ?? null),
+                    );
+                    return;
+                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (rig?.status !== "connected") return;
                 const workspace = rig?.session?.workspace;
@@ -1788,7 +2035,15 @@ export function AppRigView(props: AppRigViewProps) {
                           )
                 ).catch(() => undefined);
             }}
-            sections={rigSections(directory, nodes)}
+            // Folders first: they are where the reader files their own work, and
+            // they belong to the addressed machine as a whole rather than to any
+            // one of the project lists below them.
+            sections={[
+                ...(active?.session?.folders
+                    ? foldersSection(active.id, folders, activeAvailability?.online === true)
+                    : []),
+                ...rigSections(directory, nodes),
+            ]}
         />
     );
 
@@ -1882,6 +2137,7 @@ export function AppRigView(props: AppRigViewProps) {
         if (active?.session)
             return (
                 <RigWorkspaceSurface
+                    folders={folders}
                     availability={
                         activeAvailability ??
                         rigAvailabilityProject(active.session.connection.get(), true, {
@@ -1962,6 +2218,26 @@ export function AppRigView(props: AppRigViewProps) {
                 answered on the workspace and did nothing on the inbox would not
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
+            {/* Naming a folder and choosing its mark. Mounted here for the same
+                reason the workspace dialogs are: the sidebar is on every route,
+                so the surface its rows open has to answer from every route too.
+                The draft lives in the folders store rather than here, so an edit
+                in flight survives the tree being republished — which happens
+                whenever any folder anywhere changes, not only this one. */}
+            {folders.editor ? (
+                <RigFolderDialog
+                    mode={folders.editor.mode}
+                    name={folders.editor.name}
+                    onClose={() => foldersStore.folderEditorCancel()}
+                    onEmojiChange={(value) => foldersStore.folderEmojiUpdate(value)}
+                    onNameChange={(value) => foldersStore.folderNameUpdate(value)}
+                    onSubmit={() => void foldersStore.folderEditorSubmit()}
+                    submitting={folders.editor.submitting}
+                    {...(folders.editor.emoji === undefined ? {} : { emoji: folders.editor.emoji })}
+                    {...folderParentNameProps(folders)}
+                    {...(folders.editor.error === undefined ? {} : { error: folders.editor.error })}
+                />
+            ) : null}
             {active?.session?.workspace ? (
                 <RigWindowDialogs
                     projects={active.projects}
@@ -2122,6 +2398,13 @@ interface RigWorkspaceSurfaceProps {
     /** Joined conversation-list + active-conversation product store. */
     workspace: RigWorkspaceStore;
     /**
+     * The Rig's folder tree, because a folder is one of the places this surface
+     * can be open on. It comes in already read rather than subscribed to here:
+     * the sidebar beside this surface is reading the same store, and one
+     * subscription per materialized store is the contract.
+     */
+    folders: RigFoldersSnapshot;
+    /**
      * The Rig's projects, for the surfaces that address a project the window is
      * not currently open on — the settings dialog reached from any row.
      */
@@ -2247,7 +2530,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         aboveComposer: slotPlacement("above-composer"),
         title: slotPlacement("title"),
     };
-    const openGroup = openGroupFind(rows, props.groupId);
+    const openGroup = openGroupFind(rows, props.groupId, props.folders.folders);
     // The worktree phase this screen has to say something about. `ready` and a
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.

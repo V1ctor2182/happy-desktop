@@ -50,6 +50,11 @@ import {
 } from "./rigProviderUsageStore.js";
 import { rigNodesStoreCreate, type RigNodesSource, type RigNodesStore } from "./rigNodesStore.js";
 import {
+    rigFoldersStoreCreate,
+    type RigFoldersSource,
+    type RigFoldersStore,
+} from "./rigFoldersStore.js";
+import {
     rigPairingStoreCreate,
     type RigPairingSource,
     type RigPairingStore,
@@ -99,6 +104,15 @@ export interface RigClient {
      * peer rather than showing a list that is empty for the wrong reason.
      */
     nodes(): RigNodesStore | undefined;
+    /**
+     * The single folders store for this Rig: the virtual tree its chats are
+     * filed into. Materialized on first access and shared, because the tree
+     * belongs to the machine rather than to any project or conversation.
+     * Unavailable when the host supplied no folder feed, so a surface can say
+     * this Rig has no folders rather than showing a tree that is empty for the
+     * wrong reason.
+     */
+    folders(): RigFoldersStore | undefined;
     /**
      * The single pairing store for this Rig: trusting a new machine by
      * comparing four emojis on both ends. Materialized on first access and
@@ -239,6 +253,11 @@ export interface RigClientDeps {
      */
     readonly nodesSource?: RigNodesSource;
     /**
+     * Stream-owned feed of this Rig's folder tree. Omitted leaves folders
+     * unavailable rather than empty.
+     */
+    readonly foldersSource?: RigFoldersSource;
+    /**
      * The host's own pairing service. Omitted on a connection that does not
      * own trust, which leaves pairing unavailable rather than idle.
      */
@@ -294,6 +313,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let inboxStore: RigInboxStore | undefined;
     let providerUsageStore: RigProviderUsageStore | undefined;
     let nodesStore: RigNodesStore | undefined;
+    let foldersStore: RigFoldersStore | undefined;
     let pairingStore: RigPairingStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
@@ -409,6 +429,40 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source) return undefined;
             nodesStore ??= rigNodesStoreCreate({ source });
             return nodesStore;
+        },
+        folders() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.foldersSource;
+            const actions = deps.connectActions;
+            // Both halves or neither: a tree that can be read but not changed
+            // would offer controls that go nowhere, and a tree that can be
+            // changed but not read would never show what happened.
+            if (!source || !actions) return undefined;
+            foldersStore ??= rigFoldersStoreCreate({
+                source,
+                actions: {
+                    folderCreate: async (input) => {
+                        await actions.folders.create({
+                            name: input.name,
+                            ...(input.icon === undefined ? {} : { icon: input.icon }),
+                            ...(input.parentId === undefined ? {} : { parentId: input.parentId }),
+                        });
+                    },
+                    folderUpdate: async (folderId, changes) => {
+                        await actions.folders.update(folderId, changes);
+                    },
+                    folderMove: async (folderId, parentId, afterId) => {
+                        await actions.folders.move(folderId, { afterId, parentId });
+                    },
+                    folderArchive: async (folderId) => {
+                        await actions.folders.archive(folderId);
+                    },
+                    folderSessionSet: async (sessionId, folderId) => {
+                        await actions.folders.setSessionFolder(sessionId, folderId);
+                    },
+                },
+            });
+            return foldersStore;
         },
         pairing() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -527,6 +581,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             providerUsageStore = undefined;
             nodesStore?.[Symbol.dispose]();
             nodesStore = undefined;
+            foldersStore?.[Symbol.dispose]();
+            foldersStore = undefined;
             pairingStore?.[Symbol.dispose]();
             pairingStore = undefined;
             instructionsStore?.[Symbol.dispose]();

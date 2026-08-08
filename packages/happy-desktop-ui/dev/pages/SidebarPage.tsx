@@ -149,6 +149,43 @@ const PHOTO =
  * compares: the leading slot and the trailing word change while the row's name,
  * indent, and branch stay exactly where they were.
  */
+/**
+ * The folder tree: rows marked with a character the reader chose rather than with
+ * a house glyph, nested the way the tree is, with a heading control that makes
+ * another one.
+ */
+const folderSections: SidebarSection[] = [
+    {
+        action: { icon: "plus", label: "New folder", reveal: "always" },
+        id: "folders",
+        items: [
+            { emoji: "\u{1F680}", id: "ship", kind: "folder", label: "Ship it" },
+            { emoji: "\u{1F41B}", id: "bugs", kind: "folder", label: "Bug reports" },
+            { depth: 1, emoji: "\u{1F525}", id: "bugs-urgent", kind: "folder", label: "Urgent" },
+            { depth: 1, emoji: "\u{1F4DA}", id: "bugs-known", kind: "folder", label: "Known" },
+            // A folder nobody has marked wears the default character, so the
+            // column keeps one family of marks rather than two.
+            { emoji: "\u{1F4C1}", id: "unsorted", kind: "folder", label: "Reading list" },
+        ],
+        label: "Folders",
+    },
+];
+
+const emptyFolderSections: SidebarSection[] = [
+    {
+        action: { icon: "plus", label: "New folder", reveal: "always" },
+        empty: {
+            actionLabel: "New folder",
+            description: "Group your chats into folders to keep them apart.",
+            icon: "archive",
+            title: "No folders yet",
+        },
+        id: "folders",
+        items: [],
+        label: "Folders",
+    },
+];
+
 const lifecycleSections: SidebarSection[] = [
     {
         id: "lifecycle",
@@ -380,7 +417,17 @@ const REORDER_TREE: readonly ReorderNode[] = [
     {
         children: [
             { children: [], id: "sub-a", label: "Sub a" },
-            { children: [], id: "sub-b", label: "Sub b" },
+            // Three levels, because a folder holds folders and nothing stops an
+            // owner nesting them further: a row this deep must be ordered among
+            // its own siblings, not among everything under its top-level row.
+            {
+                children: [
+                    { children: [], id: "deep-a", label: "Deep a" },
+                    { children: [], id: "deep-b", label: "Deep b" },
+                ],
+                id: "sub-b",
+                label: "Sub b",
+            },
         ],
         id: "chan-two",
         label: "Chan two",
@@ -396,16 +443,25 @@ const REORDER_TREE: readonly ReorderNode[] = [
     },
     { children: [], id: "chan-five", label: "Chan five" },
 ];
-function reorderItems(tree: readonly ReorderNode[]): SidebarItem[] {
+function reorderItems(tree: readonly ReorderNode[], depth = 0): SidebarItem[] {
     return tree.flatMap((node) => [
-        { id: node.id, kind: "channel" as const, label: node.label },
-        ...node.children.map((child) => ({
-            depth: 1,
-            id: child.id,
-            kind: "channel" as const,
-            label: child.label,
-        })),
+        { depth, id: node.id, kind: "channel" as const, label: node.label },
+        ...reorderItems(node.children, depth + 1),
     ]);
+}
+/** Applies a reported move wherever in the tree its parent sits. */
+function treeMove(
+    tree: readonly ReorderNode[],
+    parentId: string | undefined,
+    id: string,
+    afterId: string | null,
+): readonly ReorderNode[] {
+    if (parentId === undefined) return listMove(tree, id, afterId);
+    return tree.map((node) =>
+        node.id === parentId
+            ? { ...node, children: listMove(node.children, id, afterId) }
+            : { ...node, children: treeMove(node.children, parentId, id, afterId) },
+    );
 }
 function listMove<T extends { id: string }>(
     values: readonly T[],
@@ -426,7 +482,7 @@ function ReorderDemo() {
     const [added, setAdded] = useState(0);
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <Frame height={420}>
+            <Frame height={500}>
                 <Sidebar
                     activeItemId="chan-one"
                     onItemReorder={(sectionId, reorder) => {
@@ -436,20 +492,7 @@ function ReorderDemo() {
                             }`,
                         );
                         setTree((current) =>
-                            reorder.parentId === undefined
-                                ? listMove(current, reorder.id, reorder.afterId)
-                                : current.map((node) =>
-                                      node.id === reorder.parentId
-                                          ? {
-                                                ...node,
-                                                children: listMove(
-                                                    node.children,
-                                                    reorder.id,
-                                                    reorder.afterId,
-                                                ),
-                                            }
-                                          : node,
-                                  ),
+                            treeMove(current, reorder.parentId, reorder.id, reorder.afterId),
                         );
                     }}
                     onItemSelect={() => {}}
@@ -763,6 +806,43 @@ export function SidebarPage() {
                     </Frame>
                     <DimensionRule label="back chevron 28px · title 15/700 · sub-nav rows" />
                 </div>
+            </Specimen>
+
+            <Specimen
+                detail="A folder wears a character the reader chose, in the same 16px lane a house glyph occupies, so a marked row and an unmarked one keep one rhythm. The heading control is always shown: making a folder is what the section is for."
+                label="Folder rows"
+                number="01b"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Frame height={300}>
+                        <Sidebar
+                            activeItemId="bugs"
+                            onItemSelect={() => {}}
+                            onSectionAction={() => {}}
+                            sections={folderSections}
+                            title="Folders"
+                        />
+                    </Frame>
+                    <DimensionRule label="emoji slot 16 × 16 · 13px · row 32 px unchanged · nested rows keep the branch" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="A Rig with no folders states that and offers the one act that fills it, rather than showing a heading over nothing."
+                label="Folders, empty"
+                number="01c"
+                stage="app"
+            >
+                <Frame height={260}>
+                    <Sidebar
+                        activeItemId=""
+                        onItemSelect={() => {}}
+                        onSectionAction={() => {}}
+                        sections={emptyFolderSections}
+                        title="Folders"
+                    />
+                </Frame>
             </Specimen>
 
             <Specimen

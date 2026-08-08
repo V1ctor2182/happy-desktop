@@ -8,6 +8,7 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
+import { folderFind, rigFolderGroupParse, type RigFolder } from "./rigFoldersStore.js";
 import {
     RIG_VIEW_PREFERENCES_EMPTY,
     rigViewPreferencesParse,
@@ -53,6 +54,7 @@ import type {
     RigBackgroundProcess,
     RigChangedFileDocument,
     RigFileSearchResult,
+    RigFolderId,
     RigGitChangedFile,
     RigGoal,
     RigGroupId,
@@ -2604,8 +2606,15 @@ export function rigWorkspaceStoreCreate(
      * question for both would either lock the reader out of a workspace they
      * just made or let a file be written to a folder that is not there.
      */
-    const groupConversationRefusalFind = (groupId: RigGroupId | undefined): string | undefined =>
-        groupId === undefined ? RIG_GROUP_UNLISTED_REFUSAL : list.groupConversationRefusal(groupId);
+    const groupConversationRefusalFind = (groupId: RigGroupId | undefined): string | undefined => {
+        if (groupId === undefined) return RIG_GROUP_UNLISTED_REFUSAL;
+        // A folder is not a checkout, so none of the reasons a checkout refuses
+        // work apply to it: there is no branch being prepared and no directory
+        // that might have gone. A folder the tree still holds can always take a
+        // chat, and one it no longer holds is unlisted like any other group.
+        if (folderGroupFind(groupId)) return undefined;
+        return list.groupConversationRefusal(groupId);
+    };
 
     /**
      * Why an operation naming one session rather than a place is refused: it is
@@ -2652,11 +2661,35 @@ export function rigWorkspaceStoreCreate(
      * anything, so this value is never the address a session is actually made
      * against.
      */
+    /**
+     * The folder a group id names, when it names one.
+     *
+     * A folder takes a row in the same list projects and worktrees do, so it is
+     * addressed the same way: the id is the group. Nothing here predicts a
+     * folder — the tree is whatever the connection last published.
+     */
+    const folderGroupFind = (groupId: RigGroupId): RigFolder | undefined => {
+        const folderId = rigFolderGroupParse(groupId);
+        return folderId === undefined
+            ? undefined
+            : folderFind(client.folders()?.get().folders ?? [], folderId);
+    };
+
     const groupStartFind = (
         groupId: RigGroupId,
     ):
-        | { readonly create: RigSessionCreateInput; readonly worktreeId?: RigWorktreeId }
+        | {
+              readonly create: RigSessionCreateInput;
+              readonly folderId?: RigFolderId;
+              readonly worktreeId?: RigWorktreeId;
+          }
         | undefined => {
+        // A folder is a place to work like any other: it owns a directory
+        // holding its files, and a chat started in one runs there and is filed
+        // into it. It is asked first because a folder id can never be a project
+        // or worktree id, and because a folder needs no catalog to have arrived.
+        const folder = folderGroupFind(groupId);
+        if (folder) return { create: { cwd: folder.path }, folderId: folder.id };
         const projects = list.get().projects;
         if (projects.type !== "ready") return undefined;
         for (const project of projects.value) {
@@ -2748,7 +2781,7 @@ export function rigWorkspaceStoreCreate(
         text: string,
         attachments: readonly ComposerAttachment[],
         selection: RigSelection | undefined,
-    ): Promise<void> => {
+    ): Promise<RigSessionLocation> => {
         const refusal = groupConversationRefusalFind(groupId);
         if (refusal) return Promise.reject(new Error(refusal));
         // A file attached to this first message has to land in the checkout, and
@@ -2777,6 +2810,14 @@ export function rigWorkspaceStoreCreate(
                   : list.sessionCreate(create);
         return started.then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
+            // Filed after the fact because a chat cannot be filed before it
+            // exists. Rig creates a session in a directory; which folder it
+            // belongs to is the arrangement laid over that, so it is stated as
+            // soon as there is a session to state it about — before the message
+            // is sent, so the chat never appears outside the folder it was
+            // started in.
+            if (start.folderId !== undefined)
+                await client.folders()?.folderSessionSet(location.sessionId, start.folderId);
             output({ type: "conversationOpenRequested", location });
             const placed = await attachmentsPlace(location.groupId, text, attachments);
             const acquired = await client.chat(location.sessionId);
@@ -2785,6 +2826,7 @@ export function rigWorkspaceStoreCreate(
             } finally {
                 acquired[Symbol.dispose]();
             }
+            return location;
         });
     };
 

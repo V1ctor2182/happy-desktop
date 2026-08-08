@@ -270,6 +270,12 @@ export {
     type RigProjectSettingsDialogProps,
 } from "./RigProjectSettingsDialog";
 export {
+    RigFolderDialog,
+    RIG_FOLDER_DEFAULT_EMOJI,
+    RIG_FOLDER_EMOJI,
+    type RigFolderDialogProps,
+} from "./RigFolderDialog";
+export {
     RigCreateSessionDialog,
     type RigCreateSessionDestination,
     type RigCreateSessionDialogProps,

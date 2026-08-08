@@ -5,6 +5,7 @@ import {
     type RigConnection,
 } from "@slopus/rig-connect";
 import type {
+    RigFolderId,
     RigGitChangedFile,
     RigPermissionMode,
     RigProject,
@@ -408,6 +409,9 @@ function sessionProject(session: GroupSession): RigSessionSummary {
         id: session.id as RigSessionId,
         projectId: session.projectId as RigProjectId,
         ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
+        // Where the reader filed this chat, which is theirs to change and has
+        // nothing to do with where the session runs. Absent means unsorted.
+        ...(session.folderId === undefined ? {} : { folderId: session.folderId as RigFolderId }),
         // rig-connect only groups sessions the host has placed, so a session
         // reaching here always has a key; it is carried through rather than
         // asserted so the absence would propagate honestly if that changed.

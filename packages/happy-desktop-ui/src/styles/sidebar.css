@@ -596,34 +596,65 @@
 }
 
 /*
- * A scheduled wait's clock in the leading slot. Accent-tinted so a row whose
- * agent is deliberately doing nothing still stands apart from an idle one,
- * without the spinner's claim that work is happening.
+ * What the row is doing, as one mark inside the trailing lane.
+ *
+ * A fixed square rather than shrink-to-fit, so that starting or finishing work
+ * never resizes it: a spinner and a clock are different widths, and a mark that
+ * took each one's own width would nudge the lane around it as rows became busy.
+ * It reports only — the control stacked over it is the thing that can be used.
  */
-.happy2-sidebar__item-waiting {
+.happy2-sidebar__item-activity {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+/* Accent-tinted, so a row whose agent is deliberately doing nothing still stands
+   apart from an idle one without the spinner's claim that work is happening. */
+.happy2-sidebar__item-activity[data-activity="waiting"] {
     color: var(--text-link);
 }
 
-/*
- * The leading glyph of a row whose place could not be made or is no longer
- * there. It carries the same tone as the trailing label below so the two halves
- * of the row read as one statement rather than as two unrelated marks.
- */
-.happy2-sidebar__item-lifecycle-glyph {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.happy2-sidebar__item-lifecycle-glyph[data-lifecycle="failed"] {
+.happy2-sidebar__item-activity[data-activity="failed"] {
     color: var(--box-error-text);
 }
 
-.happy2-sidebar__item-lifecycle-glyph[data-lifecycle="unavailable"] {
+.happy2-sidebar__item-activity[data-activity="unavailable"] {
     color: var(--box-warning-text);
+}
+
+/*
+ * The emoji a reader chose for a row, in a fixed 16px square — the same box the
+ * house glyph beside it occupies. Emoji are a colour font with no `currentColor`
+ * to inherit and wildly varying metrics between families, so the box is stated
+ * here rather than left to the character: without it a tall emoji would grow the
+ * 32px row and a wide one would push the name along, and neither would agree
+ * with the glyph rows above and below it.
+ *
+ * `line-height` is repeated on the inner span because an inline box takes its
+ * own, and an emoji's ascent commonly overshoots it; pinning both is what keeps
+ * the ink centred in the square rather than riding out of the top of it.
+ */
+.happy2-sidebar__item-emoji {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    overflow: hidden;
+    font-family: var(--happy2-font-emoji);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+.happy2-sidebar__item-emoji-glyph {
+    display: block;
+    line-height: 16px;
 }
 
 .happy2-sidebar__item-leading-unread {
@@ -657,6 +688,27 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     transform: translateY(var(--happy2-sidebar-label-optical-y, 0px));
+}
+
+/*
+ * A busy place shimmers its own name, and the shimmer is an inline-block — an
+ * atomic box the label's `text-overflow` cannot reach into, so a long name would
+ * be cut off mid-letter instead of ellipsised. The truncation therefore moves
+ * inside the box, which is a block container for its own text and ellipsises it
+ * the same way.
+ *
+ * `vertical-align` is not cosmetic here: an inline-block with `overflow` other
+ * than `visible` takes its baseline from the bottom of its margin box rather
+ * than from its text, so left on the baseline the name would drop a few pixels
+ * the moment it started shimmering and rise again when it stopped. Aligning the
+ * top edge to the line box keeps it exactly where an ordinary label sits.
+ */
+.happy2-sidebar__item-label .happy2-shimmer-text {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
 }
 
 .happy2-sidebar__item[data-active] .happy2-sidebar__item-label {
@@ -712,38 +764,74 @@
     color: var(--git-removed-text);
 }
 
-/* The controls are overlaid, so they contribute no width of their own; the lane
-   reserves it here instead. Without that a short delta — a lone `+1` — leaves a
-   lane narrower than the controls, and on hover they reach back out of it and
-   over the name. One control is 18px and each further one adds its own 18 plus
-   the 4px gap; the 3px overhang comes back off the end. */
-.happy2-sidebar__item-trailing-swap {
-    position: relative;
+/*
+ * The trailing lane: what the row is doing, and the controls that act on it.
+ * They occupy the same place rather than sitting side by side, so the controls
+ * are always the rightmost thing in the row and arriving at a busy row swaps the
+ * spinner for them in place — no reflow, and nothing to chase sideways.
+ *
+ * The controls are overlaid, so they contribute no width of their own; the lane
+ * reserves it here instead. Without that a lane sized to the 16px activity mark
+ * would let a pair of controls reach back out over the name. One control is 18px
+ * and each further one adds its own 18 plus the 4px gap; the 3px overhang comes
+ * back off the end.
+ */
+.happy2-sidebar__item-trailing {
     display: flex;
+    position: relative;
     flex: none;
     align-items: center;
     justify-content: flex-end;
-    min-width: 15px;
+    gap: 6px;
+    min-width: 16px;
     height: 18px;
 }
 
-.happy2-sidebar__item-trailing-swap[data-controls="2"] {
+/* The reserved width only has to cover controls that are going to overlay; ones
+   that keep their place in the line bring their own. */
+.happy2-sidebar__item-trailing[data-swaps][data-controls="1"] {
+    min-width: 18px;
+}
+
+.happy2-sidebar__item-trailing[data-swaps][data-controls="2"] {
     min-width: 37px;
 }
 
 /*
- * The controls and the Git stats intentionally occupy one trailing lane:
- * overlaying the smaller controls prevents the workspace name or the counters
- * from shifting on hover.
+ * The controls hang off the lane's right edge — but only when every one of them
+ * is waiting for hover. Nothing is showing there at rest in that case, so the
+ * delta and the spinner may have the space until the pointer arrives, and all
+ * three end at the same x. A permanently visible control keeps its own place in
+ * the line instead: overlaying that one would print it straight on top of the
+ * delta it is meant to stand beside.
  */
-.happy2-sidebar__item-trailing-swap .happy2-sidebar__item-actions {
+.happy2-sidebar__item-trailing[data-swaps] .happy2-sidebar__item-actions {
     position: absolute;
     right: 0;
 }
 
-.happy2-sidebar__item:hover .happy2-sidebar__item-trailing-swap .happy2-sidebar__item-change-stats,
-.happy2-sidebar__item-trailing-swap:focus-within .happy2-sidebar__item-change-stats {
+/*
+ * Everything the row reports at rest steps aside for the controls, and comes
+ * back when they go. The fade is carried on the marks rather than on the lane so
+ * the lane keeps its width throughout — this is a crossfade in one place, not a
+ * layout change.
+ */
+.happy2-sidebar__item-activity,
+.happy2-sidebar__item-trailing[data-swaps] .happy2-sidebar__item-change-stats {
+    transition: opacity 120ms ease;
+}
+
+.happy2-sidebar__item:hover .happy2-sidebar__item-trailing[data-swaps] > *,
+.happy2-sidebar__item-trailing[data-swaps]:focus-within > * {
     opacity: 0;
+}
+
+/* …except the controls themselves, which are what the row is making room for. */
+.happy2-sidebar__item:hover
+    .happy2-sidebar__item-trailing[data-swaps]
+    .happy2-sidebar__item-actions,
+.happy2-sidebar__item-trailing[data-swaps]:focus-within .happy2-sidebar__item-actions {
+    opacity: 1;
 }
 
 .happy2-sidebar__item-unread {
