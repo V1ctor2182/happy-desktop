@@ -8,6 +8,7 @@ import type {
     RigTask,
     RigTaskStatus,
 } from "happy-desktop-state";
+import { Button } from "./Button";
 
 export type RigActivityPanelProps = {
     /** The session's persistent goal, when one is set (`/goal`). */
@@ -64,20 +65,57 @@ function formatElapsed(ms: number): string {
     return hours > 0 ? `${hours}:${two(minutes)}:${two(seconds)}` : `${minutes}:${two(seconds)}`;
 }
 
+function ActivityStatus(props: {
+    label: string;
+    status: RigGoalStatus | RigTaskStatus | RigSessionStatus | "running";
+    part: string;
+}) {
+    return (
+        <span
+            className="happy2-rig-activity__status"
+            data-status={props.status}
+            data-happy-desktop-ui={props.part}
+        >
+            <span
+                aria-hidden="true"
+                className="happy2-rig-activity__status-dot"
+                data-happy-desktop-ui="rig-activity-status-dot"
+            />
+            {props.label}
+        </span>
+    );
+}
+
+function SectionHeading(props: { count?: number; label: string }) {
+    return (
+        <h3 className="happy2-rig-activity__heading">
+            <span
+                className="happy2-rig-activity__heading-label"
+                data-happy-desktop-ui="rig-activity-heading-label"
+            >
+                {props.label}
+            </span>
+            {props.count === undefined ? null : (
+                <span className="happy2-rig-activity__count">{props.count}</span>
+            )}
+        </h3>
+    );
+}
+
 function GoalSection(props: { goal: RigGoal }) {
     const { goal } = props;
     return (
         <section className="happy2-rig-activity__section" data-happy-desktop-ui="rig-activity-goal">
-            <h3 className="happy2-rig-activity__heading">Goal</h3>
-            <div className="happy2-rig-activity__goal">
-                <span
-                    className="happy2-rig-activity__status"
-                    data-status={goal.status}
-                    data-happy-desktop-ui="rig-activity-goal-status"
-                >
-                    {GOAL_STATUS_LABELS[goal.status]}
-                </span>
-                <p className="happy2-rig-activity__objective">{goal.objective}</p>
+            <SectionHeading label="Goal" />
+            <div className="happy2-rig-activity__list" data-happy-desktop-ui="rig-activity-list">
+                <div className="happy2-rig-activity__row" data-happy-desktop-ui="rig-activity-row">
+                    <ActivityStatus
+                        label={GOAL_STATUS_LABELS[goal.status]}
+                        part="rig-activity-goal-status"
+                        status={goal.status}
+                    />
+                    <p className="happy2-rig-activity__objective">{goal.objective}</p>
+                </div>
             </div>
         </section>
     );
@@ -87,14 +125,15 @@ function TaskRow(props: { task: RigTask }) {
     const { task } = props;
     const label = task.status === "in_progress" && task.activeForm ? task.activeForm : task.subject;
     return (
-        <li className="happy2-rig-activity__task" data-happy-desktop-ui="rig-activity-task">
-            <span
-                className="happy2-rig-activity__status"
-                data-status={task.status}
-                data-happy-desktop-ui="rig-activity-task-status"
-            >
-                {TASK_STATUS_LABELS[task.status]}
-            </span>
+        <li
+            className="happy2-rig-activity__row happy2-rig-activity__task"
+            data-happy-desktop-ui="rig-activity-task"
+        >
+            <ActivityStatus
+                label={TASK_STATUS_LABELS[task.status]}
+                part="rig-activity-task-status"
+                status={task.status}
+            />
             <span className="happy2-rig-activity__task-label">{label}</span>
         </li>
     );
@@ -106,35 +145,36 @@ function SubagentRow(props: { subagent: RigSubagentSummary; now: number }) {
         subagent.elapsedMs ??
         (subagent.activeSince !== undefined ? now - subagent.activeSince : undefined);
     return (
-        <li className="happy2-rig-activity__subagent" data-happy-desktop-ui="rig-activity-subagent">
-            <div className="happy2-rig-activity__subagent-head">
-                <span
-                    className="happy2-rig-activity__status"
-                    data-status={subagent.status}
-                    data-happy-desktop-ui="rig-activity-subagent-status"
-                >
-                    {SUBAGENT_STATUS_LABELS[subagent.status]}
-                </span>
+        <li
+            className="happy2-rig-activity__row happy2-rig-activity__subagent"
+            data-happy-desktop-ui="rig-activity-subagent"
+        >
+            <ActivityStatus
+                label={SUBAGENT_STATUS_LABELS[subagent.status]}
+                part="rig-activity-subagent-status"
+                status={subagent.status}
+            />
+            <div className="happy2-rig-activity__subagent-content">
                 <span className="happy2-rig-activity__subagent-desc">
                     {subagent.taskName ?? subagent.description}
                 </span>
-            </div>
-            <div className="happy2-rig-activity__subagent-meta">
-                <span className="happy2-rig-activity__subagent-model">{subagent.modelId}</span>
-                {elapsed !== undefined && elapsed >= 0 ? (
-                    <span className="happy2-rig-activity__subagent-elapsed">
-                        {formatElapsed(elapsed)}
-                    </span>
+                <div className="happy2-rig-activity__subagent-meta">
+                    <span className="happy2-rig-activity__subagent-model">{subagent.modelId}</span>
+                    {elapsed !== undefined && elapsed >= 0 ? (
+                        <span className="happy2-rig-activity__subagent-elapsed">
+                            {formatElapsed(elapsed)}
+                        </span>
+                    ) : null}
+                    {subagent.totalTokens !== undefined ? (
+                        <span className="happy2-rig-activity__subagent-tokens">
+                            {TOKENS.format(subagent.totalTokens)} tokens
+                        </span>
+                    ) : null}
+                </div>
+                {subagent.latestText ? (
+                    <p className="happy2-rig-activity__subagent-latest">{subagent.latestText}</p>
                 ) : null}
-                {subagent.totalTokens !== undefined ? (
-                    <span className="happy2-rig-activity__subagent-tokens">
-                        {TOKENS.format(subagent.totalTokens)} tokens
-                    </span>
-                ) : null}
             </div>
-            {subagent.latestText ? (
-                <p className="happy2-rig-activity__subagent-latest">{subagent.latestText}</p>
-            ) : null}
         </li>
     );
 }
@@ -145,24 +185,21 @@ function BackgroundProcessRow(props: {
 }) {
     const { process } = props;
     return (
-        <li className="happy2-rig-activity__process" data-happy-desktop-ui="rig-activity-process">
-            <span
-                className="happy2-rig-activity__status"
-                data-status="running"
-                data-happy-desktop-ui="rig-activity-process-status"
-            >
-                Running
-            </span>
+        <li
+            className="happy2-rig-activity__row happy2-rig-activity__process"
+            data-happy-desktop-ui="rig-activity-process"
+        >
+            <ActivityStatus label="Running" part="rig-activity-process-status" status="running" />
             <span className="happy2-rig-activity__process-command">{process.command}</span>
             {props.onStop ? (
-                <button
-                    type="button"
+                <span
                     className="happy2-rig-activity__process-stop"
                     data-happy-desktop-ui="rig-activity-process-stop"
-                    onClick={() => props.onStop?.(process.id)}
                 >
-                    Stop
-                </button>
+                    <Button onClick={() => props.onStop?.(process.id)} size="small" variant="ghost">
+                        Stop
+                    </Button>
+                </span>
             ) : null}
         </li>
     );
@@ -207,11 +244,11 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                             className="happy2-rig-activity__section"
                             data-happy-desktop-ui="rig-activity-tasks"
                         >
-                            <h3 className="happy2-rig-activity__heading">
-                                Tasks
-                                <span className="happy2-rig-activity__count">{tasks.length}</span>
-                            </h3>
-                            <ul className="happy2-rig-activity__list">
+                            <SectionHeading count={tasks.length} label="Tasks" />
+                            <ul
+                                className="happy2-rig-activity__list"
+                                data-happy-desktop-ui="rig-activity-list"
+                            >
                                 {tasks.map((task) => (
                                     <TaskRow key={task.id} task={task} />
                                 ))}
@@ -224,13 +261,11 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                             className="happy2-rig-activity__section"
                             data-happy-desktop-ui="rig-activity-subagents"
                         >
-                            <h3 className="happy2-rig-activity__heading">
-                                Subagents
-                                <span className="happy2-rig-activity__count">
-                                    {subagents.length}
-                                </span>
-                            </h3>
-                            <ul className="happy2-rig-activity__list">
+                            <SectionHeading count={subagents.length} label="Subagents" />
+                            <ul
+                                className="happy2-rig-activity__list"
+                                data-happy-desktop-ui="rig-activity-list"
+                            >
                                 {subagents.map((subagent) => (
                                     <SubagentRow
                                         key={subagent.id}
@@ -247,13 +282,14 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                             className="happy2-rig-activity__section"
                             data-happy-desktop-ui="rig-activity-processes"
                         >
-                            <h3 className="happy2-rig-activity__heading">
-                                Background terminals
-                                <span className="happy2-rig-activity__count">
-                                    {backgroundProcesses.length}
-                                </span>
-                            </h3>
-                            <ul className="happy2-rig-activity__list">
+                            <SectionHeading
+                                count={backgroundProcesses.length}
+                                label="Background terminals"
+                            />
+                            <ul
+                                className="happy2-rig-activity__list"
+                                data-happy-desktop-ui="rig-activity-list"
+                            >
                                 {backgroundProcesses.map((process) => (
                                     <BackgroundProcessRow
                                         key={process.id}

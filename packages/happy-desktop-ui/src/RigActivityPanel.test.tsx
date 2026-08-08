@@ -6,6 +6,8 @@ import type {
     RigTask,
 } from "happy-desktop-state";
 import "./theme.css";
+import "./styles/button.css";
+import "./styles/icon.css";
 import "./styles/rig-activity.css";
 import { RigActivityPanel } from "./RigActivityPanel";
 import { createRenderer } from "./testing";
@@ -66,7 +68,7 @@ const backgroundProcesses: readonly RigBackgroundProcess[] = [
     { id: 7, command: "pnpm server dev", cwd: "/repo", status: "running" },
 ];
 
-it("renders the goal, task list, and subagent monitor from reactive state", async () => {
+it("renders a grouped activity reading with one aligned status lane", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -111,6 +113,89 @@ it("renders the goal, task list, and subagent monitor from reactive state", asyn
     expect(processRows.length).toBe(1);
     expect(processRows[0]?.textContent).toContain("pnpm server dev");
 
+    const panel = view.$('[data-happy-desktop-ui="rig-activity-panel"]');
+    expect(panel.bounds().width).toBe(560);
+    expect(panel.computedStyles(["display", "gap", "width"])).toEqual({
+        display: "flex",
+        gap: "16px",
+        width: "560px",
+    });
+
+    const sections = Array.from(
+        view.container.querySelectorAll<HTMLElement>(
+            '[data-happy-desktop-ui="rig-activity-panel"] > [data-happy-desktop-ui]',
+        ),
+    );
+    expect(sections).toHaveLength(4);
+    for (let index = 1; index < sections.length; index += 1) {
+        const previous = sections[index - 1]!.getBoundingClientRect();
+        const current = sections[index]!.getBoundingClientRect();
+        expect(current.top - previous.bottom).toBe(16);
+    }
+
+    const heading = view.$('[data-happy-desktop-ui="rig-activity-tasks"] h3');
+    expect(heading.bounds().height).toBe(20);
+    expect(
+        view
+            .$(
+                '[data-happy-desktop-ui="rig-activity-tasks"] [data-happy-desktop-ui="rig-activity-heading-label"]',
+            )
+            .textMetrics(),
+    ).toMatchObject({
+        font: {
+            family: "happy2 Figtree, system-ui, sans-serif",
+            lineHeight: 16,
+            size: 12,
+            weight: "600",
+        },
+    });
+
+    const lists = Array.from(
+        view.container.querySelectorAll<HTMLElement>('[data-happy-desktop-ui="rig-activity-list"]'),
+    );
+    expect(lists).toHaveLength(4);
+    for (const list of lists) {
+        const styles = getComputedStyle(list);
+        expect({
+            background: styles.backgroundColor,
+            border: styles.borderTopWidth,
+            boxSizing: styles.boxSizing,
+            padding: styles.padding,
+            radius: styles.borderTopLeftRadius,
+        }).toEqual({
+            background: "rgba(0, 0, 0, 0)",
+            border: "0px",
+            boxSizing: "border-box",
+            padding: "0px",
+            radius: "0px",
+        });
+    }
+
+    const statuses = Array.from(
+        view.container.querySelectorAll<HTMLElement>(".happy2-rig-activity__status"),
+    );
+    expect(statuses).toHaveLength(6);
+    for (const status of statuses) {
+        expect(status.getBoundingClientRect().width).toBe(76);
+        expect(status.getBoundingClientRect().height).toBe(20);
+        expect(getComputedStyle(status).borderTopWidth).toBe("0px");
+    }
+
+    const dot = view.$('[data-happy-desktop-ui="rig-activity-status-dot"]');
+    expect(dot.bounds()).toMatchObject({ width: 6, height: 6 });
+    expect((await dot.visibleMetrics()).pixelCount).toBeGreaterThan(0);
+
+    // Every row's primary content begins on the same x coordinate after the
+    // fixed 76px status lane and 12px gap.
+    const contentLefts = [
+        view.$(".happy2-rig-activity__objective").bounds().x,
+        view.$(".happy2-rig-activity__task-label").bounds().x,
+        view.$(".happy2-rig-activity__subagent-content").bounds().x,
+        view.$(".happy2-rig-activity__process-command").bounds().x,
+    ];
+    expect(new Set(contentLefts).size).toBe(1);
+    expect(contentLefts[0]).toBe(108);
+
     await view.screenshot("RigActivityPanel.test");
 }, 120_000);
 
@@ -153,12 +238,71 @@ it("shows a Stop control on a background terminal only when onBackgroundProcessS
         ),
     ).toBeNull();
 
-    const stop = view.$('[data-happy-desktop-ui="rig-activity-process-stop"]')
-        .element as HTMLButtonElement;
+    const stop = view.$(
+        '[data-happy-desktop-ui="rig-activity-process-stop"] [data-happy-desktop-ui="button"]',
+    ).element as HTMLButtonElement;
     stop.click();
     await vi.waitFor(() => expect(stopped).toEqual([7]));
 
     await view.screenshot("RigActivityPanel.stop.test");
+}, 120_000);
+
+it("fits long live activity at the minimum desktop content measure", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ width: "320px" }}>
+                <RigActivityPanel
+                    backgroundProcesses={[
+                        {
+                            id: 9,
+                            command:
+                                "pnpm --dir packages/happy-desktop-electron run-development-server-with-a-long-name",
+                            cwd: "/repo",
+                            status: "running",
+                        },
+                    ]}
+                    now={64_000}
+                    onBackgroundProcessStop={() => undefined}
+                    subagents={[
+                        {
+                            ...subagents[0]!,
+                            taskName: "adversarial_review_of_the_minimum_desktop_activity_surface",
+                            modelId: "openai/gpt-5.6-sol-with-a-long-provider-suffix",
+                        },
+                    ]}
+                    tasks={tasks.slice(0, 2)}
+                />
+            </div>
+        ),
+        { width: 360, height: 640, padding: 12 },
+    );
+    await view.ready();
+
+    const panel = view.$('[data-happy-desktop-ui="rig-activity-panel"]');
+    const panelBounds = panel.bounds();
+    const panelRect = panel.element.getBoundingClientRect();
+    expect(panelBounds.width).toBe(320);
+    expect(
+        (panel.element as HTMLElement).scrollWidth,
+        "activity panel must not overflow horizontally",
+    ).toBeLessThanOrEqual((panel.element as HTMLElement).clientWidth);
+
+    for (const row of view.container.querySelectorAll<HTMLElement>(".happy2-rig-activity__row")) {
+        const bounds = row.getBoundingClientRect();
+        expect(bounds.left).toBeGreaterThanOrEqual(panelRect.left);
+        expect(
+            bounds.right,
+            `${row.className} extends to ${String(bounds.right)} inside panel right ${String(panelRect.right)}`,
+        ).toBeLessThanOrEqual(panelRect.right);
+        expect(getComputedStyle(row).borderTopWidth).toBe("0px");
+    }
+
+    const processCommand = view.$(".happy2-rig-activity__process-command");
+    expect(processCommand.bounds().height).toBeGreaterThan(18);
+    expect(processCommand.computedStyle("overflow-wrap")).toBe("anywhere");
+
+    await view.screenshot("RigActivityPanel.minimum.test");
 }, 120_000);
 
 it("shows an empty state when there is no goal, task, subagent, or process", async () => {

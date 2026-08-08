@@ -218,7 +218,7 @@ describe("rigWorkspaceStore", () => {
         workspace[Symbol.dispose]();
     });
 
-    it("opens panels from composer commands and the usage panel action", async () => {
+    it("runs accepted slash commands without leaving their draft behind", async () => {
         const fake = createFakeRigTransport();
         fake.sessionSet(fakeRigSession("session-a"));
         fake.usageSet("session-a" as RigSessionId, {
@@ -232,7 +232,7 @@ describe("rigWorkspaceStore", () => {
         const workspace = rigWorkspaceStoreCreate(client);
         const unsubscribe = workspace.subscribe(() => undefined);
         await flush();
-        workspace.conversationOpen("session-a" as RigSessionId);
+        workspace.conversationOpen("session-a" as RigSessionId, DEFAULT_PROJECT.id as RigGroupId);
         await flush();
 
         expect(conversationReady(workspace).usagePanelOpen).toBe(false);
@@ -244,11 +244,28 @@ describe("rigWorkspaceStore", () => {
         workspace.usagePanelClose();
         expect(conversationReady(workspace).usagePanelOpen).toBe(false);
 
-        // `/tasks` opens the activity panel idempotently through the composer.
-        workspace.composerCommandInvoke("tasks");
+        workspace.composerTextUpdate("/agents");
+        expect(conversationReady(workspace).composer.commandQuery).toBe("agents");
+        workspace.composerCommandInvoke("agents");
+        expect(conversationReady(workspace).composer.text).toBe("");
+        expect(conversationReady(workspace).composer.commandQuery).toBeUndefined();
         expect(conversationReady(workspace).activityPanelOpen).toBe(true);
-        workspace.composerCommandInvoke("tasks");
+
+        // Reconciliation after the action must not restore the command draft
+        // that opened the picker.
+        await flush();
+        expect(conversationReady(workspace).composer.text).toBe("");
         expect(conversationReady(workspace).activityPanelOpen).toBe(true);
+
+        workspace.composerTextUpdate("/compact");
+        workspace.composerCommandInvoke("compact");
+        await flush();
+        expect(fake.calls.filter((call) => call.operation === "compact")).toHaveLength(1);
+        const messageTexts = conversationReady(workspace)
+            .entries.filter((entry) => entry.kind === "message")
+            .map((entry) => entry.message.text);
+        expect(messageTexts).not.toContain("/agents");
+        expect(messageTexts).not.toContain("/compact");
 
         unsubscribe();
         workspace[Symbol.dispose]();

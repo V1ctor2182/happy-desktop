@@ -105,7 +105,7 @@ export function ComposerPanelPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The bounded, dismissible card the write end carries above the composer: a 40px band naming the reading and holding its close, over a capped scrollport. Hosts the `/agents` and `/usage` readouts without taking the transcript's place."
+            summary="The bounded, dismissible card the write end carries at the composer's exact measure: one uninterrupted surface with a 40px title band and capped scrollport. Hosts the `/agents` and `/usage` readouts without taking the transcript's place."
             title="ComposerPanel"
         >
             <Specimen
@@ -164,7 +164,7 @@ export function ComposerPanelPage() {
             </Specimen>
 
             <Specimen
-                detail="at the composer's own measure, where the product actually places it"
+                detail="at the composer's exact measure, with no divider between title and reading"
                 label="Chat measure"
                 number="04"
                 stage="surface"
@@ -177,6 +177,25 @@ export function ComposerPanelPage() {
                             onBackgroundProcessStop={() => undefined}
                             subagents={subagents.slice(0, 2)}
                             tasks={[]}
+                        />
+                    </ComposerPanel>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the activity reading at the narrow content measure available inside the 720×480 minimum desktop window"
+                label="Minimum desktop measure"
+                number="05"
+                stage="surface"
+            >
+                <div style={{ width: "360px" }}>
+                    <ComposerPanel onClose={() => undefined} title="Session activity">
+                        <RigActivityPanel
+                            backgroundProcesses={backgroundProcesses}
+                            now={NOW}
+                            onBackgroundProcessStop={() => undefined}
+                            subagents={subagents.slice(0, 2)}
+                            tasks={tasks}
                         />
                     </ComposerPanel>
                 </div>

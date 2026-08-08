@@ -406,12 +406,16 @@
 }
 
 /* The stage paints the real Happy surface a component sits on, at half the
-   canvas ink so 16px steps stay countable underneath it. */
+   canvas ink so 16px steps stay countable underneath it. Its 32px inset puts
+   every fixture origin on a visible minor-grid intersection rather than at an
+   arbitrary mathematical centre between grid lines. */
 .specimen-stage {
-    /* eslint-disable-next-line happy2-layout/use-flex-layout -- stacked specimens each occupy an equal auto row that stretches to fill the stage while staying centred in its own band; a flex column can centre the group or stretch it, not both */
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
     min-height: 192px;
-    place-items: center;
+    padding: 32px;
     overflow: hidden;
     /* Parallel inner curve: the 10px card radius less the 1px border inset. */
     border-radius: 0 0 9px 9px;

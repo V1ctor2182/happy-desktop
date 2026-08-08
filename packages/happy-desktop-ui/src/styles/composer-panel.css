@@ -5,7 +5,7 @@
  * reads as one more thing the write end is carrying rather than as a screen
  * that arrived. A slim 40px band names the reading and holds the only way out
  * of it; everything below is a full-bleed scrollport whose inner wrapper owns
- * the gutter.
+ * the gutter. Header and reading are one uninterrupted surface.
  */
 
 .happy2-composer-panel,
@@ -39,7 +39,7 @@
     /* 6px at the trailing edge centres the 28px close control in the band's
        own 40px height, against 12px of ordinary text inset at the leading one. */
     padding: 0 6px 0 12px;
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 0;
 }
 
 .happy2-composer-panel__heading {
@@ -48,6 +48,13 @@
     align-items: baseline;
     gap: 8px;
     min-width: 0;
+}
+
+/* The close control sits 7px inside the card's top/right curve (1px border +
+   6px header inset), so its 3px corner remains parallel to the card's 10px
+   corner instead of drawing a second, unrelated curve. */
+.happy2-composer-panel__header > .happy2-button {
+    border-radius: 3px;
 }
 
 .happy2-composer-panel__title {

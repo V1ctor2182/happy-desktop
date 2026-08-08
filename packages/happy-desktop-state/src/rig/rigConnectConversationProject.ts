@@ -449,25 +449,30 @@ function rigConnectGroupProject(
                         text: element.errorMessage,
                         sequence,
                     });
-                entries.push({
-                    kind: "turnStatus",
-                    id: `${element.id}:status`,
-                    sequence: sequenceOf(entries.length),
-                    status:
-                        element.reason === "steering"
-                            ? "steered"
-                            : element.reason === "error" || element.reason === "abort"
-                              ? "failed"
-                              : "complete",
-                    reason: element.reason,
-                    durationMs: element.elapsedMs,
-                    tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
-                });
+                if (element.turnKind !== "compaction")
+                    entries.push({
+                        kind: "turnStatus",
+                        id: `${element.id}:status`,
+                        sequence: sequenceOf(entries.length),
+                        status:
+                            element.reason === "steering"
+                                ? "steered"
+                                : element.reason === "error" || element.reason === "abort"
+                                  ? "failed"
+                                  : "complete",
+                        reason: element.reason,
+                        durationMs: element.elapsedMs,
+                        tools: elements.filter((candidate) => candidate.kind === "tool_call")
+                            .length,
+                    });
                 break;
         }
     }
 
-    if (!groupEnd) return entries;
+    // A standalone manual compaction is already one meaningful activity row.
+    // Treating it as a generic tool-only turn fabricates an empty agent reply,
+    // trace control, and redundant "Completed in" footer.
+    if (!groupEnd || groupEnd.turnKind === "compaction") return entries;
     let finalAgentIndex = -1;
     let statusIndex = -1;
     for (let index = entries.length - 1; index >= 0; index -= 1) {

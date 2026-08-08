@@ -344,15 +344,21 @@ export function composerStoreCreate(
         commandInvoke(commandId): void {
             const previous = get();
             if (!previous.capabilities.commands.some((command) => command.id === commandId)) return;
+            const textUpdatedAt = now();
             set({
                 text: "",
                 revision: previous.revision + 1,
                 submission: { status: "idle" },
+                textUpdatedAt,
                 commandQuery: undefined,
                 mentionQuery: undefined,
                 shellCommand: undefined,
                 mentionCandidates: [],
             });
+            // The command draft is persisted by the same output as ordinary
+            // text. Clearing only this in-memory store lets a later durable
+            // draft reconciliation restore `/agents` and reopen its picker.
+            output({ type: "textUpdated", scopeId, text: "" });
             output({ type: "commandInvoked", scopeId, commandId });
         },
 

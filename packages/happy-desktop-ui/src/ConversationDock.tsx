@@ -124,8 +124,8 @@ export function ConversationDock(props: ConversationDockProps) {
                     {props.unavailable}
                 </Banner>
             ) : null}
-            {props.composerAboveControl}
             <div className="happy2-conversation__dock-inner">
+                {props.composerAboveControl}
                 <Composer
                     attachmentMultiple
                     commands={commandItems}

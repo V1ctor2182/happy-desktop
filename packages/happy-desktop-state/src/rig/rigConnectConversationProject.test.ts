@@ -1,4 +1,4 @@
-import type { CompactionElement } from "@slopus/rig-connect";
+import type { ChatElement, CompactionElement } from "@slopus/rig-connect";
 import { expect, it } from "vitest";
 import { rigConnectConversationProject } from "./rigConnectConversationProject.js";
 
@@ -49,5 +49,49 @@ it("projects humanized token subjects throughout compaction", () => {
         subject: "249k → 5.3k tokens",
         status: "success",
         mono: false,
+    });
+});
+
+it("keeps a standalone manual compaction as one activity row", () => {
+    const completed: CompactionElement = {
+        ...running,
+        status: "completed",
+        estimatedTokensAfter: 5_330,
+    };
+    const groupEnd: Extract<ChatElement, { kind: "group_end" }> = {
+        id: "group-end:g1",
+        groupId: "g1",
+        runId: "r1",
+        createdAt: 32_000,
+        kind: "group_end",
+        turnKind: "compaction",
+        outcome: "success",
+        reason: "completed",
+        startedAt: 1_000,
+        endedAt: 32_000,
+        elapsedMs: 31_000,
+        turnStartedAt: 1_000,
+        turnElapsedMs: 31_000,
+    };
+
+    const projected = rigConnectConversationProject({
+        elements: [completed, groupEnd],
+        sessionId: "s1",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [],
+        expandedGroupIds: new Set(),
+        subagents: [],
+    });
+
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toMatchObject({
+        kind: "agentActivity",
+        activity: {
+            kind: "labeled",
+            label: "Compacted context",
+            subject: "249k → 5.3k tokens",
+            status: "success",
+        },
     });
 });

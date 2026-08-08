@@ -1,9 +1,11 @@
+import { useState } from "react";
 import type {
     RigBackgroundProcess,
     RigGoal,
     RigSubagentSummary,
     RigTask,
 } from "happy-desktop-state";
+import { Button } from "../../src/Button";
 import { RigActivityPanel } from "../../src/RigActivityPanel";
 import { ComponentPage, Specimen } from "../kit";
 
@@ -87,29 +89,60 @@ const backgroundProcesses: readonly RigBackgroundProcess[] = [
     { id: 2, command: "vite --host", cwd: "/repo", status: "running" },
 ];
 
+function DynamicActivityPanelFixture() {
+    const [completed, setCompleted] = useState(false);
+    const currentSubagents: readonly RigSubagentSummary[] = subagents.map((subagent, index) =>
+        index !== 0
+            ? subagent
+            : {
+                  ...subagent,
+                  status: completed ? "completed" : "running",
+                  ...(completed ? { elapsedMs: 90_000 } : {}),
+              },
+    );
+    return (
+        <div
+            style={{
+                alignItems: "flex-start",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                width: "560px",
+            }}
+        >
+            <Button
+                onClick={() => setCompleted((value) => !value)}
+                size="small"
+                variant="secondary"
+            >
+                {completed ? "Resume active subagent" : "Complete active subagent"}
+            </Button>
+            <RigActivityPanel
+                backgroundProcesses={backgroundProcesses}
+                onBackgroundProcessStop={() => undefined}
+                goal={goal}
+                now={NOW}
+                subagents={currentSubagents}
+                tasks={tasks}
+            />
+        </div>
+    );
+}
+
 export function RigActivityPanelPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Rig session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): persistent goal with status, task list, delegated-subagent monitor, and running background terminals. Read-only; SSE-reactive."
+            summary="Rig session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): one flat reading for the goal, tasks, delegated subagents, and running terminals, separated by spacing instead of nested cards. Read-only; SSE-reactive."
             title="RigActivityPanel"
         >
             <Specimen
-                detail="a session with a goal, task list, two subagents, and background terminals"
-                label="Populated"
+                detail="a live fixture: complete and resume its active subagent to inspect stable alignment across reactive updates"
+                label="Dynamic populated"
                 number="01"
                 stage="surface"
             >
-                <div style={{ width: "560px" }}>
-                    <RigActivityPanel
-                        backgroundProcesses={backgroundProcesses}
-                        onBackgroundProcessStop={() => undefined}
-                        goal={goal}
-                        now={NOW}
-                        subagents={subagents}
-                        tasks={tasks}
-                    />
-                </div>
+                <DynamicActivityPanelFixture />
             </Specimen>
 
             <Specimen
@@ -140,6 +173,23 @@ export function RigActivityPanelPage() {
                         now={NOW}
                         subagents={[]}
                         tasks={[]}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="360px content measure inside the 720×480 minimum desktop window; long model, activity, and terminal text must wrap without horizontal overflow"
+                label="Minimum desktop measure"
+                number="04"
+                stage="surface"
+            >
+                <div style={{ width: "360px" }}>
+                    <RigActivityPanel
+                        backgroundProcesses={backgroundProcesses.slice(0, 1)}
+                        now={NOW}
+                        onBackgroundProcessStop={() => undefined}
+                        subagents={subagents.slice(0, 1)}
+                        tasks={tasks.slice(0, 2)}
                     />
                 </div>
             </Specimen>
