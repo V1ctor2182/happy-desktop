@@ -1584,7 +1584,12 @@ export function AppRigView(props: AppRigViewProps) {
     );
     const active =
         directory.rigs.find((rig) => rig.id === props.rigId) ?? directory.rigs[0] ?? undefined;
-    const profilesStore = active?.session?.profiles?.() ?? rigProfilesStoreNoop;
+    // A remote connection authors messages with a profile owned by this window's
+    // host Rig. The node deliberately has no profile store of its own, so using
+    // the active Rig here loses the selected identity and makes the reader's
+    // messages look incoming when their attributed transcript rows arrive.
+    const localRig = hostRig(directory);
+    const profilesStore = localRig?.session?.profiles?.() ?? rigProfilesStoreNoop;
     const profiles = useSyncExternalStore(
         profilesStore.subscribe,
         profilesStore.get,
@@ -1610,7 +1615,6 @@ export function AppRigView(props: AppRigViewProps) {
     const inboxPending = inbox.pending.length;
     // The host answers for this account rather than whichever Rig the window is
     // addressing: a node the reader has open is a different machine.
-    const localRig = hostRig(directory);
     // The machines the host is peered with. The sidebar shows them whenever the
     // window is open rather than only on a settings screen: a node going quiet
     // is why work stops arriving, and that has to be visible where the work is.
