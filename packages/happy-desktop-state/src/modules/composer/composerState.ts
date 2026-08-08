@@ -78,8 +78,8 @@ export interface ComposerSnapshot {
     readonly submission: ComposerSubmission;
     /** Whether the editable text control currently owns browser focus. */
     readonly focused: boolean;
-    /** Client time of the most recent keystroke, focus, or blur. */
-    readonly lastInteractionAt?: number;
+    /** Client time of the most recent local text edit. */
+    readonly textUpdatedAt?: number;
     /**
      * Who the next send addresses. New composers address agents by default;
      * callers may explicitly select people for a human-directed message.
@@ -270,7 +270,7 @@ export function composerStoreCreate(
                 text,
                 revision: previous.revision + 1,
                 submission: { status: "idle" },
-                lastInteractionAt: now(),
+                textUpdatedAt: now(),
                 ...derived,
                 ...(mentionClosed ? { mentionCandidates: [] } : {}),
             });
@@ -281,7 +281,7 @@ export function composerStoreCreate(
 
         focusUpdate(focused): void {
             if (get().focused === focused) return;
-            set({ focused, lastInteractionAt: now() });
+            set({ focused });
             output({ type: "focusUpdated", scopeId, focused });
         },
 

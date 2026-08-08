@@ -2499,7 +2499,7 @@ export function rigWorkspaceStoreCreate(
                     // moved on. The send clears this composer itself.
                     if (currentComposer.getState().submission.status === "pending") return;
                     const remoteUpdatedAt = state.draftUpdatedAt ?? 0;
-                    const localUpdatedAt = currentComposer.getState().lastInteractionAt ?? 0;
+                    const localUpdatedAt = currentComposer.getState().textUpdatedAt ?? 0;
                     if (remoteUpdatedAt < localUpdatedAt) return;
                     const remote = state.draft ?? "";
                     if (currentComposer.getState().text !== remote)
