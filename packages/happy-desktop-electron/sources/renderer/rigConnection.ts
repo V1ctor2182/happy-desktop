@@ -42,6 +42,42 @@ import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource"
 import { rigRendererTransportCreate, RigTransportHttpError } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
 
+/**
+ * A daemon whose protocol this build cannot read, and which of the two is behind.
+ *
+ * It is kept as a fact rather than only as a sentence because nothing about it
+ * is transient: no retry, no reconnect, and no amount of waiting closes a
+ * version gap. Something has to be updated, and which side must be updated is
+ * what decides what the window is allowed to offer — installing a Happy update,
+ * or reinstalling Rig.
+ */
+export interface RigProtocolMismatch {
+    /** Which side has to be updated for the two to meet again. */
+    readonly side: "app" | "rig";
+    /** The protocol the daemon on the other end negotiated. */
+    readonly serverProtocolVersion: number;
+    /** Oldest and newest daemon protocol this build of Happy can read. */
+    readonly supportedMinimum: number;
+    readonly supportedMaximum: number;
+    /** rig-connect's own sentence about the refusal. */
+    readonly message: string;
+}
+
+/** Reads one handshake result as a mismatch, or nothing while the two can read each other. */
+function protocolMismatchOf(compatibility: ServerCompatibility): RigProtocolMismatch | undefined {
+    if (compatibility.status === "checking" || compatibility.status === "compatible")
+        return undefined;
+    return {
+        message: describeServerCompatibility(compatibility),
+        serverProtocolVersion: compatibility.serverProtocolVersion,
+        // `client_outdated` is a daemon newer than this build, so Happy is what
+        // has to move; `server_outdated` is the mirror image.
+        side: compatibility.status === "client_outdated" ? "app" : "rig",
+        supportedMaximum: compatibility.maximumSupportedProtocolVersion,
+        supportedMinimum: compatibility.minimumSupportedProtocolVersion,
+    };
+}
+
 const WORKSPACE_MEMORY_PREFIX = "happy2.rig.workspace-memory.v1:";
 
 /** How soon to read a Rig again after a read that failed for an ordinary reason. */
@@ -187,14 +223,17 @@ export interface RigSessionDeps {
      */
     readonly unavailable?: (error: unknown) => void;
     /**
-     * Reports what the connector made of the daemon's protocol handshake: a
-     * sentence when the two cannot read each other, and nothing once they can.
+     * Reports what the connector made of the daemon's protocol handshake: the
+     * mismatch when the two cannot read each other, and nothing once they can.
      *
-     * The host's daemon ships with this app and will normally agree with it. A
-     * machine reached through the host will not always, and a version gap there
-     * shows up as surfaces that stay empty for a reason nobody is told.
+     * The host's daemon does not ship with this app — it is installed and
+     * updated on its own schedule — so the two drift apart the moment either
+     * side moves, and a machine reached through the host drifts further still.
+     * A version gap otherwise shows up as surfaces that stay empty for a reason
+     * nobody is told, which is why it is reported as a fact with a side rather
+     * than as one more failure sentence.
      */
-    readonly compatibility?: (message: string | undefined) => void;
+    readonly compatibility?: (mismatch: RigProtocolMismatch | undefined) => void;
     /**
      * Reports whether this Rig is reachable but not sharing its API.
      *
@@ -316,11 +355,9 @@ export function rigConnectionOpen(input: {
                 serverProtocolVersion = nextProtocolVersion;
                 for (const listener of protocolListeners) listener(serverProtocolVersion);
             }
-            compatibilityFailure =
-                compatibility.status === "compatible" || compatibility.status === "checking"
-                    ? undefined
-                    : describeServerCompatibility(compatibility);
-            input.deps.compatibility?.(compatibilityFailure);
+            const mismatch = protocolMismatchOf(compatibility);
+            compatibilityFailure = mismatch?.message;
+            input.deps.compatibility?.(mismatch);
             input.deps.changed();
         },
         onSessionFinished: () => completionChimePlay(),

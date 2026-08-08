@@ -29,6 +29,7 @@ import {
 import {
     CodeHighlightWorkers,
     LocalOnboardingScreen,
+    SetupPage,
     ThemeScope,
     WelcomeScreen,
     type WelcomeSlide,
@@ -51,7 +52,7 @@ import {
     localOnboardingView,
     type LocalOnboardingStore,
 } from "./localOnboardingStore";
-import { rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
+import { LOCAL_RIG_ID, rigDirectoryStoreCreate, type RigDirectoryStore } from "./rigDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
@@ -394,7 +395,19 @@ function DesktopScreens(props: DesktopRendererProps) {
         props.localWebUpdate.get,
     );
     const content = (
-        <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
+        <DesktopProtocolGate
+            onUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
+            // A runtime that is still choosing, starting, or failing answers for
+            // itself, and those screens are the more actionable ones: a version
+            // gap learned from an earlier connection must not talk over the
+            // reason this one is not up. The gate stays mounted across that so
+            // the workspace below it is never rebuilt by the change.
+            ready={snapshot?.phase === "ready"}
+            rigs={props.rigs}
+            {...(snapshot?.update ? { update: snapshot.update } : {})}
+        >
+            <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
+        </DesktopProtocolGate>
     );
     // Local setup gates the workspace until this machine can run Rig.
     if (!snapshot || !desktopLocalPhase(snapshot)) return content;
@@ -406,6 +419,76 @@ function DesktopScreens(props: DesktopRendererProps) {
         >
             {content}
         </DesktopOnboardingGate>
+    );
+}
+
+/** What someone is told to run to bring their own Rig up to this build. */
+const RIG_UPDATE_COMMAND = "npm install --global @slopus/rig";
+
+/**
+ * The window when this build and the host's Rig cannot read each other.
+ *
+ * Every other unavailability in Happy belongs beside the Rig it affects, and
+ * this one deliberately does not. A version gap is not a connection that might
+ * come back: the daemon is up, answering, and speaking a protocol this build has
+ * no code for, so nothing behind this screen would work and nothing anyone does
+ * in it would change that. Waiting is not one of the options, which is why it is
+ * not shown as a state to wait in.
+ *
+ * It is the host alone. A node with the same gap is one machine of several
+ * whose work is missing while the rest of the app still does its job, so that
+ * stays a notice beside that node.
+ */
+function DesktopProtocolGate(props: {
+    children: ReactNode;
+    onUpdateInstall(): void;
+    /** False while the runtime still owns the window with a screen of its own. */
+    ready: boolean;
+    rigs: RigDirectoryStore;
+    update?: DesktopUpdateSnapshot;
+}) {
+    const directory = useSyncExternalStore(props.rigs.subscribe, props.rigs.get, props.rigs.get);
+    const mismatch = props.ready
+        ? directory.rigs.find((rig) => rig.id === LOCAL_RIG_ID)?.protocolMismatch
+        : undefined;
+    if (!mismatch) return <>{props.children}</>;
+    // Happy is behind. It updates itself, so the only useful thing on screen is
+    // the update it already has — and, until it has one, the plain fact. The
+    // button arrives here on its own when the download lands, because this
+    // screen is drawn from the same runtime snapshot the updater publishes to.
+    if (mismatch.side === "app") {
+        const downloaded = props.update?.status === "downloaded";
+        return (
+            <SetupPage
+                {...(downloaded
+                    ? {
+                          action: {
+                              label: "Install update and restart",
+                              onSelect: props.onUpdateInstall,
+                          },
+                      }
+                    : {})}
+                copy={`Rig on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy reads up to ${mismatch.supportedMaximum}. ${
+                    downloaded
+                        ? "The update is downloaded and ready to install."
+                        : "Happy is looking for its own update and will offer it here as soon as it has one."
+                }`}
+                data-testid="desktop-protocol-screen"
+                scene="owl"
+                title="Happy is out of date."
+            />
+        );
+    }
+    // The daemon is behind, which is not something Happy can fix from here: it
+    // is a global npm package on this machine, so the command is the answer.
+    return (
+        <SetupPage
+            command={RIG_UPDATE_COMMAND}
+            copy={`Rig on this machine speaks protocol ${mismatch.serverProtocolVersion}, and this build of Happy needs at least ${mismatch.supportedMinimum}. Update Rig, then start Happy again.`}
+            data-testid="desktop-protocol-screen"
+            scene="owl"
+            title="Rig is out of date."
+        />
     );
 }
 

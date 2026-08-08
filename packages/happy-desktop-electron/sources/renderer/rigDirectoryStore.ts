@@ -13,6 +13,7 @@ import {
     rigConnectionOpen,
     rigPeerConnectEndpoint,
     type RigConnectionHandle,
+    type RigProtocolMismatch,
     type RigSession,
 } from "./rigConnection";
 import type { DesktopRuntimeStore } from "./runtimeStore";
@@ -55,6 +56,16 @@ export interface RigDirectoryEntry {
      * show, which is what the surface says rather than calling it offline.
      */
     readonly accessRestricted?: boolean;
+    /**
+     * Set while this build and that daemon cannot read each other's protocol.
+     *
+     * It is published beside `status` rather than folded into it because it is
+     * the one unavailability nothing recovers from on its own: every other
+     * error here is worth waiting out, and this one is worth telling someone
+     * about. The host's is what the window shows a page for; a node's stays
+     * beside that node, since the rest of the app still works.
+     */
+    readonly protocolMismatch?: RigProtocolMismatch;
     readonly message?: string;
     readonly version?: string;
     /** This machine's projects, kept live while the Rig is connected. */
@@ -108,7 +119,7 @@ interface LiveRig {
      * publish itself as plainly connected and drop the reason its surfaces are
      * empty.
      */
-    compatibilityMessage?: string;
+    protocolMismatch?: RigProtocolMismatch;
     entry: RigDirectoryEntry;
     /** The host's current view of this node's route, kept apart from Rig health. */
     nodeLink?: {
@@ -318,7 +329,7 @@ export function rigDirectoryStoreCreate(
             status: connection.daemon === "ready" ? "connected" : "connecting",
             message:
                 connection.daemon === "ready"
-                    ? rig.compatibilityMessage
+                    ? rig.protocolMismatch?.message
                     : "Waiting for this Rig to become ready.",
             version: connection.version ?? rig.entry.version,
         };
@@ -343,32 +354,40 @@ export function rigDirectoryStoreCreate(
                 conversationOpen: (location) => deps.conversationOpen(id, location),
                 groupOpen: (groupId) => deps.groupOpen(id, groupId),
                 listOpen: (groupId) => deps.listOpen(id, groupId),
-                compatibility: (message) => {
+                compatibility: (mismatch) => {
                     const current = rigs.get(id);
-                    if (!current || current.compatibilityMessage === message) return;
+                    if (!current || current.protocolMismatch?.message === mismatch?.message) return;
                     // Said whether or not the stores came up: a daemon this
                     // build cannot read may still answer enough to look alive,
                     // and the surfaces it leaves empty have no other
                     // explanation.
-                    current.compatibilityMessage = message;
-                    current.entry =
+                    current.protocolMismatch = mismatch;
+                    const message = mismatch?.message;
+                    const availability =
                         current.nodeLink?.status === "connecting"
                             ? {
-                                  ...current.entry,
-                                  status: "connecting",
+                                  status: "connecting" as const,
                                   message:
                                       current.nodeLink.message ??
                                       "The host is connecting to this Rig.",
                               }
                             : current.nodeLink?.status === "unreachable"
                               ? {
-                                    ...current.entry,
-                                    status: "disconnected",
+                                    status: "disconnected" as const,
                                     message:
                                         current.nodeLink.message ??
                                         "The host cannot reach this Rig.",
                                 }
-                              : { ...current.entry, message };
+                              : { message };
+                    // The gap itself travels on the entry whatever the link is
+                    // doing: a node the host is still dialling has no version
+                    // gap to report in its status line yet, and the gap does not
+                    // stop being true while that link settles.
+                    current.entry = {
+                        ...current.entry,
+                        ...availability,
+                        protocolMismatch: mismatch,
+                    };
                     publish();
                 },
                 restricted: (value) => {
