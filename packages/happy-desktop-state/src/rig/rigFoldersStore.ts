@@ -218,8 +218,15 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
      */
     const readingInput = (reading: RigFoldersReading): void => {
         if (disposed) return;
-        if (reading.connection === "live") settled = true;
         const current = store.getState();
+        // A reconnecting source can publish its empty opening view before the
+        // durable catalog arrives. Keep the last live tree mounted through that
+        // transition so route changes do not collapse and rebuild the sidebar.
+        if (reading.connection !== "live") {
+            if (!settled && !current.loading) store.setState({ ...current, loading: true });
+            return;
+        }
+        settled = true;
         store.setState({
             ...current,
             folders: referencesPreserve(current.folders, reading.folders),
