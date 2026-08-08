@@ -62,8 +62,9 @@ import type {
     RigWorktree,
     RigWorktreeId,
     RigApplet,
+    RigSecret,
 } from "happy-desktop-state";
-import type { SlotAction, SlotEntry, Applet } from "./rigDaemonTypes";
+import type { SlotAction, SlotEntry, Applet, SecretSummary } from "./rigDaemonTypes";
 
 /**
  * Pure projections from Rig's raw `@slopus/rig` protocol types into the closed,
@@ -654,6 +655,19 @@ export function rigAppletProject(applet: Applet): RigApplet {
         })),
         createdAt: applet.createdAt,
         updatedAt: applet.updatedAt,
+    };
+}
+
+/**
+ * Projects one secret bundle into product state. The daemon reports what a
+ * bundle binds and never what is in it, so there is nothing here to redact:
+ * the values were never on the wire.
+ */
+export function rigSecretProject(secret: SecretSummary): RigSecret {
+    return {
+        id: secret.id,
+        description: secret.description,
+        environmentVariables: [...secret.environmentVariables],
     };
 }
 

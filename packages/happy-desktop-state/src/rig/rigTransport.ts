@@ -372,6 +372,29 @@ export interface RigTransport {
     /** Resolves one applet's current version into the host's isolated preview site. */
     appletPreviewOpen(name: string): Promise<string>;
 
+    /**
+     * Every secret bundle this Rig holds. The host answers with the environment
+     * variables each one binds and never with their values, so this reads what
+     * exists rather than what is in it.
+     */
+    secretsRead(signal?: AbortSignal): Promise<readonly import("./rigSecretsStore.js").RigSecret[]>;
+
+    /**
+     * Registers a secret bundle, replacing whatever is held under that id. The
+     * host keys a bundle by its id and stores it whole, so this carries the
+     * complete environment rather than a change to it, and answers with what the
+     * host kept. A refusal — an id it will not accept, a variable name it cannot
+     * bind — arrives as a failure in the host's own words.
+     */
+    secretWrite(secret: {
+        readonly id: string;
+        readonly description: string;
+        readonly environment: Readonly<Record<string, string>>;
+    }): Promise<import("./rigSecretsStore.js").RigSecret>;
+
+    /** Forgets one secret bundle on this Rig, values included. */
+    secretRemove(secretId: string): Promise<void>;
+
     /** Writes one existing text file back to its checkout. */
     workspaceFileWrite(
         groupId: RigGroupId,

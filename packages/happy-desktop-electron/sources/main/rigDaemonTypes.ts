@@ -273,6 +273,40 @@ export interface ListAppletsResponse {
     readonly applets: readonly Applet[];
 }
 
+/**
+ * One secret bundle this Rig holds. The daemon answers with the names of the
+ * environment variables a bundle binds and never with their values: a value is
+ * given to a command the daemon runs, not back to whoever registered it.
+ */
+export interface SecretSummary {
+    readonly id: string;
+    readonly description: string;
+    readonly environmentVariables: readonly string[];
+}
+
+export interface ListSecretsResponse {
+    readonly secrets: readonly SecretSummary[];
+}
+
+/**
+ * A registration, which is also the only way to change one: the daemon keys a
+ * bundle by its id and replaces it wholesale, so an update carries the complete
+ * environment rather than a patch of it.
+ */
+export interface RegisterSecretRequest {
+    readonly id: string;
+    readonly description: string;
+    readonly environment: Readonly<Record<string, string>>;
+}
+
+export interface RegisterSecretResponse {
+    readonly secret: SecretSummary;
+}
+
+export interface UnregisterSecretResponse {
+    readonly removed: boolean;
+}
+
 export type GlobalLiveEvent =
     | {
           readonly type: "project_git_changed";

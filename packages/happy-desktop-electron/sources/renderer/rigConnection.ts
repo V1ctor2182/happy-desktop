@@ -19,6 +19,7 @@ import {
     type RigWorkspaceMemoryPersistence,
     type RigInboxStore,
     type RigInstructionsStore,
+    type RigSecretsStore,
     type RigSecurityPolicyStore,
     type RigFoldersStore,
     type RigNodesStore,
@@ -196,6 +197,8 @@ export interface RigSession {
     readonly instructions: RigInstructionsStore;
     /** The machine-wide policy its permission reviewer applies to agent actions. */
     readonly securityPolicy: RigSecurityPolicyStore;
+    /** The secret bundles this Rig hands to the commands its agents run. */
+    readonly secrets: RigSecretsStore;
     /** Ticking clock for relative timestamps, so surfaces never read `Date.now()` in render. */
     readonly clock: RigClockStore;
 }
@@ -485,6 +488,7 @@ export function rigConnectionOpen(input: {
                     pairing: client.pairing(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
+                    secrets: client.secrets(),
                     clock: rigClockStoreCreate(),
                 };
                 catalogFailure = undefined;

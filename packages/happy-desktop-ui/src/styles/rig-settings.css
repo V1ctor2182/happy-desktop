@@ -386,3 +386,188 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ---- Secrets ------------------------------------------------------------ */
+
+/* The one act on this page that is not about an existing bundle, kept on its
+   own line above them so adding is never mistaken for changing one. */
+.happy2-rig-secret__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+/* A bundle reads as the same card a provider or a node does: something this
+   machine holds, listed with what it currently offers. */
+.happy2-rig-secret {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+}
+
+.happy2-rig-secret__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy2-rig-secret__identity {
+    display: flex;
+    align-items: center;
+    flex: 1 1 0%;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy2-rig-secret__glyph {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    /* An independent rounded tile inside the 16px card padding, so it parallels
+       no outer curve and carries its own 8px radius. */
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    color: var(--text);
+}
+
+.happy2-rig-secret__naming {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The identifier is what a command names, so it is set in the mono face the
+   rest of the system uses for something typed rather than read. */
+.happy2-rig-secret__name {
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-secret__meta {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-secret__actions {
+    display: flex;
+    align-items: center;
+    flex: none;
+    gap: 8px;
+}
+
+/* What the bundle binds. A long list wraps rather than scrolling sideways:
+   these are the names a person is checking against a command they wrote. */
+.happy2-rig-secret__variables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.happy2-rig-secret__empty-variables {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-rig-secret__confirm {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface);
+    /* Inset 16px from a 10px card corner leaves no curve to parallel, so this
+       is an independent 8px shape. */
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+}
+
+.happy2-rig-secret__confirm-text {
+    flex: 1 1 0%;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* The form for a bundle being written. It is the same card shape as a listed
+   bundle so adding one reads as taking the place it will occupy. */
+.happy2-rig-secret-form {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+}
+
+.happy2-rig-secret-form__title {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-rig-secret-form__variables {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy2-rig-secret-form__variables-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy2-rig-secret-form__variable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-rig-secret-form__variable-name {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.happy2-rig-secret-form__variable-value {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.happy2-rig-secret-form__variables-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.happy2-rig-secret-form__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}

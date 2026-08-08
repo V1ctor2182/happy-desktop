@@ -39,6 +39,7 @@ import type {
     RigInboxSnapshot,
     RigInboxStore,
     RigInstructionsStore,
+    RigSecretsStore,
     RigSecurityPolicyStore,
     RigNode,
     RigNodesSnapshot,
@@ -270,6 +271,12 @@ export interface AppRigSession {
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
     readonly securityPolicy?: RigSecurityPolicyStore;
+    /**
+     * The secret bundles this Rig holds, as the settings window lists and
+     * writes them. Absent on a machine whose registry this window cannot read,
+     * which leaves that category saying so rather than claiming it holds none.
+     */
+    readonly secrets?: RigSecretsStore;
 }
 
 export interface AppRigDirectorySnapshot {

@@ -5,11 +5,14 @@ import {
     RigNodeSettings,
     RigPairing,
     RigProviderSettings,
+    RigSecretsSettings,
     RigSettingsShell,
     RigUsageSettings,
     type RigNodeRow,
     type RigNodeTransportRow,
     type RigProviderRow,
+    type RigSecretEditor,
+    type RigSecretRow,
     type RigSettingsCategory,
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -22,6 +25,7 @@ const categories: readonly RigSettingsCategory[] = [
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
+    { icon: "lock", id: "secrets", label: "Secrets" },
     { icon: "zap", id: "usage", label: "Usage" },
 ];
 
@@ -254,6 +258,42 @@ const providers: readonly RigProviderRow[] = [
 ];
 
 const noop = () => undefined;
+
+const secretsDescription = "Environment values this machine gives to the commands its agents run";
+
+const secrets: readonly RigSecretRow[] = [
+    {
+        id: "github",
+        description: "Pushes and pull requests from this machine.",
+        variables: ["GITHUB_TOKEN"],
+    },
+    {
+        id: "deploy.staging",
+        description: "The staging deployer's credentials.",
+        variables: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
+    },
+    {
+        id: "npm",
+        description: "Publishing to the private registry.",
+        variables: [],
+    },
+];
+
+/** The form as it stands for a bundle nobody has named yet. */
+const secretEditorCreate: RigSecretEditor = {
+    mode: "create",
+    secretId: "",
+    description: "",
+    variables: [{ key: "variable-1", name: "", value: "" }],
+    onIdChange: noop,
+    onDescriptionChange: noop,
+    onVariableNameChange: noop,
+    onVariableValueChange: noop,
+    onVariableRemove: noop,
+    onVariableAdd: noop,
+    onSave: noop,
+    onCancel: noop,
+};
 
 export function RigSettingsBlueprintPage() {
     return (
@@ -672,6 +712,145 @@ export function RigSettingsBlueprintPage() {
                         error={{ name: "UserError", message: "The Rig stopped reporting usage." }}
                         providers={usageUnread}
                         readingTime={usageReadingTime}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Secrets category: every bundle this machine holds, listed by the variables it binds. A value is never shown, including to whoever registered it, so a bundle with no variables says that rather than looking unread."
+                label="Rig settings — secrets"
+                number="09"
+            >
+                <RigSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description={secretsDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <RigSecretsSettings
+                        onSecretCreate={noop}
+                        onSecretEdit={noop}
+                        onSecretRemoveCancel={noop}
+                        onSecretRemoveConfirm={noop}
+                        onSecretRemoveStart={noop}
+                        secrets={secrets}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Adding one: the identifier is chosen here and nowhere else, and each variable is a name beside a value that will not be readable again"
+                label="Rig settings — secret being added"
+                number="09a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description={secretsDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <RigSecretsSettings
+                        editor={{
+                            ...secretEditorCreate,
+                            secretId: "openai",
+                            description: "Model access for this machine's agents.",
+                            variables: [
+                                { key: "variable-1", name: "OPENAI_API_KEY", value: "sk-live" },
+                                { key: "variable-2", name: "", value: "" },
+                            ],
+                        }}
+                        onSecretCreate={noop}
+                        onSecretEdit={noop}
+                        onSecretRemoveCancel={noop}
+                        onSecretRemoveConfirm={noop}
+                        onSecretRemoveStart={noop}
+                        secrets={secrets}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Replacing one: the identifier is settled, the variable names come back, and their values do not — a replacement states the whole bundle again. The machine's refusal is shown in its own words."
+                label="Rig settings — secret being replaced"
+                number="09b"
+            >
+                <RigSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description={secretsDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <RigSecretsSettings
+                        editor={{
+                            ...secretEditorCreate,
+                            mode: "update",
+                            secretId: "deploy.staging",
+                            description: "The staging deployer's credentials.",
+                            error: "Environment variable 'aws region' in secret 'deploy.staging' is not a valid name.",
+                            variables: [
+                                { key: "variable-1", name: "AWS_ACCESS_KEY_ID", value: "AKIA" },
+                                { key: "variable-2", name: "AWS_SECRET_ACCESS_KEY", value: "" },
+                                { key: "variable-3", name: "aws region", value: "eu-west-1" },
+                            ],
+                        }}
+                        onSecretCreate={noop}
+                        onSecretEdit={noop}
+                        onSecretRemoveCancel={noop}
+                        onSecretRemoveConfirm={noop}
+                        onSecretRemoveStart={noop}
+                        secrets={secrets}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Removing one is confirmed on its own row, because the values go with it and nothing here can put them back"
+                label="Rig settings — secret being removed"
+                number="09c"
+            >
+                <RigSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description={secretsDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <RigSecretsSettings
+                        onSecretCreate={noop}
+                        onSecretEdit={noop}
+                        onSecretRemoveCancel={noop}
+                        onSecretRemoveConfirm={noop}
+                        onSecretRemoveStart={noop}
+                        secrets={secrets.map((secret) =>
+                            secret.id === "github" ? { ...secret, confirmingRemove: true } : secret,
+                        )}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A machine that holds none says so, and an unreachable one says that instead of offering controls that would go nowhere"
+                label="Rig settings — no secrets"
+                number="09d"
+            >
+                <RigSettingsShell
+                    activeCategoryId="secrets"
+                    categories={categories}
+                    description={secretsDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Secrets"
+                >
+                    <RigSecretsSettings
+                        onSecretCreate={noop}
+                        onSecretEdit={noop}
+                        onSecretRemoveCancel={noop}
+                        onSecretRemoveConfirm={noop}
+                        onSecretRemoveStart={noop}
+                        secrets={[]}
+                        unavailable="This window is not connected to a Rig on this machine."
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>

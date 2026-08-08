@@ -40,6 +40,9 @@ export type FakeRigOperation =
     | "globalInstructionsWrite"
     | "globalSecurityPolicyRead"
     | "globalSecurityPolicyWrite"
+    | "secretsRead"
+    | "secretWrite"
+    | "secretRemove"
     | "projectsRead"
     | "changedFileRead"
     | "changedFilesRevert"
@@ -269,6 +272,13 @@ class FakeRigTransportModel implements FakeRigTransport {
        back is what the next read returns, exactly as the daemon behaves. */
     private instructions = "";
     private securityPolicy = "";
+    /* The secret registry, kept the way the daemon keeps it: a bundle is keyed
+       by its id and replaced wholesale, and only the variable names it binds
+       are ever read back. */
+    private readonly secrets = new Map<
+        string,
+        { readonly description: string; readonly environment: Readonly<Record<string, string>> }
+    >();
     private readonly sessions = new Map<RigSessionId, RigSession>();
     /* Archived sessions stay readable by id and only drop out of the listing,
        which is exactly how the desktop host's durable archive behaves. */
@@ -426,6 +436,30 @@ class FakeRigTransportModel implements FakeRigTransport {
                 return this.securityPolicy;
             }),
         projectsRead: () => this.perform("projectsRead", {}, () => this.projects),
+        secretsRead: () =>
+            this.perform("secretsRead", {}, () =>
+                [...this.secrets].map(([id, secret]) => ({
+                    id,
+                    description: secret.description,
+                    environmentVariables: Object.keys(secret.environment),
+                })),
+            ),
+        secretWrite: (secret) =>
+            this.perform("secretWrite", {}, () => {
+                this.secrets.set(secret.id, {
+                    description: secret.description,
+                    environment: { ...secret.environment },
+                });
+                return {
+                    id: secret.id,
+                    description: secret.description,
+                    environmentVariables: Object.keys(secret.environment),
+                };
+            }),
+        secretRemove: (secretId) =>
+            this.perform("secretRemove", {}, () => {
+                this.secrets.delete(secretId);
+            }),
         slotsRead: () => Promise.resolve([]),
         appletsRead: () => Promise.resolve([]),
         appletPreviewOpen: (name) => Promise.resolve(`https://applet.invalid/${name}`),

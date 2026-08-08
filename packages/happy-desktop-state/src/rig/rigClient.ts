@@ -18,6 +18,7 @@ import {
 } from "./rigSessionListStore.js";
 import type { RigTransport } from "./rigTransport.js";
 import { rigSlotsStoreCreate, type RigSlotsStore } from "./rigSlotsStore.js";
+import { rigSecretsStoreCreate, type RigSecretsStore } from "./rigSecretsStore.js";
 import type {
     RigChangedFileDocument,
     RigFileSearchResult,
@@ -129,6 +130,13 @@ export interface RigClient {
     instructions(): RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy, as one editable document. */
     securityPolicy(): RigSecurityPolicyStore;
+    /**
+     * This Rig's secret bundles: what it holds, and the one place they are
+     * registered, replaced, and removed. Materialized on first access and
+     * shared, because the registry belongs to the machine rather than to any
+     * project or conversation.
+     */
+    secrets(): RigSecretsStore;
     /** Lists every file in a project or worktree checkout, changed or not. */
     workspaceFilesRead(groupId: RigGroupId): Promise<RigWorkspaceFiles>;
     /**
@@ -317,6 +325,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let pairingStore: RigPairingStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
+    let secretsStore: RigSecretsStore | undefined;
     let slotsStore: RigSlotsStore | undefined;
     const chats = new Map<RigSessionId, ChatBinding>();
     let disposed = false;
@@ -481,6 +490,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             securityPolicyStore ??= rigSecurityPolicyStoreCreate({ transport });
             return securityPolicyStore;
         },
+        secrets() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            secretsStore ??= rigSecretsStoreCreate({ transport });
+            return secretsStore;
+        },
         async chat(sessionId) {
             if (disposed) throw new Error("The Rig client is disposed.");
             let binding = chats.get(sessionId);
@@ -591,6 +605,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();
             securityPolicyStore = undefined;
+            secretsStore?.[Symbol.dispose]();
+            secretsStore = undefined;
             deps.catalogSource?.[Symbol.dispose]();
             for (const binding of chats.values()) {
                 binding.backgroundUnsubscribe?.();

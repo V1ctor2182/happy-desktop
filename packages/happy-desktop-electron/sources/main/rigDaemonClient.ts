@@ -17,6 +17,10 @@ import type {
     HealthResponse,
     ListSlotEntriesResponse,
     ListAppletsResponse,
+    ListSecretsResponse,
+    RegisterSecretRequest,
+    RegisterSecretResponse,
+    UnregisterSecretResponse,
     ModelCatalog,
     Project,
     ProjectAssetResponse,
@@ -271,6 +275,25 @@ export class RigDaemonClient {
     /** Reads Rig's global catalog of imported, versioned applets. */
     listApplets(): Promise<ListAppletsResponse> {
         return this.#requestJson("GET", "/applets");
+    }
+
+    /** Every secret bundle this Rig holds, by id, description, and variable names. */
+    listSecrets(): Promise<ListSecretsResponse> {
+        return this.#requestJson("GET", "/secrets");
+    }
+
+    /**
+     * Registers a secret bundle, or replaces the one already registered under
+     * that id. The daemon validates the id, the description, and every variable
+     * name, and refuses the whole registration in its own words.
+     */
+    registerSecret(secret: RegisterSecretRequest): Promise<RegisterSecretResponse> {
+        return this.#requestJson("POST", "/secrets", secret);
+    }
+
+    /** Forgets one secret bundle, values included. */
+    unregisterSecret(secretId: string): Promise<UnregisterSecretResponse> {
+        return this.#requestJson("DELETE", `/secrets/${encodeURIComponent(secretId)}`);
     }
 
     /** Reads one static file from a applet's current version. */

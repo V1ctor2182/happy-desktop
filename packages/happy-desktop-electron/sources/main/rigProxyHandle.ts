@@ -29,6 +29,7 @@ import {
     rigSessionSummaryProject,
     rigSessionUsageProject,
     rigShellResultProject,
+    rigSecretProject,
     rigSlotEntryProject,
     rigSubagentProject,
     rigTerminalProject,
@@ -648,6 +649,9 @@ export type RigProxyClient = Pick<
     | "listCatalog"
     | "listSlots"
     | "listApplets"
+    | "listSecrets"
+    | "registerSecret"
+    | "unregisterSecret"
     | "getAppletFile"
     | "gitWatch"
     | "readGitChanges"
@@ -771,6 +775,11 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     200,
                     (await client.listApplets()).applets.map(rigAppletProject),
                 );
+                return true;
+            }
+            if (path === "/secrets") {
+                const secrets = (await client.listSecrets()).secrets.map(rigSecretProject);
+                writeJson(response, 200, secrets);
                 return true;
             }
             if (path === "/applet-preview") {
@@ -1094,6 +1103,35 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                     typeof body.policy === "string" ? body.policy : "",
                 ),
             );
+            return true;
+        }
+
+        if (method === "POST" && path === "/secrets") {
+            const body = await bodyReadJson(request);
+            // Sent as the reader typed it. The daemon owns what a bundle may be
+            // called and which variables it may bind, and refuses the whole
+            // registration in its own words rather than having it second-guessed
+            // here and refused twice by different rules.
+            const environment =
+                body.environment !== null &&
+                typeof body.environment === "object" &&
+                !Array.isArray(body.environment)
+                    ? (body.environment as Record<string, unknown>)
+                    : {};
+            const registered = await client.registerSecret({
+                id: String(body.id ?? ""),
+                description: typeof body.description === "string" ? body.description : "",
+                environment: Object.fromEntries(
+                    Object.entries(environment).map(([name, value]) => [name, String(value ?? "")]),
+                ),
+            });
+            writeJson(response, 200, rigSecretProject(registered.secret));
+            return true;
+        }
+
+        if (method === "DELETE" && segments[0] === "secrets" && segments.length === 2) {
+            await client.unregisterSecret(decodeURIComponent(segments[1] ?? ""));
+            writeJson(response, 200, {});
             return true;
         }
 

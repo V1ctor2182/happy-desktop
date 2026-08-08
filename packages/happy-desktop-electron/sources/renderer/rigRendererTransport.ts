@@ -24,6 +24,7 @@ import type {
     RigSessionSummary,
     RigSessionUsage,
     RigShellCommandResult,
+    RigSecret,
     RigSlotEntry,
     RigSubagentSummary,
     RigTerminal,
@@ -208,6 +209,17 @@ export function rigRendererTransportCreate(baseUrl: string): RigTransport {
             return preview.url;
         },
         slotsRead: () => getJson<readonly RigSlotEntry[]>("/slots"),
+        secretsRead: async (signal) => {
+            const response = await fetch(url("/secrets"), { signal });
+            return readJson<readonly RigSecret[]>(response);
+        },
+        secretWrite: (secret) => postJson<RigSecret>("/secrets", secret),
+        secretRemove: async (secretId) => {
+            const response = await fetch(url(`/secrets/${encodeURIComponent(secretId)}`), {
+                method: "DELETE",
+            });
+            await readJson<unknown>(response);
+        },
         appletsRead: () => getJson<readonly RigApplet[]>("/applets"),
         appletPreviewOpen: async (name) => {
             const preview = await getJson<{ readonly url: string }>("/applet-preview", { name });

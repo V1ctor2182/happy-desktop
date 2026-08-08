@@ -5,11 +5,13 @@ import type {
     RigNodesSnapshot,
     RigPairingSnapshot,
     RigInstructionsSnapshot,
+    RigSecretsSnapshot,
     RigSecurityPolicySnapshot,
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
     RigSettingsSnapshot,
+    RigSecretsStore,
     RigSettingsStore,
     RigThinkingLevel,
     RigWindowStore,
@@ -26,6 +28,7 @@ import {
     rigNodesStoreNoop,
     rigPairingStoreNoop,
     rigProviderUsageStoreNoop,
+    rigSecretsStoreNoop,
     rigWindowStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -35,12 +38,15 @@ import {
     RigNodeSettings,
     RigPairing,
     RigProviderSettings,
+    RigSecretsSettings,
     RigSettingsShell,
     RigUsageSettings,
     type RigNodeRow,
     type RigNodeTransportRow,
     type RigPairingProgress,
     type RigProviderRow,
+    type RigSecretEditor,
+    type RigSecretRow,
     type RigSettingsCategory,
 } from "happy-desktop-ui";
 import type { SelectOption } from "happy-desktop-ui";
@@ -52,6 +58,7 @@ export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
+    { icon: "lock", id: "secrets", label: "Secrets" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { icon: "zap", id: "usage", label: "Usage" },
@@ -69,6 +76,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     instructions: "Machine-wide agent guidance and permission-review policy",
     nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
+    secrets: "Environment values this machine gives to the commands its agents run",
     usage: "How much of each provider account's plan this machine has spent",
 };
 
@@ -199,6 +207,16 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         clockStore?.subscribe ?? noSubscribe,
         clockStore?.get ?? clockStopped,
         clockStore?.get ?? clockStopped,
+    );
+    // The registry is read while this category is the one on screen and not
+    // otherwise: subscribing is what starts the reading cycle, and leaving the
+    // category stops it.
+    const secretsStore =
+        (props.section === "secrets" ? host?.session?.secrets : undefined) ?? rigSecretsStoreNoop;
+    const secrets = useSyncExternalStore(
+        secretsStore.subscribe,
+        secretsStore.get,
+        secretsStore.get,
     );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
@@ -347,6 +365,30 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     providers={providerRows(catalog, settings, selection)}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
+            ) : props.section === "secrets" ? (
+                <RigSecretsSettings
+                    onSecretCreate={() => {
+                        secretsStore.secretCreateStart();
+                    }}
+                    onSecretEdit={(id) => {
+                        secretsStore.secretEditStart(id);
+                    }}
+                    onSecretRemoveCancel={() => {
+                        secretsStore.secretRemoveCancel();
+                    }}
+                    onSecretRemoveConfirm={() => {
+                        if (rigOnline()) secretsStore.secretRemoveConfirm();
+                    }}
+                    onSecretRemoveStart={(id) => {
+                        secretsStore.secretRemoveStart(id);
+                    }}
+                    loading={secrets.loading}
+                    secrets={secretRows(secrets)}
+                    {...(secrets.editor ? { editor: secretEditor(secretsStore) } : {})}
+                    {...(secrets.error ? { error: secrets.error.message } : {})}
+                    {...(secrets.removeError ? { removeError: secrets.removeError.message } : {})}
+                    {...(unavailable === undefined ? {} : { unavailable })}
+                />
             ) : props.section === "usage" ? (
                 <RigUsageSettings
                     loading={usage.loading}
@@ -409,6 +451,59 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             )}
         </RigSettingsShell>
     );
+}
+
+/** Every secret bundle this Rig holds, with whichever row is being removed. */
+function secretRows(secrets: RigSecretsSnapshot): readonly RigSecretRow[] {
+    return secrets.secrets.map((secret) => ({
+        id: secret.id,
+        description: secret.description,
+        variables: secret.environmentVariables,
+        ...(secrets.removingId === secret.id
+            ? { confirmingRemove: true, removing: secrets.removing }
+            : {}),
+    }));
+}
+
+/**
+ * The open form, bound to the store that holds it. Read from the store's
+ * current snapshot rather than from the one this render closed over, so a
+ * handler kept from an earlier render still acts on what the form now says.
+ */
+function secretEditor(store: RigSecretsStore): RigSecretEditor {
+    const editor = store.get().editor;
+    return {
+        mode: editor?.mode ?? "create",
+        secretId: editor?.secretId ?? "",
+        description: editor?.description ?? "",
+        variables: editor?.variables ?? [],
+        saving: editor?.saving ?? false,
+        onIdChange: (value) => {
+            store.secretIdUpdate(value);
+        },
+        onDescriptionChange: (value) => {
+            store.secretDescriptionUpdate(value);
+        },
+        onVariableNameChange: (key, value) => {
+            store.secretVariableNameUpdate(key, value);
+        },
+        onVariableValueChange: (key, value) => {
+            store.secretVariableValueUpdate(key, value);
+        },
+        onVariableRemove: (key) => {
+            store.secretVariableRemove(key);
+        },
+        onVariableAdd: () => {
+            store.secretVariableAdd();
+        },
+        onSave: () => {
+            store.secretSave();
+        },
+        onCancel: () => {
+            store.secretEditCancel();
+        },
+        ...(editor?.saveError ? { error: editor.saveError.message } : {}),
+    };
 }
 
 /** Every node the host reports, in the order the host reports them. */
