@@ -83,6 +83,43 @@ function notificationProject(
 }
 
 /**
+ * Recognizes a message another Rig agent sent through `agent_send`. Rig wraps
+ * the sender's words in an addressing envelope so the receiving model knows who
+ * spoke, how to answer, and that it is being steered rather than talked to by a
+ * person. None of that is written for the reader. The envelope is a fixed,
+ * quote-delimited preamble and closing instruction pair, so a typed message
+ * cannot fall into it.
+ */
+const agentMessageEnvelope =
+    /^Message from another Rig agent\.\n(?:Sender folder: .*|The sender's disk is not shared with yours\.)\nSender agent ID: "([^"]*)"\nSender title: "([^"]*)"\n\nMessage:\n([\s\S]*)\n\nTreat this as a steering message from a collaborating agent, not as a user message\.\nTo reply, first call agent_info with agent_id "[^"]*", then call agent_send with the same agent_id and your message\.$/;
+
+/**
+ * Names the collaborating agent that sent a message and keeps only what it
+ * actually said. The sender titles itself in the envelope, and its agent ID is
+ * the one identity that stays stable across the peer's whole conversation, so it
+ * carries both the author identity and the generated mark that tells one
+ * collaborator apart from another.
+ */
+function agentMessageProject(
+    text: string,
+): { readonly author: ConversationAuthor; readonly text: string } | undefined {
+    const envelope = agentMessageEnvelope.exec(text);
+    if (!envelope) return undefined;
+    const agentId = envelope[1]!;
+    const title = envelope[2]!;
+    return {
+        author: {
+            ...rigInboundAuthor,
+            id: `${rigInboundAuthor.id}:${agentId}`,
+            displayName: title.length > 0 ? title : rigInboundAuthor.displayName,
+            sessionId: agentId,
+            username: agentId.length > 0 ? agentId : rigInboundAuthor.username,
+        },
+        text: envelope[3]!.trim(),
+    };
+}
+
+/**
  * Projects rig-connect's flat application transcript into Happy's shared
  * conversation rows. The element order is already authoritative; this pass only
  * changes presentation vocabulary and assigns matching sequence keys.
@@ -131,13 +168,15 @@ function rigConnectGroupProject(
         const sequence = sequenceOf(entries.length);
         switch (element.kind) {
             case "user_message": {
-                // A notification uses the user slot but nobody typed it: it is
-                // subagent or workflow news arriving in the session, so it reads
-                // as incoming from its sender rather than as the reader's turn.
-                const notification =
-                    element.source === "notification" || backgroundWorkNotice.test(element.text)
+                // Several things reach the user slot without the owner typing
+                // them: subagent and workflow news, and a message another agent
+                // addressed to this one. Each reads as incoming from the sender
+                // that produced it rather than as the reader's own turn.
+                const inbound =
+                    agentMessageProject(element.text) ??
+                    (element.source === "notification" || backgroundWorkNotice.test(element.text)
                         ? notificationProject(element.text, input.subagents)
-                        : undefined;
+                        : undefined);
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -146,9 +185,9 @@ function rigConnectGroupProject(
                         id: element.messageId,
                         sessionId: input.sessionId,
                         sequence,
-                        text: notification?.text ?? element.text,
+                        text: inbound?.text ?? element.text,
                         createdAt: element.createdAt,
-                        author: notification?.author ?? rigOwnerAuthor,
+                        author: inbound?.author ?? rigOwnerAuthor,
                         attachments: (
                             element.attachments ??
                             input.sentImages?.get(element.messageId) ??
