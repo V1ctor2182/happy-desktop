@@ -167,6 +167,17 @@
     pointer-events: none;
 }
 
+/* In a panel footer the composer itself occupies its real height in the flex
+   column. Only the fade below is overlaid, so the input covers no content and
+   no matching spacer or padding is introduced. */
+.happy2-floating-dock[data-placement="footer"] {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 100%;
+}
+
 /* Carries the surface colour up behind the dock so text scrolling under it
    fades out instead of being sliced by a hard edge. The fade is an alpha mask
    over a solid surface fill rather than a gradient to `transparent`: every
@@ -179,6 +190,15 @@
     background: var(--surface);
     -webkit-mask-image: linear-gradient(to bottom, transparent, black);
     mask-image: linear-gradient(to bottom, transparent, black);
+}
+
+/* Footer placement removes the fade from flex flow and hangs it over the final
+   72px of the panel body; the measure below remains the footer's sole height. */
+.happy2-floating-dock[data-placement="footer"] .happy2-floating-dock__scrim {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
 }
 
 /* Stretches its child: the dock centres its own contents at the chat measure,

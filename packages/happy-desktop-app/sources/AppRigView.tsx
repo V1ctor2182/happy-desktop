@@ -2629,8 +2629,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 
     // Expanded, the panel covers the workspace column — the tab strip, the
     // transcript, and with them the composer. The write end of the open session
-    // comes along as a floating dock so reading a diff or watching a terminal at
-    // full width never means losing the ability to answer.
+    // comes along in the panel footer: its input reserves only its own height,
+    // while its gradient still floats over the content above.
     const panelComposer =
         panel.open && panel.maximized && conversation.type === "ready" ? (
             <RigPanelComposer
@@ -2704,7 +2704,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             // divider is deliberately not asked for here.
             panelMaximized={panel.maximized}
             panelFooter={panelComposer}
-            panelFooterFloating
             panel={
                 // The panel reads and writes the checkout: a file tree, a diff,
                 // a terminal. None of them has anything to open until the
@@ -4322,11 +4321,13 @@ function chatTargetLabel(
 }
 
 /**
- * The composer that floats over the expanded panel. It writes into the session
+ * The composer at the bottom of the expanded panel. It writes into the session
  * the window already has open — the same draft, the same store actions, so a
  * half-typed message survives expanding and collapsing the panel — and carries a
  * picker for sending into a different session instead, which addresses that
- * session exactly as choosing its tab would.
+ * session exactly as choosing its tab would. Its input participates in the
+ * footer's height while its fade alone overlays the panel body, keeping the
+ * bottom content reachable without an added spacer.
  */
 function RigPanelComposer(props: {
     conversation: RigConversationSnapshot;
@@ -4357,7 +4358,7 @@ function RigPanelComposer(props: {
     const { conversation, workspace } = props;
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
     return (
-        <FloatingConversationDock>
+        <FloatingConversationDock placement="footer">
             <ConversationDock
                 composer={conversation.composer}
                 composerAboveControl={
@@ -4370,7 +4371,7 @@ function RigPanelComposer(props: {
                 disabled={props.readOnly}
                 submitDisabled={props.unavailable !== undefined}
                 {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-                // This dock only exists while it covers the workspace column's
+                // This dock only exists while it replaces the workspace column's
                 // composer, so it is the surface the reader writes into — and
                 // therefore the one that takes the caret when the conversation
                 // underneath it changes.

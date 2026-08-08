@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useRef, useSyncExternalStore } from "react";
 import type {
     ComposerSnapshot,
     ConversationAuthor,
@@ -21,9 +21,17 @@ import {
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
 } from "./conversationMessageGrouped";
-import { conversationRowHeight } from "./conversationRowHeight";
+import {
+    contentWidth,
+    conversationRowHeight,
+    conversationRowHeightCacheCreate,
+} from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { MessageList, type MessageListScrollPosition } from "./Message";
+import {
+    messageTextLayoutFontGenerationGet,
+    messageTextLayoutFontGenerationSubscribe,
+} from "./messageTextLayout";
 import type { RigUserInputAnswerMap } from "./RigUserInputPrompt";
 import { Spinner } from "./Spinner";
 
@@ -222,6 +230,19 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  */
 export function ConversationView(props: ConversationViewProps) {
     const composer = props.composer;
+    const textLayoutGeneration = useSyncExternalStore(
+        messageTextLayoutFontGenerationSubscribe,
+        messageTextLayoutFontGenerationGet,
+        messageTextLayoutFontGenerationGet,
+    );
+    const rowHeightCaches = useRef<
+        Record<string, ReturnType<typeof conversationRowHeightCacheCreate> | undefined>
+    >(Object.create(null) as Record<string, ReturnType<typeof conversationRowHeightCacheCreate>>);
+    const conversationCacheKey =
+        props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
+    const rowHeightCache =
+        rowHeightCaches.current[conversationCacheKey] ??
+        (rowHeightCaches.current[conversationCacheKey] = conversationRowHeightCacheCreate());
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -287,12 +308,19 @@ export function ConversationView(props: ConversationViewProps) {
             ) : (
                 <MessageList
                     estimateRowSize={(index, width) =>
-                        conversationRowHeight(props.entries, index, {
-                            surface: "conversation",
-                            viewerId: props.viewerId,
-                            width,
-                        })
+                        conversationRowHeight(
+                            props.entries,
+                            index,
+                            {
+                                surface: "conversation",
+                                viewerId: props.viewerId,
+                                width,
+                            },
+                            rowHeightCache,
+                        )
                     }
+                    estimateRowWidth={contentWidth}
+                    estimateVersion={textLayoutGeneration}
                     footer={
                         <AgentWorkingStatus
                             active={props.running === true}

@@ -135,7 +135,7 @@ export function FloatingConversationDockPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The composer floated over a surface that owns its own scrolling. The dock leaves the flow so the surface keeps its full height, and a masked gradient fades passing content out instead of slicing it."
+            summary="The composer at a surface edge: either fully overlaid or reserving only its input height, with the same masked gradient fading content into it."
             title="Floating conversation dock"
         >
             <Specimen
@@ -160,15 +160,18 @@ export function FloatingConversationDockPage() {
                 </Box>
             </Specimen>
             <FullScreenSpecimen
-                detail="The expanded workspace panel: it covers the workspace column, the sidebar stays, and the dock floats at the bottom"
+                detail="The expanded workspace panel: the input reserves only its own height while the 72px fade floats over the content above it"
                 label="Expanded panel with the dock"
                 number="02"
             >
                 <AppShell
                     onPanelMaximizedChange={noop}
                     panel={panelBody()}
-                    panelFooter={<FloatingConversationDock>{dock("")}</FloatingConversationDock>}
-                    panelFooterFloating
+                    panelFooter={
+                        <FloatingConversationDock placement="footer">
+                            {dock("")}
+                        </FloatingConversationDock>
+                    }
                     panelMaximizable
                     panelMaximized
                     panelResizable

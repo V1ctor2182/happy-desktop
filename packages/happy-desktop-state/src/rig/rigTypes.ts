@@ -780,6 +780,8 @@ export interface RigScrollMeasurement {
 export interface RigScrollPosition {
     readonly scrollTop: number;
     readonly following: boolean;
+    /** Effective centered row measure associated with `measurements`. */
+    readonly rowWidth?: number;
     readonly measurements?: readonly RigScrollMeasurement[];
 }
 

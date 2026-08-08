@@ -660,6 +660,14 @@ export type MessageListProps = {
      * layout — it falls back to the list's average measured row.
      */
     estimateRowSize?: (index: number, width: number) => number | undefined;
+    /**
+     * Converts the full scrollport width to the width rows actually occupy.
+     * Centered, max-width content uses this so growing chrome beyond its readable
+     * measure neither creates cache variants nor invalidates virtual estimates.
+     */
+    estimateRowWidth?: (scrollportWidth: number) => number;
+    /** Rebuilds unmounted-row estimates when their non-width inputs change. */
+    estimateVersion?: number;
     /** Restores a previously detached reader position on this list's first layout. */
     initialScrollPosition?: MessageListScrollPosition;
     /** Reports user scrolling and the final position before this list detaches. */
@@ -675,6 +683,8 @@ export type MessageListProps = {
 export interface MessageListScrollPosition {
     readonly scrollTop: number;
     readonly following: boolean;
+    /** Effective row measure associated with `measurements`. */
+    readonly rowWidth?: number;
     /** Measured virtual rows needed to interpret scrollTop after this list remounts. */
     readonly measurements?: readonly VirtualItem[];
 }
@@ -725,6 +735,7 @@ export function MessageList(props: MessageListProps) {
     positionChange.current = props.onScrollPositionChange;
     const interactiveResize = useRef(false);
     const interactiveResizeIndex = useRef<number | undefined>(undefined);
+    const estimateVersion = useRef(props.estimateVersion);
     const scrollPositionSync = useRef<() => void>(() => undefined);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const entryItems = Children.toArray(props.children);
@@ -744,20 +755,25 @@ export function MessageList(props: MessageListProps) {
                   </div>,
               ];
     const virtualized = props.virtualize === true;
-    const estimateItemSize = (index: number, width: number) =>
+    const rowWidthOf = (scrollportWidth: number) =>
+        props.estimateRowWidth?.(scrollportWidth) ?? scrollportWidth;
+    const estimateItemSize = (index: number, rowWidth: number) =>
         index === footerIndex
             ? (props.footerHeight ?? estimatedSize.current)
-            : (props.estimateRowSize?.(index, width) ?? estimatedSize.current);
+            : (props.estimateRowSize?.(index, rowWidth) ?? estimatedSize.current);
     /**
      * Total height of every row, asking the caller's estimator for each one and
      * falling back to the measured average only where it declines to answer.
      * This is the offset a list opens at when it has no position to restore.
      */
     const estimatedContentHeight = () => {
-        const width = list.current?.clientWidth ?? 0;
+        const rowWidth =
+            list.current === null
+                ? (restore.current?.rowWidth ?? 0)
+                : rowWidthOf(list.current.clientWidth);
         let total = MESSAGE_LIST_PADDING_START + MESSAGE_LIST_PADDING_END;
         for (let index = 0; index < items.length; index += 1)
-            total += estimateItemSize(index, width);
+            total += estimateItemSize(index, rowWidth);
         return total;
     };
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
@@ -769,7 +785,13 @@ export function MessageList(props: MessageListProps) {
            start edge instead: its header stays put and its body opens downward. */
         anchorTo: interactiveResize.current ? "start" : "end",
         count: virtualized ? items.length : 0,
-        estimateSize: (index) => estimateItemSize(index, list.current?.clientWidth ?? 0),
+        estimateSize: (index) =>
+            estimateItemSize(
+                index,
+                list.current === null
+                    ? (restore.current?.rowWidth ?? 0)
+                    : rowWidthOf(list.current.clientWidth),
+            ),
         followOnAppend: true,
         getItemKey: (index) => {
             const item = items[index];
@@ -782,7 +804,9 @@ export function MessageList(props: MessageListProps) {
            rows were taller — the list opened part way up its own history and
            then had to correct as rows measured — so the caller's own estimator
            answers for each row, exactly as it does for every later layout. */
-        initialOffset: virtualized ? (restore.current?.scrollTop ?? estimatedContentHeight()) : 0,
+        initialOffset: virtualized
+            ? () => restore.current?.scrollTop ?? estimatedContentHeight()
+            : 0,
         initialMeasurementsCache: restore.current?.measurements
             ? [...restore.current.measurements]
             : [],
@@ -837,6 +861,11 @@ export function MessageList(props: MessageListProps) {
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
+        let rowWidth = props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
+        /* A first lifetime has no mounted ref or restored measure, so its virtual
+           estimates begin at width zero. Rebuild them once at the committed
+           width; later width changes take the same path through the observer. */
+        if (virtualized && rowWidth !== (restore.current?.rowWidth ?? 0)) virtualizer.measure();
         const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else element.scrollTop = savedScrollTop ?? 0;
@@ -855,6 +884,7 @@ export function MessageList(props: MessageListProps) {
             positionChange.current?.({
                 scrollTop: element.scrollTop,
                 following: following.current,
+                rowWidth,
                 measurements: measurements.current,
             });
         };
@@ -897,6 +927,12 @@ export function MessageList(props: MessageListProps) {
             typeof ResizeObserver === "undefined"
                 ? undefined
                 : new ResizeObserver(() => {
+                      const nextRowWidth =
+                          props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
+                      if (nextRowWidth !== rowWidth) {
+                          rowWidth = nextRowWidth;
+                          if (virtualized) virtualizer.measure();
+                      }
                       const nextHeight = element.clientHeight;
                       if (nextHeight === viewportHeight) return;
                       viewportHeight = nextHeight;
@@ -919,7 +955,13 @@ export function MessageList(props: MessageListProps) {
             scrollPositionSync.current = () => undefined;
             element.removeEventListener("scroll", onScroll);
         };
-    }, [virtualized, virtualizer]);
+    }, [props.estimateRowWidth, virtualized, virtualizer]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- a new font generation changes offscreen row estimates without changing DOM geometry, so the virtualizer must discard its size cache after that generation commits
+    useLayoutEffect(() => {
+        if (estimateVersion.current === props.estimateVersion) return;
+        estimateVersion.current = props.estimateVersion;
+        if (virtualized) virtualizer.measure();
+    }, [props.estimateVersion, virtualized, virtualizer]);
     // eslint-disable-next-line happy2-react/no-layout-effect -- a resized virtual row can change scrollHeight only after commit, so a following reader must be re-pinned from the live list geometry before paint
     useLayoutEffect(() => {
         /*
