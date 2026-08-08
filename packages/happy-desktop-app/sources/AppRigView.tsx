@@ -12,7 +12,6 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
-    RigFolder,
     RigFolderId,
     RigFoldersSnapshot,
     RigFoldersStore,
@@ -47,6 +46,7 @@ import type {
     RigNodesStore,
     RigAvailabilitySnapshot,
     RigPairingStore,
+    RigProfilesStore,
     RigProviderUsageStore,
     RigProjectGroup,
     RigProjectId,
@@ -84,7 +84,11 @@ import {
     rigFolderGroupParse,
     rigFoldersFlatten,
     rigFoldersStoreNoop,
+    rigHumanMessageAuthor,
+    RIG_UNSORTED_GROUP_ID,
+    rigSessionScopeGroupId,
     rigNodesStoreNoop,
+    rigProfilesStoreNoop,
     rigSlotEntriesInScope,
     rigSlotEntryInScope,
     rigSlotsStoreNoop,
@@ -260,6 +264,8 @@ export interface AppRigSession {
      * rather than standing over a tree that is empty for the wrong reason.
      */
     readonly folders?: RigFoldersStore;
+    /** Host-owned identities available for work sent through a remote Rig. */
+    readonly profiles?: () => RigProfilesStore | undefined;
     /**
      * Trusting a new machine, by comparing four emojis at both ends. Present
      * only on the Rig that owns trust — this window's host — and only when its
@@ -435,7 +441,7 @@ interface OpenGroup {
     readonly home: boolean;
     readonly conversations: RigProjectGroup["conversations"];
     readonly changes: NonNullable<RigProjectGroup["changes"]>;
-    readonly create: RigSessionCreateInput;
+    readonly create?: RigSessionCreateInput;
     /**
      * Where the open group's checkout is in its own life, for a worktree. A
      * project has none: it is a directory Rig adopted rather than one it made,
@@ -923,27 +929,36 @@ function documentLinkResolve(from: string, href: string): string {
 function openGroupFind(
     projects: readonly RigProjectGroup[],
     groupId: string | undefined,
-    folders: readonly RigFolder[] = [],
+    folders?: RigFoldersSnapshot,
 ): OpenGroup | undefined {
     if (groupId === undefined) return undefined;
+    if (groupId === RIG_UNSORTED_GROUP_ID && folders) {
+        return {
+            id: RIG_UNSORTED_GROUP_ID,
+            name: "Unsorted",
+            home: false,
+            conversations: folders.unsorted,
+            changes: [],
+            path: "Unsorted",
+        };
+    }
     // A folder is a place to work like any other: it owns a directory holding
-    // its files, so a chat started in it runs there. What it holds is gathered
-    // from every project rather than read off one, because filing cuts across
-    // the project tree — two chats in a folder are routinely in different
-    // repositories, which is most of the point of filing them together.
+    // its files, so a chat started in it runs there. Its conversations come
+    // directly from the folder view, because project/workspace chats and folder
+    // chats are exclusive collections in Rig.
     const folderId = rigFolderGroupParse(groupId);
     if (folderId !== undefined) {
-        const folder = folderFind(folders, folderId);
+        const folder = folderFind(folders?.folders ?? [], folderId);
         if (!folder) return undefined;
         return {
             id: groupId as RigGroupId,
             name: folder.name,
             home: false,
-            conversations: folderConversations(projects, folderId),
+            conversations: folder.conversations,
             // A folder is not a checkout, so there is no working tree to report
             // on and nothing here is ever asked to draw one.
             changes: [],
-            create: { cwd: folder.path },
+            create: { cwd: folder.path, scope: { kind: "folder", folderId: folder.id } },
             path: folder.path,
         };
     }
@@ -972,27 +987,6 @@ function openGroupFind(
                 };
     }
     return undefined;
-}
-
-/**
- * The chats filed into one folder, newest first.
- *
- * Newest first because a folder is opened to see what is happening in it rather
- * than what was put in it first. A filed chat still belongs to the project it
- * runs in and still takes its row there: filing is an arrangement laid over the
- * list, not a move.
- */
-function folderConversations(
-    projects: readonly RigProjectGroup[],
-    folderId: RigFolderId,
-): RigProjectGroup["conversations"] {
-    const filed = projects.flatMap((project) => [
-        ...project.conversations.filter((entry) => entry.folderId === folderId),
-        ...project.worktrees.flatMap((worktree) =>
-            worktree.conversations.filter((entry) => entry.folderId === folderId),
-        ),
-    ]);
-    return [...filed].sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 /**
@@ -1109,13 +1103,31 @@ function foldersSection(
     folders: RigFoldersSnapshot,
     online: boolean,
 ): SidebarSection[] {
-    const items: SidebarItem[] = rigFoldersFlatten(folders.folders).map((row) => ({
-        depth: row.depth,
-        emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
-        id: folderRowId(rigId, row.folder.id),
-        kind: "folder" as const,
-        label: row.folder.name,
-    }));
+    const items: SidebarItem[] = [
+        ...(folders.unsorted.length === 0
+            ? []
+            : [
+                  {
+                      icon: "archive" as const,
+                      id: rigItemId(rigId, RIG_UNSORTED_GROUP_ID),
+                      kind: "folder" as const,
+                      label: "Unsorted",
+                      ...(folders.unsorted.some((conversation) => conversation.unread)
+                          ? { unread: true }
+                          : {}),
+                  },
+              ]),
+        ...rigFoldersFlatten(folders.folders).map((row) => ({
+            depth: row.depth,
+            emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
+            id: folderRowId(rigId, row.folder.id),
+            kind: "folder" as const,
+            label: row.folder.name,
+            ...(row.folder.conversations.some((conversation) => conversation.unread)
+                ? { unread: true }
+                : {}),
+        })),
+    ];
     // A refused act outranks a dropped feed: the tree on screen is still
     // current, and what the reader needs told is that the thing they just did
     // did not happen.
@@ -1572,6 +1584,16 @@ export function AppRigView(props: AppRigViewProps) {
     );
     const active =
         directory.rigs.find((rig) => rig.id === props.rigId) ?? directory.rigs[0] ?? undefined;
+    const profilesStore = active?.session?.profiles?.() ?? rigProfilesStoreNoop;
+    const profiles = useSyncExternalStore(
+        profilesStore.subscribe,
+        profilesStore.get,
+        profilesStore.get,
+    );
+    const viewerId =
+        active?.nodeId === undefined
+            ? rigOwnerAuthor.id
+            : (profiles.selectedProfileId ?? rigOwnerAuthor.id);
     const activeAvailability = active ? rigEntryAvailability(active) : undefined;
     const activeRigOnline = (): boolean => {
         const current = props.rigs.get();
@@ -1887,10 +1909,9 @@ export function AppRigView(props: AppRigViewProps) {
                     if (!activeRigOnline()) return;
                     if (actionId === FOLDER_MENU_NEST) foldersStore.folderCreateOpen(folderId);
                     else if (actionId === FOLDER_MENU_EDIT) foldersStore.folderEditOpen(folderId);
-                    // Deliberately no confirmation and no navigation. Archiving
-                    // a folder throws away a name, a mark, and an arrangement;
-                    // the chats filed into it are not touched and go back to
-                    // being unsorted under the projects they always ran in.
+                    // Deliberately no confirmation. A folder is now the chats'
+                    // canonical scope, so archiving it also archives the chats
+                    // contained by that branch.
                     else if (actionId === FOLDER_MENU_ARCHIVE)
                         void foldersStore.folderArchive(folderId);
                     return;
@@ -1947,7 +1968,7 @@ export function AppRigView(props: AppRigViewProps) {
                     // left falls back to its most recent conversation, which is
                     // also what a workspace without the memory at all does.
                     rig.session?.workspace.get().groupResume?.get(groupId) ??
-                        openGroupFind(rig.projects, row.id, rig.session?.folders?.get().folders)
+                        openGroupFind(rig.projects, row.id, rig.session?.folders?.get())
                             ?.conversations[0]?.id,
                 );
             }}
@@ -2093,6 +2114,7 @@ export function AppRigView(props: AppRigViewProps) {
                 >
                     {desktop ? <WindowDragRegion /> : null}
                     <RigInboxSurface
+                        folders={folders}
                         onOpenSession={(rigId, groupId, chatId) =>
                             props.onChatSelect(rigId, groupId, chatId)
                         }
@@ -2145,6 +2167,7 @@ export function AppRigView(props: AppRigViewProps) {
                     slotsScope={slotsScope}
                     slotAction={slotAction}
                     titleShimmerEnabled={titleShimmerEnabled}
+                    viewerId={viewerId}
                     windowState={props.windowState}
                     workspace={active.session.workspace}
                 />
@@ -2275,6 +2298,7 @@ function RigNotesSurface(props: {
  * questions, the window decides where they came from and where they lead.
  */
 function RigInboxSurface(props: {
+    folders: RigFoldersSnapshot;
     onOpenSession(rigId: string, groupId: string, chatId: string): void;
     projects: readonly RigProjectGroup[];
     rigId: string;
@@ -2284,11 +2308,14 @@ function RigInboxSurface(props: {
     unavailable?: string;
 }) {
     const locate = (item: RigInboxItem) => {
-        const project = props.projects.find((candidate) => candidate.id === item.projectId);
+        const scope = item.scope;
+        if (!scope) return undefined;
+        if (scope.kind === "unsorted") return "Unsorted";
+        if (scope.kind === "folder") return folderFind(props.folders.folders, scope.folderId)?.name;
+        const project = props.projects.find((candidate) => candidate.id === scope.projectId);
         if (!project) return undefined;
-        const worktree = item.worktreeId
-            ? project.worktrees.find((candidate) => candidate.id === item.worktreeId)
-            : undefined;
+        if (scope.kind === "project") return project.name;
+        const worktree = project.worktrees.find((candidate) => candidate.id === scope.worktreeId);
         return worktree ? `${project.name} · ${worktree.name}` : project.name;
     };
     return (
@@ -2313,9 +2340,12 @@ function RigInboxSurface(props: {
             }
             selections={props.snapshot.selections}
             onOpenSession={(item) => {
-                // The feed already carries the durable project/worktree address,
-                // so opening context remains a local navigation act offline.
-                props.onOpenSession(props.rigId, item.worktreeId ?? item.projectId, item.sessionId);
+                if (!item.scope) return;
+                props.onOpenSession(
+                    props.rigId,
+                    rigSessionScopeGroupId(item.scope),
+                    item.sessionId,
+                );
             }}
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
@@ -2375,6 +2405,8 @@ interface RigWorkspaceSurfaceProps {
     slotAction(entryId: string): void;
     /** Whether active session titles shimmer in the tab strip. */
     titleShimmerEnabled: boolean;
+    /** Identity of the human reading and writing this Rig. */
+    viewerId: string;
     groupId?: string;
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
@@ -2445,7 +2477,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // Inside an open project the directory is already decided, so every "new
     // session" affordance here starts one in it rather than asking again.
     const groupConversationCreate = (group: OpenGroup) => {
-        if (!rigOnline()) return;
+        if (!rigOnline() || !group.create) return;
         void props.workspace.conversationCreate(group.id, group.create).catch(() => undefined);
     };
 
@@ -2476,7 +2508,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         aboveComposer: slotPlacement("above-composer"),
         title: slotPlacement("title"),
     };
-    const openGroup = openGroupFind(rows, props.groupId, props.folders.folders);
+    const openGroup = openGroupFind(rows, props.groupId, props.folders);
     // The worktree phase this screen has to say something about. `ready` and a
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.
@@ -2867,7 +2899,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         // while only the chevron opens the list.
                                         leadingIconUrl={openInRecent?.iconUrl}
                                         menuAlign="end"
-                                        {...(openInRecent && availability.online
+                                        {...(openInRecent && availability.online && openGroup.create
                                             ? {
                                                   onPrimary: () => {
                                                       if (rigOnline())
@@ -2881,12 +2913,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             : {})}
                                         onSelect={(id: string) => {
                                             if (id === "copy-path") {
-                                                void navigator.clipboard?.writeText(
-                                                    openGroup.create.cwd,
-                                                );
+                                                if (openGroup.create)
+                                                    void navigator.clipboard?.writeText(
+                                                        openGroup.create.cwd,
+                                                    );
                                                 return;
                                             }
-                                            if (rigOnline())
+                                            if (rigOnline() && openGroup.create)
                                                 void props.workspace.openIn(openGroup.id, id);
                                         }}
                                     />
@@ -3230,7 +3263,8 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         {...(preparingNotice ? { notice: preparingNotice } : {})}
                                         now={now}
                                         {...(connectionRefusal === undefined &&
-                                        openGroupChatRefusal === undefined
+                                        openGroupChatRefusal === undefined &&
+                                        openGroup.create !== undefined
                                             ? {
                                                   onCreate: () =>
                                                       groupConversationCreate(openGroup),
@@ -3238,7 +3272,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             : {})}
                                         onChatSelect={props.onChatSelect}
                                         onFileOpen={(path) => {
-                                            if (!rigOnline()) return;
+                                            if (!rigOnline() || !openGroup.create) return;
                                             const target = workspacePathRelative(
                                                 path,
                                                 openGroup.create.cwd,
@@ -3267,6 +3301,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                               })}
                                         slotAction={props.slotAction}
                                         slots={slotViews}
+                                        viewerId={props.viewerId}
                                         workspace={props.workspace}
                                     />
                                 )}
@@ -3848,6 +3883,7 @@ function RigConversationBody(props: {
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
+    viewerId: string;
     workspace: RigWorkspaceStore;
 }) {
     const conversation = props.conversation;
@@ -3872,6 +3908,7 @@ function RigConversationBody(props: {
                 {...(props.writeRefusal === undefined ? {} : { writeRefusal: props.writeRefusal })}
                 slotAction={props.slotAction}
                 slots={props.slots}
+                viewerId={props.viewerId}
                 workspace={props.workspace}
             />
         );
@@ -3971,6 +4008,7 @@ function RigConversationSurface(props: {
     writeRefusal?: string;
     slotAction(entryId: string): void;
     slots: RigSlotViews;
+    viewerId: string;
     workspace: RigWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
@@ -4272,7 +4310,7 @@ function RigConversationSurface(props: {
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
             workingWait={rigWaitStatus(conversation, props.now)}
-            viewerId={rigOwnerAuthor.id}
+            viewerId={props.viewerId}
         />
     );
 }
@@ -4535,7 +4573,7 @@ function rigTurnElapsedMs(
         const entry = conversation.entries[index];
         if (entry?.kind === "turnStatus" && entry.status !== "steered") break;
         if (entry?.kind !== "message") continue;
-        if (entry.message.sender?.id !== rigOwnerAuthor.id) continue;
+        if (!rigHumanMessageAuthor(entry.message.sender)) continue;
         const sentAt = Date.parse(entry.message.createdAt);
         if (Number.isFinite(sentAt)) earliestSentAt = sentAt;
     }

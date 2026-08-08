@@ -198,7 +198,7 @@ const DEFAULT_CATALOG: RigModelCatalog = {
 export function fakeRigSession(id: string, overrides: Partial<RigSession> = {}): RigSession {
     return {
         id: id as RigSessionId,
-        projectId: DEFAULT_PROJECT.id,
+        scope: { kind: "project", projectId: DEFAULT_PROJECT.id },
         orderKey: "a0",
         cwd: "/workspace",
         displayCwd: "/workspace",
@@ -248,8 +248,11 @@ export function createFakeRigTransport(): FakeRigTransport {
 function summaryOf(session: RigSession): RigSessionSummary {
     return {
         id: session.id,
-        projectId: session.projectId,
-        ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
+        projectId:
+            session.scope.kind === "project" || session.scope.kind === "workspace"
+                ? session.scope.projectId
+                : DEFAULT_PROJECT.id,
+        ...(session.scope.kind === "workspace" ? { worktreeId: session.scope.worktreeId } : {}),
         orderKey: session.orderKey,
         cwd: session.cwd,
         displayCwd: session.displayCwd,
@@ -661,8 +664,10 @@ class FakeRigTransportModel implements FakeRigTransport {
                 );
                 for (const session of this.sessions.values())
                     if (
-                        session.projectId === projectId ||
-                        (session.worktreeId && worktrees.has(session.worktreeId))
+                        ((session.scope.kind === "project" || session.scope.kind === "workspace") &&
+                            session.scope.projectId === projectId) ||
+                        (session.scope.kind === "workspace" &&
+                            worktrees.has(session.scope.worktreeId))
                     )
                         this.archived.add(session.id);
                 this.projects = {
@@ -826,8 +831,15 @@ function fakeSessionFromInput(
     catalog: RigModelCatalog,
 ): RigSession {
     return fakeRigSession(id, {
-        projectId: DEFAULT_PROJECT.id,
-        ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+        scope:
+            input.scope ??
+            (input.worktreeId
+                ? {
+                      kind: "workspace",
+                      projectId: DEFAULT_PROJECT.id,
+                      worktreeId: input.worktreeId,
+                  }
+                : { kind: "project", projectId: DEFAULT_PROJECT.id }),
         orderKey: "a0",
         cwd: input.cwd,
         displayCwd: input.cwd,

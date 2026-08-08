@@ -4,7 +4,7 @@ import {
     type RigInboxOutput,
     type RigInboxSourceItem,
 } from "./rigInboxStore.js";
-import type { RigInboxItemId, RigUserInputQuestion } from "./rigTypes.js";
+import type { RigInboxItemId, RigProjectId, RigUserInputQuestion } from "./rigTypes.js";
 
 const ITEM_ID = "one" as RigInboxItemId;
 
@@ -27,7 +27,7 @@ function sourceItem(questions: readonly RigUserInputQuestion[]): RigInboxSourceI
     return {
         createdAt: 1,
         id: "one",
-        projectId: "project",
+        scope: { kind: "project", projectId: "project" as RigProjectId },
         questions,
         requestId: "request-1",
         sessionId: "session-1",

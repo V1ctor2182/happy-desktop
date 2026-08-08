@@ -24,6 +24,7 @@ import {
     type RigFoldersStore,
     type RigNodesStore,
     type RigPairingStore,
+    type RigProfilesStore,
     type RigProviderUsageStore,
     type RigWorkspaceStore,
 } from "happy-desktop-state";
@@ -41,6 +42,7 @@ import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectNodesSourceCreate } from "./rigConnectNodesSource";
 import { rigConnectPairingSourceCreate } from "./rigConnectPairingSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
+import { rigConnectProfilesSourceCreate } from "./rigConnectProfilesSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate, RigTransportHttpError } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -82,6 +84,26 @@ function protocolMismatchOf(compatibility: ServerCompatibility): RigProtocolMism
 }
 
 const WORKSPACE_MEMORY_PREFIX = "happy2.rig.workspace-memory.v1:";
+const PROFILE_SELECTION_KEY = "happy2.rig.profile-selection.v1";
+
+const profileSelectionPersistence = {
+    read(): string | undefined {
+        try {
+            return localStorage.getItem(PROFILE_SELECTION_KEY) ?? undefined;
+        } catch {
+            return undefined;
+        }
+    },
+    write(profileId: string | undefined): void {
+        try {
+            if (profileId === undefined) localStorage.removeItem(PROFILE_SELECTION_KEY);
+            else localStorage.setItem(PROFILE_SELECTION_KEY, profileId);
+        } catch {
+            // A storage-denied renderer still keeps its selection in the store
+            // for as long as this window remains open.
+        }
+    },
+};
 
 /** How soon to read a Rig again after a read that failed for an ordinary reason. */
 const RETRY_MS = 1_000;
@@ -186,6 +208,8 @@ export interface RigSession {
      * the workspace rather than inside it.
      */
     readonly folders: RigFoldersStore | undefined;
+    /** Host-owned human identities used when this window writes to remote Rigs. */
+    readonly profiles: () => RigProfilesStore | undefined;
     /**
      * Trusting a new machine, by comparing four emojis at both ends. Present
      * only on this window's host Rig, and only when its daemon's protocol
@@ -317,6 +341,8 @@ export function rigConnectionOpen(input: {
      * reached through the host precisely because that decision was already made.
      */
     readonly pairingOwner: boolean;
+    /** Resolves the local host's profiles for a node-routed connection. */
+    readonly profiles?: () => RigProfilesStore | undefined;
 }): RigConnectionHandle {
     let disposed = false;
     let session: RigSession | undefined;
@@ -389,6 +415,7 @@ export function rigConnectionOpen(input: {
     // following it opens no transport of its own. Lazy like the rest: a window
     // showing no folders holds no subscriber on it.
     const foldersSource = rigConnectFoldersSourceCreate(rigConnect);
+    const profiles = input.pairingOwner ? rigConnectProfilesSourceCreate(rigConnect) : undefined;
     // Trust, which only the host owns. The source follows the negotiated
     // protocol rather than capturing it: the handshake settles after this is
     // built, and a store that fixed the answer here would call every Rig too
@@ -428,6 +455,18 @@ export function rigConnectionOpen(input: {
         providerUsageSource,
         nodesSource,
         foldersSource,
+        ...(profiles
+            ? {
+                  profilesSource: profiles.source,
+                  profilesActions: profiles.actions,
+                  profileSelectionPersistence,
+              }
+            : {}),
+        ...(input.pairingOwner
+            ? {}
+            : {
+                  messageIdentity: () => input.profiles?.()?.get().selectedProfileId,
+              }),
         ...(pairingSource ? { pairingSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
@@ -485,6 +524,9 @@ export function rigConnectionOpen(input: {
                     providerUsage: client.providerUsage(),
                     nodes: client.nodes(),
                     folders: client.folders(),
+                    profiles: input.pairingOwner
+                        ? () => client.profiles()
+                        : (input.profiles ?? (() => undefined)),
                     pairing: client.pairing(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),

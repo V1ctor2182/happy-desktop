@@ -152,11 +152,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.0.153
-        version: 0.0.153(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.0.156
+        version: 0.0.156(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/rig-connect':
-        specifier: 0.1.4
-        version: 0.1.4
+        specifier: 0.1.7
+        version: 0.1.7
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -257,8 +257,8 @@ importers:
   packages/happy-desktop-state:
     dependencies:
       '@slopus/rig-connect':
-        specifier: 0.1.4
-        version: 0.1.4
+        specifier: 0.1.7
+        version: 0.1.7
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -2346,12 +2346,12 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/rig-connect@0.1.4':
-    resolution: {integrity: sha512-Q/duw+J/Auotjky8W+wexGEu00Zy2ipaDa9rVSAl10rOhM8c6fHPpA1tIPDwnLZFFKDea1nG0mKZDxg6SaKl+A==}
+  '@slopus/rig-connect@0.1.7':
+    resolution: {integrity: sha512-1Srv5H6wwn1GngpL+kdlEnl6zNVeGW4Q3O5hCGU3154MglYOhCV34FM7CFvTT75Wa+atoT7LbBvFI9+OW397bA==}
     engines: {node: '>=20'}
 
-  '@slopus/rig@0.0.153':
-    resolution: {integrity: sha512-xdg8hjiLF4yrlbzhORfcTBXhXCmcJdzKX2CETgf5TWGWpXFj6S1yfHUAYr1SX/QDIl4irHywSm/xiAt6LiIurw==}
+  '@slopus/rig@0.0.156':
+    resolution: {integrity: sha512-RFjJDjZVPF3BIiYfmPu5XyOBfcLFL/ECmqsu3dnzPoyd1lINf68aNe9TbtyiezEBuv7JqO2/VVcVwZcJEyeFwg==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -8114,11 +8114,11 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/rig-connect@0.1.4':
+  '@slopus/rig-connect@0.1.7':
     dependencies:
       '@sinclair/typebox': 0.34.52
 
-  '@slopus/rig@0.0.153(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
+  '@slopus/rig@0.0.156(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.220(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64
@@ -8138,6 +8138,7 @@ snapshots:
       '@types/node': 24.13.3
       '@vscode/ripgrep': 1.18.0
       better-sqlite3: 13.0.2
+      esbuild: 0.28.1
       sharp: 0.35.3(@types/node@24.13.3)
       ssh2: 1.17.0
       thumbhash: 0.1.1

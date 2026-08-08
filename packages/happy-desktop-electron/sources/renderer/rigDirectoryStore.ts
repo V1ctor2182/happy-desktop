@@ -406,6 +406,11 @@ export function rigDirectoryStoreCreate(
             // already decided to trust it, so its connection is never the one
             // asked to pair with anything.
             pairingOwner: id === LOCAL_RIG_ID,
+            ...(id === LOCAL_RIG_ID
+                ? {}
+                : {
+                      profiles: () => rigs.get(LOCAL_RIG_ID)?.entry.session?.profiles(),
+                  }),
             modelPreferencePersistence: deps.modelPreferencePersistence,
             deps: {
                 conversationOpen: (location) => deps.conversationOpen(id, location),

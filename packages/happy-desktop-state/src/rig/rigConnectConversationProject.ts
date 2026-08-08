@@ -1,4 +1,4 @@
-import type { ChatElement, ToolPresentation } from "@slopus/rig-connect";
+import type { ChatElement, RigProfile, ToolPresentation } from "@slopus/rig-connect";
 import {
     noticeInformational,
     type ConversationActivityPresentation,
@@ -119,6 +119,24 @@ function agentMessageProject(
     };
 }
 
+/** Current human profile carried by one attributed Rig message. */
+function profileAuthor(
+    profile: RigProfile | undefined,
+    identity: string | null,
+): ConversationAuthor {
+    if (identity === null) return rigOwnerAuthor;
+    if (!profile) return { ...rigOwnerAuthor, id: identity };
+    return {
+        id: identity,
+        displayName: profile.name,
+        username: profile.name,
+        kind: "human",
+        ...(profile.photo === undefined
+            ? {}
+            : { imageUrl: `data:${profile.photo.mediaType};base64,${profile.photo.data}` }),
+    };
+}
+
 /**
  * Projects rig-connect's flat application transcript into Happy's shared
  * conversation rows. The element order is already authoritative; this pass only
@@ -187,7 +205,7 @@ function rigConnectGroupProject(
                         sequence,
                         text: inbound?.text ?? element.text,
                         createdAt: element.createdAt,
-                        author: inbound?.author ?? rigOwnerAuthor,
+                        author: inbound?.author ?? profileAuthor(element.profile, element.identity),
                         attachments: (
                             element.attachments ??
                             input.sentImages?.get(element.messageId) ??
@@ -569,7 +587,7 @@ function messageProject(input: {
     readonly sequence: string;
     readonly text: string;
     readonly createdAt: number;
-    readonly author: typeof rigOwnerAuthor;
+    readonly author: ConversationAuthor;
     readonly attachments?: ConversationMessageProjection["attachments"];
     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
 }): ConversationMessageProjection {

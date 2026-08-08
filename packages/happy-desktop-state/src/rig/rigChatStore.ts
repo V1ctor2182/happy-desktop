@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { UserError } from "../types.js";
+import { UserError } from "../types.js";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
@@ -680,6 +680,13 @@ export interface RigChatDeps {
         | "stopRun"
         | "switchModel"
     >;
+    /**
+     * Selected host-owned human identity for a remote Rig.
+     *
+     * Presence means the route requires a profile; absence means this is the
+     * local Rig, where unattributed messages remain valid.
+     */
+    readonly messageIdentity?: () => string | undefined;
     readonly connectMutationSubscribe?: (
         listener: (rejection: MutationRejectedDelta) => void,
     ) => () => void;
@@ -2074,11 +2081,17 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 // ordinary send below.
                 if ((await pendingQuestionAnswer(text)).textUsed) return;
                 if (deps.connectActions) {
+                    const identity = deps.messageIdentity?.();
+                    if (deps.messageIdentity && !identity)
+                        throw new UserError(
+                            "Choose or create a profile in Settings → Profiles before sending work to a remote Rig.",
+                        );
                     const mutationId = deps.connectActions.sendMessage(
                         sessionId,
                         images && images.length > 0
                             ? {
                                   text,
+                                  ...(identity === undefined ? {} : { identity }),
                                   content: [
                                       { type: "text", text },
                                       ...images.map((image) => ({
@@ -2088,7 +2101,9 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                                       })),
                                   ],
                               }
-                            : text,
+                            : identity === undefined
+                              ? text
+                              : { text, identity },
                     );
                     if (images && images.length > 0) sentImagesRemember(mutationId, images);
                     connectMutationTrack(mutationId);

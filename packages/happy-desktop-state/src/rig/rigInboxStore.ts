@@ -4,10 +4,9 @@ import { rigUserError } from "./rigSupport.js";
 import type {
     RigInboxItem,
     RigInboxItemId,
-    RigProjectId,
     RigSessionId,
+    RigSessionScope,
     RigUserInputQuestion,
-    RigWorktreeId,
 } from "./rigTypes.js";
 
 /**
@@ -19,8 +18,7 @@ export interface RigInboxSourceItem {
     readonly id: string;
     readonly sessionId: string;
     readonly requestId: string;
-    readonly projectId: string;
-    readonly workspaceId?: string;
+    readonly scope?: RigSessionScope;
     readonly sessionTitle?: string;
     readonly questions: readonly RigUserInputQuestion[];
     readonly status: "pending" | "answered";
@@ -337,10 +335,7 @@ function inboxItemsProject(source: readonly RigInboxSourceItem[]): readonly RigI
             id: item.id as RigInboxItemId,
             sessionId: item.sessionId as RigSessionId,
             requestId: item.requestId,
-            projectId: item.projectId as RigProjectId,
-            ...(item.workspaceId === undefined
-                ? {}
-                : { worktreeId: item.workspaceId as RigWorktreeId }),
+            ...(item.scope === undefined ? {} : { scope: item.scope }),
             ...(item.sessionTitle === undefined ? {} : { sessionTitle: item.sessionTitle }),
             questions: item.questions,
             status: item.status,

@@ -1,4 +1,10 @@
-import type { RigInboxItem, RigInboxItemId, RigInboxSubmission } from "happy-desktop-state";
+import type {
+    RigInboxItem,
+    RigInboxItemId,
+    RigInboxSubmission,
+    RigProjectId,
+    RigSessionId,
+} from "happy-desktop-state";
 import { RigInboxPage } from "../../src/pages/inbox/RigInboxPage";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
@@ -10,13 +16,13 @@ const item = (
     overrides: Partial<RigInboxItem> & Pick<RigInboxItem, "questions" | "status">,
 ): RigInboxItem =>
     ({
-        id,
-        sessionId: `session-${id}`,
+        id: id as RigInboxItemId,
+        sessionId: `session-${id}` as RigSessionId,
         requestId: `req-${id}`,
-        projectId: "project-1",
+        scope: { kind: "project", projectId: "project-1" as RigProjectId },
         createdAt: 1_700_000_000_000,
         ...overrides,
-    }) as RigInboxItem;
+    }) as unknown as RigInboxItem;
 
 const pending: readonly RigInboxItem[] = [
     item("one", {
@@ -134,7 +140,7 @@ const messages: ReadonlyMap<RigInboxItemId, string> = new Map([
 ]);
 
 const location = (candidate: RigInboxItem): string =>
-    candidate.worktreeId ? "happy2 · feature worktree" : "happy2";
+    candidate.scope?.kind === "workspace" ? "happy2 · feature worktree" : "happy2";
 
 const time = (candidate: RigInboxItem): string =>
     candidate.status === "answered" ? "Answered 8m ago" : "Asked 3m ago";

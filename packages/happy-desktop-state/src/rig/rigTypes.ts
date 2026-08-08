@@ -41,6 +41,17 @@ export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
  */
 export type RigFolderId = string & { readonly [rigFolderIdBrand]: true };
 
+/** The one application collection containing a visible primary chat. */
+export type RigSessionScope =
+    | { readonly kind: "project"; readonly projectId: RigProjectId }
+    | {
+          readonly kind: "workspace";
+          readonly projectId: RigProjectId;
+          readonly worktreeId: RigWorktreeId;
+      }
+    | { readonly kind: "folder"; readonly folderId: RigFolderId }
+    | { readonly kind: "unsorted" };
+
 /**
  * One interactive terminal the daemon has started, as its create/stop actions
  * report it. It is the terminal's identity and size only: the live screen never
@@ -593,18 +604,10 @@ export interface RigProjectCatalog {
 
 export interface RigSessionSummary {
     readonly id: RigSessionId;
-    /** The project the daemon filed this session under; always set. */
+    /** The project containing this code chat. */
     readonly projectId: RigProjectId;
-    /** Set when the session runs inside one of the project's worktrees. */
+    /** Set when the chat belongs to one of the project's workspaces. */
     readonly worktreeId?: RigWorktreeId;
-    /**
-     * The folder this chat was filed into, absent while it is still unsorted.
-     *
-     * Filing is the reader's own arrangement and says nothing about where the
-     * session runs: a folder holds chats from any project, and the project it
-     * belongs to is `projectId` whatever folder it sits in.
-     */
-    readonly folderId?: RigFolderId;
     /**
      * Fractional index the host sorts sessions by within their own group.
      *
@@ -639,8 +642,7 @@ export interface RigSessionSummary {
 
 export interface RigSession {
     readonly id: RigSessionId;
-    readonly projectId: RigProjectId;
-    readonly worktreeId?: RigWorktreeId;
+    readonly scope: RigSessionScope;
     /** Fractional index this session sorts by; absent for a subagent (see `RigSessionSummary`). */
     readonly orderKey?: string;
     readonly cwd: string;
@@ -834,6 +836,10 @@ export interface RigSessionCreateInput {
     readonly cwd: string;
     /** Files the session under one of the project's worktrees rather than its root. */
     readonly worktreeId?: RigWorktreeId;
+    /** Creates a non-code chat directly in a folder or in Unsorted. */
+    readonly scope?:
+        | { readonly kind: "folder"; readonly folderId: RigFolderId }
+        | { readonly kind: "unsorted" };
     readonly providerId?: string;
     readonly modelId?: string;
     readonly effort?: RigThinkingLevel;
@@ -871,9 +877,8 @@ export interface RigInboxItem {
     readonly id: RigInboxItemId;
     readonly sessionId: RigSessionId;
     readonly requestId: string;
-    readonly projectId: RigProjectId;
-    /** Files the asking session under one of the project's worktrees. */
-    readonly worktreeId?: RigWorktreeId;
+    /** Absent only while the inbox has not yet resolved the asking session's catalog entry. */
+    readonly scope?: RigSessionScope;
     /** The asking session's title, when it has earned one. */
     readonly sessionTitle?: string;
     readonly questions: readonly RigUserInputQuestion[];

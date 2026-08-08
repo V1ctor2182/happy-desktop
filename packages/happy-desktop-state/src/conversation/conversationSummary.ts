@@ -16,15 +16,6 @@ export interface ConversationSummary {
     /** Epoch milliseconds of the newest content, for relative timestamps. */
     readonly updatedAt: number;
     readonly unread?: boolean;
-    /**
-     * The folder this conversation was filed into, absent while it is unsorted.
-     *
-     * Filing is an arrangement laid over the list rather than a move: a filed
-     * conversation still belongs to the project it runs in and still takes its
-     * row there. This is carried so a surface showing one folder can pick out
-     * the conversations in it without a second read of the catalog.
-     */
-    readonly folderId?: string;
     readonly mentions?: number;
     readonly avatarFileId?: string;
     readonly participants: readonly ConversationAuthor[];

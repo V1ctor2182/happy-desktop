@@ -1,4 +1,5 @@
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
+import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
     composerStoreCreate,
@@ -8,7 +9,15 @@ import {
     type ComposerStore,
 } from "../modules/composer/composerState.js";
 import type { RigChatHandle, RigClient } from "./rigClient.js";
-import { folderFind, rigFolderGroupParse, type RigFolder } from "./rigFoldersStore.js";
+import {
+    folderFind,
+    RIG_UNSORTED_GROUP_ID,
+    rigFolderGroupId,
+    rigFolderGroupParse,
+    rigFoldersFlatten,
+    type RigFolder,
+    type RigFoldersSnapshot,
+} from "./rigFoldersStore.js";
 import {
     RIG_VIEW_PREFERENCES_EMPTY,
     rigViewPreferencesParse,
@@ -54,7 +63,6 @@ import type {
     RigBackgroundProcess,
     RigChangedFileDocument,
     RigFileSearchResult,
-    RigFolderId,
     RigGitChangedFile,
     RigGoal,
     RigGroupId,
@@ -647,9 +655,10 @@ export type RigWorkspaceOutput =
      * the address with this Rig's list rather than leaving a route pointing at a
      * row that no longer exists.
      *
-     * Emitted only after a successful authoritative read — never from this
-     * store's own optimism, and never while a request is still in flight — and
-     * only once per removal, so a failed archive never moves the reader.
+     * Project and workspace removal is emitted only after an authoritative
+     * catalog read. Folder-owned groups follow Rig Connect's visible
+     * prediction; if that queued mutation is rejected, the exact address this
+     * event replaced is requested again once the folder view rolls back.
      */
     | { readonly type: "addressedGroupRemoved"; readonly groupId: RigGroupId };
 
@@ -1100,6 +1109,7 @@ export function rigWorkspaceStoreCreate(
     deps: RigWorkspaceDeps = {},
 ): RigWorkspaceStore {
     const list: RigSessionListStore = client.sessionList();
+    const folders = client.folders();
     const output = deps.output ?? (() => undefined);
     const draftOrigin = `happy2_${Math.random().toString(36).slice(2)}`;
     let draftUpdatedAt = 0;
@@ -1117,6 +1127,7 @@ export function rigWorkspaceStoreCreate(
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
+    let unsubscribeFolders: (() => void) | undefined;
 
     // Open conversation lease. `acquisitionGeneration` invalidates an in-flight
     // acquisition when the addressed conversation changes or the store stops.
@@ -1187,6 +1198,22 @@ export function rigWorkspaceStoreCreate(
     let catalogRevisionSeen = -1;
     /** The addressed group as of the last authoritative read that still held it. */
     let addressedGroupSeen: RigGroupId | undefined;
+    /**
+     * A folder-owned address replaced after its optimistic row disappeared.
+     *
+     * Rig Connect reports rejection but not acceptance for queued folder
+     * mutations. The row therefore leaves immediately; if the prediction is
+     * rolled back, this is the exact address restored for the reader.
+     */
+    let pendingFolderRemoval:
+        | {
+              readonly address: RigWorkspaceAddress;
+              readonly groupId: RigGroupId;
+              readonly replacementAddress?: RigWorkspaceAddress;
+          }
+        | undefined;
+    let restoredGroupRejectionRevisionSeen = folders?.get().restoredGroupRejection?.revision ?? 0;
+    let rejectedRestoredGroupIds: ReadonlySet<RigGroupId> = new Set();
     /** Every group id the last authoritative read listed: projects and their worktrees. */
     let authoritativeGroupIds: ReadonlySet<string> = new Set();
     let fileViewMode: RigFileViewMode = "unified";
@@ -1327,6 +1354,7 @@ export function rigWorkspaceStoreCreate(
     // change where a group resumes, and resolving every group's history on every
     // one of them would spend the whole list's projection to learn nothing.
     let groupResumeList: RigSessionListSnapshot | undefined;
+    let groupResumeFolders: RigFoldersSnapshot | undefined;
     let groupResumeRevision = -1;
     let memoryRevision = 0;
     let snapshot: RigWorkspaceSnapshot = {
@@ -1420,8 +1448,22 @@ export function rigWorkspaceStoreCreate(
         };
     };
 
+    const folderGroupConversations = (
+        groupId: RigGroupId,
+    ): readonly ConversationSummary[] | undefined => {
+        const snapshot = folders?.get();
+        if (!snapshot) return undefined;
+        if (groupId === RIG_UNSORTED_GROUP_ID) return snapshot.unsorted;
+        const folderId = rigFolderGroupParse(groupId);
+        return folderId === undefined
+            ? undefined
+            : folderFind(snapshot.folders, folderId)?.conversations;
+    };
+
     /** The sessions a group holds right now, in list order, or none while it is not ready. */
     const groupConversationIdList = (groupId: RigGroupId): readonly string[] => {
+        const folderConversations = folderGroupConversations(groupId);
+        if (folderConversations) return folderConversations.map((summary) => summary.id);
         const projects = list.get().projects;
         if (projects.type !== "ready") return [];
         for (const project of projects.value) {
@@ -1482,12 +1524,17 @@ export function rigWorkspaceStoreCreate(
      */
     const groupResumeCompute = (): ReadonlyMap<RigGroupId, RigSessionId> => {
         const listSnapshot = list.get();
-        if (groupResumeList === listSnapshot && groupResumeRevision === memoryRevision)
+        const foldersSnapshot = folders?.get();
+        if (
+            groupResumeList === listSnapshot &&
+            groupResumeFolders === foldersSnapshot &&
+            groupResumeRevision === memoryRevision
+        )
             return groupResume;
         groupResumeList = listSnapshot;
+        groupResumeFolders = foldersSnapshot;
         groupResumeRevision = memoryRevision;
         const projects = listSnapshot.projects;
-        if (projects.type !== "ready") return groupResume;
         const next = new Map<RigGroupId, RigSessionId>();
         const resolve = (groupId: RigGroupId, conversationIds: ReadonlySet<string>): void => {
             const memory = client.memory.groupRead(groupId);
@@ -1502,10 +1549,26 @@ export function rigWorkspaceStoreCreate(
                     return;
                 }
         };
-        for (const project of projects.value) {
-            resolve(project.id, new Set(project.conversations.map((summary) => summary.id)));
-            for (const worktree of project.worktrees)
-                resolve(worktree.id, new Set(worktree.conversations.map((summary) => summary.id)));
+        if (projects.type === "ready") {
+            for (const project of projects.value) {
+                resolve(project.id, new Set(project.conversations.map((summary) => summary.id)));
+                for (const worktree of project.worktrees)
+                    resolve(
+                        worktree.id,
+                        new Set(worktree.conversations.map((summary) => summary.id)),
+                    );
+            }
+        }
+        if (foldersSnapshot) {
+            resolve(
+                RIG_UNSORTED_GROUP_ID,
+                new Set(foldersSnapshot.unsorted.map((summary) => summary.id)),
+            );
+            for (const { folder } of rigFoldersFlatten(foldersSnapshot.folders))
+                resolve(
+                    rigFolderGroupId(folder.id),
+                    new Set(folder.conversations.map((summary) => summary.id)),
+                );
         }
         if (
             next.size === groupResume.size &&
@@ -1633,7 +1696,7 @@ export function rigWorkspaceStoreCreate(
                 : conversationAcquiring(
                       openId,
                       draft,
-                      listSnapshot,
+                      conversationSummaryFind(openId),
                       models.type === "ready" ? models.menus : undefined,
                   );
             if (conversation.type !== "ready" || !conversationEqual(conversation.value, next)) {
@@ -2348,6 +2411,14 @@ export function rigWorkspaceStoreCreate(
      * it was delegated inside, which is the group the reader has open.
      */
     const conversationGroupId = (conversationId: RigSessionId): RigGroupId | undefined => {
+        const folderSnapshot = folders?.get();
+        if (folderSnapshot) {
+            if (folderSnapshot.unsorted.some((summary) => summary.id === conversationId))
+                return RIG_UNSORTED_GROUP_ID;
+            for (const { folder } of rigFoldersFlatten(folderSnapshot.folders))
+                if (folder.conversations.some((summary) => summary.id === conversationId))
+                    return rigFolderGroupId(folder.id);
+        }
         const projects = list.get().projects;
         if (projects.type === "ready")
             for (const project of projects.value) {
@@ -2358,6 +2429,35 @@ export function rigWorkspaceStoreCreate(
                         return worktree.id;
             }
         return addressedGroupId;
+    };
+
+    const conversationSummaryFind = (
+        conversationId: RigSessionId,
+    ): ConversationSummary | undefined => {
+        const folderSnapshot = folders?.get();
+        if (folderSnapshot) {
+            const unsorted = folderSnapshot.unsorted.find(
+                (summary) => summary.id === conversationId,
+            );
+            if (unsorted) return unsorted;
+            for (const { folder } of rigFoldersFlatten(folderSnapshot.folders)) {
+                const found = folder.conversations.find((summary) => summary.id === conversationId);
+                if (found) return found;
+            }
+        }
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        for (const project of projects.value) {
+            const direct = project.conversations.find((summary) => summary.id === conversationId);
+            if (direct) return direct;
+            for (const worktree of project.worktrees) {
+                const found = worktree.conversations.find(
+                    (summary) => summary.id === conversationId,
+                );
+                if (found) return found;
+            }
+        }
+        return undefined;
     };
 
     const composerCreate = (conversationId: RigSessionId): ComposerStore => {
@@ -2612,7 +2712,7 @@ export function rigWorkspaceStoreCreate(
         // work apply to it: there is no branch being prepared and no directory
         // that might have gone. A folder the tree still holds can always take a
         // chat, and one it no longer holds is unlisted like any other group.
-        if (folderGroupFind(groupId)) return undefined;
+        if (folderGroupFind(groupId) || groupId === RIG_UNSORTED_GROUP_ID) return undefined;
         return list.groupConversationRefusal(groupId);
     };
 
@@ -2672,7 +2772,7 @@ export function rigWorkspaceStoreCreate(
         const folderId = rigFolderGroupParse(groupId);
         return folderId === undefined
             ? undefined
-            : folderFind(client.folders()?.get().folders ?? [], folderId);
+            : folderFind(folders?.get().folders ?? [], folderId);
     };
 
     const groupStartFind = (
@@ -2680,7 +2780,6 @@ export function rigWorkspaceStoreCreate(
     ):
         | {
               readonly create: RigSessionCreateInput;
-              readonly folderId?: RigFolderId;
               readonly worktreeId?: RigWorktreeId;
           }
         | undefined => {
@@ -2689,7 +2788,13 @@ export function rigWorkspaceStoreCreate(
         // into it. It is asked first because a folder id can never be a project
         // or worktree id, and because a folder needs no catalog to have arrived.
         const folder = folderGroupFind(groupId);
-        if (folder) return { create: { cwd: folder.path }, folderId: folder.id };
+        if (folder)
+            return {
+                create: {
+                    cwd: folder.path,
+                    scope: { kind: "folder", folderId: folder.id },
+                },
+            };
         const projects = list.get().projects;
         if (projects.type !== "ready") return undefined;
         for (const project of projects.value) {
@@ -2810,14 +2915,6 @@ export function rigWorkspaceStoreCreate(
                   : list.sessionCreate(create);
         return started.then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
-            // Filed after the fact because a chat cannot be filed before it
-            // exists. Rig creates a session in a directory; which folder it
-            // belongs to is the arrangement laid over that, so it is stated as
-            // soon as there is a session to state it about — before the message
-            // is sent, so the chat never appears outside the folder it was
-            // started in.
-            if (start.folderId !== undefined)
-                await client.folders()?.folderSessionSet(location.sessionId, start.folderId);
             output({ type: "conversationOpenRequested", location });
             const placed = await attachmentsPlace(location.groupId, text, attachments);
             const acquired = await client.chat(location.sessionId);
@@ -3010,6 +3107,93 @@ export function rigWorkspaceStoreCreate(
                 : undefined;
     };
 
+    const addressSame = (left: RigWorkspaceAddress, right: RigWorkspaceAddress): boolean =>
+        left.groupId === right.groupId && left.conversationId === right.conversationId;
+
+    /**
+     * Keeps a rejected folder prediction restorable across the one route
+     * replacement caused by that prediction. A later, different navigation is
+     * the reader choosing somewhere else and retires the restoration.
+     */
+    const pendingFolderRemovalAddressApply = (next: RigWorkspaceAddress): void => {
+        const pending = pendingFolderRemoval;
+        if (!pending || addressSame(next, pending.address)) return;
+        if (pending.replacementAddress === undefined) {
+            pendingFolderRemoval = { ...pending, replacementAddress: next };
+            return;
+        }
+        if (!addressSame(pending.replacementAddress, next)) pendingFolderRemoval = undefined;
+    };
+
+    const rejectedFolderAddressRestore = (groupId: RigGroupId): void => {
+        const pending = pendingFolderRemoval;
+        if (!pending || pending.groupId !== groupId) return;
+        pendingFolderRemoval = undefined;
+        if (addressSame(address, pending.address)) return;
+        if (pending.address.conversationId !== undefined) {
+            output({
+                type: "conversationOpenRequested",
+                location: {
+                    groupId,
+                    sessionId: pending.address.conversationId,
+                },
+            });
+            return;
+        }
+        output({ type: "groupOpenRequested", groupId });
+    };
+
+    const folderSnapshotGroupListed = (
+        folderSnapshot: RigFoldersSnapshot,
+        groupId: RigGroupId,
+    ): boolean => {
+        if (groupId === RIG_UNSORTED_GROUP_ID) return folderSnapshot.unsorted.length > 0;
+        const folderId = rigFolderGroupParse(groupId);
+        return folderId !== undefined && folderFind(folderSnapshot.folders, folderId) !== undefined;
+    };
+
+    /**
+     * Reconciles folder and Unsorted addressing against their owning surface.
+     *
+     * Those groups do not belong to the project catalog. Their FolderView is
+     * the complete membership source, so a row disappearing there is the event
+     * that makes the currently addressed group no longer addressable.
+     */
+    const addressedFolderGroupApply = (): boolean => {
+        const folderSnapshot = folders?.get();
+        if (!folderSnapshot || folderSnapshot.loading) return false;
+        const rejection = folderSnapshot.restoredGroupRejection;
+        if (rejection && rejection.revision !== restoredGroupRejectionRevisionSeen) {
+            restoredGroupRejectionRevisionSeen = rejection.revision;
+            rejectedRestoredGroupIds =
+                pendingFolderRemoval === undefined ? new Set() : new Set(rejection.groupIds);
+        }
+        const pending = pendingFolderRemoval;
+        if (
+            pending &&
+            rejectedRestoredGroupIds.has(pending.groupId) &&
+            folderSnapshotGroupListed(folderSnapshot, pending.groupId)
+        ) {
+            rejectedRestoredGroupIds = new Set();
+            rejectedFolderAddressRestore(pending.groupId);
+        }
+        const groupId = addressedGroupId;
+        if (
+            groupId === undefined ||
+            (rigFolderGroupParse(groupId) === undefined && groupId !== RIG_UNSORTED_GROUP_ID)
+        )
+            return false;
+        const listed = folderSnapshotGroupListed(folderSnapshot, groupId);
+        if (listed) {
+            addressedGroupSeen = groupId;
+        } else if (addressedGroupSeen === groupId) {
+            addressedGroupSeen = undefined;
+            pendingFolderRemoval = { address, groupId };
+            output({ type: "addressedGroupRemoved", groupId });
+        }
+        return true;
+    };
+
     /**
      * What the host's own answer means for this workspace's addressing and for a
      * destructive intent the reader is holding. It runs only when the list
@@ -3085,6 +3269,13 @@ export function rigWorkspaceStoreCreate(
             catalogAuthoritativeApply();
             recompute();
         });
+        unsubscribeFolders = folders?.subscribe(() => {
+            if (openId) list.sessionRead(openId, conversationSummaryFind(openId)?.unread);
+            if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
+            fileTabsReconcile();
+            addressedFolderGroupApply();
+            recompute();
+        });
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
@@ -3103,12 +3294,17 @@ export function rigWorkspaceStoreCreate(
         acquiringId = undefined;
         unsubscribeList?.();
         unsubscribeList = undefined;
+        unsubscribeFolders?.();
+        unsubscribeFolders = undefined;
         // The catalog is no longer being watched, so what was last known about
         // it is no longer a basis for reporting anything. Confirmation is
         // rebuilt from the reads taken after this store is on screen again,
         // which is what keeps a removal that happened while nobody was looking
         // from being announced as if the reader had just watched it.
         addressedGroupSeen = undefined;
+        pendingFolderRemoval = undefined;
+        rejectedRestoredGroupIds = new Set();
+        restoredGroupRejectionRevisionSeen = folders?.get().restoredGroupRejection?.revision ?? 0;
         authoritativeGroupIds = new Set();
         catalogRevisionSeen = -1;
         for (const controller of fileLoadControllers.values()) controller.abort();
@@ -3337,6 +3533,10 @@ export function rigWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
+            pendingFolderRemovalAddressApply({
+                ...(groupId === undefined ? {} : { groupId }),
+                conversationId,
+            });
             addressApply(groupId, conversationId);
             if (groupId !== addressedGroupId) {
                 fileSelectionReset();
@@ -3347,7 +3547,7 @@ export function rigWorkspaceStoreCreate(
                 workspaceFilesEnsure(groupId);
             if (groupId !== undefined) {
                 addressedGroupId = groupId;
-                addressedGroupSeenUpdate();
+                if (!addressedFolderGroupApply()) addressedGroupSeenUpdate();
                 groupRestore(groupId);
                 // A restored file tab is what this group was left showing, so it
                 // stays on screen and stays the tab this group resumes on.
@@ -3356,10 +3556,11 @@ export function rigWorkspaceStoreCreate(
                 );
                 groupTabRemember(groupId, restoredFile ? restoredFile.id : conversationId);
             }
-            list.sessionRead(conversationId);
+            list.sessionRead(conversationId, conversationSummaryFind(conversationId)?.unread);
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
+            pendingFolderRemovalAddressApply({ groupId });
             addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
                 fileSelectionReset();
@@ -3368,7 +3569,7 @@ export function rigWorkspaceStoreCreate(
             // The panel belongs to this group, so it learns the address before
             // the conversation is released rather than after.
             addressedGroupId = groupId;
-            addressedGroupSeenUpdate();
+            if (!addressedFolderGroupApply()) addressedGroupSeenUpdate();
             openConversation(undefined);
             groupRestore(groupId);
             // The scope belongs to this checkout, so a group left listing every
@@ -3423,6 +3624,7 @@ export function rigWorkspaceStoreCreate(
             recompute();
         },
         conversationClose: () => {
+            pendingFolderRemovalAddressApply(ADDRESS_NOWHERE);
             addressApply(undefined, undefined);
             releaseGroup();
             // Addressing the Rig's list addresses no group, so the identity a
@@ -4408,18 +4610,9 @@ const NO_TURNS: ReadonlySet<string> = new Set();
 function conversationAcquiring(
     conversationId: RigSessionId,
     composer: ComposerSnapshot,
-    list: RigSessionListSnapshot,
+    summary: ConversationSummary | undefined,
     menus?: RigMenusSnapshot,
 ): RigConversationSnapshot {
-    const summary =
-        list.projects.type === "ready"
-            ? list.projects.value
-                  .flatMap((project) => [
-                      ...project.conversations,
-                      ...project.worktrees.flatMap((worktree) => worktree.conversations),
-                  ])
-                  .find((row) => row.id === conversationId)
-            : undefined;
     return {
         conversationId,
         ready: false,

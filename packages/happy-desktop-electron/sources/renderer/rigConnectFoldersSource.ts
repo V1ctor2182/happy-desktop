@@ -1,10 +1,22 @@
-import type { FolderNode, FoldersState, RigConnection } from "@slopus/rig-connect";
 import type {
+    FolderNode,
+    FolderSession,
+    FolderView,
+    FoldersState,
+    RigConnection,
+} from "@slopus/rig-connect";
+import type {
+    ConversationSummary,
     RigFolder,
     RigFolderId,
     RigFoldersReading,
     RigFoldersSource,
+    RigConversationSummaryInput,
+    RigServiceTier,
+    RigSessionId,
 } from "happy-desktop-state";
+import { rigConversationSummaryProject } from "happy-desktop-state";
+import { permissionMode, thinkingLevel } from "./rigConnectCatalogSource";
 
 /**
  * Adapts `rig-connect`'s live folder tree to the folders store's source
@@ -27,9 +39,9 @@ export function rigConnectFoldersSourceCreate(rig: RigConnection): RigFoldersSou
             let connection: ReturnType<RigConnection["connectFolders"]> | undefined;
             try {
                 connection = rig.connectFolders({
-                    onChange: (folders, state) => {
+                    onChange: (view, state) => {
                         if (closed) return;
-                        listener(readingProject(folders, state));
+                        listener(readingProject(view, state));
                     },
                 });
             } catch (error) {
@@ -46,8 +58,12 @@ export function rigConnectFoldersSourceCreate(rig: RigConnection): RigFoldersSou
     };
 }
 
-function readingProject(folders: readonly FolderNode[], state: FoldersState): RigFoldersReading {
-    return { connection: state.connection, folders: folders.map(folderProject) };
+function readingProject(view: FolderView, state: FoldersState): RigFoldersReading {
+    return {
+        connection: state.connection,
+        folders: view.folders.map(folderProject),
+        unsorted: view.unsorted.map(sessionProject),
+    };
 }
 
 /**
@@ -63,9 +79,39 @@ function folderProject(folder: FolderNode): RigFolder {
         id: folder.id as RigFolderId,
         name: folder.name,
         path: folder.path,
+        conversations: folder.sessions.map(sessionProject),
         ...(folder.description === undefined ? {} : { description: folder.description }),
         ...(folder.icon === undefined ? {} : { icon: folder.icon }),
         ...(folder.parentId === undefined ? {} : { parentId: folder.parentId as RigFolderId }),
         ...(folder.rules === undefined ? {} : { rules: folder.rules }),
     };
+}
+
+function sessionProject(session: FolderSession): ConversationSummary {
+    const effort = thinkingLevel(session.effort);
+    const serviceTier = session.serviceTier === "fast" ? ("fast" as RigServiceTier) : undefined;
+    const projected: RigConversationSummaryInput = {
+        id: session.id as RigSessionId,
+        orderKey: session.orderKey,
+        cwd: session.cwd,
+        displayCwd: session.cwd,
+        providerId: session.providerId,
+        modelId: session.modelId,
+        permissionMode: permissionMode(session.permissionMode),
+        ...(effort ? { effort } : {}),
+        ...(serviceTier ? { serviceTier } : {}),
+        status: session.status,
+        ...(session.wait === undefined
+            ? {}
+            : { wait: { startedAt: session.wait.startedAt, dueAt: session.wait.dueAt } }),
+        ...(session.unread === undefined ? {} : { unreadReason: session.unread.reason }),
+        ...(session.title === undefined ? {} : { title: session.title }),
+        ...(session.recap === undefined ? {} : { recap: session.recap }),
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        ...(session.lastMessageAt === undefined ? {} : { lastMessageAt: session.lastMessageAt }),
+        ...(session.draft === undefined ? {} : { draft: session.draft }),
+        ...(session.draftUpdatedAt === undefined ? {} : { draftUpdatedAt: session.draftUpdatedAt }),
+    };
+    return rigConversationSummaryProject(projected);
 }

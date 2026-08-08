@@ -31,6 +31,7 @@ import type {
     RigBlock,
     RigEventId,
     RigFileDiff,
+    RigFolderId,
     RigGlobalEvent,
     RigGoal,
     RigJson,
@@ -44,6 +45,7 @@ import type {
     RigSession,
     RigSessionEvent,
     RigSessionId,
+    RigSessionScope,
     RigSessionSummary,
     RigSessionUsage,
     RigSlotAction,
@@ -173,11 +175,12 @@ export function rigWorktreeProject(workspace: ProjectWorkspace, homeDir: string)
 export function rigSessionSummaryProject(
     summary: SessionSummary,
     homeDir: string,
-): RigSessionSummary {
+): RigSessionSummary | undefined {
+    const location = codeSessionLocationProject(summary.scope);
+    if (!location) return undefined;
     return {
         id: summary.id as RigSessionId,
-        projectId: summary.projectId as RigProjectId,
-        ...(summary.workspaceId ? { worktreeId: summary.workspaceId as RigWorktreeId } : {}),
+        ...location,
         // A subagent carries no key. Passing the absence through is what keeps it
         // out of the lists; inventing one would file it under a project as an
         // ordinary session.
@@ -206,8 +209,7 @@ export function rigSessionSummaryProject(
 export function rigSessionProject(session: ProtocolSession, homeDir: string): RigSession {
     return {
         id: session.id as RigSessionId,
-        projectId: session.projectId as RigProjectId,
-        ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
+        scope: sessionScopeProject(session.scope),
         // A session with no place in an ordered list (a subagent) carries no key.
         ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         cwd: session.cwd,
@@ -541,17 +543,21 @@ export function rigGlobalEventProject(
         };
     }
     if (event.type === "session_created") {
+        const session = summaryFromSession(event.data.session, event.createdAt, homeDir);
+        if (!session) return undefined;
         return {
             cursor: entry.cursor,
             type: "session_created",
-            session: summaryFromSession(event.data.session, event.createdAt, homeDir),
+            session,
         };
     }
     if (event.type === "session_updated") {
+        const session = summaryFromSession(event.data.session, event.createdAt, homeDir);
+        if (!session) return undefined;
         return {
             cursor: entry.cursor,
             type: "session_updated",
-            session: summaryFromSession(event.data.session, event.createdAt, homeDir),
+            session,
         };
     }
     if (event.type === "session_title_changed") {
@@ -1061,11 +1067,12 @@ function summaryFromSession(
     session: ProtocolSession,
     createdAt: number,
     homeDir: string,
-): RigSessionSummary {
+): RigSessionSummary | undefined {
+    const location = codeSessionLocationProject(session.scope);
+    if (!location) return undefined;
     return {
         id: session.id as RigSessionId,
-        projectId: session.projectId as RigProjectId,
-        ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
+        ...location,
         // A session with no place in an ordered list (a subagent) carries no key.
         ...(session.orderKey === undefined ? {} : { orderKey: session.orderKey }),
         cwd: session.cwd,
@@ -1089,6 +1096,33 @@ function summaryFromSession(
         ...(session.title ? { title: session.title } : {}),
         ...(session.recap ? { recap: session.recap } : {}),
     };
+}
+
+function codeSessionLocationProject(
+    scope: ProtocolSession["scope"] | SessionSummary["scope"],
+): Pick<RigSessionSummary, "projectId" | "worktreeId"> | undefined {
+    if (scope.kind === "project") return { projectId: scope.projectId as RigProjectId };
+    if (scope.kind === "workspace")
+        return {
+            projectId: scope.projectId as RigProjectId,
+            worktreeId: scope.workspaceId as RigWorktreeId,
+        };
+    return undefined;
+}
+
+function sessionScopeProject(
+    scope: ProtocolSession["scope"] | SessionSummary["scope"],
+): RigSessionScope {
+    if (scope.kind === "project")
+        return { kind: "project", projectId: scope.projectId as RigProjectId };
+    if (scope.kind === "workspace")
+        return {
+            kind: "workspace",
+            projectId: scope.projectId as RigProjectId,
+            worktreeId: scope.workspaceId as RigWorktreeId,
+        };
+    if (scope.kind === "folder") return { kind: "folder", folderId: scope.folderId as RigFolderId };
+    return { kind: "unsorted" };
 }
 
 function jsonProject(value: unknown): RigJson {

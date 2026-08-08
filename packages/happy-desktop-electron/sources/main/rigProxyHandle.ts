@@ -1010,9 +1010,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
                 // The daemon owns both the arrangement and leaving archived
                 // sessions out, and already lists them in fractional-index
                 // order, so this forwards its listing rather than re-sorting it.
-                const sessions = (await client.listSessions()).sessions.map((summary) =>
-                    rigSessionSummaryProject(summary, home),
-                );
+                const sessions = (await client.listSessions()).sessions.flatMap((summary) => {
+                    const projected = rigSessionSummaryProject(summary, home);
+                    return projected === undefined ? [] : [projected];
+                });
                 writeJson(response, 200, sessions);
                 return true;
             }
@@ -1852,6 +1853,7 @@ function createRequest(input: RigSessionCreateInput) {
         // which of those chats have finished or are asking the person something.
         trackUnread: true,
         ...(input.worktreeId ? { workspaceId: input.worktreeId } : {}),
+        ...(input.scope ? { scope: input.scope } : {}),
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.modelId ? { modelId: input.modelId } : {}),
         ...(input.effort ? { effort: input.effort } : {}),

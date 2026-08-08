@@ -8,6 +8,7 @@ import {
     rigSessionGroupIdOf,
     type RigProjectGroup,
 } from "./rigProjectGroupProject.js";
+import { rigSessionScopeGroupId } from "./rigFoldersStore.js";
 import {
     RIG_GROUP_UNLISTED_REFUSAL,
     RIG_GROUP_UNREAD_REFUSAL,
@@ -146,8 +147,10 @@ export interface RigSessionListStore {
     /**
      * Marks the session's latest completed work as seen. The mark is durable:
      * a session read before the window closed is not unread when it opens again.
+     * `knownUnread` carries the folder view's observation for a chat that is not
+     * part of this code-session list.
      */
-    sessionRead(sessionId: RigSessionId): void;
+    sessionRead(sessionId: RigSessionId, knownUnread?: boolean): void;
     /**
      * Creates a session and resolves with its address, or with `undefined` when
      * the mutation failed and was recorded in `mutationError`. That address is
@@ -822,21 +825,30 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             // subagent never takes a row, and a session started a moment ago
             // may not have been reconciled yet. Asking the host is what tells
             // those apart from a session that really has left.
-            const location = listed
-                ? sessionLocationOf(listed)
-                : await deps.transport.sessionRead(sessionId).then(
-                      (session) => sessionLocationOf(session),
-                      () => undefined,
-                  );
-            return location && groupListed(location.groupId) ? location : undefined;
+            if (listed) {
+                const location = sessionLocationOf(listed);
+                return groupListed(location.groupId) ? location : undefined;
+            }
+            const session = await deps.transport.sessionRead(sessionId).catch(() => undefined);
+            if (!session) return undefined;
+            const location = sessionLocationOf(session);
+            return session.scope.kind === "folder" || session.scope.kind === "unsorted"
+                ? location
+                : groupListed(location.groupId)
+                  ? location
+                  : undefined;
         },
-        sessionRead(sessionId) {
+        sessionRead(sessionId, knownUnread) {
             const session = sessions.find((candidate) => candidate.id === sessionId);
-            if (session?.unreadReason === undefined) return;
-            sessions = sessions.map((candidate) =>
-                candidate.id === sessionId ? { ...candidate, unreadReason: undefined } : candidate,
-            );
-            publish();
+            if (session?.unreadReason === undefined && knownUnread !== true) return;
+            if (session?.unreadReason !== undefined) {
+                sessions = sessions.map((candidate) =>
+                    candidate.id === sessionId
+                        ? { ...candidate, unreadReason: undefined }
+                        : candidate,
+                );
+                publish();
+            }
             deps.connectActions?.markSessionRead(sessionId);
         },
         sessionCreate: (input) =>
@@ -846,11 +858,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 if (disposed) return undefined;
                 // A session nobody has placed yet is newest-first for the host,
                 // so the optimistic row goes where the reconcile will put it.
-                sessions = [
-                    sessionSummaryOf(session),
-                    ...sessions.filter((existing) => existing.id !== session.id),
-                ];
-                publish();
+                const summary = sessionSummaryOf(session);
+                if (summary) {
+                    sessions = [
+                        summary,
+                        ...sessions.filter((existing) => existing.id !== session.id),
+                    ];
+                    publish();
+                }
                 const location = sessionLocationOf(session);
                 output({ type: "sessionCreated", location });
                 await reconcile();
@@ -862,11 +877,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 if (disposed) return undefined;
                 // A session nobody has placed yet is newest-first for the host,
                 // so the optimistic row goes where the reconcile will put it.
-                sessions = [
-                    sessionSummaryOf(session),
-                    ...sessions.filter((existing) => existing.id !== session.id),
-                ];
-                publish();
+                const summary = sessionSummaryOf(session);
+                if (summary) {
+                    sessions = [
+                        summary,
+                        ...sessions.filter((existing) => existing.id !== session.id),
+                    ];
+                    publish();
+                }
                 const location = sessionLocationOf(session);
                 output({ type: "sessionForked", location });
                 await reconcile();
@@ -939,10 +957,9 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                     worktreeId: pathed.id,
                 });
                 if (disposed) return undefined;
-                sessions = [
-                    sessionSummaryOf(session),
-                    ...sessions.filter((existing) => existing.id !== session.id),
-                ];
+                const summary = sessionSummaryOf(session);
+                if (!summary) return undefined;
+                sessions = [summary, ...sessions.filter((existing) => existing.id !== session.id)];
                 publish();
                 const location = sessionLocationOf(session);
                 output({ type: "sessionCreated", location });
@@ -1185,12 +1202,25 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
 }
 
 /** The address of a session: its group, then itself. */
-function sessionLocationOf(session: {
-    readonly id: RigSessionId;
-    readonly projectId: RigProjectId;
-    readonly worktreeId?: RigWorktreeId;
-}): RigSessionLocation {
-    return { sessionId: session.id, groupId: rigSessionGroupIdOf(session) };
+function sessionLocationOf(
+    session:
+        | {
+              readonly id: RigSessionId;
+              readonly scope: RigSession["scope"];
+          }
+        | {
+              readonly id: RigSessionId;
+              readonly projectId: RigProjectId;
+              readonly worktreeId?: RigWorktreeId;
+          },
+): RigSessionLocation {
+    return {
+        sessionId: session.id,
+        groupId:
+            "scope" in session
+                ? rigSessionScopeGroupId(session.scope)
+                : rigSessionGroupIdOf(session),
+    };
 }
 
 /**
@@ -1204,11 +1234,12 @@ function defaultCreateId(): string {
 }
 
 /** Projects a full session down to the summary the list renders. */
-function sessionSummaryOf(session: RigSession): RigSessionSummary {
+function sessionSummaryOf(session: RigSession): RigSessionSummary | undefined {
+    if (session.scope.kind !== "project" && session.scope.kind !== "workspace") return undefined;
     return {
         id: session.id,
-        projectId: session.projectId,
-        ...(session.worktreeId ? { worktreeId: session.worktreeId } : {}),
+        projectId: session.scope.projectId,
+        ...(session.scope.kind === "workspace" ? { worktreeId: session.scope.worktreeId } : {}),
         orderKey: session.orderKey,
         cwd: session.cwd,
         displayCwd: session.displayCwd,

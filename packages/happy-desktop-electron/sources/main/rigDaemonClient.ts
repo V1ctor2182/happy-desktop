@@ -122,6 +122,16 @@ function fileScopePath(scope: RigFileScope): string {
         : `${project}/workspaces/${encodeURIComponent(scope.workspaceId)}`;
 }
 
+function sessionCheckoutScope(session: ProtocolSession): RigFileScope {
+    if (session.scope.kind === "project") return { projectId: session.scope.projectId };
+    if (session.scope.kind === "workspace")
+        return {
+            projectId: session.scope.projectId,
+            workspaceId: session.scope.workspaceId,
+        };
+    throw new RigDaemonHttpError(409, "This operation requires a project or workspace session.");
+}
+
 /**
  * Narrow client for the local Rig daemon routes consumed by Happy's main-process
  * projection. Rig intentionally exposes these routes over an authenticated Unix
@@ -598,12 +608,7 @@ export class RigDaemonClient {
      */
     async openHttpProxy(sessionId: string): Promise<Duplex> {
         const { session } = await this.getSession(sessionId);
-        const path = this.#path(
-            `${fileScopePath({
-                projectId: session.projectId,
-                ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
-            })}/proxy`,
-        );
+        const path = this.#path(`${fileScopePath(sessionCheckoutScope(session))}/proxy`);
         return new Promise((resolvePromise, reject) => {
             const request = httpRequest({
                 headers: { authorization: `Bearer ${this.#token}` },
@@ -813,10 +818,7 @@ export class RigDaemonClient {
         sessionId: string,
     ): Promise<{ readonly projectId: string; readonly workspaceId?: string }> {
         const { session } = await this.getSession(sessionId);
-        return {
-            projectId: session.projectId,
-            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
-        };
+        return sessionCheckoutScope(session);
     }
 
     #terminalCollectionPath(scope: {

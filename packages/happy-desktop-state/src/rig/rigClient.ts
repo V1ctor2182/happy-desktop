@@ -60,6 +60,13 @@ import {
     type RigPairingSource,
     type RigPairingStore,
 } from "./rigPairingStore.js";
+import {
+    rigProfilesStoreCreate,
+    type RigProfilesActions,
+    type RigProfileSelectionPersistence,
+    type RigProfilesSource,
+    type RigProfilesStore,
+} from "./rigProfilesStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface RigChatHandle {
@@ -114,6 +121,8 @@ export interface RigClient {
      * wrong reason.
      */
     folders(): RigFoldersStore | undefined;
+    /** Host-owned human identities used to author work sent into remote Rigs. */
+    profiles(): RigProfilesStore | undefined;
     /**
      * The single pairing store for this Rig: trusting a new machine by
      * comparing four emojis on both ends. Materialized on first access and
@@ -270,6 +279,12 @@ export interface RigClientDeps {
      * own trust, which leaves pairing unavailable rather than idle.
      */
     readonly pairingSource?: RigPairingSource;
+    /** Host-only profile catalog and mutations. Omitted on a node connection. */
+    readonly profilesSource?: RigProfilesSource;
+    readonly profilesActions?: RigProfilesActions;
+    readonly profileSelectionPersistence?: RigProfileSelectionPersistence;
+    /** Selected host identity required by every message sent through a node route. */
+    readonly messageIdentity?: () => string | undefined;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -323,6 +338,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let nodesStore: RigNodesStore | undefined;
     let foldersStore: RigFoldersStore | undefined;
     let pairingStore: RigPairingStore | undefined;
+    let profilesStore: RigProfilesStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
     let secretsStore: RigSecretsStore | undefined;
@@ -449,29 +465,37 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             if (!source || !actions) return undefined;
             foldersStore ??= rigFoldersStoreCreate({
                 source,
+                ...(deps.connectMutationSubscribe
+                    ? { mutationSubscribe: deps.connectMutationSubscribe }
+                    : {}),
                 actions: {
-                    folderCreate: async (input) => {
-                        await actions.folders.create({
+                    folderCreate: (input) =>
+                        actions.folders.create({
                             name: input.name,
                             ...(input.icon === undefined ? {} : { icon: input.icon }),
                             ...(input.parentId === undefined ? {} : { parentId: input.parentId }),
-                        });
-                    },
-                    folderUpdate: async (folderId, changes) => {
-                        await actions.folders.update(folderId, changes);
-                    },
-                    folderMove: async (folderId, parentId, afterId) => {
-                        await actions.folders.move(folderId, { afterId, parentId });
-                    },
-                    folderArchive: async (folderId) => {
-                        await actions.folders.archive(folderId);
-                    },
-                    folderSessionSet: async (sessionId, folderId) => {
-                        await actions.folders.setSessionFolder(sessionId, folderId);
-                    },
+                        }),
+                    folderUpdate: (folderId, changes) => actions.folders.update(folderId, changes),
+                    folderMove: (folderId, parentId, afterId) =>
+                        actions.folders.move(folderId, { afterId, parentId }),
+                    folderArchive: (folderId) => actions.folders.archive(folderId),
+                    folderSessionSet: (sessionId, folderId) =>
+                        actions.folders.setSessionFolder(sessionId, folderId),
                 },
             });
             return foldersStore;
+        },
+        profiles() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            if (!deps.profilesSource || !deps.profilesActions) return undefined;
+            profilesStore ??= rigProfilesStoreCreate({
+                source: deps.profilesSource,
+                actions: deps.profilesActions,
+                ...(deps.profileSelectionPersistence
+                    ? { selectionPersistence: deps.profileSelectionPersistence }
+                    : {}),
+            });
+            return profilesStore;
         },
         pairing() {
             if (disposed) throw new Error("The Rig client is disposed.");
@@ -507,6 +531,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                             ? { transcriptConnect: deps.transcriptConnect }
                             : {}),
                         ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
+                        ...(deps.messageIdentity ? { messageIdentity: deps.messageIdentity } : {}),
                         ...(deps.connectMutationSubscribe
                             ? { connectMutationSubscribe: deps.connectMutationSubscribe }
                             : {}),
@@ -599,6 +624,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             foldersStore = undefined;
             pairingStore?.[Symbol.dispose]();
             pairingStore = undefined;
+            profilesStore?.[Symbol.dispose]();
+            profilesStore = undefined;
             instructionsStore?.[Symbol.dispose]();
             slotsStore?.[Symbol.dispose]();
             slotsStore = undefined;

@@ -368,8 +368,8 @@ export type BashSessionActivity = NonNullable<ProtocolSession["backgroundProcess
 
 export interface SessionSummary {
     readonly id: string;
-    readonly projectId: string;
-    readonly workspaceId?: string;
+    readonly ownerInstanceId: string;
+    readonly scope: ProtocolSession["scope"];
     /**
      * Fractional index the daemon sorts sessions by within their group. Absent
      * for a session with no place in an ordered list, such as a subagent.

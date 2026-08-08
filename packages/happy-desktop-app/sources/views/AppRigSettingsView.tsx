@@ -10,6 +10,7 @@ import type {
     RigModelCatalog,
     RigModelKey,
     RigPermissionMode,
+    RigProfilesStore,
     RigSettingsSnapshot,
     RigSecretsStore,
     RigSettingsStore,
@@ -27,6 +28,7 @@ import {
     rigAvailabilityProject,
     rigNodesStoreNoop,
     rigPairingStoreNoop,
+    rigProfilesStoreNoop,
     rigProviderUsageStoreNoop,
     rigSecretsStoreNoop,
     rigWindowStoreNoop,
@@ -38,6 +40,7 @@ import {
     RigNodeSettings,
     RigPairing,
     RigProviderSettings,
+    RigProfilesSettings,
     RigSecretsSettings,
     RigSettingsShell,
     RigUsageSettings,
@@ -55,6 +58,7 @@ import { hostRig, type AppRigDirectorySnapshot, type AppRigDirectoryStore } from
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "users", id: "profiles", label: "Profiles" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
@@ -73,6 +77,7 @@ export function rigSettingsCategoryExists(section: string): boolean {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     general: "How this window looks and what a new session starts with",
+    profiles: "Who this host says is sending work to another Rig",
     instructions: "Machine-wide agent guidance and permission-review policy",
     nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
@@ -166,6 +171,14 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         props.settings.get,
         props.settings.get,
     );
+    const profilesStore =
+        (props.section === "profiles" ? host?.session?.profiles?.() : undefined) ??
+        rigProfilesStoreNoop;
+    const profiles = useSyncExternalStore(
+        profilesStore.subscribe,
+        profilesStore.get,
+        profilesStore.get,
+    );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
     const instructionsStore = host?.session?.instructions;
@@ -250,7 +263,26 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             windowControls={props.platform === "desktop"}
             windowFullScreen={windowState.fullScreen}
         >
-            {props.section === "instructions" ? (
+            {props.section === "profiles" ? (
+                <RigProfilesSettings
+                    loading={profiles.loading}
+                    onProfileCreate={() => profilesStore.profileCreateOpen()}
+                    onProfileEdit={(profileId) => profilesStore.profileEditOpen(profileId)}
+                    onProfileSelect={(profileId) => profilesStore.profileSelect(profileId)}
+                    profiles={profiles.profiles.map((profile) => ({
+                        id: profile.id,
+                        name: profile.name,
+                        selected: profile.id === profiles.selectedProfileId,
+                        ...(profile.photo === undefined
+                            ? {}
+                            : { imageUrl: profile.photo.imageUrl }),
+                    }))}
+                    {...(profiles.editor ? { editor: profileEditor(profilesStore) } : {})}
+                    {...(profiles.error ? { error: profiles.error.message } : {})}
+                    {...(profiles.actionError ? { actionError: profiles.actionError } : {})}
+                    {...(unavailable === undefined ? {} : { unavailable })}
+                />
+            ) : props.section === "instructions" ? (
                 <RigInstructionsSettings
                     documents={[
                         {
@@ -451,6 +483,21 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             )}
         </RigSettingsShell>
     );
+}
+
+function profileEditor(store: RigProfilesStore) {
+    const editor = store.get().editor;
+    return {
+        mode: editor?.mode ?? ("create" as const),
+        name: editor?.name ?? "",
+        saving: editor?.submitting ?? false,
+        onNameChange: (value: string) => store.profileNameUpdate(value),
+        onSave: () => {
+            void store.profileEditorSubmit();
+        },
+        onCancel: () => store.profileEditorCancel(),
+        ...(editor?.error === undefined ? {} : { error: editor.error }),
+    };
 }
 
 /** Every secret bundle this Rig holds, with whichever row is being removed. */

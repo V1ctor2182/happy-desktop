@@ -13,7 +13,7 @@ import {
     type ConversationMessageEntry,
     type ConversationNoticeEntry,
 } from "../conversation/conversationEntry.js";
-import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import { rigAgentAuthor, rigHumanMessageAuthor } from "./rigConversationProject.js";
 
 function humanizeToolName(name: string): string {
     const explicit: Record<string, string> = {
@@ -355,7 +355,7 @@ function attachSectionTraces(
 
     for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index]!;
-        if (entry.kind === "message" && entry.message.sender?.id === rigOwnerAuthor.id) {
+        if (entry.kind === "message" && rigHumanMessageAuthor(entry.message.sender)) {
             flush(false, input.steeringMessageIds?.has(entry.message.id) ? "steered" : "settled");
             turnUserId = entry.message.id;
             turnUserMessage = entry;

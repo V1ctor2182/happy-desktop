@@ -5,7 +5,6 @@ import {
     type RigConnection,
 } from "@slopus/rig-connect";
 import type {
-    RigFolderId,
     RigGitChangedFile,
     RigPermissionMode,
     RigProject,
@@ -407,11 +406,10 @@ function sessionProject(session: GroupSession): RigSessionSummary {
     const serviceTier = session.serviceTier === "fast" ? ("fast" as RigServiceTier) : undefined;
     return {
         id: session.id as RigSessionId,
-        projectId: session.projectId as RigProjectId,
-        ...(session.workspaceId ? { worktreeId: session.workspaceId as RigWorktreeId } : {}),
-        // Where the reader filed this chat, which is theirs to change and has
-        // nothing to do with where the session runs. Absent means unsorted.
-        ...(session.folderId === undefined ? {} : { folderId: session.folderId as RigFolderId }),
+        projectId: session.scope.projectId as RigProjectId,
+        ...(session.scope.kind === "workspace"
+            ? { worktreeId: session.scope.workspaceId as RigWorktreeId }
+            : {}),
         // rig-connect only groups sessions the host has placed, so a session
         // reaching here always has a key; it is carried through rather than
         // asserted so the absence would propagate honestly if that changed.
@@ -438,7 +436,7 @@ function sessionProject(session: GroupSession): RigSessionSummary {
     };
 }
 
-function permissionMode(value: string): RigPermissionMode {
+export function permissionMode(value: string): RigPermissionMode {
     if (
         value === "auto" ||
         value === "workspace_write" ||
@@ -450,7 +448,7 @@ function permissionMode(value: string): RigPermissionMode {
     return "auto";
 }
 
-function thinkingLevel(value: string | undefined): RigThinkingLevel | undefined {
+export function thinkingLevel(value: string | undefined): RigThinkingLevel | undefined {
     if (
         value === "off" ||
         value === "on" ||

@@ -53,6 +53,15 @@ export const rigAgentAuthor: ConversationAuthor = {
     agentRole: "default",
 };
 
+/** True for a person-authored Rig turn, excluding agent/system news in the user slot. */
+export function rigHumanMessageAuthor(author: ConversationAuthor | undefined): boolean {
+    return (
+        author?.kind === "human" &&
+        author.id !== rigInboundAuthor.id &&
+        !author.id.startsWith(`${rigInboundAuthor.id}:`)
+    );
+}
+
 /**
  * Projects one local Rig message into the renderable conversation shape.
  */
@@ -518,8 +527,10 @@ export function rigConversationBuild(
     return sequenced(explorationEntriesCollapse(entries));
 }
 
+export type RigConversationSummaryInput = Omit<RigSessionSummary, "projectId" | "worktreeId">;
+
 /** Falls back through title, recap, and id so a row always names its session. */
-function summaryTitle(session: RigSessionSummary): string {
+function summaryTitle(session: RigConversationSummaryInput): string {
     if (session.title && session.title.trim().length > 0) return session.title;
     if (session.recap && session.recap.trim().length > 0) return session.recap;
     return `Session ${session.id.slice(0, 8)}`;
@@ -530,7 +541,9 @@ function summaryTitle(session: RigSessionSummary): string {
  * directory is the subtitle that tells two sessions apart, and its run state is
  * the live-activity marker every agent-driven conversation renders.
  */
-export function rigConversationSummaryProject(session: RigSessionSummary): ConversationSummary {
+export function rigConversationSummaryProject(
+    session: RigConversationSummaryInput,
+): ConversationSummary {
     // A scheduled wait demotes a running session to "waiting": the agent is
     // alive but deliberately doing nothing, and a spinner would claim work is
     // happening. A question for the person still outranks it.
@@ -548,7 +561,6 @@ export function rigConversationSummaryProject(session: RigSessionSummary): Conve
         subtitle: session.displayCwd || session.cwd,
         activity,
         updatedAt: session.lastMessageAt ?? session.updatedAt,
-        ...(session.folderId === undefined ? {} : { folderId: session.folderId }),
         ...(session.unreadReason === undefined ? {} : { unread: true }),
         participants: [rigOwnerAuthor, rigAgentAuthor],
     };

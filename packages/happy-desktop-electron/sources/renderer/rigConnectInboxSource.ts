@@ -1,5 +1,12 @@
 import type { InboxItem, RigConnection } from "@slopus/rig-connect";
-import type { RigInboxSource, RigInboxSourceItem } from "happy-desktop-state";
+import type {
+    RigFolderId,
+    RigInboxSource,
+    RigInboxSourceItem,
+    RigProjectId,
+    RigSessionScope,
+    RigWorktreeId,
+} from "happy-desktop-state";
 
 export interface RigConnectInboxSource extends RigInboxSource {
     close(): void;
@@ -67,8 +74,7 @@ function itemProject(item: InboxItem): RigInboxSourceItem {
         id: item.id,
         sessionId: item.sessionId,
         requestId: item.requestId,
-        projectId: item.projectId,
-        ...(item.workspaceId === undefined ? {} : { workspaceId: item.workspaceId }),
+        ...(item.scope === undefined ? {} : { scope: scopeProject(item.scope) }),
         ...(item.title === undefined ? {} : { sessionTitle: item.title }),
         questions: item.questions.map((question) => ({
             id: question.id,
@@ -86,4 +92,17 @@ function itemProject(item: InboxItem): RigInboxSourceItem {
         createdAt: item.createdAt,
         ...(item.resolvedAt === undefined ? {} : { resolvedAt: item.resolvedAt }),
     };
+}
+
+function scopeProject(scope: NonNullable<InboxItem["scope"]>): RigSessionScope {
+    if (scope.kind === "project")
+        return { kind: "project", projectId: scope.projectId as RigProjectId };
+    if (scope.kind === "workspace")
+        return {
+            kind: "workspace",
+            projectId: scope.projectId as RigProjectId,
+            worktreeId: scope.workspaceId as RigWorktreeId,
+        };
+    if (scope.kind === "folder") return { kind: "folder", folderId: scope.folderId as RigFolderId };
+    return { kind: "unsorted" };
 }

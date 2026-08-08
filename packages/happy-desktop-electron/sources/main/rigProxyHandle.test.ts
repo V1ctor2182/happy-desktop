@@ -57,6 +57,8 @@ function postRequest(body: unknown): IncomingMessage {
 function protocolSession(id = "session-1") {
     return {
         id,
+        ownerInstanceId: "rig-instance-1",
+        scope: { kind: "project" as const, projectId: "project-1" },
         agentId: "a",
         cwd: `${HOME}/work`,
         providerId: "openai",
@@ -67,6 +69,12 @@ function protocolSession(id = "session-1") {
         sessionSecretIds: [],
         modelLocked: false,
         models: [],
+        modelCatalog: {
+            defaultModelId: "gpt-x",
+            defaultProviderId: "openai",
+            models: [],
+            providers: [],
+        },
         status: "idle",
         titleStatus: "ready",
         agent: { depth: 0, rootSessionId: id, type: "primary" },
@@ -107,8 +115,9 @@ function clientStub(overrides: Partial<RigProxyClient> = {}): RigProxyClient {
             sessions: [
                 {
                     id: "session-1",
+                    ownerInstanceId: "rig-instance-1",
                     cwd: `${HOME}/work`,
-                    projectId: "project-1",
+                    scope: { kind: "project", projectId: "project-1" },
                     providerId: "openai",
                     modelId: "gpt-x",
                     permissionMode: "auto",

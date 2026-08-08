@@ -40,7 +40,8 @@ function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
         activity: { kind: "idle", label: "Idle", since: 0 },
         agentId: "agent-1",
         archived: false,
-        projectId: "project-1",
+        ownerInstanceId: "instance-1",
+        scope: { kind: "project", projectId: "project-1" },
         orderKey: "a0",
         cwd: `${HOME}/work`,
         providerId: "openai",
@@ -50,6 +51,19 @@ function session(overrides: Partial<ProtocolSession> = {}): ProtocolSession {
         projectSecretIds: [],
         sessionSecretIds: [],
         modelLocked: false,
+        modelCatalog: {
+            defaultModelId: "gpt-x",
+            defaultProviderId: "openai",
+            models: [
+                {
+                    id: "gpt-x",
+                    name: "GPT X",
+                    thinkingLevels: ["low", "high"],
+                    defaultThinkingLevel: "low",
+                },
+            ],
+            providers: [],
+        },
         models: [
             {
                 id: "gpt-x",
@@ -229,7 +243,8 @@ describe("rigSessionSummaryProject", () => {
     it("projects the list summary with a home-relative cwd", () => {
         const summary: SessionSummary = {
             id: "session-1",
-            projectId: "project-1",
+            ownerInstanceId: "instance-1",
+            scope: { kind: "project", projectId: "project-1" },
             orderKey: "a0",
             cwd: `${HOME}/work`,
             providerId: "openai",

@@ -300,6 +300,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             agent={author?.kind === "agent"}
             author={author?.displayName ?? "Unknown"}
             {...(author?.sessionId === undefined ? {} : { avatarSessionId: author.sessionId })}
+            {...(author?.imageUrl === undefined ? {} : { imageUrl: author.imageUrl })}
             body={message.text}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}

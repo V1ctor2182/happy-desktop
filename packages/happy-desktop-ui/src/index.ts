@@ -474,6 +474,12 @@ export {
     type RigProviderStatus,
 } from "./pages/settings/RigProviderSettings";
 export {
+    RigProfilesSettings,
+    type RigProfileEditor,
+    type RigProfileRow,
+    type RigProfilesSettingsProps,
+} from "./pages/settings/RigProfilesSettings";
+export {
     RigSecretsSettings,
     type RigSecretEditor,
     type RigSecretRow,

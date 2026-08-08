@@ -12,6 +12,8 @@ export interface ConversationAuthor {
     readonly username: string;
     readonly kind: "human" | "agent";
     readonly photoFileId?: string;
+    /** Already-safe display URL for an inline profile photo. */
+    readonly imageUrl?: string;
     /**
      * The session this author speaks for, when the author is another session
      * rather than a person or this session's own agent. A surface renders it as

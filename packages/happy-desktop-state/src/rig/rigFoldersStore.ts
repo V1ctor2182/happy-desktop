@@ -1,7 +1,9 @@
 import { createStore } from "zustand/vanilla";
+import type { MutationRejectedDelta } from "@slopus/rig-connect";
+import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { UserError } from "../types.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
-import type { RigFolderId, RigGroupId, RigSessionId } from "./rigTypes.js";
+import type { RigFolderId, RigGroupId, RigSessionId, RigSessionScope } from "./rigTypes.js";
 
 /**
  * One folder in the Rig's virtual tree, with the folders nested inside it
@@ -26,6 +28,8 @@ export interface RigFolder {
     readonly parentId?: RigFolderId;
     /** Flat storage directory holding this folder's files. */
     readonly path: string;
+    /** Chats directly contained by this folder, in the order the host published. */
+    readonly conversations: readonly ConversationSummary[];
     /** The folders nested inside this one, in the order they should be drawn. */
     readonly children: readonly RigFolder[];
 }
@@ -34,6 +38,8 @@ export interface RigFolder {
 export interface RigFoldersReading {
     /** The folders at the root of the tree, each carrying its own children. */
     readonly folders: readonly RigFolder[];
+    /** Chats that do not belong to a folder, project, or workspace yet. */
+    readonly unsorted: readonly ConversationSummary[];
     /** Whether the feed behind this reading is live, coming back, or gone. */
     readonly connection: "connecting" | "live" | "reconnecting" | "closed";
 }
@@ -53,32 +59,34 @@ export interface RigFoldersSource {
 /**
  * Everything this surface does to the tree, as the connection performs it.
  *
- * Nothing here is predicted locally. The host derives a folder's place among its
- * siblings itself, which is why a move names where the folder landed rather than
- * an order key, and why every call answers by completing rather than by handing
- * back a folder this store would have to reconcile against the stream anyway.
+ * The connection predicts each queued mutation and later reconciles the host's
+ * answer through the same stream. The host still derives a folder's place among
+ * its siblings, which is why a move names where the folder landed rather than an
+ * order key. A standalone source may instead complete each action as a promise.
  */
+export type RigFolderActionResult = string | void | Promise<string | void>;
+
 export interface RigFoldersActions {
     folderCreate(input: {
         readonly name: string;
         readonly icon?: string;
         readonly parentId?: RigFolderId;
-    }): Promise<void>;
+    }): RigFolderActionResult;
     /** Changes a folder's own fields. `null` clears an optional one. */
     folderUpdate(
         folderId: RigFolderId,
         changes: { readonly name?: string; readonly icon?: string | null },
-    ): Promise<void>;
+    ): RigFolderActionResult;
     /** One drag-and-drop: the folder it was dropped into, and the sibling below. */
     folderMove(
         folderId: RigFolderId,
         parentId: RigFolderId | null,
         afterId: RigFolderId | null,
-    ): Promise<void>;
+    ): RigFolderActionResult;
     /** Puts a folder away together with everything nested under it. */
-    folderArchive(folderId: RigFolderId): Promise<void>;
+    folderArchive(folderId: RigFolderId): RigFolderActionResult;
     /** Files one chat into a folder, or takes it back out into unsorted with `null`. */
-    folderSessionSet(sessionId: RigSessionId, folderId: RigFolderId | null): Promise<void>;
+    folderSessionSet(sessionId: RigSessionId, folderId: RigFolderId | null): RigFolderActionResult;
 }
 
 /**
@@ -107,6 +115,8 @@ export interface RigFolderEditorSnapshot {
 export interface RigFoldersSnapshot {
     /** The folders at the root of the tree, each carrying its own children. */
     readonly folders: readonly RigFolder[];
+    /** Chats waiting to be filed into a folder. */
+    readonly unsorted: readonly ConversationSummary[];
     /** True until the host's first reading arrives, so "no folders" is not claimed early. */
     readonly loading: boolean;
     /** Set when the feed itself failed; the last reading stays visible beneath it. */
@@ -117,6 +127,16 @@ export interface RigFoldersSnapshot {
      * tree on screen is still current, and only the act did not happen.
      */
     readonly actionError?: string;
+    /**
+     * Groups restored by the latest rejected optimistic mutation.
+     *
+     * The revision makes this an event a subscriber can consume once even when
+     * the same group is restored by two different rejected attempts.
+     */
+    readonly restoredGroupRejection?: {
+        readonly groupIds: readonly RigGroupId[];
+        readonly revision: number;
+    };
     /** The folder being made or edited, if any. */
     readonly editor?: RigFolderEditorSnapshot;
 }
@@ -155,9 +175,14 @@ export interface RigFoldersStore {
 export interface RigFoldersStoreDeps {
     readonly source: RigFoldersSource;
     readonly actions: RigFoldersActions;
+    readonly mutationSubscribe?: (
+        listener: (rejection: MutationRejectedDelta) => void,
+    ) => () => void;
 }
 
-const EMPTY: RigFoldersSnapshot = { folders: [], loading: true };
+const EMPTY: RigFoldersSnapshot = { folders: [], unsorted: [], loading: true };
+/** The connector accepts at most this many mutations before rejecting overflow. */
+const RIG_MUTATION_QUEUE_LIMIT = 256;
 
 /**
  * The Rig's folder tree, and the few things a person does to it.
@@ -176,6 +201,12 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
     /** True once the host has answered live at least once. */
     let settled = false;
     let disposed = false;
+    const pendingMutationIds = new Set<string>();
+    const pendingMutationOrder: string[] = [];
+    const pendingMutationRestoredGroups = new Map<string, readonly RigGroupId[]>();
+    const earlyMutationRejections = new Map<string, MutationRejectedDelta>();
+    const earlyMutationRejectionOrder: string[] = [];
+    let restoredGroupRejectionRevision = 0;
 
     /**
      * Private authoritative writer: the host's own reading, never a public action.
@@ -192,6 +223,7 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
         store.setState({
             ...current,
             folders: referencesPreserve(current.folders, reading.folders),
+            unsorted: referencesPreserve(current.unsorted, reading.unsorted),
             loading: !settled,
             ...(current.error === undefined ? {} : { error: undefined }),
         });
@@ -210,6 +242,72 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
         if (disposed || store.getState().actionError === undefined) return;
         store.setState({ ...store.getState(), actionError: undefined });
     };
+
+    const restoredGroupsPublish = (groupIds: readonly RigGroupId[]): void => {
+        if (disposed || groupIds.length === 0) return;
+        restoredGroupRejectionRevision += 1;
+        store.setState({
+            ...store.getState(),
+            restoredGroupRejection: {
+                groupIds,
+                revision: restoredGroupRejectionRevision,
+            },
+        });
+    };
+
+    const mutationTrack = (
+        mutationId: string,
+        restoredGroups: readonly RigGroupId[] = [],
+    ): void => {
+        const earlyRejection = earlyMutationRejections.get(mutationId);
+        if (earlyRejection) {
+            earlyMutationRejections.delete(mutationId);
+            restoredGroupsPublish(restoredGroups);
+            throw new Error(earlyRejection.message);
+        }
+        pendingMutationIds.add(mutationId);
+        if (restoredGroups.length > 0)
+            pendingMutationRestoredGroups.set(mutationId, restoredGroups);
+        pendingMutationOrder.push(mutationId);
+        while (pendingMutationOrder.length > RIG_MUTATION_QUEUE_LIMIT) {
+            const expired = pendingMutationOrder.shift();
+            if (expired) {
+                pendingMutationIds.delete(expired);
+                pendingMutationRestoredGroups.delete(expired);
+            }
+        }
+    };
+
+    const actionRun = async (
+        result: RigFolderActionResult,
+        restoredGroups: readonly RigGroupId[] = [],
+    ): Promise<void> => {
+        if (typeof result === "string") {
+            mutationTrack(result, restoredGroups);
+            return;
+        }
+        const mutationId = await result;
+        if (typeof mutationId === "string") mutationTrack(mutationId, restoredGroups);
+    };
+
+    const unsubscribeMutationRejections = deps.mutationSubscribe?.((rejection) => {
+        if (disposed) return;
+        if (pendingMutationIds.delete(rejection.mutationId)) {
+            restoredGroupsPublish(pendingMutationRestoredGroups.get(rejection.mutationId) ?? []);
+            pendingMutationRestoredGroups.delete(rejection.mutationId);
+            actionFailed(new Error(rejection.message));
+            return;
+        }
+        // Queue overflow is rejected synchronously inside the connector, before
+        // its action returns the mutation id. Hold unmatched rejections long
+        // enough for `mutationTrack` to pair that return with this notification.
+        earlyMutationRejections.set(rejection.mutationId, rejection);
+        earlyMutationRejectionOrder.push(rejection.mutationId);
+        while (earlyMutationRejectionOrder.length > RIG_MUTATION_QUEUE_LIMIT) {
+            const expired = earlyMutationRejectionOrder.shift();
+            if (expired) earlyMutationRejections.delete(expired);
+        }
+    });
 
     const start = (): void => {
         if (disposed || unsubscribeSource) return;
@@ -296,19 +394,25 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
             editorSet({ ...pending, submitting: true, error: undefined });
             try {
                 if (pending.mode === "create") {
-                    await deps.actions.folderCreate({
-                        name,
-                        ...(pending.emoji === undefined ? {} : { icon: pending.emoji }),
-                        ...(pending.parentId === undefined ? {} : { parentId: pending.parentId }),
-                    });
+                    await actionRun(
+                        deps.actions.folderCreate({
+                            name,
+                            ...(pending.emoji === undefined ? {} : { icon: pending.emoji }),
+                            ...(pending.parentId === undefined
+                                ? {}
+                                : { parentId: pending.parentId }),
+                        }),
+                    );
                 } else if (pending.folderId !== undefined) {
-                    await deps.actions.folderUpdate(pending.folderId, {
-                        name,
-                        // Explicitly cleared rather than left alone: a reader who
-                        // took the emoji off means the folder to carry none, and
-                        // an absent field would leave the old one in place.
-                        icon: pending.emoji ?? null,
-                    });
+                    await actionRun(
+                        deps.actions.folderUpdate(pending.folderId, {
+                            name,
+                            // Explicitly cleared rather than left alone: a reader who
+                            // took the emoji off means the folder to carry none, and
+                            // an absent field would leave the old one in place.
+                            icon: pending.emoji ?? null,
+                        }),
+                    );
                 }
                 if (disposed) return;
                 // Only if this is still the same edit. A reader who closed it and
@@ -331,7 +435,7 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
         },
         async folderMove(folderId, parentId, afterId) {
             try {
-                await deps.actions.folderMove(folderId, parentId, afterId);
+                await actionRun(deps.actions.folderMove(folderId, parentId, afterId));
                 actionSucceeded();
             } catch (error) {
                 actionFailed(error);
@@ -339,7 +443,13 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
         },
         async folderArchive(folderId) {
             try {
-                await deps.actions.folderArchive(folderId);
+                const folder = folderFind(store.getState().folders, folderId);
+                const restoredGroups = (
+                    folder === undefined
+                        ? [folderId]
+                        : rigFoldersFlatten([folder]).map(({ folder }) => folder.id)
+                ).map(rigFolderGroupId);
+                await actionRun(deps.actions.folderArchive(folderId), restoredGroups);
                 actionSucceeded();
             } catch (error) {
                 actionFailed(error);
@@ -347,7 +457,11 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
         },
         async folderSessionSet(sessionId, folderId) {
             try {
-                await deps.actions.folderSessionSet(sessionId, folderId);
+                const restoredGroup = sessionGroupFind(store.getState(), sessionId);
+                await actionRun(
+                    deps.actions.folderSessionSet(sessionId, folderId),
+                    restoredGroup === undefined ? [] : [restoredGroup],
+                );
                 actionSucceeded();
             } catch (error) {
                 actionFailed(error);
@@ -357,12 +471,13 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
             if (disposed) return;
             disposed = true;
             stop();
+            unsubscribeMutationRejections?.();
             listeners.clear();
         },
     };
 }
 
-const INERT: RigFoldersSnapshot = { folders: [], loading: false };
+const INERT: RigFoldersSnapshot = { folders: [], unsorted: [], loading: false };
 
 /**
  * Folders for a Rig that has none to offer. Permanently empty and settled rather
@@ -393,9 +508,20 @@ export const rigFoldersStoreNoop: RigFoldersStore = {
  */
 export const RIG_FOLDER_GROUP_PREFIX = "folder:";
 
+/** The global collection of chats that have not been filed yet. */
+export const RIG_UNSORTED_GROUP_ID = "unsorted:" as RigGroupId;
+
 /** The group id addressing one folder. */
 export function rigFolderGroupId(folderId: RigFolderId): RigGroupId {
     return `${RIG_FOLDER_GROUP_PREFIX}${folderId}` as RigGroupId;
+}
+
+/** The group address corresponding to one canonical session scope. */
+export function rigSessionScopeGroupId(scope: RigSessionScope): RigGroupId {
+    if (scope.kind === "project") return scope.projectId;
+    if (scope.kind === "workspace") return scope.worktreeId;
+    if (scope.kind === "folder") return rigFolderGroupId(scope.folderId);
+    return RIG_UNSORTED_GROUP_ID;
 }
 
 /** The folder a group id names, or undefined when it names a checkout. */
@@ -431,4 +557,17 @@ export function rigFoldersFlatten(
         { depth, folder },
         ...rigFoldersFlatten(folder.children, depth + 1),
     ]);
+}
+
+/** The folder-tree group currently containing one conversation. */
+function sessionGroupFind(
+    snapshot: Pick<RigFoldersSnapshot, "folders" | "unsorted">,
+    sessionId: RigSessionId,
+): RigGroupId | undefined {
+    if (snapshot.unsorted.some((conversation) => conversation.id === sessionId))
+        return RIG_UNSORTED_GROUP_ID;
+    const entry = rigFoldersFlatten(snapshot.folders).find(({ folder }) =>
+        folder.conversations.some((conversation) => conversation.id === sessionId),
+    );
+    return entry === undefined ? undefined : rigFolderGroupId(entry.folder.id);
 }
