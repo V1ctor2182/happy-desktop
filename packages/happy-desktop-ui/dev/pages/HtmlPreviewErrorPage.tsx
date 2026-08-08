@@ -4,6 +4,9 @@ import { HtmlPreviewError } from "../../src/HtmlPreviewError";
 import { HtmlPreviewFrame } from "../../src/HtmlPreviewFrame";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-239";
+
 /* The preview origin is an opaque local name derived from the document's own
    folder; only the path in it names the reader's file, which is why that is the
    only part of an address the failure ever shows. */
@@ -35,7 +38,7 @@ function specimen(failure: HtmlPreviewFailure) {
 export function HtmlPreviewErrorPage() {
     return (
         <ComponentPage
-            number="C-239"
+            number={componentNumber}
             summary="What a preview region says instead of a page. One host-reported failure becomes a short title, a line of plain explanation, and the engine's own detail underneath. It carries no control: a preview reloads when the file behind it changes."
             title="HTML preview error"
         >

@@ -1,6 +1,9 @@
 import { SearchResults, type SearchResultGroup } from "../../src/SearchResults";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-036";
+
 const groups: SearchResultGroup[] = [
     {
         type: "channel",
@@ -56,7 +59,7 @@ const groups: SearchResultGroup[] = [
 export function SearchResultsPage() {
     return (
         <ComponentPage
-            number="C-036"
+            number={componentNumber}
             summary="Grouped unified search: message / channel / user / file rows with query highlight."
             title="Search results"
         >

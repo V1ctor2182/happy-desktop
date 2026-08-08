@@ -2,6 +2,9 @@ import type { RigInboxItem, RigInboxItemId, RigInboxSubmission } from "happy-des
 import { RigInboxPage } from "../../src/pages/inbox/RigInboxPage";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "P-013";
+
 const item = (
     id: string,
     overrides: Partial<RigInboxItem> & Pick<RigInboxItem, "questions" | "status">,
@@ -140,7 +143,7 @@ export function RigInboxBlueprintPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="P-013"
+            number={componentNumber}
             summary="The queue of questions a Rig's agents are waiting on: pending first in the order they were asked, answered below as a record. A waiting question is one outlined block headed by the session that asked; a settled one drops the outline and keeps only what was decided."
             title="RigInboxPage"
         >

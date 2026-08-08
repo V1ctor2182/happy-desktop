@@ -3,6 +3,9 @@ import { Spinner } from "../../src/Spinner";
 import { WaitRing, waitRemainingLabel } from "../../src/WaitRing";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-172";
+
 /* Every time here is pinned so the page renders the same twice: the product
    passes a ticking clock, the blueprint passes these. */
 const STARTED_AT = Date.parse("2026-08-01T09:00:00Z");
@@ -28,7 +31,7 @@ const row = {
 export function WaitRingPage() {
     return (
         <ComponentPage
-            number="C-172"
+            number={componentNumber}
             summary="The share of a scheduled wait already spent, as a filling arc. It stands in a spinner's box and takes the same space, but it measures a known interval instead of saying that something is happening. It carries no text: the row it sits in owns the type."
             title="Wait ring"
         >

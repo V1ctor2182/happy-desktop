@@ -2,6 +2,9 @@ import { EmptyState } from "../../src/EmptyState";
 import { LottieScene } from "../../src/LottieScene";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-237";
+
 /*
  * Nothing on this page moves by itself. Every specimen is `on-demand`, which is
  * the shipped code path holding the frame the animation ends on — the same
@@ -15,7 +18,7 @@ export function LottieScenePage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-237"
+            number={componentNumber}
             summary="One vector animation, played once and then held, drawn by ThorVG on a worker thread against an OffscreenCanvas. All rasterising happens off the main thread, which transfers the canvas once and afterwards only sends play, pause, and seek; the renderer posts back one small frame notification per frame while it runs, and none once it rests. It stops when scrolled out of view or the window is hidden, replays on a click, a fresh hover, or Enter/Space, refuses to replay while it is already running, and never loops. Under reduced motion it holds a still frame and is not a control at all."
             title="LottieScene"
         >

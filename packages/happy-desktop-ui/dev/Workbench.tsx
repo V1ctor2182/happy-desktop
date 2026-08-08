@@ -8,6 +8,8 @@ import "./workbench.css";
 type PageModule = Readonly<Record<string, unknown>>;
 
 interface BlueprintPage {
+    /** The component plan number, the same one the open page prints in its header. */
+    readonly componentNumber: string;
     readonly id: string;
     readonly label: string;
     readonly page: ComponentType;
@@ -25,8 +27,12 @@ const pages = Object.entries(modules)
             ([name, value]) => name.endsWith("Page") && typeof value === "function",
         );
         if (!exported) throw new Error(`Blueprint page ${path} exports no page component.`);
+        const componentNumber = module.componentNumber;
+        if (typeof componentNumber !== "string")
+            throw new Error(`Blueprint page ${path} exports no componentNumber.`);
         const name = filename.replace(/BlueprintPage$|Page$/u, "");
         return {
+            componentNumber,
             id: name
                 .replace(/([a-z\d])([A-Z])/gu, "$1-$2")
                 .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1-$2")
@@ -37,7 +43,12 @@ const pages = Object.entries(modules)
             page: exported[1] as ComponentType,
         };
     })
-    .sort((left, right) => left.label.localeCompare(right.label));
+    /* By plan number, so the selector reads in the order the components were
+       planned and a page can be found from a number quoted anywhere else.
+       Numerically, or C-100 would sort between C-002b and C-003. */
+    .sort((left, right) =>
+        left.componentNumber.localeCompare(right.componentNumber, undefined, { numeric: true }),
+    );
 
 const defaultPageId = pages.find((page) => page.id === "icon")?.id ?? pages[0]?.id ?? "";
 
@@ -134,7 +145,7 @@ export function Workbench(props: WorkbenchProps = {}) {
                             >
                                 {pages.map((page) => (
                                     <option key={page.id} value={page.id}>
-                                        {page.label}
+                                        {`${page.componentNumber} · ${page.label}`}
                                     </option>
                                 ))}
                             </select>

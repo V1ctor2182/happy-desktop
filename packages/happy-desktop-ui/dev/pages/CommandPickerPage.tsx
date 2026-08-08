@@ -2,6 +2,9 @@ import type { ComposerCommand } from "happy-desktop-state";
 import { CommandPicker, commandPickerItems } from "../../src/CommandPicker";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-152";
+
 const commands: ComposerCommand[] = [
     "model",
     "effort",
@@ -23,7 +26,7 @@ const items = commandPickerItems(commands);
 export function CommandPickerPage() {
     return (
         <ComponentPage
-            number="C-152"
+            number={componentNumber}
             summary="Composer slash-command popover: a quiet section heading over 32px single-line rows — glyph, command, and what it does — spanning the composer, with the highlighted row Enter commits."
             title="CommandPicker"
         >

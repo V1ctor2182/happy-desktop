@@ -1,6 +1,9 @@
 import { EventCard } from "../../src/EventCard";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-015";
+
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -13,7 +16,7 @@ const noop = () => {};
 export function EventCardPage() {
     return (
         <ComponentPage
-            number="C-015"
+            number={componentNumber}
             summary="Compact 44px status-transition row — icon chip, truncating title with inline meta, right-aligned from → to lane or badge, mono time."
             title="EventCard"
         >

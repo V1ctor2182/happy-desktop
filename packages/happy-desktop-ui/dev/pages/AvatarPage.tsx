@@ -1,5 +1,8 @@
 import { Avatar, type AvatarSize, type ToneName } from "../../src/Avatar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-004";
 const FIXTURE_IMAGE =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAT0lEQVR4nGPorvk+ufrTrOp3i6perqx8srHiwY6K2wfKrzNgFT1edokBq+j5srMMWEWvlZ5kwCp6r+QIA1bRp8X7GbCKvi3ezYBV9EvRNgD7aoNVazUeBQAAAABJRU5ErkJggg==";
 const SIZES: Array<{
@@ -27,7 +30,7 @@ const cell: Record<string, string> = {
 export function AvatarPage() {
     return (
         <ComponentPage
-            number="C-004"
+            number={componentNumber}
             title="Avatar"
             summary="Identity mark for humans (circle) and agents (rounded square) with tone gradients, presence, and image variant."
         >

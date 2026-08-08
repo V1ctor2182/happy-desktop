@@ -1,6 +1,9 @@
 import { Menu, type MenuItem } from "../../src/Menu";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-027";
+
 const messageActions: MenuItem[] = [
     { kind: "item", id: "copy", label: "Copy link", icon: "link", shortcut: "⌘C" },
     { kind: "item", id: "star", label: "Add to starred", icon: "star" },
@@ -45,7 +48,7 @@ const states: MenuItem[] = [
 export function MenuPage() {
     return (
         <ComponentPage
-            number="C-027"
+            number={componentNumber}
             summary="Dropdown / context-menu popover — 220px raised card, 28px item rows, icon gutter, KeyCap shortcuts, mono section labels, danger items, and 1px separators."
             title="Menu"
         >

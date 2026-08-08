@@ -1,6 +1,9 @@
 import { DiffSnippet, type DiffLine } from "../../src/DiffSnippet";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-006";
+
 const reviewLines: DiffLine[] = [
     { kind: "meta", text: "@@ -41,7 +41,9 @@ export class TokenService {" },
     { kind: "context", number: 41, text: "async refresh(token: Token) {" },
@@ -64,7 +67,7 @@ const overflowLines: DiffLine[] = [
 export function DiffSnippetPage() {
     return (
         <ComponentPage
-            number="C-006"
+            number={componentNumber}
             summary="Code-well diff block: mono header with +/− stats, 20px diff lines with sign gutter, optional line numbers, and inner horizontal scroll."
             title="DiffSnippet"
         >

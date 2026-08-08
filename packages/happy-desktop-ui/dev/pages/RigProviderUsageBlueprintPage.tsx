@@ -2,6 +2,9 @@ import type { RigProviderUsageEntry } from "happy-desktop-state";
 import { RigProviderUsagePage } from "../../src/pages/usage/RigProviderUsagePage";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "P-015";
+
 const providers: readonly RigProviderUsageEntry[] = [
     {
         providerId: "claude",
@@ -59,7 +62,7 @@ export function RigProviderUsageBlueprintPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="P-015"
+            number={componentNumber}
             summary="How much of each provider account's plan this machine has spent: one section per account, carrying the windows that vendor reports and whatever credit is left once they are gone. A window is one row — name, measure, share, reset — and every measure starts and ends on the same two edges so two accounts can be compared by eye. One dot per account says which of the six states it is in."
             title="RigProviderUsagePage"
         >

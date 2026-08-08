@@ -4,6 +4,9 @@ import { TabbedPane } from "../../src/TabbedPane";
 import { type TabItem } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-160";
+
 const sessionTabs: TabItem[] = [
     { id: "one", label: "Refactor the router" },
     { id: "two", label: "Fix the flaky upload test", busy: true },
@@ -73,7 +76,7 @@ function Pane(props: {
 export function TabbedPanePage() {
     return (
         <ComponentPage
-            number="C-160"
+            number={componentNumber}
             summary="A Tabs bar over a body that takes the remaining height — peer documents inside one surface, with optional trailing bar actions and truncating tab labels."
             title="Tabbed pane"
         >

@@ -4,6 +4,9 @@ import { Button } from "../../src/Button";
 import { DataTable, type DataTableColumn, type DataTableRow } from "../../src/DataTable";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-030";
+
 const roleVariant: Record<string, BadgeVariant> = {
     Owner: "accent",
     Admin: "info",
@@ -92,7 +95,7 @@ function rows(options?: { selectable?: boolean }): DataTableRow[] {
 export function DataTablePage() {
     return (
         <ComponentPage
-            number="C-030"
+            number={componentNumber}
             summary="Columns + rows admin table — alignment, selection, row actions, dense mode, and an empty slot."
             title="Data table"
         >

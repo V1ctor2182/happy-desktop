@@ -2,6 +2,9 @@ import { Button } from "../../src/Button";
 import { Modal } from "../../src/Modal";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-028";
+
 function ConfirmFooter(props: { confirmLabel: string; danger?: boolean }) {
     return (
         <>
@@ -18,7 +21,7 @@ function ConfirmFooter(props: { confirmLabel: string; danger?: boolean }) {
 export function ModalPage() {
     return (
         <ComponentPage
-            number="C-028"
+            number={componentNumber}
             summary="Dialog card — header (leading icon chip · title · close) / body / right-aligned footer actions, three fixed widths on a 14px shell radius. Rendered as a specimen card; a host portals it over its own backdrop."
             title="Modal"
         >

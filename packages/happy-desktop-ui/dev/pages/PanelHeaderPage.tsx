@@ -4,6 +4,9 @@ import { PanelHeader } from "../../src/PanelHeader";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-162";
+
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -46,7 +49,7 @@ const body: Record<string, string> = {
 export function PanelHeaderPage() {
     return (
         <ComponentPage
-            number="C-162"
+            number={componentNumber}
             summary="56px band across the top of a docked panel column, matching ChannelHeader to the pixel so the two columns' headers read as one band and their content starts on the same line. Legitimately empty, and the window's drag lane on that edge."
             title="PanelHeader"
         >

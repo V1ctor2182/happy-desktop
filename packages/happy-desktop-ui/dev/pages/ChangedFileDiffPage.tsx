@@ -3,6 +3,9 @@ import { ChangedFileDiff } from "../../src/ChangedFileDiff";
 import { FilePreview } from "../../src/FilePreview";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-237";
+
 const oldContent = `# File viewer
 
 Opening a file shows the file. A Markdown document renders as prose.
@@ -67,7 +70,7 @@ function frame(children: ReactNode, height = 420, appearance: "dark" | "light" =
 export function ChangedFileDiffPage() {
     return (
         <ComponentPage
-            number="C-237"
+            number={componentNumber}
             summary="One changed file, in the four ways there are to look at one. Preview is the product's own file preview over the working-tree copy, so a changed document reads as the document and changed source reads as numbered, highlighted source; Unified and Split are the diff; Edit is the text. A mode with nothing behind it is not offered."
             title="ChangedFileDiff"
         >

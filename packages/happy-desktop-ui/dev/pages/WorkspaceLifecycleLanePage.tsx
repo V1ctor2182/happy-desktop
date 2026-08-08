@@ -1,6 +1,9 @@
 import { type ReactNode } from "react";
 import { WorkspaceLifecycleLane } from "../../src/WorkspaceLifecycleLane";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-242";
 /*
  * The lane's whole contract is that it is there in every phase, so the specimens
  * show it in a column with the work it sits above: the ready one is the proof
@@ -47,7 +50,7 @@ function column(children: ReactNode) {
 export function WorkspaceLifecycleLanePage() {
     return (
         <ComponentPage
-            number="C-242"
+            number={componentNumber}
             summary="The fixed row a workspace's phase is stated in, above the work it is about. Rendered in every phase — empty and occupying nothing while the workspace is ready — so a phase change never moves, replaces, or rebuilds the tab strip, transcript, or composer below it."
             title="Workspace lifecycle lane"
         >

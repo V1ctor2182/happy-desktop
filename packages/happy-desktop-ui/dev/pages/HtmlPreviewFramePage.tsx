@@ -4,6 +4,9 @@ import { FilePreview } from "../../src/FilePreview";
 import { HtmlPreviewFrame } from "../../src/HtmlPreviewFrame";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-173";
+
 /* The product mounts an Electron guest here. Blueprint mounts a data-URL iframe
    instead: it is the same box with the same sizing, drawn without a network
    fetch, an engine, or anything that renders differently twice. */
@@ -72,7 +75,7 @@ class CrashingGuest extends Component<HtmlPreviewProps> {
 export function HtmlPreviewFramePage() {
     return (
         <ComponentPage
-            number="C-173"
+            number={componentNumber}
             summary="Where a rendered HTML file sits. The page itself is drawn by the host's engine; this owns the box it fills, the white canvas under it, and what the region says before the page has an address to load from."
             title="HTML preview frame"
         >

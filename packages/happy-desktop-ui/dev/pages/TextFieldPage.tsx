@@ -1,6 +1,9 @@
 import { TextField } from "../../src/TextField";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-018";
+
 const column = {
     display: "grid",
     gap: "16px",
@@ -11,7 +14,7 @@ const column = {
 export function TextFieldPage() {
     return (
         <ComponentPage
-            number="C-018"
+            number={componentNumber}
             summary="Labeled text input / textarea — three heights, hint/error/leading-icon."
             title="Text field"
         >

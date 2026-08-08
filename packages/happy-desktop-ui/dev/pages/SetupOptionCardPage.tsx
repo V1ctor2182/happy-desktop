@@ -1,6 +1,9 @@
 import { type CSSProperties } from "react";
 import { SetupOptionCard } from "../../src/SetupOptionCard";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-062";
 const column: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -11,7 +14,7 @@ const column: CSSProperties = {
 export function SetupOptionCardPage() {
     return (
         <ComponentPage
-            number="C-062"
+            number={componentNumber}
             summary="Full-width selectable option used during onboarding to choose a sandbox provider, a base image, and the registration policy. The whole card is a real button; selection, health, and pending state are all props."
             title="Setup option card"
         >

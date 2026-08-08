@@ -5,6 +5,9 @@ import { Ionicon } from "../../src/vectorIcons/VectorIcon";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 import { videoClipOpen, videoClipPortrait, videoClipWide } from "./videoClips";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-236";
+
 function frame(children: ReactNode, height = 340, width = 560) {
     return (
         <div
@@ -25,7 +28,7 @@ function frame(children: ReactNode, height = 340, width = 560) {
 export function VideoViewerPage() {
     return (
         <ComponentPage
-            number="C-236"
+            number={componentNumber}
             summary="One recording, played properly: a frame that fills its region and a control panel that floats over the bottom of it. The panel states where the recording is and what is left of it, and leaves while the recording plays and nobody is touching it. Space plays, the arrows seek and set the level, J and L jump ten seconds, M mutes, F fills the screen, and the digits jump through the recording by tenths."
             title="VideoViewer"
         >

@@ -3,6 +3,9 @@ import { DiffSnippet } from "../../src/DiffSnippet";
 import { FileAttachment } from "../../src/FileAttachment";
 import { DayDivider, Message, MessageList, SteeringNotice, SystemNotice } from "../../src/Message";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-012";
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -39,7 +42,7 @@ function channelFrame(children: ReactNode, height?: string) {
 export function MessagePage() {
     return (
         <ComponentPage
-            number="C-012"
+            number={componentNumber}
             summary="The chat column: rich-bodied messages with agent badges, reactions, attachments, and reply affordances inside a bottom-anchored scrolling list."
             title="Message · MessageList · DayDivider · SystemNotice"
         >

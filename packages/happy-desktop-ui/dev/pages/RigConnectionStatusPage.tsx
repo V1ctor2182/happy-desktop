@@ -2,12 +2,15 @@ import { type CSSProperties } from "react";
 import { RigConnectionStatus } from "../../src/RigConnectionStatus";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-147";
+
 const frame: CSSProperties = { width: "720px", height: "480px" };
 
 export function RigConnectionStatusPage() {
     return (
         <ComponentPage
-            number="C-147"
+            number={componentNumber}
             summary="Minimal desktop status surface for the local Rig daemon: one muted ASCII loader, a neutral status, and concise progress."
             title="Rig connection status"
         >

@@ -5,6 +5,9 @@ import { EmptyState } from "../../src/EmptyState";
 import { SearchResults, type SearchResultGroup } from "../../src/SearchResults";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-060";
+
 const overflowGroups: SearchResultGroup[] = (["channel", "user", "message", "file"] as const).map(
     (type) => ({
         type,
@@ -50,7 +53,7 @@ function PaletteSpecimen(props: {
 export function CommandPalettePage() {
     return (
         <ComponentPage
-            number="C-060"
+            number={componentNumber}
             summary="Top-anchored Slack-style ⌘K palette — a fixed 640 × 461 card with its own focused search input over a stable-gutter scrollport. Renders the card only; ModalOverlay owns its dim, stacking, and placement."
             title="Command palette"
         >

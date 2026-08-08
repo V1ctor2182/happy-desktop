@@ -2,6 +2,9 @@ import type { ConversationToolCall } from "happy-desktop-state";
 import { ToolCallPreview } from "../../src/ToolCallPreview";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-165";
+
 const runningCommand: ConversationToolCall = {
     toolCallId: "tool-preview-running",
     toolName: "exec_command",
@@ -88,7 +91,7 @@ function Preview(props: { tool: ConversationToolCall; width: number }) {
 export function ToolCallPreviewPage() {
     return (
         <ComponentPage
-            number="C-165"
+            number={componentNumber}
             summary="A read-only inspector for one tool call, with its command available immediately and result output added as execution progresses."
             title="Tool call preview"
         >

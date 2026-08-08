@@ -2,6 +2,9 @@ import type { TerminalCellSnapshot, TerminalGridSnapshot } from "happy-desktop-s
 import { TerminalPanel } from "../../src/TerminalPanel";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-078";
+
 function cell(
     x: number,
     text: string,
@@ -74,7 +77,7 @@ const handlers = {
 export function TerminalPanelPage() {
     return (
         <ComponentPage
-            number="C-078"
+            number={componentNumber}
             summary="Resizable interactive terminal dock rendering the Rig binary-protocol grid."
             title="Terminal panel"
         >

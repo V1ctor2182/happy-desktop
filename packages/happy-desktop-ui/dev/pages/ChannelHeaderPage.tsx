@@ -3,6 +3,9 @@ import { Button } from "../../src/Button";
 import { ChannelHeader } from "../../src/ChannelHeader";
 import type { MenuItem } from "../../src/Menu";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-011";
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -29,7 +32,7 @@ export function ChannelHeaderPage() {
     const [starred, setStarred] = useState(true);
     return (
         <ComponentPage
-            number="C-011"
+            number={componentNumber}
             summary="52px context strip across the top of the main surface, modeled on Slack: star toggle, clickable channel title, truncating topic, a member-count pill, agent chip, actions, and an overflow menu."
             title="ChannelHeader"
         >

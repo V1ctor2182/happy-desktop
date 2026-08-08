@@ -4,6 +4,9 @@ import { ImageViewer } from "../../src/ImageViewer";
 import { Ionicon } from "../../src/vectorIcons/VectorIcon";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-235";
+
 /* Deterministic, offline specimens: inline SVG, so the workbench never waits on
    a network fetch to take a screenshot and every run measures the same pixels. */
 function svg(width: number, height: number, body: string): string {
@@ -56,7 +59,7 @@ function frame(children: ReactNode, height = 360, width = 560) {
 export function ImageViewerPage() {
     return (
         <ComponentPage
-            number="C-235"
+            number={componentNumber}
             summary="One picture, looked at properly: a frame that fills its region and a 40px tool bar that states the magnification and changes it. Pinch or Cmd-wheel magnifies under the pointer, a scroll or a drag moves a magnified picture, and 0, 1, +, - and the arrows do the same from the keyboard."
             title="ImageViewer"
         >

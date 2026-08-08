@@ -3,10 +3,13 @@ import { Box } from "../../src/Box";
 import { Button } from "../../src/Button";
 import { FormRow } from "../../src/FormRow";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-029";
 export function FormRowPage() {
     return (
         <ComponentPage
-            number="C-029"
+            number={componentNumber}
             summary="Settings row: label + optional muted description on the left, a trailing control slot, inline or stacked, with a hairline divider so rows tile into a list."
             title="Form row"
         >

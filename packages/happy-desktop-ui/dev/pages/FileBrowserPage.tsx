@@ -7,6 +7,9 @@ import {
     type FileTreeExpansion,
 } from "../../src/fileTreeBuild";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-168";
 const changed: FileTreeBuildEntry[] = [
     {
         path: "packages/happy-desktop-ui/src/FileTree.tsx",
@@ -186,7 +189,7 @@ function LiveBrowser(props: { entries: FileTreeBuildEntry[]; height?: number; wi
 export function FileBrowserPage() {
     return (
         <ComponentPage
-            number="C-168"
+            number={componentNumber}
             summary="The file listing of a workspace panel: one 32px flat control row carrying the scope switch, the listing's own totals, and the layout switch, over a virtualized FileTree scrollport with no rule between them."
             title="FileBrowser"
         >

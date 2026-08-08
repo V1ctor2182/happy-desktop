@@ -4,6 +4,9 @@ import { ThemeScope } from "../../src/ThemeScope";
 import { WelcomeScreen, type WelcomeSlide } from "../../src/WelcomeScreen";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-250";
+
 /*
  * Placeholder deck. The words belong to the app; these exist so the page shows a
  * logo slide, a scene slide, and a slide whose copy is long enough to prove the
@@ -79,7 +82,7 @@ function AppearanceSpecimen() {
 export function WelcomeScreenPage() {
     return (
         <ComponentPage
-            number="C-250"
+            number={componentNumber}
             summary="First-run welcome deck: a 160px hero, a title, a short slogan, a row of dot controls and one primary action, centred on the workspace surface. It advances itself every 15s and wraps; a dot or an arrow key restarts the clock, and a reader who asked for reduced motion never sees it move. Two overlays sit outside that column and cannot move it: the transparent 56px window-drag lane along the top, invisible here, and the appearance switcher 24px in from the bottom-right corner."
             title="Welcome screen"
         >

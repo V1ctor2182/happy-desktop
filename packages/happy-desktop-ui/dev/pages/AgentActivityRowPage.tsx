@@ -15,10 +15,13 @@ import {
     rigTerminalTool,
 } from "./rigChatFixtures";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-148";
+
 export function AgentActivityRowPage() {
     return (
         <ComponentPage
-            number="C-148"
+            number={componentNumber}
             summary="One glanceable row per piece of agent activity — a tool call, a reasoning block, or a shell run — with a status dot, verb, subject, and an expandable detail body."
             title="AgentActivityRow"
         >

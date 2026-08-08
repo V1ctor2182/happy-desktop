@@ -6,6 +6,9 @@ import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sideba
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { SidebarUpdateAction, type SidebarUpdateActionProps } from "../../src/SidebarUpdateAction";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-009";
 const workspaceSections: SidebarSection[] = [
     {
         id: "views",
@@ -645,7 +648,7 @@ const UPDATE_STATES: readonly {
 export function SidebarPage() {
     return (
         <ComponentPage
-            number="C-009"
+            number={componentNumber}
             summary="288px workspace navigation column — header with workspace switcher, sectioned rows for views, channels, people, agents, and actions, actionable empty states, and an optional footer."
             title="Sidebar"
         >

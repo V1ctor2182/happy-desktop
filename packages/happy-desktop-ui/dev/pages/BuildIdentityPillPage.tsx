@@ -2,6 +2,9 @@ import { BuildIdentityPill, buildIdentityTone } from "../../src/BuildIdentityPil
 import { Button } from "../../src/Button";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-177";
+
 const row: Record<string, string> = {
     alignItems: "center",
     display: "flex",
@@ -29,7 +32,7 @@ const worktreeLabels = [
 export function BuildIdentityPillPage() {
     return (
         <ComponentPage
-            number="C-177"
+            number={componentNumber}
             summary="Quiet dev-build identity mark — a tone dot and mono label so one dev window reads apart from another: main checkout vs. a git worktree."
             title="Build identity pill"
         >

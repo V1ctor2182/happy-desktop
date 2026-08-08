@@ -5,6 +5,9 @@ import { type TabItem } from "../../src/Tabs";
 import { TransferZone } from "../../src/TransferZone";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-171";
+
 const MAIN_ZONE = "blueprint-main";
 const SIDE_ZONE = "blueprint-side";
 
@@ -122,7 +125,7 @@ function Region(props: { label: string; state?: "armed" | "over" }) {
 export function TransferZonePage() {
     return (
         <ComponentPage
-            number="C-171"
+            number={componentNumber}
             summary="The region a tab lands in when it is dragged out of another strip: nothing at all until a drag begins, then an inset outline and what dropping here would do."
             title="Transfer zone"
         >

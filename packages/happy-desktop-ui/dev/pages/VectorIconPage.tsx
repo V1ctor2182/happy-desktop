@@ -6,6 +6,9 @@ import {
 } from "../../src/vectorIcons/VectorIcon";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-002b";
+
 const SIZES = [14, 16, 20, 24] as const;
 
 /* Ionicons Happy leans on across the app chrome, chat, and agent surfaces. */
@@ -155,7 +158,7 @@ function OcticonCell(props: { name: OcticonName }) {
 export function VectorIconPage() {
     return (
         <ComponentPage
-            number="C-002b"
+            number={componentNumber}
             title="Vector icons"
             summary="Font-based Ionicons and Octicons ported verbatim from Happy's @expo/vector-icons usage. Addressed by the upstream glyph names so a name renders the same glyph Happy renders."
         >

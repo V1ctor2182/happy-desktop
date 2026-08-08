@@ -1,6 +1,9 @@
 import { EmojiPicker, type EmojiItem } from "../../src/EmojiPicker";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-043";
+
 /* Custom (non-unicode) emoji as an inline SVG data-URI — a deterministic,
  * network-free stand-in for an uploaded custom reaction image. */
 const customEmoji = (fill: string) =>
@@ -38,7 +41,7 @@ const emoji: EmojiItem[] = [
 export function EmojiPickerPage() {
     return (
         <ComponentPage
-            number="C-043"
+            number={componentNumber}
             summary="Reaction picker: a search field over an emoji grid of fixed, equal 36px slots — unicode chars and custom images share one slot geometry."
             title="Emoji picker"
         >

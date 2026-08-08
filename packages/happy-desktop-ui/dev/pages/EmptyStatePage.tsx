@@ -1,6 +1,9 @@
 import { EmptyState } from "../../src/EmptyState";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-024";
+
 const noop = () => {};
 
 const panelStage: Record<string, string> = {
@@ -13,7 +16,7 @@ const panelStage: Record<string, string> = {
 export function EmptyStatePage() {
     return (
         <ComponentPage
-            number="C-024"
+            number={componentNumber}
             summary="Centered icon medallion + title + description + action. Panel fills and vertically centers its host region; inline is a compact content-sized block. Replaces the app's raw .feature-empty."
             title="Empty state"
         >

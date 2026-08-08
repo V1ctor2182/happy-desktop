@@ -1,6 +1,9 @@
 import { type ReactNode } from "react";
 import { WorkspaceLifecycleNotice } from "../../src/WorkspaceLifecycleNotice";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-241";
 /*
  * Every reason string here is a real shape of git failure, written out rather
  * than summarised, so the specimens show what the block does when the host's
@@ -37,7 +40,7 @@ function strip(children: ReactNode) {
 export function WorkspaceLifecycleNoticePage() {
     return (
         <ComponentPage
-            number="C-241"
+            number={componentNumber}
             summary="One workspace's own phase, said in full: being prepared, failed, refused outright, or prepared and since gone. Panel fills a content region; compact is a strip for above a composer. Props only — no timers, no elapsed time, no re-check control."
             title="Workspace lifecycle notice"
         >

@@ -1,12 +1,15 @@
 import { Banner } from "../../src/Banner";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-023";
+
 const noop = () => {};
 
 export function BannerPage() {
     return (
         <ComponentPage
-            number="C-023"
+            number={componentNumber}
             summary="Inline alert — soft tone fill, hairline border, tone-colored leading icon. Five tones, optional title, action, and dismiss."
             title="Banner"
         >

@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { FilePanel } from "../../src/FilePanel";
 import type { FileTreeNode } from "../../src/FileTree";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-053";
 const nodes: FileTreeNode[] = [
     {
         id: "src/",
@@ -52,7 +55,7 @@ function panelFrame(children: ReactNode, height = 520) {
 export function FilePanelPage() {
     return (
         <ComponentPage
-            number="C-053"
+            number={componentNumber}
             summary="The workspace file-tree side panel: a 52px surface header with a branch/revision subtitle and close button, an optional note strip, and a scrolling FileTree body."
             title="FilePanel"
         >

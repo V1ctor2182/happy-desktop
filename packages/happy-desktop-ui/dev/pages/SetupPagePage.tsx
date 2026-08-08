@@ -2,6 +2,9 @@ import { SetupChoice } from "../../src/SetupChoice";
 import { SetupPage } from "../../src/SetupPage";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-252";
+
 const noop = () => undefined;
 
 /** Setup fills the window, so every specimen gets a window-shaped frame. */
@@ -17,7 +20,7 @@ const frame = {
 export function SetupPagePage() {
     return (
         <ComponentPage
-            number="C-252"
+            number={componentNumber}
             summary="One step of setup as one centred page: a picture of what is happening, a sentence naming it, a line explaining it, and at most one thing to do. Every first-run state is this component with different fields filled in."
             title="Setup page"
         >

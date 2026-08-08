@@ -1,5 +1,8 @@
 import { Badge, CountBadge, KeyCap, ReactionChip, type BadgeVariant } from "../../src/Badge";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-005";
 const row: Record<string, string> = {
     alignItems: "center",
     display: "flex",
@@ -26,7 +29,7 @@ const variants: Array<{
 export function BadgePage() {
     return (
         <ComponentPage
-            number="C-005"
+            number={componentNumber}
             summary="Status pills, unread counts, reaction chips, and shortcut key caps — the small mono-labelled signals that annotate everything else."
             title="Badge family"
         >

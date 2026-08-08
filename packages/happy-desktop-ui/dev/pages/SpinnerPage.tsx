@@ -11,6 +11,9 @@ import {
 } from "../../src/Spinner";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-160";
+
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -169,7 +172,7 @@ function Filmstrip(props: { variant: SpinnerVariant }) {
 export function SpinnerPage() {
     return (
         <ComponentPage
-            number="C-160"
+            number={componentNumber}
             summary="Twenty-three terminal ASCII loaders rebuilt as pure CSS shapes. Each variant advances through the same discrete frames as its text original — steps() cadence, no easing — and parks on an exact frame for fixtures."
             title="Spinner"
         >

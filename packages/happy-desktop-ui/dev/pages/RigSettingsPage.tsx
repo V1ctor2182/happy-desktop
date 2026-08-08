@@ -12,6 +12,9 @@ import {
 } from "../../src";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "P-012";
+
 const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "doc", id: "instructions", label: "Instructions" },
@@ -198,7 +201,7 @@ export function RigSettingsBlueprintPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="P-012"
+            number={componentNumber}
             summary="The local workspace's settings window: a permanent category column whose heading is the way back out, and one category body beside it. Every state is prop-driven, with no daemon connection or router."
             title="Rig settings"
         >

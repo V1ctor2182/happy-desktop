@@ -1,6 +1,9 @@
 import { SetupChoice } from "../../src/SetupChoice";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-251";
+
 const noop = () => undefined;
 
 const setupOptions = [
@@ -26,7 +29,7 @@ const setupOptions = [
 export function SetupChoicePage() {
     return (
         <ComponentPage
-            number="C-251"
+            number={componentNumber}
             summary="A fork in setup drawn as its two answers: equal side-by-side columns of animation, words, and then the button that takes that way. Unequal copy cannot make one side the bigger offer, and both buttons land on the same line."
             title="Setup choice"
         >

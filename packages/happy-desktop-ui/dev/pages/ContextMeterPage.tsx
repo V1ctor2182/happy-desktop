@@ -1,9 +1,12 @@
 import { ContextMeter } from "../../src/ContextMeter";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-159";
 export function ContextMeterPage() {
     return (
         <ComponentPage
-            number="C-159"
+            number={componentNumber}
             summary="How much of the model's context window the conversation has spent, as a 64px bar at the end of the composer's control row. Pointing at it slides the percentage and token counts out to its left; it stays muted until compacting is the next thing to do."
             title="Context meter"
         >

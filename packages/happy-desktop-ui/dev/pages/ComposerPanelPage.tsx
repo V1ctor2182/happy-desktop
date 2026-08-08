@@ -10,6 +10,9 @@ import { RigActivityPanel } from "../../src/RigActivityPanel";
 import { RigUsagePanel } from "../../src/RigUsagePanel";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-249";
+
 // Fixed "now" keeps subagent elapsed timing and quota resets deterministic.
 const NOW = Date.UTC(2026, 6, 25, 17, 0, 0);
 
@@ -101,7 +104,7 @@ export function ComposerPanelPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-249"
+            number={componentNumber}
             summary="The bounded, dismissible card the write end carries above the composer: a 40px band naming the reading and holding its close, over a capped scrollport. Hosts the `/agents` and `/usage` readouts without taking the transcript's place."
             title="ComposerPanel"
         >

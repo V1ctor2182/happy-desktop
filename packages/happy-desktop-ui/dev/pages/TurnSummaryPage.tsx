@@ -2,6 +2,9 @@ import { type CSSProperties } from "react";
 import { TurnSummary } from "../../src/TurnSummary";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-164";
+
 const column: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -12,7 +15,7 @@ const column: CSSProperties = {
 export function TurnSummaryPage() {
     return (
         <ComponentPage
-            number="C-164"
+            number={componentNumber}
             summary="The neutral settled footer for a turn: total duration, steering boundary, and final-message copy confirmation. Failure detail belongs to ConversationErrorCard above it."
             title="Turn summary"
         >

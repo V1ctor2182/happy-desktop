@@ -3,6 +3,9 @@ import { Avatar } from "../../src/Avatar";
 import { Rail, type RailItem } from "../../src/Rail";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-008";
 const items: RailItem[] = [
     { badge: 12, icon: "inbox", id: "inbox", label: "Inbox" },
     { icon: "chat", id: "chat", label: "Chat" },
@@ -20,7 +23,7 @@ export function RailPage() {
     const [appearance, setAppearance] = useState<"dark" | "light">("light");
     return (
         <ComponentPage
-            number="C-008"
+            number={componentNumber}
             summary="The 76px feature rail: happy otter brand, icon+label destinations with unread badges, a replaceable brand slot, and a footer avatar with equal side/bottom clearance."
             title="Rail"
         >

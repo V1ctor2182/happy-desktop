@@ -1,6 +1,9 @@
 import { FileAttachment } from "../../src/FileAttachment";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-049";
+
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -11,7 +14,7 @@ const column: Record<string, string> = {
 export function FileAttachmentPage() {
     return (
         <ComponentPage
-            number="C-049"
+            number={componentNumber}
             summary="A non-image file attachment with a compact treatment and a larger bounded card for chat message lists."
             title="FileAttachment"
         >

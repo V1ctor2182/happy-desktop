@@ -1,10 +1,13 @@
 import { Switch } from "../../src/Switch";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-020";
+
 export function SwitchPage() {
     return (
         <ComponentPage
-            number="C-020"
+            number={componentNumber}
             summary="Relay toggle — two sizes, on/off with accent vs inset track, optional label and secondary description, disabled state."
             title="Switch"
         >

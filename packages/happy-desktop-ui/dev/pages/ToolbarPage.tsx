@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { Button } from "../../src/Button";
 import { Toolbar } from "../../src/Toolbar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-026";
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -21,7 +24,7 @@ function Frame(props: { children: ReactNode; width: number }) {
 export function ToolbarPage() {
     return (
         <ComponentPage
-            number="C-026"
+            number={componentNumber}
             summary="Panel/section header bar — a 48px strip with a title, optional subtitle, an optional leading slot, and a right-pinned actions cluster holding an inset search well and a trailing slot."
             title="Toolbar"
         >

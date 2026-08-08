@@ -4,6 +4,9 @@ import { ConversationComputeEvent } from "../../src/ConversationComputeEvent";
 import { ConversationEntryView } from "../../src/ConversationEntryView";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-240";
+
 const transcript: CSSProperties = {
     display: "flex",
     flexDirection: "column",
@@ -75,7 +78,7 @@ const preparation: readonly ConversationComputeNoticeEntry[] = [
 export function ConversationComputeEventPage() {
     return (
         <ComponentPage
-            number="C-240"
+            number={componentNumber}
             summary="A compute lifecycle row on the activity rail: state glyph, reader-facing label, the provider's own sentence, live progress, and the provider/phase/instance behind it one disclosure away."
             title="Conversation compute event"
         >

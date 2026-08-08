@@ -2,6 +2,9 @@ import type { RigSessionUsage } from "happy-desktop-state";
 import { RigUsagePanel } from "../../src/RigUsagePanel";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-156";
+
 // Fixed reset time keeps the blueprint deterministic and screenshot-safe.
 const RESET = Date.UTC(2026, 6, 25, 17, 0, 0);
 
@@ -52,7 +55,7 @@ const usage: RigSessionUsage = {
 export function RigUsagePanelPage() {
     return (
         <ComponentPage
-            number="C-156"
+            number={componentNumber}
             summary="Rig session usage (`/usage`): per-model token/cost table, session totals, context-window occupancy, and provider rate-limit windows."
             title="RigUsagePanel"
         >

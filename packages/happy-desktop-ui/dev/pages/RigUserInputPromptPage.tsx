@@ -2,10 +2,13 @@ import { RigUserInputPrompt } from "../../src/RigUserInputPrompt";
 import { ComponentPage, Specimen } from "../kit";
 import { rigUserInput } from "./rigChatFixtures";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-150";
+
 export function RigUserInputPromptPage() {
     return (
         <ComponentPage
-            number="C-150"
+            number={componentNumber}
             summary="Rig user-input request: single- and multi-select option pickers with a submit gated on required questions. Each question states its own selection rule beside its name."
             title="RigUserInputPrompt"
         >

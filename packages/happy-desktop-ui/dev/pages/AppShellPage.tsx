@@ -1,6 +1,9 @@
 import { type ReactNode } from "react";
 import { AppShell } from "../../src/AppShell";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-010";
 /*
  * Slot placeholders: the shell composes TitleBar, Rail, Sidebar, and content
  * built elsewhere, so the blueprint marks each region with a dashed slot and
@@ -61,7 +64,7 @@ function window1024(children: ReactNode) {
 export function AppShellPage() {
     return (
         <ComponentPage
-            number="C-010"
+            number={componentNumber}
             summary="Window composition: chrome base, 38px title bar row, rail | main card with no top/left inset, an 8px right/bottom inset, a macOS-matched 8px radius, and a darker sidebar lane separated by an inset hairline."
             title="AppShell"
         >

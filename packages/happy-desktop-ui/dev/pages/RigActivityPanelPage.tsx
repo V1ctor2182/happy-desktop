@@ -7,6 +7,9 @@ import type {
 import { RigActivityPanel } from "../../src/RigActivityPanel";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-157";
+
 // Fixed "now" keeps subagent elapsed timing deterministic for screenshots.
 const NOW = Date.UTC(2026, 6, 25, 17, 0, 0);
 
@@ -87,7 +90,7 @@ const backgroundProcesses: readonly RigBackgroundProcess[] = [
 export function RigActivityPanelPage() {
     return (
         <ComponentPage
-            number="C-157"
+            number={componentNumber}
             summary="Rig session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): persistent goal with status, task list, delegated-subagent monitor, and running background terminals. Read-only; SSE-reactive."
             title="RigActivityPanel"
         >

@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { type MenuItem } from "../../src/Menu";
 import { type TabItem, Tabs, type TabsSize } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-025";
 const inboxTabs: TabItem[] = [
     { id: "all", label: "All", icon: "inbox" },
     { id: "unread", label: "Unread", unread: true },
@@ -72,7 +75,7 @@ function Stack(props: { children: ReactNode; rule: string }) {
 export function TabsPage() {
     return (
         <ComponentPage
-            number="C-025"
+            number={componentNumber}
             summary="Horizontal tab bar on a bottom hairline — leading icons, trailing count badges, and a 2px accent underline on the active tab. Three contract heights."
             title="Tabs"
         >
@@ -199,7 +202,7 @@ export function TabsPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="the same tabs idle, working, and unread — the labels do not move"
+                    detail="the same tabs idle, working, and unread — a working title shimmers where it stands"
                     label="Leading lane holds"
                     number="T-09"
                     stage="app"

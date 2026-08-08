@@ -6,6 +6,9 @@ import {
 } from "../../src/BrowserPanel";
 import { ComponentPage, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-161";
+
 function BrowserPreview(_props: BrowserContentProps) {
     return (
         <div style={preview}>
@@ -54,7 +57,7 @@ const httpErrorPreview = browserFailurePreview({
 export function BrowserPanelPage() {
     return (
         <ComponentPage
-            number="C-161"
+            number={componentNumber}
             summary="Desktop browser chrome hosting an isolated Chromium page renderer."
             title="Browser panel"
         >

@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { CodeBlock, codeBlockLanguage } from "../../src/CodeBlock";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-174";
+
 const typescript = `import { CodeBlock } from "happy-desktop-ui";
 
 /** One renderer for every piece of code the product shows. */
@@ -38,7 +41,7 @@ function frame(children: ReactNode, width = 720) {
 export function CodeBlockPage() {
     return (
         <ComponentPage
-            number="C-174"
+            number={componentNumber}
             summary="Code with syntax highlighting, wherever code is read: the source face of the file viewer and every fenced block in a document. Colors follow the surrounding theme through color-scheme, so there is no appearance prop to thread."
             title="CodeBlock"
         >

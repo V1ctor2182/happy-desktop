@@ -2,6 +2,9 @@ import { RigPeerStatus, type RigPeerState } from "../../src/RigPeerStatus";
 import { Sidebar, type SidebarSection } from "../../src/Sidebar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-214";
+
 const STATES: readonly RigPeerState[] = [
     "connected",
     "connecting",
@@ -36,7 +39,7 @@ export function RigPeerStatusPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-214"
+            number={componentNumber}
             summary="One Rig's connection as the same marker everywhere it is shown: an 8px dot in the shared status colours, with the state's word beside it when the surface is about the connection itself. Static in every state, so a window holding several machines is still while they are being reached."
             title="Rig peer status"
         >

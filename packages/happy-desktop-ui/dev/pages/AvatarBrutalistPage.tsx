@@ -1,6 +1,9 @@
 import { AvatarBrutalist } from "../../src/AvatarBrutalist";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-170";
+
 const IDS = [
     "ses_9f2a",
     "ses_1b74",
@@ -31,7 +34,7 @@ const cell: Record<string, string> = {
 export function AvatarBrutalistPage() {
     return (
         <ComponentPage
-            number="C-170"
+            number={componentNumber}
             title="Avatar brutalist"
             summary="Generated identity mark: a vendored brutalist tile tinted over a paired background, both chosen by hashing an id. Needs no upload and no initials, so anything with an id can wear a face."
         >

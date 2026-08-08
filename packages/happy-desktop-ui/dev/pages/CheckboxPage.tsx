@@ -1,10 +1,13 @@
 import { Checkbox } from "../../src/Checkbox";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-021";
+
 export function CheckboxPage() {
     return (
         <ComponentPage
-            number="C-021"
+            number={componentNumber}
             summary="18px control box on the 4px grid — reused Icon check glyph, symmetric indeterminate bar, accent fill, focus ring; the real state rides a hidden native checkbox."
             title="Checkbox"
         >

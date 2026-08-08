@@ -10,10 +10,13 @@ const APP_ICON =
     );
 import { rigMenus } from "./rigChatFixtures";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-151";
+
 export function RigSessionControlsPage() {
     return (
         <ComponentPage
-            number="C-151"
+            number={componentNumber}
             summary="Rig session control bar: model / effort / permission / service-tier dropdowns built on Menu, driven by a RigMenusSnapshot."
             title="RigSessionControls"
         >

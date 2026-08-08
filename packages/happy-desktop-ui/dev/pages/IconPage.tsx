@@ -1,5 +1,8 @@
 import { Icon, iconNames, type IconName } from "../../src/Icon";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-002";
 const SIZES = [14, 16, 20] as const;
 const OPTICAL_ROW: IconName[] = [
     "home",
@@ -58,7 +61,7 @@ function GlyphCell(props: { name: IconName }) {
 export function IconPage() {
     return (
         <ComponentPage
-            number="C-002"
+            number={componentNumber}
             title="Icon"
             summary="Hand-drawn 20-unit-grid stroke glyphs — 1.7 stroke mass, round caps, optically centered. The visual backbone of every Relay component."
         >

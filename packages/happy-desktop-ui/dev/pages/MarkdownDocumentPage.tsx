@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { MarkdownDocument } from "../../src/MarkdownDocument";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-171";
+
 const readme = `# Happy file viewer
 
 Opening a file shows the file. A Markdown document reads as a document — on a
@@ -71,7 +74,7 @@ function frame(children: ReactNode, height: number, width: number) {
 export function MarkdownDocumentPage() {
     return (
         <ComponentPage
-            number="C-171"
+            number={componentNumber}
             summary="A Markdown file read as a document: a full-bleed scrollport with the document set on a 768px reading measure inside it. Headings, tables, task lists, quotes, and fenced code render in the document type ramp; a link to another file is a click the caller handles."
             title="Markdown document"
         >

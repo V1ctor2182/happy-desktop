@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { CodeEditor } from "../../src/CodeEditor";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-175";
+
 const typescript = `import { CodeEditor } from "happy-desktop-ui";
 
 /** The file tab's body: one file, edited where it is read. */
@@ -52,7 +55,7 @@ function frame(children: ReactNode, height = 280, width = 720) {
 export function CodeEditorPage() {
     return (
         <ComponentPage
-            number="C-175"
+            number={componentNumber}
             summary="A real code editor for one file: CodeMirror parses incrementally, so highlighting keeps up with typing at any file size. Undo history, bracket matching, and a line-number gutter come with it; Cmd/Ctrl+S reports intent to save."
             title="CodeEditor"
         >

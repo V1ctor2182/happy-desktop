@@ -1,10 +1,13 @@
 import { StatTile } from "../../src/StatTile";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-031";
+
 export function StatTilePage() {
     return (
         <ComponentPage
-            number="C-031"
+            number={componentNumber}
             summary="Metric card — muted label, tone icon chip, large tabular value, and a trend delta with an optional hint."
             title="Stat tile"
         >

@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { Button } from "../../src/Button";
 import { FilePreview } from "../../src/FilePreview";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-169";
 /* A deterministic, offline specimen image: an inline SVG, so the workbench never
    waits on a network fetch to take a screenshot. */
 const sampleImage = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -58,7 +61,7 @@ function frame(children: ReactNode, height = 420, width = 720) {
 export function FilePreviewPage() {
     return (
         <ComponentPage
-            number="C-169"
+            number={componentNumber}
             summary="One file, shown rather than downloaded: a 56px header naming the file and a body that fills its region. Images and video are contained on the inset stage; Markdown and source scroll in a full-bleed scrollport."
             title="FilePreview"
         >

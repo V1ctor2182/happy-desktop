@@ -1,6 +1,9 @@
 import { Select } from "../../src/Select";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-019";
+
 const roles = [
     { value: "owner", label: "Owner" },
     { value: "admin", label: "Admin" },
@@ -18,7 +21,7 @@ const retention = [
 export function SelectPage() {
     return (
         <ComponentPage
-            number="C-019"
+            number={componentNumber}
             summary="Styled native single-select — three contract heights, placeholder / selected / error / disabled states, and truncating long options with a tuned chevron."
             title="Select"
         >

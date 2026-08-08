@@ -2,6 +2,9 @@ import type { MediaItem } from "../../src/MediaGallery";
 import { MediaGallery } from "../../src/MediaGallery";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-038";
+
 /* Deterministic data-URI previews (no network). A 4:3 diagonal gradient rect
  * standing in for a real thumbnail; the theme palette keeps the blueprint
  * on-brand. */
@@ -96,7 +99,7 @@ const noop = () => {};
 export function MediaGalleryPage() {
     return (
         <ComponentPage
-            number="C-038"
+            number={componentNumber}
             summary="Media grid tiles — 4:3 thumbnail or file-glyph medallion, kind badge and duration overlays, and a name + size footer on an equal-track grid."
             title="Media gallery"
         >

@@ -2,6 +2,9 @@ import { Button } from "../../src/Button";
 import { Lightbox } from "../../src/Lightbox";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-046";
+
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -33,7 +36,7 @@ function demoImage(width: number, height: number, from: string, to: string): str
 export function LightboxPage() {
     return (
         <ComponentPage
-            number="C-046"
+            number={componentNumber}
             summary="Full image preview inside a web modal (never a new browser tab). Hosted on ModalOverlay's fill placement it takes the whole app window and paints one flat dark over it, in either appearance, with a chrome-less caption/actions header floating above the shared ImageViewer — so a picture opened from a conversation zooms and pans exactly as one opened from Files."
             title="Lightbox"
         >

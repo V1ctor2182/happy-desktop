@@ -1,6 +1,9 @@
 import { FileTree, type FileTreeNode } from "../../src/FileTree";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-052";
+
 const sampleNodes: FileTreeNode[] = [
     {
         id: "src/",
@@ -88,7 +91,7 @@ function frame(children: ReturnType<typeof FileTree>, width = 320) {
 export function FileTreePage() {
     return (
         <ComponentPage
-            number="C-052"
+            number={componentNumber}
             summary="A props-only file/folder explorer: 28px rows, chevron disclosure for directories, 16px-per-level indentation, file-type icons resolved from each name, git-status decorations, selection, and a 'Show more' paging affordance."
             title="FileTree"
         >

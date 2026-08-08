@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import { RigPairing, type RigPairingProgress } from "../../src/RigPairing";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-215";
+
 const noop = () => {};
 
 /** Enough of the props to draw one state; every specimen fills in the rest. */
@@ -39,7 +42,7 @@ export function RigPairingPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-215"
+            number={componentNumber}
             summary="Trusting another machine by comparing four emojis at both ends. There is no key to copy across, no address to allow, and nothing about the other machine to configure: two machines that see the same four emojis reached each other and nobody else, which is why the emojis are the largest thing on the surface. The component holds no pairing state and starts nothing — it renders the phase it is given and reports presses."
             title="Rig pairing"
         >

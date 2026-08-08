@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Fade } from "../../src/Fade";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-057";
 const screens = ["loading", "sign-in", "workspace"] as const;
 function ScreenCard(props: { label: string }) {
     return (
@@ -28,7 +31,7 @@ export function FadePage() {
     const advance = () => setIndex((current) => (current + 1) % screens.length);
     return (
         <ComponentPage
-            number="C-057"
+            number={componentNumber}
             title="Fade"
             summary="Crossfades between whole-screen content keyed by an id; the incoming layer fades in over the outgoing one, then the old layer is dropped."
         >

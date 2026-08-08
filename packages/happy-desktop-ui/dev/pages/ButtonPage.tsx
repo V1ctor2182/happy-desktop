@@ -1,10 +1,13 @@
 import { Button } from "../../src/Button";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-003";
+
 export function ButtonPage() {
     return (
         <ComponentPage
-            number="C-003"
+            number={componentNumber}
             summary="Relay action control — five variants, three contract heights, leading-icon and icon-only forms."
             title="Button"
         >

@@ -5,6 +5,9 @@ import { EmptyState } from "../../src/EmptyState";
 import { Modal } from "../../src/Modal";
 import { ModalOverlay } from "../../src/ModalOverlay";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-058";
 /*
  * The overlay is `position: fixed`; a transformed wrapper establishes a
  * containing block so the specimen renders it inside a bounded, screenshot-safe
@@ -72,7 +75,7 @@ function TopPalette() {
 export function ModalOverlayPage() {
     return (
         <ComponentPage
-            number="C-058"
+            number={componentNumber}
             summary="The single backdrop every modal-class surface sits on — one dim and stacking level with a 24px minimum safe area. Dialogs center by default; transient type-ahead surfaces may use the adaptive top placement."
             title="Modal overlay"
         >

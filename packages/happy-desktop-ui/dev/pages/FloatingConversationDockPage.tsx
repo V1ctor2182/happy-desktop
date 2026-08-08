@@ -13,6 +13,9 @@ import { rigComposerModelControlProps } from "../../src/rigComposerModelControl"
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 import { rigMenus } from "./rigChatFixtures";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-167";
+
 const commands = [
     { id: "usage", label: "/usage", description: "Token usage for the session." },
     { id: "tasks", label: "/tasks", description: "Show the session task list." },
@@ -131,7 +134,7 @@ export function FloatingConversationDockPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-167"
+            number={componentNumber}
             summary="The composer floated over a surface that owns its own scrolling. The dock leaves the flow so the surface keeps its full height, and a masked gradient fades passing content out instead of slicing it."
             title="Floating conversation dock"
         >

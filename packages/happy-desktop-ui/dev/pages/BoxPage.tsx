@@ -1,10 +1,13 @@
 import { Box } from "../../src/Box";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-001";
+
 export function BoxPage() {
     return (
         <ComponentPage
-            number="C-001"
+            number={componentNumber}
             title="Box"
             summary="A neutral layout primitive whose geometry is completely controlled by props."
         >

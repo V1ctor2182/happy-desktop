@@ -1,6 +1,9 @@
 import { type ReactNode } from "react";
 import { BuildProgressPanel } from "../../src/BuildProgressPanel";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-063";
 /*
  * Deterministic, network-free build logs: static multi-line strings (no
  * timestamps that vary between renders) so the retained-log block and its
@@ -31,7 +34,7 @@ function column(children: ReactNode) {
 export function BuildProgressPanelPage() {
     return (
         <ComponentPage
-            number="C-063"
+            number={componentNumber}
             summary="Onboarding-sized live view of a durable agent base-image build — phase badge, deterministic progress bar, current log line, retained scrollable log, failure detail, and Retry. Props only; no timers or animation."
             title="Build progress panel"
         >

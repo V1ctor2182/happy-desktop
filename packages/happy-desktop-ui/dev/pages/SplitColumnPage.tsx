@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { SplitColumn } from "../../src/SplitColumn";
 import { EmptyState } from "../../src/EmptyState";
 import { ComponentPage, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-163";
 function Region(props: { label: string }) {
     return (
         <div
@@ -39,7 +42,7 @@ function Stage(props: { children: ReactNode; height: number }) {
 export function SplitColumnPage() {
     return (
         <ComponentPage
-            number="C-163"
+            number={componentNumber}
             title="Split column"
             summary="Two stacked regions separated by a draggable horizontal divider. The lower region owns the boundary height; the upper region absorbs the rest. Drag the 8px lane, or focus it and use Arrow/Home/End."
             contract="Props only"

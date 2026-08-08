@@ -1,10 +1,13 @@
 import { StatusPicker } from "../../src/StatusPicker";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-034";
+
 export function StatusPickerPage() {
     return (
         <ComponentPage
-            number="C-034"
+            number={componentNumber}
             summary="Availability segmented control (automatic/online/away/dnd, each with a status-dot color) plus a custom status editor: emoji slot, text field, and expiry."
             title="Status picker"
         >

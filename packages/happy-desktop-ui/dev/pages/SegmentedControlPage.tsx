@@ -1,6 +1,9 @@
 import { SegmentedControl } from "../../src/SegmentedControl";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-022";
+
 const RANGE = [
     { value: "day", label: "Day" },
     { value: "week", label: "Week" },
@@ -28,7 +31,7 @@ const SCOPE = [
 export function SegmentedControlPage() {
     return (
         <ComponentPage
-            number="C-022"
+            number={componentNumber}
             summary="Inline exclusive choice group (2–5 segments) with a sliding raised pill and one equal column width per segment."
             title="Segmented control"
         >

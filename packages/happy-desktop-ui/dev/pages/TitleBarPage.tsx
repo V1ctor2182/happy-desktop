@@ -3,6 +3,9 @@ import { Button } from "../../src/Button";
 import { Icon } from "../../src/Icon";
 import { SearchField, TitleBar, WindowDragRegion } from "../../src/TitleBar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-007";
 const column: Record<string, string> = {
     display: "flex",
     flexDirection: "column",
@@ -62,7 +65,7 @@ export function TitleBarPage() {
     const [value, setValue] = useState("");
     return (
         <ComponentPage
-            number="C-007"
+            number={componentNumber}
             summary="38px draggable window chrome with a centered 420px global search well — leading crumb and trailing actions ride the 1fr side lanes."
             title="TitleBar + SearchField"
         >

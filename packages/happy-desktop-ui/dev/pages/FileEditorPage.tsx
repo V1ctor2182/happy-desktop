@@ -2,6 +2,9 @@ import { type ReactNode } from "react";
 import { Banner } from "../../src/Banner";
 import { FileEditor } from "../../src/FileEditor";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-054";
 const sample = `import { useState } from "react";
 
 export function Counter() {
@@ -32,7 +35,7 @@ function frame(children: ReactNode, height = 420) {
 export function FileEditorPage() {
     return (
         <ComponentPage
-            number="C-054"
+            number={componentNumber}
             summary="A single-file text editor: a 52px header with the file name, directory subtitle, unsaved marker, and Save / Revert / Close; an optional alert banner; a monospace code body; and a status bar. Cmd/Ctrl+S saves."
             title="FileEditor"
         >

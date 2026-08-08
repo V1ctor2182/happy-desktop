@@ -6,6 +6,9 @@ import {
 } from "../../src/RigCreateSessionDialog";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-238";
+
 /** Desktop canvas the dialog is reviewed on, and the Electron minimum window. */
 const FRAME = { height: "640px", width: "1000px" };
 const MINIMUM_WINDOW = { height: "480px", width: "720px" };
@@ -114,7 +117,7 @@ export function RigCreateSessionDialogPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-238"
+            number={componentNumber}
             summary="The window's global Create: the task, where it runs, and how the session that does it is configured."
             title="RigCreateSessionDialog"
         >

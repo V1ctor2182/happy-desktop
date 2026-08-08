@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import { RigProjectSettingsDialog } from "../../src/RigProjectSettingsDialog";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-178";
+
 /**
  * The dialog is fixed to the window it is in, so a specimen gives it one. The
  * archive specimens ask for a taller one: the block is below the fields, and a
@@ -43,7 +46,7 @@ export function RigProjectSettingsDialogPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-178"
+            number={componentNumber}
             summary="What one project of the local workspace is, what it is set to, and what the daemon takes new values for."
             title="RigProjectSettingsDialog"
         >

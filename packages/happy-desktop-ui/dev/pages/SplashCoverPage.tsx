@@ -1,6 +1,9 @@
 import { SplashCover } from "../../src/SplashCover";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-253";
+
 /** Stands in for the mounted app under the veil. */
 function Underneath() {
     return (
@@ -32,7 +35,7 @@ const frame = {
 export function SplashCoverPage() {
     return (
         <ComponentPage
-            number="C-253"
+            number={componentNumber}
             summary="The boot mark above the app and its one dissolve into it. Only the mark's opacity animates; both layers draw the same surface, so the app appears to have been there all along."
             title="Splash cover"
         >

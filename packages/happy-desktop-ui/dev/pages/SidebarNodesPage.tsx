@@ -2,6 +2,9 @@ import { Sidebar } from "../../src/Sidebar";
 import { SidebarNodes, type SidebarNode } from "../../src/SidebarNodes";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-249";
+
 const NODES: readonly SidebarNode[] = [
     { detail: "10.0.0.4:4919", id: "one", label: "workshop", state: "connected" },
     { detail: "10.0.0.9:4919", id: "two", label: "builder", state: "connecting" },
@@ -13,7 +16,7 @@ export function SidebarNodesPage() {
     return (
         <ComponentPage
             contract="Props only"
-            number="C-249"
+            number={componentNumber}
             summary="The machines this Rig is peered with that this window has no connection to, reported in the sidebar rather than offered as navigation. The rows keep the column's 32px rhythm and 10px inset but carry no hover, no press, and no pointer: there is nothing behind them to open. A node the window did reach is a section of its own, with that machine's projects under its own name."
             title="Sidebar nodes"
         >

@@ -1,9 +1,12 @@
 import { SplashScreen } from "../../src/SplashScreen";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+
+/** The component plan this page documents. The selector and the page header read the same value. */
+export const componentNumber = "C-161";
 export function SplashScreenPage() {
     return (
         <ComponentPage
-            number="C-161"
+            number={componentNumber}
             summary="What the window holds while the app resolves: the muted Happy mark centered on the workspace surface, with no spinner and an optional reassurance note."
             title="Splash screen"
         >
