@@ -285,6 +285,18 @@ export type ComposerProps = {
      * than one composer at a time turns it on for exactly one of them.
      */
     focusOnType?: boolean;
+    /**
+     * What this composer is currently writing into. Whenever the value changes
+     * the caret is put in the draft, so arriving somewhere new — a conversation
+     * just opened, a workspace just made — is already somewhere to type.
+     *
+     * It is the identity of the destination rather than a "focus now" flag,
+     * because the same composer stays mounted across the move: what changed is
+     * the only thing that can say a move happened at all. An owner that never
+     * wants the caret taken leaves it out, and one that mounts two composers
+     * gives it to whichever of them is being written into.
+     */
+    focusKey?: string;
     /** e.g. "Enter to send · @ to hand off to an agent" */
     hint?: string;
     /** Opens a host-owned attachment browser. Takes precedence over the native picker. */
@@ -585,6 +597,14 @@ export function Composer(props: ComposerProps) {
         }
         wasBusy.current = busy;
     }, [busy]);
+    // eslint-disable-next-line happy2-react/no-layout-effect -- moving real keyboard focus to a destination the reader has just arrived at is imperative browser work with no declarative or event-driven boundary: the composer stays mounted across the move, so no ref callback or handler observes it
+    useLayoutEffect(() => {
+        // A composer nobody can type into is not somewhere to put the caret, and
+        // taking focus from whatever does have it would be worse than leaving it
+        // where it is.
+        if (props.focusKey === undefined || busy) return;
+        textareaEl.current?.focus();
+    }, [busy, props.focusKey]);
     // eslint-disable-next-line happy2-react/no-layout-effect -- composer popovers require one document-level outside-pointer listener whose lifetime follows the mounted composer and is completely cleaned up
     useLayoutEffect(() => {
         const onPointerDown = (event: PointerEvent) => {

@@ -10,7 +10,7 @@ import type {
 } from "happy-desktop-state";
 import {
     appearanceStoreCreate,
-    rigGroupAccessOf,
+    rigGroupAccessRefused,
     rigHostNoop,
     RIG_GROUP_UNLISTED_REFUSAL,
 } from "happy-desktop-state";
@@ -99,7 +99,7 @@ function workspace(): RigWorkspaceStore {
          * describe is never permission to write into it. Every snapshot carries
          * an access, so this one does too. */
         address: {},
-        groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
+        groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
         fileTabs: [],
         tabOrder: [],
         openInTargets: [],

@@ -36,6 +36,7 @@ import {
 } from "./rigSessionDraftStore.js";
 import {
     rigGroupAccessOf,
+    rigGroupAccessRefused,
     RIG_GROUP_UNLISTED_REFUSAL,
     type RigGroupAccess,
 } from "./rigGroupAccess.js";
@@ -1330,7 +1331,7 @@ export function rigWorkspaceStoreCreate(
         address: addressPublic(),
         list: list.get(),
         conversation,
-        groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
+        groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
         fileTabs,
         tabOrder,
         groupResume,
@@ -2710,6 +2711,24 @@ export function rigWorkspaceStoreCreate(
         groupStartFind(groupId)?.worktreeId;
 
     /**
+     * The first conversation a newly created workspace is starting for itself,
+     * while it is still being started.
+     *
+     * A workspace is made in order to work in it, so its conversation is started
+     * with it rather than waiting to be asked a second time. Rig names the
+     * checkout's directory before it has finished preparing it, so this is a
+     * short wait — but the reader is looking at the workspace throughout it with
+     * a live composer in front of them, and what they type has to join this
+     * conversation rather than open another one next to it.
+     */
+    let worktreeFirstConversation:
+        | {
+              readonly groupId: RigGroupId;
+              readonly started: Promise<RigSessionLocation | undefined>;
+          }
+        | undefined;
+
+    /**
      * Starts the addressed group's first conversation and sends `text` into it.
      * A worktree the host has only just been asked for has no directory named
      * yet, so that path waits for the host to name one; a project is ready by
@@ -2745,11 +2764,18 @@ export function rigWorkspaceStoreCreate(
         const create = selection
             ? { ...start.create, ...selectionCreateFields(selection) }
             : start.create;
-        return (
-            start.worktreeId
-                ? list.worktreeSessionStart(start.worktreeId, create)
-                : list.sessionCreate(create)
-        ).then(async (location) => {
+        // A workspace starts its own first conversation the moment it is asked
+        // for, and may still be starting it. This message belongs in that one:
+        // the reader asked for one new place to work, and a message typed into
+        // it while it was being made must not leave a second conversation beside
+        // the one the workspace already has.
+        const started =
+            worktreeFirstConversation?.groupId === groupId
+                ? worktreeFirstConversation.started
+                : start.worktreeId
+                  ? list.worktreeSessionStart(start.worktreeId, create)
+                  : list.sessionCreate(create);
+        return started.then(async (location) => {
             if (!location) throw new Error("The conversation could not be started.");
             output({ type: "conversationOpenRequested", location });
             const placed = await attachmentsPlace(location.groupId, text, attachments);
@@ -2841,6 +2867,38 @@ export function rigWorkspaceStoreCreate(
     /** Reports a newly created conversation so the router can address it. */
     const openRequest = (location: RigSessionLocation | undefined): void => {
         if (location) output({ type: "conversationOpenRequested", location });
+    };
+
+    /**
+     * Starts the conversation a newly created workspace comes with, and
+     * addresses it.
+     *
+     * The configuration is the connection's last selection, exactly as a new tab
+     * in an existing workspace takes it: this is that same act, performed for
+     * the reader because asking for a workspace is asking to work in one. The
+     * directory is left to `worktreeSessionStart`, which fills it in from the
+     * path Rig names for the checkout — the only reason a conversation can be
+     * asked for before there is a checkout to hold it.
+     */
+    const worktreeFirstConversationStart = async (worktreeId: RigWorktreeId): Promise<void> => {
+        const models = client.models.get();
+        const selection = models.type === "ready" ? models.lastUsedSelection : undefined;
+        const create: RigSessionCreateInput = {
+            cwd: "",
+            worktreeId,
+            ...(selection ? selectionCreateFields(selection) : {}),
+        };
+        const started = list.worktreeSessionStart(worktreeId, create);
+        const pending = { groupId: worktreeId as RigGroupId, started };
+        worktreeFirstConversation = pending;
+        try {
+            openRequest(await started);
+        } finally {
+            // Only this start's own record is cleared. A workspace made while
+            // this one was still being prepared owns the record by then, and
+            // taking it away would send its first message somewhere else.
+            if (worktreeFirstConversation === pending) worktreeFirstConversation = undefined;
+        }
     };
 
     /**
@@ -3026,7 +3084,7 @@ export function rigWorkspaceStoreCreate(
             address: addressPublic(),
             list: list.get(),
             conversation,
-            groupAccess: rigGroupAccessOf(RIG_GROUP_UNLISTED_REFUSAL),
+            groupAccess: rigGroupAccessRefused(RIG_GROUP_UNLISTED_REFUSAL),
             fileTabs,
             tabOrder,
             groupResume,
@@ -3521,10 +3579,16 @@ export function rigWorkspaceStoreCreate(
             if (refusal) throw new Error(refusal);
             const worktreeId = await list.worktreeCreate(projectId);
             if (worktreeId === undefined) return;
-            // Addressed as soon as it exists, and left empty: the conversation is
-            // started by the first message sent into it, so adding a worktree to
-            // look around does not leave an empty session behind.
+            // Addressed as soon as Rig names it, which is before its checkout
+            // exists: the reader asked for this workspace, so the window is in
+            // it while it is still being prepared rather than after.
             output({ type: "groupOpenRequested", groupId: worktreeId });
+            // And its first conversation is started with it. A workspace is
+            // somewhere to work, not somewhere to look at, so it arrives the way
+            // a new tab does — as a chat, with the checkout's own progress shown
+            // in it — instead of as an empty place the reader has to open a chat
+            // in themselves.
+            await worktreeFirstConversationStart(worktreeId);
         },
         worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
         worktreeReorder: (projectId, worktreeId, afterId) =>

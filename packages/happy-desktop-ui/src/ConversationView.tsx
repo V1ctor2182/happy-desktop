@@ -89,6 +89,17 @@ export type ConversationViewProps = {
      * in the tree so it stacks over the whole conversation.
      */
     overlay?: ReactNode;
+    /**
+     * Something to say about this conversation that is not part of it, held
+     * above every message rather than mixed in among them.
+     *
+     * It is a fixed row between the header and the body, so it stays put while
+     * the transcript scrolls and reads as a fact about the place the
+     * conversation is happening in — a checkout still being prepared, above all
+     * — rather than as something that was said in it. The transcript underneath
+     * behaves exactly as it otherwise would, empty or full.
+     */
+    notice?: ReactNode;
     /** Replaces the conversation body while an owner-selected panel is open. */
     panel?: ReactNode;
     /** Shows or hides the intermediate entries of a finished turn. */
@@ -108,6 +119,8 @@ export type ConversationViewProps = {
     composerPlaceholder?: string;
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
+    /** What this composer writes into; a change takes the caret. See `Composer.focusKey`. */
+    composerFocusKey?: string;
     onComposerValueChange: (value: string) => void;
     onComposerFocusChange?: (focused: boolean) => void;
     onComposerSend: () => void;
@@ -232,6 +245,15 @@ export function ConversationView(props: ConversationViewProps) {
                     topic={props.subtitle}
                 />
             )}
+
+            {props.notice ? (
+                <div
+                    className="happy2-conversation__notice"
+                    data-happy-desktop-ui="conversation-notice"
+                >
+                    {props.notice}
+                </div>
+            ) : null}
 
             {props.panel ? (
                 <div
@@ -374,6 +396,9 @@ export function ConversationView(props: ConversationViewProps) {
                     : { unavailable: props.composerUnavailable })}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
+                {...(props.composerFocusKey === undefined
+                    ? {}
+                    : { composerFocusKey: props.composerFocusKey })}
                 composerPlaceholder={props.composerPlaceholder}
                 onAbort={props.onAbort}
                 onCommandInvoke={props.onCommandInvoke}

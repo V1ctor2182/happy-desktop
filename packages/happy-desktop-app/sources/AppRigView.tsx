@@ -2262,6 +2262,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         openGroup.conversations.length === 0 &&
         openGroupPhase !== undefined &&
         !access.canConverse;
+    // The one phase that takes the body of the first chat rather than a strip
+    // above it. A workspace is addressed the instant it is asked for, so this is
+    // the screen the reader lands on straight after clicking: the checkout being
+    // prepared is the only thing happening here, so it is the only thing shown,
+    // with the composer still live underneath it. Every control that would act
+    // on a directory that is not there yet is withheld for the same reason —
+    // there is nothing behind them to act on until the checkout arrives.
+    const openGroupPreparing = openGroupPhase === "creating";
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — rig-connect withdrew
     // the one it had predicted — so the address answers for itself here rather
@@ -2417,6 +2425,35 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // the workspace column the dock is the write end of the session, and the
     // composer it covers must not answer the keyboard from underneath it.
     const composerClaimsTyping = panelComposer === undefined;
+    // Whether the chat this workspace was made with is what is on screen. That
+    // chat carries the checkout's phase itself, so the lane above the tab strip
+    // does not: a file or a terminal open here is not that chat, and those keep
+    // the lane. It is suppressed even when the chat says nothing at all — a new
+    // workspace is an ordinary empty chat, and the sidebar row is already
+    // showing that its checkout is being prepared.
+    const preparingChatOnScreen =
+        openGroupPreparing &&
+        openGroup !== undefined &&
+        activeMainTool === undefined &&
+        activeFile === undefined;
+    // A new workspace opens as a plain empty chat, with the ordinary placeholder
+    // and a live composer. The checkout being prepared is only worth a word once
+    // there is something in the chat waiting on it: a message sent before the
+    // checkout arrives is an ordinary message, and this is the standing fact
+    // above all of them that says why it has not run yet. Rig has already named
+    // where the checkout is going and holds the work until it is there.
+    const preparingNotice =
+        openGroup &&
+        preparingChatOnScreen &&
+        conversation.type === "ready" &&
+        conversation.value.entries.length > 0 ? (
+            <WorkspaceLifecycleNotice
+                name={openGroup.name}
+                {...(openGroup.path ? { path: openGroup.path } : {})}
+                phase="creating"
+                size="compact"
+            />
+        ) : undefined;
 
     return (
         <AppShell
@@ -2439,7 +2476,12 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             panelFooter={panelComposer}
             panelFooterFloating
             panel={
-                panel.open ? (
+                // The panel reads and writes the checkout: a file tree, a diff,
+                // a terminal. None of them has anything to open until the
+                // checkout is there, so while it is being prepared the panel is
+                // not drawn at all rather than drawn empty. It comes back on its
+                // own — the reader's choice to have it open is untouched here.
+                panel.open && !openGroupPreparing ? (
                     <RigPanelBody
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
@@ -2551,77 +2593,87 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         // the tab strip. It only appears once the project has a
                         // session, because a panel with no conversation behind it has
                         // nowhere to run a terminal and the control would do nothing.
+                        //
+                        // Both of them address the checkout, so a workspace
+                        // still being prepared carries neither: handing a folder
+                        // that does not exist to an editor, or opening a panel
+                        // onto it, are the two things this header could offer
+                        // that would fail on arrival.
                         actions={
-                            <>
-                                {/* Hands this project's directory to another
+                            openGroupPreparing ? undefined : (
+                                <>
+                                    {/* Hands this project's directory to another
                                     application, or puts its path on the
                                     clipboard. The path is no longer spelled out
                                     in the header — it said nothing the project's
                                     name did not — so copying it is how it is
                                     still reachable when it is genuinely needed. */}
-                                <RigControlMenu
-                                    items={[
-                                        ...workspace.openInTargets.map((target) => ({
-                                            id: target.id,
-                                            kind: "item" as const,
-                                            label: target.label,
-                                            disabled: !availability.online,
-                                            ...(target.iconUrl ? { iconUrl: target.iconUrl } : {}),
-                                        })),
-                                        ...(workspace.openInTargets.length > 0
-                                            ? [{ kind: "separator" as const }]
-                                            : []),
-                                        {
-                                            id: "copy-path",
-                                            kind: "item" as const,
-                                            label: "Copy path",
-                                            icon: "doc" as const,
-                                        },
-                                    ]}
-                                    label="Open in"
-                                    // The control wears whatever was opened last,
-                                    // so the answer to "again, please" is already
-                                    // on screen instead of one menu away — and
-                                    // once it is worn, the label side hands the
-                                    // project straight back to that application
-                                    // while only the chevron opens the list.
-                                    leadingIconUrl={openInRecent?.iconUrl}
-                                    menuAlign="end"
-                                    {...(openInRecent && availability.online
-                                        ? {
-                                              onPrimary: () => {
-                                                  if (rigOnline())
-                                                      void props.workspace.openIn(
-                                                          openGroup.id,
-                                                          openInRecent.id,
-                                                      );
-                                              },
-                                              primaryLabel: `Open in ${openInRecent.label}`,
-                                          }
-                                        : {})}
-                                    onSelect={(id: string) => {
-                                        if (id === "copy-path") {
-                                            void navigator.clipboard?.writeText(
-                                                openGroup.create.cwd,
-                                            );
-                                            return;
-                                        }
-                                        if (rigOnline())
-                                            void props.workspace.openIn(openGroup.id, id);
-                                    }}
-                                />
-                                {!panel.open ? (
-                                    <Button
-                                        aria-label="Show panel"
-                                        aria-pressed={false}
-                                        icon="panel-expand"
-                                        iconOnly
-                                        onClick={() => props.workspace.panel.panelToggle()}
-                                        size="small"
-                                        variant="ghost"
+                                    <RigControlMenu
+                                        items={[
+                                            ...workspace.openInTargets.map((target) => ({
+                                                id: target.id,
+                                                kind: "item" as const,
+                                                label: target.label,
+                                                disabled: !availability.online,
+                                                ...(target.iconUrl
+                                                    ? { iconUrl: target.iconUrl }
+                                                    : {}),
+                                            })),
+                                            ...(workspace.openInTargets.length > 0
+                                                ? [{ kind: "separator" as const }]
+                                                : []),
+                                            {
+                                                id: "copy-path",
+                                                kind: "item" as const,
+                                                label: "Copy path",
+                                                icon: "doc" as const,
+                                            },
+                                        ]}
+                                        label="Open in"
+                                        // The control wears whatever was opened last,
+                                        // so the answer to "again, please" is already
+                                        // on screen instead of one menu away — and
+                                        // once it is worn, the label side hands the
+                                        // project straight back to that application
+                                        // while only the chevron opens the list.
+                                        leadingIconUrl={openInRecent?.iconUrl}
+                                        menuAlign="end"
+                                        {...(openInRecent && availability.online
+                                            ? {
+                                                  onPrimary: () => {
+                                                      if (rigOnline())
+                                                          void props.workspace.openIn(
+                                                              openGroup.id,
+                                                              openInRecent.id,
+                                                          );
+                                                  },
+                                                  primaryLabel: `Open in ${openInRecent.label}`,
+                                              }
+                                            : {})}
+                                        onSelect={(id: string) => {
+                                            if (id === "copy-path") {
+                                                void navigator.clipboard?.writeText(
+                                                    openGroup.create.cwd,
+                                                );
+                                                return;
+                                            }
+                                            if (rigOnline())
+                                                void props.workspace.openIn(openGroup.id, id);
+                                        }}
                                     />
-                                ) : null}
-                            </>
+                                    {!panel.open ? (
+                                        <Button
+                                            aria-label="Show panel"
+                                            aria-pressed={false}
+                                            icon="panel-expand"
+                                            iconOnly
+                                            onClick={() => props.workspace.panel.panelToggle()}
+                                            size="small"
+                                            variant="ghost"
+                                        />
+                                    ) : null}
+                                </>
+                            )
                         }
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
@@ -2663,7 +2715,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         read what ran there before the checkout went away. The
                         lane is mounted in every phase, including the ready one,
                         so arriving at or leaving a phase never rebuilds the
-                        strip and transcripts underneath it. */}
+                        strip and transcripts underneath it.
+
+                        A checkout being prepared is the exception, whenever its
+                        own chat is the thing on screen: that phase is stated
+                        inside the chat instead, above its messages and where the
+                        reader is already looking, so the lane stays empty rather
+                        than saying the same thing twice. */}
                     <WorkspaceLifecycleLane
                         {...(openGroup.lifecycle?.phase === "failed" &&
                         openGroup.lifecycle.reason !== undefined
@@ -2671,7 +2729,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             : {})}
                         name={openGroup.name}
                         {...(openGroup.path ? { path: openGroup.path } : {})}
-                        {...(openGroupPhase !== undefined && !openGroupNotice
+                        {...(openGroupPhase !== undefined &&
+                        !openGroupNotice &&
+                        !preparingChatOnScreen
                             ? { phase: openGroupPhase }
                             : {})}
                     />
@@ -2711,6 +2771,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 ? { draftMenus: workspace.groupSessionDraft.menus }
                                 : {})}
                             focusOnType={composerClaimsTyping}
+                            groupId={openGroup.id}
                             groupName={openGroup.name}
                             rigOnline={rigOnline}
                             slotAction={props.slotAction}
@@ -2921,6 +2982,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             ? { draftMenus: workspace.groupSessionDraft.menus }
                                             : {})}
                                         focusOnType={composerClaimsTyping}
+                                        groupId={openGroup.id}
                                         groupName={openGroup.name}
                                         rigOnline={rigOnline}
                                         slotAction={props.slotAction}
@@ -2936,6 +2998,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                         focusOnType={composerClaimsTyping}
                                         groupId={openGroup.id}
                                         groupName={openGroup.name}
+                                        {...(preparingNotice ? { notice: preparingNotice } : {})}
                                         now={now}
                                         {...(connectionRefusal === undefined &&
                                         openGroupChatRefusal === undefined
@@ -3420,6 +3483,8 @@ function RigGroupComposer(props: {
      */
     draftMenus?: RigMenusSnapshot;
     focusOnType: boolean;
+    /** The group being written into. Arriving at another one takes the caret. */
+    groupId: string;
     groupName: string;
     /** Reads current transport health when a Rig-backed action is invoked. */
     rigOnline: () => boolean;
@@ -3443,6 +3508,10 @@ function RigGroupComposer(props: {
                 />
             }
             composerFocusOnType={props.focusOnType}
+            // Only the composer that claims stray typing takes the caret, so the
+            // dock over an expanded panel cannot pull it out from under the one
+            // the reader can see.
+            {...(props.focusOnType ? { composerFocusKey: props.groupId } : {})}
             composerPlaceholder={composerPlaceholder(props.groupName)}
             composerSubmitDisabled={props.unavailable !== undefined}
             {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
@@ -3519,6 +3588,14 @@ function RigConversationBody(props: {
     groupId: string;
     groupName: string;
     now: number;
+    /**
+     * Something to say about the place this conversation is happening in, held
+     * above every message in it. A workspace's own first conversation exists
+     * before its checkout does, so this is where the reader watches that
+     * checkout being prepared — while the transcript, the empty state, and the
+     * composer underneath all behave exactly as they otherwise would.
+     */
+    notice?: ReactNode;
     /** Starts a session here, when this workspace can host one. */
     onCreate?: () => void;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
@@ -3552,6 +3629,7 @@ function RigConversationBody(props: {
                 focusOnType={props.focusOnType}
                 groupId={props.groupId}
                 groupName={props.groupName}
+                {...(props.notice === undefined ? {} : { notice: props.notice })}
                 now={props.now}
                 onChatSelect={props.onChatSelect}
                 onFileOpen={props.onFileOpen}
@@ -3639,6 +3717,8 @@ function RigConversationSurface(props: {
     focusOnType: boolean;
     groupId: string;
     groupName: string;
+    /** What to say above every message here; see `RigConversationBody`. */
+    notice?: ReactNode;
     now: number;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     /** Opens a file the transcript names, in the panel beside it. */
@@ -3750,6 +3830,14 @@ function RigConversationSurface(props: {
             composerSubmitDisabled={props.unavailable !== undefined}
             {...(props.unavailable === undefined ? {} : { composerUnavailable: props.unavailable })}
             composerFocusOnType={!props.readOnly && props.focusOnType}
+            // The open conversation is what this composer writes into, so moving
+            // to another one — or landing in the one a new workspace was made
+            // with — puts the caret in the draft. A read-only chat has no draft
+            // to put it in, and only the composer claiming stray typing takes it,
+            // so the dock over an expanded panel cannot steal it.
+            {...(!props.readOnly && props.focusOnType
+                ? { composerFocusKey: conversation.conversationId }
+                : {})}
             composerPlaceholder={
                 props.readOnly
                     ? (props.readOnlyReason ?? "Subagent chats are read-only")
@@ -3758,6 +3846,7 @@ function RigConversationSurface(props: {
             conversationId={conversation.conversationId}
             entries={conversation.entries}
             loading={!conversation.ready}
+            {...(props.notice === undefined ? {} : { notice: props.notice })}
             scrollPosition={conversation.scrollPosition}
             onScrollPositionChange={(position) => {
                 if (
@@ -4052,8 +4141,11 @@ function RigPanelComposer(props: {
                 submitDisabled={props.unavailable !== undefined}
                 {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
                 // This dock only exists while it covers the workspace column's
-                // composer, so it is the surface the reader writes into.
+                // composer, so it is the surface the reader writes into — and
+                // therefore the one that takes the caret when the conversation
+                // underneath it changes.
                 composerFocusOnType={!props.readOnly}
+                {...(props.readOnly ? {} : { composerFocusKey: props.conversation.conversationId })}
                 composerPlaceholder={
                     props.readOnly
                         ? (props.readOnlyReason ?? "Subagent chats are read-only")

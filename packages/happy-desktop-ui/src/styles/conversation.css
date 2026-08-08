@@ -89,6 +89,19 @@
     top: 4px;
 }
 
+/*
+ * The notice row: a fixed strip between the header and the transcript, taking
+ * only the height its contents ask for and never scrolling. What it says is a
+ * fact about the place the conversation is happening in, so it has to stay
+ * readable however far the transcript beneath it has been scrolled.
+ */
+.happy2-conversation__notice {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    padding: 12px 16px 0;
+}
+
 .happy2-conversation__panel,
 .happy2-conversation__empty {
     display: flex;

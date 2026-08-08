@@ -23,6 +23,8 @@ export type ConversationDockProps = {
     composerPlaceholder?: string;
     /** Makes this composer the last resort for typing; see `Composer.focusOnType`. */
     composerFocusOnType?: boolean;
+    /** What this composer writes into; a change takes the caret. See `Composer.focusKey`. */
+    composerFocusKey?: string;
     "data-testid"?: string;
     /**
      * Stops the current run; the send control becomes this while running.
@@ -130,6 +132,9 @@ export function ConversationDock(props: ConversationDockProps) {
                     contextItems={contextItemsOf(composer)}
                     disabled={props.disabled}
                     focusOnType={props.composerFocusOnType}
+                    {...(props.composerFocusKey === undefined
+                        ? {}
+                        : { focusKey: props.composerFocusKey })}
                     hint={composer.shellCommand !== undefined ? "Enter to run" : "Enter to send"}
                     mentions={mentionsOf(composer)}
                     footerControl={props.composerFooterControl}

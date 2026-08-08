@@ -120,17 +120,29 @@ export function rigProjectWriteRefusal(project: RigProject): string | undefined 
 }
 
 /**
+ * The access one sentence describes, when that one sentence answers both
+ * questions. An id the catalog does not describe at all is the case that
+ * matters: nothing is known about the place, so nothing may be done there, and
+ * saying it once is how it cannot say two different things by accident.
+ */
+export function rigGroupAccessRefused(refusal: string): RigGroupAccess {
+    return rigGroupAccessOf(refusal, refusal);
+}
+
+/**
  * The access these two refusals describe. Stopping is allowed either way.
  *
- * `conversationRefusal` defaults to `writeRefusal` because the two answers
- * differ only where a place can take a chat but not a change on disk. A caller
- * that has one sentence for the whole group — an id the catalog does not
- * describe at all, above all — is saying both, and saying it once is how it
- * cannot say two different things by accident.
+ * Both answers are always given, and neither is derived from the other. The one
+ * situation this whole distinction exists for — a workspace whose checkout Rig
+ * is still preparing — is exactly the situation where writing is refused and
+ * conversing is not, so a conversation answer that fell back to the write one
+ * would close the composer there with the directory's own reason and defeat the
+ * split at the only moment it matters. A caller holding a single sentence for
+ * the whole group says so through `rigGroupAccessRefused`.
  */
 export function rigGroupAccessOf(
     writeRefusal: string | undefined,
-    conversationRefusal: string | undefined = writeRefusal,
+    conversationRefusal: string | undefined,
 ): RigGroupAccess {
     if (writeRefusal === undefined && conversationRefusal === undefined)
         return RIG_GROUP_ACCESS_OPEN;
