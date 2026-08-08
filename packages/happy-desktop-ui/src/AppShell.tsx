@@ -116,7 +116,6 @@ function panelMaxWidthOf(): number {
     return Math.max(PANEL_MIN_WIDTH, Math.round(viewport * PANEL_MAX_FRACTION));
 }
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
-const RESIZE_HANDLE_WIDTH = 8;
 const REVEAL_WIDTH = 48;
 const WORKSPACE_MIN_WIDTH = 140;
 function clamp(value: number, min: number, max: number): number {
@@ -342,7 +341,7 @@ export function AppShell(props: AppShellProps) {
           : sidebarHidden
             ? REVEAL_WIDTH
             : sidebarInteractive
-              ? sidebarMin + RESIZE_HANDLE_WIDTH
+              ? sidebarMin
               : FIXED_SIDEBAR_MIN_WIDTH;
     const sidebarFootprint = !local.sidebar
         ? "0px"
@@ -351,7 +350,7 @@ export function AppShell(props: AppShellProps) {
           : sidebarHidden
             ? `${REVEAL_WIDTH}px`
             : sidebarInteractive
-              ? `${sidebarWidth + RESIZE_HANDLE_WIDTH}px`
+              ? `${sidebarWidth}px`
               : "clamp(250px, 30vw, 360px)";
     const revealButton = sidebarHidden ? (
         <button
@@ -465,17 +464,17 @@ export function AppShell(props: AppShellProps) {
                                         <Icon name="sidebar-collapse" size={14} />
                                     </button>
                                 ) : null}
+                                {showSidebarHandle ? (
+                                    <ResizeHandle
+                                        edge="right"
+                                        label={local.sidebarResizeLabel ?? "Resize sidebar"}
+                                        max={sidebarMax}
+                                        min={sidebarMin}
+                                        onResize={setSidebarWidth}
+                                        value={sidebarWidth}
+                                    />
+                                ) : null}
                             </div>
-                        ) : null}
-                        {showSidebarHandle ? (
-                            <ResizeHandle
-                                edge="right"
-                                label={local.sidebarResizeLabel ?? "Resize sidebar"}
-                                max={sidebarMax}
-                                min={sidebarMin}
-                                onResize={setSidebarWidth}
-                                value={sidebarWidth}
-                            />
                         ) : null}
                         <div
                             className="happy-desktop-app-shell__workspace"
@@ -484,16 +483,6 @@ export function AppShell(props: AppShellProps) {
                             {local.children}
                         </div>
                     </main>
-                    {local.panel && panelResizable && !panelMaximized ? (
-                        <ResizeHandle
-                            edge="left"
-                            label={local.panelResizeLabel ?? "Resize panel"}
-                            max={panelMax}
-                            min={panelMin}
-                            onResize={applyPanelWidth}
-                            value={panelWidth}
-                        />
-                    ) : null}
                     {local.panel ? (
                         <aside
                             className="happy-desktop-app-shell__panel"
@@ -502,6 +491,16 @@ export function AppShell(props: AppShellProps) {
                             data-resizable={panelResizable ? "" : undefined}
                             style={panelStyle}
                         >
+                            {panelResizable && !panelMaximized ? (
+                                <ResizeHandle
+                                    edge="left"
+                                    label={local.panelResizeLabel ?? "Resize panel"}
+                                    max={panelMax}
+                                    min={panelMin}
+                                    onResize={applyPanelWidth}
+                                    value={panelWidth}
+                                />
+                            ) : null}
                             <div
                                 className="happy-desktop-app-shell__panel-content"
                                 data-happy-desktop-ui="app-shell-panel-content"

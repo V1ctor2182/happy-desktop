@@ -391,25 +391,29 @@
     transform: scaleX(-1);
 }
 
-/* Vertical drag divider: an 8px hit lane whose hairline meets its owning
-   surface edge; the lane itself is painted as the adjacent workspace/panel. */
+/* Vertical drag divider: its 8px hit lane overlays the owning surface edge so
+   structural hairlines meet continuously instead of leaving an 8px gutter. */
 .happy-desktop-app-shell__resize-handle {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
     box-sizing: border-box;
-    display: flex;
-    align-items: stretch;
-    justify-content: flex-start;
-    flex: none;
     width: 8px;
-    min-height: 0;
     padding: 0;
-    background: var(--surface);
+    background: transparent;
     cursor: col-resize;
     touch-action: none;
 }
 
-/* The inspector splitter owns the panel's left edge. */
+/* The sidebar and inspector own their splitters, so the hit lanes can overlap
+   their shared border without changing either column's layout width. */
+.happy-desktop-app-shell__resize-handle[data-edge="right"] {
+    right: -4px;
+}
+
 .happy-desktop-app-shell__resize-handle[data-edge="left"] {
-    justify-content: flex-end;
+    left: -4px;
 }
 
 .happy-desktop-app-shell__resize-handle:focus-visible {
@@ -417,7 +421,10 @@
 }
 
 .happy-desktop-app-shell__resize-line {
-    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
     width: 1px;
     background: var(--divider);
 }
@@ -436,8 +443,8 @@
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
-    /* At the 720px desktop minimum, a 64px rail, both sidebar minimums,
-       and their 8px handles leave exactly 140px for the owning workspace. */
+    /* At the 720px desktop minimum, a 64px rail and both sidebar minimums
+       still leave a real 140px workspace; resize hit lanes overlay the joins. */
     min-width: 140px;
     min-height: 0;
 }
