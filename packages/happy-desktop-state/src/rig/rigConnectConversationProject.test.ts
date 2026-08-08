@@ -52,7 +52,7 @@ it("projects humanized token subjects throughout compaction", () => {
     });
 });
 
-it("keeps a standalone manual compaction as one activity row", () => {
+it("keeps a standalone manual compaction activity and completion time", () => {
     const completed: CompactionElement = {
         ...running,
         status: "completed",
@@ -84,7 +84,7 @@ it("keeps a standalone manual compaction as one activity row", () => {
         subagents: [],
     });
 
-    expect(projected).toHaveLength(1);
+    expect(projected).toHaveLength(2);
     expect(projected[0]).toMatchObject({
         kind: "agentActivity",
         activity: {
@@ -93,5 +93,10 @@ it("keeps a standalone manual compaction as one activity row", () => {
             subject: "249k → 5.3k tokens",
             status: "success",
         },
+    });
+    expect(projected[1]).toMatchObject({
+        kind: "turnStatus",
+        status: "complete",
+        durationMs: 31_000,
     });
 });

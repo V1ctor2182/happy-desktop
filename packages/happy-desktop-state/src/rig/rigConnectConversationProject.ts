@@ -449,29 +449,27 @@ function rigConnectGroupProject(
                         text: element.errorMessage,
                         sequence,
                     });
-                if (element.turnKind !== "compaction")
-                    entries.push({
-                        kind: "turnStatus",
-                        id: `${element.id}:status`,
-                        sequence: sequenceOf(entries.length),
-                        status:
-                            element.reason === "steering"
-                                ? "steered"
-                                : element.reason === "error" || element.reason === "abort"
-                                  ? "failed"
-                                  : "complete",
-                        reason: element.reason,
-                        durationMs: element.elapsedMs,
-                        tools: elements.filter((candidate) => candidate.kind === "tool_call")
-                            .length,
-                    });
+                entries.push({
+                    kind: "turnStatus",
+                    id: `${element.id}:status`,
+                    sequence: sequenceOf(entries.length),
+                    status:
+                        element.reason === "steering"
+                            ? "steered"
+                            : element.reason === "error" || element.reason === "abort"
+                              ? "failed"
+                              : "complete",
+                    reason: element.reason,
+                    durationMs: element.elapsedMs,
+                    tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
+                });
                 break;
         }
     }
 
-    // A standalone manual compaction is already one meaningful activity row.
-    // Treating it as a generic tool-only turn fabricates an empty agent reply,
-    // trace control, and redundant "Completed in" footer.
+    // A standalone manual compaction already has its meaningful activity and
+    // completion rows. Generic tool-only collapsing would fabricate an empty
+    // agent reply and trace control around them.
     if (!groupEnd || groupEnd.turnKind === "compaction") return entries;
     let finalAgentIndex = -1;
     let statusIndex = -1;
