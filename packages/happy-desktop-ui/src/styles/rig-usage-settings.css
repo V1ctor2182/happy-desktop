@@ -1,71 +1,25 @@
 /*
- * Provider usage: one section per provider account, each holding the windows
- * that vendor reports, read down a single column. There is no card around an
- * account — the rule between two sections is the only shape on the page.
+ * The Usage settings category: one section per provider account, each holding
+ * the windows that vendor reports, read down a single column. There is no card
+ * around an account — the rule between two sections is the only shape here,
+ * which is why this category is a run of rules where Providers is a run of
+ * cards.
  *
  * A window is one row of four cells: name, measure, share, reset. The measure
- * cell is the only elastic one, so every bar on the page starts and ends at the
- * same two edges and two accounts can be compared by eye. That is why the reset
- * cell keeps its width even when a vendor reports no reset: a cell that
- * collapsed would move the bar beside it and break the comparison.
+ * cell is the only elastic one, so every bar starts and ends at the same two
+ * edges and two accounts can be compared by eye. That is why the reset cell
+ * keeps its width even when a vendor reports no reset: a cell that collapsed
+ * would move the bar beside it and break the comparison.
  *
- * The column, its measure, the header height, and the section rhythm match the
- * inbox surface, so the two Rig reading screens are the same object with
- * different content. Layout is flexbox throughout; colors and type come only
- * from theme roles.
+ * The column and its measure are the settings body's own: this file styles what
+ * sits inside one category and owns no scrollport, header, or page width.
+ * Layout is flexbox throughout; colors and type come only from theme roles.
  */
-
-.happy2-rig-usage-page {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    min-height: 0;
-    width: 100%;
-    background: var(--surface);
-    font-family: var(--happy2-font-ui);
-}
-
-/* The header shares the column the sections are read in, so the title sits
- * directly above them. */
-.happy2-rig-usage-page__header {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 720px;
-    /* The toolbar insets its own title by 16px, so the strip carries the
-       remaining 8px that puts that title over the column below it. */
-    padding: 0 8px;
-}
-
-/* The scrollport is flush; spacing belongs to the content wrapper inside it. */
-.happy2-rig-usage-page__scroll {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-    width: 100%;
-    overflow-y: auto;
-}
-
-/* Held to a comfortable measure but anchored to the surface's leading edge,
-   like every other page: a column centred in the window drifts away from the
-   sidebar on a wide display and lands somewhere else than the page before it. */
-.happy2-rig-usage-page__content {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    padding: 8px 24px 48px;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 720px;
-}
 
 /* The run of accounts is its own flex parent and owns the space between them, so
    the rule below is a fixed edge every account carries rather than spacing
    conjured between particular siblings. */
-.happy2-rig-usage-page__providers {
+.happy2-rig-usage-settings__providers {
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -75,7 +29,7 @@
 
 /* One account is told apart from the next by a rule above it, not by a box
    around either; on the first that rule closes the header. */
-.happy2-rig-usage-page__provider {
+.happy2-rig-usage-settings__provider {
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -85,7 +39,7 @@
     border-top: 1px solid var(--divider);
 }
 
-.happy2-rig-usage-page__provider-header {
+.happy2-rig-usage-settings__provider-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -94,7 +48,7 @@
     min-height: 24px;
 }
 
-.happy2-rig-usage-page__identity {
+.happy2-rig-usage-settings__identity {
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -107,7 +61,7 @@
  * carries the whole account's worst window, which is the reading that decides
  * whether work can continue.
  */
-.happy2-rig-usage-page__dot {
+.happy2-rig-usage-settings__dot {
     display: block;
     flex: 0 0 auto;
     /* The identity row aligns its text on one baseline; a circle has no
@@ -119,21 +73,21 @@
     background: var(--status-default);
 }
 
-.happy2-rig-usage-page__provider[data-tone="ample"] .happy2-rig-usage-page__dot {
+.happy2-rig-usage-settings__provider[data-tone="ample"] .happy2-rig-usage-settings__dot {
     background: var(--success);
 }
 
-.happy2-rig-usage-page__provider[data-tone="warning"] .happy2-rig-usage-page__dot {
+.happy2-rig-usage-settings__provider[data-tone="warning"] .happy2-rig-usage-settings__dot {
     background: var(--box-warning-text);
 }
 
-.happy2-rig-usage-page__provider[data-tone="critical"] .happy2-rig-usage-page__dot,
-.happy2-rig-usage-page__provider[data-tone="spent"] .happy2-rig-usage-page__dot,
-.happy2-rig-usage-page__provider[data-tone="error"] .happy2-rig-usage-page__dot {
+.happy2-rig-usage-settings__provider[data-tone="critical"] .happy2-rig-usage-settings__dot,
+.happy2-rig-usage-settings__provider[data-tone="spent"] .happy2-rig-usage-settings__dot,
+.happy2-rig-usage-settings__provider[data-tone="error"] .happy2-rig-usage-settings__dot {
     background: var(--status-error);
 }
 
-.happy2-rig-usage-page__name {
+.happy2-rig-usage-settings__name {
     overflow: hidden;
     font-size: 17px;
     font-weight: 600;
@@ -144,7 +98,7 @@
     white-space: nowrap;
 }
 
-.happy2-rig-usage-page__plan {
+.happy2-rig-usage-settings__plan {
     overflow: hidden;
     font-size: 13px;
     line-height: 24px;
@@ -153,14 +107,14 @@
     white-space: nowrap;
 }
 
-.happy2-rig-usage-page__provider-meta {
+.happy2-rig-usage-settings__provider-meta {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
 }
 
-.happy2-rig-usage-page__taken {
+.happy2-rig-usage-settings__taken {
     font-size: 13px;
     line-height: 20px;
     color: var(--text-secondary);
@@ -169,7 +123,7 @@
 
 /* An account with nothing to show says why on one line, with the tone carried
    by the glyph so the sentence itself stays as readable as the rest. */
-.happy2-rig-usage-page__note {
+.happy2-rig-usage-settings__note {
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -179,23 +133,23 @@
     color: var(--text);
 }
 
-.happy2-rig-usage-page__note-icon {
+.happy2-rig-usage-settings__note-icon {
     flex: 0 0 auto;
     color: var(--text-secondary);
 }
 
-.happy2-rig-usage-page__note[data-note="error"] .happy2-rig-usage-page__note-icon {
+.happy2-rig-usage-settings__note[data-note="error"] .happy2-rig-usage-settings__note-icon {
     color: var(--status-error);
 }
 
-.happy2-rig-usage-page__windows {
+.happy2-rig-usage-settings__windows {
     display: flex;
     flex-direction: column;
     gap: 12px;
     width: 100%;
 }
 
-.happy2-rig-usage-page__window {
+.happy2-rig-usage-settings__window {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -203,7 +157,7 @@
     min-height: 20px;
 }
 
-.happy2-rig-usage-page__window-label {
+.happy2-rig-usage-settings__window-label {
     flex: 0 0 auto;
     width: 72px;
     overflow: hidden;
@@ -214,7 +168,7 @@
     white-space: nowrap;
 }
 
-.happy2-rig-usage-page__track {
+.happy2-rig-usage-settings__track {
     display: flex;
     flex: 1 1 auto;
     align-items: stretch;
@@ -228,22 +182,22 @@
 /* The fill is a width, not a transform: the track is four pixels tall and a
  * scaled fill would smear its end. It is the same ink as the text until the
  * share is worth colouring, so a healthy page stays monochrome. */
-.happy2-rig-usage-page__fill {
+.happy2-rig-usage-settings__fill {
     display: block;
     min-width: 0;
     border-radius: inherit;
     background: var(--text);
 }
 
-.happy2-rig-usage-page__window[data-tone="warning"] .happy2-rig-usage-page__fill {
+.happy2-rig-usage-settings__window[data-tone="warning"] .happy2-rig-usage-settings__fill {
     background: var(--box-warning-text);
 }
 
-.happy2-rig-usage-page__window[data-tone="critical"] .happy2-rig-usage-page__fill {
+.happy2-rig-usage-settings__window[data-tone="critical"] .happy2-rig-usage-settings__fill {
     background: var(--status-error);
 }
 
-.happy2-rig-usage-page__percent {
+.happy2-rig-usage-settings__percent {
     flex: 0 0 auto;
     width: 44px;
     font-size: 14px;
@@ -254,17 +208,17 @@
     font-variant-numeric: tabular-nums lining-nums;
 }
 
-.happy2-rig-usage-page__window[data-tone="warning"] .happy2-rig-usage-page__percent {
+.happy2-rig-usage-settings__window[data-tone="warning"] .happy2-rig-usage-settings__percent {
     color: var(--box-warning-text);
 }
 
-.happy2-rig-usage-page__window[data-tone="critical"] .happy2-rig-usage-page__percent {
+.happy2-rig-usage-settings__window[data-tone="critical"] .happy2-rig-usage-settings__percent {
     color: var(--status-error);
 }
 
 /* Wide enough for the longest reset this can produce ("resets in 30d 12h"), so
    the sentence is never cut: an elided reset would read as a different time. */
-.happy2-rig-usage-page__reset {
+.happy2-rig-usage-settings__reset {
     flex: 0 0 auto;
     width: 128px;
     font-size: 13px;
@@ -277,7 +231,7 @@
 
 /* Credits have no share to draw, so they read as a labelled value on one line
    in the same column the window names occupy. */
-.happy2-rig-usage-page__credits {
+.happy2-rig-usage-settings__credits {
     display: flex;
     align-items: baseline;
     gap: 12px;
@@ -285,7 +239,7 @@
     min-height: 20px;
 }
 
-.happy2-rig-usage-page__credits-value {
+.happy2-rig-usage-settings__credits-value {
     flex: 1 1 auto;
     min-width: 0;
     font-size: 14px;

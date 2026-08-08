@@ -229,18 +229,6 @@ const inboxRoute = createRoute({
 });
 
 /**
- * One machine's provider usage. The Rig is in the address for the same reason
- * the inbox carries it: the accounts being spent are that machine's, so the
- * window's back and forward move between machines rather than between two views
- * of one ambiguous total.
- */
-const usageRoute = createRoute({
-    component: RigUsageRoute,
-    getParentRoute: () => rootRoute,
-    path: "/usage/$rigId",
-});
-
-/**
  * The component workbench, addressed without a Rig because it renders component
  * pages rather than anything a machine holds. The route is registered only in a
  * development build, which is also the only build whose sidebar offers it.
@@ -289,7 +277,6 @@ const routeTree = rootRoute.addChildren([
     notesIndexRoute,
     noteRoute,
     inboxRoute,
-    usageRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
     settingsSectionRoute,
@@ -314,14 +301,6 @@ function RigInboxRoute() {
 }
 
 /**
- * The usage address renders the same window a conversation does: the shell and
- * its sidebar stay, and only the content area changes.
- */
-function RigUsageRoute() {
-    return <RigWorkspaceLayout usage />;
-}
-
-/**
  * The workbench address renders the same window a conversation does: the shell
  * and its sidebar stay, and only the content area changes.
  */
@@ -334,7 +313,6 @@ function RigWorkspaceLayout(
         blueprint?: boolean;
         inbox?: boolean;
         notes?: boolean;
-        usage?: boolean;
     } = {},
 ) {
     // The hook's generic inference does not retain this locally assembled route
@@ -375,7 +353,6 @@ function RigWorkspaceLayout(
             notes={context.notes}
             notesOpen={props.notes}
             inboxOpen={props.inbox}
-            usageOpen={props.usage}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the
             // workbench row in a development sidebar and nowhere else.
@@ -386,12 +363,6 @@ function RigWorkspaceLayout(
                 void navigate({
                     params: { rigId: params.rigId ?? rigDefaultId(context) },
                     to: "/inbox/$rigId",
-                })
-            }
-            onUsageOpen={() =>
-                void navigate({
-                    params: { rigId: params.rigId ?? rigDefaultId(context) },
-                    to: "/usage/$rigId",
                 })
             }
             onNotesOpen={(noteId) =>

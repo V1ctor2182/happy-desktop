@@ -24,6 +24,7 @@ import {
     rigAvailabilityProject,
     rigNodesStoreNoop,
     rigPairingStoreNoop,
+    rigProviderUsageStoreNoop,
     rigWindowStoreNoop,
 } from "happy-desktop-state";
 import {
@@ -33,6 +34,7 @@ import {
     RigPairing,
     RigProviderSettings,
     RigSettingsShell,
+    RigUsageSettings,
     type RigNodeRow,
     type RigNodeTransportRow,
     type RigPairingProgress,
@@ -48,6 +50,9 @@ export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
+    // Usage sits after Providers because it is the same accounts read the other
+    // way round: which of them exist, then what each has spent.
+    { icon: "zap", id: "usage", label: "Usage" },
 ];
 
 export const RIG_SETTINGS_DEFAULT_CATEGORY = "general";
@@ -62,6 +67,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     instructions: "Machine-wide agent guidance and permission-review policy",
     nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
+    usage: "How much of each provider account's plan this machine has spent",
 };
 
 const PERMISSION_MODES: readonly RigPermissionMode[] = [
@@ -170,6 +176,20 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         pairingStore.get,
     );
     const pairingProgressView = pairingProgress(pairing);
+    // The Usage category is the only thing that reads these, and subscribing is
+    // what starts the work: the daemon is asked what its accounts have spent,
+    // and the clock ticks the time left until each reset, only while that
+    // category is the one on screen.
+    const usageOpen = props.section === "usage";
+    const usageStore =
+        (usageOpen ? host?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
+    const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
+    const clockStore = usageOpen ? host?.session?.clock : undefined;
+    const currentTime = useSyncExternalStore(
+        clockStore?.subscribe ?? noSubscribe,
+        clockStore?.get ?? clockStopped,
+        clockStore?.get ?? clockStopped,
+    );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
         windowStateStore.subscribe,
@@ -316,6 +336,14 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     }
                     providers={providerRows(catalog, settings, selection)}
                     {...(unavailable === undefined ? {} : { unavailable })}
+                />
+            ) : props.section === "usage" ? (
+                <RigUsageSettings
+                    loading={usage.loading}
+                    providers={usage.providers}
+                    readingTime={usageReadingTime}
+                    {...(clockStore ? { currentTime } : {})}
+                    {...(usage.error ? { error: usage.error } : {})}
                 />
             ) : (
                 <RigGeneralSettings
@@ -488,6 +516,17 @@ const SECURITY_POLICY_PATH = "~/Happy/Config/SECURITY.md";
 const noSubscribe = () => () => undefined;
 const UNLOADED = { type: "loading" } as const;
 const modelsUnloaded = () => UNLOADED;
+/** Stands in while no Rig on this machine is connected to read the time from. */
+const clockStopped = () => 0;
+
+/**
+ * When a usage reading was taken, as an absolute local time. A reading is only
+ * as good as its age — a plan can be spent in the minutes since — so the account
+ * says when it was taken rather than implying it is live.
+ */
+function usageReadingTime(capturedAt: number): string {
+    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(capturedAt));
+}
 
 const INSTRUCTIONS_UNAVAILABLE: RigInstructionsSnapshot = {
     stored: { type: "unloaded" },

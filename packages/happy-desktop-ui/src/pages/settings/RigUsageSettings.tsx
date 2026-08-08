@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import type {
     RigProviderUsageEntry,
     RigProviderUsageWindow,
@@ -8,13 +7,12 @@ import type {
 import { Badge } from "../../Badge";
 import { Banner } from "../../Banner";
 import { EmptyState } from "../../EmptyState";
-import { SURFACE_HEADER_HEIGHT } from "../../InfoPanel";
 import type { UsageWindowTone } from "../../usageTone";
 import { usagePercentClamp, usageWindowTone } from "../../usageTone";
-import { Toolbar } from "../../Toolbar";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
+import { RigSettingsSection } from "./RigSettingsShell";
 
-export interface RigProviderUsagePageProps {
+export interface RigUsageSettingsProps {
     /** Every configured provider account, in the order they should be read. */
     providers: readonly RigProviderUsageEntry[];
     /** True before the first reading arrives, so "no accounts" is not claimed early. */
@@ -25,9 +23,6 @@ export interface RigProviderUsagePageProps {
     readingTime?: (capturedAt: number) => string | undefined;
     /** Current epoch millis used to render live time remaining until each reported reset. */
     currentTime?: number;
-    className?: string;
-    "data-testid"?: string;
-    style?: CSSProperties;
 }
 
 /** An account is in one of these; the first three come straight from its worst window. */
@@ -49,13 +44,13 @@ const VENDOR_LABELS: Record<RigProviderVendor, string> = {
 };
 
 /**
- * RigProviderUsagePage — how much of each provider account's plan this machine
- * has spent.
+ * The Usage category: how much of each provider account's plan this machine has
+ * spent.
  *
- * A person opens this screen to learn one thing: whether they can keep working.
- * So the answer is the content and nothing is drawn around it — an account is a
- * name with its windows listed beneath, and the only rule on the page is the
- * one that separates one account from the next.
+ * A person opens this category to learn one thing: whether they can keep
+ * working. So the answer is the content and nothing is drawn around it — an
+ * account is a name with its windows listed beneath, and the only rule here is
+ * the one that separates one account from the next.
  *
  * A window is one line: what it is, how much of it is gone drawn across the
  * middle of the column, the share as a number, and when it starts over. Putting
@@ -72,75 +67,54 @@ const VENDOR_LABELS: Record<RigProviderVendor, string> = {
  * not "this is a bar".
  *
  * It renders exactly what it is handed. It reads nothing and refreshes nothing:
- * the owner keeps the readings current for as long as this surface is on screen.
+ * the owner keeps the readings current for as long as this category is open.
  */
-export function RigProviderUsagePage(props: RigProviderUsagePageProps) {
+export function RigUsageSettings(props: RigUsageSettingsProps) {
     const providers = props.providers;
     return (
-        <div
-            className={["happy2-rig-usage-page", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="rig-usage-page"
-            data-testid={props["data-testid"]}
-            style={props.style}
-        >
-            <div
-                className="happy2-rig-usage-page__header"
-                data-happy-desktop-ui="rig-usage-page-header"
-            >
-                <Toolbar
-                    height={SURFACE_HEADER_HEIGHT}
-                    subtitle={usageSubtitle(providers, props.loading)}
-                    title="Usage"
+        <>
+            {props.error ? (
+                <Banner tone="danger" title="Usage may be out of date">
+                    {props.error.message}
+                </Banner>
+            ) : null}
+
+            {providers.length === 0 ? (
+                <EmptyState
+                    // A category-wide wait, like the inbox and the plugin
+                    // catalogue. The settled version asks the reader to go and
+                    // sign in somewhere else, which is not something artwork
+                    // here can help with.
+                    animation={props.loading ? "snail" : undefined}
+                    description={
+                        props.loading
+                            ? "Reading what this machine's provider accounts have spent."
+                            : "Sign in to a coding assistant on this machine and its plan appears here."
+                    }
+                    icon={props.loading ? "clock" : "zap"}
+                    title={props.loading ? "Loading usage…" : "No provider accounts"}
                 />
-            </div>
-            <div
-                className="happy2-rig-usage-page__scroll"
-                data-happy-desktop-ui="rig-usage-page-scroll"
-            >
-                <div className="happy2-rig-usage-page__content">
-                    {props.error ? (
-                        <Banner tone="danger" title="Usage may be out of date">
-                            {props.error.message}
-                        </Banner>
-                    ) : null}
-
-                    {providers.length === 0 ? (
-                        <EmptyState
-                            // A panel-wide wait, like the inbox and the plugin
-                            // catalogue. The settled version asks the reader to
-                            // go and sign in somewhere else, which is not
-                            // something artwork here can help with.
-                            animation={props.loading ? "snail" : undefined}
-                            description={
-                                props.loading
-                                    ? "Reading what this machine's provider accounts have spent."
-                                    : "Sign in to a coding assistant on this machine and its plan appears here."
-                            }
-                            icon={props.loading ? "clock" : "zap"}
-                            title={props.loading ? "Loading usage…" : "No provider accounts"}
-                        />
-                    ) : null}
-
-                    {providers.length > 0 ? (
-                        <div
-                            className="happy2-rig-usage-page__providers"
-                            data-happy-desktop-ui="rig-usage-page-providers"
-                        >
-                            {providers.map((provider) => (
-                                <ProviderSection
-                                    currentTime={props.currentTime}
-                                    key={provider.providerId}
-                                    provider={provider}
-                                    {...(props.readingTime
-                                        ? { readingTime: props.readingTime }
-                                        : {})}
-                                />
-                            ))}
-                        </div>
-                    ) : null}
-                </div>
-            </div>
-        </div>
+            ) : (
+                <RigSettingsSection
+                    description={usageSubtitle(providers)}
+                    title="Provider accounts"
+                >
+                    <div
+                        className="happy2-rig-usage-settings__providers"
+                        data-happy-desktop-ui="rig-usage-settings-providers"
+                    >
+                        {providers.map((provider) => (
+                            <ProviderSection
+                                currentTime={props.currentTime}
+                                key={provider.providerId}
+                                provider={provider}
+                                {...(props.readingTime ? { readingTime: props.readingTime } : {})}
+                            />
+                        ))}
+                    </div>
+                </RigSettingsSection>
+            )}
+        </>
     );
 }
 
@@ -159,63 +133,65 @@ function ProviderSection(props: {
     const taken = stamp === undefined ? undefined : props.readingTime?.(stamp);
     return (
         <section
-            className="happy2-rig-usage-page__provider"
-            data-happy-desktop-ui="rig-usage-page-provider"
+            className="happy2-rig-usage-settings__provider"
+            data-happy-desktop-ui="rig-usage-settings-provider"
             data-provider={provider.providerId}
             data-tone={tone}
         >
-            <header className="happy2-rig-usage-page__provider-header">
-                <span className="happy2-rig-usage-page__identity">
+            <header className="happy2-rig-usage-settings__provider-header">
+                <span className="happy2-rig-usage-settings__identity">
                     <span
                         aria-label={TONE_LABELS[tone]}
-                        className="happy2-rig-usage-page__dot"
-                        data-happy-desktop-ui="rig-usage-page-dot"
+                        className="happy2-rig-usage-settings__dot"
+                        data-happy-desktop-ui="rig-usage-settings-dot"
                         role="img"
                     />
                     <span
-                        className="happy2-rig-usage-page__name"
-                        data-happy-desktop-ui="rig-usage-page-provider-name"
+                        className="happy2-rig-usage-settings__name"
+                        data-happy-desktop-ui="rig-usage-settings-provider-name"
                     >
                         {providerLabel(provider)}
                     </span>
                     {usage?.planName ? (
-                        <span className="happy2-rig-usage-page__plan">{usage.planName}</span>
+                        <span className="happy2-rig-usage-settings__plan">{usage.planName}</span>
                     ) : null}
                 </span>
-                <span className="happy2-rig-usage-page__provider-meta">
+                <span className="happy2-rig-usage-settings__provider-meta">
                     {usage?.exhausted ? (
-                        <span data-happy-desktop-ui="rig-usage-page-exhausted">
+                        <span data-happy-desktop-ui="rig-usage-settings-exhausted">
                             <Badge label="Spent" variant="danger" />
                         </span>
                     ) : null}
-                    {taken ? <span className="happy2-rig-usage-page__taken">{taken}</span> : null}
+                    {taken ? (
+                        <span className="happy2-rig-usage-settings__taken">{taken}</span>
+                    ) : null}
                 </span>
             </header>
 
             {provider.error !== undefined ? (
                 <p
-                    className="happy2-rig-usage-page__note"
-                    data-happy-desktop-ui="rig-usage-page-provider-error"
+                    className="happy2-rig-usage-settings__note"
+                    data-happy-desktop-ui="rig-usage-settings-provider-error"
                     data-note="error"
                 >
                     <Ionicon
-                        className="happy2-rig-usage-page__note-icon"
+                        className="happy2-rig-usage-settings__note-icon"
                         name="alert-circle-outline"
                         size={16}
                     />
                     <span>{provider.error}</span>
                 </p>
             ) : usage === undefined ? (
-                <p className="happy2-rig-usage-page__note" data-note="unread">
+                <p className="happy2-rig-usage-settings__note" data-note="unread">
                     <Ionicon
-                        className="happy2-rig-usage-page__note-icon"
+                        className="happy2-rig-usage-settings__note-icon"
                         name="time-outline"
                         size={16}
                     />
                     <span>This account has not been read yet.</span>
                 </p>
             ) : (
-                <div className="happy2-rig-usage-page__windows">
+                <div className="happy2-rig-usage-settings__windows">
                     <UsageWindow
                         currentTime={props.currentTime}
                         label="5 hours"
@@ -233,11 +209,11 @@ function ProviderSection(props: {
                     />
                     {usage.credits ? (
                         <div
-                            className="happy2-rig-usage-page__credits"
-                            data-happy-desktop-ui="rig-usage-page-credits"
+                            className="happy2-rig-usage-settings__credits"
+                            data-happy-desktop-ui="rig-usage-settings-credits"
                         >
-                            <span className="happy2-rig-usage-page__window-label">Credits</span>
-                            <span className="happy2-rig-usage-page__credits-value">
+                            <span className="happy2-rig-usage-settings__window-label">Credits</span>
+                            <span className="happy2-rig-usage-settings__credits-value">
                                 {creditsText(
                                     usage.credits.available,
                                     usage.credits.unlimited,
@@ -277,32 +253,32 @@ function UsageWindow(props: {
             : undefined;
     return (
         <div
-            className="happy2-rig-usage-page__window"
-            data-happy-desktop-ui="rig-usage-page-window"
+            className="happy2-rig-usage-settings__window"
+            data-happy-desktop-ui="rig-usage-settings-window"
             data-tone={tone}
         >
-            <span className="happy2-rig-usage-page__window-label">{props.label}</span>
+            <span className="happy2-rig-usage-settings__window-label">{props.label}</span>
             <span
                 aria-hidden="true"
-                className="happy2-rig-usage-page__track"
-                data-happy-desktop-ui="rig-usage-page-track"
+                className="happy2-rig-usage-settings__track"
+                data-happy-desktop-ui="rig-usage-settings-track"
             >
                 <span
-                    className="happy2-rig-usage-page__fill"
-                    data-happy-desktop-ui="rig-usage-page-fill"
+                    className="happy2-rig-usage-settings__fill"
+                    data-happy-desktop-ui="rig-usage-settings-fill"
                     style={{ width: `${String(percent)}%` }}
                 />
             </span>
             <span
                 aria-label={`${String(Math.round(percent))}% of ${props.label} used`}
-                className="happy2-rig-usage-page__percent"
+                className="happy2-rig-usage-settings__percent"
                 role="img"
             >
                 {Math.round(percent)}%
             </span>
             <span
-                className="happy2-rig-usage-page__reset"
-                data-happy-desktop-ui="rig-usage-page-reset"
+                className="happy2-rig-usage-settings__reset"
+                data-happy-desktop-ui="rig-usage-settings-reset"
             >
                 {reset ?? ""}
             </span>
@@ -368,11 +344,8 @@ function creditsText(
     return `$${(remainingCents / 100).toFixed(2)} left`;
 }
 
-function usageSubtitle(
-    providers: readonly RigProviderUsageEntry[],
-    loading: boolean | undefined,
-): string {
-    if (providers.length === 0) return loading ? "Reading…" : "No accounts";
+/** How many accounts are listed, and how many of them are already spent. */
+function usageSubtitle(providers: readonly RigProviderUsageEntry[]): string {
     const spent = providers.filter((provider) => provider.usage?.exhausted).length;
     const accounts = `${String(providers.length)} account${providers.length === 1 ? "" : "s"}`;
     return spent === 0 ? accounts : `${accounts} · ${String(spent)} spent`;

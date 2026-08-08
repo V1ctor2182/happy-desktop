@@ -1,3 +1,4 @@
+import type { RigProviderUsageEntry } from "happy-desktop-state";
 import {
     RigGeneralSettings,
     RigInstructionsSettings,
@@ -5,6 +6,7 @@ import {
     RigPairing,
     RigProviderSettings,
     RigSettingsShell,
+    RigUsageSettings,
     type RigNodeRow,
     type RigNodeTransportRow,
     type RigProviderRow,
@@ -20,7 +22,63 @@ const categories: readonly RigSettingsCategory[] = [
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
+    { icon: "zap", id: "usage", label: "Usage" },
 ];
+
+const usageDescription = "How much of each provider account's plan this machine has spent";
+
+const usageAccounts: readonly RigProviderUsageEntry[] = [
+    {
+        providerId: "claude",
+        checkedAt: 1_700_000_000_000,
+        usage: {
+            vendor: "claude",
+            capturedAt: 1_700_000_000_000,
+            planName: "Max 20×",
+            exhausted: false,
+            fiveHour: { usedPercent: 42, resetsAt: 1_700_007_200_000 },
+            weekly: { usedPercent: 81, resetsAt: 1_700_400_000_000 },
+            monthly: { usedPercent: 34, resetsAt: 1_702_000_000_000 },
+        },
+    },
+    {
+        providerId: "codex",
+        checkedAt: 1_700_000_000_000,
+        usage: {
+            vendor: "codex",
+            capturedAt: 1_699_999_400_000,
+            planName: "Pro",
+            exhausted: true,
+            fiveHour: { usedPercent: 100, resetsAt: 1_700_003_000_000 },
+            weekly: { usedPercent: 96 },
+            credits: { available: true, unlimited: false, remainingCents: 1_450 },
+        },
+    },
+    {
+        providerId: "grok",
+        checkedAt: 1_700_000_000_000,
+        error: "The Grok account could not be read: the assistant is signed out.",
+    },
+];
+
+/** A configured account the daemon has not reached yet: neither read nor failed. */
+const usageUnread: readonly RigProviderUsageEntry[] = [
+    {
+        providerId: "claude",
+        checkedAt: 1_700_000_000_000,
+        usage: {
+            vendor: "claude",
+            capturedAt: 1_700_000_000_000,
+            planName: "Pro",
+            exhausted: false,
+            fiveHour: { usedPercent: 8, resetsAt: 1_700_012_000_000 },
+        },
+    },
+    { providerId: "codex" },
+];
+
+const usageReadingTime = (capturedAt: number) =>
+    capturedAt >= 1_700_000_000_000 ? "just now" : "10 minutes ago";
 
 const nodes: readonly RigNodeRow[] = [
     // Reached two ways and still one machine: the routes are listed, the row is
@@ -537,6 +595,79 @@ export function RigSettingsBlueprintPage() {
                                 value: instructions,
                             },
                         ]}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Usage category: three accounts separated by a rule rather than boxed — one with room across three windows, one spent with credits behind it, one that could not be read"
+                label="Rig settings — usage"
+                number="08"
+            >
+                <RigSettingsShell
+                    activeCategoryId="usage"
+                    categories={categories}
+                    description={usageDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Usage"
+                >
+                    <RigUsageSettings
+                        currentTime={1_700_000_000_000}
+                        providers={usageAccounts}
+                        readingTime={usageReadingTime}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Before the first reading arrives, so an empty account list is not claimed early"
+                label="Rig settings — usage loading"
+                number="08a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="usage"
+                    categories={categories}
+                    description={usageDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Usage"
+                >
+                    <RigUsageSettings loading providers={[]} />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="No assistant is signed in on this machine, so the category sends the reader where accounts are actually made"
+                label="Rig settings — usage empty"
+                number="08b"
+            >
+                <RigSettingsShell
+                    activeCategoryId="usage"
+                    categories={categories}
+                    description={usageDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Usage"
+                >
+                    <RigUsageSettings providers={[]} />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="The reading failed; what was already read stays legible beneath the banner, and an account never read says so rather than reading as unspent"
+                label="Rig settings — usage error and unread"
+                number="08c"
+            >
+                <RigSettingsShell
+                    activeCategoryId="usage"
+                    categories={categories}
+                    description={usageDescription}
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Usage"
+                >
+                    <RigUsageSettings
+                        currentTime={1_700_000_000_000}
+                        error={{ name: "UserError", message: "The Rig stopped reporting usage." }}
+                        providers={usageUnread}
+                        readingTime={usageReadingTime}
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>

@@ -46,7 +46,6 @@ import type {
     RigNodesStore,
     RigAvailabilitySnapshot,
     RigPairingStore,
-    RigProviderUsageEntry,
     RigProviderUsageStore,
     RigProjectGroup,
     RigProjectId,
@@ -69,7 +68,6 @@ import type {
     RigWorkspaceStore,
     RigWorkingWait,
     RigWorktreeId,
-    UserError,
 } from "happy-desktop-state";
 import {
     RIG_PANEL_FILE_VIEW_ID,
@@ -85,7 +83,6 @@ import {
     rigFoldersFlatten,
     rigFoldersStoreNoop,
     rigNodesStoreNoop,
-    rigProviderUsageStoreNoop,
     rigSlotEntriesInScope,
     rigSlotEntryInScope,
     rigSlotsStoreNoop,
@@ -147,7 +144,6 @@ import {
     type SlotActionIntent,
     type SlotVisualEntry,
     RigInboxPage,
-    RigProviderUsagePage,
     TabbedPane,
     TextField,
     TerminalPanel,
@@ -243,9 +239,10 @@ export interface AppRigSession {
      */
     readonly inbox?: RigInboxStore;
     /**
-     * How much of each provider account's plan this machine has spent. Absent
-     * when the machine reports no usage, which is why the Usage row is absent
-     * too rather than opening onto an account list that means nothing.
+     * How much of each provider account's plan this machine has spent, read by
+     * the Usage settings category. Absent when the machine reports no usage,
+     * which leaves that category saying so rather than listing accounts that
+     * mean nothing.
      */
     readonly providerUsage?: RigProviderUsageStore;
     /**
@@ -402,10 +399,6 @@ export interface AppRigViewProps {
     inboxOpen?: boolean;
     /** Addresses that inbox. */
     onInboxOpen?(): void;
-    /** Whether the URL addresses the addressed Rig's provider usage. */
-    usageOpen?: boolean;
-    /** Addresses that usage. */
-    onUsageOpen?(): void;
     /** Whether the URL addresses the component workbench, in a development build. */
     blueprintOpen?: boolean;
     /** Addresses the workbench. */
@@ -451,6 +444,11 @@ interface OpenGroup {
  */
 function sidebarItems(project: RigProjectGroup): SidebarItem[] {
     const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
+    // Anything the row reports about itself — its delta, or the spinner and
+    // clock it wears while work runs in it — lives in the trailing lane, in the
+    // same column the + would otherwise occupy.
+    const projectReports =
+        projectHasLineChanges || project.activity === "running" || project.activity === "waiting";
     return [
         {
             id: project.id,
@@ -459,12 +457,13 @@ function sidebarItems(project: RigProjectGroup): SidebarItem[] {
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-            // With changes, the delta occupies the trailing lane until hover
-            // reveals the add-workspace control. A clean project offers + directly.
+            // While the row has something of its own to report, that report
+            // keeps the lane and hover reveals the add-workspace control in its
+            // place. A quiet project offers + directly.
             action: {
                 icon: "plus" as const,
                 label: `New workspace in ${project.name}`,
-                ...(projectHasLineChanges ? { reveal: "hover" as const } : {}),
+                ...(projectReports ? { reveal: "hover" as const } : {}),
             },
             // Settings sits left of the plus and waits for hover: it is about
             // the project, not about the work to start in it. The home project
@@ -1366,13 +1365,6 @@ const NOTES_ITEM = "notes";
 const INBOX_ITEM = "inbox";
 
 /**
- * The pinned row that opens the addressed Rig's provider usage. It sits after
- * the inbox because both are about this machine: the inbox is what its agents
- * are waiting on, and usage is what they have spent to get there.
- */
-const USAGE_ITEM = "usage";
-
-/**
  * The pinned row that opens the component workbench. It exists only in a
  * development build: it is a tool for the people building this window, not
  * something the reader's own work ever passes through.
@@ -1566,13 +1558,6 @@ export function AppRigView(props: AppRigViewProps) {
     const inboxStore = active?.session?.inbox ?? rigInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
     const inboxPending = inbox.pending.length;
-    // The usage surface is the only thing that reads this store, so it is
-    // subscribed here rather than inside the page for one reason: the
-    // subscription is what starts the daemon reading, and it has to stop when
-    // the reader looks at something else.
-    const usageStore =
-        (props.usageOpen ? active?.session?.providerUsage : undefined) ?? rigProviderUsageStoreNoop;
-    const usage = useSyncExternalStore(usageStore.subscribe, usageStore.get, usageStore.get);
     // The host answers for this account rather than whichever Rig the window is
     // addressing: a node the reader has open is a different machine.
     const localRig = hostRig(directory);
@@ -1697,19 +1682,6 @@ export function AppRigView(props: AppRigViewProps) {
                   },
               ]
             : []),
-        // Usage belongs to the addressed machine for the same reason
-        // the inbox does: it is that machine's accounts that are being
-        // spent, so the row is absent while it cannot say.
-        ...(active?.session?.providerUsage
-            ? [
-                  {
-                      icon: "zap" as const,
-                      id: USAGE_ITEM,
-                      kind: "action" as const,
-                      label: "Usage",
-                  },
-              ]
-            : []),
         // The component workbench is a development tool. Its row is a
         // capability the host grants rather than an environment this
         // component reads for itself: the router registers the workbench
@@ -1735,13 +1707,11 @@ export function AppRigView(props: AppRigViewProps) {
                     ? NOTES_ITEM
                     : experimental && props.inboxOpen
                       ? INBOX_ITEM
-                      : props.usageOpen
-                        ? USAGE_ITEM
-                        : props.blueprintOpen
-                          ? BLUEPRINT_ITEM
-                          : props.groupId
-                            ? rigItemId(props.rigId, props.groupId)
-                            : ""
+                      : props.blueprintOpen
+                        ? BLUEPRINT_ITEM
+                        : props.groupId
+                          ? rigItemId(props.rigId, props.groupId)
+                          : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -1934,10 +1904,6 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onInboxOpen?.();
                     return;
                 }
-                if (id === USAGE_ITEM) {
-                    props.onUsageOpen?.();
-                    return;
-                }
                 if (id === BLUEPRINT_ITEM) {
                     props.onBlueprintOpen?.();
                     return;
@@ -2110,26 +2076,6 @@ export function AppRigView(props: AppRigViewProps) {
                         {...(activeAvailability?.refusal === undefined
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
-                    />
-                </AppShell>
-            );
-
-        // Usage belongs to the addressed machine, so it is shown only while that
-        // machine has readings to give.
-        if (props.usageOpen && active?.session?.providerUsage)
-            return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
-                    {desktop ? <WindowDragRegion /> : null}
-                    <RigProviderUsageSurface
-                        clock={active.session.clock}
-                        {...(usage.error ? { error: usage.error } : {})}
-                        loading={usage.loading}
-                        providers={usage.providers}
                     />
                 </AppShell>
             );
@@ -2345,37 +2291,6 @@ function RigInboxSurface(props: {
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-        />
-    );
-}
-
-/**
- * When a usage reading was taken, as an absolute local time. A reading is only
- * as good as its age — a plan can be spent in the minutes since — so the card
- * says when it was taken rather than implying it is live.
- */
-function usageReadingTime(capturedAt: number): string {
-    return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(capturedAt));
-}
-
-function RigProviderUsageSurface(props: {
-    clock: RigClockStore;
-    error?: UserError;
-    loading: boolean;
-    providers: readonly RigProviderUsageEntry[];
-}) {
-    const currentTime = useSyncExternalStore(
-        props.clock.subscribe,
-        props.clock.get,
-        props.clock.get,
-    );
-    return (
-        <RigProviderUsagePage
-            currentTime={currentTime}
-            {...(props.error ? { error: props.error } : {})}
-            loading={props.loading}
-            providers={props.providers}
-            readingTime={usageReadingTime}
         />
     );
 }

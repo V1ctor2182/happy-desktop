@@ -442,10 +442,6 @@ export {
     type RigInboxPageProps,
 } from "./pages/inbox/RigInboxPage";
 export {
-    RigProviderUsagePage,
-    type RigProviderUsagePageProps,
-} from "./pages/usage/RigProviderUsagePage";
-export {
     RigSettingsSection,
     RigSettingsShell,
     type RigSettingsCategory,
@@ -477,3 +473,4 @@ export {
     type RigProviderSettingsProps,
     type RigProviderStatus,
 } from "./pages/settings/RigProviderSettings";
+export { RigUsageSettings, type RigUsageSettingsProps } from "./pages/settings/RigUsageSettings";
