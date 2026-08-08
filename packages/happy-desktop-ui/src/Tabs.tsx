@@ -13,6 +13,7 @@ import { CountBadge } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
 import { Menu, type MenuItem } from "./Menu";
+import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import {
     transferFocusClaim,
@@ -33,16 +34,17 @@ export type TabItem = {
     /** An italic, replaceable document preview rather than a permanent tab. */
     preview?: boolean;
     /**
-     * Whether the work behind this tab is running. It takes the leading slot and
-     * spins there, so a busy tab reads as busy at a glance instead of wearing a
-     * static mark that says only "something about this one is different". It
-     * takes precedence over `icon`: both want the same lane, and while work is
-     * running that is the thing worth showing.
+     * Whether the work behind this tab is running. It spins in the trailing
+     * lane, the one the close control uses, so a busy tab reads as busy without
+     * giving up the icon or generated mark the reader picks the tab out by, and
+     * a band of light travels through the tab's own title for as long as the
+     * work lasts — the strip is read by its titles, and a 12px spinner at the
+     * far edge of a tab is easy to pass over.
      */
     busy?: boolean;
     /**
      * Whether the work behind this tab is sitting inside a scheduled wait. A
-     * lower-priority sibling of `busy`: it takes the same leading lane with a
+     * lower-priority sibling of `busy`: it takes the same trailing lane with a
      * highlighted clock instead of the spinner, so a tab that is deliberately
      * doing nothing reads as waiting rather than as working or stalled. `busy`
      * outranks it — real work is the thing worth showing.
@@ -54,43 +56,36 @@ export type TabItem = {
      * Gives the tab a generated brutalist mark derived from this string, so a
      * tab that has no icon still has a face the reader can aim at. Supply the
      * entity's own id — the session's, the project's — and the mark stays the
-     * same for as long as the entity does. `busy` and `icon` both outrank it.
+     * same for as long as the entity does. `icon` outranks it.
      */
     avatarId?: string;
 };
 
 /**
  * Whether a tab keeps its leading lane even when nothing is in it. A tab that
- * reports `busy` or `unread` at all owns the lane permanently, so starting and
- * finishing work makes the mark appear and go without sliding the tab's own
- * label sideways underneath it. A tab that never speaks of either — a fixed
- * section, say — has no lane to hold open and its label starts at the edge.
+ * reports `unread` at all owns the lane permanently, so news arriving and going
+ * never slides the tab's own label sideways underneath it. A tab that never
+ * speaks of it — a fixed section, say — has no lane to hold open and its label
+ * starts at the edge.
  */
 function tabHoldsLeadingLane(tab: TabItem): boolean {
-    return tab.busy !== undefined || tab.waiting !== undefined || tab.unread !== undefined;
+    return tab.unread !== undefined;
 }
 
 /**
- * The tab's leading lane. Running work outranks everything, then a scheduled
- * wait's clock, then an explicit icon, then the tab's generated mark; a tab
- * with none of those still holds the
- * lane open if it ever speaks of `busy` or `unread`. Unread rides on top of
- * whichever mark is there as a corner dot, and only stands in the lane alone
- * when there is no mark to ride — so the news arriving never moves the label.
+ * The tab's leading lane: what the tab *is*. An explicit icon outranks the
+ * generated mark, and a tab with neither still holds the lane open if it ever
+ * speaks of `unread`. Unread rides on top of whichever mark is there as a corner
+ * dot, and only stands in the lane alone when there is no mark to ride — so the
+ * news arriving never moves the label.
+ *
+ * What the tab is *doing* is reported at the trailing edge instead. The two are
+ * different questions, and answering both in one lane meant a busy tab lost the
+ * only thing distinguishing it from its neighbours at exactly the moment the
+ * reader was most likely to be looking for it.
  */
 function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
-    const mark = tab.busy ? (
-        <Spinner label={`${tab.label} is working`} size={iconSize} tone="muted" />
-    ) : tab.waiting ? (
-        <span
-            aria-label={`${tab.label} is waiting`}
-            className="happy2-tabs__tab-waiting"
-            data-happy-desktop-ui="tab-waiting"
-            role="img"
-        >
-            <Icon name="clock" size={iconSize} />
-        </span>
-    ) : tab.icon ? (
+    const mark = tab.icon ? (
         <Icon name={tab.icon} size={iconSize} />
     ) : tab.avatarId !== undefined ? (
         <AvatarBrutalist id={tab.avatarId} size={iconSize} />
@@ -105,7 +100,7 @@ function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
             }
         >
             {mark}
-            {tab.unread && !tab.busy ? (
+            {tab.unread ? (
                 <span
                     className={
                         mark === null
@@ -116,6 +111,27 @@ function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
             ) : null}
         </span>
     );
+}
+
+/**
+ * What the tab is doing, for the trailing lane. Running work outranks a
+ * scheduled wait: a tab doing both is doing real work, and that is the thing
+ * worth showing.
+ */
+function tabActivityMark(tab: TabItem) {
+    if (tab.busy) return <Spinner label={`${tab.label} is working`} size={12} tone="muted" />;
+    if (tab.waiting)
+        return (
+            <span
+                aria-label={`${tab.label} is waiting`}
+                className="happy2-tabs__tab-waiting"
+                data-happy-desktop-ui="tab-waiting"
+                role="img"
+            >
+                <Icon name="clock" size={12} />
+            </span>
+        );
+    return null;
 }
 export type TabsProps = {
     className?: string;
@@ -129,9 +145,9 @@ export type TabsProps = {
     size?: TabsSize;
     /**
      * Closes a tab. Supplying it gives every tab a trailing close control that
-     * appears on hover and on the active tab, and stays permanently visible for
-     * keyboard users once focused. Omit it for a bar whose tabs are fixed
-     * sections rather than documents the reader opens and closes.
+     * appears while the pointer is over that tab, and whenever it holds keyboard
+     * focus. Omit it for a bar whose tabs are fixed sections rather than
+     * documents the reader opens and closes.
      */
     onClose?: (id: string) => void;
     /** Accessible name of the close control, for example `Close session`. */
@@ -626,7 +642,20 @@ export function Tabs(props: TabsProps) {
                     >
                         {tabLeadingMark(tab, iconSizes[size()])}
                         <span className="happy2-tabs__tab-label" data-happy-desktop-ui="tab-label">
-                            {tab.label}
+                            {/* The tab's own colour, with a pale band wiping
+                                through it. Busy is a passing state, so it may
+                                not restyle the title: the active tab is already
+                                the darkest one in the strip, and painting its
+                                title again here would stack a second emphasis
+                                on top of one the tab had already earned. Only
+                                the travelling band is new. */}
+                            {tab.busy ? (
+                                <ShimmerText sweep="sheen" tone="inherit">
+                                    {tab.label}
+                                </ShimmerText>
+                            ) : (
+                                tab.label
+                            )}
                         </span>
                         {tab.badge !== undefined ? (
                             <CountBadge
@@ -635,33 +664,61 @@ export function Tabs(props: TabsProps) {
                                 tone={active() ? "accent" : "neutral"}
                             />
                         ) : null}
-                        {local.onClose && tab.closable !== false
-                            ? ((close) => (
-                                  /* A `span` because the tab itself is the
-                                     button: nesting one button inside another is
-                                     invalid, and this control must sit inside
-                                     the tab box so it tracks its hover. */
-                                  <span
-                                      aria-label={local.closeLabel ?? "Close tab"}
-                                      className="happy2-tabs__tab-close"
-                                      data-happy-desktop-ui="tab-close"
-                                      onClick={(event) => {
-                                          event.stopPropagation();
-                                          close(tab.id);
-                                      }}
-                                      onKeyDown={(event) => {
-                                          if (event.key !== "Enter" && event.key !== " ") return;
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          close(tab.id);
-                                      }}
-                                      role="button"
-                                      tabIndex={0}
-                                  >
-                                      <Icon name="close" size={12} />
-                                  </span>
-                              ))(local.onClose)
-                            : null}
+                        {((closable, activity) =>
+                            /* One lane at the trailing edge, holding what the
+                               tab is doing and the control that closes it. They
+                               share it rather than sitting side by side: both
+                               answer "this tab, right now", the reader only ever
+                               wants one of them, and a second box would leave a
+                               permanent gap on every tab that is merely
+                               closable. The close control wins whenever it is
+                               revealed, so reaching for it is never a race
+                               against a spinner appearing under the pointer. */
+                            closable || activity ? (
+                                <span
+                                    className="happy2-tabs__tab-trailing"
+                                    data-happy-desktop-ui="tab-trailing"
+                                >
+                                    {activity ? (
+                                        <span
+                                            className="happy2-tabs__tab-activity"
+                                            data-happy-desktop-ui="tab-activity"
+                                        >
+                                            {activity}
+                                        </span>
+                                    ) : null}
+                                    {closable ? (
+                                        /* A `span` because the tab itself is the
+                                           button: nesting one button inside
+                                           another is invalid, and this control
+                                           must sit inside the tab box so it
+                                           tracks its hover. */
+                                        <span
+                                            aria-label={local.closeLabel ?? "Close tab"}
+                                            className="happy2-tabs__tab-close"
+                                            data-happy-desktop-ui="tab-close"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                local.onClose!(tab.id);
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (event.key !== "Enter" && event.key !== " ")
+                                                    return;
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                local.onClose!(tab.id);
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                        >
+                                            <Icon name="close" size={12} />
+                                        </span>
+                                    ) : null}
+                                </span>
+                            ) : null)(
+                            local.onClose !== undefined && tab.closable !== false,
+                            tabActivityMark(tab),
+                        )}
                         {active() ? (
                             <span
                                 aria-hidden="true"

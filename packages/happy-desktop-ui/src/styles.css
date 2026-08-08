@@ -36,6 +36,7 @@
 @import "./styles/switch.css";
 @import "./styles/spinner.css";
 @import "./styles/spinner-braille.css";
+@import "./styles/shimmer-text.css";
 @import "./styles/loading-swap.css";
 @import "./styles/checkbox.css";
 @import "./styles/segmented-control.css";

@@ -304,6 +304,12 @@ export {
     type SpinnerTone,
     type SpinnerVariant,
 } from "./Spinner";
+export {
+    ShimmerText,
+    type ShimmerTextProps,
+    type ShimmerTextSweep,
+    type ShimmerTextTone,
+} from "./ShimmerText";
 export { WaitRing, type WaitRingProps, waitFinishDateLabel, waitRemainingLabel } from "./WaitRing";
 export { WorkspaceLifecycleLane, type WorkspaceLifecycleLaneProps } from "./WorkspaceLifecycleLane";
 export {

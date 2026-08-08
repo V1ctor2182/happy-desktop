@@ -152,10 +152,50 @@
 }
 
 /*
- * Close control. It keeps its box at all times so revealing it never reflows the
- * bar or shifts a label sideways; only its paint changes. It shows on hover of
- * its tab, on the active tab, and whenever it is focused, so a keyboard user can
- * always see what they are about to close.
+ * The trailing lane, holding what the tab is doing and the control that closes
+ * it. One fixed 16px box whichever of them is showing, so a tab starting work,
+ * finishing it, or being hovered never reflows the bar or shifts its own label.
+ *
+ * The close control is the lane's one flex item. The activity mark overlays it
+ * instead of sitting beside it: the reader only ever wants one of the two, and
+ * laying them out in a line would leave a permanent second box on every tab that
+ * is merely closable.
+ */
+.happy2-tabs__tab-trailing {
+    display: flex;
+    position: relative;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+/*
+ * Not interactive and not reachable by tab: it reports, and the control stacked
+ * over it is the thing that can be used. It is out of flow so that a tab which
+ * is both busy and closable keeps one 16px lane rather than two.
+ */
+.happy2-tabs__tab-activity {
+    display: flex;
+    position: absolute;
+    align-items: center;
+    justify-content: center;
+    inset: 0;
+    color: var(--text-secondary);
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
+/*
+ * Close control. It shows while the pointer is over its tab, and nowhere else:
+ * closing is a deliberate act the reader goes looking for, so the glyph belongs
+ * on the one tab they are actually pointing at rather than standing permanently
+ * on the active tab, where it competes with that tab's own content.
+ *
+ * Focus is the one exception, and it is not a second resting state: a control
+ * that can be reached by keyboard has to be visible while it holds focus, or the
+ * reader is about to press Enter on something they cannot see.
  */
 .happy2-tabs__tab-close {
     display: flex;
@@ -163,18 +203,39 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    width: 16px;
-    height: 16px;
+    width: 100%;
+    height: 100%;
     border-radius: var(--happy2-radius-sm);
     color: var(--text-secondary);
     opacity: 0;
     cursor: pointer;
+    transition: opacity 120ms ease;
 }
 
 .happy2-tabs__tab:hover .happy2-tabs__tab-close,
-.happy2-tabs__tab[data-active] .happy2-tabs__tab-close,
 .happy2-tabs__tab-close:focus-visible {
     opacity: 1;
+}
+
+/*
+ * Whenever the close control is up it owns the lane outright. The activity mark
+ * is hidden rather than left underneath: the close glyph paints no background of
+ * its own until it is hovered, so a spinner behind it would otherwise turn every
+ * revealed close control into two overlapping marks.
+ *
+ * This tracks the close control exactly, so it is keyed off the lane actually
+ * containing one: a busy tab that cannot be closed keeps reporting its work
+ * while the pointer is over it, and every tab reports again as soon as the
+ * pointer leaves.
+ */
+.happy2-tabs__tab:hover .happy2-tabs__tab-trailing:has(.happy2-tabs__tab-close),
+.happy2-tabs__tab-trailing:has(.happy2-tabs__tab-close:focus-visible) {
+    /* Consumed by the activity mark below; the close control sets its own. */
+    --happy2-tabs-activity-opacity: 0;
+}
+
+.happy2-tabs__tab-activity {
+    opacity: var(--happy2-tabs-activity-opacity, 1);
 }
 
 .happy2-tabs__tab-close:hover {
