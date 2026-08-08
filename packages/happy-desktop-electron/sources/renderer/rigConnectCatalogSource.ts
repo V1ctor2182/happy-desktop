@@ -303,7 +303,7 @@ function catalogProject(
             worktrees.push({
                 id: workspace.id as RigWorktreeId,
                 projectId: group.id as RigProjectId,
-                name: workspace.title ?? workspace.name,
+                name: workspace.name,
                 orderKey: workspace.orderKey,
                 path: workspace.path,
                 displayPath: workspace.path,
