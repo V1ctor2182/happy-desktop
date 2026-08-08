@@ -41,9 +41,9 @@ describe("confirmed Rig installation terminal", () => {
         expect(host.spawn).toHaveBeenCalledOnce();
         const [shell, arguments_, options] = vi.mocked(host.spawn).mock.calls[0]!;
         expect(shell).toBe("/bin/zsh");
-        expect(arguments_.slice(0, 2)).toEqual(["-l", "-c"]);
-        expect(arguments_[2]).toContain(rigInstallCommand);
-        expect(arguments_[2]).not.toContain(opened.terminalId);
+        expect(arguments_.slice(0, 3)).toEqual(["-l", "-i", "-c"]);
+        expect(arguments_[3]).toContain(rigInstallCommand);
+        expect(arguments_[3]).not.toContain(opened.terminalId);
         expect(options).toMatchObject({ cols: 100, rows: 30, cwd: "/Users/ada" });
         manager.input(7, opened.terminalId, "password\n");
         manager.resize(7, opened.terminalId, 120, 40);

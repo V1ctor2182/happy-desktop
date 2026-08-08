@@ -48,7 +48,7 @@ describe("normal Rig discovery", () => {
         expect(host.execFile).toHaveBeenCalledTimes(1);
         const [executable, arguments_] = vi.mocked(host.execFile).mock.calls[0]!;
         expect(executable).toBe("/bin/zsh");
-        expect(arguments_.slice(0, 2)).toEqual(["-l", "-c"]);
+        expect(arguments_.slice(0, 3)).toEqual(["-l", "-i", "-c"]);
     });
 
     it("distinguishes missing, malformed-path, and malformed-version results", async () => {

@@ -15,6 +15,16 @@ const discoveryCommand =
     `/usr/bin/env -0`;
 const maximumOutputBytes = 1024 * 1024;
 
+/**
+ * How the probe runs the user's shell: as a login shell *and* an interactive
+ * one. Login alone is not enough. zsh reads `.zshrc` only when interactive, and
+ * that is where people actually keep their API keys, tokens, and the PATH
+ * entries added by version managers and installers. A login-only shell reports
+ * an environment the user has never seen, and the daemon Happy starts from it
+ * then runs agents without those variables.
+ */
+const discoveryShellArguments = ["-l", "-i", "-c", discoveryCommand] as const;
+
 export interface RigLoginEnvironment {
     readonly command: string;
     readonly environment: NodeJS.ProcessEnv;
@@ -80,7 +90,7 @@ export async function rigLoginEnvironmentDiscover(
     configuredShell?: string,
 ): Promise<RigLoginEnvironment> {
     const shell = loginShellResolve(environment, configuredShell);
-    const result = await host.execFile(shell, ["-l", "-c", discoveryCommand], {
+    const result = await host.execFile(shell, [...discoveryShellArguments], {
         env: minimalShellEnvironment(environment),
     });
     const parsed = discoveryOutputParse(result.stdout);
@@ -118,7 +128,7 @@ export async function localRuntimeProbe(
     configuredShell?: string,
 ): Promise<LocalRuntimeProbe> {
     const shell = loginShellResolve(environment, configuredShell);
-    const result = await host.execFile(shell, ["-l", "-c", discoveryCommand], {
+    const result = await host.execFile(shell, [...discoveryShellArguments], {
         env: minimalShellEnvironment(environment),
     });
     const parsed = discoveryOutputParse(result.stdout);

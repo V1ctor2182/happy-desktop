@@ -117,9 +117,12 @@ export class RigInstallTerminalManager implements Disposable {
             `${rigInstallCommand}; ` +
             `install_status=$?; printf '\\n${installExitMarker}%s\\n' "$install_status"; ` +
             `exit "$install_status"`;
+        // Login *and* interactive, for the same reason discovery is: the npm,
+        // node, or version manager that installs Rig is usually only on PATH
+        // because of `.zshrc`, which a login-only shell never reads.
         const pty = (this.options.ptyHost ?? defaultPtyHost).spawn(
             shell,
-            ["-l", "-c", fixedScript],
+            ["-l", "-i", "-c", fixedScript],
             {
                 cols,
                 rows,
