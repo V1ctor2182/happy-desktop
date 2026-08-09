@@ -6,12 +6,13 @@ import {
     type ConversationEntry,
     type ConversationJson,
     type ConversationMessageProjection,
+    type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
 import { rigInboundMessageProject } from "./rigInboundMessageProject.js";
-import type { RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
+import type { RigAnsweredUserInput, RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
 import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 import { rigCompactionSubject } from "./rigTokenFormat.js";
 
@@ -21,6 +22,7 @@ export interface RigConnectConversationInput {
     readonly showReasoning: boolean;
     readonly ephemeral: readonly ConversationEntry[];
     readonly pendingUserInputs: readonly RigUserInputRequest[];
+    readonly answeredUserInputs: readonly RigAnsweredUserInput[];
     readonly expandedGroupIds: ReadonlySet<string>;
     /** Named senders for background-work news, matched by the description it quotes. */
     readonly subagents: readonly RigSubagentSummary[];
@@ -64,39 +66,86 @@ export function rigConnectConversationProject(
     input: RigConnectConversationInput,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
+    const userInputs = new Map<string, ProjectableUserInput>();
+    for (const request of input.pendingUserInputs)
+        userInputs.set(request.requestId, { state: "pending", request });
+    // The resolved inbox record is authoritative across the brief interval in
+    // which a session snapshot can still carry the same request as pending.
+    for (const request of input.answeredUserInputs)
+        userInputs.set(request.requestId, { state: "answered", request });
+    const matchedUserInputIds = new Set<string>();
+
     for (let start = 0; start < input.elements.length; ) {
         const groupId = input.elements[start]!.groupId;
         let end = start + 1;
         while (end < input.elements.length && input.elements[end]!.groupId === groupId) end += 1;
-        entries.push(...rigConnectGroupProject(input.elements.slice(start, end), input));
+        entries.push(
+            ...rigConnectGroupProject(
+                input.elements.slice(start, end),
+                input,
+                userInputs,
+                matchedUserInputIds,
+            ),
+        );
         start = end;
     }
 
     for (const entry of input.ephemeral) entries.push(entry);
-    for (const request of input.pendingUserInputs)
-        entries.push({
+    // Older connectors may report a pending request before its tool element is
+    // available. Keep that question actionable at the end until the transcript
+    // catches up; answered records never append out of sequence.
+    for (const request of input.pendingUserInputs) {
+        if (matchedUserInputIds.has(request.requestId)) continue;
+        entries.push(userInputRequestProject({ state: "pending", request }, ""));
+    }
+    return entries.map(resequence);
+}
+
+type ProjectableUserInput =
+    | { readonly state: "pending"; readonly request: RigUserInputRequest }
+    | { readonly state: "answered"; readonly request: RigAnsweredUserInput };
+
+function userInputRequestProject(
+    input: ProjectableUserInput,
+    sequence: string,
+): ConversationRequestEntry {
+    if (input.state === "answered")
+        return {
             kind: "request",
-            id: `request:${request.requestId}`,
-            sequence: "",
+            id: `request:${input.request.requestId}`,
+            sequence,
             request: {
                 kind: "userInput",
-                requestId: request.requestId,
-                questions: request.questions,
+                requestId: input.request.requestId,
+                questions: input.request.questions,
+                status: "answered",
+                answers: input.request.answers,
+                createdAt: input.request.createdAt,
+                resolvedAt: input.request.resolvedAt,
             },
-        });
-    return entries.map(resequence);
+        };
+    const request = input.request;
+    return {
+        kind: "request",
+        id: `request:${request.requestId}`,
+        sequence,
+        request: {
+            kind: "userInput",
+            requestId: request.requestId,
+            questions: request.questions,
+            status: "pending",
+        },
+    };
 }
 
 function rigConnectGroupProject(
     elements: readonly ChatElement[],
     input: RigConnectConversationInput,
+    userInputs: ReadonlyMap<string, ProjectableUserInput>,
+    matchedUserInputIds: Set<string>,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
     let groupEnd: Extract<ChatElement, { kind: "group_end" }> | undefined;
-    // `inference` only says the model was asked and had not answered yet, so its
-    // spinner is stale the moment the group ends. A turn that ends empty keeps
-    // every row it produced, and without this it would spin forever.
-    const ended = elements.some((element) => element.kind === "group_end");
     const hasTerminalFailure = elements.some(
         (element) => element.kind === "failure" && element.outcome === "failed",
     );
@@ -183,17 +232,9 @@ function rigConnectGroupProject(
                 break;
             }
             case "inference":
-                if (ended) break;
-                entries.push({
-                    kind: "agentActivity",
-                    id: element.id,
-                    occurredAt: element.createdAt,
-                    sequence,
-                    activity: {
-                        kind: "waiting",
-                        label: "Waiting for model",
-                    },
-                });
+                // This is an empty live protocol placeholder, not transcript
+                // content. The conversation footer owns the one live status
+                // and replaces "Waiting for model" when real output arrives.
                 break;
             case "agent_text":
                 entries.push({
@@ -297,7 +338,7 @@ function rigConnectGroupProject(
                 break;
             }
             case "thinking":
-                if (input.showReasoning)
+                if (input.showReasoning) {
                     entries.push({
                         kind: "agentActivity",
                         id: element.id,
@@ -309,15 +350,23 @@ function rigConnectGroupProject(
                             streaming: !element.complete,
                         },
                     });
+                }
                 break;
             case "tool_call":
-                entries.push({
-                    kind: "agentActivity",
-                    id: element.id,
-                    occurredAt: element.createdAt,
-                    sequence,
-                    activity: { kind: "tool", tool: toolProject(element) },
-                });
+                {
+                    const userInput = userInputs.get(element.toolCallId);
+                    if (userInput) {
+                        matchedUserInputIds.add(element.toolCallId);
+                        entries.push(userInputRequestProject(userInput, sequence));
+                    } else
+                        entries.push({
+                            kind: "agentActivity",
+                            id: element.id,
+                            occurredAt: element.createdAt,
+                            sequence,
+                            activity: { kind: "tool", tool: toolProject(element) },
+                        });
+                }
                 break;
             case "failure":
                 entries.push({

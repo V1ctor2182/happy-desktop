@@ -24,7 +24,6 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
     width: 100%;
     height: 32px;
     min-height: 32px;
@@ -46,23 +45,35 @@
     opacity: 1;
 }
 
-/* The clock and phase share the row with the fan-out details, so a talkative
-   label gives way inside the row rather than running past its right edge. */
+/* One typographic run after the loader: clock, separator, and phase share the
+   same family, size, line box, and baseline. */
 .happy2-agent-working-status__state {
     display: flex;
     flex: 0 1 auto;
-    align-items: center;
+    align-items: baseline;
     gap: 6px;
     min-width: 0;
     padding-left: 3px;
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    line-height: 20px;
 }
 
 .happy2-agent-working-status__state .happy2-typed-text {
     min-width: 0;
+    vertical-align: baseline;
+    font-family: inherit;
+}
+
+/* A question pauses work on the human side. The static label starts where the
+   loader normally starts; no empty glyph column suggests that work continues. */
+.happy2-agent-working-status[data-awaiting-input] .happy2-agent-working-status__state {
+    padding-left: 0;
 }
 
 .happy2-agent-working-status__spinner {
     flex: none;
+    align-self: center;
     margin-right: 3px;
 }
 
@@ -79,22 +90,17 @@
 
 .happy2-agent-working-status__timer {
     flex: none;
-    font-family: var(--happy2-font-mono);
-    font-size: 14px;
-    line-height: 20px;
     text-align: right;
     font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* The wait countdown stands in the phase slot, so it takes the same monospace
-   the typed phase label has. Its digits change every second and must not
-   change width while they do. */
+/* The wait countdown stands in the phase slot. Its digits change every second,
+   but it keeps the exact typography and baseline of the ordinary phase. */
 .happy2-agent-working-status__phase {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-family: var(--happy2-font-mono);
     font-variant-numeric: lining-nums tabular-nums;
 }
 
@@ -103,17 +109,16 @@
     color: var(--input-placeholder);
 }
 
-.happy2-agent-working-status__details {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--input-placeholder);
-}
-
 /* A live footer follows the newest activity rather than closing settled prose:
  * keep it in normal flow and retain a small block boundary above it. */
 .happy2-chat-turn-status.happy2-agent-working-status,
 .happy2-conversation-turn-status.happy2-agent-working-status {
     margin-top: 4px;
+}
+
+/* When the footer itself opens the agent turn, Message already owns the same
+   content inset and author clearance as a tool-first row. */
+.happy2-message--working-lead .happy2-conversation-turn-status {
+    margin-top: 0;
+    padding: 0;
 }

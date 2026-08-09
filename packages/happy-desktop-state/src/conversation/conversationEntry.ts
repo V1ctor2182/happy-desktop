@@ -179,7 +179,6 @@ export interface ConversationToolCall {
  */
 export type ConversationActivity =
     | { readonly kind: "tool"; readonly tool: ConversationToolCall }
-    | { readonly kind: "waiting"; readonly label: string }
     | { readonly kind: "reasoning"; readonly text: string; readonly streaming: boolean }
     | {
           readonly kind: "shell";
@@ -209,6 +208,19 @@ export type ConversationRequest =
           readonly kind: "userInput";
           readonly requestId: string;
           readonly questions: readonly ConversationRequestQuestion[];
+          readonly status: "pending";
+          readonly answers?: never;
+          readonly createdAt?: never;
+          readonly resolvedAt?: never;
+      }
+    | {
+          readonly kind: "userInput";
+          readonly requestId: string;
+          readonly questions: readonly ConversationRequestQuestion[];
+          readonly status: "answered";
+          readonly answers: Readonly<Record<string, readonly string[]>>;
+          readonly createdAt: number;
+          readonly resolvedAt: number;
       }
     | {
           readonly kind: "permissionReview";

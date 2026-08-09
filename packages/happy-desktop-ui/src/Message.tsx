@@ -1,4 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
+import { flushSync } from "react-dom";
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import {
     Children,
@@ -153,8 +154,15 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     emptyText?: string;
     /** Agent reply generation lifecycle for a string body. Separate from
      * `deliveryState`: delivery is outgoing, generation is the incoming reply
-     * being produced. `streaming` shows a live caret; `failed` a minimal marker. */
+     * being produced. `streaming` marks a body still arriving; `failed` shows a
+     * minimal marker. */
     generationStatus?: MessageGenerationStatus;
+    /**
+     * A caret riding the end of a `streaming` body, matching the typing caret
+     * activity labels wear. Off by default: showing it is a surface-wide
+     * choice the conversation surface makes, not a per-message one.
+     */
+    streamingCaret?: boolean;
     /** Consecutive message from the same author. Preferred over `compact`. */
     grouped?: boolean;
     /** Compact time for the grouped gutter (e.g. "12:55") so a wide 12-hour
@@ -270,6 +278,7 @@ export function Message(props: MessageProps) {
         "deliveryState",
         "emptyText",
         "generationStatus",
+        "streamingCaret",
         "grouped",
         "gutterTime",
         "imageUrl",
@@ -537,6 +546,9 @@ export function Message(props: MessageProps) {
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
+            data-streaming-caret={
+                local.streamingCaret && local.generationStatus === "streaming" ? "" : undefined
+            }
             data-grouped={grouped() ? "" : undefined}
             data-has-body={local.body || local.emptyText !== undefined ? "" : undefined}
             data-happy-desktop-ui="message"
@@ -903,17 +915,52 @@ export function MessageList(props: MessageListProps) {
         };
         element.addEventListener("scroll", onScroll, { passive: true });
         scrollPositionSync.current = onScroll;
-        /* Only the unmeasured path needs a DOM watcher to stay pinned. A
-           virtualized list learns about the same growth as a measurement and
-           compensates the offset itself; re-writing `scrollTop` on every
-           mutation would undo that compensation and make a streaming reply
-           stutter. */
-        const observer = virtualized
-            ? undefined
-            : new MutationObserver(() => {
-                  if (following.current) scrollToBottom();
-              });
-        observer?.observe(element, { characterData: true, childList: true, subtree: true });
+        /*
+         * Both paths react to DOM growth through this watcher, whose microtask
+         * runs after the growing commit but before the browser paints. The
+         * unmeasured path just re-pins the bottom. The virtualized path has a
+         * harder problem: a streamed reply grows its row in a commit that may
+         * not render MessageList at all, and the virtualizer's own
+         * ResizeObserver reports the new height through the async scheduler —
+         * often after paint, leaving one visible frame where the rows below
+         * (and the footer status) sit at stale offsets underneath the new
+         * text. Re-measuring here inside `flushSync` commits the corrected
+         * offsets in the same frame as the growth, so text never paints twice
+         * in two places. `resizeItem` is used directly because
+         * `measureElement` declines to measure while the list scrolls — and a
+         * followed stream keeps the list permanently scrolling. Style-only
+         * mutations are not observed, so the corrective render cannot retrigger
+         * this observer.
+         */
+        const measureRows = (rows: ReadonlySet<HTMLElement>) => {
+            for (const row of rows) {
+                const index = Number(row.dataset.index);
+                if (!Number.isInteger(index)) continue;
+                /* A real DOM read, deliberately: the entry-less form of
+                   `options.measureElement` answers from the size cache to
+                   avoid forced reflow, which here would just re-read the
+                   stale height this callback exists to correct. Rounding
+                   matches the ResizeObserver path so the two never disagree
+                   over the same row. */
+                virtualizer.resizeItem(index, Math.round(row.getBoundingClientRect().height));
+            }
+        };
+        const observer = new MutationObserver((records) => {
+            if (virtualized) {
+                const rows = new Set<HTMLElement>();
+                for (const record of records) {
+                    const target =
+                        record.target instanceof Element
+                            ? record.target
+                            : record.target.parentElement;
+                    const row = target?.closest<HTMLElement>(".happy2-message-list__virtual-row");
+                    if (row && element.contains(row)) rows.add(row);
+                }
+                if (rows.size > 0) flushSync(() => measureRows(rows));
+            }
+            if (following.current) scrollToBottom();
+        });
+        observer.observe(element, { characterData: true, childList: true, subtree: true });
         /*
          * The composer is a flex sibling of this scrollport. As its textarea
          * grows or shrinks, preserve the reader's exact distance from the
@@ -950,7 +997,7 @@ export function MessageList(props: MessageListProps) {
         return () => {
             if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
-            observer?.disconnect();
+            observer.disconnect();
             viewportObserver?.disconnect();
             scrollPositionSync.current = () => undefined;
             element.removeEventListener("scroll", onScroll);

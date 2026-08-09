@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { Icon } from "./Icon";
 export type CheckboxProps = {
+    "aria-describedby"?: string;
     "aria-label"?: string;
     checked: boolean;
     className?: string;
@@ -23,6 +24,7 @@ export type CheckboxProps = {
  */
 export function Checkbox(props: CheckboxProps) {
     const [local] = partitionComponentProps(props, [
+        "aria-describedby",
         "aria-label",
         "checked",
         "className",
@@ -56,6 +58,7 @@ export function Checkbox(props: CheckboxProps) {
             style={local.style}
         >
             <input
+                aria-describedby={local["aria-describedby"]}
                 aria-label={local["aria-label"]}
                 checked={local.checked}
                 className="happy2-checkbox__control"

@@ -5,6 +5,7 @@ import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/diff-snippet.css";
 import "./styles/agent-activity-row.css";
+import "./styles/typed-text.css";
 import { AgentActivityRow } from "./AgentActivityRow";
 import { createRenderer } from "./testing";
 
@@ -318,4 +319,52 @@ it("expands and collapses its body without remounting the header or losing focus
         ).toBeNull(),
     );
     expect(document.activeElement).toBe(header);
+}, 120_000);
+
+it("seats a verb on the same line whichever motion profile renders it", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ display: "flex", flexDirection: "column", width: "600px" }}>
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: execTool }}
+                    data-testid="typed-line"
+                    motion="typewriter"
+                    singleLine
+                />
+                <AgentActivityRow
+                    activity={{ kind: "tool", tool: execTool }}
+                    data-testid="still-line"
+                    motion="calm"
+                    singleLine
+                />
+            </div>
+        ),
+        { width: 660, height: 240, padding: 16 },
+    );
+    await view.ready();
+
+    const bounds = (selector: string) => view.$(selector).bounds();
+    /* Whether a row's label is a TypedText or the still span that stands in for
+       it is a motion decision, and it must stay one: an inline span is sized by
+       the font's ascent and descent while an inline-block aligned to the line's
+       bottom fills the line box, so letting the two differ shifted a calm row's
+       verb a pixel down from the glyph and monospace subject beside it. Compare
+       each row against itself, since the rows sit at different heights. */
+    for (const row of ["typed-line", "still-line"]) {
+        const glyph = bounds(
+            `[data-testid="${row}"] [data-happy-desktop-ui="agent-activity-glyph"]`,
+        );
+        const verb = bounds(`[data-testid="${row}"] [data-happy-desktop-ui="agent-activity-verb"]`);
+        const text = bounds(`[data-testid="${row}"] [data-happy-desktop-ui="agent-activity-text"]`);
+        expect(verb.y).toBe(text.y);
+        expect(verb.height).toBe(text.height);
+        expect(glyph.y + glyph.height / 2).toBe(verb.y + verb.height / 2);
+    }
+
+    /* And the label box itself is identical between the two, so a row does not
+       change height when a tool settles from typing to still. */
+    const typedLabel = bounds('[data-testid="typed-line"] .happy2-typed-text');
+    const stillLabel = bounds('[data-testid="still-line"] .happy2-agent-activity__still-text');
+    expect(stillLabel.height).toBe(typedLabel.height);
 }, 120_000);

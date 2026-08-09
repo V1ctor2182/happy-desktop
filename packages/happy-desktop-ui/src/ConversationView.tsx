@@ -6,6 +6,7 @@ import type {
     ConversationRequestSubmission,
     ConversationToolCall,
 } from "happy-desktop-state";
+import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
 import {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
@@ -20,14 +21,17 @@ import {
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
+    conversationTurnStatusStartsGroup,
+    conversationWorkingStatusStartsGroup,
 } from "./conversationMessageGrouped";
 import {
+    CHAT_MEASURE,
     contentWidth,
     conversationRowHeight,
     conversationRowHeightCacheCreate,
 } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
-import { MessageList, type MessageListScrollPosition } from "./Message";
+import { Message, MessageList, type MessageListScrollPosition } from "./Message";
 import {
     messageTextLayoutFontGenerationGet,
     messageTextLayoutFontGenerationSubscribe,
@@ -57,10 +61,18 @@ export type ConversationViewProps = {
     workingLabel?: string;
     /** The scheduled wait the turn is inside, counted down by the owner's clock. */
     workingWait?: AgentWaitStatus;
-    /** Subagents currently running under the active turn. */
-    runningAgents?: number;
-    /** Background tasks currently owned by the active turn. */
-    backgroundTasks?: number;
+    /**
+     * Motion profile for live activity rows and the working-status footer.
+     * Defaults to the historical typewriter behavior.
+     */
+    motion?: ActivityMotion;
+    /** Activity-row content/chrome policy, independent of animation. */
+    activityTreatment?: ActivityTreatment;
+    /**
+     * The global switch for a caret at the end of a still-streaming reply.
+     * Off by default, preserving the historical no-caret text stream.
+     */
+    streamingCaret?: boolean;
     entries: readonly ConversationEntry[];
     /** Agent identity shown when a tool/activity row opens a turn before prose exists. */
     agentAuthor?: ConversationAuthor;
@@ -183,6 +195,34 @@ function conversationEntryTraceOpen(
     return trace !== undefined && expandedTurnIds?.has(trace.turnId) === true;
 }
 
+/**
+ * Splits off the queued steering waiting at the end of the transcript.
+ *
+ * Steering is the one thing in a conversation that has not happened yet: the
+ * reader typed it while the agent was working and it will be handed over at the
+ * next boundary. Ordered among the rows above the live status, it reads as
+ * something already said and answers the wrong question — the reader looks at
+ * their own words sitting above "Thinking" and cannot tell whether the turn has
+ * seen them. Below that line it reads as what it is, next in the queue.
+ *
+ * Only a run of them at the very tail moves. Steering that was already applied
+ * is ordinary history and stays where it happened.
+ */
+function conversationPendingSteering(entries: readonly ConversationEntry[]): {
+    readonly transcript: readonly ConversationEntry[];
+    readonly queued: readonly ConversationEntry[];
+} {
+    let start = entries.length;
+    while (start > 0) {
+        const entry = entries[start - 1];
+        if (entry?.kind !== "message" || entry.delivery !== "pending_steering") break;
+        start -= 1;
+    }
+    return start === entries.length
+        ? { transcript: entries, queued: [] }
+        : { transcript: entries.slice(0, start), queued: entries.slice(start) };
+}
+
 function elapsedFormat(ms: number): string {
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60) return `${seconds}s`;
@@ -243,6 +283,52 @@ export function ConversationView(props: ConversationViewProps) {
     const rowHeightCache =
         rowHeightCaches.current[conversationCacheKey] ??
         (rowHeightCaches.current[conversationCacheKey] = conversationRowHeightCacheCreate());
+    const { transcript, queued } = conversationPendingSteering(props.entries);
+    const awaitingInput = transcript.some(
+        (entry) =>
+            entry.kind === "request" &&
+            entry.request.kind === "userInput" &&
+            entry.request.status !== "answered",
+    );
+    const workingStatusStartsGroup =
+        props.running === true &&
+        props.agentAuthor !== undefined &&
+        conversationWorkingStatusStartsGroup(transcript);
+    const workingStatus = (
+        <AgentWorkingStatus
+            active={props.running === true}
+            awaitingInput={awaitingInput}
+            className="happy2-conversation-turn-status"
+            elapsedMs={props.elapsedMs}
+            label={props.workingLabel}
+            /* The phase word is the one label whose changes are the whole
+               point of the row, so it retypes wherever the rows above it
+               retype verbs. */
+            motion={
+                props.motion === undefined ||
+                props.motion === "typewriter" ||
+                props.motion === "verb-typed"
+                    ? "typewriter"
+                    : "calm"
+            }
+            phase={props.workingPhase}
+            wait={props.workingWait}
+        />
+    );
+    const workingStatusRow =
+        workingStatusStartsGroup && props.agentAuthor ? (
+            <Message
+                agent
+                author={props.agentAuthor.displayName}
+                body=""
+                className="happy2-message--activity-lead happy2-message--working-lead"
+                initials={initialsOf(props.agentAuthor.displayName)}
+            >
+                {workingStatus}
+            </Message>
+        ) : (
+            workingStatus
+        );
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -309,7 +395,7 @@ export function ConversationView(props: ConversationViewProps) {
                 <MessageList
                     estimateRowSize={(index, width) =>
                         conversationRowHeight(
-                            props.entries,
+                            transcript,
                             index,
                             {
                                 surface: "conversation",
@@ -322,18 +408,46 @@ export function ConversationView(props: ConversationViewProps) {
                     estimateRowWidth={contentWidth}
                     estimateVersion={textLayoutGeneration}
                     footer={
-                        <AgentWorkingStatus
-                            active={props.running === true}
-                            agents={props.runningAgents}
-                            backgroundTasks={props.backgroundTasks}
-                            className="happy2-conversation-turn-status"
-                            elapsedMs={props.elapsedMs}
-                            label={props.workingLabel}
-                            phase={props.workingPhase}
-                            wait={props.workingWait}
-                        />
+                        <>
+                            {workingStatusRow}
+                            {queued.length > 0 ? (
+                                <div
+                                    className="happy2-conversation__queued"
+                                    data-happy-desktop-ui="conversation-queued"
+                                >
+                                    {queued.map((entry) => (
+                                        <ConversationEntryView
+                                            entry={entry}
+                                            key={
+                                                entry.kind === "message"
+                                                    ? entry.message.id
+                                                    : entry.id
+                                            }
+                                            viewerId={props.viewerId}
+                                        />
+                                    ))}
+                                </div>
+                            ) : null}
+                        </>
                     }
-                    footerHeight={AGENT_WORKING_STATUS_ROW_HEIGHT}
+                    footerHeight={
+                        (workingStatusStartsGroup ? 68 : AGENT_WORKING_STATUS_ROW_HEIGHT) +
+                        queued.reduce(
+                            (total, entry, index) =>
+                                total +
+                                (conversationRowHeight(
+                                    queued,
+                                    index,
+                                    {
+                                        surface: "conversation",
+                                        viewerId: props.viewerId,
+                                        width: CHAT_MEASURE,
+                                    },
+                                    rowHeightCache,
+                                ) ?? 0),
+                            0,
+                        )
+                    }
                     initialScrollPosition={props.scrollPosition}
                     // The conversation is this list's lifetime: switching to
                     // another one mounts its own list, which is what lets each
@@ -342,7 +456,7 @@ export function ConversationView(props: ConversationViewProps) {
                     onScrollPositionChange={props.onScrollPositionChange}
                     virtualize
                 >
-                    {props.entries.map((entry, index) => {
+                    {transcript.map((entry, index) => {
                         const submission =
                             entry.kind === "request"
                                 ? props.requestSubmissions?.find(
@@ -352,30 +466,33 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
+                                activityMotion={props.motion}
+                                activityTreatment={props.activityTreatment}
+                                {...(props.streamingCaret === undefined
+                                    ? {}
+                                    : { streamingCaret: props.streamingCaret })}
                                 {...(entry.kind === "message" && entry.contextNote !== undefined
                                     ? { contextNote: entry.contextNote }
                                     : {})}
                                 activityAuthor={
                                     props.agentAuthor &&
-                                    conversationAgentRowStartsGroup(props.entries, index)
+                                    (conversationAgentRowStartsGroup(transcript, index) ||
+                                        conversationTurnStatusStartsGroup(transcript, index))
                                         ? props.agentAuthor
                                         : undefined
                                 }
                                 className={
                                     entry.kind === "turnStatus" &&
-                                    conversationTurnStatusAfterActivity(props.entries, index)
+                                    conversationTurnStatusAfterActivity(transcript, index)
                                         ? "happy2-turn-status--after-trace"
-                                        : conversationEntryResumesAfterActivity(
-                                                props.entries,
-                                                index,
-                                            )
+                                        : conversationEntryResumesAfterActivity(transcript, index)
                                           ? "happy2-conversation__resumed"
                                           : undefined
                                 }
                                 entry={entry}
                                 grouped={
                                     entry.kind === "message"
-                                        ? conversationMessageGrouped(props.entries, index)
+                                        ? conversationMessageGrouped(transcript, index)
                                         : undefined
                                 }
                                 key={
@@ -441,4 +558,13 @@ export function ConversationView(props: ConversationViewProps) {
             {props.overlay}
         </section>
     );
+}
+
+function initialsOf(displayName: string): string {
+    return displayName
+        .split(/\s+/u)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("");
 }

@@ -4,6 +4,7 @@ import {
     conversationEntryResumesAfterActivity,
     conversationMessageGrouped,
     conversationTurnStatusAfterActivity,
+    conversationTurnStatusStartsGroup,
 } from "./conversationMessageGrouped";
 import {
     asideTimeWidth,
@@ -321,11 +322,17 @@ export function conversationRowHeight(
     /* A settled footer owns the clearance above it when prior activity exists. */
     if (entry.kind === "turnStatus") {
         const afterActivity = conversationTurnStatusAfterActivity(entries, index);
+        const startsGroup =
+            context.surface === "conversation" && conversationTurnStatusStartsGroup(entries, index);
         return rowHeightCached(
             cache,
             entry,
-            `turn-status:${afterActivity ? "after-activity" : "plain"}`,
-            () => (afterActivity ? 40 : 32),
+            [
+                "turn-status",
+                afterActivity ? "after-activity" : "plain",
+                startsGroup ? "leading" : "continuous",
+            ].join(":"),
+            () => (afterActivity ? 40 : 32) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
         );
     }
     if (entry.kind === "notice") {

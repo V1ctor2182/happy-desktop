@@ -86,6 +86,49 @@ export function conversationAgentRowStartsGroup(
     return true;
 }
 
+/** Whether the live footer is the first agent-owned thing after the user turn. */
+export function conversationWorkingStatusStartsGroup(
+    entries: readonly ConversationEntry[],
+): boolean {
+    for (let cursor = entries.length - 1; cursor >= 0; cursor -= 1) {
+        const entry = entries[cursor];
+        if (!entry) break;
+        if (agentOwnedRow(entry) || entry.kind === "request") return false;
+        if (entry.kind === "message") return entry.message.sender?.kind !== "agent";
+        if (entry.kind === "turnStatus") return true;
+    }
+    return true;
+}
+
+/**
+ * Whether this status is the only thing its turn has left to show for itself.
+ *
+ * A turn whose entire visible history is hidden reasoning ends as one bare
+ * "Completed in 3s" under the reader's own message, owned by nobody. There is no
+ * agent content to attribute — that is what hiding reasoning means — so the
+ * status takes the identity header a tool-first or notice-first turn takes,
+ * rather than inventing a row to carry it.
+ *
+ * It is deliberately not part of `agentOwnedRow`: a status closing a turn that
+ * did real work must keep reading as the end of that turn, not as something a
+ * later turn's first row has to scan past.
+ */
+export function conversationTurnStatusStartsGroup(
+    entries: readonly ConversationEntry[],
+    index: number,
+): boolean {
+    if (entries[index]?.kind !== "turnStatus") return false;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const entry = entries[cursor];
+        if (!entry) break;
+        if (agentOwnedRow(entry)) return false;
+        if (entry.kind === "message") return entry.message.sender?.kind !== "agent";
+        // Another turn's status: this one opens everything after it.
+        if (entry.kind === "turnStatus") return true;
+    }
+    return true;
+}
+
 /** Whether this status follows activity already emitted in the same turn. */
 export function conversationTurnStatusAfterActivity(
     entries: readonly ConversationEntry[],

@@ -88,6 +88,12 @@
     text-align: left;
     cursor: pointer;
     color: var(--text);
+    /* The header is a button, and a button does not inherit the page's font:
+       left alone it falls back to the UA's own, which is how a row's verb came
+       out in Arial while every label beside it was the house face. The inner
+       label spans each set a font of their own, so this was invisible until a
+       row rendered a word without one. */
+    font-family: var(--happy2-font-ui);
     font-size: 14px;
     line-height: 20px;
 }
@@ -370,17 +376,13 @@
 }
 
 /* A call that went through a permission review is worth spotting in a scan
-   down the transcript, so its whole line turns amber: glyph, verb, subject,
-   and trailing status, not one word of it. Muted well below the warning
-   orange, because a review is a fact about the call rather than a failure and
-   a transcript where most calls were reviewed should still read as prose.
-   These follow the single-line rules because they must win over them at equal
-   specificity, and they yield to a failure, which is the louder fact. */
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__header,
+   down the transcript: its glyph and verb turn amber. The mark stops there —
+   the subject is the command itself, and a long line of amber shell text
+   reads as a warning about its content rather than a fact about its
+   approval. Muted well below the warning orange, and it yields to a failure,
+   which is the louder fact. */
 .happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__glyph,
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__verb,
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__text,
-.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__status {
+.happy2-agent-activity[data-review]:not([data-failed]) .happy2-agent-activity__verb {
     color: var(--review-accent);
 }
 
@@ -397,15 +399,40 @@
     .happy2-agent-activity__text,
 .happy2-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
     .happy2-agent-activity__text,
+.happy2-agent-activity[data-single-line][data-presentation="fileDiff"] .happy2-agent-activity__text,
 .happy2-agent-activity[data-single-line][data-mono] .happy2-agent-activity__text {
     font-family: var(--happy2-font-mono);
     font-size: 13px;
 }
 
+/* The edited file is a subject like an explored path or a command — same
+   monospace, same weight — so the row's only bold word stays the verb. It
+   shrinks to fit rather than flexing wide, keeping the diff stats beside the
+   name instead of pushed to the row's far edge. */
 .happy2-agent-activity[data-single-line][data-presentation="fileDiff"]
     .happy2-agent-activity__file-summary
     .happy2-agent-activity__text {
     flex: 0 1 auto;
-    font-weight: 600;
-    color: var(--text-secondary);
+}
+
+/* Focused conversation rows spend their width on the tool subject; timestamp
+   and copy metadata live in the detail surface for this treatment. */
+.happy2-agent-activity-row[data-treatment="focused"] {
+    padding-right: 20px;
+}
+
+/* A still label in the slot TypedText otherwise owns. It must occupy the exact
+   inline box TypedText occupies, or a row whose motion profile happens to
+   render one rather than the other sits a pixel off its neighbours: an inline
+   span is sized by the font's own ascent and descent, while an inline-block
+   aligned to the line's bottom takes the line box's full height and puts its
+   baseline where the row's other labels put theirs. Everything here but the
+   width animation therefore comes from typed-text.css. */
+.happy2-agent-activity__still-text {
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- matches TypedText exactly: one inline text run occupying the same inline box as the label it stands in for, which a flex box would not */
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+    white-space: nowrap;
+    font-family: var(--happy2-font-mono);
 }

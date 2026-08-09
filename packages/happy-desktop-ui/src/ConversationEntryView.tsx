@@ -8,7 +8,7 @@ import type {
     ConversationToolCall,
     UserError,
 } from "happy-desktop-state";
-import { AgentActivityRow } from "./AgentActivityRow";
+import { AgentActivityRow, type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
 import { TurnSummary } from "./TurnSummary";
@@ -65,6 +65,12 @@ export type ConversationEntryViewProps = {
     requestError?: UserError;
     /** Renders rich activity bodies expanded from the first paint (blueprint/tests). */
     activityDefaultExpanded?: boolean;
+    /** Motion profile for live activity rows; see `AgentActivityRow`. */
+    activityMotion?: ActivityMotion;
+    /** Content/chrome policy for activity rows; independent of motion. */
+    activityTreatment?: ActivityTreatment;
+    /** Shows a caret at the end of a still-streaming reply body. */
+    streamingCaret?: boolean;
     /** Shows or hides the intermediate entries of this message's finished turn. */
     onTraceToggle?: (turnId: string) => void;
     /** That turn's intermediate entries are currently listed. */
@@ -144,6 +150,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 activity={entry.activity}
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
+                motion={props.activityMotion}
+                treatment={props.activityTreatment}
                 onToolSelect={
                     entry.activity.kind === "tool"
                         ? (tool) => props.onToolSelect?.(entry.id, tool)
@@ -175,20 +183,44 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             </div>
         );
     }
-    if (entry.kind === "turnStatus")
-        return (
+    if (entry.kind === "turnStatus") {
+        const summary = (
             <TurnSummary
-                className={["happy2-conversation-turn-status", props.className]
-                    .filter(Boolean)
-                    .join(" ")}
+                className={
+                    props.activityAuthor
+                        ? "happy2-conversation-turn-status"
+                        : ["happy2-conversation-turn-status", props.className]
+                              .filter(Boolean)
+                              .join(" ")
+                }
                 copyText={entry.copyText}
                 data-testid={props["data-testid"]}
                 durationMs={entry.durationMs}
                 reason={entry.reason}
                 status={entry.status}
-                style={props.style}
+                {...(props.activityAuthor ? {} : { style: props.style })}
             />
         );
+        /* A turn whose only visible history was hidden reasoning has nothing
+           else to be attributed to, so its status carries the identity itself
+           rather than closing a turn that appears to belong to no one. */
+        return props.activityAuthor ? (
+            <Message
+                agent
+                author={props.activityAuthor.displayName}
+                body=""
+                className={["happy2-message--activity-lead", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
+                initials={initialsOf(props.activityAuthor.displayName)}
+                style={props.style}
+            >
+                {summary}
+            </Message>
+        ) : (
+            summary
+        );
+    }
     if (entry.kind === "notice") {
         /* Compute preparation is the runtime materializing the workspace, not
            the agent working: Rig attributes it to every session running out of
@@ -271,12 +303,12 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 data-testid={props["data-testid"]}
                 defaultExpanded={props.activityDefaultExpanded}
                 error={props.requestError}
-                onAnswer={(requestId, answers) => props.onRequestAnswer?.(requestId, answers)}
+                {...(props.onRequestAnswer ? { onAnswer: props.onRequestAnswer } : {})}
                 {...(props.onRequestSelectionChange
                     ? { onSelectionChange: props.onRequestSelectionChange }
                     : {})}
                 {...(props.requestSelection ? { selection: props.requestSelection } : {})}
-                onDecide={(requestId, decision) => props.onRequestDecide?.(requestId, decision)}
+                {...(props.onRequestDecide ? { onDecide: props.onRequestDecide } : {})}
                 pending={props.requestPending}
                 request={entry.request}
                 style={props.style}
@@ -316,6 +348,9 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             generationStatus={
                 message.generationStatus === "failed" ? "complete" : message.generationStatus
             }
+            {...(props.streamingCaret === undefined
+                ? {}
+                : { streamingCaret: props.streamingCaret })}
             grouped={props.grouped}
             initials={initialsOf(author?.displayName)}
             metaAccessory={traceRow}

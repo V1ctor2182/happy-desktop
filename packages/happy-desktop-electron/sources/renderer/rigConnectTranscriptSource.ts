@@ -1,5 +1,9 @@
-import type { ChatElement, RigConnection } from "@slopus/rig-connect";
-import type { RigChatTranscriptConnect } from "happy-desktop-state";
+import type { ChatElement, InboxItem, RigConnection, SessionState } from "@slopus/rig-connect";
+import type {
+    RigAnsweredUserInput,
+    RigChatTranscriptConnect,
+    RigSessionId,
+} from "happy-desktop-state";
 
 function attachmentUrlsResolve(
     elements: readonly ChatElement[],
@@ -24,6 +28,40 @@ function attachmentUrlsResolve(
     });
 }
 
+function answeredUserInputsProject(
+    items: readonly InboxItem[],
+    sessionId: RigSessionId,
+): readonly RigAnsweredUserInput[] {
+    const answered: RigAnsweredUserInput[] = [];
+    for (const item of items) {
+        if (
+            item.sessionId !== sessionId ||
+            item.status !== "answered" ||
+            item.answers === undefined ||
+            item.resolvedAt === undefined
+        )
+            continue;
+        answered.push({
+            requestId: item.requestId,
+            questions: item.questions.map((question) => ({
+                id: question.id,
+                header: question.header,
+                question: question.question,
+                multiSelect: question.multiSelect,
+                required: question.required ?? false,
+                options: question.options.map((option) => ({
+                    label: option.label,
+                    description: option.description,
+                })),
+            })),
+            answers: item.answers,
+            createdAt: item.createdAt,
+            resolvedAt: item.resolvedAt,
+        });
+    }
+    return answered;
+}
+
 /**
  * Opens rig-connect through Happy's capability-scoped read bridge.
  *
@@ -38,18 +76,46 @@ export function rigConnectTranscriptConnectCreate(
 ): RigChatTranscriptConnect {
     return (options) => {
         let accepted = false;
-        const connection = rig.connectSession({
+        let inboxReady = false;
+        let elements: readonly ChatElement[] | undefined;
+        let session: SessionState | undefined;
+        let answeredUserInputs: readonly RigAnsweredUserInput[] = [];
+        const emit = (): void => {
+            if (!accepted || !inboxReady || elements === undefined || session === undefined) return;
+            options.onChange(elements, session, answeredUserInputs);
+        };
+        const sessionConnection = rig.connectSession({
             sessionId: options.sessionId,
-            onChange: (elements, session) => {
-                if (session.connection === "live") accepted = true;
-                if (accepted)
-                    options.onChange(attachmentUrlsResolve(elements, rigHttpUrl), session);
+            onChange: (nextElements, nextSession) => {
+                if (nextSession.connection === "live") accepted = true;
+                elements = attachmentUrlsResolve(nextElements, rigHttpUrl);
+                session = nextSession;
+                emit();
             },
             onError: options.onError,
         });
+        const inboxConnection = rig.connectInbox({
+            onChange: (items) => {
+                answeredUserInputs = answeredUserInputsProject(items, options.sessionId);
+                inboxReady = true;
+                emit();
+            },
+            // Answer history enriches an already-authoritative live transcript.
+            // Losing that secondary feed must not close the healthy session
+            // connector and fall back to the legacy transcript path.
+            onError: () => {
+                // Answer history enriches the session but must never prevent
+                // the conversation itself from opening when that feed fails.
+                inboxReady = true;
+                emit();
+            },
+        });
         return {
-            close: () => connection.close(),
-            loadMore: (token) => connection.loadMore(token),
+            close: () => {
+                sessionConnection.close();
+                inboxConnection.close();
+            },
+            loadMore: (token) => sessionConnection.loadMore(token),
         };
     };
 }

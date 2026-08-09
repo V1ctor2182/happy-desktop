@@ -78,14 +78,6 @@ function activityTraceEntry(
                       : "complete",
             occurredAt,
         };
-    if (activity.kind === "waiting")
-        return {
-            id: entry.id,
-            kind: "tool",
-            title: activity.label,
-            status: "running",
-            occurredAt,
-        };
     const tool = activity.tool;
     const failed = tool.status === "failed" || tool.failed;
     const running = tool.status === "running" || tool.status === "awaitingApproval";

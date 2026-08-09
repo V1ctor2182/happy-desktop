@@ -224,7 +224,12 @@ export {
     type RigPairingProps,
     type RigPairingRole,
 } from "./RigPairing";
-export { AgentActivityRow, type AgentActivityRowProps } from "./AgentActivityRow";
+export {
+    AgentActivityRow,
+    type ActivityMotion,
+    type ActivityTreatment,
+    type AgentActivityRowProps,
+} from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
@@ -296,6 +301,7 @@ export {
 } from "./RigCreateSessionDialog";
 export { RigProjectCloneDialog, type RigProjectCloneDialogProps } from "./RigProjectCloneDialog";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
+export { RigActivityControl, type RigActivityControlProps } from "./RigActivityControl";
 export {
     SearchField,
     type SearchFieldEditableProps,

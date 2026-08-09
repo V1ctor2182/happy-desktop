@@ -33,20 +33,28 @@ export type ConversationRequestViewProps = {
  */
 export function ConversationRequestView(props: ConversationRequestViewProps) {
     const request = props.request;
-    if (request.kind === "userInput")
+    if (request.kind === "userInput") {
+        const answered = request.status === "answered";
         return (
             <RigUserInputPrompt
                 className={props.className}
                 data-testid={props["data-testid"]}
-                error={props.error}
-                onAnswer={(requestId, answers) => props.onAnswer?.(requestId, answers)}
-                {...(props.onSelectionChange ? { onSelectionChange: props.onSelectionChange } : {})}
-                pending={props.pending}
+                {...(!answered && props.error ? { error: props.error } : {})}
+                {...(!answered && props.onAnswer ? { onAnswer: props.onAnswer } : {})}
+                {...(!answered && props.onSelectionChange
+                    ? { onSelectionChange: props.onSelectionChange }
+                    : {})}
+                pending={!answered && props.pending}
                 request={request}
-                {...(props.selection ? { selection: props.selection } : {})}
+                {...(answered
+                    ? { resolvedAnswers: request.answers ?? {} }
+                    : props.selection
+                      ? { selection: props.selection }
+                      : {})}
                 style={props.style}
             />
         );
+    }
     return (
         <ConversationGate
             className={props.className}

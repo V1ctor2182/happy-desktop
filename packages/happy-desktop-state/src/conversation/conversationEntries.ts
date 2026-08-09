@@ -173,6 +173,10 @@ function requestEqual(left: ConversationRequest, right: ConversationRequest): bo
     if (left.kind !== right.kind || left.requestId !== right.requestId) return false;
     if (left.kind === "userInput" && right.kind === "userInput")
         return (
+            left.status === right.status &&
+            left.createdAt === right.createdAt &&
+            left.resolvedAt === right.resolvedAt &&
+            answersEqual(left.answers, right.answers) &&
             left.questions.length === right.questions.length &&
             left.questions.every((question, index) =>
                 questionEqual(question, right.questions[index]),
@@ -181,6 +185,26 @@ function requestEqual(left: ConversationRequest, right: ConversationRequest): bo
     if (left.kind === "permissionReview" && right.kind === "permissionReview")
         return toolEqual(left.tool, right.tool) && reviewEqual(left.review, right.review);
     return false;
+}
+
+function answersEqual(
+    left: Readonly<Record<string, readonly string[]>> | undefined,
+    right: Readonly<Record<string, readonly string[]>> | undefined,
+): boolean {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    const keys = Object.keys(left);
+    return (
+        keys.length === Object.keys(right).length &&
+        keys.every((key) => {
+            const leftValues = left[key];
+            const rightValues = right[key];
+            return (
+                leftValues?.length === rightValues?.length &&
+                leftValues?.every((value, index) => value === rightValues?.[index])
+            );
+        })
+    );
 }
 
 function questionEqual(
@@ -255,7 +279,6 @@ function activityEqual(left: ConversationActivity, right: ConversationActivity):
     if (left.kind !== right.kind) return false;
     if (left.kind === "reasoning" && right.kind === "reasoning")
         return left.text === right.text && left.streaming === right.streaming;
-    if (left.kind === "waiting" && right.kind === "waiting") return left.label === right.label;
     if (left.kind === "labeled" && right.kind === "labeled")
         return (
             left.label === right.label &&

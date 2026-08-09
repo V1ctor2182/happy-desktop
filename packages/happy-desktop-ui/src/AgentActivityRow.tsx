@@ -18,8 +18,25 @@ import { Spinner } from "./Spinner";
 import { TypedText } from "./TypedText";
 import { Ionicon, Octicon } from "./vectorIcons/VectorIcon";
 
+/**
+ * Which live labels type when their value changes. This affects animation
+ * only: wording, timestamps, controls, and every other piece of row content
+ * stay identical across profiles.
+ */
+export type ActivityMotion = "typewriter" | "verb-typed" | "calm-typed" | "calm";
+
+/**
+ * Content treatment independent of animation. `focused` keeps one action word
+ * for the call's life and leaves timestamp/copy metadata to the detail surface.
+ */
+export type ActivityTreatment = "detailed" | "focused";
+
 export type AgentActivityRowProps = {
     activity: ConversationActivity;
+    /** Motion profile for live updates. Defaults to the historical `typewriter`. */
+    motion?: ActivityMotion;
+    /** Row content/chrome policy, independent of which labels animate. */
+    treatment?: ActivityTreatment;
     /** Opens a tool's complete body in an owner-provided detail surface. */
     onToolSelect?: (tool: ConversationToolCall) => void;
     /**
@@ -135,6 +152,27 @@ function toolVerb(
     return active ? "Tool" : "Used";
 }
 
+/** Turns the lifecycle word into the stable action label used by focused rows. */
+function toolVerbFocused(verb: string): string {
+    switch (verb) {
+        case "Exploring":
+        case "Explored":
+            return "Explore";
+        case "Typing":
+        case "Typed":
+            return "Type";
+        case "Reading":
+            return "Read";
+        case "Editing":
+        case "Edited":
+            return "Edit";
+        case "Used":
+            return "Tool";
+        default:
+            return verb;
+    }
+}
+
 /**
  * Tool → the glyph saying what kind of work it was. Commands use Octicons
  * `code`, failed tools use Octicons `alert`, and file edits use Ionicons
@@ -176,9 +214,31 @@ function ToolIcon(props: { glyph: ToolGlyph }) {
     return <Icon name={props.glyph.name} size={12} />;
 }
 
-/** Retypes a tool label whenever this row's projected text changes. */
-function AgentActivityChangingText(props: { value: string }) {
-    return <TypedText data-happy-desktop-ui="agent-activity-changing-text" value={props.value} />;
+/**
+ * Retypes a tool label whenever this row's projected text changes.
+ *
+ * `typeFirst` also types the text the label opens with. A subject only retypes
+ * when it changes, and whether a command ever changes is decided by the wire —
+ * arguments that streamed in arrive as several values and type, the same
+ * command delivered whole arrives once and does not. Rows that are live when
+ * they appear ask for the first value to type too, so the same act looks the
+ * same either way.
+ */
+function AgentActivityChangingText(props: { value: string; typed?: boolean; typeFirst?: boolean }) {
+    return (props.typed ?? true) ? (
+        <TypedText
+            data-happy-desktop-ui="agent-activity-changing-text"
+            {...(props.typeFirst ? { typeInitial: true } : {})}
+            value={props.value}
+        />
+    ) : (
+        <span
+            className="happy2-agent-activity__still-text"
+            data-happy-desktop-ui="agent-activity-changing-text"
+        >
+            {props.value}
+        </span>
+    );
 }
 
 function explorationSummary(
@@ -404,6 +464,8 @@ function PermissionReviewRow(props: { review: ConversationActivityReview }) {
 function AgentToolActivity(props: {
     tool: ConversationToolCall;
     defaultExpanded?: boolean;
+    motion?: ActivityMotion;
+    treatment?: ActivityTreatment;
     onSelect?: (tool: ConversationToolCall) => void;
     onFileOpen?: (path: string) => void;
     singleLine?: boolean;
@@ -414,6 +476,11 @@ function AgentToolActivity(props: {
     const [expanded, setExpanded] = useState(props.defaultExpanded ?? false);
     const singleLine = props.singleLine ?? false;
     const running = tool.status === "running";
+    const motion = props.motion ?? "typewriter";
+    const focused = props.treatment === "focused";
+    const verbTyped = motion === "typewriter" || motion === "verb-typed";
+    /** The subject types only in the profiles that type it. */
+    const subjectTyped = motion === "typewriter" || motion === "calm-typed";
 
     const tone = singleLine ? "neutral" : statusTone(tool.status);
 
@@ -459,7 +526,7 @@ function AgentToolActivity(props: {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = humanizeToolName(tool.toolName);
     }
-
+    if (focused && presentation?.type !== "fileDiff") verb = toolVerbFocused(verb);
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;
 
     const argsJson = presentation ? undefined : boundedJson(tool.arguments);
@@ -553,7 +620,7 @@ function AgentToolActivity(props: {
                 className="happy2-agent-activity__verb"
                 data-happy-desktop-ui="agent-activity-verb"
             >
-                <AgentActivityChangingText value={verb} />
+                <AgentActivityChangingText typed={verbTyped} value={verb} />
             </span>
             {stats ? (
                 <span
@@ -564,7 +631,11 @@ function AgentToolActivity(props: {
                         className="happy2-agent-activity__text"
                         data-happy-desktop-ui="agent-activity-text"
                     >
-                        <AgentActivityChangingText value={primaryText} />
+                        <AgentActivityChangingText
+                            typeFirst={running}
+                            typed={subjectTyped}
+                            value={primaryText}
+                        />
                     </ScrollingText>
                     {/* A side that changed nothing is left unsaid: "+0" is a
                         number the reader has to read before learning there was
@@ -590,7 +661,11 @@ function AgentToolActivity(props: {
                     className="happy2-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
-                    <AgentActivityChangingText value={primaryText} />
+                    <AgentActivityChangingText
+                        typeFirst={running}
+                        typed={subjectTyped}
+                        value={primaryText}
+                    />
                 </ScrollingText>
             )}
             {hasBody ? (
@@ -598,7 +673,7 @@ function AgentToolActivity(props: {
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
             ) : null}
-            <AgentActivityTime time={props.time} />
+            {focused ? null : <AgentActivityTime time={props.time} />}
         </>
     );
 
@@ -670,11 +745,13 @@ function AgentToolActivity(props: {
                         <Icon name="eye" size={14} />
                     </button>
                 ) : null}
-                <CopyButton
-                    data-happy-desktop-ui="agent-activity-copy"
-                    label="Copy tool detail"
-                    text={copyText}
-                />
+                {focused ? null : (
+                    <CopyButton
+                        data-happy-desktop-ui="agent-activity-copy"
+                        label="Copy tool detail"
+                        text={copyText}
+                    />
+                )}
             </div>
 
             {!singleLine && tool.review ? <PermissionReviewRow review={tool.review} /> : null}
@@ -982,26 +1059,6 @@ function AgentLabeledActivity(props: {
     );
 }
 
-/** Compact live inference marker; the circular spinner replaces a textual status row. */
-function AgentWaitingActivity(props: { label: string }) {
-    return (
-        <div
-            className="happy2-agent-activity"
-            data-happy-desktop-ui="agent-activity-call"
-            data-single-line=""
-            data-status="running"
-            data-tone="neutral"
-        >
-            <div
-                className="happy2-agent-activity__header"
-                data-happy-desktop-ui="agent-activity-header"
-            >
-                <Spinner label={props.label} size={16} tone="muted" variant="circle" />
-            </div>
-        </div>
-    );
-}
-
 /**
  * AgentActivityRow — the one glanceable row for everything an agent does inside
  * a conversation: a tool call, a reasoning block, or a shell run. Each variant
@@ -1017,20 +1074,21 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
             className={["happy2-agent-activity-row", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="agent-activity-row"
             data-kind={activity.kind}
+            data-treatment={props.treatment ?? "detailed"}
             data-testid={props["data-testid"]}
             style={props.style}
         >
             {activity.kind === "tool" ? (
                 <AgentToolActivity
                     defaultExpanded={props.defaultExpanded}
+                    motion={props.motion}
+                    treatment={props.treatment}
                     onSelect={props.onToolSelect}
                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                     singleLine={props.singleLine}
                     time={props.time}
                     tool={activity.tool}
                 />
-            ) : activity.kind === "waiting" ? (
-                <AgentWaitingActivity label={activity.label} />
             ) : activity.kind === "labeled" ? (
                 <AgentLabeledActivity
                     label={activity.label}

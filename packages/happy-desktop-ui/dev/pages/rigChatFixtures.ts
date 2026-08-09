@@ -334,6 +334,7 @@ export const rigMenus: RigMenusSnapshot = {
 export const rigUserInput: Extract<ConversationRequest, { kind: "userInput" }> = {
     kind: "userInput",
     requestId: "req-1",
+    status: "pending",
     questions: [
         {
             id: "approach",

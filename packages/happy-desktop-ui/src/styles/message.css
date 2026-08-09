@@ -767,6 +767,33 @@
     display: block;
 }
 
+/* When the surface opts in, a caret rides the end of a streaming body — the
+ * same bar activity labels wear while typing. It sits after the last rendered
+ * block so partial markdown keeps its normal layout, and it occupies no width
+ * of its own. */
+.happy2-message[data-streaming-caret] .happy2-message__body > :last-child::after {
+    display: inline-flex;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.125em;
+    background: currentcolor;
+    content: "";
+    animation: happy2-message-streaming-caret 1s steps(1, end) infinite;
+}
+
+@keyframes happy2-message-streaming-caret {
+    50% {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy2-message[data-streaming-caret] .happy2-message__body > :last-child::after {
+        animation: none;
+    }
+}
+
 .happy2-message__empty-text {
     color: var(--text-secondary);
     font-style: italic;

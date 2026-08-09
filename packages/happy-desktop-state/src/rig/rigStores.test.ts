@@ -297,6 +297,8 @@ describe("rigChatStore streaming reconciliation", () => {
         );
         await flush();
         expect(store.get().runStatus).toBe("running");
+        expect(store.get().workingPhase).toBe("working");
+        expect(store.get().workingLabel).toBeUndefined();
 
         fake.sessionEmit(
             "s1" as RigSessionId,
@@ -307,6 +309,7 @@ describe("rigChatStore streaming reconciliation", () => {
                 event: { type: "text_start" },
             }),
         );
+        expect(store.get().workingPhase).toBe("texting");
         fake.sessionEmit(
             "s1" as RigSessionId,
             event("s1", "e3", 3, {
@@ -655,6 +658,7 @@ describe("rigChatStore streaming reconciliation", () => {
         );
         await flush();
         expect(store.get().pendingUserInputs).toHaveLength(1);
+        expect(store.get().workingLabel).toBeUndefined();
         fake.sessionSet(
             fakeRigSession("s1", {
                 pendingUserInputs: [],

@@ -39,6 +39,7 @@ import type {
     RigTransport,
 } from "./rigTransport.js";
 import type {
+    RigAnsweredUserInput,
     RigBackgroundProcess,
     RigEventId,
     RigGoal,
@@ -86,7 +87,9 @@ function transcriptSessionBusy(session: SessionState): boolean {
 function workingPhaseProject(
     session: SessionState | undefined,
     streaming: RigStreamingMessage | undefined,
+    waitingForModel: boolean,
 ): RigWorkingPhase {
+    if (waitingForModel) return "waiting";
     switch (session?.activity.kind) {
         case "thinking":
             return "thinking";
@@ -109,13 +112,62 @@ function workingPhaseProject(
 }
 
 /**
+ * A run exists, but nothing from its agent side has reached this client yet.
+ *
+ * Rig can optimistically call the session "thinking" as soon as it dispatches
+ * the request. The transcript boundary is more precise for the reader: until an
+ * empty inference placeholder advances to thinking, tool, or text output, this
+ * time is provider latency rather than observable model work.
+ */
+function waitingForModelProject(
+    session: SessionState | undefined,
+    elements: readonly ChatElement[] | undefined,
+    runStatus: RigChatSnapshot["runStatus"],
+): boolean {
+    // Only rig-connect has the structural inference placeholder that makes this
+    // distinction authoritative. The compatibility stream has no equivalent
+    // fact and must keep its generic/stream-derived phase instead of guessing.
+    if (runStatus !== "running" || session === undefined || elements === undefined) return false;
+    const activeGroup = session?.activeGroup;
+    if (activeGroup !== undefined) {
+        const activeElement = elements?.find(
+            (element) => element.groupId === activeGroup.groupId && element.kind !== "user_message",
+        );
+        return activeElement?.kind === "inference";
+    }
+    const activeTurn = session.activeTurn;
+    if (activeTurn === undefined) return false;
+    const alreadyProducedOutput = elements.some(
+        (element) =>
+            element.runId === activeTurn.runId &&
+            element.kind !== "user_message" &&
+            element.kind !== "inference" &&
+            element.kind !== "group_end",
+    );
+    if (alreadyProducedOutput) return false;
+    const activity = session?.activity.kind;
+    return (
+        activity === undefined ||
+        activity === "idle" ||
+        activity === "queued" ||
+        activity === "thinking"
+    );
+}
+
+/**
  * Prefers the agent's own humanized activity text over the generic phase word.
  *
  * The daemon describes what it is doing right now — "Running Bash", or a tool's
  * own status such as "Reading AGENTS.md" — so a status line says something more
  * useful than "Calling tools". An idle session has nothing to say.
  */
-function workingLabelProject(session: SessionState | undefined): string | undefined {
+function workingLabelProject(
+    session: SessionState | undefined,
+    waitingForModel: boolean,
+): string | undefined {
+    // The daemon's optimistic "Thinking" label must not override the more
+    // honest pre-response phase projected above.
+    if (waitingForModel) return undefined;
     const activity = session?.activity;
     if (activity === undefined || activity.kind === "idle") return undefined;
     const label = activity.label.split("\n")[0]?.trim() ?? "";
@@ -699,7 +751,11 @@ export interface RigChatTranscriptConnection {
 
 export type RigChatTranscriptConnect = (options: {
     readonly sessionId: RigSessionId;
-    readonly onChange: (elements: readonly ChatElement[], session: SessionState) => void;
+    readonly onChange: (
+        elements: readonly ChatElement[],
+        session: SessionState,
+        answeredUserInputs: readonly RigAnsweredUserInput[],
+    ) => void;
     readonly onError: (error: unknown) => void;
 }) => RigChatTranscriptConnection;
 
@@ -752,6 +808,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let ephemeral: ConversationEntry[] = [];
     let transcriptElements: readonly ChatElement[] | undefined;
     let transcriptSession: SessionState | undefined;
+    let transcriptAnsweredUserInputs: readonly RigAnsweredUserInput[] = [];
     let transcriptConnection: RigChatTranscriptConnection | undefined;
     let mutationRejection: MutationRejectedDelta | undefined;
     const pendingMutationIds = new Set<string>();
@@ -898,6 +955,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                       showReasoning,
                       ephemeral: projectedEphemeral,
                       pendingUserInputs,
+                      answeredUserInputs: transcriptAnsweredUserInputs,
                       expandedGroupIds: expandedTurnIds,
                       subagents,
                   });
@@ -947,6 +1005,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 ? withMutationState
                 : withMutationState.filter((entry) => !clearedIds.has(entryKey(entry)));
         const entries = entriesMerge(previous.entries, visible);
+        const waitingForModel = waitingForModelProject(
+            transcriptSession,
+            transcriptElements,
+            runStatus,
+        );
         const next: RigChatSnapshot = {
             sessionId,
             ready: transcriptSession !== undefined || status === "ready",
@@ -969,8 +1032,12 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             entries,
             streaming: transientStreamingPresentation,
             runStatus,
-            workingPhase: workingPhaseProject(transcriptSession, transientStreamingPresentation),
-            workingLabel: workingLabelProject(transcriptSession),
+            workingPhase: workingPhaseProject(
+                transcriptSession,
+                transientStreamingPresentation,
+                waitingForModel,
+            ),
+            workingLabel: workingLabelProject(transcriptSession, waitingForModel),
             workingWait: workingWaitProject(transcriptSession),
             activeTurnId,
             runId,
@@ -1738,7 +1805,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         generation += 1;
         transcriptConnection = deps.transcriptConnect?.({
             sessionId,
-            onChange: (elements, connectedSession) => {
+            onChange: (elements, connectedSession, answeredUserInputs) => {
                 if (!active || disposed) return;
                 // The accepted hello is now the session/transcript authority.
                 // Retain the one bootstrap read for compatibility-only metadata,
@@ -1747,6 +1814,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 unsubscribeSession = undefined;
                 transcriptElements = elements;
                 transcriptSession = connectedSession;
+                transcriptAnsweredUserInputs = answeredUserInputs;
                 runStatus = transcriptSessionBusy(connectedSession) ? "running" : "idle";
                 runStartedAt = connectedSession.activeTurn?.startedAt;
                 runId = connectedSession.activeTurn?.runId;
@@ -1768,6 +1836,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 transcriptConnection = undefined;
                 transcriptElements = undefined;
                 transcriptSession = undefined;
+                transcriptAnsweredUserInputs = [];
                 runStatus =
                     session?.status === "running" || session?.status === "queued"
                         ? "running"
@@ -1801,6 +1870,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         transcriptConnection = undefined;
         transcriptElements = undefined;
         transcriptSession = undefined;
+        transcriptAnsweredUserInputs = [];
         // Suspend polling while nothing observes this store; the open flag persists
         // so a re-subscription resumes it. No background work without subscribers.
         usagePollStop();

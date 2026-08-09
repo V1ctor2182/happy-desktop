@@ -33,6 +33,15 @@
     mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
 }
 
+/* While a label inside is still typing, the end fade is on from the first
+   frame. Overflow only becomes measurable once the reveal passes the row edge,
+   so waiting for the measurement made the fade pop in mid-animation instead of
+   framing it. */
+.happy2-scrolling-text:has(.happy2-typed-text[data-typing]) {
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+}
+
 .happy2-scrolling-text[data-fade-start] {
     -webkit-mask-image: linear-gradient(to right, transparent 0, black 24px);
     mask-image: linear-gradient(to right, transparent 0, black 24px);

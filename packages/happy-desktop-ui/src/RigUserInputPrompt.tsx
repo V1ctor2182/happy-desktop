@@ -7,17 +7,17 @@ import { Checkbox } from "./Checkbox";
 export type RigUserInputAnswerMap = Record<string, string[]>;
 
 /**
- * Whether the prompt draws its own container. `card` is the standalone form a
- * transcript needs, because a question there has to separate itself from the
- * messages around it. `flat` drops the fill, border, and padding for a host
- * that already gives the question a container — the inbox, where the asking
- * session's line and the question it asked are one block.
+ * Whether the prompt follows transcript or inbox spacing. `card` uses the
+ * conversation's full composer measure; `flat` inherits the inbox row around it.
  */
 export type RigUserInputPromptVariant = "card" | "flat";
 
 export type RigUserInputPromptProps = {
     request: RigUserInputRequest;
-    onAnswer: (requestId: string, answers: RigUserInputAnswerMap) => void;
+    /** Authoritative settled answers turn the prompt into compact transcript history. */
+    resolvedAnswers?: Readonly<Record<string, readonly string[]>>;
+    /** Absent when this surface can display choices but cannot submit them. */
+    onAnswer?: (requestId: string, answers: RigUserInputAnswerMap) => void;
     /**
      * What is ticked right now, for an owner that keeps the selection. Supplying
      * it with `onSelectionChange` is what lets something outside this card act on
@@ -62,10 +62,11 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
 
 /**
  * RigUserInputPrompt — renders a `RigUserInputRequest` as one or more option
- * pickers. Single-select questions clear other options; multi-select questions
- * accumulate. Submit calls `onAnswer(requestId, { [questionId]: string[] })` with
- * the chosen option labels, and is blocked until every `required` question has at
- * least one selection.
+ * pickers, or as compact read-only history when `resolvedAnswers` is present.
+ * Single-select questions clear other options; multi-select questions
+ * accumulate. Submit calls `onAnswer(requestId, { [questionId]: string[] })`
+ * with the chosen option labels, and is blocked until every `required` question
+ * has at least one selection.
  *
  * Each question states its own selection rule beside its name, so a person can
  * tell a single choice from an accumulating one, and an optional question from
@@ -79,10 +80,14 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
 export function RigUserInputPrompt(props: RigUserInputPromptProps) {
     const { request } = props;
     const [ownAnswers, setOwnAnswers] = useState<RigUserInputAnswerMap>({});
-    const controlled = props.selection !== undefined;
+    const resolved = props.resolvedAnswers !== undefined;
+    const controlled = props.selection !== undefined || resolved;
     const answers: RigUserInputAnswerMap = controlled
         ? Object.fromEntries(
-              Object.entries(props.selection ?? {}).map(([id, values]) => [id, [...values]]),
+              Object.entries(props.resolvedAnswers ?? props.selection ?? {}).map(([id, values]) => [
+                  id,
+                  [...values],
+              ]),
           )
         : ownAnswers;
 
@@ -103,6 +108,7 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
         <section
             className={["happy2-rig-input", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="rig-user-input"
+            data-state={resolved ? "answered" : "pending"}
             data-testid={props["data-testid"]}
             data-variant={props.variant ?? "card"}
             style={props.style}
@@ -129,61 +135,115 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
                                         className="happy2-rig-input__rule"
                                         data-happy-desktop-ui="rig-user-input-rule"
                                     >
-                                        {selectionRule(question)}
+                                        {resolved
+                                            ? selected.length > 0
+                                                ? "Answered"
+                                                : question.required
+                                                  ? "No answer"
+                                                  : "Skipped"
+                                            : selectionRule(question)}
                                     </span>
                                 </span>
                                 <span className="happy2-rig-input__prompt">
                                     {question.question}
                                 </span>
                             </legend>
-                            <div className="happy2-rig-input__options">
-                                {question.options.map((option) => (
-                                    <label
-                                        className="happy2-rig-input__option"
-                                        data-disabled={props.pending ? "" : undefined}
-                                        data-happy-desktop-ui="rig-user-input-option"
-                                        data-selected={
-                                            selected.includes(option.label) ? "" : undefined
-                                        }
-                                        key={option.label}
-                                    >
-                                        <Checkbox
-                                            aria-label={option.label}
-                                            checked={selected.includes(option.label)}
-                                            disabled={props.pending}
-                                            onChange={() =>
-                                                select(
-                                                    question.id,
-                                                    option.label,
-                                                    question.multiSelect,
-                                                )
-                                            }
-                                        />
-                                        <span className="happy2-rig-input__option-body">
-                                            <span className="happy2-rig-input__option-label">
-                                                {option.label}
+                            {resolved ? (
+                                <div
+                                    className="happy2-rig-input__answers"
+                                    data-happy-desktop-ui="rig-user-input-answers"
+                                >
+                                    {(answers[question.id] ?? []).length > 0 ? (
+                                        (answers[question.id] ?? []).map((answer) => {
+                                            const option = question.options.find(
+                                                (candidate) => candidate.label === answer,
+                                            );
+                                            return (
+                                                <div
+                                                    className="happy2-rig-input__answer"
+                                                    key={answer}
+                                                >
+                                                    <span className="happy2-rig-input__answer-label">
+                                                        {answer}
+                                                    </span>
+                                                    {option?.description ? (
+                                                        <span className="happy2-rig-input__answer-description">
+                                                            {option.description}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="happy2-rig-input__answer">
+                                            <span className="happy2-rig-input__answer-label">
+                                                {question.required ? "No answer" : "Skipped"}
                                             </span>
-                                            {option.description ? (
-                                                <span className="happy2-rig-input__option-description">
-                                                    {option.description}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="happy2-rig-input__options">
+                                    {question.options.map((option, optionIndex) => {
+                                        const descriptionId = `${request.requestId}-${question.id}-${optionIndex}-description`;
+                                        return (
+                                            <label
+                                                className="happy2-rig-input__option"
+                                                data-disabled={props.pending ? "" : undefined}
+                                                data-happy-desktop-ui="rig-user-input-option"
+                                                data-selected={
+                                                    selected.includes(option.label) ? "" : undefined
+                                                }
+                                                key={option.label}
+                                                title={option.description || undefined}
+                                            >
+                                                <Checkbox
+                                                    aria-describedby={
+                                                        option.description
+                                                            ? descriptionId
+                                                            : undefined
+                                                    }
+                                                    aria-label={option.label}
+                                                    checked={selected.includes(option.label)}
+                                                    disabled={props.pending}
+                                                    onChange={() =>
+                                                        select(
+                                                            question.id,
+                                                            option.label,
+                                                            question.multiSelect,
+                                                        )
+                                                    }
+                                                />
+                                                <span className="happy2-rig-input__option-body">
+                                                    <span className="happy2-rig-input__option-label">
+                                                        {option.label}
+                                                    </span>
+                                                    {option.description ? (
+                                                        <span
+                                                            className="happy2-rig-input__option-description"
+                                                            id={descriptionId}
+                                                        >
+                                                            {option.description}
+                                                        </span>
+                                                    ) : null}
                                                 </span>
-                                            ) : null}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </fieldset>
                     );
                 })}
             </div>
-            {props.error ? (
+            {!resolved && props.error ? (
                 <Banner
-                    {...(props.submitDisabled
+                    {...(props.submitDisabled || props.onAnswer === undefined
                         ? {}
                         : {
                               action: {
                                   label: "Retry",
-                                  onClick: () => props.onAnswer(request.requestId, answers),
+                                  onClick: () => props.onAnswer?.(request.requestId, answers),
                               },
                           })}
                     data-testid="rig-user-input-error"
@@ -193,17 +253,29 @@ export function RigUserInputPrompt(props: RigUserInputPromptProps) {
                     {props.error.message}
                 </Banner>
             ) : null}
-            <div className="happy2-rig-input__footer">
-                <Button
-                    data-action="submit"
-                    disabled={!complete || props.pending || props.submitDisabled}
-                    onClick={() => props.onAnswer(request.requestId, answers)}
-                    size="small"
-                    title={props.submitDisabledReason}
-                >
-                    Submit
-                </Button>
-            </div>
+            {resolved ? null : (
+                <div className="happy2-rig-input__footer">
+                    <Button
+                        data-action="submit"
+                        disabled={
+                            !complete ||
+                            props.pending ||
+                            props.submitDisabled ||
+                            props.onAnswer === undefined
+                        }
+                        loading={props.pending}
+                        onClick={() => props.onAnswer?.(request.requestId, answers)}
+                        size="small"
+                        title={
+                            props.submitDisabledReason ??
+                            (props.onAnswer === undefined ? "Answers are unavailable" : undefined)
+                        }
+                        variant="secondary"
+                    >
+                        Submit
+                    </Button>
+                </div>
+            )}
         </section>
     );
 }

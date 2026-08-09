@@ -140,6 +140,7 @@ import {
     MarkdownDocument,
     Modal,
     ModalOverlay,
+    RigActivityControl,
     RigActivityPanel,
     RigControlMenu,
     fileTreeBuild,
@@ -3360,6 +3361,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             <RigPanelComposer
                 conversation={conversation.value}
                 groupName={openGroup?.name}
+                now={now}
                 onChatSelect={props.onChatSelect}
                 projects={rows}
                 canAbort={conversationCanAbort}
@@ -4534,6 +4536,39 @@ function RigGroupComposer(props: {
     );
 }
 
+function RigActivityComposerPanel(props: {
+    conversation: RigConversationSnapshot;
+    now: number;
+    rigOnline: () => boolean;
+    unavailable?: string;
+    workspace: RigWorkspaceStore;
+}) {
+    if (!props.conversation.activityPanelOpen) return null;
+    const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    return (
+        <ComposerPanel
+            onClose={() => props.workspace.activityPanelClose()}
+            title="Session activity"
+        >
+            <RigActivityPanel
+                backgroundProcesses={props.conversation.backgroundProcesses}
+                goal={props.conversation.goal}
+                now={props.now}
+                {...(props.unavailable === undefined
+                    ? {
+                          onBackgroundProcessStop: (processId: number) => {
+                              if (props.rigOnline())
+                                  swallow(props.workspace.backgroundProcessStop(processId));
+                          },
+                      }
+                    : {})}
+                subagents={props.conversation.subagents}
+                tasks={props.conversation.tasks}
+            />
+        </ComposerPanel>
+    );
+}
+
 /** The open conversation's materialization states, inside the directory's tabs. */
 function RigConversationBody(props: {
     conversation: RigWorkspaceSnapshot["conversation"];
@@ -4751,30 +4786,15 @@ function RigConversationSurface(props: {
                             />
                         </ComposerPanel>
                     ) : null}
-                    {conversation.activityPanelOpen ? (
-                        <ComposerPanel
-                            onClose={() => workspace.activityPanelClose()}
-                            title="Session activity"
-                        >
-                            <RigActivityPanel
-                                backgroundProcesses={conversation.backgroundProcesses}
-                                goal={conversation.goal}
-                                now={props.now}
-                                {...(props.unavailable === undefined
-                                    ? {
-                                          onBackgroundProcessStop: (processId: number) => {
-                                              if (props.rigOnline())
-                                                  swallow(
-                                                      workspace.backgroundProcessStop(processId),
-                                                  );
-                                          },
-                                      }
-                                    : {})}
-                                subagents={conversation.subagents}
-                                tasks={conversation.tasks}
-                            />
-                        </ComposerPanel>
-                    ) : null}
+                    <RigActivityComposerPanel
+                        conversation={conversation}
+                        now={props.now}
+                        rigOnline={props.rigOnline}
+                        {...(props.unavailable === undefined
+                            ? {}
+                            : { unavailable: props.unavailable })}
+                        workspace={workspace}
+                    />
                     <SlotEntries
                         entries={props.slots.aboveComposer}
                         onAction={props.slotAction}
@@ -4863,6 +4883,14 @@ function RigConversationSurface(props: {
                                 onServiceTierChange={(tier?: RigServiceTier) => {
                                     if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
                                 }}
+                            />
+                            <RigActivityControl
+                                agents={conversation.subagents.length}
+                                backgroundTerminals={conversation.backgroundProcesses.length}
+                                hasGoal={conversation.goal !== undefined}
+                                onClick={() => workspace.activityPanelToggle()}
+                                open={conversation.activityPanelOpen}
+                                tasks={conversation.tasks.length}
                             />
                             <SlotEntries
                                 entries={props.slots.statusLine}
@@ -4990,11 +5018,10 @@ function RigConversationSurface(props: {
             onRequestSelectionChange={(requestId, answers) =>
                 workspace.requestSelectionUpdate(requestId, answers)
             }
+            activityTreatment="focused"
+            motion="calm-typed"
             running={conversation.running}
-            runningAgents={
-                conversation.subagents.filter((subagent) => subagent.status === "running").length
-            }
-            backgroundTasks={conversation.backgroundProcesses.length}
+            streamingCaret
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
@@ -5059,6 +5086,7 @@ function chatTargetLabel(
 function RigPanelComposer(props: {
     conversation: RigConversationSnapshot;
     groupName: string | undefined;
+    now: number;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
@@ -5089,11 +5117,22 @@ function RigPanelComposer(props: {
             <ConversationDock
                 composer={conversation.composer}
                 composerAboveControl={
-                    <SlotEntries
-                        entries={props.slots.aboveComposer}
-                        onAction={props.slotAction}
-                        placement="above-composer"
-                    />
+                    <>
+                        <RigActivityComposerPanel
+                            conversation={conversation}
+                            now={props.now}
+                            rigOnline={props.rigOnline}
+                            {...(props.unavailable === undefined
+                                ? {}
+                                : { unavailable: props.unavailable })}
+                            workspace={workspace}
+                        />
+                        <SlotEntries
+                            entries={props.slots.aboveComposer}
+                            onAction={props.slotAction}
+                            placement="above-composer"
+                        />
+                    </>
                 }
                 disabled={props.readOnly}
                 submitDisabled={props.unavailable !== undefined}
@@ -5153,6 +5192,14 @@ function RigPanelComposer(props: {
                                         if (props.rigOnline())
                                             workspace.sessionServiceTierUpdate(tier);
                                     }}
+                                />
+                                <RigActivityControl
+                                    agents={conversation.subagents.length}
+                                    backgroundTerminals={conversation.backgroundProcesses.length}
+                                    hasGoal={conversation.goal !== undefined}
+                                    onClick={() => workspace.activityPanelToggle()}
+                                    open={conversation.activityPanelOpen}
+                                    tasks={conversation.tasks.length}
                                 />
                                 <SlotEntries
                                     entries={props.slots.statusLine}

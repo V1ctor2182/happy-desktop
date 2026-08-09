@@ -111,6 +111,7 @@ export type RigSessionStatus =
 
 /** Reader-facing phase of the active turn's current work. */
 export type RigWorkingPhase =
+    | "waiting"
     | "working"
     | "thinking"
     | "generatingTools"
@@ -898,6 +899,21 @@ export interface RigModelSelection {
 export interface RigUserInputAnswers {
     readonly requestId: string;
     readonly answers: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * A question the daemon has authoritatively recorded as answered.
+ *
+ * Pending questions live on the session. Resolved questions leave that list,
+ * so the inbox is the durable source that lets their original transcript row
+ * remain visible after resolution.
+ */
+export interface RigAnsweredUserInput {
+    readonly requestId: string;
+    readonly questions: readonly RigUserInputQuestion[];
+    readonly answers: Readonly<Record<string, readonly string[]>>;
+    readonly createdAt: number;
+    readonly resolvedAt: number;
 }
 
 // ---------------------------------------------------------------------------

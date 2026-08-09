@@ -545,6 +545,7 @@ export function rigConversationBuild(
                 kind: "userInput",
                 requestId: request.requestId,
                 questions: request.questions,
+                status: "pending",
             },
         });
 

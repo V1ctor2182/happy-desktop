@@ -15,14 +15,23 @@
     font-family: var(--happy2-font-ui);
 }
 
-/* A question in a transcript draws its own container, because it has to hold
-   itself apart from the messages above and below it. A host that already gives
-   the question a block of its own asks for `flat` and supplies that container. */
+/* A question in a transcript is a quiet inline response block. It follows the
+   same measure as the composer without introducing another card or table. */
 .happy2-rig-input[data-variant="card"] {
-    padding: 16px;
-    background: var(--surface-high);
-    border: 1px solid var(--divider);
-    border-radius: var(--happy2-radius-md);
+    gap: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+}
+
+/* Match the composer's actual card edges, not only the shared max measure. */
+.happy2-conversation .happy2-rig-input[data-variant="card"] {
+    width: auto;
+    /* The transcript reserves an 11px scrollbar gutter while the dock does
+       not. Split that gutter across the two margins so this block's painted
+       edges still land on the composer's painted edges. */
+    margin-right: 14px;
+    margin-left: 18px;
 }
 
 .happy2-rig-input__questions {
@@ -166,6 +175,108 @@
     width: 100%;
 }
 
+/* Transcript variant: a restrained form embedded in the response flow. */
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__questions {
+    gap: 0;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__question {
+    gap: 0;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__question + .happy2-rig-input__question {
+    padding-top: 8px;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__legend {
+    gap: 3px;
+    padding: 6px 12px 5px;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__prompt {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 22px;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__options {
+    gap: 2px;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option {
+    align-items: center;
+    gap: 9px;
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option + .happy2-rig-input__option {
+    border-top: 0;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option:hover {
+    background: var(--surface-ripple);
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option[data-selected] {
+    background: color-mix(in srgb, var(--surface-selected) 72%, transparent);
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option-label {
+    font-size: 14px;
+    line-height: 19px;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__option-description {
+    min-width: 0;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: normal;
+}
+
+.happy2-rig-input[data-variant="card"] .happy2-rig-input__footer {
+    padding: 4px 8px;
+    border-top: 0;
+}
+
+.happy2-rig-input__answers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+}
+
+.happy2-rig-input__answer {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 5px 12px;
+    border-radius: var(--happy2-radius-sm);
+    background: color-mix(in srgb, var(--surface-selected) 58%, transparent);
+}
+
+.happy2-rig-input__answer-label {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    color: var(--text);
+}
+
+.happy2-rig-input__answer-description {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-secondary);
+}
+
 /* ---- Session controls / control menu --------------------------------------- */
 
 .happy2-rig-controls {
@@ -294,6 +405,59 @@
    already the affordance, and pointing at it opens the menu. */
 .happy2-rig-control[data-variant="ghost"] .happy2-rig-control__chevron {
     display: none;
+}
+
+/* ---- Session activity footer control -------------------------------------
+ *
+ * A session can carry dozens of tasks, agents, and background terminals. The
+ * detailed collection belongs in the capped shared activity panel; the footer
+ * keeps one compact aggregate control before context usage.
+ */
+
+.happy2-rig-activity-control {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 20px;
+    max-width: 104px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    opacity: 0.5;
+    white-space: nowrap;
+    transition:
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.happy2-rig-activity-control:hover:not(:disabled),
+.happy2-rig-activity-control[data-open] {
+    color: var(--text);
+    opacity: 1;
+}
+
+.happy2-rig-activity-control:disabled {
+    cursor: default;
+}
+
+.happy2-rig-activity-control__summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-activity-control__count {
+    font-variant-numeric: tabular-nums;
 }
 
 /* Full-window transparent dismissal layer beneath the popover; leaves flow. */

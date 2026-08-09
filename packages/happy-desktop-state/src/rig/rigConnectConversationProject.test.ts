@@ -1,4 +1,4 @@
-import type { ChatElement, CompactionElement } from "@slopus/rig-connect";
+import type { ChatElement, CompactionElement, ToolCallElement } from "@slopus/rig-connect";
 import { expect, it } from "vitest";
 import { rigConnectConversationProject } from "./rigConnectConversationProject.js";
 
@@ -20,6 +20,7 @@ function compactionProject(element: CompactionElement) {
         showReasoning: false,
         ephemeral: [],
         pendingUserInputs: [],
+        answeredUserInputs: [],
         expandedGroupIds: new Set(),
         subagents: [],
     });
@@ -80,6 +81,7 @@ it("keeps a standalone manual compaction activity and completion time", () => {
         showReasoning: false,
         ephemeral: [],
         pendingUserInputs: [],
+        answeredUserInputs: [],
         expandedGroupIds: new Set(),
         subagents: [],
     });
@@ -99,4 +101,125 @@ it("keeps a standalone manual compaction activity and completion time", () => {
         status: "complete",
         durationMs: 31_000,
     });
+});
+
+const askTool: ToolCallElement = {
+    id: "tool:ask-1",
+    groupId: "g1",
+    runId: "r1",
+    createdAt: 2_000,
+    kind: "tool_call",
+    toolCallId: "ask-1",
+    name: "AskUserQuestion",
+    arguments: {},
+    argumentsComplete: true,
+    status: "succeeded",
+};
+
+const questions = [
+    {
+        id: "choice",
+        header: "Choose",
+        question: "Which direction?",
+        multiSelect: false,
+        required: true,
+        options: [{ label: "Native", description: "Keep it quiet." }],
+    },
+] as const;
+
+it("replaces an Ask User tool with its pending request at the tool sequence", () => {
+    const entries = rigConnectConversationProject({
+        elements: [askTool],
+        sessionId: "s1",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [{ requestId: "ask-1", questions }],
+        answeredUserInputs: [],
+        expandedGroupIds: new Set(),
+        subagents: [],
+    });
+
+    expect(entries).toEqual([
+        {
+            kind: "request",
+            id: "request:ask-1",
+            sequence: "00000001",
+            request: {
+                kind: "userInput",
+                requestId: "ask-1",
+                questions,
+                status: "pending",
+            },
+        },
+    ]);
+});
+
+it("keeps an answered Ask User request once and prefers it over a stale pending copy", () => {
+    const entries = rigConnectConversationProject({
+        elements: [askTool],
+        sessionId: "s1",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [{ requestId: "ask-1", questions }],
+        answeredUserInputs: [
+            {
+                requestId: "ask-1",
+                questions,
+                answers: { choice: ["Native"] },
+                createdAt: 1_900,
+                resolvedAt: 2_100,
+            },
+        ],
+        expandedGroupIds: new Set(),
+        subagents: [],
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+        kind: "request",
+        id: "request:ask-1",
+        sequence: "00000001",
+        request: {
+            kind: "userInput",
+            requestId: "ask-1",
+            status: "answered",
+            answers: { choice: ["Native"] },
+            createdAt: 1_900,
+            resolvedAt: 2_100,
+        },
+    });
+});
+
+it("appends only unmatched pending requests", () => {
+    const base = {
+        elements: [],
+        sessionId: "s1",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [{ requestId: "ask-1", questions }],
+        expandedGroupIds: new Set<string>(),
+        subagents: [],
+    } as const;
+
+    expect(
+        rigConnectConversationProject({
+            ...base,
+            answeredUserInputs: [],
+        }),
+    ).toHaveLength(1);
+    expect(
+        rigConnectConversationProject({
+            ...base,
+            pendingUserInputs: [],
+            answeredUserInputs: [
+                {
+                    requestId: "ask-1",
+                    questions,
+                    answers: { choice: ["Native"] },
+                    createdAt: 1_900,
+                    resolvedAt: 2_100,
+                },
+            ],
+        }),
+    ).toEqual([]);
 });

@@ -79,4 +79,31 @@ it("gates submit on required questions and reports single/multi select answers",
     expect(answers[0]!.answers.notify).toEqual(["On-call", "Channel"]);
 
     await view.screenshot("RigUserInputPrompt.test");
+
+    view.render(
+        () => (
+            <RigUserInputPrompt
+                data-testid="answered-input"
+                request={request}
+                resolvedAnswers={{
+                    approach: ["One transaction"],
+                }}
+            />
+        ),
+        { width: 560, height: 440, padding: 16 },
+    );
+    await view.ready();
+
+    const answered = view.$('[data-testid="answered-input"]');
+    expect(answered.element.getAttribute("data-state")).toBe("answered");
+    expect(answered.element.querySelector('[data-action="submit"]')).toBeNull();
+    expect(answered.element.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(
+        answered.element.querySelector('[data-happy-desktop-ui="rig-user-input-answers"]')
+            ?.textContent,
+    ).toContain("One transaction");
+    expect(answered.element.querySelector('[data-question-id="notify"]')?.textContent).toContain(
+        "Skipped",
+    );
+    await view.screenshot("RigUserInputPrompt.answered.test");
 }, 120_000);
