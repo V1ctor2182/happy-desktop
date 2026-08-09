@@ -48,11 +48,8 @@ export function rigConnectSharingSourceCreate(rig: RigConnection): RigSharingSou
             return { expiresAt: response.expiresAt, invitation: response.invitation };
         },
         async contactRequest(invitation) {
-            // The Rig answers with the outgoing request it recorded, which
-            // arrives again on the feed a moment later. The feed is the one
-            // account of what exists, so the answer here is only an
-            // acknowledgement that the request was accepted for sending.
-            await rig.requestSharingContact(invitation);
+            const request = await rig.requestSharingContact(invitation);
+            return { id: request.id, identity: request.identity };
         },
         async requestAnswer(requestId, accept) {
             return readingProject(

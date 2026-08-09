@@ -88,7 +88,7 @@ export interface RigSharingSource {
     /** Makes an invitation for one other person to redeem. */
     invitationCreate(): Promise<RigSharingInvitation>;
     /** Redeems an invitation made by someone else, asking to be their contact. */
-    contactRequest(invitation: string): Promise<void>;
+    contactRequest(invitation: string): Promise<RigSharingOutgoingRequest>;
     /** Answers someone who asked to become a contact here. */
     requestAnswer(requestId: string, accept: boolean): Promise<RigSharingReading>;
     /** Ends the relationship with one contact. */
@@ -171,9 +171,10 @@ const NO_ANSWERING: ReadonlySet<string> = new Set<string>();
  * halves live here because they are one act to the person doing it, and either
  * end of it may be the one sitting at this window.
  *
- * The store predicts nothing. An accepted request becomes a contact when the
- * Rig republishes its snapshot, not when the button is pressed: the handshake
- * is between two machines and this one does not get to decide how it ended.
+ * The store predicts no remote outcome. Once Rig confirms an outgoing request
+ * is durable, that request stays visible until the authoritative feed observes
+ * it; becoming a contact still waits for the Rig's snapshot because the
+ * handshake is between two machines and this one does not decide how it ended.
  */
 export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStore {
     const store = createStore<RigSharingSnapshot>()(() => ({
@@ -191,6 +192,7 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
     const listeners = new Set<() => void>();
     let unsubscribeSource: (() => void) | undefined;
     let disposed = false;
+    const pendingOutgoing = new Map<string, RigSharingOutgoingRequest>();
 
     /**
      * Which reading is current. An answer that arrives after the store stopped
@@ -202,6 +204,22 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
     const readingInput = (reading: RigSharingReading): void => {
         if (disposed) return;
         const current = store.getState();
+        const authoritativeOutgoingIds = new Set(
+            reading.outgoingRequests.map((request) => request.id),
+        );
+        const resolvedIdentities = new Set([
+            ...reading.contacts.map((contact) => contact.identity),
+            ...reading.incomingRequests.map((request) => request.identity),
+        ]);
+        for (const [id, request] of pendingOutgoing) {
+            if (authoritativeOutgoingIds.has(id) || resolvedIdentities.has(request.identity)) {
+                pendingOutgoing.delete(id);
+            }
+        }
+        const outgoingRequests = [...reading.outgoingRequests];
+        for (const request of pendingOutgoing.values()) {
+            if (!authoritativeOutgoingIds.has(request.id)) outgoingRequests.push(request);
+        }
         store.setState({
             ...current,
             loading: false,
@@ -212,10 +230,7 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
                 current.incomingRequests,
                 reading.incomingRequests,
             ),
-            outgoingRequests: referencesPreserve(
-                current.outgoingRequests,
-                reading.outgoingRequests,
-            ),
+            outgoingRequests: referencesPreserve(current.outgoingRequests, outgoingRequests),
             error: undefined,
             ...(reading.profileId === undefined
                 ? { profileId: undefined }
@@ -338,11 +353,19 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
                 actionError: undefined,
             });
             deps.source.contactRequest(invitation).then(
-                () => {
+                (outgoing) => {
                     if (disposed || attempt !== generation) return;
-                    // The request is now the Rig's; what is on screen from here
-                    // is the outgoing list it publishes, not this draft.
-                    store.setState({ ...store.getState(), request: EMPTY_REQUEST });
+                    pendingOutgoing.set(outgoing.id, outgoing);
+                    const next = store.getState();
+                    store.setState({
+                        ...next,
+                        outgoingRequests: next.outgoingRequests.some(
+                            (request) => request.id === outgoing.id,
+                        )
+                            ? next.outgoingRequests
+                            : [...next.outgoingRequests, outgoing],
+                        request: EMPTY_REQUEST,
+                    });
                 },
                 (error: unknown) => {
                     if (disposed || attempt !== generation) return;
@@ -384,6 +407,7 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
             disposed = true;
             stop();
             listeners.clear();
+            pendingOutgoing.clear();
         },
     };
 
