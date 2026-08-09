@@ -3,6 +3,12 @@ import { useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNo
 import { Icon } from "./Icon";
 export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     children: ReactNode;
+    /**
+     * Fills a region owned by another AppShell instead of imposing the desktop
+     * window's minimum size. This lets a product surface own its workspace and
+     * inspector while the outer window keeps navigation chrome mounted.
+     */
+    embedded?: boolean;
     panel?: ReactNode;
     panelWidth?: number;
     /** Optional 64px feature rail. When omitted the content spans the full body. */
@@ -230,6 +236,7 @@ export function AppShell(props: AppShellProps) {
     const [local, rest] = partitionComponentProps(props, [
         "children",
         "className",
+        "embedded",
         "panel",
         "panelWidth",
         "rail",
@@ -389,6 +396,7 @@ export function AppShell(props: AppShellProps) {
         <div
             {...rest}
             className={["happy-desktop-app-shell", local.className].filter(Boolean).join(" ")}
+            data-embedded={local.embedded ? "" : undefined}
             data-happy-desktop-ui="app-shell"
             data-sidebar-collapsed={sidebarHidden ? "" : undefined}
             data-window-controls={local.windowControls ? "" : undefined}

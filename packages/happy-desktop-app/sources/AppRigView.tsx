@@ -2733,46 +2733,31 @@ export function AppRigView(props: AppRigViewProps) {
     const routeContent = (): ReactNode => {
         if (props.documentId && active?.session?.documentOpen)
             return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
+                <>
                     {desktop ? <WindowDragRegion /> : null}
                     <RigDocumentSurface
                         documentId={props.documentId}
                         documentOpen={active.session.documentOpen}
                         theme={appearance.appearance}
                     />
-                </AppShell>
+                </>
             );
 
         // The workbench belongs to no machine and needs no connection: it renders the
         // component pages themselves, so it is independent of every Rig.
         if (props.blueprintOpen)
             return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
+                <>
                     {desktop ? <WindowDragRegion /> : null}
                     <BlueprintView />
-                </AppShell>
+                </>
             );
 
         // The inbox belongs to the addressed machine, so it is shown only while that
         // machine has stores to answer through.
         if (experimental && props.inboxOpen && active?.session?.inbox)
             return (
-                <AppShell
-                    sidebarCollapsible
-                    windowControls={desktop}
-                    windowFullScreen={windowState.fullScreen}
-                    sidebar={sidebar}
-                >
+                <>
                     {desktop ? <WindowDragRegion /> : null}
                     <RigInboxSurface
                         folders={folders}
@@ -2788,7 +2773,7 @@ export function AppRigView(props: AppRigViewProps) {
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
                     />
-                </AppShell>
+                </>
             );
 
         if (active?.session)
@@ -2823,13 +2808,11 @@ export function AppRigView(props: AppRigViewProps) {
                     platform={props.platform}
                     projects={active.projects}
                     rigOnline={activeRigOnline}
-                    sidebar={sidebar}
                     slots={slots}
                     slotsScope={slotsScope}
                     slotAction={slotAction}
                     titleShimmerEnabled={titleShimmerEnabled}
                     viewerId={viewerId}
-                    windowState={props.windowState}
                     workspace={active.session.workspace}
                 />
             );
@@ -2838,12 +2821,7 @@ export function AppRigView(props: AppRigViewProps) {
         // that resolves; anything the reader can do about it is a settings act,
         // which is where the control points.
         return (
-            <AppShell
-                sidebarCollapsible
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                sidebar={sidebar}
-            >
+            <>
                 {desktop ? <WindowDragRegion /> : null}
                 <EmptyState
                     action={{
@@ -2863,13 +2841,24 @@ export function AppRigView(props: AppRigViewProps) {
                     size="panel"
                     title={active ? active.label : "No machine"}
                 />
-            </AppShell>
+            </>
         );
     };
 
     return (
         <>
-            {routeContent()}
+            {/* Window chrome has one lifetime. Rig workspaces keep their own
+                keyed lifetimes inside its content region, so changing machines
+                resets machine-owned UI without rebuilding this sidebar's DOM,
+                focus, width, collapsed state, or scroll position. */}
+            <AppShell
+                sidebarCollapsible
+                windowControls={desktop}
+                windowFullScreen={windowState.fullScreen}
+                sidebar={sidebar}
+            >
+                {routeContent()}
+            </AppShell>
             {/* The window's own dialogs, mounted once beside whatever screen is
                 showing rather than inside one of them. Naming a row belongs to
                 the sidebar, and Create belongs to the window: both are reached
@@ -3099,7 +3088,6 @@ interface RigWorkspaceSurfaceProps {
     clock: RigClockStore;
     appearance: AppearanceStore;
     platform?: "desktop" | "web";
-    windowState?: RigWindowStore;
     browserContent?: BrowserContentRenderer;
     /**
      * The machine this workspace's Rig is, when it is not the one this window
@@ -3109,8 +3097,6 @@ interface RigWorkspaceSurfaceProps {
     nodeId?: string;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
-    /** The window's sidebar, composed once for every Rig by `AppRigView`. */
-    sidebar: ReactNode;
     slots: RigSlotsSnapshot;
     /** What this window addresses, against which a scoped entry is resolved. */
     slotsScope: RigSlotsContext;
@@ -3160,12 +3146,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         props.workspace.panel.subscribe,
         props.workspace.panel.get,
         props.workspace.panel.get,
-    );
-    const windowStateStore = props.windowState ?? rigWindowStoreNoop;
-    const windowState = useSyncExternalStore(
-        windowStateStore.subscribe,
-        windowStateStore.get,
-        windowStateStore.get,
     );
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const appearance = useSyncExternalStore(
@@ -3431,9 +3411,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
 
     return (
         <AppShell
-            sidebarCollapsible
-            windowControls={desktop}
-            windowFullScreen={windowState.fullScreen}
+            embedded
             panelResizable
             // The width this checkout was last left at, or the shell's own
             // default where nobody has sized it. Passed on every render rather
@@ -3552,7 +3530,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                     />
                 ) : undefined
             }
-            sidebar={props.sidebar}
         >
             {openGroup ? (
                 <>
