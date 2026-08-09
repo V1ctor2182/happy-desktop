@@ -15,7 +15,7 @@ import {
 import type {
     AppearanceStore,
     ExperimentsStore,
-    NotesSessionStore,
+    RigDocumentId,
     RigGroupId,
     RigNavigationOrderStore,
     RigSessionId,
@@ -65,12 +65,6 @@ export interface RigRouterContext {
     /** This build's development identity; absent in the packaged product. */
     readonly buildIdentity?: AppBuildIdentity;
     readonly appearance: AppearanceStore;
-    /**
-     * This machine's notes, absent in a host that stores none. They are the
-     * window's, not a Rig's: the files live in the reader's home directory, so
-     * they outlive every connection this window makes.
-     */
-    readonly notes?: NotesSessionStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: RigSettingsStore;
     /**
@@ -195,28 +189,11 @@ const chatRoute = createRoute({
     path: "/chats/$rigId/$groupId/$chatId",
 });
 
-/**
- * This machine's notes, addressed without a Rig: they are files in the reader's
- * home directory, so no machine appears in their address. The note itself is a
- * path segment for the same reason a conversation is — the window's back and
- * forward move between notes, and the open one survives a reload.
- */
-const notesIndexRoute = createRoute({
-    component: RigNotesRoute,
-    getParentRoute: () => rootRoute,
-    loader: ({ context }) => {
-        context.notes?.notesOpen();
-    },
-    path: "/notes",
-});
-
-const noteRoute = createRoute({
-    component: RigNotesRoute,
-    getParentRoute: () => rootRoute,
-    loader: ({ context, params }) => {
-        context.notes?.notesOpen(params.noteId);
-    },
-    path: "/notes/$noteId",
+/** One document owned by one Rig, reached through a link in that Rig's folders. */
+const documentRoute = createRoute({
+    component: RigWorkspaceLayout,
+    getParentRoute: () => workspaceRoute,
+    path: "/documents/$rigId/$documentId",
 });
 
 /**
@@ -276,23 +253,12 @@ const settingsSectionRoute = createRoute({
 const routeTree = rootRoute.addChildren([
     indexRoute,
     chatsRootRoute,
-    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute]),
-    notesIndexRoute,
-    noteRoute,
+    workspaceRoute.addChildren([chatsIndexRoute, groupRoute, chatRoute, documentRoute]),
     inboxRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
     settingsSectionRoute,
 ]);
-
-/**
- * The notes address renders the same window as a conversation does: the shell and
- * its sidebar stay, and only the content area changes, so opening notes is not
- * leaving the workspace.
- */
-function RigNotesRoute() {
-    return <RigWorkspaceLayout notes />;
-}
 
 /**
  * The inbox address renders the same window a conversation does: the shell and
@@ -315,7 +281,6 @@ function RigWorkspaceLayout(
     props: {
         blueprint?: boolean;
         inbox?: boolean;
-        notes?: boolean;
     } = {},
 ) {
     // The hook's generic inference does not retain this locally assembled route
@@ -335,7 +300,7 @@ function RigWorkspaceLayout(
         rigId?: string;
         groupId?: string;
         chatId?: string;
-        noteId?: string;
+        documentId?: string;
     };
     // The router is constructed before RouterProvider supplies the real context,
     // so the very first render of a deep-linked URL can arrive with an empty
@@ -349,13 +314,11 @@ function RigWorkspaceLayout(
             htmlPreview={context.htmlPreview}
             mediaWindow={context.mediaWindow}
             chatId={params.chatId}
+            documentId={params.documentId as RigDocumentId | undefined}
             groupId={params.groupId}
-            noteId={params.noteId}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
-            notes={context.notes}
-            notesOpen={props.notes}
             inboxOpen={props.inbox}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the
@@ -369,12 +332,11 @@ function RigWorkspaceLayout(
                     to: "/inbox/$rigId",
                 })
             }
-            onNotesOpen={(noteId) =>
-                void navigate(
-                    noteId === undefined
-                        ? { to: "/notes" }
-                        : { params: { noteId }, to: "/notes/$noteId" },
-                )
+            onDocumentOpen={(rigId, documentId) =>
+                void navigate({
+                    params: { documentId, rigId },
+                    to: "/documents/$rigId/$documentId",
+                })
             }
             onUpdateApply={context.onUpdateApply}
             platform={context.platform}
@@ -504,7 +466,7 @@ export function rigRouterGroupOpen(router: RigRouter, rigId: string, groupId: st
  * removal of its own group whether or not the window is currently showing it, so
  * the current address is what decides: only a route naming this exact Rig and
  * this exact group is replaced. Everything else — another project, the Rig's own
- * list, Notes, or settings — is already a valid address, and a removal elsewhere
+ * list, a document, or settings — is already a valid address, and a removal elsewhere
  * is inert against it.
  *
  * Replace rather than push: the entry being left names a row that is gone, so

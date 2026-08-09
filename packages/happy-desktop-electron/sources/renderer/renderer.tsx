@@ -14,14 +14,12 @@ import {
     RIG_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
     experimentsStoreCreate,
-    notesSessionStoreCreate,
     titleShimmerStoreCreate,
     welcomeStoreCreate,
     rigNavigationOrderStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
     type ExperimentsStore,
-    type NotesSessionStore,
     type WelcomeStore,
     type RigNavigationOrderStore,
     type RigSettingsStore,
@@ -203,7 +201,6 @@ function RigBoundary(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
-    notes: NotesSessionStore;
     platform: "desktop" | "web";
     router: RigRouter;
     navigationOrder: RigNavigationOrderStore;
@@ -236,7 +233,6 @@ function RigBoundary(props: {
                     : {}),
                 experiments: props.experiments,
                 navigationOrder: props.navigationOrder,
-                notes: props.notes,
                 platform: props.platform,
                 rigs: props.rigs,
                 settings: props.settings,
@@ -363,7 +359,6 @@ interface DesktopRendererProps {
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
     navigationOrder: RigNavigationOrderStore;
-    notes: NotesSessionStore;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
     rigs: RigDirectoryStore;
@@ -574,7 +569,6 @@ function DesktopRuntimeContent(
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
             navigationOrder={props.navigationOrder}
-            notes={props.notes}
             platform={props.platform}
             router={props.rigRouter}
             rigs={props.rigs}
@@ -629,14 +623,9 @@ if (mediaPreviewBridge) {
         // snapshots through the main process.
         const settings = rigSettingsStoreCreate(modelSettings.initialSettings);
         settings.subscribe(() => modelSettings.settingsChanged(settings.get()));
-        // The reader's notes are files in their home directory, so they belong to the
-        // window rather than to any Rig: the main process stores them, and this store
-        // outlives every daemon connection the window makes.
-        const notes = notesSessionStoreCreate(desktopBridge);
         // How the reader arranged the sidebar's pinned rows. It is the window's
-        // for the same reason the notes are: those rows are here whether or not
-        // any machine is reachable, so the arrangement must outlive every
-        // connection this window makes.
+        // Those rows are window chrome whether or not any machine is reachable,
+        // so the arrangement must outlive every connection this window makes.
         const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
@@ -693,7 +682,6 @@ if (mediaPreviewBridge) {
                         }
                         experiments={experiments}
                         navigationOrder={navigationOrder}
-                        notes={notes}
                         // Only the Electron window hides its title bar; the browser
                         // development server renders the same tree with web chrome.
                         platform={browserLocal ? "web" : "desktop"}

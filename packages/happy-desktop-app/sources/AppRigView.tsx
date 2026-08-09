@@ -18,6 +18,9 @@ import type {
     RigFolderItemId,
     RigFoldersSnapshot,
     RigFoldersStore,
+    RigDocumentId,
+    RigDocumentStore,
+    RigDocumentsStore,
     RigWorkspaceFiles,
     RigFileScope,
     RigFileViewMode,
@@ -27,8 +30,6 @@ import type {
     RigModelStore,
     RigModelSelection,
     RigNavigationOrderStore,
-    NotesSessionStore,
-    NoteSummary,
     RigPanelFileKind,
     RigPanelFileSnapshot,
     RigPanelSnapshot,
@@ -87,6 +88,7 @@ import {
     rigFolderGroupParse,
     rigFoldersFlatten,
     rigFoldersStoreNoop,
+    rigDocumentsStoreNoop,
     rigHumanMessageAuthor,
     RIG_UNSORTED_GROUP_ID,
     rigSessionScopeGroupId,
@@ -119,6 +121,7 @@ import {
     ComposerPanel,
     ConversationDock,
     ConversationView,
+    DocumentSurface,
     EmptyState,
     FileBrowser,
     FileEditor,
@@ -131,7 +134,6 @@ import {
     MarkdownDocument,
     Modal,
     ModalOverlay,
-    NotesPage,
     RigActivityPanel,
     RigControlMenu,
     fileTreeBuild,
@@ -268,6 +270,12 @@ export interface AppRigSession {
      * rather than standing over a tree that is empty for the wrong reason.
      */
     readonly folders?: RigFoldersStore;
+    /** Names of the documents linked into this Rig's folders. */
+    readonly documents?: RigDocumentsStore;
+    /** Materializes one open document for the addressed route. */
+    readonly documentOpen?: (documentId: RigDocumentId) => RigDocumentStore | undefined;
+    /** Creates one empty collaborative Markdown document on this Rig. */
+    readonly documentCreate?: () => RigDocumentId | undefined;
     /** Host-owned identities available for work sent through a remote Rig. */
     readonly profiles?: () => RigProfilesStore | undefined;
     /**
@@ -396,6 +404,8 @@ export interface AppRigViewProps {
      */
     groupId?: string;
     chatId?: string;
+    /** The Rig document addressed by the route, when a folder document is open. */
+    documentId?: RigDocumentId;
     /**
      * Addresses a Rig, a group in it, and optionally one of that group's
      * sessions; no group means that Rig's list.
@@ -408,17 +418,8 @@ export interface AppRigViewProps {
     ): void;
     /** Opens the local settings destination from the pinned sidebar footer. */
     onSettingsOpen(): void;
-    /**
-     * This machine's notes. They belong to the window rather than to any Rig —
-     * they are files in the reader's own home directory — so they arrive here as
-     * one store beside the directory of Rigs instead of inside a Rig's session.
-     */
-    notes?: NotesSessionStore;
-    /** Whether the URL addresses the notes surface, and which note in it. */
-    notesOpen?: boolean;
-    noteId?: string;
-    /** Addresses the notes surface, with a note or without one. */
-    onNotesOpen?(noteId?: string): void;
+    /** Opens one folder document on its owning Rig. */
+    onDocumentOpen?(rigId: string, documentId: RigDocumentId): void;
     /** Whether the URL addresses the addressed Rig's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -1060,6 +1061,8 @@ const FOLDERS_SECTION = "folders";
  * neighbour makes every ordinary reordering a near miss.
  */
 const FOLDER_MENU_NEST = "folder-nest";
+/** Creates a document and links it directly into this folder. */
+const FOLDER_MENU_DOCUMENT_CREATE = "folder-document-create";
 /** Opens the folder's own surface: what it is called, and the mark it wears. */
 const FOLDER_MENU_EDIT = "folder-edit";
 /** Puts the folder away, and everything nested under it with it. */
@@ -1095,9 +1098,35 @@ function folderItemRowId(rigId: string, itemId: RigFolderItemId): string {
 /** The folder item a sidebar row names, or undefined when it names something else. */
 function folderItemRowParse(value: string): RigFolderItemId | undefined {
     const { id } = rigItemParse(value);
-    return id.startsWith(FOLDER_ITEM_ROW_PREFIX)
-        ? (id.slice(FOLDER_ITEM_ROW_PREFIX.length) as RigFolderItemId)
-        : undefined;
+    if (!id.startsWith(FOLDER_ITEM_ROW_PREFIX)) return undefined;
+    const rest = id.slice(FOLDER_ITEM_ROW_PREFIX.length);
+    // A worktree drawn under a linked project is addressed by that link and the
+    // checkout together, so the link's own row is the one with no worktree on it.
+    const boundary = rest.indexOf("/");
+    return (boundary < 0 ? rest : rest.slice(0, boundary)) as RigFolderItemId;
+}
+
+/**
+ * A row for one worktree of a linked project.
+ *
+ * The same checkout can appear under several folders that link its project, and
+ * each of those rows has to be its own selectable thing — so the link is part of
+ * the address rather than the worktree alone.
+ */
+function folderItemWorktreeRowId(
+    rigId: string,
+    itemId: RigFolderItemId,
+    worktreeId: RigWorktreeId,
+): string {
+    return rigItemId(rigId, `${FOLDER_ITEM_ROW_PREFIX}${itemId}/${worktreeId}`);
+}
+
+/** The worktree a linked-project row names, when it names one rather than the link. */
+function folderItemWorktreeRowParse(value: string): RigWorktreeId | undefined {
+    const { id } = rigItemParse(value);
+    if (!id.startsWith(FOLDER_ITEM_ROW_PREFIX)) return undefined;
+    const boundary = id.indexOf("/");
+    return boundary < 0 ? undefined : (id.slice(boundary + 1) as RigWorktreeId);
 }
 
 /** Puts the link away. What it pointed at stays exactly where it was. */
@@ -1121,6 +1150,20 @@ function folderItemFind(
     return undefined;
 }
 
+/** The link row that exposes one document, wherever it sits in the tree. */
+function folderDocumentItemFind(
+    folders: readonly RigFolder[],
+    documentId: RigDocumentId,
+): RigFolderItem | undefined {
+    for (const { folder } of rigFoldersFlatten(folders)) {
+        const found = folder.items.find(
+            (item) => item.target.kind === "document" && item.target.documentId === documentId,
+        );
+        if (found) return found;
+    }
+    return undefined;
+}
+
 /** The group one folder item points at, as the sidebar addresses groups. */
 function folderItemGroupId(item: RigFolderItem): RigGroupId | undefined {
     if (item.target.kind === "project") return item.target.projectId;
@@ -1129,35 +1172,60 @@ function folderItemGroupId(item: RigFolderItem): RigGroupId | undefined {
 }
 
 /**
- * One folder item's row, named and iconed from the catalog it points into.
+ * The rows one folder item contributes, named and iconed from the catalog it
+ * points into.
+ *
+ * A linked project brings its workspaces with it, nested under it exactly as
+ * they are in the project section: a project in a folder is the project, and one
+ * that showed its name but hid the checkouts its work actually happens in would
+ * make the folder a worse place to work from than the list below it.
  *
  * A link whose target this Rig no longer lists draws nothing. The item names an
  * id and not a name, so a row for a project that has gone could only be labelled
  * by inventing one — and a folder quietly holding a row that says nothing true
  * is worse than a folder that has stopped showing it.
  */
-function folderItemRow(
+function folderItemRows(
     rigId: string,
     item: RigFolderItem,
     depth: number,
     projects: readonly RigProjectGroup[],
-): SidebarItem | undefined {
+    documentTitles: ReadonlyMap<RigDocumentId, string>,
+): SidebarItem[] {
     const target = item.target;
     if (target.kind === "project") {
         const project = projects.find((candidate) => candidate.id === target.projectId);
-        if (!project) return undefined;
-        return {
-            depth,
-            id: folderItemRowId(rigId, item.id),
-            initials: project.name.slice(0, 1).toUpperCase(),
-            kind: "project",
-            label: project.name,
-            ...(project.kind === "home" ? { icon: "home" as const } : {}),
-            ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-            ...(project.conversations.some((conversation) => conversation.unread)
-                ? { unread: true }
-                : {}),
-        };
+        if (!project) return [];
+        return [
+            {
+                depth,
+                id: folderItemRowId(rigId, item.id),
+                initials: project.name.slice(0, 1).toUpperCase(),
+                kind: "project",
+                label: project.name,
+                ...(project.kind === "home" ? { icon: "home" as const } : {}),
+                ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+                ...(project.conversations.some((conversation) => conversation.unread)
+                    ? { unread: true }
+                    : {}),
+            },
+            ...project.worktrees.map((worktree) => ({
+                depth: depth + 1,
+                icon: "branch" as const,
+                id: folderItemWorktreeRowId(rigId, item.id, worktree.id),
+                kind: "workspace" as const,
+                label: worktree.name,
+                ...sidebarLifecycle(worktree.lifecycle),
+                ...(worktree.activity === "running"
+                    ? { status: "working" as const }
+                    : worktree.activity === "waiting"
+                      ? { status: "waiting" as const }
+                      : {}),
+                ...(worktree.conversations.some((conversation) => conversation.unread)
+                    ? { unread: true }
+                    : {}),
+            })),
+        ];
     }
     if (target.kind === "workspace") {
         for (const project of projects) {
@@ -1165,22 +1233,31 @@ function folderItemRow(
                 (candidate) => candidate.id === target.workspaceId,
             );
             if (!worktree) continue;
-            return {
-                depth,
-                icon: "branch",
-                id: folderItemRowId(rigId, item.id),
-                kind: "workspace",
-                label: worktree.name,
-                ...(worktree.conversations.some((conversation) => conversation.unread)
-                    ? { unread: true }
-                    : {}),
-            };
+            return [
+                {
+                    depth,
+                    icon: "branch",
+                    id: folderItemRowId(rigId, item.id),
+                    kind: "workspace",
+                    label: worktree.name,
+                    ...sidebarLifecycle(worktree.lifecycle),
+                    ...(worktree.conversations.some((conversation) => conversation.unread)
+                        ? { unread: true }
+                        : {}),
+                },
+            ];
         }
-        return undefined;
+        return [];
     }
-    // A document is a Rig entity of its own rather than something in the project
-    // catalog, so its row is drawn where documents are known.
-    return undefined;
+    return [
+        {
+            depth,
+            icon: "doc",
+            id: folderItemRowId(rigId, item.id),
+            kind: "view",
+            label: documentTitles.get(target.documentId) || "Untitled document",
+        },
+    ];
 }
 
 /**
@@ -1237,6 +1314,7 @@ function foldersSection(
     folders: RigFoldersSnapshot,
     online: boolean,
     projects: readonly RigProjectGroup[],
+    documentTitles: ReadonlyMap<RigDocumentId, string>,
 ): SidebarSection[] {
     const items: SidebarItem[] = [
         ...(folders.unsorted.length === 0
@@ -1266,10 +1344,9 @@ function foldersSection(
                     ? { unread: true }
                     : {}),
             },
-            ...row.folder.items.flatMap((item) => {
-                const drawn = folderItemRow(rigId, item, row.depth + 1, projects);
-                return drawn ? [drawn] : [];
-            }),
+            ...row.folder.items.flatMap((item) =>
+                folderItemRows(rigId, item, row.depth + 1, projects, documentTitles),
+            ),
         ]),
     ];
     // A refused act outranks a dropped feed: the tree on screen is still
@@ -1553,13 +1630,6 @@ function rigStatusLabel(rig: AppRigEntry): string {
 }
 
 /**
- * The pinned row that opens this machine's notes. It sits with the other pinned
- * rows rather than under a project because a note belongs to the reader, not to
- * one repository or one machine's daemon.
- */
-const NOTES_ITEM = "notes";
-
-/**
  * The pinned row that opens the addressed Rig's inbox. It belongs with the
  * pinned rows rather than under a project because the questions it collects come
  * from every session on that machine at once, and the person answering them is
@@ -1726,14 +1796,12 @@ export function AppRigView(props: AppRigViewProps) {
         titleShimmerStore.get,
         titleShimmerStore.get,
     ).titleShimmerEnabled;
-    // The order the reader arranged the pinned rows in. It belongs to the window
-    // rather than to any one Rig — Notes and the inbox outlive every connection
-    // — so a machine going away rearranges nothing.
+    // The order the reader arranged the pinned rows in belongs to the window
+    // rather than to any one Rig, so a machine going away rearranges nothing.
     const experimentsStore = props.experiments ?? experimentsStoreNoop;
-    // Notes and the inbox are still being built, so they are offered only to a
-    // reader who has asked for unfinished work in settings. The switch is read
-    // here rather than at each of their rows so that the sidebar and the routes
-    // can never disagree about whether they exist.
+    // The inbox is still being built, so it is offered only to a reader who has
+    // asked for unfinished work in settings. The switch is read here so the
+    // sidebar and route can never disagree about whether it exists.
     const experimental = useSyncExternalStore(
         experimentsStore.subscribe,
         experimentsStore.get,
@@ -1813,6 +1881,15 @@ export function AppRigView(props: AppRigViewProps) {
         localFoldersStore.get,
         localFoldersStore.get,
     );
+    const localDocumentsStore = localRig?.session?.documents ?? rigDocumentsStoreNoop;
+    const localDocuments = useSyncExternalStore(
+        localDocumentsStore.subscribe,
+        localDocumentsStore.get,
+        localDocumentsStore.get,
+    );
+    const selectedDocumentItem = props.documentId
+        ? folderDocumentItemFind(localFolders.folders, props.documentId)
+        : undefined;
     // The other three slot placements and the workspace surface still belong to
     // the addressed Rig. When it is the host, reuse the sidebar subscriptions so
     // one materialized store has only one React subscriber in this surface.
@@ -1925,19 +2002,6 @@ export function AppRigView(props: AppRigViewProps) {
     // that order is applied below, so this list only ever states which rows this
     // window has and what each one is.
     const pinnedOffered: SidebarItem[] = [
-        // Notes follow the two rows that give the window somewhere to
-        // work, because they are the third thing this window holds that
-        // is not a session: the reader's own writing on this machine.
-        ...(experimental && props.notes
-            ? [
-                  {
-                      icon: "doc" as const,
-                      id: NOTES_ITEM,
-                      kind: "action" as const,
-                      label: "Notes",
-                  },
-              ]
-            : []),
         // The inbox belongs to the addressed machine, so it appears only
         // while that machine is reachable: a queue of questions is
         // meaningless from a Rig that cannot say what it is waiting on.
@@ -1973,8 +2037,8 @@ export function AppRigView(props: AppRigViewProps) {
         <Sidebar
             actions={pinned}
             activeItemId={
-                experimental && props.notesOpen
-                    ? NOTES_ITEM
+                props.documentId && selectedDocumentItem && localRig
+                    ? folderItemRowId(localRig.id, selectedDocumentItem.id)
                     : experimental && props.inboxOpen
                       ? INBOX_ITEM
                       : props.blueprintOpen
@@ -2066,6 +2130,12 @@ export function AppRigView(props: AppRigViewProps) {
                                   label: "New folder inside…",
                               },
                               {
+                                  icon: "doc" as const,
+                                  id: FOLDER_MENU_DOCUMENT_CREATE,
+                                  kind: "item" as const,
+                                  label: "New document",
+                              },
+                              {
                                   icon: "edit" as const,
                                   id: FOLDER_MENU_EDIT,
                                   kind: "item" as const,
@@ -2086,7 +2156,11 @@ export function AppRigView(props: AppRigViewProps) {
                 // archiving here would reach past the folder and change the
                 // project itself, which is not what this row is.
                 if (folderItemRowParse(item.id) !== undefined)
-                    return localRigOnline()
+                    // A worktree shown under a linked project is not itself
+                    // linked: it is there because its project is. Offering to
+                    // remove it would take the whole project out of the folder,
+                    // so only the link's own row carries the act.
+                    return localRigOnline() && folderItemWorktreeRowParse(item.id) === undefined
                         ? [
                               {
                                   danger: true,
@@ -2153,7 +2227,15 @@ export function AppRigView(props: AppRigViewProps) {
                 if (folderId !== undefined) {
                     if (!localRigOnline()) return;
                     if (actionId === FOLDER_MENU_NEST) localFoldersStore.folderCreateOpen(folderId);
-                    else if (actionId === FOLDER_MENU_EDIT)
+                    else if (actionId === FOLDER_MENU_DOCUMENT_CREATE) {
+                        const documentId = localRig?.session?.documentCreate?.();
+                        if (!documentId || !localRig) return;
+                        void localFoldersStore.folderItemLink(folderId, {
+                            kind: "document",
+                            documentId,
+                        });
+                        props.onDocumentOpen?.(localRig.id, documentId);
+                    } else if (actionId === FOLDER_MENU_EDIT)
                         localFoldersStore.folderEditOpen(folderId);
                     // Deliberately no confirmation. A folder is now the chats'
                     // canonical scope, so archiving it also archives the chats
@@ -2165,6 +2247,7 @@ export function AppRigView(props: AppRigViewProps) {
                 const itemId = folderItemRowParse(item.id);
                 if (itemId !== undefined) {
                     if (actionId !== FOLDER_ITEM_MENU_UNLINK || !localRigOnline()) return;
+                    if (folderItemWorktreeRowParse(item.id) !== undefined) return;
                     void localFoldersStore.folderItemUnlink(itemId);
                     return;
                 }
@@ -2210,10 +2293,6 @@ export function AppRigView(props: AppRigViewProps) {
             // Once every remembered tab is gone, its first session is what the
             // group still has to show.
             onItemSelect={(id) => {
-                if (id === NOTES_ITEM) {
-                    props.onNotesOpen?.();
-                    return;
-                }
                 if (id === INBOX_ITEM) {
                     props.onInboxOpen?.();
                     return;
@@ -2231,8 +2310,19 @@ export function AppRigView(props: AppRigViewProps) {
                     itemRowId === undefined
                         ? undefined
                         : folderItemFind(localFolders.folders, itemRowId);
+                if (linked?.target.kind === "document") {
+                    props.onDocumentOpen?.(rigItemParse(id).rigId, linked.target.documentId);
+                    return;
+                }
+                // A worktree drawn under a linked project opens that checkout,
+                // not the project holding it: the row names the work, and the
+                // link is only how the reader arrived at it.
+                const linkedWorktree = folderItemWorktreeRowParse(id);
                 const row = linked
-                    ? { id: folderItemGroupId(linked) ?? "", rigId: rigItemParse(id).rigId }
+                    ? {
+                          id: linkedWorktree ?? folderItemGroupId(linked) ?? "",
+                          rigId: rigItemParse(id).rigId,
+                      }
                     : rigItemParse(id);
                 if (linked && row.id === "") return;
                 const rig = rigOf(row.rigId);
@@ -2297,6 +2387,31 @@ export function AppRigView(props: AppRigViewProps) {
                     const movedItem = folderItemRowParse(move.id);
                     if (movedItem !== undefined) {
                         if (!localRigOnline()) return;
+                        // A worktree shown under a linked project is dragged
+                        // among that project's checkouts, not among the folder's
+                        // links: it is the same checkout the project section
+                        // lists, so it reorders on the host exactly as it would
+                        // there and the new order arrives on both at once.
+                        const movedWorktree = folderItemWorktreeRowParse(move.id);
+                        if (movedWorktree !== undefined) {
+                            const linkedItem = folderItemFind(localFolders.folders, movedItem);
+                            const owner =
+                                linkedItem?.target.kind === "project"
+                                    ? linkedItem.target.projectId
+                                    : undefined;
+                            const localWorkspace = localRig?.session?.workspace;
+                            if (owner === undefined || !localWorkspace) return;
+                            void localWorkspace
+                                .worktreeReorder(
+                                    owner,
+                                    movedWorktree,
+                                    move.afterId === null
+                                        ? null
+                                        : (folderItemWorktreeRowParse(move.afterId) ?? null),
+                                )
+                                .catch(() => undefined);
+                            return;
+                        }
                         const parent =
                             move.parentId === undefined ? undefined : folderRowParse(move.parentId);
                         if (parent === undefined) return;
@@ -2357,6 +2472,7 @@ export function AppRigView(props: AppRigViewProps) {
                           localFolders,
                           localAvailability?.online === true,
                           localRig.projects,
+                          localDocuments.titles,
                       )
                     : []),
                 ...rigSections(
@@ -2375,9 +2491,7 @@ export function AppRigView(props: AppRigViewProps) {
     // surface that answers on one route and not another is not a window-level
     // surface at all.
     const routeContent = (): ReactNode => {
-        // The notes surface is the window's, not a Rig's, so it is shown whatever the
-        // addressed machine is doing — including while none of them is reachable.
-        if (experimental && props.notesOpen && props.notes)
+        if (props.documentId && active?.session?.documentOpen)
             return (
                 <AppShell
                     sidebarCollapsible
@@ -2386,17 +2500,16 @@ export function AppRigView(props: AppRigViewProps) {
                     sidebar={sidebar}
                 >
                     {desktop ? <WindowDragRegion /> : null}
-                    <RigNotesSurface
-                        noteId={props.noteId}
-                        notes={props.notes}
-                        onOpen={(id) => props.onNotesOpen?.(id)}
+                    <RigDocumentSurface
+                        documentId={props.documentId}
+                        documentOpen={active.session.documentOpen}
                         theme={appearance.appearance}
                     />
                 </AppShell>
             );
 
         // The workbench belongs to no machine and needs no connection: it renders the
-        // component pages themselves, so it is shown exactly like notes are.
+        // component pages themselves, so it is independent of every Rig.
         if (props.blueprintOpen)
             return (
                 <AppShell
@@ -2562,39 +2675,43 @@ export function AppRigView(props: AppRigViewProps) {
     );
 }
 
-/**
- * This machine's notes inside the window's shell. It subscribes to the notes
- * session alone — never to a Rig — because a note is a file in the reader's home
- * directory and outlives every daemon connection in this window. Creating a note
- * addresses it as soon as it exists, so writing starts in the editor rather than
- * in the list.
- */
-function RigNotesSurface(props: {
-    noteId?: string;
-    notes: NotesSessionStore;
-    onOpen(noteId?: string): void;
+const emptyDocumentSubscribe = () => () => undefined;
+const emptyDocumentSnapshot = () => undefined;
+
+/** One Rig-backed collaborative document, opened for exactly this route lifetime. */
+function RigDocumentSurface(props: {
+    documentId: RigDocumentId;
+    documentOpen(documentId: RigDocumentId): RigDocumentStore | undefined;
     theme: "dark" | "light";
 }) {
-    const session = useSyncExternalStore(props.notes.subscribe, props.notes.get, props.notes.get);
+    const store = useMemo(
+        () => props.documentOpen(props.documentId),
+        [props.documentId, props.documentOpen],
+    );
+    const snapshot = useSyncExternalStore(
+        store?.subscribe ?? emptyDocumentSubscribe,
+        store?.get ?? emptyDocumentSnapshot,
+        store?.get ?? emptyDocumentSnapshot,
+    );
+    if (!store || !snapshot)
+        return (
+            <EmptyState
+                description="This Rig cannot open documents."
+                icon="doc"
+                title="Document unavailable"
+            />
+        );
     return (
-        <NotesPage
-            note={session.note}
-            notes={session.notes}
-            onCreate={() => {
-                void props.notes
-                    .noteCreate()
-                    .then((note: NoteSummary) => props.onOpen(note.id))
-                    .catch(() => undefined);
-            }}
-            onDelete={(note) => {
-                // The deleted note may be the addressed one, so the URL stops
-                // naming it: only this surface addresses, never the store.
-                if (note.id === props.noteId) props.onOpen(undefined);
-                void props.notes.noteRemove(note.id).catch(() => undefined);
-            }}
-            onOpen={(id) => props.onOpen(id)}
-            selectedId={session.noteId}
+        <DocumentSurface
+            blockDragEnabled={false}
+            error={snapshot.status === "error" ? snapshot.error : undefined}
+            loading={snapshot.status === "loading"}
+            saveError={snapshot.saveError}
+            saveState={snapshot.saveState}
             theme={props.theme}
+            title={snapshot.title}
+            user={{ name: "You", color: "#0a7c72" }}
+            ydoc={snapshot.ydoc}
         />
     );
 }

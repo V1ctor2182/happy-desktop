@@ -22,6 +22,7 @@ import { rigSecretsStoreCreate, type RigSecretsStore } from "./rigSecretsStore.j
 import type {
     RigChangedFileDocument,
     RigFileSearchResult,
+    RigDocumentId,
     RigGroupId,
     RigOpenInTargets,
     RigWorkspaceFileBytes,
@@ -55,6 +56,13 @@ import {
     type RigFoldersSource,
     type RigFoldersStore,
 } from "./rigFoldersStore.js";
+import { rigDocumentsStoreCreate, type RigDocumentsStore } from "./rigDocumentsStore.js";
+import {
+    rigDocumentStoreCreate,
+    type RigDocumentActions,
+    type RigDocumentSource,
+    type RigDocumentStore,
+} from "./rigDocumentStore.js";
 import {
     rigPairingStoreCreate,
     type RigPairingSource,
@@ -121,6 +129,21 @@ export interface RigClient {
      * wrong reason.
      */
     folders(): RigFoldersStore | undefined;
+    /**
+     * What each document linked into this Rig's folders is called. Materialized
+     * on first access and shared: a document carries no name on the Rig, so its
+     * title is read from its content, and one store does that for every row
+     * rather than each row opening a feed of its own.
+     */
+    documents(): RigDocumentsStore | undefined;
+    /**
+     * One open document, with a lifetime of its own rather than the client's.
+     * The caller disposes it: which document is open is decided by the address,
+     * and the collaborative document behind it must outlive any render.
+     */
+    documentOpen(documentId: RigDocumentId): RigDocumentStore | undefined;
+    /** Creates one empty document on this Rig and returns its stable address. */
+    documentCreate(): RigDocumentId | undefined;
     /** Host-owned human identities used to author work sent into remote Rigs. */
     profiles(): RigProfilesStore | undefined;
     /**
@@ -275,6 +298,14 @@ export interface RigClientDeps {
      */
     readonly foldersSource?: RigFoldersSource;
     /**
+     * Opens the host's feed for one document. Omitted leaves documents
+     * unavailable rather than empty, which is what a Rig too old to serve them
+     * should look like.
+     */
+    readonly documentSourceCreate?: (documentId: RigDocumentId) => RigDocumentSource;
+    /** One compare-version-and-write per document. Omitted leaves them read-only. */
+    readonly documentActions?: RigDocumentActions;
+    /**
      * The host's own pairing service. Omitted on a connection that does not
      * own trust, which leaves pairing unavailable rather than idle.
      */
@@ -337,6 +368,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let providerUsageStore: RigProviderUsageStore | undefined;
     let nodesStore: RigNodesStore | undefined;
     let foldersStore: RigFoldersStore | undefined;
+    let documentsStore: RigDocumentsStore | undefined;
     let pairingStore: RigPairingStore | undefined;
     let profilesStore: RigProfilesStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
@@ -491,6 +523,33 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             });
             return foldersStore;
         },
+        documents() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const sourceCreate = deps.documentSourceCreate;
+            // Titles are read from the documents the tree links, so both the
+            // tree and a way to read one are needed before anything can be named.
+            if (!sourceCreate) return undefined;
+            const folders = this.folders();
+            if (!folders) return undefined;
+            documentsStore ??= rigDocumentsStoreCreate({ folders, sourceCreate });
+            return documentsStore;
+        },
+        documentOpen(documentId) {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const sourceCreate = deps.documentSourceCreate;
+            const actions = deps.documentActions;
+            // Both halves or neither: a document that could be read but not
+            // written would offer an editor that silently discards every edit.
+            if (!sourceCreate || !actions) return undefined;
+            return rigDocumentStoreCreate(documentId, {
+                actions,
+                source: sourceCreate(documentId),
+            });
+        },
+        documentCreate() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            return deps.documentActions?.documentCreate();
+        },
         profiles() {
             if (disposed) throw new Error("The Rig client is disposed.");
             if (!deps.profilesSource || !deps.profilesActions) return undefined;
@@ -628,6 +687,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             nodesStore = undefined;
             foldersStore?.[Symbol.dispose]();
             foldersStore = undefined;
+            documentsStore?.[Symbol.dispose]();
+            documentsStore = undefined;
             pairingStore?.[Symbol.dispose]();
             pairingStore = undefined;
             profilesStore?.[Symbol.dispose]();

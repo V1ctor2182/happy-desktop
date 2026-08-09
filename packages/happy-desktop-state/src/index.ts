@@ -22,6 +22,8 @@ export * from "./rig/rigClient.js";
 export * from "./rig/rigClock.js";
 export * from "./rig/rigConnection.js";
 export * from "./rig/rigConversationProject.js";
+export * from "./rig/rigDocumentStore.js";
+export * from "./rig/rigDocumentsStore.js";
 export * from "./rig/rigFoldersStore.js";
 export * from "./rig/rigGroupAccess.js";
 export * from "./rig/rigHost.js";

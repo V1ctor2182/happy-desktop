@@ -8,6 +8,9 @@ import {
     type RigClockStore,
     type RigConnectionStore,
     type RigDaemonHealth,
+    type RigDocumentId,
+    type RigDocumentStore,
+    type RigDocumentsStore,
     type RigGlobalEvent,
     type RigHost,
     type RigModelPreferencePersistence,
@@ -38,6 +41,10 @@ import {
 import { terminalDriverCreate } from "happy-desktop-app";
 import { rigConnectCatalogSourceCreate } from "./rigConnectCatalogSource";
 import { rigConnectFoldersSourceCreate } from "./rigConnectFoldersSource";
+import {
+    rigConnectDocumentActionsCreate,
+    rigConnectDocumentSourceCreate,
+} from "./rigConnectDocumentSource";
 import { rigConnectInboxSourceCreate } from "./rigConnectInboxSource";
 import { rigConnectNodesSourceCreate } from "./rigConnectNodesSource";
 import { rigConnectPairingSourceCreate } from "./rigConnectPairingSource";
@@ -208,6 +215,12 @@ export interface RigSession {
      * the workspace rather than inside it.
      */
     readonly folders: RigFoldersStore | undefined;
+    /** Titles for every document currently linked into this Rig's folders. */
+    readonly documents: RigDocumentsStore | undefined;
+    /** Materializes one document surface store for the caller-owned route lifetime. */
+    readonly documentOpen: (documentId: RigDocumentId) => RigDocumentStore | undefined;
+    /** Creates one empty collaborative Markdown document on this Rig. */
+    readonly documentCreate: () => RigDocumentId | undefined;
     /** Host-owned human identities used when this window writes to remote Rigs. */
     readonly profiles: () => RigProfilesStore | undefined;
     /**
@@ -415,6 +428,12 @@ export function rigConnectionOpen(input: {
     // following it opens no transport of its own. Lazy like the rest: a window
     // showing no folders holds no subscriber on it.
     const foldersSource = rigConnectFoldersSourceCreate(rigConnect);
+    // One document feed per document actually opened or linked, built on demand
+    // rather than held here: unlike the tree, a document is addressed by id, and
+    // a window showing none opens nothing.
+    const documentSourceCreate = (documentId: RigDocumentId) =>
+        rigConnectDocumentSourceCreate(rigConnect, documentId);
+    const documentActions = rigConnectDocumentActionsCreate(rigConnect);
     const profiles = input.pairingOwner ? rigConnectProfilesSourceCreate(rigConnect) : undefined;
     // Trust, which only the host owns. The source follows the negotiated
     // protocol rather than capturing it: the handshake settles after this is
@@ -455,6 +474,8 @@ export function rigConnectionOpen(input: {
         providerUsageSource,
         nodesSource,
         foldersSource,
+        documentSourceCreate,
+        documentActions,
         ...(profiles
             ? {
                   profilesSource: profiles.source,
@@ -524,6 +545,9 @@ export function rigConnectionOpen(input: {
                     providerUsage: client.providerUsage(),
                     nodes: client.nodes(),
                     folders: client.folders(),
+                    documents: client.documents(),
+                    documentOpen: (documentId) => client.documentOpen(documentId),
+                    documentCreate: () => client.documentCreate(),
                     profiles: input.pairingOwner
                         ? () => client.profiles()
                         : (input.profiles ?? (() => undefined)),

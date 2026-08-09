@@ -78,6 +78,7 @@
 @import "./styles/code-block.css";
 @import "./styles/code-editor.css";
 @import "./styles/documents-page.css";
+@import "./styles/document-surface.css";
 @import "./styles/notes-page.css";
 @import "./styles/media-gallery.css";
 @import "./styles/file-attachment.css";

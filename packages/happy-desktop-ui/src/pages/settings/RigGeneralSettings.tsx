@@ -187,7 +187,7 @@ export function RigGeneralSettings(props: RigGeneralSettingsProps) {
                             size="small"
                         />
                     }
-                    description="Shows Notes and the inbox in the sidebar. Kept on this machine only."
+                    description="Shows the inbox in the sidebar. Kept on this machine only."
                     htmlFor="rig-settings-experimental-features"
                     label="Enable experimental features"
                 />
