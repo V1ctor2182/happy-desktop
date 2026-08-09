@@ -52,6 +52,8 @@ import type {
     RigPairingStore,
     RigProfilesStore,
     RigProviderUsageStore,
+    RigSharingSnapshot,
+    RigSharingStore,
     RigGroupLifecycle,
     RigProjectGroup,
     RigProjectId,
@@ -94,6 +96,7 @@ import {
     rigSessionScopeGroupId,
     rigNodesStoreNoop,
     rigProfilesStoreNoop,
+    rigSharingStoreNoop,
     rigSlotEntriesInScope,
     rigSlotEntryInScope,
     rigSlotsStoreNoop,
@@ -142,6 +145,7 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigCreateSessionDialog,
+    RigContactDialog,
     RigFolderDialog,
     RIG_FOLDER_DEFAULT_EMOJI,
     RigProjectCloneDialog,
@@ -285,6 +289,13 @@ export interface AppRigSession {
      * rather than drawing a control that would answer nothing.
      */
     readonly pairing?: RigPairingStore;
+    /**
+     * The people this account shares work with, and the requests waiting at
+     * either end. Present only on this window's host Rig: a node shares under
+     * the host's identity, so it has no contact list of its own and the Murmur
+     * section is absent rather than empty.
+     */
+    readonly sharing?: RigSharingStore;
     /** This Rig's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: RigInstructionsStore;
     /** This Rig's machine-wide permission-review policy. */
@@ -1056,6 +1067,32 @@ function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): 
 const FOLDERS_SECTION = "folders";
 
 /**
+ * The Murmur block in the sidebar: the people this account shares work with.
+ *
+ * One id for the same reason the folders block has one — sharing belongs to the
+ * host Rig's identity, and the addressed project or node never changes whose
+ * contacts these are.
+ */
+const CONTACTS_SECTION = "murmur";
+
+/** What marks a sidebar row as one contact rather than a place to work. */
+const CONTACT_ROW_PREFIX = "contact:";
+
+function contactRowId(identity: string): string {
+    return `${CONTACT_ROW_PREFIX}${identity}`;
+}
+
+/** The contact a sidebar row names, or undefined when it names something else. */
+function contactRowParse(value: string): string | undefined {
+    return value.startsWith(CONTACT_ROW_PREFIX)
+        ? value.slice(CONTACT_ROW_PREFIX.length)
+        : undefined;
+}
+
+/** Ends the relationship with the contact this row names. */
+const CONTACT_MENU_REMOVE = "contact-remove";
+
+/**
  * Starts a folder inside this one. Nesting is stated here rather than by
  * dragging, because a drag that could both order a row and swallow it into its
  * neighbour makes every ordinary reordering a near miss.
@@ -1381,6 +1418,78 @@ function foldersSection(
                           icon: "archive" as const,
                           title: "No folders yet",
                           ...(online ? { actionLabel: "New folder" } : {}),
+                      },
+                  }
+                : {}),
+        },
+    ];
+}
+
+/**
+ * The people this account shares work with, under the host Rig's own identity.
+ *
+ * Shown only once Murmur has produced a profile to share as. A Rig that
+ * declined it has no identity, no contacts, and nothing this block could
+ * truthfully say — so it contributes nothing rather than an empty list implying
+ * the reader simply has no friends yet.
+ *
+ * A contact is a person, not a place to work: the rows go nowhere and carry no
+ * unread state. What the block is for is adding one, so its heading control
+ * stands rather than waiting to be found, and someone waiting on an answer is
+ * counted on it — a request nobody notices is a request nobody answers.
+ */
+function contactsSection(sharing: RigSharingSnapshot, online: boolean): SidebarSection[] {
+    if (sharing.profileId === undefined) return [];
+    const waiting = sharing.incomingRequests.length;
+    const items: SidebarItem[] = sharing.contacts.map((contact) => ({
+        id: contactRowId(contact.identity),
+        kind: "person" as const,
+        // Someone whose Rig has published no profile yet is still a contact, so
+        // the identity stands in for the name rather than the row being held
+        // back until a profile arrives.
+        label: contact.profile?.name ?? contact.identity,
+        // A contact being removed is still on screen until the Rig says it is
+        // gone, and reads as going rather than as present.
+        ...(contact.status === "removing"
+            ? { lifecycle: "unavailable" as const, lifecycleLabel: "Removing…" }
+            : {}),
+        ...(contact.profile?.email === undefined ? {} : { meta: contact.profile.email }),
+        ...(contact.profile?.photo === undefined
+            ? {}
+            : { imageUrl: contact.profile.photo.imageUrl }),
+        // Presence here is the account's own link to the sharing network, not
+        // each person's: the Rig reports whether this machine is connected, and
+        // claiming to know who else is online would be inventing it.
+        ...(sharing.connection === "connected" ? { online: true } : {}),
+    }));
+    return [
+        {
+            id: CONTACTS_SECTION,
+            items,
+            label: "Murmur",
+            ...(online
+                ? {
+                      action: {
+                          icon: "plus" as const,
+                          label: waiting > 0 ? "Contact requests" : "Add contact",
+                          reveal: "always" as const,
+                      },
+                  }
+                : {}),
+            ...(sharing.actionError === undefined ? {} : { error: sharing.actionError }),
+            // Nothing is claimed about a list that has not arrived. A Rig still
+            // being asked has no contacts in the sense of "not answered", which
+            // is not the same sentence as "none".
+            ...(items.length === 0 && !sharing.loading
+                ? {
+                      empty: {
+                          description:
+                              waiting > 0
+                                  ? "Someone is waiting for your answer."
+                                  : "Share work with people you trust.",
+                          icon: "users" as const,
+                          title: waiting > 0 ? "Contact request waiting" : "No contacts yet",
+                          ...(online ? { actionLabel: "Add contact" } : {}),
                       },
                   }
                 : {}),
@@ -1881,6 +1990,17 @@ export function AppRigView(props: AppRigViewProps) {
         localFoldersStore.get,
         localFoldersStore.get,
     );
+    // Who this account shares work with. The host answers for it, like folders
+    // and slots: sharing belongs to one identity, and the machine the window is
+    // addressing does not change whose contacts these are. Subscribed while the
+    // window is open rather than only on a settings screen, because a request
+    // waiting on an answer is only answered if it is seen where the work is.
+    const localSharingStore = localRig?.session?.sharing ?? rigSharingStoreNoop;
+    const localSharing = useSyncExternalStore(
+        localSharingStore.subscribe,
+        localSharingStore.get,
+        localSharingStore.get,
+    );
     const localDocumentsStore = localRig?.session?.documents ?? rigDocumentsStoreNoop;
     const localDocuments = useSyncExternalStore(
         localDocumentsStore.subscribe,
@@ -2117,6 +2237,21 @@ export function AppRigView(props: AppRigViewProps) {
                 ) : undefined
             }
             itemMenuItems={(item) => {
+                // A contact is a person, not a checkout: the only act on the row
+                // is ending the relationship, and every project act below would
+                // reach for a repository that does not exist.
+                if (contactRowParse(item.id) !== undefined)
+                    return localRigOnline()
+                        ? [
+                              {
+                                  danger: true,
+                                  icon: "trash" as const,
+                                  id: CONTACT_MENU_REMOVE,
+                                  kind: "item" as const,
+                                  label: "Remove contact",
+                              },
+                          ]
+                        : [];
                 // A folder is a group, but not one of the host's checkouts, so
                 // the acts on it are its own: the project menu below would offer
                 // to rename and archive a repository that is not there.
@@ -2206,6 +2341,15 @@ export function AppRigView(props: AppRigViewProps) {
                     if (localRigOnline()) localFoldersStore.folderCreateOpen();
                     return;
                 }
+                // Both of this block's controls open the same surface, because
+                // there is only one act it offers: the heading's plus and the
+                // button an empty block shows instead both open the dialog where
+                // a contact is made — and where one waiting to be answered is
+                // answered, which is the same place for the same reason.
+                if (sectionId === CONTACTS_SECTION) {
+                    if (localRigOnline()) localSharingStore.contactAddOpen();
+                    return;
+                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (rig?.status !== "connected") {
                     props.onSettingsOpen();
@@ -2223,6 +2367,15 @@ export function AppRigView(props: AppRigViewProps) {
                 workspace.projectCloneOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
+                const contactIdentity = contactRowParse(item.id);
+                if (contactIdentity !== undefined) {
+                    // Deliberately no confirmation. Removing a contact takes
+                    // away an ability rather than destroying anything, and the
+                    // relationship can be made again from either end.
+                    if (localRigOnline() && actionId === CONTACT_MENU_REMOVE)
+                        localSharingStore.contactRemove(contactIdentity);
+                    return;
+                }
                 const folderId = folderRowParse(item.id);
                 if (folderId !== undefined) {
                     if (!localRigOnline()) return;
@@ -2301,6 +2454,10 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onBlueprintOpen?.();
                     return;
                 }
+                // A contact row names a person, not a place to work. There is
+                // nowhere to go yet, so selecting one does nothing rather than
+                // falling through and addressing a group by their identity.
+                if (contactRowParse(id) !== undefined) return;
                 // A link row opens what it points at, exactly as that thing's
                 // own row does. The link is where the reader found it, not a
                 // different place to be — so it resolves to the target's group
@@ -2474,6 +2631,14 @@ export function AppRigView(props: AppRigViewProps) {
                           localRig.projects,
                           localDocuments.titles,
                       )
+                    : []),
+                // People, then machines. Contacts sit under the folders because
+                // they belong to the reader's account rather than to any one
+                // machine's work, and above the project sections because a
+                // request waiting on an answer must not be pushed off the bottom
+                // by however many projects happen to be open.
+                ...(localRig?.session?.sharing
+                    ? contactsSection(localSharing, localAvailability?.online === true)
                     : []),
                 ...rigSections(
                     directory,
@@ -2659,6 +2824,49 @@ export function AppRigView(props: AppRigViewProps) {
                     {...(localFolders.editor.error === undefined
                         ? {}
                         : { error: localFolders.editor.error })}
+                />
+            ) : null}
+            {/* Making a contact, and answering someone who asked to be one.
+                Mounted here for the same reason the folder dialog is: the
+                sidebar is on every route, so the surface its heading opens has
+                to answer from every route too. The invitation and the pasted one
+                live in the sharing store rather than here, so neither is lost to
+                the Rig republishing its snapshot — which happens whenever any
+                contact or request anywhere changes, not only this one. */}
+            {localSharing.addOpen ? (
+                <RigContactDialog
+                    incoming={localSharing.incomingRequests.map((request) => ({
+                        id: request.id,
+                        identity: request.identity,
+                        answering: localSharing.answering.has(request.id),
+                        ...(request.profile === undefined
+                            ? {}
+                            : {
+                                  name: request.profile.name,
+                                  email: request.profile.email,
+                                  ...(request.profile.photo === undefined
+                                      ? {}
+                                      : { imageUrl: request.profile.photo.imageUrl }),
+                              }),
+                    }))}
+                    onClose={() => localSharingStore.contactAddClose()}
+                    onInvitationCreate={() => localSharingStore.invitationCreate()}
+                    onRequestAccept={(requestId) => localSharingStore.requestAccept(requestId)}
+                    onRequestReject={(requestId) => localSharingStore.requestReject(requestId)}
+                    onRequestSubmit={() => localSharingStore.requestSubmit()}
+                    onRequestValueChange={(value) =>
+                        localSharingStore.requestInvitationUpdate(value)
+                    }
+                    outgoing={localSharing.outgoingRequests}
+                    requesting={localSharing.request.submitting}
+                    requestValue={localSharing.request.invitation}
+                    creating={localSharing.creating}
+                    {...(localSharing.invitation === undefined
+                        ? {}
+                        : { invitation: { invitation: localSharing.invitation.invitation } })}
+                    {...(localSharing.actionError === undefined
+                        ? {}
+                        : { error: localSharing.actionError })}
                 />
             ) : null}
             {active?.session?.workspace ? (

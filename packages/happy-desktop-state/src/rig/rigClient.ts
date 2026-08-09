@@ -69,6 +69,11 @@ import {
     type RigPairingStore,
 } from "./rigPairingStore.js";
 import {
+    rigSharingStoreCreate,
+    type RigSharingSource,
+    type RigSharingStore,
+} from "./rigSharingStore.js";
+import {
     rigProfilesStoreCreate,
     type RigProfilesActions,
     type RigProfileSelectionPersistence,
@@ -154,6 +159,13 @@ export interface RigClient {
      * negotiate trust on another machine's behalf.
      */
     pairing(): RigPairingStore | undefined;
+    /**
+     * The single sharing store for this Rig: the people it shares work with and
+     * the requests waiting at either end. Materialized on first access and
+     * shared. Unavailable on a connection that does not own an identity — a node
+     * shares under its host's, so it has no contact list of its own.
+     */
+    sharing(): RigSharingStore | undefined;
     /**
      * This Rig's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -310,6 +322,8 @@ export interface RigClientDeps {
      * own trust, which leaves pairing unavailable rather than idle.
      */
     readonly pairingSource?: RigPairingSource;
+    /** Host-only sharing feed and contact mutations. Omitted on a node connection. */
+    readonly sharingSource?: RigSharingSource;
     /** Host-only profile catalog and mutations. Omitted on a node connection. */
     readonly profilesSource?: RigProfilesSource;
     readonly profilesActions?: RigProfilesActions;
@@ -370,6 +384,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
     let foldersStore: RigFoldersStore | undefined;
     let documentsStore: RigDocumentsStore | undefined;
     let pairingStore: RigPairingStore | undefined;
+    let sharingStore: RigSharingStore | undefined;
     let profilesStore: RigProfilesStore | undefined;
     let instructionsStore: RigInstructionsStore | undefined;
     let securityPolicyStore: RigSecurityPolicyStore | undefined;
@@ -569,6 +584,13 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             pairingStore ??= rigPairingStoreCreate({ source });
             return pairingStore;
         },
+        sharing() {
+            if (disposed) throw new Error("The Rig client is disposed.");
+            const source = deps.sharingSource;
+            if (!source) return undefined;
+            sharingStore ??= rigSharingStoreCreate({ source });
+            return sharingStore;
+        },
         instructions() {
             if (disposed) throw new Error("The Rig client is disposed.");
             instructionsStore ??= rigInstructionsStoreCreate({ transport });
@@ -691,6 +713,8 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
             documentsStore = undefined;
             pairingStore?.[Symbol.dispose]();
             pairingStore = undefined;
+            sharingStore?.[Symbol.dispose]();
+            sharingStore = undefined;
             profilesStore?.[Symbol.dispose]();
             profilesStore = undefined;
             instructionsStore?.[Symbol.dispose]();

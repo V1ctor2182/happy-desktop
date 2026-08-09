@@ -276,6 +276,13 @@ export {
     type RigFolderDialogProps,
 } from "./RigFolderDialog";
 export {
+    RigContactDialog,
+    type RigContactDialogProps,
+    type RigContactInvitationView,
+    type RigContactOutgoingView,
+    type RigContactRequestView,
+} from "./RigContactDialog";
+export {
     RigCreateSessionDialog,
     type RigCreateSessionDestination,
     type RigCreateSessionDialogProps,

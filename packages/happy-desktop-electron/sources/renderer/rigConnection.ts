@@ -29,6 +29,7 @@ import {
     type RigPairingStore,
     type RigProfilesStore,
     type RigProviderUsageStore,
+    type RigSharingStore,
     type RigWorkspaceStore,
 } from "happy-desktop-state";
 import {
@@ -50,6 +51,7 @@ import { rigConnectNodesSourceCreate } from "./rigConnectNodesSource";
 import { rigConnectPairingSourceCreate } from "./rigConnectPairingSource";
 import { rigConnectProviderUsageSourceCreate } from "./rigConnectProviderUsageSource";
 import { rigConnectProfilesSourceCreate } from "./rigConnectProfilesSource";
+import { rigConnectSharingSourceCreate } from "./rigConnectSharingSource";
 import { rigConnectTranscriptConnectCreate } from "./rigConnectTranscriptSource";
 import { rigRendererTransportCreate, RigTransportHttpError } from "./rigRendererTransport";
 import { completionChimePlay } from "./completionChime";
@@ -230,6 +232,12 @@ export interface RigSession {
      * there is nothing to negotiate on a node's own connection.
      */
     readonly pairing: RigPairingStore | undefined;
+    /**
+     * The people this account shares work with, and the requests waiting at
+     * either end. Present only on this window's host Rig: a node shares under
+     * the host's identity, so it has no contact list of its own.
+     */
+    readonly sharing: RigSharingStore | undefined;
     /** The machine-wide instructions every agent this Rig starts is given. */
     readonly instructions: RigInstructionsStore;
     /** The machine-wide policy its permission reviewer applies to agent actions. */
@@ -450,6 +458,13 @@ export function rigConnectionOpen(input: {
               },
           })
         : undefined;
+    // Who this account shares work with, which only the host owns for the same
+    // reason trust does: a node shares under the host's identity, so it has no
+    // contact list of its own to offer. Lazy like the rest — the feed opens when
+    // a surface watches the contacts and closes when the last one leaves.
+    const sharingSource = input.pairingOwner
+        ? rigConnectSharingSourceCreate(rigConnect)
+        : undefined;
     const catalogSource = rigConnectCatalogSourceCreate(rigConnect, input.rigHttpUrl, {
         read: async (): Promise<RigSessionCatalogSnapshot> => {
             const [catalog, sessions] = await Promise.all([
@@ -489,6 +504,7 @@ export function rigConnectionOpen(input: {
                   peerIdentity: () => input.profiles?.()?.get().selectedProfileId,
               }),
         ...(pairingSource ? { pairingSource } : {}),
+        ...(sharingSource ? { sharingSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),
         connectActions: rigConnect,
         connectMutationSubscribe: (listener) => {
@@ -552,6 +568,7 @@ export function rigConnectionOpen(input: {
                         ? () => client.profiles()
                         : (input.profiles ?? (() => undefined)),
                     pairing: client.pairing(),
+                    sharing: client.sharing(),
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
                     secrets: client.secrets(),
