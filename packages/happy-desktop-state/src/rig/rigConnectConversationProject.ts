@@ -113,6 +113,9 @@ function rigConnectGroupProject(
                     subagents: input.subagents,
                     inboundAuthor: rigInboundAuthor,
                     notification: element.source === "notification",
+                    opaqueAgent:
+                        element.text.trim().length === 0 &&
+                        (element.attachments?.length ?? 0) === 0,
                 });
                 entries.push({
                     kind: "message",

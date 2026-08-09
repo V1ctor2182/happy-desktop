@@ -36,6 +36,14 @@ export function rigInboundMessageProject(input: {
     readonly inboundAuthor: ConversationAuthor;
     /** Structured evidence available only on the modern live transcript. */
     readonly notification?: boolean;
+    /**
+     * Rig's native encrypted collaboration deliberately gives clients no
+     * plaintext, so its visible message has neither text nor attachments.
+     * Happy itself cannot submit that shape; its composer requires one or the
+     * other. This is therefore an incoming agent message whose content this
+     * client is not allowed to read, not an empty owner message.
+     */
+    readonly opaqueAgent?: boolean;
 }): RigInboundMessageProjection | undefined {
     const text = input.text.trim();
     const agentEnvelope = agentMessageEnvelope.exec(text);
@@ -72,6 +80,8 @@ export function rigInboundMessageProject(input: {
             text: `Background work ${outcome}`,
         };
     }
+
+    if (input.opaqueAgent) return { author: input.inboundAuthor, text: "Encrypted agent message" };
 
     return input.notification ? { author: input.inboundAuthor, text: input.text } : undefined;
 }

@@ -4,6 +4,7 @@ import type { ConversationSummary } from "../conversation/conversationSummary.js
 import type { UserError } from "../types.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
 import type {
+    RigFolderContentId,
     RigFolderId,
     RigFolderItemId,
     RigFolderItemTarget,
@@ -24,6 +25,11 @@ export interface RigFolderItem {
     readonly folderId: RigFolderId;
     readonly target: RigFolderItemTarget;
 }
+
+/** One entry in a folder's shared folder-and-link order. */
+export type RigFolderContent =
+    | { readonly kind: "folder"; readonly folder: RigFolder }
+    | { readonly kind: "item"; readonly item: RigFolderItem };
 
 /**
  * One folder in the Rig's virtual tree, with the folders nested inside it
@@ -50,13 +56,15 @@ export interface RigFolder {
     readonly path: string;
     /** Chats directly contained by this folder, in the order the host published. */
     readonly conversations: readonly ConversationSummary[];
+    /** Direct folders and links in the one shared order the host published. */
+    readonly contents: readonly RigFolderContent[];
     /**
-     * Projects, workspaces, and documents linked into this folder, in the order
-     * the host published. Ordered independently of the chats: an item is a link
-     * the reader placed, not a chat that arrived.
+     * Projects, workspaces, and documents linked into this folder, filtered
+     * from `contents`. Ordered independently of the chats: an item is a link the
+     * reader placed, not a chat that arrived.
      */
     readonly items: readonly RigFolderItem[];
-    /** The folders nested inside this one, in the order they should be drawn. */
+    /** The folders nested inside this one, filtered from `contents`. */
     readonly children: readonly RigFolder[];
 }
 
@@ -103,11 +111,11 @@ export interface RigFoldersActions {
         folderId: RigFolderId,
         changes: { readonly name?: string; readonly icon?: string | null },
     ): RigFolderActionResult;
-    /** One drag-and-drop: the folder it was dropped into, and the sibling below. */
+    /** One drag-and-drop: the folder it entered, and the folder or link it follows. */
     folderMove(
         folderId: RigFolderId,
         parentId: RigFolderId | null,
-        afterId: RigFolderId | null,
+        afterId: RigFolderContentId | null,
     ): RigFolderActionResult;
     /** Puts a folder away together with everything nested under it. */
     folderArchive(folderId: RigFolderId): RigFolderActionResult;
@@ -115,11 +123,11 @@ export interface RigFoldersActions {
     folderSessionSet(sessionId: RigSessionId, folderId: RigFolderId | null): RigFolderActionResult;
     /** Links one project, workspace, or document into a folder's item list. */
     folderItemLink(folderId: RigFolderId, target: RigFolderItemTarget): RigFolderActionResult;
-    /** Moves one link into or within a folder. The target itself does not move. */
+    /** Moves one link within the shared folder-and-link order. The target itself does not move. */
     folderItemMove(
         itemId: RigFolderItemId,
         folderId: RigFolderId,
-        afterId: RigFolderItemId | null,
+        afterId: RigFolderContentId | null,
     ): RigFolderActionResult;
     /** Removes the link only. What it pointed at is left exactly as it was. */
     folderItemUnlink(itemId: RigFolderItemId): RigFolderActionResult;
@@ -195,7 +203,7 @@ export interface RigFoldersStore {
     folderMove(
         folderId: RigFolderId,
         parentId: RigFolderId | null,
-        afterId: RigFolderId | null,
+        afterId: RigFolderContentId | null,
     ): Promise<void>;
     folderArchive(folderId: RigFolderId): Promise<void>;
     /**
@@ -215,7 +223,7 @@ export interface RigFoldersStore {
     folderItemMove(
         itemId: RigFolderItemId,
         folderId: RigFolderId,
-        afterId: RigFolderItemId | null,
+        afterId: RigFolderContentId | null,
     ): Promise<void>;
     /** Removes one link. What it pointed at is left exactly as it was. */
     folderItemUnlink(itemId: RigFolderItemId): Promise<void>;

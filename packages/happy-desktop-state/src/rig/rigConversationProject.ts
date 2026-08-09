@@ -233,6 +233,7 @@ function userEntry(
     createdAt?: number,
 ): ConversationEntry {
     const text = messageText(message);
+    const attachments = messageAttachments(message);
     // Older remote Rigs use this durable-message fallback, whose user slot also
     // carries agent-to-agent and background-work injections. Give those the same
     // authors the modern transcript projector does instead of claiming they
@@ -241,6 +242,7 @@ function userEntry(
         text,
         subagents,
         inboundAuthor: rigInboundAuthor,
+        opaqueAgent: text.trim().length === 0 && attachments.length === 0,
     });
     return messageEntry({
         id: message.id,
@@ -248,7 +250,7 @@ function userEntry(
         author: inbound?.author ?? rigOwnerAuthor,
         text: inbound?.text ?? text,
         createdAt,
-        attachments: messageAttachments(message),
+        attachments,
     });
 }
 

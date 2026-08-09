@@ -13,6 +13,7 @@ import type {
     RigConversationSnapshot,
     RigFileLayout,
     RigFolder,
+    RigFolderContentId,
     RigFolderId,
     RigFolderItem,
     RigFolderItemId,
@@ -1151,6 +1152,11 @@ function folderItemRowParse(value: string): RigFolderItemId | undefined {
     return (boundary < 0 ? rest : rest.slice(0, boundary)) as RigFolderItemId;
 }
 
+/** The folder or link occupying one place in a folder's shared child order. */
+function folderContentRowParse(value: string): RigFolderContentId | undefined {
+    return folderRowParse(value) ?? folderItemRowParse(value);
+}
+
 /**
  * A row for one worktree of a linked project.
  *
@@ -1305,6 +1311,33 @@ function folderItemRows(
     ];
 }
 
+/** One folder row followed by its folders and links in their shared order. */
+function folderRows(
+    rigId: string,
+    folder: RigFolder,
+    depth: number,
+    projects: readonly RigProjectGroup[],
+    documentTitles: ReadonlyMap<RigDocumentId, string>,
+): SidebarItem[] {
+    return [
+        {
+            depth,
+            emoji: folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
+            id: folderRowId(rigId, folder.id),
+            kind: "folder",
+            label: folder.name,
+            ...(folder.conversations.some((conversation) => conversation.unread)
+                ? { unread: true }
+                : {}),
+        },
+        ...folder.contents.flatMap((entry) =>
+            entry.kind === "folder"
+                ? folderRows(rigId, entry.folder, depth + 1, projects, documentTitles)
+                : folderItemRows(rigId, entry.item, depth + 1, projects, documentTitles),
+        ),
+    ];
+}
+
 /**
  * The "put this in a folder" half of a project or workspace row's menu.
  *
@@ -1375,24 +1408,11 @@ function foldersSection(
                           : {}),
                   },
               ]),
-        // Each folder, then the things linked into it directly beneath it. The
-        // links are drawn one level in, so a folder's contents read as its own
-        // rather than as siblings of the folder holding them.
-        ...rigFoldersFlatten(folders.folders).flatMap((row) => [
-            {
-                depth: row.depth,
-                emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
-                id: folderRowId(rigId, row.folder.id),
-                kind: "folder" as const,
-                label: row.folder.name,
-                ...(row.folder.conversations.some((conversation) => conversation.unread)
-                    ? { unread: true }
-                    : {}),
-            },
-            ...row.folder.items.flatMap((item) =>
-                folderItemRows(rigId, item, row.depth + 1, projects, documentTitles),
-            ),
-        ]),
+        // Every folder and link in the shared order the host published. Direct
+        // contents are one level in, so they read as belonging to their folder.
+        ...folders.folders.flatMap((folder) =>
+            folderRows(rigId, folder, 0, projects, documentTitles),
+        ),
     ];
     // A refused act outranks a dropped feed: the tree on screen is still
     // current, and what the reader needs told is that the thing they just did
@@ -2618,11 +2638,9 @@ export function AppRigView(props: AppRigViewProps) {
                         void localFoldersStore.folderItemMove(
                             movedItem,
                             parent,
-                            // Only a link can precede a link. Dropped just under
-                            // the folder's own row, it lands first.
                             move.afterId === null
                                 ? null
-                                : (folderItemRowParse(move.afterId) ?? null),
+                                : (folderContentRowParse(move.afterId) ?? null),
                         );
                         return;
                     }
@@ -2638,7 +2656,9 @@ export function AppRigView(props: AppRigViewProps) {
                         move.parentId === undefined
                             ? null
                             : (folderRowParse(move.parentId) ?? null),
-                        move.afterId === null ? null : (folderRowParse(move.afterId) ?? null),
+                        move.afterId === null
+                            ? null
+                            : (folderContentRowParse(move.afterId) ?? null),
                     );
                     return;
                 }

@@ -50,6 +50,9 @@ export type RigFolderId = string & { readonly [rigFolderIdBrand]: true };
  */
 export type RigFolderItemId = string & { readonly [rigFolderItemIdBrand]: true };
 
+/** One identity in a folder's shared direct-child order. */
+export type RigFolderContentId = RigFolderId | RigFolderItemId;
+
 /**
  * Branded identifier of one document the Rig owns (CUID2 on the wire).
  * Documents belong to a Rig rather than to a project or a session.

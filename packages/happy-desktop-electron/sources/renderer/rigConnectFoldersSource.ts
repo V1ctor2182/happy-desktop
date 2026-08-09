@@ -1,4 +1,5 @@
 import type {
+    FolderChild,
     FolderItem,
     FolderNode,
     FolderSession,
@@ -10,6 +11,7 @@ import type {
     ConversationSummary,
     RigDocumentId,
     RigFolder,
+    RigFolderContent,
     RigFolderId,
     RigFolderItem,
     RigFolderItemId,
@@ -80,25 +82,32 @@ function readingProject(view: FolderView, state: FoldersState): RigFoldersReadin
  * its siblings and already hands the tree over in that order, so carrying the
  * key would only invite a surface to sort by it and disagree.
  *
- * The nested folders are read from `folders` rather than from `children`, which
- * is the shared order holding this folder's child folders and its links
- * together. This product states the two apart — a folder's `children` are
- * folders and its `items` are links — so the filtered view is the one that
- * answers the question being asked here.
+ * The connector's canonical `children` order contains tagged folders and links.
+ * This product states those apart, so only folder children enter `children`
+ * here; links enter `items` below. Reading the canonical value directly avoids
+ * depending on the connector's redundant filtered `folders` convenience view.
  */
 function folderProject(folder: FolderNode): RigFolder {
+    const contents = folder.children.map(folderChildProject);
     return {
-        children: folder.folders.map(folderProject),
+        children: contents.flatMap((entry) => (entry.kind === "folder" ? [entry.folder] : [])),
+        contents,
         id: folder.id as RigFolderId,
         name: folder.name,
         path: folder.path,
         conversations: folder.sessions.map(sessionProject),
-        items: folder.items.map(itemProject),
+        items: contents.flatMap((entry) => (entry.kind === "item" ? [entry.item] : [])),
         ...(folder.description === undefined ? {} : { description: folder.description }),
         ...(folder.icon === undefined ? {} : { icon: folder.icon }),
         ...(folder.parentId === undefined ? {} : { parentId: folder.parentId as RigFolderId }),
         ...(folder.rules === undefined ? {} : { rules: folder.rules }),
     };
+}
+
+function folderChildProject(child: FolderChild): RigFolderContent {
+    return child.kind === "folder"
+        ? { kind: "folder", folder: folderProject(child.folder) }
+        : { kind: "item", item: itemProject(child.item) };
 }
 
 /**
