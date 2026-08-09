@@ -180,6 +180,10 @@ export type LocalOnboardingStage =
     | "connecting"
     /** The daemon could not be reached; the desktop runtime carries the reason. */
     | "connectFailed"
+    /** The installed Rig CLI or daemon is older than Happy's supported protocol. */
+    | "rigUpdateRequired"
+    /** The installed Rig protocol is newer than this Happy build. */
+    | "happyUpdateRequired"
     /**
      * Rig is installed and working, but no coding assistant on this machine is
      * signed in, so it has nothing to run a session with. Kept apart from
@@ -188,7 +192,11 @@ export type LocalOnboardingStage =
      * signed in.
      */
     | "providersMissing"
-    /** Whether this Rig has ever been used is still being read from it. */
+    /** Rig requires a human identity before it can finish setup. */
+    | "profileRequired"
+    /** The person must explicitly opt in to or out of Murmur sharing. */
+    | "murmurSetup"
+    /** Rig Connect is resolving the daemon-owned onboarding status. */
     | "examining"
     /** Everything else is settled and this Rig is demonstrably unused. */
     | "project"
@@ -257,8 +265,15 @@ export interface LocalOnboardingSnapshot {
      * order it named them. Present only at `providersMissing`.
      */
     readonly providers?: readonly string[];
+    /** Profiles that can own Murmur identity, present at the Murmur step. */
+    readonly profiles?: readonly {
+        readonly email: string;
+        readonly id: string;
+        readonly name: string;
+    }[];
     /** An attempt to reach Rig is running, started from a failed stage. */
     readonly retrying?: boolean;
+    readonly update?: DesktopUpdateSnapshot;
 }
 
 /**
@@ -453,6 +468,13 @@ export interface HappyDesktopBridge {
      * keystrokes through `rigInstallInput`/`rigInstallResize`.
      */
     onboardingRigInstall(cols: number, rows: number): Promise<void>;
+    onboardingProfileCreate(input: {
+        readonly email: string;
+        readonly name: string;
+    }): Promise<void>;
+    onboardingMurmurChoose(
+        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
+    ): Promise<void>;
     /**
      * Opens the native folder picker, requires a Git repository root, and opens
      * it as this Rig's first project. Picking, validating, and registering all
@@ -521,6 +543,8 @@ export const desktopIpc = {
     notesList: "happy2:notes:list",
     onboardingChanged: "happy2:onboarding:changed",
     onboardingGet: "happy2:onboarding:get",
+    onboardingMurmurChoose: "happy2:onboarding:murmur-choose",
+    onboardingProfileCreate: "happy2:onboarding:profile-create",
     onboardingProjectChoose: "happy2:onboarding:project-choose",
     onboardingRigInstall: "happy2:onboarding:rig-install",
     runtimeChanged: "happy2:runtime:changed",

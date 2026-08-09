@@ -2,6 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { realpath } from "node:fs/promises";
 import { isAbsolute, normalize, resolve } from "node:path";
 import { userInfo } from "node:os";
+import type { LocalRigOnboardingInspection } from "@slopus/rig-connect";
 import type { HealthResponse } from "@slopus/rig/types";
 import { RigDaemonClient, rigDaemonPathsResolve, rigDaemonTokenRead } from "./rigDaemonClient";
 
@@ -37,6 +38,45 @@ export interface LocalRigConnection {
     readonly environment: NodeJS.ProcessEnv;
     readonly version: string;
     close(): void;
+}
+
+/**
+ * Runs Rig's read-only native installation inspection for the onboarding
+ * resolver. Exit status 2 is still a completed inspection: Rig uses it for an
+ * incompatible or unavailable data directory while keeping JSON on stdout.
+ */
+export function localRigOnboardingInspect(
+    connection: Pick<LocalRigConnection, "command" | "environment">,
+    signal: AbortSignal,
+): Promise<LocalRigOnboardingInspection> {
+    return new Promise((resolvePromise, reject) => {
+        execFileCallback(
+            connection.command,
+            ["inspect", "--json"],
+            {
+                encoding: "utf8",
+                env: connection.environment,
+                maxBuffer: maximumOutputBytes,
+                signal,
+                timeout: 30_000,
+            },
+            (error, stdout) => {
+                if (error && error.code !== 2) {
+                    reject(error);
+                    return;
+                }
+                try {
+                    resolvePromise(JSON.parse(stdout) as LocalRigOnboardingInspection);
+                } catch (parseError) {
+                    reject(
+                        new Error("The discovered rig command returned an invalid inspection.", {
+                            cause: parseError,
+                        }),
+                    );
+                }
+            },
+        );
+    });
 }
 
 export interface LocalRigConnector {

@@ -27,6 +27,15 @@
     box-sizing: border-box;
 }
 
+.happy2-local-onboarding__profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 400px;
+    align-self: center;
+}
+
 .happy2-setup-page {
     position: relative;
     display: flex;

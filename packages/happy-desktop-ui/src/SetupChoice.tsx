@@ -15,6 +15,7 @@ export interface SetupChoiceOption {
     readonly actionLabel: string;
     /** Defaults to `secondary`, so a fork with no recommendation has none. */
     readonly actionVariant?: ButtonVariant;
+    readonly disabled?: boolean;
 }
 
 export interface SetupChoiceProps {
@@ -100,6 +101,7 @@ export function SetupChoice(props: SetupChoiceProps) {
                         {option.description}
                     </span>
                     <Button
+                        disabled={option.disabled}
                         fullWidth
                         onClick={() => {
                             local.onSelect(option.id);

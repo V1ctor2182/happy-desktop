@@ -20,13 +20,20 @@ import {
     desktopTopologyTarget,
 } from "./runtimeValidation";
 import {
+    localRigOnboardingInspect,
     localRigConnectorCreate,
     RigCommandMissingError,
     type LocalRigConnection,
     type LocalRigConnector,
 } from "./localRig";
-import { connectRig, type RigConnection, type RigProjects } from "@slopus/rig-connect";
-import { rigDaemonConnectionUnavailable, type RigDaemonClient } from "./rigDaemonClient";
+import {
+    connectRig,
+    resolveRigOnboarding,
+    type RigConnection,
+    type RigOnboardingState,
+    type RigProfile,
+} from "@slopus/rig-connect";
+import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
@@ -69,6 +76,8 @@ export interface DesktopRuntimeOptions {
 /** Owns the active local-Rig topology and one immutable renderer snapshot. */
 export class DesktopRuntime implements AsyncDisposable {
     private activationGeneration = 0;
+    /** Advances whenever the daemon backing the stable local proxy changes. */
+    private connectionGeneration = 0;
     private activeTopology?: DesktopTopology;
     private closed = false;
     private closeTask?: Promise<void>;
@@ -77,7 +86,7 @@ export class DesktopRuntime implements AsyncDisposable {
     private persistOnSuccess = false;
     private reconnectTask?: Promise<void>;
     private rigConnection?: LocalRigConnection;
-    private rigProjectsConnection?: {
+    private rigConnectConnection?: {
         readonly generation: number;
         readonly connection: RigConnection;
     };
@@ -151,46 +160,120 @@ export class DesktopRuntime implements AsyncDisposable {
         return () => this.listeners.delete(listener);
     }
 
-    /**
-     * The live local daemon client, or nothing while no local Rig is connected.
-     * It is exposed so another main-process owner can ask the daemon a question
-     * without opening a second connection to it; the renderer never sees this.
-     */
-    localClient(): RigDaemonClient | undefined {
-        return this.snapshotValue.phase === "ready" && this.snapshotValue.mode === "local"
-            ? this.rigConnection?.client
-            : undefined;
+    /** Resolves Rig's complete ordered onboarding contract for this daemon. */
+    localOnboardingResolve(expectedConnectionId: number): Promise<RigOnboardingState> {
+        return this.serial(() => this.localOnboardingResolveOnce(expectedConnectionId));
     }
 
-    /**
-     * Rig's authoritative project registration for the connected local Rig, or
-     * nothing while none is connected.
-     *
-     * It is `rig-connect`'s own `projects` surface rather than a hand-rolled
-     * request, because registration's contract — validating the folder, minting
-     * one project identity, and converging on that identity when a response is
-     * lost after the daemon already committed — belongs to the released client.
-     * The connector is made once per activation and closed with the connection
-     * it belongs to, so a Rig that has been replaced cannot still be registered
-     * against.
-     */
-    localProjects(): RigProjects | undefined {
-        if (this.snapshotValue.phase !== "ready" || this.snapshotValue.mode !== "local")
-            return undefined;
-        const endpoint = this.rigProxy?.url;
+    private async localOnboardingResolveOnce(
+        expectedConnectionId: number,
+    ): Promise<RigOnboardingState> {
+        const endpoint = this.localRigEndpoint();
+        if (!endpoint) throw new Error("The local Rig daemon is unavailable.");
+        const connection = this.localConnectionRequire(expectedConnectionId);
+        const state = await resolveRigOnboarding({
+            endpoint,
+            inspectLocalRig: (signal) => localRigOnboardingInspect(connection, signal),
+            token: "happy2-local-capability",
+        });
+        if (
+            this.snapshotValue.phase !== "ready" ||
+            this.snapshotValue.connectionId !== expectedConnectionId ||
+            this.rigConnection !== connection
+        )
+            throw new Error("The local Rig changed while Happy was examining it.");
+        return state;
+    }
+
+    async localOnboardingProfileCreate(
+        expectedConnectionId: number,
+        input: { readonly email: string; readonly name: string },
+    ): Promise<RigProfile> {
+        return this.serial(async () => {
+            this.localConnectionRequire(expectedConnectionId);
+            const rig = this.localRigConnect();
+            if (!rig) throw new Error("The local Rig daemon is unavailable.");
+            return rig.createProfile(input);
+        });
+    }
+
+    async localOnboardingProfiles(expectedConnectionId: number): Promise<readonly RigProfile[]> {
+        return this.serial(async () => {
+            this.localConnectionRequire(expectedConnectionId);
+            const rig = this.localRigConnect();
+            if (!rig) throw new Error("The local Rig daemon is unavailable.");
+            return rig.listProfiles();
+        });
+    }
+
+    async localOnboardingMurmurChoose(
+        expectedConnectionId: number,
+        input: { readonly enabled: false } | { readonly enabled: true; readonly profileId: string },
+    ): Promise<void> {
+        await this.serial(async () => {
+            this.localConnectionRequire(expectedConnectionId);
+            const rig = this.localRigConnect();
+            if (!rig) throw new Error("The local Rig daemon is unavailable.");
+            await rig.onboardMurmur(input);
+        });
+    }
+
+    localOnboardingFreshness(expectedConnectionId: number): Promise<"fresh" | "used"> {
+        return this.serial(async () => {
+            const client = this.localConnectionRequire(expectedConnectionId).client;
+            const catalog = await client.listCatalog();
+            this.localConnectionRequire(expectedConnectionId);
+            return catalog.projects.some((project) => project.kind !== "home") ? "used" : "fresh";
+        });
+    }
+
+    localOnboardingProjectAdd(
+        expectedConnectionId: number,
+        path: string,
+    ): Promise<{ readonly path: string }> {
+        return this.serial(async () => {
+            this.localConnectionRequire(expectedConnectionId);
+            const rig = this.localRigConnect();
+            if (!rig) throw new Error("The local Rig daemon is unavailable.");
+            return rig.projects.add(path);
+        });
+    }
+
+    private localConnectionRequire(expectedConnectionId: number): LocalRigConnection {
+        if (
+            this.snapshotValue.phase !== "ready" ||
+            this.snapshotValue.mode !== "local" ||
+            this.snapshotValue.connectionId !== expectedConnectionId ||
+            !this.rigConnection
+        )
+            throw new Error("The local Rig changed before Happy could finish.");
+        return this.rigConnection;
+    }
+
+    /** The one shared rig-connect client for this local activation. */
+    private localRigConnect(): RigConnection | undefined {
+        const endpoint = this.localRigEndpoint();
         if (!endpoint) return undefined;
-        const generation = this.activationGeneration;
-        if (this.rigProjectsConnection?.generation !== generation) {
-            this.rigProjectsConnection?.connection.close();
-            this.rigProjectsConnection = {
+        const generation = this.connectionGeneration;
+        if (this.rigConnectConnection?.generation !== generation) {
+            this.rigConnectConnection?.connection.close();
+            this.rigConnectConnection = {
                 connection: connectRig({
-                    endpoint: `${endpoint.replace(/\/$/u, "")}/rig-connect`,
+                    endpoint,
                     token: "happy2-local-capability",
                 }),
                 generation,
             };
         }
-        return this.rigProjectsConnection.connection.projects;
+        return this.rigConnectConnection.connection;
+    }
+
+    /** The capability-scoped proxy endpoint rig-connect owns for local mode. */
+    private localRigEndpoint(): string | undefined {
+        if (this.snapshotValue.phase !== "ready" || this.snapshotValue.mode !== "local")
+            return undefined;
+        const endpoint = this.rigProxy?.url;
+        return endpoint ? `${endpoint.replace(/\/$/u, "")}/rig-connect` : undefined;
     }
 
     /**
@@ -288,15 +371,19 @@ export class DesktopRuntime implements AsyncDisposable {
                 throw replaceError;
             }
             this.rigConnection = replacement;
+            this.rigConnectConnection?.connection.close();
+            this.rigConnectConnection = undefined;
             failedConnection.close();
             const snapshot = this.snapshotValue;
             if (snapshot.phase === "ready") {
+                const connectionId = ++this.connectionGeneration;
                 this.publish({
                     ...snapshot,
                     activeTarget: {
                         ...snapshot.activeTarget,
                         rigVersion: replacement.version,
                     },
+                    connectionId,
                 });
             }
         });
@@ -401,6 +488,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 return;
             }
             this.rigConnection = connection;
+            const connectionId = ++this.connectionGeneration;
             const proxy = await this.proxyStart(connection, (error) => {
                 void this.reconnectLocal(error).catch(() => undefined);
             });
@@ -428,7 +516,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 phase: "ready",
                 activeTarget,
                 activeTargetId: activeTarget.id,
-                connectionId: generation,
+                connectionId,
                 mode: topology.mode,
                 targets: this.targets(),
                 update: this.snapshotValue.update,
@@ -460,8 +548,8 @@ export class DesktopRuntime implements AsyncDisposable {
     }
 
     private localDispose(): void {
-        this.rigProjectsConnection?.connection.close();
-        this.rigProjectsConnection = undefined;
+        this.rigConnectConnection?.connection.close();
+        this.rigConnectConnection = undefined;
         this.rigProxy?.close();
         this.rigProxy = undefined;
         this.rigConnection?.close();

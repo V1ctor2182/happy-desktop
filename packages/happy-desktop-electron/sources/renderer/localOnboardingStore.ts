@@ -11,6 +11,9 @@ export interface LocalOnboardingViewSnapshot {
     readonly pending: boolean;
     /** Why the last request could not be delivered, until another is made. */
     readonly failure?: string;
+    readonly profileName: string;
+    readonly profileEmail: string;
+    readonly selectedProfileId?: string;
 }
 
 export interface LocalOnboardingStore {
@@ -21,6 +24,11 @@ export interface LocalOnboardingStore {
     terminalResize(cols: number, rows: number): void;
     connectRetry(): void;
     projectChoose(): void;
+    profileNameUpdate(value: string): void;
+    profileEmailUpdate(value: string): void;
+    profileCreate(): void;
+    profileSelect(profileId: string): void;
+    murmurChoose(enabled: boolean): void;
 }
 
 const DEFAULT_COLS = 80;
@@ -47,7 +55,11 @@ export function localOnboardingStoreCreate(
 ): LocalOnboardingStore {
     const listeners = new Set<() => void>();
     const encoder = new TextEncoder();
-    let snapshot: LocalOnboardingViewSnapshot = { pending: false };
+    let snapshot: LocalOnboardingViewSnapshot = {
+        pending: false,
+        profileEmail: "",
+        profileName: "",
+    };
     let bridgeUnsubscribe: (() => void) | undefined;
     let installUnsubscribe: (() => void) | undefined;
     let emulator: TerminalEmulator | undefined;
@@ -95,6 +107,17 @@ export function localOnboardingStoreCreate(
             ...snapshot,
             ...(ended ? { terminal: undefined } : {}),
             onboarding: next,
+            ...(next.stage === "murmurSetup"
+                ? {
+                      selectedProfileId:
+                          next.profiles?.some(({ id }) => id === snapshot.selectedProfileId) ===
+                          true
+                              ? snapshot.selectedProfileId
+                              : next.profiles?.length === 1
+                                ? next.profiles[0]?.id
+                                : undefined,
+                  }
+                : {}),
         });
     };
     const emulatorEnsure = (id: string): Promise<TerminalEmulator> => {
@@ -228,6 +251,38 @@ export function localOnboardingStoreCreate(
         projectChoose() {
             attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
         },
+        profileNameUpdate(value) {
+            publish({ ...snapshot, profileName: value });
+        },
+        profileEmailUpdate(value) {
+            publish({ ...snapshot, profileEmail: value });
+        },
+        profileCreate() {
+            if (snapshot.pending) return;
+            attempt(
+                bridge.onboardingProfileCreate({
+                    email: snapshot.profileEmail.trim(),
+                    name: snapshot.profileName.trim(),
+                }),
+                "Happy could not create that profile.",
+            );
+        },
+        profileSelect(profileId) {
+            if (!snapshot.onboarding?.profiles?.some(({ id }) => id === profileId)) return;
+            publish({ ...snapshot, selectedProfileId: profileId });
+        },
+        murmurChoose(enabled) {
+            if (snapshot.pending) return;
+            const profileId = snapshot.selectedProfileId ?? snapshot.onboarding?.profiles?.[0]?.id;
+            attempt(
+                enabled
+                    ? profileId
+                        ? bridge.onboardingMurmurChoose({ enabled: true, profileId })
+                        : Promise.reject(new Error("Create a profile before enabling Murmur."))
+                    : bridge.onboardingMurmurChoose({ enabled: false }),
+                "Happy could not save that Murmur choice.",
+            );
+        },
     };
 }
 
@@ -276,11 +331,40 @@ export function localOnboardingView(
                 message: message ?? "Happy could not reach your Rig daemon.",
                 retrying: onboarding.retrying === true,
             };
+        case "rigUpdateRequired":
+            return {
+                kind: "rig-update-required",
+                message: message ?? "Update Rig before continuing setup.",
+            };
+        case "happyUpdateRequired":
+            return {
+                downloaded: onboarding.update?.status === "downloaded",
+                kind: "happy-update-required",
+                message: message ?? "Update Happy before continuing setup.",
+            };
         case "providersMissing":
             return {
                 kind: "providers-missing",
                 providers: onboarding.providers ?? [],
                 retrying: onboarding.retrying === true,
+            };
+        case "profileRequired":
+            return {
+                busy,
+                email: snapshot.profileEmail,
+                kind: "profile-required",
+                name: snapshot.profileName,
+                ...(message ? { message } : {}),
+            };
+        case "murmurSetup":
+            return {
+                busy,
+                kind: "murmur-setup",
+                profiles: onboarding.profiles ?? [],
+                ...(snapshot.selectedProfileId
+                    ? { selectedProfileId: snapshot.selectedProfileId }
+                    : {}),
+                ...(message ? { message } : {}),
             };
         case "examining":
             return { kind: "examining" };

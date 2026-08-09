@@ -256,6 +256,7 @@ function RigBoundary(props: {
  */
 function DesktopOnboardingGate(props: {
     appearance: AppearanceStore;
+    bridge: HappyDesktopBridge;
     children: ReactNode;
     store: LocalOnboardingStore;
     welcome: WelcomeStore;
@@ -297,6 +298,12 @@ function DesktopOnboardingGate(props: {
             // the layout and does not pretend to do anything until it does.
             onAppOnlyChoose={() => undefined}
             onConnectRetry={() => props.store.connectRetry()}
+            onHappyUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
+            onMurmurChoose={(enabled) => props.store.murmurChoose(enabled)}
+            onProfileCreate={() => props.store.profileCreate()}
+            onProfileEmailChange={(value) => props.store.profileEmailUpdate(value)}
+            onProfileNameChange={(value) => props.store.profileNameUpdate(value)}
+            onProfileSelect={(profileId) => props.store.profileSelect(profileId)}
             onProjectChoose={() => props.store.projectChoose()}
             onRigInstall={() => props.store.rigInstall()}
             onTerminalInput={(data) => props.store.terminalInput(data)}
@@ -415,6 +422,7 @@ function DesktopScreens(props: DesktopRendererProps) {
     return (
         <DesktopOnboardingGate
             appearance={props.appearance}
+            bridge={props.bridge}
             store={props.onboarding}
             welcome={props.welcome}
         >

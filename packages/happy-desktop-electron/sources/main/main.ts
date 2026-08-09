@@ -1100,6 +1100,32 @@ void app
             onboardingSenderRequire(event.sender);
             return onboarding.projectChoose();
         });
+        ipcMain.handle(desktopIpc.onboardingProfileCreate, (event, input: unknown) => {
+            onboardingSenderRequire(event.sender);
+            if (
+                !input ||
+                typeof input !== "object" ||
+                typeof (input as { name?: unknown }).name !== "string" ||
+                typeof (input as { email?: unknown }).email !== "string"
+            )
+                throw new Error("That profile is invalid.");
+            const profile = input as { readonly email: string; readonly name: string };
+            return onboarding.profileCreate({ email: profile.email, name: profile.name });
+        });
+        ipcMain.handle(desktopIpc.onboardingMurmurChoose, (event, input: unknown) => {
+            onboardingSenderRequire(event.sender);
+            if (
+                !input ||
+                typeof input !== "object" ||
+                typeof (input as { enabled?: unknown }).enabled !== "boolean"
+            )
+                throw new Error("That Murmur choice is invalid.");
+            const choice = input as { readonly enabled: boolean; readonly profileId?: unknown };
+            if (!choice.enabled) return onboarding.murmurChoose({ enabled: false });
+            if (typeof choice.profileId !== "string")
+                throw new Error("Choose a profile for Murmur.");
+            return onboarding.murmurChoose({ enabled: true, profileId: choice.profileId });
+        });
         ipcMain.handle(desktopIpc.runtimeStart, (_event, request: unknown) =>
             runtime.start(desktopStartRequestValidate(request)),
         );

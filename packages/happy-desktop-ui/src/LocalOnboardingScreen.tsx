@@ -2,6 +2,8 @@ import type { TerminalGridSnapshot } from "happy-desktop-state";
 import { SetupChoice } from "./SetupChoice";
 import { SetupPage } from "./SetupPage";
 import { TerminalPanel } from "./TerminalPanel";
+import { TextField } from "./TextField";
+import { Select } from "./Select";
 
 export interface LocalOnboardingTerminal {
     readonly grid?: TerminalGridSnapshot;
@@ -20,6 +22,12 @@ export type LocalOnboardingView =
       }
     | { readonly kind: "connecting" }
     | { readonly kind: "connect-failed"; readonly message: string; readonly retrying: boolean }
+    | { readonly kind: "rig-update-required"; readonly message: string }
+    | {
+          readonly downloaded: boolean;
+          readonly kind: "happy-update-required";
+          readonly message: string;
+      }
     | {
           readonly kind: "providers-missing";
           /** The assistants Rig looked for, in the order it named them. */
@@ -27,6 +35,24 @@ export type LocalOnboardingView =
           readonly retrying: boolean;
       }
     | { readonly kind: "examining" }
+    | {
+          readonly busy: boolean;
+          readonly email: string;
+          readonly kind: "profile-required";
+          readonly message?: string;
+          readonly name: string;
+      }
+    | {
+          readonly busy: boolean;
+          readonly kind: "murmur-setup";
+          readonly message?: string;
+          readonly profiles: readonly {
+              readonly email: string;
+              readonly id: string;
+              readonly name: string;
+          }[];
+          readonly selectedProfileId?: string;
+      }
     | { readonly kind: "project"; readonly busy: boolean; readonly message?: string };
 
 export interface LocalOnboardingScreenProps {
@@ -36,6 +62,12 @@ export interface LocalOnboardingScreenProps {
     onTerminalResize(cols: number, rows: number): void;
     onConnectRetry(): void;
     onProjectChoose(): void;
+    onProfileNameChange(value: string): void;
+    onProfileEmailChange(value: string): void;
+    onProfileCreate(): void;
+    onProfileSelect(profileId: string): void;
+    onMurmurChoose(enabled: boolean): void;
+    onHappyUpdateInstall(): void;
     /**
      * Goes on without installing anything, using only what this app carries.
      * Offered beside the install because Rig is a command line tool and a
@@ -183,11 +215,6 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
     if (view.kind === "providers-missing")
         return (
             <SetupPage
-                action={{
-                    busy: view.retrying,
-                    label: "Check again",
-                    onSelect: props.onConnectRetry,
-                }}
                 // Nothing is broken here, so nothing on this screen says so. Rig
                 // runs the coding assistants already signed in on this machine —
                 // it has none yet, which is the last ordinary step of setting one
@@ -198,6 +225,99 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 title="No coding assistant yet."
             />
         );
+
+    if (view.kind === "profile-required")
+        return (
+            <SetupPage
+                action={{
+                    busy: view.busy,
+                    disabled: !view.name.trim() || !view.email.trim(),
+                    label: "Create profile",
+                    onSelect: props.onProfileCreate,
+                }}
+                copy={
+                    view.message ??
+                    "Rig uses this identity for your work and for messages shared with other Rigs."
+                }
+                data-testid="local-onboarding-screen"
+                scene="sparkles"
+                title="Create your profile."
+            >
+                <div className="happy2-local-onboarding__profile-form">
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        label="Name"
+                        onSubmit={props.onProfileCreate}
+                        onValueChange={props.onProfileNameChange}
+                        placeholder="Your name"
+                        required
+                        value={view.name}
+                    />
+                    <TextField
+                        fullWidth
+                        label="Git email"
+                        onSubmit={props.onProfileCreate}
+                        onValueChange={props.onProfileEmailChange}
+                        placeholder="you@example.com"
+                        required
+                        type="email"
+                        value={view.email}
+                    />
+                </div>
+            </SetupPage>
+        );
+
+    if (view.kind === "murmur-setup") {
+        const profile = view.profiles.find(({ id }) => id === view.selectedProfileId);
+        return (
+            <SetupPage
+                copy={
+                    view.message ??
+                    `Murmur gives ${profile?.name ?? "your profile"} a private identity for secure sharing between Rigs. You can enable it now or continue without it.`
+                }
+                data-testid="local-onboarding-screen"
+                title="Connect with Murmur?"
+            >
+                {view.profiles.length > 1 ? (
+                    <Select
+                        fullWidth
+                        label="Murmur profile"
+                        onValueChange={props.onProfileSelect}
+                        options={view.profiles.map(({ email, id, name }) => ({
+                            label: `${name} · ${email}`,
+                            value: id,
+                        }))}
+                        placeholder="Choose a profile"
+                        value={view.selectedProfileId}
+                    />
+                ) : null}
+                <SetupChoice
+                    onSelect={(id) => props.onMurmurChoose(id === "enable")}
+                    options={[
+                        {
+                            actionLabel: "Not now",
+                            description:
+                                "Finish setup without creating Murmur keys. You can opt in later.",
+                            id: "skip",
+                            scene: "owl",
+                            title: "Keep it local",
+                        },
+                        {
+                            actionLabel: "Enable Murmur",
+                            actionVariant: "primary",
+                            disabled: !view.selectedProfileId,
+                            description:
+                                "Create a private identity for secure contacts and sharing between your Rigs.",
+                            id: "enable",
+                            scene: "sparkles",
+                            title: "Connect my profile",
+                        },
+                    ]}
+                />
+            </SetupPage>
+        );
+    }
 
     if (view.kind === "connect-failed")
         return (
@@ -215,6 +335,35 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 data-testid="local-onboarding-screen"
                 scene="owl"
                 title="Happy could not reach Rig."
+            />
+        );
+
+    if (view.kind === "rig-update-required")
+        return (
+            <SetupPage
+                command="npm install --global @slopus/rig@latest && rig daemon reload"
+                copy={view.message}
+                data-testid="local-onboarding-screen"
+                scene="owl"
+                title="Rig needs an update."
+            />
+        );
+
+    if (view.kind === "happy-update-required")
+        return (
+            <SetupPage
+                {...(view.downloaded
+                    ? {
+                          action: {
+                              label: "Install update and restart",
+                              onSelect: props.onHappyUpdateInstall,
+                          },
+                      }
+                    : {})}
+                copy={view.message}
+                data-testid="local-onboarding-screen"
+                scene="owl"
+                title="Happy needs an update."
             />
         );
 
