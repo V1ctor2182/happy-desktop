@@ -1,4 +1,5 @@
 import type {
+    FolderItem,
     FolderNode,
     FolderSession,
     FolderView,
@@ -7,13 +8,19 @@ import type {
 } from "@slopus/rig-connect";
 import type {
     ConversationSummary,
+    RigDocumentId,
     RigFolder,
     RigFolderId,
+    RigFolderItem,
+    RigFolderItemId,
+    RigFolderItemTarget,
     RigFoldersReading,
     RigFoldersSource,
     RigConversationSummaryInput,
+    RigProjectId,
     RigServiceTier,
     RigSessionId,
+    RigWorktreeId,
 } from "happy-desktop-state";
 import { rigConversationSummaryProject } from "happy-desktop-state";
 import { permissionMode, thinkingLevel } from "./rigConnectCatalogSource";
@@ -80,11 +87,35 @@ function folderProject(folder: FolderNode): RigFolder {
         name: folder.name,
         path: folder.path,
         conversations: folder.sessions.map(sessionProject),
+        items: folder.items.map(itemProject),
         ...(folder.description === undefined ? {} : { description: folder.description }),
         ...(folder.icon === undefined ? {} : { icon: folder.icon }),
         ...(folder.parentId === undefined ? {} : { parentId: folder.parentId as RigFolderId }),
         ...(folder.rules === undefined ? {} : { rules: folder.rules }),
     };
+}
+
+/**
+ * One link, with the wire's open target union narrowed to the closed one the
+ * product renders.
+ *
+ * `orderKey` is dropped for the same reason a folder's is: the daemon owns where
+ * an item sits among its siblings and hands them over in that order already.
+ */
+function itemProject(item: FolderItem): RigFolderItem {
+    return {
+        id: item.id as RigFolderItemId,
+        folderId: item.folderId as RigFolderId,
+        target: itemTargetProject(item.target),
+    };
+}
+
+function itemTargetProject(target: FolderItem["target"]): RigFolderItemTarget {
+    if (target.kind === "project")
+        return { kind: "project", projectId: target.projectId as RigProjectId };
+    if (target.kind === "workspace")
+        return { kind: "workspace", workspaceId: target.workspaceId as RigWorktreeId };
+    return { kind: "document", documentId: target.documentId as RigDocumentId };
 }
 
 function sessionProject(session: FolderSession): ConversationSummary {

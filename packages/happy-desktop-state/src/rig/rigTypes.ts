@@ -11,6 +11,8 @@ declare const rigProjectIdBrand: unique symbol;
 declare const rigWorktreeIdBrand: unique symbol;
 declare const rigTerminalIdBrand: unique symbol;
 declare const rigFolderIdBrand: unique symbol;
+declare const rigFolderItemIdBrand: unique symbol;
+declare const rigDocumentIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type RigSessionId = string & { readonly [rigSessionIdBrand]: true };
@@ -40,6 +42,30 @@ export type RigTerminalId = string & { readonly [rigTerminalIdBrand]: true };
  * id is deliberately not interchangeable with a project's or a worktree's.
  */
 export type RigFolderId = string & { readonly [rigFolderIdBrand]: true };
+
+/**
+ * Branded identifier of one link placing a project, workspace, or document in a
+ * folder (CUID2 on the wire). The link is its own entity: it is what moves and
+ * what is removed, while the thing it points at is untouched either way.
+ */
+export type RigFolderItemId = string & { readonly [rigFolderItemIdBrand]: true };
+
+/**
+ * Branded identifier of one document the Rig owns (CUID2 on the wire).
+ * Documents belong to a Rig rather than to a project or a session.
+ */
+export type RigDocumentId = string & { readonly [rigDocumentIdBrand]: true };
+
+/**
+ * What one folder item points at.
+ *
+ * A folder holds links rather than the things themselves, so the same project
+ * can sit in two folders and removing the link leaves the project alone.
+ */
+export type RigFolderItemTarget =
+    | { readonly kind: "project"; readonly projectId: RigProjectId }
+    | { readonly kind: "workspace"; readonly workspaceId: RigWorktreeId }
+    | { readonly kind: "document"; readonly documentId: RigDocumentId };
 
 /** The one application collection containing a visible primary chat. */
 export type RigSessionScope =

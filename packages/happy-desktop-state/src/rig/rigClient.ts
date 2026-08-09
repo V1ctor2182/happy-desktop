@@ -482,6 +482,11 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     folderArchive: (folderId) => actions.folders.archive(folderId),
                     folderSessionSet: (sessionId, folderId) =>
                         actions.folders.setSessionFolder(sessionId, folderId),
+                    folderItemLink: (folderId, target) =>
+                        actions.folders.linkItem(folderId, { target }),
+                    folderItemMove: (itemId, folderId, afterId) =>
+                        actions.folders.moveItem(itemId, { afterId, folderId }),
+                    folderItemUnlink: (itemId) => actions.folders.unlinkItem(itemId),
                 },
             });
             return foldersStore;

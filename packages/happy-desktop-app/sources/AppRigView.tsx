@@ -12,7 +12,10 @@ import type {
     RigConnectionStore,
     RigConversationSnapshot,
     RigFileLayout,
+    RigFolder,
     RigFolderId,
+    RigFolderItem,
+    RigFolderItemId,
     RigFoldersSnapshot,
     RigFoldersStore,
     RigWorkspaceFiles,
@@ -1077,6 +1080,133 @@ function folderRowParse(value: string): RigFolderId | undefined {
 }
 
 /**
+ * What marks a sidebar row as one folder item rather than a folder or a group.
+ *
+ * An item row stands for a link, not for the thing linked: two folders holding
+ * the same project draw two rows, and each must be addressable on its own so
+ * removing one leaves the other — and the project — alone.
+ */
+const FOLDER_ITEM_ROW_PREFIX = "folder-item:";
+
+function folderItemRowId(rigId: string, itemId: RigFolderItemId): string {
+    return rigItemId(rigId, `${FOLDER_ITEM_ROW_PREFIX}${itemId}`);
+}
+
+/** The folder item a sidebar row names, or undefined when it names something else. */
+function folderItemRowParse(value: string): RigFolderItemId | undefined {
+    const { id } = rigItemParse(value);
+    return id.startsWith(FOLDER_ITEM_ROW_PREFIX)
+        ? (id.slice(FOLDER_ITEM_ROW_PREFIX.length) as RigFolderItemId)
+        : undefined;
+}
+
+/** Puts the link away. What it pointed at stays exactly where it was. */
+const FOLDER_ITEM_MENU_UNLINK = "folder-item-unlink";
+
+/**
+ * Links the row's project or workspace into one folder. The folder is named in
+ * the id because the menu is flat: one entry per folder is the whole picker.
+ */
+const FOLDER_LINK_MENU_PREFIX = "folder-link:";
+
+/** One folder item anywhere in the tree, by id. */
+function folderItemFind(
+    folders: readonly RigFolder[],
+    itemId: RigFolderItemId,
+): RigFolderItem | undefined {
+    for (const { folder } of rigFoldersFlatten(folders)) {
+        const found = folder.items.find((candidate) => candidate.id === itemId);
+        if (found) return found;
+    }
+    return undefined;
+}
+
+/** The group one folder item points at, as the sidebar addresses groups. */
+function folderItemGroupId(item: RigFolderItem): RigGroupId | undefined {
+    if (item.target.kind === "project") return item.target.projectId;
+    if (item.target.kind === "workspace") return item.target.workspaceId;
+    return undefined;
+}
+
+/**
+ * One folder item's row, named and iconed from the catalog it points into.
+ *
+ * A link whose target this Rig no longer lists draws nothing. The item names an
+ * id and not a name, so a row for a project that has gone could only be labelled
+ * by inventing one — and a folder quietly holding a row that says nothing true
+ * is worse than a folder that has stopped showing it.
+ */
+function folderItemRow(
+    rigId: string,
+    item: RigFolderItem,
+    depth: number,
+    projects: readonly RigProjectGroup[],
+): SidebarItem | undefined {
+    const target = item.target;
+    if (target.kind === "project") {
+        const project = projects.find((candidate) => candidate.id === target.projectId);
+        if (!project) return undefined;
+        return {
+            depth,
+            id: folderItemRowId(rigId, item.id),
+            initials: project.name.slice(0, 1).toUpperCase(),
+            kind: "project",
+            label: project.name,
+            ...(project.kind === "home" ? { icon: "home" as const } : {}),
+            ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+            ...(project.conversations.some((conversation) => conversation.unread)
+                ? { unread: true }
+                : {}),
+        };
+    }
+    if (target.kind === "workspace") {
+        for (const project of projects) {
+            const worktree = project.worktrees.find(
+                (candidate) => candidate.id === target.workspaceId,
+            );
+            if (!worktree) continue;
+            return {
+                depth,
+                icon: "branch",
+                id: folderItemRowId(rigId, item.id),
+                kind: "workspace",
+                label: worktree.name,
+                ...(worktree.conversations.some((conversation) => conversation.unread)
+                    ? { unread: true }
+                    : {}),
+            };
+        }
+        return undefined;
+    }
+    // A document is a Rig entity of its own rather than something in the project
+    // catalog, so its row is drawn where documents are known.
+    return undefined;
+}
+
+/**
+ * The "put this in a folder" half of a project or workspace row's menu.
+ *
+ * One entry per folder rather than a submenu, because the menu is flat: the
+ * whole picker is the list. A folder's own mark leads its entry so the choice
+ * reads the way the sidebar does. Absent entirely when there is no folder to
+ * choose or no host answering to store the link.
+ */
+function folderLinkMenuItems(folders: RigFoldersSnapshot | undefined): MenuItem[] {
+    if (!folders) return [];
+    const rows = rigFoldersFlatten(folders.folders);
+    if (rows.length === 0) return [];
+    return [
+        { kind: "separator" },
+        { kind: "label", label: "Add to folder" },
+        ...rows.map((row) => ({
+            kind: "item" as const,
+            id: `${FOLDER_LINK_MENU_PREFIX}${row.folder.id}`,
+            label: `${row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI}  ${row.folder.name}`,
+        })),
+    ];
+}
+
+/**
  * What the folder dialog calls the folder it is landing in, when it is landing
  * in one. Read from the tree rather than carried by the editor, because the name
  * is the tree's to state and the editor holds only what is being written.
@@ -1106,6 +1236,7 @@ function foldersSection(
     rigId: string,
     folders: RigFoldersSnapshot,
     online: boolean,
+    projects: readonly RigProjectGroup[],
 ): SidebarSection[] {
     const items: SidebarItem[] = [
         ...(folders.unsorted.length === 0
@@ -1121,16 +1252,25 @@ function foldersSection(
                           : {}),
                   },
               ]),
-        ...rigFoldersFlatten(folders.folders).map((row) => ({
-            depth: row.depth,
-            emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
-            id: folderRowId(rigId, row.folder.id),
-            kind: "folder" as const,
-            label: row.folder.name,
-            ...(row.folder.conversations.some((conversation) => conversation.unread)
-                ? { unread: true }
-                : {}),
-        })),
+        // Each folder, then the things linked into it directly beneath it. The
+        // links are drawn one level in, so a folder's contents read as its own
+        // rather than as siblings of the folder holding them.
+        ...rigFoldersFlatten(folders.folders).flatMap((row) => [
+            {
+                depth: row.depth,
+                emoji: row.folder.icon ?? RIG_FOLDER_DEFAULT_EMOJI,
+                id: folderRowId(rigId, row.folder.id),
+                kind: "folder" as const,
+                label: row.folder.name,
+                ...(row.folder.conversations.some((conversation) => conversation.unread)
+                    ? { unread: true }
+                    : {}),
+            },
+            ...row.folder.items.flatMap((item) => {
+                const drawn = folderItemRow(rigId, item, row.depth + 1, projects);
+                return drawn ? [drawn] : [];
+            }),
+        ]),
     ];
     // A refused act outranks a dropped feed: the tree on screen is still
     // current, and what the reader needs told is that the thing they just did
@@ -1941,11 +2081,37 @@ export function AppRigView(props: AppRigViewProps) {
                               },
                           ]
                         : [];
+                // A link row stands for the link, not for the project behind
+                // it, so the only act on it is removing the link. Renaming or
+                // archiving here would reach past the folder and change the
+                // project itself, which is not what this row is.
+                if (folderItemRowParse(item.id) !== undefined)
+                    return localRigOnline()
+                        ? [
+                              {
+                                  danger: true,
+                                  icon: "unlink" as const,
+                                  id: FOLDER_ITEM_MENU_UNLINK,
+                                  kind: "item" as const,
+                                  label: "Remove from folder",
+                              },
+                          ]
+                        : [];
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
-                return rig?.status === "connected"
-                    ? rowMenuItems(rig.projects, { ...item, id: row.id })
-                    : [];
+                if (rig?.status !== "connected") return [];
+                return [
+                    ...rowMenuItems(rig.projects, { ...item, id: row.id }),
+                    // Folders belong to the host Rig, so only its own projects
+                    // and workspaces can be put in one. The picker is a flat
+                    // list of folders because the menu has no submenus, and it
+                    // is offered only when there is a folder to choose.
+                    ...folderLinkMenuItems(
+                        rigItemParse(item.id).rigId === localRig?.id && localRigOnline()
+                            ? localFolders
+                            : undefined,
+                    ),
+                ];
             }}
             // Create is the window's, not a screen's: the dialog is mounted
             // beside whatever is showing, so this row answers from every route.
@@ -1996,6 +2162,12 @@ export function AppRigView(props: AppRigViewProps) {
                         void localFoldersStore.folderArchive(folderId);
                     return;
                 }
+                const itemId = folderItemRowParse(item.id);
+                if (itemId !== undefined) {
+                    if (actionId !== FOLDER_ITEM_MENU_UNLINK || !localRigOnline()) return;
+                    void localFoldersStore.folderItemUnlink(itemId);
+                    return;
+                }
                 const row = rigItemParse(item.id);
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
@@ -2003,6 +2175,19 @@ export function AppRigView(props: AppRigViewProps) {
                 const workspace = rig.session?.workspace;
                 const owner = rowOwnerFind(rig.projects, row.id);
                 if (!owner || !workspace) return;
+                // Linking is the host's act on its own tree, so it is decided
+                // from the folder named in the entry and the row's own target
+                // rather than from anything the addressed Rig is doing.
+                if (actionId.startsWith(FOLDER_LINK_MENU_PREFIX)) {
+                    if (rig.id !== localRig?.id || !localRigOnline()) return;
+                    void localFoldersStore.folderItemLink(
+                        actionId.slice(FOLDER_LINK_MENU_PREFIX.length) as RigFolderId,
+                        owner.worktreeId
+                            ? { kind: "workspace", workspaceId: owner.worktreeId }
+                            : { kind: "project", projectId: owner.project.id },
+                    );
+                    return;
+                }
                 if (actionId === ROW_MENU_RENAME) {
                     workspace.renameOpen(owner.project.id, owner.worktreeId);
                     return;
@@ -2037,7 +2222,19 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onBlueprintOpen?.();
                     return;
                 }
-                const row = rigItemParse(id);
+                // A link row opens what it points at, exactly as that thing's
+                // own row does. The link is where the reader found it, not a
+                // different place to be — so it resolves to the target's group
+                // and then takes the ordinary path.
+                const itemRowId = folderItemRowParse(id);
+                const linked =
+                    itemRowId === undefined
+                        ? undefined
+                        : folderItemFind(localFolders.folders, itemRowId);
+                const row = linked
+                    ? { id: folderItemGroupId(linked) ?? "", rigId: rigItemParse(id).rigId }
+                    : rigItemParse(id);
+                if (linked && row.id === "") return;
                 const rig = rigOf(row.rigId);
                 if (!rig) return;
                 const groupId = row.id as RigGroupId;
@@ -2093,6 +2290,27 @@ export function AppRigView(props: AppRigViewProps) {
                 : {})}
             onItemReorder={(sectionId, move) => {
                 if (sectionId === FOLDERS_SECTION) {
+                    // A link is dragged between and within folders, never to the
+                    // root: an item is something a folder holds, so a drop with
+                    // no folder around it names nowhere to put it and is refused
+                    // rather than quietly landing somewhere else.
+                    const movedItem = folderItemRowParse(move.id);
+                    if (movedItem !== undefined) {
+                        if (!localRigOnline()) return;
+                        const parent =
+                            move.parentId === undefined ? undefined : folderRowParse(move.parentId);
+                        if (parent === undefined) return;
+                        void localFoldersStore.folderItemMove(
+                            movedItem,
+                            parent,
+                            // Only a link can precede a link. Dropped just under
+                            // the folder's own row, it lands first.
+                            move.afterId === null
+                                ? null
+                                : (folderItemRowParse(move.afterId) ?? null),
+                        );
+                        return;
+                    }
                     const moved = folderRowParse(move.id);
                     if (moved === undefined || !localRigOnline()) return;
                     // The drop names where the folder landed, not an order key:
@@ -2134,7 +2352,12 @@ export function AppRigView(props: AppRigViewProps) {
             // and project sections below, never this window-owned tree.
             sections={[
                 ...(localRig?.session?.folders
-                    ? foldersSection(localRig.id, localFolders, localAvailability?.online === true)
+                    ? foldersSection(
+                          localRig.id,
+                          localFolders,
+                          localAvailability?.online === true,
+                          localRig.projects,
+                      )
                     : []),
                 ...rigSections(
                     directory,

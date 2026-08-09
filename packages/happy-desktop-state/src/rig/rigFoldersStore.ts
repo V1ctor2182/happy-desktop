@@ -3,7 +3,27 @@ import type { MutationRejectedDelta } from "@slopus/rig-connect";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { UserError } from "../types.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
-import type { RigFolderId, RigGroupId, RigSessionId, RigSessionScope } from "./rigTypes.js";
+import type {
+    RigFolderId,
+    RigFolderItemId,
+    RigFolderItemTarget,
+    RigGroupId,
+    RigSessionId,
+    RigSessionScope,
+} from "./rigTypes.js";
+
+/**
+ * One thing linked into a folder: a project, a workspace, or a document.
+ *
+ * The link is the entity, not the thing it points at. The same project may be
+ * linked into several folders, and unlinking removes only the link — which is
+ * why the item carries its own id and its own place among a folder's items.
+ */
+export interface RigFolderItem {
+    readonly id: RigFolderItemId;
+    readonly folderId: RigFolderId;
+    readonly target: RigFolderItemTarget;
+}
 
 /**
  * One folder in the Rig's virtual tree, with the folders nested inside it
@@ -30,6 +50,12 @@ export interface RigFolder {
     readonly path: string;
     /** Chats directly contained by this folder, in the order the host published. */
     readonly conversations: readonly ConversationSummary[];
+    /**
+     * Projects, workspaces, and documents linked into this folder, in the order
+     * the host published. Ordered independently of the chats: an item is a link
+     * the reader placed, not a chat that arrived.
+     */
+    readonly items: readonly RigFolderItem[];
     /** The folders nested inside this one, in the order they should be drawn. */
     readonly children: readonly RigFolder[];
 }
@@ -87,6 +113,16 @@ export interface RigFoldersActions {
     folderArchive(folderId: RigFolderId): RigFolderActionResult;
     /** Files one chat into a folder, or takes it back out into unsorted with `null`. */
     folderSessionSet(sessionId: RigSessionId, folderId: RigFolderId | null): RigFolderActionResult;
+    /** Links one project, workspace, or document into a folder's item list. */
+    folderItemLink(folderId: RigFolderId, target: RigFolderItemTarget): RigFolderActionResult;
+    /** Moves one link into or within a folder. The target itself does not move. */
+    folderItemMove(
+        itemId: RigFolderItemId,
+        folderId: RigFolderId,
+        afterId: RigFolderItemId | null,
+    ): RigFolderActionResult;
+    /** Removes the link only. What it pointed at is left exactly as it was. */
+    folderItemUnlink(itemId: RigFolderItemId): RigFolderActionResult;
 }
 
 /**
@@ -169,6 +205,20 @@ export interface RigFoldersStore {
      * result.
      */
     folderSessionSet(sessionId: RigSessionId, folderId: RigFolderId | null): Promise<void>;
+    /**
+     * Links one project, workspace, or document into a folder. Nothing here
+     * changes on its own: the host publishes the folder's new item list, exactly
+     * as it does for a link made in another window.
+     */
+    folderItemLink(folderId: RigFolderId, target: RigFolderItemTarget): Promise<void>;
+    /** Applies one drag-and-drop of a link, reported by the sidebar as one move. */
+    folderItemMove(
+        itemId: RigFolderItemId,
+        folderId: RigFolderId,
+        afterId: RigFolderItemId | null,
+    ): Promise<void>;
+    /** Removes one link. What it pointed at is left exactly as it was. */
+    folderItemUnlink(itemId: RigFolderItemId): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -474,6 +524,30 @@ export function rigFoldersStoreCreate(deps: RigFoldersStoreDeps): RigFoldersStor
                 actionFailed(error);
             }
         },
+        async folderItemLink(folderId, target) {
+            try {
+                await actionRun(deps.actions.folderItemLink(folderId, target));
+                actionSucceeded();
+            } catch (error) {
+                actionFailed(error);
+            }
+        },
+        async folderItemMove(itemId, folderId, afterId) {
+            try {
+                await actionRun(deps.actions.folderItemMove(itemId, folderId, afterId));
+                actionSucceeded();
+            } catch (error) {
+                actionFailed(error);
+            }
+        },
+        async folderItemUnlink(itemId) {
+            try {
+                await actionRun(deps.actions.folderItemUnlink(itemId));
+                actionSucceeded();
+            } catch (error) {
+                actionFailed(error);
+            }
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
@@ -503,6 +577,9 @@ export const rigFoldersStoreNoop: RigFoldersStore = {
     folderMove: () => Promise.resolve(),
     folderArchive: () => Promise.resolve(),
     folderSessionSet: () => Promise.resolve(),
+    folderItemLink: () => Promise.resolve(),
+    folderItemMove: () => Promise.resolve(),
+    folderItemUnlink: () => Promise.resolve(),
     [Symbol.dispose]: () => undefined,
 };
 
