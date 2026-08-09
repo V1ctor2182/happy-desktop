@@ -17,8 +17,8 @@
         "test:artifacts": "VITE_HAPPY2_WRITE_SCREENSHOTS=1 node ../../scripts/run-ui-alignment-tests.mjs",
         "test:watch": "playwright install chromium firefox webkit && vitest",
         "typecheck": "tsc --project tsconfig.json",
-        "format": "oxfmt --write .",
-        "format:check": "oxfmt --check .",
+        "format": "oxfmt --write . '!dev/recordings/**/*.json'",
+        "format:check": "oxfmt --check . '!dev/recordings/**/*.json'",
         "lint": "node --test eslint/*.test.mjs && eslint . && oxlint .",
         "lint:fix": "eslint . --fix && oxlint . --fix",
         "clean": "rm -rf dist coverage"
@@ -55,6 +55,7 @@
         "@babel/core": "^8.0.1",
         "@babel/eslint-parser": "^8.0.1",
         "@eslint/js": "^9.39.2",
+        "@slopus/rig-connect": "0.1.15",
         "@tailwindcss/vite": "^4.3.2",
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
