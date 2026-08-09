@@ -38,6 +38,7 @@ import {
     mediaPreviewView,
     type DesktopBrowserProxyTarget,
     type DesktopBrowserStatus,
+    type DesktopDebugSnapshot,
     type DesktopMediaPreview,
     type DesktopPreviewNavigation,
     type DesktopPreviewNavigationStep,
@@ -66,6 +67,7 @@ import { RigInstallTerminalManager } from "./rigInstallTerminal";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
+import { DesktopDebugController } from "./desktopDebugController";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 
@@ -135,6 +137,7 @@ app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_pro
 
 let runtime: DesktopRuntime;
 let desktopConfigStore: DesktopConfigStore;
+let desktopDebugController: DesktopDebugController;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let onboarding: LocalOnboarding;
@@ -161,6 +164,17 @@ const unavailableBrowserProxy = "http://127.0.0.1:9";
  */
 let mediaPreviewWindow: BrowserWindow | undefined;
 let mediaPreviewSubject: DesktopMediaPreview | undefined;
+function desktopDebugPublish(snapshot: DesktopDebugSnapshot): void {
+    const window = windowLifecycle.get();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.debugChanged, snapshot);
+}
+
+function desktopDebugSenderRequire(sender: WebContents): void {
+    const presenting = windowLifecycle.get();
+    if (!presenting || presenting.webContents !== sender)
+        throw new Error("This window cannot control the debugger.");
+}
 
 /** The one native folder chooser, shared by the renderer's request and first-run setup. */
 async function directoryPickShow(owner: BrowserWindow | undefined): Promise<string | undefined> {
@@ -931,6 +945,23 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
             },
         );
+        desktopDebugController = new DesktopDebugController({
+            changed: desktopDebugPublish,
+            daemon: () => {
+                const snapshot = runtime.get();
+                if (snapshot.phase !== "ready" || snapshot.mode !== "local") return undefined;
+                const connectionId = snapshot.connectionId;
+                return {
+                    connectionId,
+                    startInspector: () => runtime.localInspectorStart(connectionId),
+                    stopInspector: () => runtime.localInspectorStop(connectionId),
+                };
+            },
+            renderer: () => {
+                const window = windowLifecycle.get();
+                return window && !window.isDestroyed() ? window.webContents : undefined;
+            },
+        });
         // Notes live in the user's home rather than in this app's private data
         // directory: the Markdown beside each note is meant to be found by an
         // agent working on this machine, and an application-support path is not
@@ -986,12 +1017,49 @@ void app
                     desktopWindowTarget(snapshot).kind === "local")
             )
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
+            desktopDebugController.refresh();
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
         ipcMain.handle(desktopIpc.desktopConfigWrite, (_event, config: unknown) =>
             desktopConfigStore.write(config),
         );
+        ipcMain.handle(desktopIpc.debugGet, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.get();
+        });
+        ipcMain.handle(desktopIpc.debugAllStart, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.startAll();
+        });
+        ipcMain.handle(desktopIpc.debugAllStop, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.stopAll();
+        });
+        ipcMain.handle(desktopIpc.debugMainInspectorStart, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.start("main");
+        });
+        ipcMain.handle(desktopIpc.debugMainInspectorStop, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.stop("main");
+        });
+        ipcMain.handle(desktopIpc.debugRendererInspectorStart, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.start("renderer");
+        });
+        ipcMain.handle(desktopIpc.debugRendererInspectorStop, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.stop("renderer");
+        });
+        ipcMain.handle(desktopIpc.debugDaemonInspectorStart, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.start("daemon");
+        });
+        ipcMain.handle(desktopIpc.debugDaemonInspectorStop, (event) => {
+            desktopDebugSenderRequire(event.sender);
+            return desktopDebugController.stop("daemon");
+        });
         ipcMain.handle(desktopIpc.browserProxyApply, (_event, target: unknown) =>
             browserProxyApply(desktopBrowserProxyTargetValidate(target)),
         );

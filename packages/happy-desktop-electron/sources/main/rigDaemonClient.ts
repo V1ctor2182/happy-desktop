@@ -98,6 +98,16 @@ export interface RigDaemonFileResponse {
     readonly hash: string;
 }
 
+/** Where a debugger attaches to the daemon once its inspector is listening. */
+export interface RigDaemonInspectorResponse {
+    readonly inspectorUrl: string;
+}
+
+/** Whether an inspector was actively listening before the stop request. */
+export interface RigDaemonInspectorStopResponse {
+    readonly stopped: boolean;
+}
+
 export interface RigDaemonFileWriteRequest {
     readonly content: string;
     readonly expectedHash: string | null;
@@ -206,6 +216,20 @@ export class RigDaemonClient {
     /** Replaces that security policy wholesale and answers with what was stored. */
     setGlobalSecurityPolicy(policy: string): Promise<GlobalSecurityPolicyResponse> {
         return this.#requestJson("PUT", "/config/security", { policy });
+    }
+
+    /**
+     * Opens this daemon's own Node inspector and answers with the address a
+     * debugger attaches to. One daemon holds one inspector, so asking again
+     * returns the one already listening rather than opening another.
+     */
+    startInspector(): Promise<RigDaemonInspectorResponse> {
+        return this.#requestJson("POST", "/debug/inspector");
+    }
+
+    /** Stops this daemon's Node inspector without stopping the daemon itself. */
+    stopInspector(): Promise<RigDaemonInspectorStopResponse> {
+        return this.#requestJson("DELETE", "/debug/inspector");
     }
 
     /**

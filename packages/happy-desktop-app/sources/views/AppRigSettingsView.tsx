@@ -36,6 +36,7 @@ import {
 } from "happy-desktop-state";
 import {
     RigGeneralSettings,
+    RigDebugSettings,
     RigInstructionsSettings,
     RigNodeSettings,
     RigPairing,
@@ -58,6 +59,7 @@ import { hostRig, type AppRigDirectorySnapshot, type AppRigDirectoryStore } from
 /** The categories the local settings window offers, in the order they are listed. */
 export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "users", id: "profiles", label: "Profiles" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
@@ -75,7 +77,39 @@ export function rigSettingsCategoryExists(section: string): boolean {
     return RIG_SETTINGS_CATEGORIES.some((category) => category.id === section);
 }
 
+export interface AppRigDebugTargetSnapshot {
+    readonly error?: string;
+    readonly status: "stopped" | "starting" | "running" | "stopping" | "unavailable" | "error";
+    readonly url?: string;
+}
+
+/** The native debugger state projected into the settings route. */
+export interface AppRigDebugSnapshot {
+    readonly daemon: AppRigDebugTargetSnapshot;
+    readonly daemonConnected: boolean;
+    readonly error?: string;
+    readonly loading: boolean;
+    readonly main: AppRigDebugTargetSnapshot;
+    readonly renderer: AppRigDebugTargetSnapshot;
+    readonly supported: boolean;
+}
+
+/** Framework-neutral adapter for the desktop debugger capability. */
+export interface AppRigDebugStore {
+    get(): AppRigDebugSnapshot;
+    subscribe(listener: () => void): () => void;
+    debugAllStart(): void;
+    debugAllStop(): void;
+    daemonInspectorStart(): void;
+    daemonInspectorStop(): void;
+    mainInspectorStart(): void;
+    mainInspectorStop(): void;
+    rendererInspectorStart(): void;
+    rendererInspectorStop(): void;
+}
+
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+    debug: "Start, stop, and copy live debugger endpoints for Happy and Rig",
     general: "How this window looks and what a new session starts with",
     profiles: "Who this host says is sending work to another Rig",
     instructions: "Machine-wide agent guidance and permission-review policy",
@@ -100,6 +134,7 @@ export interface AppRigSettingsViewProps {
      */
     experiments?: ExperimentsStore;
     /** Every Rig in this window: the Machines category, and whose catalog is read. */
+    debug?: AppRigDebugStore;
     rigs: AppRigDirectoryStore;
     onClose(): void;
     onCategorySelect(id: string): void;
@@ -237,6 +272,8 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         windowStateStore.get,
         windowStateStore.get,
     );
+    const debugStore = (props.section === "debug" ? props.debug : undefined) ?? debugStoreNoop;
+    const debug = useSyncExternalStore(debugStore.subscribe, debugStore.get, debugStore.get);
     const catalog = models.type === "ready" ? models.catalog : undefined;
     const selection = defaultSelection(catalog, settings);
     const model = catalog?.providers
@@ -263,7 +300,25 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             windowControls={props.platform === "desktop"}
             windowFullScreen={windowState.fullScreen}
         >
-            {props.section === "profiles" ? (
+            {props.section === "debug" ? (
+                <RigDebugSettings
+                    daemon={debug.daemon}
+                    daemonConnected={debug.daemonConnected}
+                    error={debug.error}
+                    loading={debug.loading}
+                    main={debug.main}
+                    onAllStart={debugStore.debugAllStart}
+                    onAllStop={debugStore.debugAllStop}
+                    onDaemonStart={debugStore.daemonInspectorStart}
+                    onDaemonStop={debugStore.daemonInspectorStop}
+                    onMainStart={debugStore.mainInspectorStart}
+                    onMainStop={debugStore.mainInspectorStop}
+                    onRendererStart={debugStore.rendererInspectorStart}
+                    onRendererStop={debugStore.rendererInspectorStop}
+                    renderer={debug.renderer}
+                    supported={debug.supported}
+                />
+            ) : props.section === "profiles" ? (
                 <RigProfilesSettings
                     loading={profiles.loading}
                     onProfileCreate={() => profilesStore.profileCreateOpen()}
@@ -677,6 +732,27 @@ const UNLOADED = { type: "loading" } as const;
 const modelsUnloaded = () => UNLOADED;
 /** Stands in while no Rig on this machine is connected to read the time from. */
 const clockStopped = () => 0;
+const debugStopped: AppRigDebugTargetSnapshot = { status: "stopped" };
+const debugUnavailable: AppRigDebugSnapshot = {
+    daemon: debugStopped,
+    daemonConnected: false,
+    loading: false,
+    main: debugStopped,
+    renderer: debugStopped,
+    supported: false,
+};
+const debugStoreNoop: AppRigDebugStore = {
+    get: () => debugUnavailable,
+    subscribe: noSubscribe,
+    debugAllStart: () => undefined,
+    debugAllStop: () => undefined,
+    daemonInspectorStart: () => undefined,
+    daemonInspectorStop: () => undefined,
+    mainInspectorStart: () => undefined,
+    mainInspectorStop: () => undefined,
+    rendererInspectorStart: () => undefined,
+    rendererInspectorStop: () => undefined,
+};
 
 /**
  * When a usage reading was taken, as an absolute local time. A reading is only

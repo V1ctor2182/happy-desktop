@@ -41,6 +41,7 @@ import {
     AppRigSettingsView,
     RIG_SETTINGS_DEFAULT_CATEGORY,
     rigSettingsCategoryExists,
+    type AppRigDebugStore,
 } from "../views/AppRigSettingsView";
 
 /**
@@ -62,6 +63,7 @@ export interface RigRouterContext {
      * packaged Electron.
      */
     readonly mediaWindow?: MediaWindowOpener;
+    readonly debug?: AppRigDebugStore;
     readonly rigs: AppRigDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
     readonly buildIdentity?: AppBuildIdentity;
@@ -390,6 +392,7 @@ function RigSettingsRoute() {
     return (
         <AppRigSettingsView
             appearance={context.appearance}
+            {...(context.debug ? { debug: context.debug } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })

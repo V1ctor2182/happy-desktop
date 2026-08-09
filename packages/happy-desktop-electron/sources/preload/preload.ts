@@ -6,6 +6,7 @@ import {
     type DesktopBrowserStatus,
     type DesktopPreviewNavigation,
     type DesktopBuildIdentity,
+    type DesktopDebugSnapshot,
     type DesktopMediaPreview,
     type DesktopNoteApplyRequest,
     type DesktopRuntimeSnapshot,
@@ -62,6 +63,21 @@ const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
+    debugGet: () => ipcRenderer.invoke(desktopIpc.debugGet),
+    debugAllStart: () => ipcRenderer.invoke(desktopIpc.debugAllStart),
+    debugAllStop: () => ipcRenderer.invoke(desktopIpc.debugAllStop),
+    debugMainInspectorStart: () => ipcRenderer.invoke(desktopIpc.debugMainInspectorStart),
+    debugMainInspectorStop: () => ipcRenderer.invoke(desktopIpc.debugMainInspectorStop),
+    debugRendererInspectorStart: () => ipcRenderer.invoke(desktopIpc.debugRendererInspectorStart),
+    debugRendererInspectorStop: () => ipcRenderer.invoke(desktopIpc.debugRendererInspectorStop),
+    debugDaemonInspectorStart: () => ipcRenderer.invoke(desktopIpc.debugDaemonInspectorStart),
+    debugDaemonInspectorStop: () => ipcRenderer.invoke(desktopIpc.debugDaemonInspectorStop),
+    debugSubscribe(listener: (snapshot: DesktopDebugSnapshot) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopDebugSnapshot) =>
+            listener(snapshot);
+        ipcRenderer.on(desktopIpc.debugChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.debugChanged, receive);
+    },
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     noteApply: (request: DesktopNoteApplyRequest) =>
         ipcRenderer.invoke(desktopIpc.noteApply, request),

@@ -1,5 +1,6 @@
 import type {
     DesktopConfig,
+    DesktopDebugSnapshot,
     DesktopNoteApplyRequest,
     DesktopNoteContent,
     DesktopNoteSummary,
@@ -10,6 +11,18 @@ import type {
 } from "../shared/desktopContract";
 
 const endpoint = "/__happy2_local_rig";
+
+const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
+    daemon: { status: "stopped" },
+    daemonConnected: false,
+    main: { status: "stopped" },
+    renderer: { status: "stopped" },
+    supported: false,
+};
+
+function nativeDebugUnavailable(): never {
+    throw new Error("Debugger attachment is available in the Electron desktop window.");
+}
 
 interface DevResponse<Value> {
     error?: string;
@@ -56,6 +69,16 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         directoryPick: async () => undefined,
         desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
         desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),
+        debugGet: async () => unsupportedDebugSnapshot,
+        debugAllStart: async () => nativeDebugUnavailable(),
+        debugAllStop: async () => nativeDebugUnavailable(),
+        debugMainInspectorStart: async () => nativeDebugUnavailable(),
+        debugMainInspectorStop: async () => nativeDebugUnavailable(),
+        debugRendererInspectorStart: async () => nativeDebugUnavailable(),
+        debugRendererInspectorStop: async () => nativeDebugUnavailable(),
+        debugDaemonInspectorStart: async () => nativeDebugUnavailable(),
+        debugDaemonInspectorStop: async () => nativeDebugUnavailable(),
+        debugSubscribe: () => () => undefined,
         applicationMenuOpen: async () => undefined,
         noteApply: (apply: DesktopNoteApplyRequest) =>
             request<DesktopNoteSummary>("noteApply", apply),

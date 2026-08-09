@@ -10,6 +10,11 @@ export {
     type AppRigViewProps,
 } from "./AppRigView";
 export {
+    type AppRigDebugSnapshot,
+    type AppRigDebugStore,
+    type AppRigDebugTargetSnapshot,
+} from "./views/AppRigSettingsView";
+export {
     rigMemoryHistoryCreate,
     rigRouterConversationOpen,
     rigRouterGroupOpen,

@@ -474,6 +474,11 @@ export {
     type RigGeneralSettingsProps,
 } from "./pages/settings/RigGeneralSettings";
 export {
+    RigDebugSettings,
+    type RigDebugSettingsProps,
+    type RigDebugTarget,
+} from "./pages/settings/RigDebugSettings";
+export {
     RigInstructionsSettings,
     type RigInstructionDocument,
     type RigInstructionsSettingsProps,

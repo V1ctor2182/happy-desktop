@@ -33,7 +33,11 @@ import {
     type RigOnboardingState,
     type RigProfile,
 } from "@slopus/rig-connect";
-import { rigDaemonConnectionUnavailable } from "./rigDaemonClient";
+import {
+    rigDaemonConnectionUnavailable,
+    type RigDaemonInspectorResponse,
+    type RigDaemonInspectorStopResponse,
+} from "./rigDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
 import { rigHttpProxyCreate, type RigHttpProxyHandle } from "./rigHttpProxy";
 import { rigInstallCommand } from "./rigInstallTerminal";
@@ -158,6 +162,24 @@ export class DesktopRuntime implements AsyncDisposable {
     subscribe(listener: (snapshot: DesktopRuntimeSnapshot) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
+    }
+
+    localInspectorStart(expectedConnectionId: number): Promise<RigDaemonInspectorResponse> {
+        return this.serial(async () => {
+            const client = this.localConnectionRequire(expectedConnectionId).client;
+            const result = await client.startInspector();
+            this.localConnectionRequire(expectedConnectionId);
+            return result;
+        });
+    }
+
+    localInspectorStop(expectedConnectionId: number): Promise<RigDaemonInspectorStopResponse> {
+        return this.serial(async () => {
+            const client = this.localConnectionRequire(expectedConnectionId).client;
+            const result = await client.stopInspector();
+            this.localConnectionRequire(expectedConnectionId);
+            return result;
+        });
     }
 
     /** Resolves Rig's complete ordered onboarding contract for this daemon. */

@@ -124,6 +124,30 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+export type DesktopDebugTargetStatus =
+    | "stopped"
+    | "starting"
+    | "running"
+    | "stopping"
+    | "unavailable"
+    | "error";
+
+/** One live debugger attachment point owned by the native shell. */
+export interface DesktopDebugTargetSnapshot {
+    readonly error?: string;
+    readonly status: DesktopDebugTargetStatus;
+    readonly url?: string;
+}
+
+/** The three runtimes an external CDP client can attach to from Dev Tools. */
+export interface DesktopDebugSnapshot {
+    readonly daemonConnected: boolean;
+    readonly daemon: DesktopDebugTargetSnapshot;
+    readonly main: DesktopDebugTargetSnapshot;
+    readonly renderer: DesktopDebugTargetSnapshot;
+    readonly supported: boolean;
+}
+
 /**
  * What a development build calls itself. A packaged Happy reports none: only a
  * build run from a checkout has to be told apart from the other one beside it.
@@ -450,6 +474,16 @@ export interface HappyDesktopBridge {
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
+    debugGet(): Promise<DesktopDebugSnapshot>;
+    debugAllStart(): Promise<DesktopDebugSnapshot>;
+    debugAllStop(): Promise<DesktopDebugSnapshot>;
+    debugMainInspectorStart(): Promise<DesktopDebugSnapshot>;
+    debugMainInspectorStop(): Promise<DesktopDebugSnapshot>;
+    debugRendererInspectorStart(): Promise<DesktopDebugSnapshot>;
+    debugRendererInspectorStop(): Promise<DesktopDebugSnapshot>;
+    debugDaemonInspectorStart(): Promise<DesktopDebugSnapshot>;
+    debugDaemonInspectorStop(): Promise<DesktopDebugSnapshot>;
+    debugSubscribe(listener: (snapshot: DesktopDebugSnapshot) => void): () => void;
     noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
     noteCreate(title?: string): Promise<DesktopNoteContent>;
     noteRead(id: string): Promise<DesktopNoteContent>;
@@ -533,6 +567,16 @@ export const desktopIpc = {
     dockUnreadSet: "happy2:dock:unread-set",
     desktopConfigGet: "happy2:desktop-config:get",
     desktopConfigWrite: "happy2:desktop-config:write",
+    debugAllStart: "happy2:debug:all-start",
+    debugAllStop: "happy2:debug:all-stop",
+    debugChanged: "happy2:debug:changed",
+    debugDaemonInspectorStart: "happy2:debug:daemon-inspector-start",
+    debugDaemonInspectorStop: "happy2:debug:daemon-inspector-stop",
+    debugGet: "happy2:debug:get",
+    debugMainInspectorStart: "happy2:debug:main-inspector-start",
+    debugMainInspectorStop: "happy2:debug:main-inspector-stop",
+    debugRendererInspectorStart: "happy2:debug:renderer-inspector-start",
+    debugRendererInspectorStop: "happy2:debug:renderer-inspector-stop",
     applicationMenuOpen: "happy2:application-menu:open",
     noteApply: "happy2:notes:apply",
     noteCreate: "happy2:notes:create",

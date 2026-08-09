@@ -1,5 +1,6 @@
 import type { RigProviderUsageEntry } from "happy-desktop-state";
 import {
+    RigDebugSettings,
     RigGeneralSettings,
     RigInstructionsSettings,
     RigNodeSettings,
@@ -22,6 +23,7 @@ export const componentNumber = "P-012";
 
 const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
+    { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
@@ -332,6 +334,45 @@ export function RigSettingsBlueprintPage() {
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
                         titleShimmerEnabled={false}
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Live loopback debugger controls and raw CDP attachment URLs for the three application runtimes"
+                label="Rig settings — Dev Tools"
+                number="01a"
+            >
+                <RigSettingsShell
+                    activeCategoryId="debug"
+                    categories={categories}
+                    description="Start, stop, and copy live debugger endpoints for Happy and Rig"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Dev Tools"
+                >
+                    <RigDebugSettings
+                        daemon={{
+                            status: "running",
+                            url: "ws://127.0.0.1:62701/rig",
+                        }}
+                        daemonConnected
+                        main={{
+                            status: "running",
+                            url: "ws://127.0.0.1:62702/main",
+                        }}
+                        onAllStart={noop}
+                        onAllStop={noop}
+                        onDaemonStart={noop}
+                        onDaemonStop={noop}
+                        onMainStart={noop}
+                        onMainStop={noop}
+                        onRendererStart={noop}
+                        onRendererStop={noop}
+                        renderer={{
+                            status: "running",
+                            url: "ws://127.0.0.1:62703/cdp/8a84291d",
+                        }}
+                        supported
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>
