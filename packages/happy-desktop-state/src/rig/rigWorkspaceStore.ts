@@ -3245,14 +3245,14 @@ export function rigWorkspaceStoreCreate(
      * reports a newly applied authoritative read, so nothing here can be
      * triggered by an optimistic row change or by a request still in flight.
      *
-     * Two things are settled from it. A group the catalog no longer holds is no
-     * longer addressable, however it went — archived here, from another window,
-     * or on the machine itself — so its removal is reported once for the owner
-     * to re-address. And a pending archive is checked against the entity it
-     * names: gone means the outcome the reader asked for already holds, and a
-     * renamed project means the sentence they are being asked to confirm is
-     * about to stop matching, so the confirmation is restarted on the new name
-     * rather than left standing over a stale copy.
+     * Two things are settled from it. A project or worktree group the catalog no
+     * longer holds is no longer addressable, however it went — archived here,
+     * from another window, or on the machine itself — so its removal is reported
+     * once for the owner to re-address. And a pending archive is checked against
+     * the entity it names: gone means the outcome the reader asked for already
+     * holds, and a renamed project means the sentence they are being asked to
+     * confirm is about to stop matching, so the confirmation is restarted on the
+     * new name rather than left standing over a stale copy.
      */
     const catalogAuthoritativeApply = (): void => {
         const listSnapshot = list.get();
@@ -3266,7 +3266,11 @@ export function rigWorkspaceStoreCreate(
             for (const worktree of project.worktrees) listedIds.add(worktree.id);
         }
         authoritativeGroupIds = listedIds;
-        if (addressedGroupId !== undefined) {
+        if (
+            addressedGroupId !== undefined &&
+            rigFolderGroupParse(addressedGroupId) === undefined &&
+            addressedGroupId !== RIG_UNSORTED_GROUP_ID
+        ) {
             const listed = listedIds.has(addressedGroupId);
             // Removed means it was here and is not any more. A group the host
             // has never confirmed is a group still arriving — a worktree just
