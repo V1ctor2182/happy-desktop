@@ -1,4 +1,5 @@
 import type {
+    FolderShareStatus,
     RigConnection,
     SharingContact as ConnectSharingContact,
     SharingContactRequest as ConnectSharingContactRequest,
@@ -6,6 +7,7 @@ import type {
 } from "@slopus/rig-connect";
 import type {
     RigSharingContact,
+    RigFolderShare,
     RigSharingIncomingRequest,
     RigSharingProfile,
     RigSharingReading,
@@ -61,6 +63,12 @@ export function rigConnectSharingSourceCreate(rig: RigConnection): RigSharingSou
         async contactRemove(identity) {
             return readingProject(await rig.removeSharingContact(identity));
         },
+        async folderShare(folderId, contacts) {
+            return folderShareProject(await rig.shareFolder(folderId, contacts));
+        },
+        async reset() {
+            return readingProject(await rig.resetSharing());
+        },
     };
 }
 
@@ -74,11 +82,25 @@ function readingProject(snapshot: SharingSnapshot): RigSharingReading {
             id: request.id,
             identity: request.identity,
         })),
+        folderShares: snapshot.folderShares.map(folderShareProject),
         // A Rig that declined Murmur reports no profile, which is the whole of
         // the enrolment question. It is passed through as absence rather than
         // normalized to a blank string, so a surface can tell "opted out" from
         // "enrolled under a profile with no name yet".
         ...(snapshot.profileId === null ? {} : { profileId: snapshot.profileId }),
+    };
+}
+
+function folderShareProject(folderShare: FolderShareStatus): RigFolderShare {
+    return {
+        groupId: folderShare.groupId,
+        rootFolderId: folderShare.rootFolderId as RigFolderShare["rootFolderId"],
+        members: folderShare.members,
+        status: folderShare.status,
+        ...(folderShare.lastSyncedAt === undefined
+            ? {}
+            : { lastSyncedAt: folderShare.lastSyncedAt }),
+        ...(folderShare.error === undefined ? {} : { error: folderShare.error }),
     };
 }
 

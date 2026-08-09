@@ -86,6 +86,14 @@ export type SidebarItem = {
      * keeps its width whether or not the control is showing.
      */
     secondaryAction?: SidebarItemAction;
+    /**
+     * A folder-sharing group at this row: one durable trailing mark at rest,
+     * with a spinner while its contents are crossing Murmur.
+     */
+    share?: {
+        status: "syncing" | "synced" | "error";
+        label: string;
+    };
     online?: boolean;
     /**
      * `working` spins in the leading slot; `waiting` shows a highlighted clock
@@ -696,6 +704,26 @@ function SidebarRow({
                 label: `${item().label}: ${item().lifecycleLabel ?? "unavailable"}`,
                 lifecycle: lifecycle()!,
             };
+        if (item().share?.status === "syncing")
+            return {
+                kind: "spinner",
+                tone: "accent",
+                label: item().share!.label,
+            };
+        if (item().share?.status === "error")
+            return {
+                kind: "glyph",
+                icon: "alert",
+                label: item().share!.label,
+                lifecycle: "failed",
+            };
+        if (item().share?.status === "synced")
+            return {
+                kind: "glyph",
+                icon: "link",
+                label: item().share!.label,
+                lifecycle: "shared",
+            };
         if (item().kind !== "workspace" && item().kind !== "project") return undefined;
         if (item().status === "working")
             return { kind: "spinner", tone: "muted", label: `${item().label} is working` };
@@ -728,6 +756,7 @@ function SidebarRow({
             data-happy-desktop-ui="sidebar-item"
             data-lifecycle={lifecycle()}
             data-status={item().status}
+            data-share={item().share?.status}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             onClick={() => props.onSelect(item().id)}

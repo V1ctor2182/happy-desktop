@@ -95,6 +95,7 @@ function folderProject(folder: FolderNode): RigFolder {
         id: folder.id as RigFolderId,
         name: folder.name,
         path: folder.path,
+        shared: folder.shared,
         conversations: folder.sessions.map(sessionProject),
         items: contents.flatMap((entry) => (entry.kind === "item" ? [entry.item] : [])),
         ...(folder.description === undefined ? {} : { description: folder.description }),

@@ -295,6 +295,11 @@ export {
     type RigContactRequestView,
 } from "./RigContactDialog";
 export {
+    RigFolderShareDialog,
+    type RigFolderShareContactView,
+    type RigFolderShareDialogProps,
+} from "./RigFolderShareDialog";
+export {
     RigCreateSessionDialog,
     type RigCreateSessionDestination,
     type RigCreateSessionDialogProps,
@@ -510,6 +515,14 @@ export {
     type RigProfileRow,
     type RigProfilesSettingsProps,
 } from "./pages/settings/RigProfilesSettings";
+export {
+    RigMurmurSettings,
+    type RigMurmurConnection,
+    type RigMurmurContactRow,
+    type RigMurmurIncomingRequestRow,
+    type RigMurmurOutgoingRequestRow,
+    type RigMurmurSettingsProps,
+} from "./pages/settings/RigMurmurSettings";
 export {
     RigSecretsSettings,
     type RigSecretEditor,

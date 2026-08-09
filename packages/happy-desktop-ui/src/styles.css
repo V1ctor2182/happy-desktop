@@ -119,5 +119,6 @@
 @import "./styles/rig-create-session.css";
 @import "./styles/rig-folder-dialog.css";
 @import "./styles/rig-contact-dialog.css";
+@import "./styles/rig-folder-share-dialog.css";
 @import "./styles/rig-project-clone-dialog.css";
 @import "./styles/workspace-lifecycle-notice.css";

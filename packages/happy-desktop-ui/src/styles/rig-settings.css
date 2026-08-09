@@ -653,3 +653,152 @@
     justify-content: flex-end;
     gap: 8px;
 }
+
+.happy2-rig-murmur__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.happy2-rig-murmur__connection {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-rig-murmur__connection[data-connection="connected"] {
+    color: var(--success);
+}
+
+.happy2-rig-murmur__connection[data-connection="disconnected"] {
+    color: var(--text-secondary);
+}
+
+.happy2-rig-murmur__identity {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+}
+
+.happy2-rig-murmur__identity-label {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-rig-murmur__identity code {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-murmur-reset {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 16px;
+}
+
+.happy2-rig-murmur-reset__copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 4px;
+}
+
+.happy2-rig-murmur-reset__title {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.happy2-rig-murmur-reset__detail {
+    max-width: 64ch;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.happy2-rig-murmur-reset__confirm {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-rig-murmur-person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    background: var(--surface-high);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+}
+
+.happy2-rig-murmur-person[data-kind="incoming"] {
+    border-color: color-mix(in srgb, var(--radio-active) 40%, var(--divider));
+}
+
+.happy2-rig-murmur-person__naming {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+}
+
+.happy2-rig-murmur-person__name,
+.happy2-rig-murmur-person__detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-murmur-person__name {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-rig-murmur-person__detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-rig-murmur-person__actions,
+.happy2-rig-murmur-person__answering,
+.happy2-rig-murmur-person__pending {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy2-rig-murmur-person__answering,
+.happy2-rig-murmur-person__pending {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}

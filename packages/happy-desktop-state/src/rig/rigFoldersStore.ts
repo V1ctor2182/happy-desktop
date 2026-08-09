@@ -44,6 +44,8 @@ export type RigFolderContent =
 export interface RigFolder {
     readonly id: RigFolderId;
     readonly name: string;
+    /** True on the root owned by one Murmur folder-sharing group. */
+    readonly shared: boolean;
     /** A single emoji, when the folder has one. */
     readonly icon?: string;
     /** What the folder is for, shown to people and given to agents working inside it. */

@@ -54,8 +54,8 @@ import type {
     RigPairingStore,
     RigProfilesStore,
     RigProviderUsageStore,
-    RigSharingSnapshot,
     RigSharingStore,
+    RigFolderShare,
     RigGroupLifecycle,
     RigProjectGroup,
     RigProjectId,
@@ -149,8 +149,8 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     RigCreateSessionDialog,
-    RigContactDialog,
     RigFolderDialog,
+    RigFolderShareDialog,
     RIG_FOLDER_DEFAULT_EMOJI,
     RigProjectCloneDialog,
     RigProjectSettingsDialog,
@@ -989,7 +989,17 @@ function openGroupFind(
             // A folder is not a checkout, so there is no working tree to report
             // on and nothing here is ever asked to draw one.
             changes: [],
-            create: { cwd: folder.path, scope: { kind: "folder", folderId: folder.id } },
+            // Murmur folder groups carry the virtual folder tree only. Rig
+            // refuses chats inside any folder below a shared root, so a shared
+            // place has nothing honest to offer through the compose control.
+            ...(sharedFolderIds(folders?.folders ?? []).has(folder.id)
+                ? {}
+                : {
+                      create: {
+                          cwd: folder.path,
+                          scope: { kind: "folder" as const, folderId: folder.id },
+                      },
+                  }),
             path: folder.path,
         };
     }
@@ -1077,32 +1087,6 @@ function pinnedArrange(rows: readonly SidebarItem[], order: readonly string[]): 
 const FOLDERS_SECTION = "folders";
 
 /**
- * The Murmur block in the sidebar: the people this account shares work with.
- *
- * One id for the same reason the folders block has one — sharing belongs to the
- * host Rig's identity, and the addressed project or node never changes whose
- * contacts these are.
- */
-const CONTACTS_SECTION = "murmur";
-
-/** What marks a sidebar row as one contact rather than a place to work. */
-const CONTACT_ROW_PREFIX = "contact:";
-
-function contactRowId(identity: string): string {
-    return `${CONTACT_ROW_PREFIX}${identity}`;
-}
-
-/** The contact a sidebar row names, or undefined when it names something else. */
-function contactRowParse(value: string): string | undefined {
-    return value.startsWith(CONTACT_ROW_PREFIX)
-        ? value.slice(CONTACT_ROW_PREFIX.length)
-        : undefined;
-}
-
-/** Ends the relationship with the contact this row names. */
-const CONTACT_MENU_REMOVE = "contact-remove";
-
-/**
  * Starts a folder inside this one. Nesting is stated here rather than by
  * dragging, because a drag that could both order a row and swallow it into its
  * neighbour makes every ordinary reordering a near miss.
@@ -1114,6 +1098,8 @@ const FOLDER_MENU_DOCUMENT_CREATE = "folder-document-create";
 const FOLDER_MENU_EDIT = "folder-edit";
 /** Puts the folder away, and everything nested under it with it. */
 const FOLDER_MENU_ARCHIVE = "folder-archive";
+/** Creates a Murmur sharing group, or opens one that already exists. */
+const FOLDER_MENU_SHARE = "folder-share";
 
 /**
  * A folder's sidebar row, which is an ordinary Rig group row: a folder is a
@@ -1319,7 +1305,10 @@ function folderRows(
     depth: number,
     projects: readonly RigProjectGroup[],
     documentTitles: ReadonlyMap<RigDocumentId, string>,
+    folderShares: readonly RigFolderShare[],
 ): SidebarItem[] {
+    const folderShare = folderShares.find((share) => share.rootFolderId === folder.id);
+    const shareStatus = folderShare?.status ?? (folder.shared ? "synced" : undefined);
     return [
         {
             depth,
@@ -1327,16 +1316,50 @@ function folderRows(
             id: folderRowId(rigId, folder.id),
             kind: "folder",
             label: folder.name,
+            ...(shareStatus === undefined
+                ? {}
+                : {
+                      share: {
+                          status: shareStatus,
+                          label:
+                              shareStatus === "syncing"
+                                  ? `${folder.name} is syncing`
+                                  : shareStatus === "error"
+                                    ? `${folder.name}: ${folderShare?.error ?? "sync failed"}`
+                                    : `${folder.name} is shared`,
+                      },
+                  }),
             ...(folder.conversations.some((conversation) => conversation.unread)
                 ? { unread: true }
                 : {}),
         },
         ...folder.contents.flatMap((entry) =>
             entry.kind === "folder"
-                ? folderRows(rigId, entry.folder, depth + 1, projects, documentTitles)
+                ? folderRows(rigId, entry.folder, depth + 1, projects, documentTitles, folderShares)
                 : folderItemRows(rigId, entry.item, depth + 1, projects, documentTitles),
         ),
     ];
+}
+
+/** Every folder contained by a shared root, including that root. */
+function sharedFolderIds(folders: readonly RigFolder[]): ReadonlySet<RigFolderId> {
+    const ids = new Set<RigFolderId>();
+    const visit = (folder: RigFolder, insideSharedRoot: boolean): void => {
+        const shared = insideSharedRoot || folder.shared;
+        if (shared) ids.add(folder.id);
+        for (const child of folder.children) visit(child, shared);
+    };
+    for (const folder of folders) visit(folder, false);
+    return ids;
+}
+
+/** Sharing accepts folder-only trees; chats and linked entities are private contents. */
+function folderTreeHasContents(folder: RigFolder): boolean {
+    return (
+        folder.conversations.length > 0 ||
+        folder.items.length > 0 ||
+        folder.children.some(folderTreeHasContents)
+    );
 }
 
 /**
@@ -1349,7 +1372,8 @@ function folderRows(
  */
 function folderLinkMenuItems(folders: RigFoldersSnapshot | undefined): MenuItem[] {
     if (!folders) return [];
-    const rows = rigFoldersFlatten(folders.folders);
+    const shared = sharedFolderIds(folders.folders);
+    const rows = rigFoldersFlatten(folders.folders).filter((row) => !shared.has(row.folder.id));
     if (rows.length === 0) return [];
     return [
         { kind: "separator" },
@@ -1394,6 +1418,7 @@ function foldersSection(
     online: boolean,
     projects: readonly RigProjectGroup[],
     documentTitles: ReadonlyMap<RigDocumentId, string>,
+    folderShares: readonly RigFolderShare[],
 ): SidebarSection[] {
     const items: SidebarItem[] = [
         ...(folders.unsorted.length === 0
@@ -1412,7 +1437,7 @@ function foldersSection(
         // Every folder and link in the shared order the host published. Direct
         // contents are one level in, so they read as belonging to their folder.
         ...folders.folders.flatMap((folder) =>
-            folderRows(rigId, folder, 0, projects, documentTitles),
+            folderRows(rigId, folder, 0, projects, documentTitles, folderShares),
         ),
     ];
     // A refused act outranks a dropped feed: the tree on screen is still
@@ -1447,78 +1472,6 @@ function foldersSection(
                           icon: "archive" as const,
                           title: "No folders yet",
                           ...(online ? { actionLabel: "New folder" } : {}),
-                      },
-                  }
-                : {}),
-        },
-    ];
-}
-
-/**
- * The people this account shares work with, under the host Rig's own identity.
- *
- * Shown only once Murmur has produced a profile to share as. A Rig that
- * declined it has no identity, no contacts, and nothing this block could
- * truthfully say — so it contributes nothing rather than an empty list implying
- * the reader simply has no friends yet.
- *
- * A contact is a person, not a place to work: the rows go nowhere and carry no
- * unread state. What the block is for is adding one, so its heading control
- * stands rather than waiting to be found, and someone waiting on an answer is
- * counted on it — a request nobody notices is a request nobody answers.
- */
-function contactsSection(sharing: RigSharingSnapshot, online: boolean): SidebarSection[] {
-    if (sharing.profileId === undefined) return [];
-    const waiting = sharing.incomingRequests.length;
-    const items: SidebarItem[] = sharing.contacts.map((contact) => ({
-        id: contactRowId(contact.identity),
-        kind: "person" as const,
-        // Someone whose Rig has published no profile yet is still a contact, so
-        // the identity stands in for the name rather than the row being held
-        // back until a profile arrives.
-        label: contact.profile?.name ?? contact.identity,
-        // A contact being removed is still on screen until the Rig says it is
-        // gone, and reads as going rather than as present.
-        ...(contact.status === "removing"
-            ? { lifecycle: "unavailable" as const, lifecycleLabel: "Removing…" }
-            : {}),
-        ...(contact.profile?.email === undefined ? {} : { meta: contact.profile.email }),
-        ...(contact.profile?.photo === undefined
-            ? {}
-            : { imageUrl: contact.profile.photo.imageUrl }),
-        // Presence here is the account's own link to the sharing network, not
-        // each person's: the Rig reports whether this machine is connected, and
-        // claiming to know who else is online would be inventing it.
-        ...(sharing.connection === "connected" ? { online: true } : {}),
-    }));
-    return [
-        {
-            id: CONTACTS_SECTION,
-            items,
-            label: "Murmur",
-            ...(online
-                ? {
-                      action: {
-                          icon: "plus" as const,
-                          label: waiting > 0 ? "Contact requests" : "Add contact",
-                          reveal: "always" as const,
-                      },
-                  }
-                : {}),
-            ...(sharing.actionError === undefined ? {} : { error: sharing.actionError }),
-            // Nothing is claimed about a list that has not arrived. A Rig still
-            // being asked has no contacts in the sense of "not answered", which
-            // is not the same sentence as "none".
-            ...(items.length === 0 && !sharing.loading
-                ? {
-                      empty: {
-                          description:
-                              waiting > 0
-                                  ? "Someone is waiting for your answer."
-                                  : "Share work with people you trust.",
-                          icon: "users" as const,
-                          title: waiting > 0 ? "Contact request waiting" : "No contacts yet",
-                          ...(online ? { actionLabel: "Add contact" } : {}),
                       },
                   }
                 : {}),
@@ -1963,9 +1916,10 @@ export function AppRigView(props: AppRigViewProps) {
     // The order the reader arranged the pinned rows in belongs to the window
     // rather than to any one Rig, so a machine going away rearranges nothing.
     const experimentsStore = props.experiments ?? experimentsStoreNoop;
-    // The inbox is still being built, so it is offered only to a reader who has
-    // asked for unfinished work in settings. The switch is read here so the
-    // sidebar and route can never disagree about whether it exists.
+    // The inbox and folders are still being built, so they are offered only to
+    // a reader who has asked for unfinished work in settings. The switch is
+    // read here so their routes, sidebar rows, and dialogs cannot disagree
+    // about whether the surfaces exist.
     const experimental = useSyncExternalStore(
         experimentsStore.subscribe,
         experimentsStore.get,
@@ -2054,11 +2008,8 @@ export function AppRigView(props: AppRigViewProps) {
         localFoldersStore.get,
         localFoldersStore.get,
     );
-    // Who this account shares work with. The host answers for it, like folders
-    // and slots: sharing belongs to one identity, and the machine the window is
-    // addressing does not change whose contacts these are. Subscribed while the
-    // window is open rather than only on a settings screen, because a request
-    // waiting on an answer is only answered if it is seen where the work is.
+    // Folder-sharing status belongs to the host identity and remains live while
+    // the workspace is open. Contact management itself is rendered in Settings.
     const localSharingStore = localRig?.session?.sharing ?? rigSharingStoreNoop;
     const localSharing = useSyncExternalStore(
         localSharingStore.subscribe,
@@ -2074,6 +2025,36 @@ export function AppRigView(props: AppRigViewProps) {
     const selectedDocumentItem = props.documentId
         ? folderDocumentItemFind(localFolders.folders, props.documentId)
         : undefined;
+    const folderShareDraft = localSharing.folderShare;
+    const folderShareFolder =
+        folderShareDraft === undefined
+            ? undefined
+            : folderFind(localFolders.folders, folderShareDraft.folderId);
+    const folderShareStatus =
+        folderShareDraft === undefined
+            ? undefined
+            : localSharing.folderShares.find(
+                  (share) => share.rootFolderId === folderShareDraft.folderId,
+              );
+    const folderShareShared = folderShareFolder?.shared === true || folderShareStatus !== undefined;
+    const folderShareContactIdentities = folderShareShared
+        ? (folderShareStatus?.members.filter((identity) => identity !== localSharing.identity) ??
+          folderShareDraft?.selectedContactIdentities ??
+          [])
+        : localSharing.contacts
+              .filter((contact) => contact.status === "active")
+              .map((contact) => contact.identity);
+    const folderShareContacts = folderShareContactIdentities.map((identity) => {
+        const contact = localSharing.contacts.find((candidate) => candidate.identity === identity);
+        return {
+            identity,
+            name: contact?.profile?.name ?? identity,
+            ...(contact?.profile?.email === undefined ? {} : { email: contact.profile.email }),
+            ...(contact?.profile?.photo === undefined
+                ? {}
+                : { imageUrl: contact.profile.photo.imageUrl }),
+        };
+    });
     // The other three slot placements and the workspace surface still belong to
     // the addressed Rig. When it is the host, reuse the sidebar subscriptions so
     // one materialized store has only one React subscriber in this surface.
@@ -2301,55 +2282,77 @@ export function AppRigView(props: AppRigViewProps) {
                 ) : undefined
             }
             itemMenuItems={(item) => {
-                // A contact is a person, not a checkout: the only act on the row
-                // is ending the relationship, and every project act below would
-                // reach for a repository that does not exist.
-                if (contactRowParse(item.id) !== undefined)
-                    return localRigOnline()
-                        ? [
-                              {
-                                  danger: true,
-                                  icon: "trash" as const,
-                                  id: CONTACT_MENU_REMOVE,
-                                  kind: "item" as const,
-                                  label: "Remove contact",
-                              },
-                          ]
-                        : [];
                 // A folder is a group, but not one of the host's checkouts, so
                 // the acts on it are its own: the project menu below would offer
                 // to rename and archive a repository that is not there.
-                if (folderRowParse(item.id) !== undefined)
-                    return localRigOnline()
-                        ? [
-                              {
-                                  icon: "plus" as const,
-                                  id: FOLDER_MENU_NEST,
-                                  kind: "item" as const,
-                                  label: "New folder inside…",
-                              },
-                              {
-                                  icon: "doc" as const,
-                                  id: FOLDER_MENU_DOCUMENT_CREATE,
-                                  kind: "item" as const,
-                                  label: "New document",
-                              },
-                              {
-                                  icon: "edit" as const,
-                                  id: FOLDER_MENU_EDIT,
-                                  kind: "item" as const,
-                                  label: "Rename and mark…",
-                              },
-                              { kind: "separator" as const },
-                              {
-                                  danger: true,
-                                  icon: "archive" as const,
-                                  id: FOLDER_MENU_ARCHIVE,
-                                  kind: "item" as const,
-                                  label: "Archive folder",
-                              },
-                          ]
-                        : [];
+                const menuFolderId = folderRowParse(item.id);
+                if (menuFolderId !== undefined) {
+                    if (!localRigOnline()) return [];
+                    const folder = folderFind(localFolders.folders, menuFolderId);
+                    if (!folder) return [];
+                    const insideSharedTree = sharedFolderIds(localFolders.folders).has(folder.id);
+                    const activeContactCount = localSharing.contacts.filter(
+                        (contact) => contact.status === "active",
+                    ).length;
+                    const shareLabel = folder.shared
+                        ? "Sharing details…"
+                        : folder.parentId !== undefined
+                          ? "Only root folders can be shared"
+                          : folderTreeHasContents(folder)
+                            ? "Move chats and links out to share"
+                            : activeContactCount === 0
+                              ? "Add a Murmur contact to share"
+                              : "Share folder…";
+                    const shareDisabled =
+                        !folder.shared &&
+                        (folder.parentId !== undefined ||
+                            folderTreeHasContents(folder) ||
+                            activeContactCount === 0);
+                    return [
+                        {
+                            icon: "plus",
+                            id: FOLDER_MENU_NEST,
+                            kind: "item",
+                            label: "New folder inside…",
+                        },
+                        ...(insideSharedTree
+                            ? []
+                            : [
+                                  {
+                                      icon: "doc" as const,
+                                      id: FOLDER_MENU_DOCUMENT_CREATE,
+                                      kind: "item" as const,
+                                      label: "New document",
+                                  },
+                              ]),
+                        { kind: "separator" },
+                        {
+                            icon: "edit",
+                            id: FOLDER_MENU_EDIT,
+                            kind: "item",
+                            label: "Rename and mark…",
+                        },
+                        {
+                            disabled: shareDisabled,
+                            icon: "link",
+                            id: FOLDER_MENU_SHARE,
+                            kind: "item",
+                            label: shareLabel,
+                        },
+                        ...(folder.shared
+                            ? []
+                            : [
+                                  { kind: "separator" as const },
+                                  {
+                                      danger: true,
+                                      icon: "archive" as const,
+                                      id: FOLDER_MENU_ARCHIVE,
+                                      kind: "item" as const,
+                                      label: "Archive folder",
+                                  },
+                              ]),
+                    ];
+                }
                 // A link row stands for the link, not for the project behind
                 // it, so the only act on it is removing the link. Renaming or
                 // archiving here would reach past the folder and change the
@@ -2378,9 +2381,12 @@ export function AppRigView(props: AppRigViewProps) {
                     // Folders belong to the host Rig, so only its own projects
                     // and workspaces can be put in one. The picker is a flat
                     // list of folders because the menu has no submenus, and it
-                    // is offered only when there is a folder to choose.
+                    // is offered only when there is a folder to choose and the
+                    // unfinished folder feature is enabled.
                     ...folderLinkMenuItems(
-                        rigItemParse(item.id).rigId === localRig?.id && localRigOnline()
+                        experimental &&
+                            rigItemParse(item.id).rigId === localRig?.id &&
+                            localRigOnline()
                             ? localFolders
                             : undefined,
                     ),
@@ -2405,15 +2411,6 @@ export function AppRigView(props: AppRigViewProps) {
                     if (localRigOnline()) localFoldersStore.folderCreateOpen();
                     return;
                 }
-                // Both of this block's controls open the same surface, because
-                // there is only one act it offers: the heading's plus and the
-                // button an empty block shows instead both open the dialog where
-                // a contact is made — and where one waiting to be answered is
-                // answered, which is the same place for the same reason.
-                if (sectionId === CONTACTS_SECTION) {
-                    if (localRigOnline()) localSharingStore.contactAddOpen();
-                    return;
-                }
                 const rig = rigOf(sectionId.slice("rig:".length));
                 if (rig?.status !== "connected") {
                     props.onSettingsOpen();
@@ -2431,20 +2428,14 @@ export function AppRigView(props: AppRigViewProps) {
                 workspace.projectCloneOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
-                const contactIdentity = contactRowParse(item.id);
-                if (contactIdentity !== undefined) {
-                    // Deliberately no confirmation. Removing a contact takes
-                    // away an ability rather than destroying anything, and the
-                    // relationship can be made again from either end.
-                    if (localRigOnline() && actionId === CONTACT_MENU_REMOVE)
-                        localSharingStore.contactRemove(contactIdentity);
-                    return;
-                }
                 const folderId = folderRowParse(item.id);
                 if (folderId !== undefined) {
                     if (!localRigOnline()) return;
+                    const currentFolder = folderFind(localFoldersStore.get().folders, folderId);
+                    if (!currentFolder) return;
                     if (actionId === FOLDER_MENU_NEST) localFoldersStore.folderCreateOpen(folderId);
                     else if (actionId === FOLDER_MENU_DOCUMENT_CREATE) {
+                        if (sharedFolderIds(localFoldersStore.get().folders).has(folderId)) return;
                         const documentId = localRig?.session?.documentCreate?.();
                         if (!documentId || !localRig) return;
                         void localFoldersStore.folderItemLink(folderId, {
@@ -2454,10 +2445,20 @@ export function AppRigView(props: AppRigViewProps) {
                         props.onDocumentOpen?.(localRig.id, documentId);
                     } else if (actionId === FOLDER_MENU_EDIT)
                         localFoldersStore.folderEditOpen(folderId);
+                    else if (
+                        actionId === FOLDER_MENU_SHARE &&
+                        (currentFolder.shared ||
+                            (currentFolder.parentId === undefined &&
+                                !folderTreeHasContents(currentFolder) &&
+                                localSharingStore
+                                    .get()
+                                    .contacts.some((contact) => contact.status === "active")))
+                    )
+                        localSharingStore.folderShareOpen(folderId);
                     // Deliberately no confirmation. A folder is now the chats'
                     // canonical scope, so archiving it also archives the chats
                     // contained by that branch.
-                    else if (actionId === FOLDER_MENU_ARCHIVE)
+                    else if (actionId === FOLDER_MENU_ARCHIVE && !currentFolder.shared)
                         void localFoldersStore.folderArchive(folderId);
                     return;
                 }
@@ -2480,8 +2481,12 @@ export function AppRigView(props: AppRigViewProps) {
                 // rather than from anything the addressed Rig is doing.
                 if (actionId.startsWith(FOLDER_LINK_MENU_PREFIX)) {
                     if (rig.id !== localRig?.id || !localRigOnline()) return;
+                    const destinationId = actionId.slice(
+                        FOLDER_LINK_MENU_PREFIX.length,
+                    ) as RigFolderId;
+                    if (sharedFolderIds(localFoldersStore.get().folders).has(destinationId)) return;
                     void localFoldersStore.folderItemLink(
-                        actionId.slice(FOLDER_LINK_MENU_PREFIX.length) as RigFolderId,
+                        destinationId,
                         owner.worktreeId
                             ? { kind: "workspace", workspaceId: owner.worktreeId }
                             : { kind: "project", projectId: owner.project.id },
@@ -2518,10 +2523,6 @@ export function AppRigView(props: AppRigViewProps) {
                     props.onBlueprintOpen?.();
                     return;
                 }
-                // A contact row names a person, not a place to work. There is
-                // nowhere to go yet, so selecting one does nothing rather than
-                // falling through and addressing a group by their identity.
-                if (contactRowParse(id) !== undefined) return;
                 // A link row opens what it points at, exactly as that thing's
                 // own row does. The link is where the reader found it, not a
                 // different place to be — so it resolves to the target's group
@@ -2636,6 +2637,7 @@ export function AppRigView(props: AppRigViewProps) {
                         const parent =
                             move.parentId === undefined ? undefined : folderRowParse(move.parentId);
                         if (parent === undefined) return;
+                        if (sharedFolderIds(localFoldersStore.get().folders).has(parent)) return;
                         void localFoldersStore.folderItemMove(
                             movedItem,
                             parent,
@@ -2647,6 +2649,12 @@ export function AppRigView(props: AppRigViewProps) {
                     }
                     const moved = folderRowParse(move.id);
                     if (moved === undefined || !localRigOnline()) return;
+                    const targetParent =
+                        move.parentId === undefined
+                            ? null
+                            : (folderRowParse(move.parentId) ?? null);
+                    const movedFolder = folderFind(localFoldersStore.get().folders, moved);
+                    if (!movedFolder || (movedFolder.shared && targetParent !== null)) return;
                     // The drop names where the folder landed, not an order key:
                     // the parent it was dragged inside — the root when it was
                     // dragged at the top level — and the sibling it now follows.
@@ -2654,9 +2662,7 @@ export function AppRigView(props: AppRigViewProps) {
                     // is predicted here and the moved tree arrives on the feed.
                     void localFoldersStore.folderMove(
                         moved,
-                        move.parentId === undefined
-                            ? null
-                            : (folderRowParse(move.parentId) ?? null),
+                        targetParent,
                         move.afterId === null
                             ? null
                             : (folderContentRowParse(move.afterId) ?? null),
@@ -2697,22 +2703,15 @@ export function AppRigView(props: AppRigViewProps) {
             // and project sections below, never this window-owned tree.
             sections={sectionsCollapsed(
                 [
-                    ...(localRig?.session?.folders
+                    ...(experimental && localRig?.session?.folders
                         ? foldersSection(
                               localRig.id,
                               localFolders,
                               localAvailability?.online === true,
                               localRig.projects,
                               localDocuments.titles,
+                              localSharing.folderShares,
                           )
-                        : []),
-                    // People, then machines. Contacts sit under the folders because
-                    // they belong to the reader's account rather than to any one
-                    // machine's work, and above the project sections because a
-                    // request waiting on an answer must not be pushed off the bottom
-                    // by however many projects happen to be open.
-                    ...(localRig?.session?.sharing
-                        ? contactsSection(localSharing, localAvailability?.online === true)
                         : []),
                     ...rigSections(
                         directory,
@@ -2873,7 +2872,7 @@ export function AppRigView(props: AppRigViewProps) {
                 The draft lives in the local folders store rather than here, so
                 an edit in flight survives the tree being republished — which
                 happens whenever any folder anywhere changes, not only this one. */}
-            {localFolders.editor ? (
+            {experimental && localFolders.editor ? (
                 <RigFolderDialog
                     mode={localFolders.editor.mode}
                     name={localFolders.editor.name}
@@ -2891,47 +2890,31 @@ export function AppRigView(props: AppRigViewProps) {
                         : { error: localFolders.editor.error })}
                 />
             ) : null}
-            {/* Making a contact, and answering someone who asked to be one.
-                Mounted here for the same reason the folder dialog is: the
-                sidebar is on every route, so the surface its heading opens has
-                to answer from every route too. The invitation and the pasted one
-                live in the sharing store rather than here, so neither is lost to
-                the Rig republishing its snapshot — which happens whenever any
-                contact or request anywhere changes, not only this one. */}
-            {localSharing.addOpen ? (
-                <RigContactDialog
-                    incoming={localSharing.incomingRequests.map((request) => ({
-                        id: request.id,
-                        identity: request.identity,
-                        answering: localSharing.answering.has(request.id),
-                        ...(request.profile === undefined
-                            ? {}
-                            : {
-                                  name: request.profile.name,
-                                  email: request.profile.email,
-                                  ...(request.profile.photo === undefined
-                                      ? {}
-                                      : { imageUrl: request.profile.photo.imageUrl }),
-                              }),
-                    }))}
-                    onClose={() => localSharingStore.contactAddClose()}
-                    onInvitationCreate={() => localSharingStore.invitationCreate()}
-                    onRequestAccept={(requestId) => localSharingStore.requestAccept(requestId)}
-                    onRequestReject={(requestId) => localSharingStore.requestReject(requestId)}
-                    onRequestSubmit={() => localSharingStore.requestSubmit()}
-                    onRequestValueChange={(value) =>
-                        localSharingStore.requestInvitationUpdate(value)
+            {/* A folder share belongs to the same window-owned tree and the
+                host's Murmur identity. The store keeps the selected contacts
+                and submission lifetime stable while either live feed changes
+                underneath it; the dialog only projects that one draft. */}
+            {experimental && folderShareDraft && folderShareFolder ? (
+                <RigFolderShareDialog
+                    contacts={folderShareContacts}
+                    folderName={folderShareFolder.name}
+                    onClose={() => localSharingStore.folderShareClose()}
+                    onSelectionChange={(identity) =>
+                        localSharingStore.folderShareContactToggle(identity)
                     }
-                    outgoing={localSharing.outgoingRequests}
-                    requesting={localSharing.request.submitting}
-                    requestValue={localSharing.request.invitation}
-                    creating={localSharing.creating}
-                    {...(localSharing.invitation === undefined
+                    onSubmit={() => localSharingStore.folderShareSubmit()}
+                    selectedContactIdentities={folderShareDraft.selectedContactIdentities}
+                    shared={folderShareShared}
+                    submitting={folderShareDraft.submitting}
+                    {...(folderShareStatus?.status === undefined
                         ? {}
-                        : { invitation: { invitation: localSharing.invitation.invitation } })}
-                    {...(localSharing.actionError === undefined
+                        : { status: folderShareStatus.status })}
+                    {...(folderShareStatus?.lastSyncedAt === undefined
                         ? {}
-                        : { error: localSharing.actionError })}
+                        : { lastSyncedAt: folderShareStatus.lastSyncedAt })}
+                    {...((folderShareStatus?.error ?? folderShareDraft.error) === undefined
+                        ? {}
+                        : { error: folderShareStatus?.error ?? folderShareDraft.error })}
                 />
             ) : null}
             {active?.session?.workspace ? (

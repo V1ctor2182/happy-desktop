@@ -1,6 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import type { UserError } from "../types.js";
 import { referencesPreserve, rigUserError } from "./rigSupport.js";
+import type { RigFolderId } from "./rigTypes.js";
 
 /**
  * The human behind a contact, as their own Rig published it.
@@ -45,6 +46,16 @@ export interface RigSharingOutgoingRequest {
 /** Where this Rig's sharing link stands with the network it publishes on. */
 export type RigSharingConnection = "connecting" | "connected" | "disconnected";
 
+/** One root folder's Murmur group and the latest sync state the Rig reported. */
+export interface RigFolderShare {
+    readonly groupId: string;
+    readonly rootFolderId: RigFolderId;
+    readonly members: readonly string[];
+    readonly status: "syncing" | "synced" | "error";
+    readonly lastSyncedAt?: number;
+    readonly error?: string;
+}
+
 /**
  * The authoritative sharing picture, exactly as the Rig reports it.
  *
@@ -60,6 +71,8 @@ export interface RigSharingReading {
     readonly contacts: readonly RigSharingContact[];
     readonly incomingRequests: readonly RigSharingIncomingRequest[];
     readonly outgoingRequests: readonly RigSharingOutgoingRequest[];
+    /** Shared roots and their live Murmur sync state. */
+    readonly folderShares: readonly RigFolderShare[];
 }
 
 /** An invitation this Rig made, for someone else to redeem. */
@@ -93,12 +106,24 @@ export interface RigSharingSource {
     requestAnswer(requestId: string, accept: boolean): Promise<RigSharingReading>;
     /** Ends the relationship with one contact. */
     contactRemove(identity: string): Promise<RigSharingReading>;
+    /** Creates one sharing group for a root folder and the selected contacts. */
+    folderShare(folderId: RigFolderId, contacts: readonly string[]): Promise<RigFolderShare>;
+    /** Replaces this Rig's Murmur identity and clears every local sharing relationship. */
+    reset(): Promise<RigSharingReading>;
 }
 
 /** The invitation being pasted in, and whether it has been sent yet. */
 export interface RigSharingRequestDraft {
     readonly invitation: string;
     readonly submitting: boolean;
+}
+
+/** The folder-sharing choice currently open in the window. */
+export interface RigFolderShareDraft {
+    readonly folderId: RigFolderId;
+    readonly selectedContactIdentities: readonly string[];
+    readonly submitting: boolean;
+    readonly error?: string;
 }
 
 export interface RigSharingSnapshot {
@@ -115,6 +140,8 @@ export interface RigSharingSnapshot {
     readonly contacts: readonly RigSharingContact[];
     readonly incomingRequests: readonly RigSharingIncomingRequest[];
     readonly outgoingRequests: readonly RigSharingOutgoingRequest[];
+    /** Shared roots and the latest status from their live sync feed. */
+    readonly folderShares: readonly RigFolderShare[];
     /** True while the add-a-contact surface is open. */
     readonly addOpen: boolean;
     /** The invitation this Rig made, once it has made one. */
@@ -125,10 +152,16 @@ export interface RigSharingSnapshot {
     readonly request: RigSharingRequestDraft;
     /** Requests currently being accepted or rejected, by request id. */
     readonly answering: ReadonlySet<string>;
+    /** The folder-sharing surface, when one is open. */
+    readonly folderShare?: RigFolderShareDraft;
     /** Why the feed itself failed, when it failed. */
     readonly error?: UserError;
     /** Why the last act was refused, in the Rig's own words. */
     readonly actionError?: string;
+    /** True while the destructive reset confirmation is shown. */
+    readonly resetConfirming: boolean;
+    /** True while Rig is replacing the Murmur state. */
+    readonly resetting: boolean;
 }
 
 export interface RigSharingStore {
@@ -153,6 +186,20 @@ export interface RigSharingStore {
     requestReject(requestId: string): void;
     /** Ends the relationship with one contact. */
     contactRemove(identity: string): void;
+    /** Opens the destructive Murmur reset confirmation. */
+    resetOpen(): void;
+    /** Closes the reset confirmation without changing Murmur. */
+    resetCancel(): void;
+    /** Clears Murmur's identity, contacts, requests, and folder shares. */
+    resetConfirm(): void;
+    /** Opens sharing for a folder, or its live details when it is already shared. */
+    folderShareOpen(folderId: RigFolderId): void;
+    /** Adds or removes one active contact from the new share. */
+    folderShareContactToggle(identity: string): void;
+    /** Creates the folder's Murmur group with the selected contacts. */
+    folderShareSubmit(): void;
+    /** Closes the folder-sharing surface. */
+    folderShareClose(): void;
     [Symbol.dispose](): void;
 }
 
@@ -183,10 +230,13 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
         contacts: [],
         incomingRequests: [],
         outgoingRequests: [],
+        folderShares: [],
         addOpen: false,
         creating: false,
         request: EMPTY_REQUEST,
         answering: NO_ANSWERING,
+        resetConfirming: false,
+        resetting: false,
     }));
 
     const listeners = new Set<() => void>();
@@ -204,6 +254,7 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
     const readingInput = (reading: RigSharingReading): void => {
         if (disposed) return;
         const current = store.getState();
+        if (current.resetting) return;
         const authoritativeOutgoingIds = new Set(
             reading.outgoingRequests.map((request) => request.id),
         );
@@ -231,6 +282,7 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
                 reading.incomingRequests,
             ),
             outgoingRequests: referencesPreserve(current.outgoingRequests, outgoingRequests),
+            folderShares: referencesPreserve(current.folderShares, reading.folderShares),
             error: undefined,
             ...(reading.profileId === undefined
                 ? { profileId: undefined }
@@ -402,6 +454,152 @@ export function rigSharingStoreCreate(deps: RigSharingStoreDeps): RigSharingStor
                 },
             );
         },
+        resetOpen() {
+            if (disposed) return;
+            const current = store.getState();
+            if (current.resetting) return;
+            store.setState({
+                ...current,
+                resetConfirming: true,
+                actionError: undefined,
+            });
+        },
+        resetCancel() {
+            if (disposed) return;
+            const current = store.getState();
+            if (current.resetting || !current.resetConfirming) return;
+            store.setState({ ...current, resetConfirming: false });
+        },
+        resetConfirm() {
+            if (disposed) return;
+            const previous = store.getState();
+            if (!previous.resetConfirming || previous.resetting) return;
+            const attempt = generation;
+            pendingOutgoing.clear();
+            store.setState({
+                ...previous,
+                connection: "connecting",
+                identity: undefined,
+                contacts: [],
+                incomingRequests: [],
+                outgoingRequests: [],
+                folderShares: [],
+                resetting: true,
+                actionError: undefined,
+            });
+            deps.source.reset().then(
+                (reading) => {
+                    if (disposed || attempt !== generation) return;
+                    store.setState({
+                        ...store.getState(),
+                        resetConfirming: false,
+                        resetting: false,
+                    });
+                    readingInput(reading);
+                },
+                (error: unknown) => {
+                    if (disposed || attempt !== generation) return;
+                    store.setState({
+                        ...previous,
+                        resetConfirming: false,
+                        resetting: false,
+                        actionError: rigUserError(error).message,
+                    });
+                },
+            );
+        },
+        folderShareOpen(folderId) {
+            if (disposed) return;
+            const current = store.getState();
+            const existing = current.folderShares.find((share) => share.rootFolderId === folderId);
+            store.setState({
+                ...current,
+                folderShare: {
+                    folderId,
+                    selectedContactIdentities:
+                        existing?.members.filter((identity) => identity !== current.identity) ?? [],
+                    submitting: false,
+                },
+            });
+        },
+        folderShareContactToggle(identity) {
+            if (disposed) return;
+            const current = store.getState();
+            const draft = current.folderShare;
+            if (!draft || draft.submitting) return;
+            if (
+                !current.contacts.some(
+                    (contact) => contact.identity === identity && contact.status === "active",
+                )
+            )
+                return;
+            const selected = new Set(draft.selectedContactIdentities);
+            if (selected.has(identity)) selected.delete(identity);
+            else selected.add(identity);
+            store.setState({
+                ...current,
+                folderShare: {
+                    ...draft,
+                    selectedContactIdentities: [...selected],
+                    error: undefined,
+                },
+            });
+        },
+        folderShareSubmit() {
+            if (disposed) return;
+            const current = store.getState();
+            const draft = current.folderShare;
+            if (
+                !draft ||
+                draft.submitting ||
+                draft.selectedContactIdentities.length === 0 ||
+                current.folderShares.some((share) => share.rootFolderId === draft.folderId)
+            )
+                return;
+            const attempt = generation;
+            const folderId = draft.folderId;
+            const contacts = [...draft.selectedContactIdentities];
+            store.setState({
+                ...current,
+                folderShare: { ...draft, submitting: true, error: undefined },
+            });
+            deps.source.folderShare(folderId, contacts).then(
+                (folderShare) => {
+                    if (disposed || attempt !== generation) return;
+                    const next = store.getState();
+                    if (next.folderShare?.folderId !== folderId) return;
+                    const folderShares = next.folderShares.some(
+                        (share) => share.rootFolderId === folderShare.rootFolderId,
+                    )
+                        ? next.folderShares.map((share) =>
+                              share.rootFolderId === folderShare.rootFolderId ? folderShare : share,
+                          )
+                        : [...next.folderShares, folderShare];
+                    store.setState({
+                        ...next,
+                        folderShares,
+                        folderShare: { ...next.folderShare, submitting: false },
+                    });
+                },
+                (error: unknown) => {
+                    if (disposed || attempt !== generation) return;
+                    const next = store.getState();
+                    if (next.folderShare?.folderId !== folderId) return;
+                    store.setState({
+                        ...next,
+                        folderShare: {
+                            ...next.folderShare,
+                            submitting: false,
+                            error: rigUserError(error).message,
+                        },
+                    });
+                },
+            );
+        },
+        folderShareClose() {
+            if (disposed || store.getState().folderShare === undefined) return;
+            store.setState({ ...store.getState(), folderShare: undefined });
+        },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
@@ -442,10 +640,13 @@ const NO_SHARING: RigSharingSnapshot = {
     contacts: [],
     incomingRequests: [],
     outgoingRequests: [],
+    folderShares: [],
     addOpen: false,
     creating: false,
     request: EMPTY_REQUEST,
     answering: NO_ANSWERING,
+    resetConfirming: false,
+    resetting: false,
 };
 
 export const rigSharingStoreNoop: RigSharingStore = {
@@ -459,5 +660,12 @@ export const rigSharingStoreNoop: RigSharingStore = {
     requestAccept: () => undefined,
     requestReject: () => undefined,
     contactRemove: () => undefined,
+    resetOpen: () => undefined,
+    resetCancel: () => undefined,
+    resetConfirm: () => undefined,
+    folderShareOpen: () => undefined,
+    folderShareContactToggle: () => undefined,
+    folderShareSubmit: () => undefined,
+    folderShareClose: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

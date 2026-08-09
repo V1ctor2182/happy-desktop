@@ -155,11 +155,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@slopus/rig':
-        specifier: 0.1.3
-        version: 0.1.3(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
+        specifier: 0.2.0
+        version: 0.2.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@slopus/rig-connect':
-        specifier: 0.1.15
-        version: 0.1.15
+        specifier: 0.1.16
+        version: 0.1.16
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -2515,16 +2515,20 @@ packages:
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
 
-  '@slopus/murmur@0.4.1':
-    resolution: {integrity: sha512-hBVbAcBN4baaUH8smxQ88QxIP9N0Ph75Aw2Fs5Um4sulFhF9Z6oOA2V9Nf6NpeYXIkF97CByQdwMeybKTwPBBw==}
+  '@slopus/murmur@0.4.2':
+    resolution: {integrity: sha512-5ipSC6gS4CGZajgJK1eGOyCxDl1aE8FmabNdGEnWWMdkC0YJUbg82umqlH8eSnuPaqv1T5qyVHjJCdBzYAEISg==}
     engines: {node: '>=20'}
 
   '@slopus/rig-connect@0.1.15':
     resolution: {integrity: sha512-TN8DXQZlGepktQNHT+0MQjFMr23pHmYoZ+l1itdz6LXDBYv/YUMqxXPdKeHoqD7u4BIGZri4rhafOndIxefUEA==}
     engines: {node: '>=20'}
 
-  '@slopus/rig@0.1.3':
-    resolution: {integrity: sha512-VYr9JXIsE8k8poan6iG3Bl55MLILrNfdOoZQStA6ZTmqWFXGn49Ox9Cnzn/4e+BLRqaQiQfKMjIZtGrBzkusCA==}
+  '@slopus/rig-connect@0.1.16':
+    resolution: {integrity: sha512-nKCTNQKb+0rDdL3j/XUNnMt8FjJfOxQYV/3ZlCVhNOKV1uQOPqwN8GC8KGZyfSzHILbVf/ABTHR0GFRm1zQVGQ==}
+    engines: {node: '>=20'}
+
+  '@slopus/rig@0.2.0':
+    resolution: {integrity: sha512-Y6gl9jYCPs2MBIOnMfKyqqYNo0gZT6yr+sJkkp7bB+vehTyrS8C/cgf21o/j4hPkGhC/zKXHB5MDHeM9BsMT2w==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -8447,7 +8451,7 @@ snapshots:
 
   '@slopus/ghostty-web@0.1.0': {}
 
-  '@slopus/murmur@0.4.1':
+  '@slopus/murmur@0.4.2':
     dependencies:
       '@noble/ciphers': 1.3.0
       '@noble/curves': 1.9.7
@@ -8457,7 +8461,11 @@ snapshots:
     dependencies:
       '@sinclair/typebox': 0.34.52
 
-  '@slopus/rig@0.1.3(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
+  '@slopus/rig-connect@0.1.16':
+    dependencies:
+      '@sinclair/typebox': 0.34.52
+
+  '@slopus/rig@0.2.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)':
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.226(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0)(zod@4.4.3)
       '@anthropic-ai/sandbox-runtime': 0.0.64
@@ -8474,7 +8482,7 @@ snapshots:
       '@pydantic/monty': 0.0.18(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
       '@sinclair/typebox': 0.34.52
       '@slopus/ghostty-wasm': 1.3.6
-      '@slopus/murmur': 0.4.1
+      '@slopus/murmur': 0.4.2
       '@types/node': 24.13.3
       '@vscode/ripgrep': 1.18.0
       better-sqlite3: 13.0.3

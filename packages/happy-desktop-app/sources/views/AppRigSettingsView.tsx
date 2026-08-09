@@ -11,6 +11,8 @@ import type {
     RigModelKey,
     RigPermissionMode,
     RigProfilesStore,
+    RigSharingSnapshot,
+    RigSharingStore,
     RigSettingsSnapshot,
     RigSecretsStore,
     RigSettingsStore,
@@ -31,6 +33,7 @@ import {
     rigProfilesStoreNoop,
     rigProviderUsageStoreNoop,
     rigSecretsStoreNoop,
+    rigSharingStoreNoop,
     rigWindowStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -38,8 +41,10 @@ import {
     RigGeneralSettings,
     RigDebugSettings,
     RigInstructionsSettings,
+    RigMurmurSettings,
     RigNodeSettings,
     RigPairing,
+    RigContactDialog,
     RigProviderSettings,
     RigProfilesSettings,
     RigSecretsSettings,
@@ -61,6 +66,7 @@ export const RIG_SETTINGS_CATEGORIES: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "users", id: "profiles", label: "Profiles" },
+    { icon: "link", id: "murmur", label: "Murmur" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
@@ -112,6 +118,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Start, stop, and copy live debugger endpoints for Happy and Rig",
     general: "How this window looks and what a new session starts with",
     profiles: "Who this host says is sending work to another Rig",
+    murmur: "Trusted contacts and the network used to share folders",
     instructions: "Machine-wide agent guidance and permission-review policy",
     nodes: "Machines this Rig is peered with, and how it reaches them",
     providers: "Every model provider this Rig daemon knows about",
@@ -213,6 +220,16 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
         profilesStore.subscribe,
         profilesStore.get,
         profilesStore.get,
+    );
+    // Murmur is a settings surface now, so its live feed starts only while that
+    // category is open. The same session-owned store also backs folder sharing
+    // in the workspace; this route creates no second contact state.
+    const sharingStore =
+        (props.section === "murmur" ? host?.session?.sharing : undefined) ?? rigSharingStoreNoop;
+    const sharing = useSyncExternalStore(
+        sharingStore.subscribe,
+        sharingStore.get,
+        sharingStore.get,
     );
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
@@ -338,6 +355,62 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     {...(profiles.actionError ? { actionError: profiles.actionError } : {})}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />
+            ) : props.section === "murmur" ? (
+                <>
+                    <RigMurmurSettings
+                        connection={sharing.connection}
+                        contacts={sharing.contacts.map((contact) => ({
+                            identity: contact.identity,
+                            name: contact.profile?.name ?? contact.identity,
+                            removing: contact.status === "removing",
+                            ...(contact.profile?.email === undefined
+                                ? {}
+                                : { email: contact.profile.email }),
+                            ...(contact.profile?.photo === undefined
+                                ? {}
+                                : { imageUrl: contact.profile.photo.imageUrl }),
+                        }))}
+                        enabled={sharing.profileId !== undefined}
+                        incomingRequests={sharing.incomingRequests.map((request) => ({
+                            id: request.id,
+                            identity: request.identity,
+                            name: request.profile?.name ?? request.identity,
+                            answering: sharing.answering.has(request.id),
+                            ...(request.profile?.email === undefined
+                                ? {}
+                                : { email: request.profile.email }),
+                            ...(request.profile?.photo === undefined
+                                ? {}
+                                : { imageUrl: request.profile.photo.imageUrl }),
+                        }))}
+                        loading={sharing.loading}
+                        onAddContact={() => sharingStore.contactAddOpen()}
+                        onContactRemove={(identity) => {
+                            if (rigOnline()) sharingStore.contactRemove(identity);
+                        }}
+                        onRequestAccept={(requestId) => {
+                            if (rigOnline()) sharingStore.requestAccept(requestId);
+                        }}
+                        onRequestReject={(requestId) => {
+                            if (rigOnline()) sharingStore.requestReject(requestId);
+                        }}
+                        onResetCancel={() => sharingStore.resetCancel()}
+                        onResetConfirm={() => {
+                            if (rigOnline()) sharingStore.resetConfirm();
+                        }}
+                        onResetOpen={() => sharingStore.resetOpen()}
+                        outgoingRequests={sharing.outgoingRequests}
+                        resetConfirming={sharing.resetConfirming}
+                        resetting={sharing.resetting}
+                        {...(sharing.identity === undefined ? {} : { identity: sharing.identity })}
+                        {...(sharing.error === undefined ? {} : { error: sharing.error.message })}
+                        {...(sharing.actionError === undefined
+                            ? {}
+                            : { actionError: sharing.actionError })}
+                        {...(unavailable === undefined ? {} : { unavailable })}
+                    />
+                    {sharing.addOpen ? contactDialog(sharing, sharingStore) : null}
+                </>
             ) : props.section === "instructions" ? (
                 <RigInstructionsSettings
                     documents={[
@@ -538,6 +611,42 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                 />
             )}
         </RigSettingsShell>
+    );
+}
+
+/** The existing two-way Murmur handshake dialog, bound to the settings store. */
+function contactDialog(sharing: RigSharingSnapshot, store: RigSharingStore) {
+    return (
+        <RigContactDialog
+            creating={sharing.creating}
+            incoming={sharing.incomingRequests.map((request) => ({
+                id: request.id,
+                identity: request.identity,
+                answering: sharing.answering.has(request.id),
+                ...(request.profile === undefined
+                    ? {}
+                    : {
+                          name: request.profile.name,
+                          email: request.profile.email,
+                          ...(request.profile.photo === undefined
+                              ? {}
+                              : { imageUrl: request.profile.photo.imageUrl }),
+                      }),
+            }))}
+            onClose={() => store.contactAddClose()}
+            onInvitationCreate={() => store.invitationCreate()}
+            onRequestAccept={(requestId) => store.requestAccept(requestId)}
+            onRequestReject={(requestId) => store.requestReject(requestId)}
+            onRequestSubmit={() => store.requestSubmit()}
+            onRequestValueChange={(value) => store.requestInvitationUpdate(value)}
+            outgoing={sharing.outgoingRequests}
+            requesting={sharing.request.submitting}
+            requestValue={sharing.request.invitation}
+            {...(sharing.invitation === undefined
+                ? {}
+                : { invitation: { invitation: sharing.invitation.invitation } })}
+            {...(sharing.actionError === undefined ? {} : { error: sharing.actionError })}
+        />
     );
 }
 

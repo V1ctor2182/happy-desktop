@@ -1,0 +1,104 @@
+/*
+ * C-262 RigFolderShareDialog — one focused contact choice and the live state of
+ * the sharing group it creates.
+ */
+
+.happy2-rig-folder-share-dialog,
+.happy2-rig-folder-share-dialog * {
+    box-sizing: border-box;
+}
+
+.happy2-rig-folder-share-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.happy2-rig-folder-share-dialog__intro {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy2-rig-folder-share-dialog__section,
+.happy2-rig-folder-share-dialog__contacts {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy2-rig-folder-share-dialog__section {
+    gap: 8px;
+}
+
+.happy2-rig-folder-share-dialog__contacts {
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-card);
+    background: var(--surface);
+}
+
+.happy2-rig-folder-share-dialog__section-title {
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.happy2-rig-folder-share-dialog__contact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 10px 12px;
+}
+
+.happy2-rig-folder-share-dialog__contact + .happy2-rig-folder-share-dialog__contact {
+    border-top: 1px solid var(--divider);
+}
+
+.happy2-rig-folder-share-dialog__contact-who {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy2-rig-folder-share-dialog__contact-name,
+.happy2-rig-folder-share-dialog__contact-detail {
+    overflow: hidden;
+    font-family: var(--happy2-font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-folder-share-dialog__contact-name {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy2-rig-folder-share-dialog__contact-detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy2-rig-folder-share-dialog__empty {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px;
+    border: 1px dashed var(--divider);
+    border-radius: var(--happy2-radius-card);
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 12px;
+    line-height: 18px;
+}

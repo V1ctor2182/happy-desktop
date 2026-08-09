@@ -3,6 +3,7 @@ import {
     RigDebugSettings,
     RigGeneralSettings,
     RigInstructionsSettings,
+    RigMurmurSettings,
     RigNodeSettings,
     RigPairing,
     RigProviderSettings,
@@ -25,6 +26,7 @@ const categories: readonly RigSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
     { icon: "code", id: "debug", label: "Dev Tools" },
     { icon: "doc", id: "instructions", label: "Instructions" },
+    { icon: "link", id: "murmur", label: "Murmur" },
     { icon: "link", id: "nodes", label: "Nodes" },
     { icon: "globe", id: "providers", label: "Providers" },
     { icon: "lock", id: "secrets", label: "Secrets" },
@@ -296,6 +298,19 @@ const secretEditorCreate: RigSecretEditor = {
     onSave: noop,
     onCancel: noop,
 };
+
+const murmurContacts = [
+    {
+        email: "kirill@example.com",
+        identity: "murmur:kirill:7f3ba91d",
+        name: "Kirill",
+    },
+    {
+        email: "maya@example.com",
+        identity: "murmur:maya:12c6d880",
+        name: "Maya Chen",
+    },
+];
 
 export function RigSettingsBlueprintPage() {
     return (
@@ -892,6 +907,48 @@ export function RigSettingsBlueprintPage() {
                         onSecretRemoveStart={noop}
                         secrets={[]}
                         unavailable="This window is not connected to a Rig on this machine."
+                    />
+                </RigSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Murmur owns trusted contacts and both sides of a pending handshake in Settings, while its network status remains informative rather than disabling queueable actions"
+                label="Rig settings — Murmur contacts"
+                number="10"
+            >
+                <RigSettingsShell
+                    activeCategoryId="murmur"
+                    categories={categories}
+                    description="Trusted contacts and the network used to share folders"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Murmur"
+                >
+                    <RigMurmurSettings
+                        connection="connected"
+                        contacts={murmurContacts}
+                        enabled
+                        identity="murmur:steve:95d2e1af"
+                        incomingRequests={[
+                            {
+                                email: "noah@example.com",
+                                id: "request-noah",
+                                identity: "murmur:noah:ce0874a1",
+                                name: "Noah Patel",
+                            },
+                        ]}
+                        onAddContact={noop}
+                        onContactRemove={noop}
+                        onRequestAccept={noop}
+                        onRequestReject={noop}
+                        onResetCancel={noop}
+                        onResetConfirm={noop}
+                        onResetOpen={noop}
+                        outgoingRequests={[
+                            {
+                                id: "request-rina",
+                                identity: "murmur:rina:a316dfb0",
+                            },
+                        ]}
                     />
                 </RigSettingsShell>
             </FullScreenSpecimen>
