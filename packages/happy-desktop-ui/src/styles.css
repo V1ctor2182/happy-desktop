@@ -11,6 +11,7 @@
 @import "./styles/rail.css";
 @import "./styles/sidebar.css";
 @import "./styles/sidebar-nodes.css";
+@import "./styles/sidebar-spaces.css";
 @import "./styles/app-shell.css";
 @import "./styles/channel-header.css";
 @import "./styles/message.css";

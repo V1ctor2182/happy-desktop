@@ -193,6 +193,13 @@ export {
 } from "./Sidebar";
 export { SidebarNodes, type SidebarNode, type SidebarNodesProps } from "./SidebarNodes";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
+export {
+    SIDEBAR_SPACES_BAR_HEIGHT,
+    SIDEBAR_SPACES_DOT_SIZE,
+    SidebarSpaces,
+    type SidebarSpace,
+    type SidebarSpacesProps,
+} from "./SidebarSpaces";
 export { SidebarUpdateAction, type SidebarUpdateActionProps } from "./SidebarUpdateAction";
 export {
     DesktopStartupScreen,
