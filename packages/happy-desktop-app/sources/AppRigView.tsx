@@ -5004,7 +5004,6 @@ function RigConversationSurface(props: {
             activityTreatment="focused"
             motion="calm-typed"
             running={conversation.running}
-            streamingCaret
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
