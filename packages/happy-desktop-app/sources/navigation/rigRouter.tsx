@@ -18,6 +18,7 @@ import type {
     RigDocumentId,
     RigGroupId,
     RigNavigationOrderStore,
+    RigSidebarCollapseStore,
     RigSessionId,
     RigSessionLocation,
     RigSettingsStore,
@@ -73,6 +74,11 @@ export interface RigRouterContext {
      * the rows in the order the window offers them.
      */
     readonly navigationOrder?: RigNavigationOrderStore;
+    /**
+     * Where this window remembers which sidebar rows the reader folded shut.
+     * Absent in a host that keeps no such record, which leaves every row open.
+     */
+    readonly sidebarCollapse?: RigSidebarCollapseStore;
     /**
      * Whether this window offers the features that are not finished yet. Absent
      * in a host that remembers no such choice, which withholds them.
@@ -319,6 +325,7 @@ function RigWorkspaceLayout(
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
+            {...(context.sidebarCollapse ? { sidebarCollapse: context.sidebarCollapse } : {})}
             inboxOpen={props.inbox}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the

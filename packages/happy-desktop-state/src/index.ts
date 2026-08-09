@@ -44,6 +44,7 @@ export * from "./rig/rigSecurityPolicyStore.js";
 export * from "./rig/rigSessionListStore.js";
 export * from "./rig/rigSettingsStore.js";
 export * from "./rig/rigSharingStore.js";
+export * from "./rig/rigSidebarCollapseStore.js";
 export * from "./rig/rigSlotsStore.js";
 export * from "./rig/rigSupport.js";
 export * from "./rig/rigTerminalStore.js";

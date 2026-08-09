@@ -657,6 +657,64 @@
     line-height: 16px;
 }
 
+/*
+ * The fold, stacked over the row's own mark in the leading lane rather than
+ * given a lane of its own: the rows here are already a tree hanging off that
+ * lane, and a column of twisties beside it would indent every row in the window
+ * to make room for a control most rows do not have. Stacking also means reaching
+ * for it never resizes or reflows the row — the chevron simply appears where the
+ * avatar was.
+ *
+ * The two are never drawn at once. Rather than covering the mark with an opaque
+ * patch — which has to name the row's background, and so shows as a square of
+ * the wrong colour on exactly the hovered and selected rows where it appears —
+ * the mark is faded out underneath as the chevron comes up. Nothing here paints
+ * a surface, so a fold cannot disagree with the row it sits on.
+ */
+.happy2-sidebar__item-fold {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    opacity: 0;
+    cursor: pointer;
+}
+
+/*
+ * A row that is shut keeps its chevron showing. The reader has to be able to
+ * find the work they folded away by looking down the column, rather than
+ * sweeping it to see which rows answer — and a project that has quietly hidden
+ * its checkouts while looking exactly like one with none is the whole failure
+ * this control could have.
+ */
+.happy2-sidebar__item:hover .happy2-sidebar__item-fold,
+.happy2-sidebar__item:focus-visible .happy2-sidebar__item-fold,
+.happy2-sidebar__item[data-collapsed] .happy2-sidebar__item-fold {
+    opacity: 1;
+}
+
+/* The mark steps aside for exactly as long as the chevron is up. The unread dot
+   is not part of the mark and keeps its place: whether a row has activity in it
+   is not something reaching for the fold should take away. */
+.happy2-sidebar__item[data-foldable]:hover
+    .happy2-sidebar__item-leading
+    > :not(.happy2-sidebar__item-fold):not(.happy2-sidebar__item-leading-unread),
+.happy2-sidebar__item[data-foldable]:focus-visible
+    .happy2-sidebar__item-leading
+    > :not(.happy2-sidebar__item-fold):not(.happy2-sidebar__item-leading-unread),
+.happy2-sidebar__item[data-collapsed]
+    .happy2-sidebar__item-leading
+    > :not(.happy2-sidebar__item-fold):not(.happy2-sidebar__item-leading-unread) {
+    opacity: 0;
+}
+
+.happy2-sidebar__item[data-active] .happy2-sidebar__item-fold,
+.happy2-sidebar__item-fold:hover {
+    color: var(--text);
+}
+
 .happy2-sidebar__item-leading-unread {
     position: absolute;
     top: 1px;

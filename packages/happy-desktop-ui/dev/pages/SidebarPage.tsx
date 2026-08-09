@@ -534,6 +534,46 @@ function ReorderDemo() {
     );
 }
 
+/**
+ * Folding, over the same nested tree the reorder specimen uses, so a row that
+ * folds is seen to be an ordinary row of the list rather than a shape of its
+ * own — and so a fold and a drag are reviewed against one another.
+ *
+ * The folded rows are held here exactly as a product store holds them: the
+ * sidebar is told which rows are shut and reports a press, and never decides for
+ * itself what is open. A folder folded away takes the folders inside it with it,
+ * which is why the tree is three levels deep and why one row starts shut.
+ */
+function FoldDemo() {
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set(["chan-four"]));
+    const rows = reorderItems(REORDER_TREE);
+    const items = rows.map((item, index) =>
+        collapsed.has(item.id) && (rows[index + 1]?.depth ?? 0) > (item.depth ?? 0)
+            ? { ...item, collapsed: true }
+            : item,
+    );
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Frame height={420}>
+                <Sidebar
+                    activeItemId="chan-one"
+                    onItemCollapseToggle={(id) => {
+                        setCollapsed((current) => {
+                            const next = new Set(current);
+                            if (!next.delete(id)) next.add(id);
+                            return next;
+                        });
+                    }}
+                    onItemSelect={() => {}}
+                    sections={[{ id: "channels", items, label: "Channels" }]}
+                    title="Fold"
+                />
+            </Frame>
+            <DimensionRule label="chevron 12px over the 20px leading lane · row 32 px unchanged · a shut row keeps its chevron showing" />
+        </div>
+    );
+}
+
 const PINNED_ROWS: SidebarItem[] = [
     { icon: "doc", id: "notes", kind: "action", label: "Notes" },
     { badge: 3, icon: "bell", id: "inbox", kind: "action", label: "Inbox" },
@@ -897,9 +937,18 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
+                detail="A row with anything nested under it folds from the chevron stacked over its own mark, so no lane is taken from every row in the window for a control most rows do not have. A shut row keeps its chevron showing — work folded away has to be findable by looking down the column. A fold takes the whole tree beneath it, and the rows it hides can be neither dragged past nor counted as anyone's neighbour."
+                label="Fold a row"
+                number="02c"
+                stage="app"
+            >
+                <FoldDemo />
+            </Specimen>
+
+            <Specimen
                 detail="The pinned rows above the projects arrange the same way, by drag or by ⌥↑ / ⌥↓ on the focused row. A move is announced to a screen reader, the badge and the row's identity travel with it, and the click the browser fires on release does not open what was dragged."
                 label="Arrange the pinned rows"
-                number="02c"
+                number="02d"
                 stage="app"
             >
                 <PinnedReorderDemo />
@@ -908,7 +957,7 @@ export function SidebarPage() {
             <Specimen
                 detail="A heading control the section exists to offer stands without hover (reveal: always), spins in place while its act runs, and refuses a second press. A refusal is said under the heading in the reader's terms, because the thing it would have added never came into being and has no row to fail on."
                 label="Section heading action — resting, pending, refused"
-                number="02d"
+                number="02e"
                 stage="app"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>

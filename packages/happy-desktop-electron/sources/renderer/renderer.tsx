@@ -17,11 +17,13 @@ import {
     titleShimmerStoreCreate,
     welcomeStoreCreate,
     rigNavigationOrderStoreCreate,
+    rigSidebarCollapseStoreCreate,
     rigSettingsStoreCreate,
     type AppearanceStore,
     type ExperimentsStore,
     type WelcomeStore,
     type RigNavigationOrderStore,
+    type RigSidebarCollapseStore,
     type RigSettingsStore,
     type TitleShimmerStore,
     type RigWindowStore,
@@ -68,6 +70,7 @@ import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
+import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { desktopTitleShimmerPersistence } from "./desktopTitleShimmer";
 import { DesktopBootGate } from "./DesktopBootGate";
 import {
@@ -204,6 +207,7 @@ function RigBoundary(props: {
     platform: "desktop" | "web";
     router: RigRouter;
     navigationOrder: RigNavigationOrderStore;
+    sidebarCollapse: RigSidebarCollapseStore;
     rigs: RigDirectoryStore;
     settings: RigSettingsStore;
     titleShimmer: TitleShimmerStore;
@@ -233,6 +237,7 @@ function RigBoundary(props: {
                     : {}),
                 experiments: props.experiments,
                 navigationOrder: props.navigationOrder,
+                sidebarCollapse: props.sidebarCollapse,
                 platform: props.platform,
                 rigs: props.rigs,
                 settings: props.settings,
@@ -366,6 +371,7 @@ interface DesktopRendererProps {
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
     navigationOrder: RigNavigationOrderStore;
+    sidebarCollapse: RigSidebarCollapseStore;
     platform: "desktop" | "web";
     rigRouter: RigRouter;
     rigs: RigDirectoryStore;
@@ -577,6 +583,7 @@ function DesktopRuntimeContent(
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
             navigationOrder={props.navigationOrder}
+            sidebarCollapse={props.sidebarCollapse}
             platform={props.platform}
             router={props.rigRouter}
             rigs={props.rigs}
@@ -635,6 +642,10 @@ if (mediaPreviewBridge) {
         // Those rows are window chrome whether or not any machine is reachable,
         // so the arrangement must outlive every connection this window makes.
         const navigationOrder = rigNavigationOrderStoreCreate(desktopNavigationOrderPersistence());
+        // Which projects and folders the reader folded shut, kept beside that
+        // arrangement and for the same reason: a fold is about this window's
+        // sidebar, so no machine coming or going may undo it.
+        const sidebarCollapse = rigSidebarCollapseStoreCreate(desktopSidebarCollapsePersistence());
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
@@ -690,6 +701,7 @@ if (mediaPreviewBridge) {
                         }
                         experiments={experiments}
                         navigationOrder={navigationOrder}
+                        sidebarCollapse={sidebarCollapse}
                         // Only the Electron window hides its title bar; the browser
                         // development server renders the same tree with web chrome.
                         platform={browserLocal ? "web" : "desktop"}

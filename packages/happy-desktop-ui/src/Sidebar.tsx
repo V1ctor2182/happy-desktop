@@ -38,6 +38,17 @@ export type SidebarItem = {
         added: number;
         deleted: number;
     };
+    /**
+     * Whether the rows nested under this one are folded away, for a row that can
+     * be folded at all. Absent means the row is not one of those: a row with no
+     * children, or one whose caller keeps no record of what is folded, is stated
+     * without it and offers no control.
+     *
+     * The rows themselves are still given in `items`; the sidebar draws only the
+     * ones a fold leaves visible. A caller states the tree it has and says which
+     * rows are shut, rather than working out which of its own rows to withhold.
+     */
+    collapsed?: boolean;
     /** Nesting level. `0`/absent is top level; each level adds `SIDEBAR_ROW_INDENT` of left inset. */
     depth?: number;
     /**
@@ -242,6 +253,17 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      */
     onItemReorder?: (sectionId: string, move: SidebarReorder) => void;
     /**
+     * Invoked by a foldable row's disclosure control, with the row that was
+     * folded or unfolded. Whether it is now open is the caller's to record and
+     * to say back through `collapsed`, so the sidebar never holds an opinion
+     * about the tree that outlives one render.
+     *
+     * Without it no row discloses, whatever it says about being collapsed: a
+     * control that folds a row a caller cannot remember folding is a control
+     * that undoes itself on the next update.
+     */
+    onItemCollapseToggle?: (id: string) => void;
+    /**
      * Invoked by a section's heading control or by the button in its empty
      * state. The two are reported apart because they are different acts on the
      * same section — adding something to it, and the one act an empty section
@@ -275,6 +297,49 @@ function showsLeadingSlot(item: SidebarItem): boolean {
     if (item.kind === "person" || item.kind === "agent" || item.kind === "project") return true;
     return item.icon !== undefined || item.emoji !== undefined;
 }
+/** One row as it is drawn: the row itself, and whether it has a tree to fold. */
+interface SidebarVisibleRow {
+    readonly item: SidebarItem;
+    /** True when rows are nested under this one, whether or not they show now. */
+    readonly foldable: boolean;
+}
+
+/**
+ * The rows a section actually shows: every row, less the ones nested under a
+ * row that is folded shut, each carrying whether it has anything to fold.
+ *
+ * Both answers come from one pass over the stated rows, because both are about
+ * the same thing — what is nested under what — and a folded row's children have
+ * to be counted before they are dropped. Asking the drawn list whether a row has
+ * children would say no about every row that is shut, which is exactly the row
+ * whose control has to be there.
+ *
+ * A fold takes the whole tree beneath it, not one level: a folder folded away
+ * takes the folders inside it with it whatever those said about themselves, so a
+ * row reopened later is found as it was left rather than having quietly unfolded
+ * while nobody could see it.
+ *
+ * Everything downstream — the tree connectors, the drag units, the keyboard
+ * moves — reads the rows this returns, so a fold is one filter at the top rather
+ * than a condition each of them has to remember.
+ */
+function visibleRows(items: readonly SidebarItem[]): readonly SidebarVisibleRow[] {
+    const rows: SidebarVisibleRow[] = [];
+    // The depth a row must be shallower than to be shown again, once a folded
+    // row has been passed. Nothing is hidden until one is.
+    let hiddenBelow: number | undefined;
+    for (const [index, item] of items.entries()) {
+        const depth = item.depth ?? 0;
+        if (hiddenBelow !== undefined) {
+            if (depth >= hiddenBelow) continue;
+            hiddenBelow = undefined;
+        }
+        rows.push({ foldable: (items[index + 1]?.depth ?? 0) > depth, item });
+        if (item.collapsed === true) hiddenBelow = depth + 1;
+    }
+    return rows;
+}
+
 /** `true` when no later sibling sits at this row's depth before the group closes. */
 function isLastAtDepth(items: readonly SidebarItem[], index: number): boolean {
     const depth = items[index]!.depth ?? 0;
@@ -524,6 +589,8 @@ function SidebarRow({
     onAction?: () => void;
     /** Invoked by the control left of it; absent when the row offers no second one. */
     onSecondaryAction?: () => void;
+    /** Folds or unfolds this row; absent when the row has nothing to fold. */
+    onCollapseToggle?: () => void;
     onSelect: (id: string) => void;
     /** The row can be arranged, which is what the keyboard shortcut is offered for. */
     reorderable?: boolean;
@@ -644,10 +711,16 @@ function SidebarRow({
     return (
         <button
             aria-current={props.active ? "page" : undefined}
+            aria-expanded={props.onCollapseToggle ? item().collapsed !== true : undefined}
             aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
             className={["happy2-sidebar__item", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-archived={item().archived ? "" : undefined}
+            /* Both are needed and neither implies the other: a row that folds is
+               styled as one whether it is open or shut, and a row still says it
+               is shut while the pointer is elsewhere. */
+            data-collapsed={props.onCollapseToggle && item().collapsed ? "" : undefined}
+            data-foldable={props.onCollapseToggle ? "" : undefined}
             data-depth={depth() > 0 ? String(depth()) : undefined}
             data-item-id={item().id}
             data-kind={item().kind}
@@ -686,7 +759,7 @@ function SidebarRow({
                     data-happy-desktop-ui="sidebar-item-branch"
                 />
             ) : null}
-            {showsLeadingSlot(item()) ? (
+            {showsLeadingSlot(item()) || props.onCollapseToggle ? (
                 <span
                     className="happy2-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
@@ -695,10 +768,15 @@ function SidebarRow({
                         trailing edge instead, so a busy row still shows the face
                         or glyph the reader picks it out by — a column of
                         spinners where the avatars were is a column with nothing
-                        left to aim at. */}
-                    {item().kind === "person" ||
-                    item().kind === "agent" ||
-                    item().kind === "project" ? (
+                        left to aim at.
+
+                        A nested row that shows no mark of its own keeps showing
+                        none when it folds: the branch line beside it already says
+                        what it is, and opening the lane for the chevron must not
+                        put back the glyph that line replaced. */}
+                    {!showsLeadingSlot(item()) ? null : item().kind === "person" ||
+                      item().kind === "agent" ||
+                      item().kind === "project" ? (
                         <Avatar
                             icon={item().icon}
                             imageUrl={item().imageUrl}
@@ -738,6 +816,36 @@ function SidebarRow({
                             className="happy2-sidebar__item-leading-unread"
                             data-happy-desktop-ui="sidebar-item-leading-unread"
                         />
+                    ) : null}
+                    {/* The fold, in the lane the row's own mark occupies rather
+                        than in one of its own: the sidebar's rows are already a
+                        tree drawn hanging off that lane, and a column of twisties
+                        beside it would indent every row in the window to make
+                        room for a control most rows do not have.
+
+                        It is stacked over the mark rather than replacing it, so
+                        that reaching for the chevron never resizes or reflows the
+                        row. A row that is shut keeps it showing: the reader has
+                        to be able to find the work they folded away without
+                        sweeping the column to see which rows answer. */}
+                    {props.onCollapseToggle ? (
+                        /* A `span`, because the row itself is the button and a
+                           button inside a button is invalid. */
+                        <span
+                            aria-hidden="true"
+                            className="happy2-sidebar__item-fold"
+                            data-happy-desktop-ui="sidebar-item-fold"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                props.onCollapseToggle?.();
+                            }}
+                            onPointerDown={(event) => event.stopPropagation()}
+                        >
+                            <Icon
+                                name={item().collapsed ? "chevron-right" : "chevron-down"}
+                                size={12}
+                            />
+                        </span>
                     ) : null}
                 </span>
             ) : null}
@@ -894,6 +1002,7 @@ export function Sidebar(props: SidebarProps) {
         "onItemAction",
         "onItemSecondaryAction",
         "onItemMenuSelect",
+        "onItemCollapseToggle",
         "onItemReorder",
         "onSectionAction",
         "sections",
@@ -1468,199 +1577,228 @@ export function Sidebar(props: SidebarProps) {
                             {local.bodyAccessory}
                         </div>
                     ) : null}
-                    {local.sections.map((section) => (
-                        <section
-                            className="happy2-sidebar__section"
-                            key={section.id}
-                            data-happy-desktop-ui="sidebar-section"
-                            data-reordering={dragOf(section.id) ? "" : undefined}
-                            data-section-id={section.id}
-                        >
-                            {section.label ? (
-                                <div
-                                    className="happy2-sidebar__section-head"
-                                    data-happy-desktop-ui="sidebar-section-head"
-                                >
-                                    <span
-                                        className="happy2-sidebar__section-label"
-                                        data-happy-desktop-ui="sidebar-section-label"
+                    {local.sections.map((section) => {
+                        // The rows as they stand on screen. Everything below —
+                        // the tree connectors, a drag's units, a keyboard move —
+                        // is stated against these rather than against the rows
+                        // the caller gave, so a row folded away can neither be
+                        // dragged past nor counted as a neighbour of anything.
+                        const shown = visibleRows(section.items);
+                        const shownItems = shown.map((row) => row.item);
+                        return (
+                            <section
+                                className="happy2-sidebar__section"
+                                key={section.id}
+                                data-happy-desktop-ui="sidebar-section"
+                                data-reordering={dragOf(section.id) ? "" : undefined}
+                                data-section-id={section.id}
+                            >
+                                {section.label ? (
+                                    <div
+                                        className="happy2-sidebar__section-head"
+                                        data-happy-desktop-ui="sidebar-section-head"
                                     >
-                                        {section.label}
-                                    </span>
-                                    {section.status ? (
-                                        <RigPeerStatus
-                                            className="happy2-sidebar__section-status"
-                                            name={section.label}
-                                            state={section.status}
-                                        />
-                                    ) : null}
-                                    {section.action
-                                        ? ((action) => (
-                                              <button
-                                                  aria-busy={action.busy ? true : undefined}
-                                                  aria-label={action.label}
-                                                  className="happy2-sidebar__section-action"
-                                                  data-busy={action.busy ? "" : undefined}
-                                                  data-happy-desktop-ui="sidebar-section-action"
-                                                  data-reveal={action.reveal ?? "hover"}
-                                                  disabled={action.busy || action.disabled}
-                                                  onClick={() =>
-                                                      local.onSectionAction?.(section.id, "heading")
+                                        <span
+                                            className="happy2-sidebar__section-label"
+                                            data-happy-desktop-ui="sidebar-section-label"
+                                        >
+                                            {section.label}
+                                        </span>
+                                        {section.status ? (
+                                            <RigPeerStatus
+                                                className="happy2-sidebar__section-status"
+                                                name={section.label}
+                                                state={section.status}
+                                            />
+                                        ) : null}
+                                        {section.action
+                                            ? ((action) => (
+                                                  <button
+                                                      aria-busy={action.busy ? true : undefined}
+                                                      aria-label={action.label}
+                                                      className="happy2-sidebar__section-action"
+                                                      data-busy={action.busy ? "" : undefined}
+                                                      data-happy-desktop-ui="sidebar-section-action"
+                                                      data-reveal={action.reveal ?? "hover"}
+                                                      disabled={action.busy || action.disabled}
+                                                      onClick={() =>
+                                                          local.onSectionAction?.(
+                                                              section.id,
+                                                              "heading",
+                                                          )
+                                                      }
+                                                      type="button"
+                                                  >
+                                                      {action.busy ? (
+                                                          <Spinner size={12} tone="muted" />
+                                                      ) : (
+                                                          <Icon name={action.icon} size={12} />
+                                                      )}
+                                                  </button>
+                                              ))(section.action)
+                                            : null}
+                                    </div>
+                                ) : null}
+                                {section.error !== undefined ? (
+                                    <p
+                                        className="happy2-sidebar__section-error"
+                                        data-happy-desktop-ui="sidebar-section-error"
+                                        role="status"
+                                    >
+                                        {section.error}
+                                    </p>
+                                ) : null}
+                                {!section.headingOnly &&
+                                section.nodes &&
+                                section.nodes.length > 0 ? (
+                                    <SidebarNodes label={section.label} nodes={section.nodes} />
+                                ) : null}
+                                {!section.headingOnly
+                                    ? shown.map(({ foldable, item }, index) => {
+                                          const drag = dragOf(section.id);
+                                          const dragging = drag?.moved === true;
+                                          // While a drag is live the row's position
+                                          // is read from that drag's own units, which
+                                          // are the top-level blocks or one row's
+                                          // children depending on where it started.
+                                          const unitIndex = dragging
+                                              ? drag.units.findIndex((unit) => unit.includes(index))
+                                              : -1;
+                                          const held = dragging && unitIndex === drag.from;
+                                          return (
+                                              <SidebarRow
+                                                  active={item.id === local.activeItemId}
+                                                  branch={
+                                                      (item.depth ?? 0) > 0
+                                                          ? isLastAtDepth(shownItems, index)
+                                                              ? "end"
+                                                              : "tee"
+                                                          : undefined
                                                   }
-                                                  type="button"
-                                              >
-                                                  {action.busy ? (
-                                                      <Spinner size={12} tone="muted" />
-                                                  ) : (
-                                                      <Icon name={action.icon} size={12} />
-                                                  )}
-                                              </button>
-                                          ))(section.action)
-                                        : null}
-                                </div>
-                            ) : null}
-                            {section.error !== undefined ? (
-                                <p
-                                    className="happy2-sidebar__section-error"
-                                    data-happy-desktop-ui="sidebar-section-error"
-                                    role="status"
-                                >
-                                    {section.error}
-                                </p>
-                            ) : null}
-                            {!section.headingOnly && section.nodes && section.nodes.length > 0 ? (
-                                <SidebarNodes label={section.label} nodes={section.nodes} />
-                            ) : null}
-                            {!section.headingOnly
-                                ? section.items.map((item, index) => {
-                                      const drag = dragOf(section.id);
-                                      const dragging = drag?.moved === true;
-                                      // While a drag is live the row's position
-                                      // is read from that drag's own units, which
-                                      // are the top-level blocks or one row's
-                                      // children depending on where it started.
-                                      const unitIndex = dragging
-                                          ? drag.units.findIndex((unit) => unit.includes(index))
-                                          : -1;
-                                      const held = dragging && unitIndex === drag.from;
-                                      return (
-                                          <SidebarRow
-                                              active={item.id === local.activeItemId}
-                                              branch={
-                                                  (item.depth ?? 0) > 0
-                                                      ? isLastAtDepth(section.items, index)
-                                                          ? "end"
-                                                          : "tee"
-                                                      : undefined
-                                              }
-                                              branchFirst={
-                                                  (item.depth ?? 0) > 0 &&
-                                                  isFirstAtDepth(section.items, index)
-                                              }
-                                              dragging={
-                                                  held || rowKey(section.id, item.id) === dropped
-                                              }
-                                              key={item.id}
-                                              item={item}
-                                              onContextMenu={openItemMenu}
-                                              onKeyDown={
-                                                  local.onItemReorder
-                                                      ? (event) =>
-                                                            moveByKey(
-                                                                event,
-                                                                section.id,
-                                                                section.items,
-                                                                index,
-                                                            )
-                                                      : undefined
-                                              }
-                                              onPointerDown={
-                                                  local.onItemReorder
-                                                      ? (event) =>
-                                                            dragStart(
-                                                                event,
-                                                                section.id,
-                                                                section.items,
-                                                                index,
-                                                            )
-                                                      : undefined
-                                              }
-                                              onPointerCancel={
-                                                  local.onItemReorder ? dragCancel : undefined
-                                              }
-                                              onPointerMove={
-                                                  local.onItemReorder ? dragMove : undefined
-                                              }
-                                              onPointerUp={
-                                                  local.onItemReorder
-                                                      ? (event) => dragEnd(event, section.items)
-                                                      : undefined
-                                              }
-                                              reorderable={local.onItemReorder !== undefined}
-                                              onAction={
-                                                  local.onItemAction && item.action
-                                                      ? () => local.onItemAction?.(item.id)
-                                                      : undefined
-                                              }
-                                              onSecondaryAction={
-                                                  local.onItemSecondaryAction &&
-                                                  item.secondaryAction
-                                                      ? () => local.onItemSecondaryAction?.(item.id)
-                                                      : undefined
-                                              }
-                                              nodeRef={(node) => {
-                                                  const key = rowKey(section.id, item.id);
-                                                  if (node) rowNodes.set(key, node);
-                                                  else rowNodes.delete(key);
-                                              }}
-                                              onSelect={(id) => {
-                                                  if (dragClick.current) {
-                                                      dragClick.current = false;
-                                                      return;
+                                                  branchFirst={
+                                                      (item.depth ?? 0) > 0 &&
+                                                      isFirstAtDepth(shownItems, index)
                                                   }
-                                                  local.onItemSelect(id);
-                                              }}
-                                              shift={
-                                                  dragging && unitIndex >= 0
-                                                      ? unitIndex === drag.from
-                                                          ? drag.deltaY
-                                                          : blockShift(drag, unitIndex)
-                                                      : undefined
-                                              }
-                                          />
-                                      );
-                                  })
-                                : null}
-                            {!section.headingOnly &&
-                            (section.items.length === 0 ? section.empty : undefined)
-                                ? ((empty) => (
-                                      <div
-                                          className="happy2-sidebar__empty"
-                                          data-happy-desktop-ui="sidebar-section-empty"
-                                      >
-                                          <span
-                                              className="happy2-sidebar__empty-description"
-                                              data-happy-desktop-ui="sidebar-section-empty-description"
+                                                  dragging={
+                                                      held ||
+                                                      rowKey(section.id, item.id) === dropped
+                                                  }
+                                                  key={item.id}
+                                                  item={item}
+                                                  onContextMenu={openItemMenu}
+                                                  onKeyDown={
+                                                      local.onItemReorder
+                                                          ? (event) =>
+                                                                moveByKey(
+                                                                    event,
+                                                                    section.id,
+                                                                    shownItems,
+                                                                    index,
+                                                                )
+                                                          : undefined
+                                                  }
+                                                  onPointerDown={
+                                                      local.onItemReorder
+                                                          ? (event) =>
+                                                                dragStart(
+                                                                    event,
+                                                                    section.id,
+                                                                    shownItems,
+                                                                    index,
+                                                                )
+                                                          : undefined
+                                                  }
+                                                  onPointerCancel={
+                                                      local.onItemReorder ? dragCancel : undefined
+                                                  }
+                                                  onPointerMove={
+                                                      local.onItemReorder ? dragMove : undefined
+                                                  }
+                                                  onPointerUp={
+                                                      local.onItemReorder
+                                                          ? (event) => dragEnd(event, shownItems)
+                                                          : undefined
+                                                  }
+                                                  reorderable={local.onItemReorder !== undefined}
+                                                  onCollapseToggle={
+                                                      local.onItemCollapseToggle && foldable
+                                                          ? () =>
+                                                                local.onItemCollapseToggle?.(
+                                                                    item.id,
+                                                                )
+                                                          : undefined
+                                                  }
+                                                  onAction={
+                                                      local.onItemAction && item.action
+                                                          ? () => local.onItemAction?.(item.id)
+                                                          : undefined
+                                                  }
+                                                  onSecondaryAction={
+                                                      local.onItemSecondaryAction &&
+                                                      item.secondaryAction
+                                                          ? () =>
+                                                                local.onItemSecondaryAction?.(
+                                                                    item.id,
+                                                                )
+                                                          : undefined
+                                                  }
+                                                  nodeRef={(node) => {
+                                                      const key = rowKey(section.id, item.id);
+                                                      if (node) rowNodes.set(key, node);
+                                                      else rowNodes.delete(key);
+                                                  }}
+                                                  onSelect={(id) => {
+                                                      if (dragClick.current) {
+                                                          dragClick.current = false;
+                                                          return;
+                                                      }
+                                                      local.onItemSelect(id);
+                                                  }}
+                                                  shift={
+                                                      dragging && unitIndex >= 0
+                                                          ? unitIndex === drag.from
+                                                              ? drag.deltaY
+                                                              : blockShift(drag, unitIndex)
+                                                          : undefined
+                                                  }
+                                              />
+                                          );
+                                      })
+                                    : null}
+                                {!section.headingOnly &&
+                                (section.items.length === 0 ? section.empty : undefined)
+                                    ? ((empty) => (
+                                          <div
+                                              className="happy2-sidebar__empty"
+                                              data-happy-desktop-ui="sidebar-section-empty"
                                           >
-                                              {empty.description}
-                                          </span>
-                                          {empty.actionLabel === undefined ? null : (
-                                              <Button
-                                                  className="happy2-sidebar__empty-action"
-                                                  onClick={() =>
-                                                      local.onSectionAction?.(section.id, "empty")
-                                                  }
-                                                  size="small"
-                                                  variant="ghost"
+                                              <span
+                                                  className="happy2-sidebar__empty-description"
+                                                  data-happy-desktop-ui="sidebar-section-empty-description"
                                               >
-                                                  {empty.actionLabel}
-                                              </Button>
-                                          )}
-                                      </div>
-                                  ))((section.items.length === 0 ? section.empty : undefined)!)
-                                : null}
-                        </section>
-                    ))}
+                                                  {empty.description}
+                                              </span>
+                                              {empty.actionLabel === undefined ? null : (
+                                                  <Button
+                                                      className="happy2-sidebar__empty-action"
+                                                      onClick={() =>
+                                                          local.onSectionAction?.(
+                                                              section.id,
+                                                              "empty",
+                                                          )
+                                                      }
+                                                      size="small"
+                                                      variant="ghost"
+                                                  >
+                                                      {empty.actionLabel}
+                                                  </Button>
+                                              )}
+                                          </div>
+                                      ))((section.items.length === 0 ? section.empty : undefined)!)
+                                    : null}
+                            </section>
+                        );
+                    })}
                 </div>
             </div>
             {/* A row moved by keyboard travels without the reader's caret leaving

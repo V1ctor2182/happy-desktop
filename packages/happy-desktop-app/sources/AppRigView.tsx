@@ -30,6 +30,7 @@ import type {
     RigModelStore,
     RigModelSelection,
     RigNavigationOrderStore,
+    RigSidebarCollapseStore,
     RigPanelFileKind,
     RigPanelFileSnapshot,
     RigPanelSnapshot,
@@ -85,6 +86,7 @@ import {
     rigNavigationOrderApply,
     rigAvailabilityProject,
     rigNavigationOrderStoreNoop,
+    rigSidebarCollapseStoreNoop,
     folderFind,
     rigFolderGroupId,
     rigFolderGroupParse,
@@ -380,6 +382,12 @@ export interface AppRigViewProps {
      * order the next launch would forget.
      */
     navigationOrder?: RigNavigationOrderStore;
+    /**
+     * Where this window remembers which projects and folders the reader folded
+     * shut. A host that keeps no such record supplies none, and every row stays
+     * open rather than offering a fold the next launch would forget.
+     */
+    sidebarCollapse?: RigSidebarCollapseStore;
     /**
      * Whether this window offers the features that are not finished yet. A host
      * that remembers no such choice supplies none, and they stay withheld.
@@ -1520,6 +1528,32 @@ function rigSidebarItemAvailability(
     };
 }
 
+/**
+ * The sections with the reader's folding applied, marked on the rows that carry
+ * something nested under them.
+ *
+ * Said once over the finished sections rather than inside each builder above:
+ * every one of them states rows with a depth, the row ids are only their final
+ * ones by the time they reach here, and folding is one fact about the sidebar
+ * rather than something a project, a folder and a contact list should each have
+ * to remember. A row nothing is nested under is left alone, so it never claims a
+ * fold that would do nothing.
+ */
+function sectionsCollapsed(
+    sections: readonly SidebarSection[],
+    collapsed: ReadonlySet<string>,
+): SidebarSection[] {
+    if (collapsed.size === 0) return sections as SidebarSection[];
+    return sections.map((section) => ({
+        ...section,
+        items: section.items.map((item, index) =>
+            collapsed.has(item.id) && (section.items[index + 1]?.depth ?? 0) > (item.depth ?? 0)
+                ? { ...item, collapsed: true }
+                : item,
+        ),
+    }));
+}
+
 function rigSections(
     directory: AppRigDirectorySnapshot,
     nodes: RigNodesSnapshot,
@@ -1921,6 +1955,15 @@ export function AppRigView(props: AppRigViewProps) {
         navigationOrderStore.subscribe,
         navigationOrderStore.get,
         navigationOrderStore.get,
+    );
+    // Which projects and folders the reader folded shut. Like the order above it
+    // this belongs to the window: a machine going away must not unfold the tree
+    // somebody arranged, and coming back must not fold it again.
+    const sidebarCollapseStore = props.sidebarCollapse ?? rigSidebarCollapseStoreNoop;
+    const sidebarCollapse = useSyncExternalStore(
+        sidebarCollapseStore.subscribe,
+        sidebarCollapseStore.get,
+        sidebarCollapseStore.get,
     );
     const windowStateStore = props.windowState ?? rigWindowStoreNoop;
     const windowState = useSyncExternalStore(
@@ -2620,34 +2663,46 @@ export function AppRigView(props: AppRigViewProps) {
                           )
                 ).catch(() => undefined);
             }}
+            // A row is folded shut by this window's own record, so a project
+            // whose checkouts are hidden stays hidden as its Rig comes and goes.
+            {...(props.sidebarCollapse
+                ? {
+                      onItemCollapseToggle: (id: string) => {
+                          sidebarCollapseStore.rowCollapseToggle(id);
+                      },
+                  }
+                : {})}
             // Local folders first: remote navigation changes the content surface
             // and project sections below, never this window-owned tree.
-            sections={[
-                ...(localRig?.session?.folders
-                    ? foldersSection(
-                          localRig.id,
-                          localFolders,
-                          localAvailability?.online === true,
-                          localRig.projects,
-                          localDocuments.titles,
-                      )
-                    : []),
-                // People, then machines. Contacts sit under the folders because
-                // they belong to the reader's account rather than to any one
-                // machine's work, and above the project sections because a
-                // request waiting on an answer must not be pushed off the bottom
-                // by however many projects happen to be open.
-                ...(localRig?.session?.sharing
-                    ? contactsSection(localSharing, localAvailability?.online === true)
-                    : []),
-                ...rigSections(
-                    directory,
-                    nodes,
-                    titleShimmerEnabled,
-                    profiles.selectedProfileId,
-                    profiles.loading,
-                ),
-            ]}
+            sections={sectionsCollapsed(
+                [
+                    ...(localRig?.session?.folders
+                        ? foldersSection(
+                              localRig.id,
+                              localFolders,
+                              localAvailability?.online === true,
+                              localRig.projects,
+                              localDocuments.titles,
+                          )
+                        : []),
+                    // People, then machines. Contacts sit under the folders because
+                    // they belong to the reader's account rather than to any one
+                    // machine's work, and above the project sections because a
+                    // request waiting on an answer must not be pushed off the bottom
+                    // by however many projects happen to be open.
+                    ...(localRig?.session?.sharing
+                        ? contactsSection(localSharing, localAvailability?.online === true)
+                        : []),
+                    ...rigSections(
+                        directory,
+                        nodes,
+                        titleShimmerEnabled,
+                        profiles.selectedProfileId,
+                        profiles.loading,
+                    ),
+                ],
+                sidebarCollapse.collapsed,
+            )}
         />
     );
 
