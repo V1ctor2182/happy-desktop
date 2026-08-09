@@ -59,6 +59,7 @@ export function rigConnectProfilesSourceCreate(rig: RigConnection): {
 function profileProject(profile: ConnectRigProfile): RigProfile {
     return {
         id: profile.id,
+        email: profile.email,
         name: profile.name,
         parentInstanceId: profile.parentInstanceId,
         version: profile.version,

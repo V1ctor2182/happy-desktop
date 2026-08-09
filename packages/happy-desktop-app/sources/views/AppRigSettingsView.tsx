@@ -270,6 +270,7 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
                     onProfileEdit={(profileId) => profilesStore.profileEditOpen(profileId)}
                     onProfileSelect={(profileId) => profilesStore.profileSelect(profileId)}
                     profiles={profiles.profiles.map((profile) => ({
+                        email: profile.email,
                         id: profile.id,
                         name: profile.name,
                         selected: profile.id === profiles.selectedProfileId,
@@ -488,9 +489,11 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
 function profileEditor(store: RigProfilesStore) {
     const editor = store.get().editor;
     return {
+        email: editor?.email ?? "",
         mode: editor?.mode ?? ("create" as const),
         name: editor?.name ?? "",
         saving: editor?.submitting ?? false,
+        onEmailChange: (value: string) => store.profileEmailUpdate(value),
         onNameChange: (value: string) => store.profileNameUpdate(value),
         onSave: () => {
             void store.profileEditorSubmit();

@@ -32,11 +32,17 @@ import type {
  * the moment its archival begins, so "on its way out" is not something this list
  * can observe — see the filter in `rigProjectGroupsProject`.
  */
-export type RigWorktreeLifecycle =
+export type RigGroupLifecycle =
     | { readonly phase: "creating" }
     | { readonly phase: "ready" }
     | { readonly phase: "missing" }
     | { readonly phase: "failed"; readonly reason?: string };
+
+/** The lifecycle of a project checkout, including a managed clone in progress. */
+export type RigProjectLifecycle = RigGroupLifecycle;
+
+/** The lifecycle of one additional checkout inside a project. */
+export type RigWorktreeLifecycle = RigGroupLifecycle;
 
 /**
  * One of a project's git worktrees with the sessions running in it. A worktree is
@@ -94,6 +100,12 @@ export interface RigProjectGroup {
     readonly displayPath: string;
     /** `home` is the catch-all project for sessions started outside any repository. */
     readonly kind: "regular" | "home";
+    /** Whether this project's checkout is being prepared, usable, gone, or failed. */
+    readonly lifecycle: RigProjectLifecycle;
+    /** Repository source for a managed project Rig cloned. */
+    readonly remoteSource?: RigProject["remoteSource"];
+    /** Native credential required for Git operations on this managed project. */
+    readonly requiredSecretKind?: RigProject["requiredSecretKind"];
     readonly avatar?: RigProjectAvatar;
     /** Sessions in the project itself, i.e. not in one of its worktrees. */
     readonly conversations: readonly ConversationSummary[];
@@ -257,8 +269,13 @@ function projectGroup(
         path: project.path,
         displayPath: project.displayPath,
         kind: project.kind,
+        lifecycle: rigProjectLifecycleOf(project),
         conversations,
         ...(projectRefusal === undefined ? {} : { writeRefusal: projectRefusal }),
+        ...(project.remoteSource === undefined ? {} : { remoteSource: project.remoteSource }),
+        ...(project.requiredSecretKind === undefined
+            ? {}
+            : { requiredSecretKind: project.requiredSecretKind }),
         worktrees,
         // A project and each of its worktrees are independent destinations.
         // Child activity belongs on the child row rather than bubbling upward.
@@ -285,6 +302,16 @@ const LIFECYCLE_CREATING: RigWorktreeLifecycle = { phase: "creating" };
 const LIFECYCLE_READY: RigWorktreeLifecycle = { phase: "ready" };
 const LIFECYCLE_MISSING: RigWorktreeLifecycle = { phase: "missing" };
 const LIFECYCLE_FAILED: RigWorktreeLifecycle = { phase: "failed" };
+
+/** Reads a project's managed-clone and filesystem facts as one visible phase. */
+export function rigProjectLifecycleOf(project: RigProject): RigProjectLifecycle {
+    if (project.status === "initializing") return LIFECYCLE_CREATING;
+    if (project.status === "failed")
+        return project.error === undefined
+            ? LIFECYCLE_FAILED
+            : { phase: "failed", reason: project.error };
+    return project.presence === "missing" ? LIFECYCLE_MISSING : LIFECYCLE_READY;
+}
 
 /**
  * Reads the host's worktree record as the phase a reader can act on.

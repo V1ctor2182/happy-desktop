@@ -283,8 +283,8 @@ export interface RigClientDeps {
     readonly profilesSource?: RigProfilesSource;
     readonly profilesActions?: RigProfilesActions;
     readonly profileSelectionPersistence?: RigProfileSelectionPersistence;
-    /** Selected host identity required by every message sent through a node route. */
-    readonly messageIdentity?: () => string | undefined;
+    /** Selected host identity required by work sent through a node route. */
+    readonly peerIdentity?: () => string | undefined;
     /** Opens rig-connect's core transcript stream for one materialized chat. */
     readonly transcriptConnect?: RigChatTranscriptConnect;
     /** Shared rig-connect actions for session mutations. */
@@ -397,6 +397,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                     ...(deps.connectMutationSubscribe
                         ? { connectMutationSubscribe: deps.connectMutationSubscribe }
                         : {}),
+                    ...(deps.peerIdentity ? { peerIdentity: deps.peerIdentity } : {}),
                     output: deps.sessionListOutput,
                     createId: deps.createId,
                 });
@@ -531,7 +532,7 @@ export function rigClientCreate(deps: RigClientDeps): RigClient {
                             ? { transcriptConnect: deps.transcriptConnect }
                             : {}),
                         ...(deps.connectActions ? { connectActions: deps.connectActions } : {}),
-                        ...(deps.messageIdentity ? { messageIdentity: deps.messageIdentity } : {}),
+                        ...(deps.peerIdentity ? { messageIdentity: deps.peerIdentity } : {}),
                         ...(deps.connectMutationSubscribe
                             ? { connectMutationSubscribe: deps.connectMutationSubscribe }
                             : {}),

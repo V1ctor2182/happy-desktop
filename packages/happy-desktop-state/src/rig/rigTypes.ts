@@ -442,6 +442,11 @@ export interface RigProjectAvatar {
     readonly height: number;
 }
 
+/** Repository Rig manages for a project it cloned rather than adopted from disk. */
+export type RigProjectRemoteSource =
+    | { readonly kind: "github"; readonly repository: string }
+    | { readonly kind: "git"; readonly url: string };
+
 /**
  * One directory the daemon has adopted as a durable project. This — not the raw
  * working directory — is what the workspace lists: it carries a name the daemon
@@ -464,6 +469,14 @@ export interface RigProject {
     readonly kind: "regular" | "home";
     /** Whether the daemon has finished deriving the project's name and picture. */
     readonly status: "initializing" | "ready" | "failed";
+    /** Whether the project directory still exists once initialization has completed. */
+    readonly presence: "present" | "missing";
+    /** The daemon's bounded reason when a managed project could not be prepared. */
+    readonly error?: string;
+    /** Repository source for a project whose checkout Rig owns. */
+    readonly remoteSource?: RigProjectRemoteSource;
+    /** Native credential Rig needs refreshed for Git operations on this managed project. */
+    readonly requiredSecretKind?: "github";
     readonly avatar?: RigProjectAvatar;
     /** Current changed-file total for this checkout, omitted until Git state is available. */
     readonly changedFiles?: number;

@@ -81,6 +81,12 @@ export interface Project {
     readonly orderKey: string;
     readonly path: string;
     readonly initializationStatus: "initializing" | "ready" | "failed";
+    readonly initializationError?: string;
+    readonly presence: "present" | "missing";
+    readonly remoteSource?:
+        | { readonly kind: "github"; readonly repository: string }
+        | { readonly kind: "git"; readonly url: string };
+    readonly requiredSecretKind?: "github";
     readonly avatar?: ProjectAvatar;
     /** Optimistic-concurrency token the daemon requires to guard a reorder or an archive. */
     readonly version: number;

@@ -114,7 +114,15 @@ export function rigProjectProject(project: Project, homeDir: string): RigProject
         path: project.path,
         displayPath: rigDisplayCwd(project.path, homeDir),
         kind: project.kind,
+        presence: project.presence,
         status: project.initializationStatus,
+        ...(project.initializationError === undefined
+            ? {}
+            : { error: project.initializationError }),
+        ...(project.remoteSource === undefined ? {} : { remoteSource: project.remoteSource }),
+        ...(project.requiredSecretKind === undefined
+            ? {}
+            : { requiredSecretKind: project.requiredSecretKind }),
         ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
         ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),

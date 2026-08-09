@@ -1,7 +1,7 @@
 import type { MutationRejectedDelta, RigConnection } from "@slopus/rig-connect";
 import { createStore } from "zustand/vanilla";
 import type { Loadable } from "../conversation/loadable.js";
-import type { UserError } from "../types.js";
+import { UserError } from "../types.js";
 import {
     rigProjectGroupsPreserve,
     rigProjectGroupsProject,
@@ -61,6 +61,10 @@ export interface RigSessionListSnapshot {
      * says — and it is answered by the read sequence rather than by this.
      */
     readonly catalogRevision: number;
+    /** Managed projects whose optimistic clone request this window saw refused. */
+    readonly projectCreateFailures: ReadonlyMap<RigProjectId, UserError>;
+    /** Sessions whose optimistic peer creation this window saw refused. */
+    readonly sessionCreateFailures: ReadonlyMap<RigSessionId, UserError>;
     /**
      * Worktrees this window asked for that the host refused, by the identity it
      * refused them under — which is the identity the worktree would have had, so
@@ -170,6 +174,8 @@ export interface RigSessionListStore {
 
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
+    /** Starts one peer-owned managed project and returns its optimistic identity. */
+    projectCloneGithub(repository: string, name: string): RigProjectId;
 
     /**
      * Archives a project: it leaves the list with its conversations and
@@ -303,7 +309,8 @@ export interface RigSessionListDeps {
      * every mutation falls back to the request/reconcile path on `transport`,
      * which is how the store runs standalone against a fake server.
      */
-    readonly connectActions?: Pick<RigConnection, "createWorkspace" | "markSessionRead">;
+    readonly connectActions?: Pick<RigConnection, "createWorkspace" | "markSessionRead"> &
+        Partial<Pick<RigConnection, "createSession" | "projects">>;
     /**
      * Terminal failures for mutations issued through `connectActions`. They
      * arrive here rather than as a rejected promise, because such a mutation is
@@ -312,6 +319,8 @@ export interface RigSessionListDeps {
     readonly connectMutationSubscribe?: (
         listener: (rejection: MutationRejectedDelta) => void,
     ) => () => void;
+    /** Selected host profile when this store sends creation through a peer route. */
+    readonly peerIdentity?: () => string | undefined;
     readonly output?: (event: RigSessionListOutput) => void;
     readonly createId?: () => string;
 }
@@ -346,10 +355,14 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
     const createId = deps.createId ?? defaultCreateId;
 
     const NO_WORKTREE_CREATE_FAILURES: ReadonlyMap<RigWorktreeId, UserError> = new Map();
+    const NO_PROJECT_CREATE_FAILURES: ReadonlyMap<RigProjectId, UserError> = new Map();
+    const NO_SESSION_CREATE_FAILURES: ReadonlyMap<RigSessionId, UserError> = new Map();
 
     const store = createStore<RigSessionListSnapshot>()(() => ({
         catalogRevision: 0,
+        projectCreateFailures: NO_PROJECT_CREATE_FAILURES,
         projects: { type: "loading" },
+        sessionCreateFailures: NO_SESSION_CREATE_FAILURES,
         worktreeCreateFailures: NO_WORKTREE_CREATE_FAILURES,
     }));
 
@@ -418,7 +431,6 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
      * so an intent is acted on exactly once however many reconciles arrive.
      */
     const worktreeWaiters = new Map<RigWorktreeId, RigWorktreeWaiter[]>();
-
     /** Takes every waiter on one worktree out of the registry, ready to settle. */
     const worktreeWaitersTake = (worktreeId: RigWorktreeId): readonly RigWorktreeWaiter[] => {
         const waiting = worktreeWaiters.get(worktreeId);
@@ -728,7 +740,27 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                           error,
                       )
                     : previous.worktreeCreateFailures;
-            store.setState({ ...previous, mutationError: error, worktreeCreateFailures });
+            const projectCreateFailures =
+                rejection.action === "create_project"
+                    ? new Map(previous.projectCreateFailures).set(
+                          rejection.mutationId as RigProjectId,
+                          error,
+                      )
+                    : previous.projectCreateFailures;
+            const sessionCreateFailures =
+                rejection.action === "create_session"
+                    ? new Map(previous.sessionCreateFailures).set(
+                          rejection.mutationId as RigSessionId,
+                          error,
+                      )
+                    : previous.sessionCreateFailures;
+            store.setState({
+                ...previous,
+                mutationError: error,
+                projectCreateFailures,
+                sessionCreateFailures,
+                worktreeCreateFailures,
+            });
             // Anyone waiting to start the first conversation in that worktree is
             // waiting for a checkout that will never be prepared, so the refusal
             // ends their wait with the host's own sentence.
@@ -791,6 +823,71 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
         }
     };
 
+    const sessionCreateRun = async (
+        input: RigSessionCreateInput,
+    ): Promise<RigSessionLocation | undefined> => {
+        const createSession = deps.connectActions?.createSession;
+        if (deps.peerIdentity && createSession) {
+            const identity = deps.peerIdentity();
+            if (!identity)
+                throw new UserError(
+                    "Choose a profile in Settings before creating work on another Rig.",
+                );
+            const worktree =
+                input.worktreeId === undefined
+                    ? undefined
+                    : catalog.worktrees.find((entry) => entry.id === input.worktreeId);
+            const project =
+                worktree === undefined
+                    ? catalog.projects.find((entry) => entry.path === input.cwd)
+                    : catalog.projects.find((entry) => entry.id === worktree.projectId);
+            const groupId =
+                input.scope === undefined
+                    ? (input.worktreeId ?? project?.id)
+                    : rigSessionScopeGroupId(input.scope);
+            if (groupId === undefined)
+                throw new UserError("That project or workspace is no longer listed.");
+            const sessionId = connectMutationTrack(
+                createSession({
+                    cwd: input.cwd,
+                    identity,
+                    ...(input.providerId === undefined ? {} : { providerId: input.providerId }),
+                    ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
+                    ...(input.effort === undefined ? {} : { effort: input.effort }),
+                    ...(input.serviceTier === undefined ? {} : { serviceTier: input.serviceTier }),
+                    ...(input.permissionMode === undefined
+                        ? {}
+                        : { permissionMode: input.permissionMode }),
+                    ...(project === undefined ? {} : { projectId: project.id }),
+                    ...(input.worktreeId === undefined ? {} : { workspaceId: input.worktreeId }),
+                    ...(input.scope === undefined ? {} : { scope: input.scope }),
+                    ...(project?.requiredSecretKind === "github"
+                        ? { gitSecret: { kind: "github" as const } }
+                        : {}),
+                    trackUnread: true,
+                }),
+            ) as RigSessionId;
+            const location = { groupId, sessionId };
+            output({ type: "sessionCreated", location });
+            return location;
+        }
+
+        void createId();
+        const session = await deps.transport.sessionCreate(input);
+        if (disposed) return undefined;
+        // A session nobody has placed yet is newest-first for the host, so the
+        // optimistic row goes where the reconcile will put it.
+        const summary = sessionSummaryOf(session);
+        if (summary) {
+            sessions = [summary, ...sessions.filter((existing) => existing.id !== session.id)];
+            publish();
+        }
+        const location = sessionLocationOf(session);
+        output({ type: "sessionCreated", location });
+        await reconcile();
+        return location;
+    };
+
     return {
         get: () => store.getState(),
         subscribe(listener) {
@@ -851,26 +948,24 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             }
             deps.connectActions?.markSessionRead(sessionId);
         },
-        sessionCreate: (input) =>
-            mutate(async () => {
-                void createId();
-                const session = await deps.transport.sessionCreate(input);
-                if (disposed) return undefined;
-                // A session nobody has placed yet is newest-first for the host,
-                // so the optimistic row goes where the reconcile will put it.
-                const summary = sessionSummaryOf(session);
-                if (summary) {
-                    sessions = [
-                        summary,
-                        ...sessions.filter((existing) => existing.id !== session.id),
-                    ];
-                    publish();
-                }
-                const location = sessionLocationOf(session);
-                output({ type: "sessionCreated", location });
-                await reconcile();
-                return location;
-            }),
+        sessionCreate: (input) => mutate(() => sessionCreateRun(input)),
+        projectCloneGithub(repository, name) {
+            const projects = deps.connectActions?.projects;
+            if (!projects) throw new UserError("This Rig cannot clone projects.");
+            const identity = deps.peerIdentity?.();
+            if (!identity)
+                throw new UserError(
+                    "Choose a profile in Settings before creating work on another Rig.",
+                );
+            return connectMutationTrack(
+                projects.clone({
+                    identity,
+                    name,
+                    secret: { kind: "github" },
+                    source: { kind: "github", repository },
+                }),
+            ) as RigProjectId;
+        },
         sessionFork: (sessionId) =>
             mutate(async () => {
                 const session = await deps.transport.sessionFork(sessionId);
@@ -921,6 +1016,12 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                 // refusal withdraws the row and arrives as a rejection rather
                 // than as a thrown error, which is why it is tracked below.
                 if (deps.connectActions) {
+                    const identity = deps.peerIdentity?.();
+                    if (deps.peerIdentity && !identity)
+                        throw new UserError(
+                            "Choose a profile in Settings before creating work on another Rig.",
+                        );
+                    const project = catalog.projects.find((entry) => entry.id === projectId);
                     const worktreeId = connectMutationTrack(
                         deps.connectActions.createWorkspace({
                             // No base is named: a ref given here is taken as a
@@ -931,6 +1032,10 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
                             // project folder happens to be checked out on.
                             name: "Workspace",
                             projectId,
+                            ...(identity === undefined ? {} : { identity }),
+                            ...(project?.requiredSecretKind === "github"
+                                ? { secret: { kind: "github" as const } }
+                                : {}),
                         }),
                     ) as RigWorktreeId;
                     return worktreeId;
@@ -951,20 +1056,11 @@ export function rigSessionListStoreCreate(deps: RigSessionListDeps): RigSessionL
             mutate(async () => {
                 const pathed = await worktreePathed(worktreeId);
                 if (disposed) return undefined;
-                const session = await deps.transport.sessionCreate({
+                return sessionCreateRun({
                     ...create,
                     cwd: pathed.path,
                     worktreeId: pathed.id,
                 });
-                if (disposed) return undefined;
-                const summary = sessionSummaryOf(session);
-                if (!summary) return undefined;
-                sessions = [summary, ...sessions.filter((existing) => existing.id !== session.id)];
-                publish();
-                const location = sessionLocationOf(session);
-                output({ type: "sessionCreated", location });
-                await reconcile();
-                return location;
             }),
         worktreeArchive: (projectId, worktreeId) =>
             mutate(async () => {

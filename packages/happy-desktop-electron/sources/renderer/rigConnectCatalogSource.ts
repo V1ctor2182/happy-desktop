@@ -335,7 +335,13 @@ function projectProject(group: ProjectGroup, baseUrl: string): RigProject {
         path: group.path,
         displayPath: group.path,
         kind: group.kind,
-        status: group.presence === "present" ? "ready" : "failed",
+        status: group.initializationStatus,
+        presence: group.presence,
+        ...(group.initializationError === undefined ? {} : { error: group.initializationError }),
+        ...(group.remoteSource === undefined ? {} : { remoteSource: group.remoteSource }),
+        ...(group.requiredSecretKind === undefined
+            ? {}
+            : { requiredSecretKind: group.requiredSecretKind }),
         ...(avatar ? { avatar } : {}),
         ...gitProject(group.git),
     };

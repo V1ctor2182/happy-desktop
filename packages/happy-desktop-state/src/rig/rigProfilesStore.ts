@@ -5,6 +5,7 @@ import { referencesPreserve, rigUserError } from "./rigSupport.js";
 /** One host-owned human identity that can author work sent to a remote Rig. */
 export interface RigProfile {
     readonly id: string;
+    readonly email: string;
     readonly name: string;
     readonly parentInstanceId: string;
     readonly version: number;
@@ -26,8 +27,11 @@ export interface RigProfilesSource {
 }
 
 export interface RigProfilesActions {
-    profileCreate(input: { readonly name: string }): Promise<RigProfile>;
-    profileUpdate(profileId: string, input: { readonly name: string }): Promise<RigProfile>;
+    profileCreate(input: { readonly email: string; readonly name: string }): Promise<RigProfile>;
+    profileUpdate(
+        profileId: string,
+        input: { readonly email: string; readonly name: string },
+    ): Promise<RigProfile>;
 }
 
 export interface RigProfileSelectionPersistence {
@@ -38,6 +42,7 @@ export interface RigProfileSelectionPersistence {
 export interface RigProfileEditorSnapshot {
     readonly mode: "create" | "edit";
     readonly profileId?: string;
+    readonly email: string;
     readonly name: string;
     readonly submitting: boolean;
     readonly error?: string;
@@ -58,6 +63,7 @@ export interface RigProfilesStore {
     profileSelect(profileId: string): void;
     profileCreateOpen(): void;
     profileEditOpen(profileId: string): void;
+    profileEmailUpdate(value: string): void;
     profileNameUpdate(value: string): void;
     profileEditorCancel(): void;
     profileEditorSubmit(): Promise<void>;
@@ -162,7 +168,7 @@ export function rigProfilesStoreCreate(deps: RigProfilesStoreDeps): RigProfilesS
         profileCreateOpen() {
             store.setState({
                 ...store.getState(),
-                editor: { mode: "create", name: "", submitting: false },
+                editor: { email: "", mode: "create", name: "", submitting: false },
             });
         },
         profileEditOpen(profileId) {
@@ -171,11 +177,20 @@ export function rigProfilesStoreCreate(deps: RigProfilesStoreDeps): RigProfilesS
             store.setState({
                 ...store.getState(),
                 editor: {
+                    email: profile.email,
                     mode: "edit",
                     profileId,
                     name: profile.name,
                     submitting: false,
                 },
+            });
+        },
+        profileEmailUpdate(value) {
+            const current = store.getState();
+            if (!current.editor || current.editor.submitting) return;
+            store.setState({
+                ...current,
+                editor: { ...current.editor, email: value, error: undefined },
             });
         },
         profileNameUpdate(value) {
@@ -195,6 +210,7 @@ export function rigProfilesStoreCreate(deps: RigProfilesStoreDeps): RigProfilesS
             const current = store.getState();
             const editor = current.editor;
             if (!editor || editor.submitting) return;
+            const email = editor.email.trim();
             const name = editor.name.trim();
             if (!name) {
                 store.setState({
@@ -203,15 +219,22 @@ export function rigProfilesStoreCreate(deps: RigProfilesStoreDeps): RigProfilesS
                 });
                 return;
             }
+            if (!email || !email.includes("@")) {
+                store.setState({
+                    ...current,
+                    editor: { ...editor, error: "Enter the email used for Git commits." },
+                });
+                return;
+            }
             store.setState({
                 ...current,
-                editor: { ...editor, name, submitting: true, error: undefined },
+                editor: { ...editor, email, name, submitting: true, error: undefined },
             });
             try {
                 const profile =
                     editor.mode === "create"
-                        ? await deps.actions.profileCreate({ name })
-                        : await deps.actions.profileUpdate(editor.profileId!, { name });
+                        ? await deps.actions.profileCreate({ email, name })
+                        : await deps.actions.profileUpdate(editor.profileId!, { email, name });
                 if (disposed) return;
                 profileInput(profile);
                 const next = store.getState();
@@ -255,6 +278,7 @@ export const rigProfilesStoreNoop: RigProfilesStore = {
     profileSelect: () => undefined,
     profileCreateOpen: () => undefined,
     profileEditOpen: () => undefined,
+    profileEmailUpdate: () => undefined,
     profileNameUpdate: () => undefined,
     profileEditorCancel: () => undefined,
     profileEditorSubmit: () => Promise.resolve(),

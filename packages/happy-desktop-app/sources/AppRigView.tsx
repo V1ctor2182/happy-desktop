@@ -48,9 +48,9 @@ import type {
     RigPairingStore,
     RigProfilesStore,
     RigProviderUsageStore,
+    RigGroupLifecycle,
     RigProjectGroup,
     RigProjectId,
-    RigWorktreeLifecycle,
     RigServiceTier,
     RigSessionCreateInput,
     RigSessionId,
@@ -139,6 +139,7 @@ import {
     RigCreateSessionDialog,
     RigFolderDialog,
     RIG_FOLDER_DEFAULT_EMOJI,
+    RigProjectCloneDialog,
     RigProjectSettingsDialog,
     RigSessionControls,
     type RigUserInputAnswerMap,
@@ -447,7 +448,7 @@ interface OpenGroup {
      * project has none: it is a directory Rig adopted rather than one it made,
      * so there is no moment at which it is being prepared.
      */
-    readonly lifecycle?: RigWorktreeLifecycle;
+    readonly lifecycle?: RigGroupLifecycle;
     /** The checkout's path, so a notice about it can name the directory. */
     readonly path: string;
 }
@@ -468,7 +469,10 @@ function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): S
     // clock it wears while work runs in it — lives in the trailing lane, in the
     // same column the + would otherwise occupy.
     const projectReports =
-        projectHasLineChanges || project.activity === "running" || project.activity === "waiting";
+        projectHasLineChanges ||
+        project.activity === "running" ||
+        project.activity === "waiting" ||
+        project.lifecycle.phase !== "ready";
     return [
         {
             id: project.id,
@@ -482,10 +486,12 @@ function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): S
             // keeps the lane and hover reveals the add-workspace control in its
             // place. A quiet project offers + directly.
             action: {
+                disabled: project.lifecycle.phase !== "ready",
                 icon: "plus" as const,
                 label: `New workspace in ${project.name}`,
                 ...(projectReports ? { reveal: "hover" as const } : {}),
             },
+            ...sidebarLifecycle(project.lifecycle),
             // Settings sits left of the plus and waits for hover: it is about
             // the project, not about the work to start in it. The home project
             // is left out — its name and its path are the machine's, so there
@@ -565,7 +571,7 @@ function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): S
  * a place that has gone is not somewhere to send work.
  */
 function sidebarLifecycle(
-    lifecycle: RigWorktreeLifecycle,
+    lifecycle: RigGroupLifecycle,
 ): Pick<SidebarItem, "lifecycle" | "lifecycleLabel"> {
     if (lifecycle.phase === "creating")
         return { lifecycle: "creating", lifecycleLabel: "creating" };
@@ -583,7 +589,7 @@ function sidebarLifecycle(
  * application. The notice's own type leaves `ready` out for the same reason.
  */
 function workspaceLifecyclePhase(
-    lifecycle: RigWorktreeLifecycle | undefined,
+    lifecycle: RigGroupLifecycle | undefined,
 ): WorkspaceLifecyclePhase | undefined {
     if (lifecycle === undefined || lifecycle.phase === "ready") return undefined;
     return lifecycle.phase;
@@ -971,6 +977,7 @@ function openGroupFind(
                 conversations: project.conversations,
                 changes: project.changes ?? [],
                 create: { cwd: project.path },
+                lifecycle: project.lifecycle,
                 path: project.displayPath,
             };
         for (const worktree of project.worktrees)
@@ -1164,10 +1171,35 @@ function foldersSection(
     ];
 }
 
+function rigSidebarItemAvailability(
+    item: SidebarItem,
+    rig: AppRigEntry,
+    selectedPeerProfileId: string | undefined,
+    peerProfilesLoading: boolean,
+): Pick<SidebarItem, "action" | "secondaryAction"> {
+    const disconnected = rig.status !== "connected";
+    const remoteWorkUnavailable =
+        rig.nodeId !== undefined && (peerProfilesLoading || selectedPeerProfileId === undefined);
+    return {
+        ...(item.action && (disconnected || remoteWorkUnavailable)
+            ? { action: { ...item.action, disabled: true } }
+            : item.action
+              ? { action: item.action }
+              : {}),
+        ...(item.secondaryAction && disconnected
+            ? { secondaryAction: { ...item.secondaryAction, disabled: true } }
+            : item.secondaryAction
+              ? { secondaryAction: item.secondaryAction }
+              : {}),
+    };
+}
+
 function rigSections(
     directory: AppRigDirectorySnapshot,
     nodes: RigNodesSnapshot,
     titleShimmerEnabled: boolean,
+    selectedPeerProfileId: string | undefined,
+    peerProfilesLoading: boolean,
 ): SidebarSection[] {
     return [
         ...directory.rigs.map((rig) => ({
@@ -1179,39 +1211,33 @@ function rigSections(
                 .map((item) => ({
                     ...item,
                     id: rigItemId(rig.id, item.id),
-                    ...(rig.status === "connected"
-                        ? {}
-                        : {
-                              ...(item.action
-                                  ? { action: { ...item.action, disabled: true } }
-                                  : {}),
-                              ...(item.secondaryAction
-                                  ? {
-                                        secondaryAction: {
-                                            ...item.secondaryAction,
-                                            disabled: true,
-                                        },
-                                    }
-                                  : {}),
-                          }),
+                    ...rigSidebarItemAvailability(
+                        item,
+                        rig,
+                        selectedPeerProfileId,
+                        peerProfilesLoading,
+                    ),
                 })),
-            // Adding a folder is this machine's act: the picker opens on the disk
-            // the window is running on, so only a folder that is actually here can
-            // be registered. A checkout that lives on a node is added on that
-            // machine, by the Rig running there, so the control is not offered
-            // there at all rather than offered and refused. It appears only once
-            // the daemon is actually up, since a folder cannot be registered with
-            // a Rig that is not answering.
-            ...(rig.nodeId === undefined && rig.status === "connected" && rig.session
+            // The local Rig adopts a folder chosen on this Mac. A peer instead
+            // clones a GitHub repository on its own machine. Both are ordinary
+            // project creation on the Rig named by this section.
+            ...(rig.status === "connected" && rig.session
                 ? {
                       action: {
-                          busy: rig.projectAdd?.pending === true,
+                          busy: rig.nodeId === undefined && rig.projectAdd?.pending === true,
                           icon: "plus" as const,
-                          label: "Add project",
+                          label: rig.nodeId === undefined ? "Add project" : "Clone GitHub project",
                           reveal: "always" as const,
                       },
-                      ...(rig.projectAdd?.error !== undefined
+                      ...(rig.nodeId === undefined && rig.projectAdd?.error !== undefined
                           ? { error: rig.projectAdd.error }
+                          : {}),
+                      ...(rig.nodeId !== undefined &&
+                      !peerProfilesLoading &&
+                      selectedPeerProfileId === undefined
+                          ? {
+                                error: "Choose a profile in Settings before creating work on another Rig.",
+                            }
                           : {}),
                   }
                 : {}),
@@ -1226,9 +1252,15 @@ function rigSections(
                       empty:
                           rig.status === "connected"
                               ? {
-                                    actionLabel: "Create",
-                                    description: "Start a session to begin working here.",
-                                    icon: "chat" as const,
+                                    actionLabel:
+                                        rig.nodeId === undefined
+                                            ? "Add project"
+                                            : "Clone from GitHub",
+                                    description:
+                                        rig.nodeId === undefined
+                                            ? "Choose a repository folder on this Mac."
+                                            : "Clone a GitHub repository onto this machine.",
+                                    icon: "plus" as const,
                                     title: "No projects yet",
                                 }
                               : {
@@ -1926,7 +1958,7 @@ export function AppRigView(props: AppRigViewProps) {
             // that machine as a project; a section with nothing in it offers the
             // one act that would fill it instead — starting work here, or
             // connecting the machine that holds it.
-            onSectionAction={(sectionId, source) => {
+            onSectionAction={(sectionId) => {
                 // Both of the folder block's controls do the same thing, because
                 // there is only one act it offers: the heading's plus and the
                 // button an empty block shows instead both make a folder.
@@ -1935,22 +1967,20 @@ export function AppRigView(props: AppRigViewProps) {
                     return;
                 }
                 const rig = rigOf(sectionId.slice("rig:".length));
-                if (source === "heading") {
-                    // Silent when there is nothing to ask: the control is only
-                    // offered on a connected local machine, and a section
-                    // without one carries no heading control at all.
-                    if (rig?.status === "connected") rig.session?.workspace.projectAdd();
-                    return;
-                }
                 if (rig?.status !== "connected") {
                     props.onSettingsOpen();
                     return;
                 }
-                // The dialog belongs to the machine the window is addressing, so
-                // a section belonging to another one is addressed first:
-                // otherwise this would open a dialog nothing is showing.
+                const workspace = rig.session?.workspace;
+                if (!workspace) return;
+                if (rig.nodeId === undefined) {
+                    workspace.projectAdd();
+                    return;
+                }
+                // The dialog belongs to the peer whose checkout will receive the
+                // clone, so address that Rig before opening its window-level draft.
                 if (rig.id !== active?.id) props.onChatSelect(rig.id, undefined);
-                rig.session?.workspace.createOpen();
+                workspace.projectCloneOpen();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const folderId = folderRowParse(item.id);
@@ -2106,7 +2136,13 @@ export function AppRigView(props: AppRigViewProps) {
                 ...(localRig?.session?.folders
                     ? foldersSection(localRig.id, localFolders, localAvailability?.online === true)
                     : []),
-                ...rigSections(directory, nodes, titleShimmerEnabled),
+                ...rigSections(
+                    directory,
+                    nodes,
+                    titleShimmerEnabled,
+                    profiles.selectedProfileId,
+                    profiles.loading,
+                ),
             ]}
         />
     );
@@ -4682,6 +4718,21 @@ function RigWindowDialogs(props: {
                 props.unavailable,
             )}
             {rigCreateDialog(workspace.create, props.workspace, props.rigOnline, props.unavailable)}
+            {workspace.projectClone ? (
+                <RigProjectCloneDialog
+                    repository={workspace.projectClone.repository}
+                    submitting={workspace.projectClone.submitting}
+                    onClose={() => props.workspace.projectCloneCancel()}
+                    onRepositoryChange={(value) => props.workspace.projectRepositoryUpdate(value)}
+                    onSubmit={() => props.workspace.projectCloneSubmit()}
+                    {...(workspace.projectClone.error === undefined
+                        ? {}
+                        : { error: workspace.projectClone.error })}
+                    {...(props.unavailable === undefined
+                        ? {}
+                        : { submitDisabledReason: props.unavailable })}
+                />
+            ) : null}
         </>
     );
 }

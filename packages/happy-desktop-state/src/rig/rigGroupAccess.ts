@@ -112,11 +112,17 @@ export function rigWorktreeConversationRefusal(worktree: RigWorktree): string | 
 
 /**
  * Why work cannot be written into this project's directory, or `undefined` when
- * it can. A project is the folder Happy was pointed at, so the only thing that
- * can be wrong with it is that the folder is no longer there.
+ * it can. A local project may be a folder Happy pointed at; a managed project
+ * may still be cloning or may have failed before its checkout existed.
  */
 export function rigProjectWriteRefusal(project: RigProject): string | undefined {
-    return project.status === "ready" ? undefined : "This project's folder is no longer on disk.";
+    if (project.status === "initializing") return "This project is still being cloned.";
+    if (project.status === "failed")
+        return project.error === undefined
+            ? "This project could not be cloned."
+            : `This project could not be cloned. ${project.error}`;
+    if (project.presence === "missing") return "This project's folder is no longer on disk.";
+    return project.status === "ready" ? undefined : "This project is not ready.";
 }
 
 /**

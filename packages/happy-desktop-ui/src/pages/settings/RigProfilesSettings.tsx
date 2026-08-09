@@ -8,6 +8,7 @@ import { TextField } from "../../TextField";
 import { RigSettingsSection } from "./RigSettingsShell";
 
 export interface RigProfileRow {
+    readonly email: string;
     readonly id: string;
     readonly name: string;
     readonly imageUrl?: string;
@@ -15,11 +16,13 @@ export interface RigProfileRow {
 }
 
 export interface RigProfileEditor {
+    readonly email: string;
     readonly mode: "create" | "edit";
     readonly name: string;
     readonly saving: boolean;
     readonly error?: string;
     onNameChange(value: string): void;
+    onEmailChange(value: string): void;
     onSave(): void;
     onCancel(): void;
 }
@@ -49,7 +52,7 @@ const initials = (name: string): string =>
 export function RigProfilesSettings(props: RigProfilesSettingsProps) {
     return (
         <RigSettingsSection
-            description="Choose who you are when this Mac sends work to another Rig. Profiles belong to this host and travel with remote messages."
+            description="Choose who you are when this Mac sends work to another Rig. Profiles supply the Git identity for remote projects, workspaces, and sessions."
             rows="cards"
             title="Profiles"
         >
@@ -89,6 +92,15 @@ export function RigProfilesSettings(props: RigProfilesSettingsProps) {
                         placeholder="Your name"
                         size="medium"
                         value={props.editor.name}
+                    />
+                    <TextField
+                        fullWidth
+                        label="Git email"
+                        onValueChange={props.editor.onEmailChange}
+                        placeholder="you@example.com"
+                        size="medium"
+                        type="email"
+                        value={props.editor.email}
                     />
                     <Box className="happy2-rig-profile-form__actions">
                         <Button onClick={props.editor.onCancel} variant="ghost">
@@ -136,9 +148,7 @@ export function RigProfilesSettings(props: RigProfilesSettingsProps) {
                         />
                         <Box className="happy2-rig-profile__naming">
                             <span className="happy2-rig-profile__name">{profile.name}</span>
-                            <span className="happy2-rig-profile__status">
-                                {profile.selected ? "Used for remote messages" : "Use this profile"}
-                            </span>
+                            <span className="happy2-rig-profile__status">{profile.email}</span>
                         </Box>
                     </button>
                     <Button

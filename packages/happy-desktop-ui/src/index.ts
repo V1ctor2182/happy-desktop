@@ -280,6 +280,7 @@ export {
     type RigCreateSessionDestination,
     type RigCreateSessionDialogProps,
 } from "./RigCreateSessionDialog";
+export { RigProjectCloneDialog, type RigProjectCloneDialogProps } from "./RigProjectCloneDialog";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
 export {
     SearchField,

@@ -158,6 +158,7 @@ export const DEFAULT_PROJECT: RigProject = {
     path: "/workspace",
     displayPath: "/workspace",
     kind: "regular",
+    presence: "present",
     status: "ready",
 };
 

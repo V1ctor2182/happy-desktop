@@ -465,7 +465,7 @@ export function rigConnectionOpen(input: {
         ...(input.pairingOwner
             ? {}
             : {
-                  messageIdentity: () => input.profiles?.()?.get().selectedProfileId,
+                  peerIdentity: () => input.profiles?.()?.get().selectedProfileId,
               }),
         ...(pairingSource ? { pairingSource } : {}),
         transcriptConnect: rigConnectTranscriptConnectCreate(rigConnect, input.rigHttpUrl),

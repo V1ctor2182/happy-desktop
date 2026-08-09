@@ -421,6 +421,8 @@ export interface RigWorkspaceSnapshot {
     readonly create?: RigCreateSnapshot;
     /** Where adding a folder to this machine as a project stands. */
     readonly projectAdd: RigProjectAddSnapshot;
+    /** GitHub project being cloned onto a peer Rig, while its dialog is open. */
+    readonly projectClone?: RigProjectCloneSnapshot;
 }
 
 /**
@@ -445,6 +447,13 @@ export interface RigProjectAddSnapshot {
      * gone back to the picker over. Cancelling that attempt reports nothing of
      * its own, since choosing nothing is a complete act with nothing to say.
      */
+    readonly error?: string;
+}
+
+/** Controlled draft for creating one managed project on another Rig. */
+export interface RigProjectCloneSnapshot {
+    readonly repository: string;
+    readonly submitting: boolean;
     readonly error?: string;
 }
 
@@ -778,6 +787,11 @@ export interface RigWorkspaceStore {
      * project never leaves an unwanted session behind.
      */
     projectAdd(): void;
+    /** Opens the GitHub project dialog for the addressed peer Rig. */
+    projectCloneOpen(): void;
+    projectRepositoryUpdate(value: string): void;
+    projectCloneCancel(): void;
+    projectCloneSubmit(): void;
     /** Moves one project after `afterId`, or to the front of the list when null. */
     projectReorder(projectId: RigProjectId, afterId: RigProjectId | null): Promise<void>;
     /**
@@ -1072,6 +1086,20 @@ function noOpenConversation(): Promise<never> {
 /** Nothing is being added and nothing was refused: one shared idle value. */
 const PROJECT_ADD_IDLE: RigProjectAddSnapshot = { pending: false };
 
+function githubRepositoryParse(
+    value: string,
+): { readonly repository: string; readonly name: string } | undefined {
+    const match =
+        /^(?:(?:https?:\/\/)?github\.com\/|git@github\.com:)?([^/\s]+)\/([^/?#\s]+?)(?:\.git)?\/?$/iu.exec(
+            value.trim(),
+        );
+    if (!match) return undefined;
+    const owner = match[1];
+    const name = match[2];
+    if (!owner || !name) return undefined;
+    return { repository: `${owner}/${name}`, name };
+}
+
 /**
  * The creation fields one selection names. Absent optionals are left out rather
  * than sent as undefined, so a create request carries only what was chosen and
@@ -1269,6 +1297,13 @@ export function rigWorkspaceStoreCreate(
      * which is the thing `pending` both reports and enforces.
      */
     let projectAdd: RigProjectAddSnapshot = PROJECT_ADD_IDLE;
+    let projectClone: RigProjectCloneSnapshot | undefined;
+    /** Clone requests awaiting either a durable lifecycle or a mutation refusal. */
+    const pendingProjectClones = new Map<
+        RigProjectId,
+        { readonly generation: number; readonly repository: string }
+    >();
+    let projectCloneGeneration = 0;
     let createDraft: RigSessionDraftStore | undefined;
     let unsubscribeCreateDraft: (() => void) | undefined;
     let createDraftGeneration = 0;
@@ -1374,6 +1409,7 @@ export function rigWorkspaceStoreCreate(
         fileSelection,
         workspaceFilesLoading,
         projectAdd,
+        ...(projectClone ? { projectClone } : {}),
     };
 
     const notify = (): void => {
@@ -1752,7 +1788,8 @@ export function rigWorkspaceStoreCreate(
             snapshot.workspaceFiles === workspaceFiles &&
             snapshot.workspaceFilesLoading === workspaceFilesLoading &&
             snapshot.create === create &&
-            snapshot.projectAdd === projectAdd
+            snapshot.projectAdd === projectAdd &&
+            snapshot.projectClone === projectClone
         )
             return;
         snapshot = {
@@ -1776,6 +1813,7 @@ export function rigWorkspaceStoreCreate(
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             projectAdd,
+            ...(projectClone ? { projectClone } : {}),
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
             ...(panelFile ? { panelFile } : {}),
@@ -2552,6 +2590,13 @@ export function rigWorkspaceStoreCreate(
     const acquireConversation = (conversationId: RigSessionId): void => {
         if (disposed || !active || openId !== conversationId || acquiringId === conversationId)
             return;
+        const createFailure = list.get().sessionCreateFailures.get(conversationId);
+        if (createFailure) {
+            acquiringId = undefined;
+            conversation = { type: "error", error: createFailure };
+            recompute();
+            return;
+        }
         const current = ++acquisitionGeneration;
         acquiringId = conversationId;
         // The composer is local: it is created and published in this same call
@@ -3257,6 +3302,45 @@ export function rigWorkspaceStoreCreate(
         };
     };
 
+    const pendingProjectClonesApply = (): void => {
+        if (pendingProjectClones.size === 0) return;
+        const listSnapshot = list.get();
+        const projects =
+            listSnapshot.projects.type === "ready" ? listSnapshot.projects.value : undefined;
+        for (const [projectId, pending] of pendingProjectClones) {
+            const failure = listSnapshot.projectCreateFailures.get(projectId);
+            if (failure) {
+                pendingProjectClones.delete(projectId);
+                if (pending.generation === projectCloneGeneration && projectClone === undefined) {
+                    projectClone = {
+                        repository: pending.repository,
+                        submitting: false,
+                        error: failure.message,
+                    };
+                }
+                continue;
+            }
+            const project = projects?.find((candidate) => candidate.id === projectId);
+            if (project && project.lifecycle.phase !== "creating") {
+                pendingProjectClones.delete(projectId);
+            }
+        }
+    };
+
+    const sessionCreateFailureApply = (): void => {
+        if (openId === undefined) return;
+        const failure = list.get().sessionCreateFailures.get(openId);
+        if (
+            failure === undefined ||
+            (conversation.type === "error" && conversation.error === failure)
+        )
+            return;
+        acquisitionGeneration += 1;
+        acquiringId = undefined;
+        releaseConversation();
+        conversation = { type: "error", error: failure };
+    };
+
     const start = (): void => {
         active = true;
         unsubscribeList = list.subscribe(() => {
@@ -3266,6 +3350,8 @@ export function rigWorkspaceStoreCreate(
             // has is what makes that possible.
             if (addressedGroupId !== undefined) groupRestore(addressedGroupId);
             fileTabsReconcile();
+            pendingProjectClonesApply();
+            sessionCreateFailureApply();
             catalogAuthoritativeApply();
             recompute();
         });
@@ -3340,6 +3426,7 @@ export function rigWorkspaceStoreCreate(
             ...(openInRecentId ? { openInRecentId } : {}),
             workspaceFilesLoading,
             projectAdd,
+            ...(projectClone ? { projectClone } : {}),
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
         };
@@ -3813,6 +3900,57 @@ export function rigWorkspaceStoreCreate(
                     recompute();
                 }
             })();
+        },
+        projectCloneOpen() {
+            if (disposed || projectClone?.submitting) return;
+            projectCloneGeneration += 1;
+            projectClone = { repository: "", submitting: false };
+            recompute();
+        },
+        projectRepositoryUpdate(value) {
+            if (!projectClone || projectClone.submitting) return;
+            projectClone = { repository: value, submitting: false };
+            recompute();
+        },
+        projectCloneCancel() {
+            if (!projectClone || projectClone.submitting) return;
+            projectClone = undefined;
+            recompute();
+        },
+        projectCloneSubmit() {
+            const editor = projectClone;
+            if (!editor || editor.submitting) return;
+            const source = githubRepositoryParse(editor.repository);
+            if (!source) {
+                projectClone = {
+                    ...editor,
+                    error: "Enter a GitHub repository as owner/repository or a GitHub URL.",
+                };
+                recompute();
+                return;
+            }
+            projectClone = { ...editor, submitting: true };
+            recompute();
+            try {
+                const projectId = list.projectCloneGithub(source.repository, source.name);
+                pendingProjectClones.set(projectId, {
+                    generation: projectCloneGeneration,
+                    repository: editor.repository,
+                });
+                projectClone = undefined;
+                recompute();
+                // The mutation identity is the optimistic project's id, so the
+                // route can address its cloning row before the peer answers.
+                output({ type: "groupOpenRequested", groupId: projectId });
+            } catch (error) {
+                if (disposed) return;
+                projectClone = {
+                    ...editor,
+                    submitting: false,
+                    error: rigUserError(error).message,
+                };
+                recompute();
+            }
         },
         projectReorder: (projectId, afterId) => list.projectReorder(projectId, afterId),
         projectArchive: (projectId) => list.projectArchive(projectId),
