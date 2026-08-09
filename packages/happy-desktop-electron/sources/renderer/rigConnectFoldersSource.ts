@@ -79,10 +79,16 @@ function readingProject(view: FolderView, state: FoldersState): RigFoldersReadin
  * `orderKey` is deliberately dropped: the daemon owns where a folder sits among
  * its siblings and already hands the tree over in that order, so carrying the
  * key would only invite a surface to sort by it and disagree.
+ *
+ * The nested folders are read from `folders` rather than from `children`, which
+ * is the shared order holding this folder's child folders and its links
+ * together. This product states the two apart — a folder's `children` are
+ * folders and its `items` are links — so the filtered view is the one that
+ * answers the question being asked here.
  */
 function folderProject(folder: FolderNode): RigFolder {
     return {
-        children: folder.children.map(folderProject),
+        children: folder.folders.map(folderProject),
         id: folder.id as RigFolderId,
         name: folder.name,
         path: folder.path,
