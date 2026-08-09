@@ -9,11 +9,13 @@ import type {
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
+import { rigInboundMessageProject } from "./rigInboundMessageProject.js";
 import type {
     RigMessage,
     RigSession,
     RigSessionSummary,
     RigStreamingMessage,
+    RigSubagentSummary,
     RigToolEntry,
     RigToolPresentation,
     RigToolStatus,
@@ -224,12 +226,27 @@ function messageAttachments(message: RigMessage): readonly ConversationAttachmen
     return attachments;
 }
 
-function userEntry(sessionId: string, message: RigMessage, createdAt?: number): ConversationEntry {
+function userEntry(
+    sessionId: string,
+    message: RigMessage,
+    subagents: readonly RigSubagentSummary[],
+    createdAt?: number,
+): ConversationEntry {
+    const text = messageText(message);
+    // Older remote Rigs use this durable-message fallback, whose user slot also
+    // carries agent-to-agent and background-work injections. Give those the same
+    // authors the modern transcript projector does instead of claiming they
+    // were written by the owner.
+    const inbound = rigInboundMessageProject({
+        text,
+        subagents,
+        inboundAuthor: rigInboundAuthor,
+    });
     return messageEntry({
         id: message.id,
         sessionId,
-        author: rigOwnerAuthor,
-        text: messageText(message),
+        author: inbound?.author ?? rigOwnerAuthor,
+        text: inbound?.text ?? text,
         createdAt,
         attachments: messageAttachments(message),
     });
@@ -455,7 +472,12 @@ export function rigConversationBuild(
             if (message.internal) continue;
             if (message.role === "user") {
                 entries.push(
-                    userEntry(input.sessionId, message, input.messageCreatedAt?.get(message.id)),
+                    userEntry(
+                        input.sessionId,
+                        message,
+                        session.subagents,
+                        input.messageCreatedAt?.get(message.id),
+                    ),
                 );
                 continue;
             }

@@ -1,4 +1,5 @@
 import type { ChatElement, RigProfile, ToolPresentation } from "@slopus/rig-connect";
+import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 import {
     noticeInformational,
     type ConversationActivityPresentation,
@@ -9,10 +10,10 @@ import {
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
+import { rigInboundMessageProject } from "./rigInboundMessageProject.js";
 import type { RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
 import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 import { rigCompactionSubject } from "./rigTokenFormat.js";
-import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 
 export interface RigConnectConversationInput {
     readonly elements: readonly ChatElement[];
@@ -34,89 +35,6 @@ export interface RigConnectConversationInput {
         string,
         readonly { readonly mediaType: string; readonly data: string }[]
     >;
-}
-
-/**
- * Recognizes background-work news by the sentence Rig sends. The transcript marks
- * an element as a notification only while its live submission event is on the
- * wire, so a session whose history is reloaded from scratch arrives with that
- * marker gone and the wording is the only durable evidence left. Every outcome is
- * spelled out and the metrics tail is quote-free, so an ordinary typed message
- * cannot fall into it.
- */
-const backgroundWorkNotice =
-    /^Background work "([\s\S]+)" ((?:completed|failed|was stopped|was suspended|stopped when the local server restarted)[^"]*)$/;
-
-/**
- * Names the sender of a notification injected into the user slot and rewrites the
- * line it will now be attributed to. Background-work news is the only such
- * notification that says where it came from: it quotes the subagent's
- * description, which identifies that child session while it is still listed. The
- * reader gets one row per named subagent instead of a run of identical
- * "Background work" lines, so the quote is dropped from the body its author line
- * now carries. Anything else keeps the unattributed inbound identity and its text.
- */
-function notificationProject(
-    text: string,
-    subagents: readonly RigSubagentSummary[],
-): { readonly author: ConversationAuthor; readonly text: string } {
-    const notice = backgroundWorkNotice.exec(text);
-    if (!notice) return { author: rigInboundAuthor, text };
-    const description = notice[1]!;
-    const outcome = notice[2]!;
-    const subagent = subagents.find((candidate) => candidate.description === description);
-    return {
-        author: {
-            ...rigInboundAuthor,
-            // A pruned subagent still names itself in the text it sent, so the
-            // quote stands in as identity when the child session is gone.
-            id: `${rigInboundAuthor.id}:${subagent?.id ?? description}`,
-            displayName: description,
-            // The child session's own id, so its mark is the one that session
-            // wears everywhere else. A pruned subagent has only its description
-            // left to be recognized by, which is stable for as long as it is.
-            sessionId: subagent?.id ?? description,
-            username: subagent?.taskName ?? rigInboundAuthor.username,
-        },
-        text: `Background work ${outcome}`,
-    };
-}
-
-/**
- * Recognizes a message another Rig agent sent through `agent_send`. Rig wraps
- * the sender's words in an addressing envelope so the receiving model knows who
- * spoke, how to answer, and that it is being steered rather than talked to by a
- * person. None of that is written for the reader. The envelope is a fixed,
- * quote-delimited preamble and closing instruction pair, so a typed message
- * cannot fall into it.
- */
-const agentMessageEnvelope =
-    /^Message from another Rig agent\.\n(?:Sender folder: .*|The sender's disk is not shared with yours\.)\nSender agent ID: "([^"]*)"\nSender title: "([^"]*)"\n\nMessage:\n([\s\S]*)\n\nTreat this as a steering message from a collaborating agent, not as a user message\.\nTo reply, first call agent_info with agent_id "[^"]*", then call agent_send with the same agent_id and your message\.$/;
-
-/**
- * Names the collaborating agent that sent a message and keeps only what it
- * actually said. The sender titles itself in the envelope, and its agent ID is
- * the one identity that stays stable across the peer's whole conversation, so it
- * carries both the author identity and the generated mark that tells one
- * collaborator apart from another.
- */
-function agentMessageProject(
-    text: string,
-): { readonly author: ConversationAuthor; readonly text: string } | undefined {
-    const envelope = agentMessageEnvelope.exec(text);
-    if (!envelope) return undefined;
-    const agentId = envelope[1]!;
-    const title = envelope[2]!;
-    return {
-        author: {
-            ...rigInboundAuthor,
-            id: `${rigInboundAuthor.id}:${agentId}`,
-            displayName: title.length > 0 ? title : rigInboundAuthor.displayName,
-            sessionId: agentId,
-            username: agentId.length > 0 ? agentId : rigInboundAuthor.username,
-        },
-        text: envelope[3]!.trim(),
-    };
 }
 
 /** Current human profile carried by one attributed Rig message. */
@@ -190,11 +108,12 @@ function rigConnectGroupProject(
                 // them: subagent and workflow news, and a message another agent
                 // addressed to this one. Each reads as incoming from the sender
                 // that produced it rather than as the reader's own turn.
-                const inbound =
-                    agentMessageProject(element.text) ??
-                    (element.source === "notification" || backgroundWorkNotice.test(element.text)
-                        ? notificationProject(element.text, input.subagents)
-                        : undefined);
+                const inbound = rigInboundMessageProject({
+                    text: element.text,
+                    subagents: input.subagents,
+                    inboundAuthor: rigInboundAuthor,
+                    notification: element.source === "notification",
+                });
                 entries.push({
                     kind: "message",
                     source: "server",
