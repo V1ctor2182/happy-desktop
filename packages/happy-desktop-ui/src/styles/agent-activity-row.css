@@ -441,11 +441,11 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    width: 124px;
+    width: 92px;
     height: 20px;
-    padding-left: 64px;
-    background: linear-gradient(90deg, transparent 0, var(--surface) 52%);
-    transition: opacity 560ms ease-in-out;
+    padding-left: 32px;
+    background: linear-gradient(90deg, transparent 0, var(--surface) 35%);
+    transition: none;
 }
 
 /* A still label in the slot TypedText otherwise owns. It must occupy the exact
