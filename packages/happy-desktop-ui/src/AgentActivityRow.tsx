@@ -27,7 +27,8 @@ export type ActivityMotion = "typewriter" | "verb-typed" | "calm-typed" | "calm"
 
 /**
  * Content treatment independent of animation. `focused` keeps one action word
- * for the call's life and leaves timestamp/copy metadata to the detail surface.
+ * for the call's life, leaves copy metadata to the detail surface, and reveals
+ * the tool's start time over the row's trailing edge.
  */
 export type ActivityTreatment = "detailed" | "focused";
 
@@ -673,7 +674,7 @@ function AgentToolActivity(props: {
                     <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
                 </span>
             ) : null}
-            {focused ? null : <AgentActivityTime time={props.time} />}
+            <AgentActivityTime time={props.time} />
         </>
     );
 

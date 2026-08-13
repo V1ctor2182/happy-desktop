@@ -159,7 +159,13 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 }
                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                 singleLine={entry.activity.kind === "tool"}
-                time={props.activityAuthor ? undefined : time}
+                time={
+                    entry.activity.kind === "tool" && props.activityTreatment === "focused"
+                        ? time
+                        : props.activityAuthor
+                          ? undefined
+                          : time
+                }
             />
         );
         return props.activityAuthor ? (

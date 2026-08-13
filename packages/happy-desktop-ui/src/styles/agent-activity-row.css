@@ -415,10 +415,37 @@
     flex: 0 1 auto;
 }
 
-/* Focused conversation rows spend their width on the tool subject; timestamp
-   and copy metadata live in the detail surface for this treatment. */
+/* Focused conversation rows spend their resting width on the tool subject.
+   Their start time overlays the trailing edge on hover, so it takes no width
+   from the subject before or after it appears. */
 .happy2-agent-activity-row[data-treatment="focused"] {
     padding-right: 20px;
+}
+
+.happy2-agent-activity-row[data-treatment="focused"][data-kind="tool"]
+    .happy2-agent-activity__header {
+    position: relative;
+}
+
+/*
+ * This timestamp leaves the flex flow on purpose: it is hover metadata over
+ * the row, not another column. Its surface veil turns the would-be "|" into a
+ * soft fade while the subject and every sibling keep exactly the same box.
+ */
+.happy2-agent-activity-row[data-treatment="focused"][data-kind="tool"]
+    .happy2-agent-activity__time {
+    position: absolute;
+    top: 0;
+    right: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 124px;
+    height: 20px;
+    padding-left: 64px;
+    background: linear-gradient(90deg, transparent 0, var(--surface) 52%);
+    transition: opacity 560ms ease-in-out;
 }
 
 /* A still label in the slot TypedText otherwise owns. It must occupy the exact

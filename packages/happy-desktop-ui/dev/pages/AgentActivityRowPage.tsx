@@ -152,7 +152,7 @@ export function AgentActivityRowPage() {
             </Specimen>
 
             <Specimen
-                detail="a command wider than its row scrolls sideways behind a 24px fade · the copy action reveals on row hover"
+                detail="a command wider than its row scrolls sideways behind a 24px fade · detailed rows reveal copy metadata and the focused row overlays its start time without reflow"
                 label="Overflowing subject"
                 number="05"
                 stage="surface"
@@ -170,6 +170,13 @@ export function AgentActivityRowPage() {
                         activity={{ kind: "tool", tool: longExecTool }}
                         onToolSelect={() => undefined}
                         singleLine
+                    />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: longExecTool }}
+                        onToolSelect={() => undefined}
+                        singleLine
+                        time="10:45 AM"
+                        treatment="focused"
                     />
                 </div>
             </Specimen>
