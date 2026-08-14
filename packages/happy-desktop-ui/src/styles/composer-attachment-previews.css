@@ -1,0 +1,121 @@
+.happy2-composer-attachments,
+.happy2-composer-attachments * {
+    box-sizing: border-box;
+}
+
+.happy2-composer-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+.happy2-composer-attachments__item {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy2-radius-md);
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.happy2-composer-attachments__media {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy2-composer-attachments__file {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
+    padding: 6px 4px 4px;
+}
+
+.happy2-composer-attachments__name {
+    display: block;
+    width: 100%;
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 10px;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The play mark and remove action belong to the media they overlay, so they
+ * intentionally leave the preview's flex flow. */
+.happy2-composer-attachments__play,
+.happy2-composer-attachments__remove {
+    position: absolute;
+}
+
+.happy2-composer-attachments__play {
+    left: 4px;
+    bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 50%;
+    color: var(--text);
+    pointer-events: none;
+}
+
+.happy2-composer-attachments__remove {
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text);
+    cursor: pointer;
+    appearance: none;
+}
+
+/* The visible 18px disc sits inside the standard 28px control target. It is an
+ * overlay decoration, not a sibling-layout box. */
+.happy2-composer-attachments__remove::before {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: 50%;
+    content: "";
+}
+
+.happy2-composer-attachments__remove .happy2-icon {
+    position: relative;
+}
+
+.happy2-composer-attachments__remove:hover::before {
+    background: var(--surface-ripple);
+}
+
+.happy2-composer-attachments__remove:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}

@@ -12,6 +12,7 @@ import { Sidebar } from "../../src/Sidebar";
 import { rigComposerModelControlProps } from "../../src/rigComposerModelControl";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 import { rigMenus } from "./rigChatFixtures";
+import { videoClipWide } from "./videoClips";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-167";
@@ -38,6 +39,41 @@ function composer(overrides: Partial<ComposerSnapshot> = {}): ComposerSnapshot {
 
 const noop = () => undefined;
 
+const imagePreview = `data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#172554"/><circle cx="116" cy="44" r="24" fill="#fbbf24"/><path d="M0 132 54 70l34 38 22-22 50 50v24H0Z" fill="#22d3ee"/><path d="M0 144 54 82l34 38 22-22 50 50v12H0Z" fill="#f472b6"/></svg>',
+)}`;
+
+function attachmentFixtures(): ComposerSnapshot["attachments"] {
+    return [
+        {
+            kind: "workspaceFile",
+            id: "attachment:image",
+            name: "reference.png",
+            size: 842_137,
+            mediaType: "image/png",
+            file: new File([], "reference.png", { type: "image/png" }),
+            previewUrl: imagePreview,
+        },
+        {
+            kind: "workspaceFile",
+            id: "attachment:video",
+            name: "walkthrough.webm",
+            size: 8_231_091,
+            mediaType: "video/webm",
+            file: new File([], "walkthrough.webm", { type: "video/webm" }),
+            previewUrl: videoClipWide,
+        },
+        {
+            kind: "workspaceFile",
+            id: "attachment:file",
+            name: "requirements.pdf",
+            size: 124_928,
+            mediaType: "application/pdf",
+            file: new File([], "requirements.pdf", { type: "application/pdf" }),
+        },
+    ];
+}
+
 const chatItems = [
     { kind: "label" as const, label: "happy2" },
     { kind: "item" as const, id: "happy2|ses_a", label: "Local settings", icon: "check" as const },
@@ -47,10 +83,14 @@ const chatItems = [
     { kind: "item" as const, id: "wt3|ses_c", label: "Provider catalog" },
 ];
 
-function dock(value: string, unavailable?: string) {
+function dock(
+    value: string,
+    unavailable?: string,
+    attachments: ComposerSnapshot["attachments"] = [],
+) {
     return (
         <ConversationDock
-            composer={composer({ text: value })}
+            composer={composer({ attachments, text: value })}
             composerControls={
                 <ComposerModelControl
                     {...rigComposerModelControlProps(rigMenus, {
@@ -88,6 +128,8 @@ function dock(value: string, unavailable?: string) {
                 />
             }
             composerPlaceholder="Message Happy…"
+            onComposerAttachmentRemove={noop}
+            onComposerAttachmentsSelect={noop}
             onComposerSend={noop}
             onComposerValueChange={noop}
             submitDisabled={unavailable !== undefined}
@@ -247,6 +289,29 @@ export function FloatingConversationDockPage() {
                     {dock(
                         "Keep this draft here until the Rig reconnects.",
                         "Rig is offline. The draft is preserved.",
+                    )}
+                </Box>
+            </Specimen>
+            <Specimen
+                detail="56px image, video, and file previews · removable · above the text"
+                label="Draft attachments"
+                number="05"
+                stage="surface"
+            >
+                <Box
+                    style={{
+                        background: "var(--surface)",
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: "240px",
+                        justifyContent: "flex-end",
+                        width: "520px",
+                    }}
+                >
+                    {dock(
+                        "Compare these before making the change.",
+                        undefined,
+                        attachmentFixtures(),
                     )}
                 </Box>
             </Specimen>

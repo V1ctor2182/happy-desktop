@@ -16,6 +16,10 @@ import { CommandPicker, type CommandPickerItem } from "./CommandPicker";
 import { Avatar, type ToneName } from "./Avatar";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
+import {
+    ComposerAttachmentPreviews,
+    type ComposerAttachmentPreview,
+} from "./ComposerAttachmentPreviews";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
 /* ---- ContextChips ----------------------------------------------------- */
@@ -251,6 +255,8 @@ export type ComposerProps = {
     attachmentAccept?: string;
     /** Allows more than one file in the native picker. */
     attachmentMultiple?: boolean;
+    /** Draft files rendered as compact square previews above the text. */
+    attachmentPreviews?: readonly ComposerAttachmentPreview[];
     /**
      * Current message destination. Supplying it (with `onAudienceChange`)
      * renders the People/Agents toggle and enables Shift+Tab switching.
@@ -1026,6 +1032,18 @@ export function Composer(props: ComposerProps) {
             ref={composerEl}
         >
             <div className="happy2-composer__surface" data-happy-desktop-ui="composer-surface">
+                {(props.attachmentPreviews?.length ?? 0) > 0 ? (
+                    <div
+                        className="happy2-composer__attachments"
+                        data-happy-desktop-ui="composer-attachment-previews"
+                    >
+                        <ComposerAttachmentPreviews
+                            items={props.attachmentPreviews ?? []}
+                            onRemove={props.onContextRemove}
+                            readOnly={busy || !props.onContextRemove}
+                        />
+                    </div>
+                ) : null}
                 {(props.contextItems?.length ?? 0) > 0 ? (
                     <div
                         className="happy2-composer__context"

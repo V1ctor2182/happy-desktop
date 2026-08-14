@@ -101,6 +101,11 @@
     padding: 8px 20px 0;
 }
 
+.happy2-composer__attachments {
+    display: flex;
+    padding: 12px 16px 0;
+}
+
 .happy2-composer[data-disabled] .happy2-composer__surface {
     cursor: not-allowed;
 }

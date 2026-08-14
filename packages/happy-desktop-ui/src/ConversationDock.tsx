@@ -2,7 +2,8 @@ import { type CSSProperties, type ReactNode } from "react";
 import type { ComposerSnapshot } from "happy-desktop-state";
 import { Banner } from "./Banner";
 import { commandPickerItems } from "./CommandPicker";
-import { Composer, type ContextItem, type Mentionable } from "./Composer";
+import { Composer, type Mentionable } from "./Composer";
+import type { ComposerAttachmentPreview } from "./ComposerAttachmentPreviews";
 
 export type ConversationDockProps = {
     className?: string;
@@ -45,14 +46,23 @@ export type ConversationDockProps = {
     style?: CSSProperties;
 };
 
-/** The draft's attachments as composer chips; an image chip carries its size. */
-function contextItemsOf(composer: ComposerSnapshot): ContextItem[] {
-    return composer.attachments.map((attachment) => ({
-        id: attachment.id,
-        kind: "file",
-        label: attachment.name,
-        detail: attachmentSizeFormat(attachment.size),
-    }));
+/** Projects draft payloads into presentation-only square previews. */
+function attachmentPreviewsOf(composer: ComposerSnapshot): ComposerAttachmentPreview[] {
+    return composer.attachments.map((attachment) => {
+        const mediaType = attachment.mediaType;
+        const kind = mediaType.startsWith("image/")
+            ? "image"
+            : mediaType.startsWith("video/")
+              ? "video"
+              : "file";
+        return {
+            id: attachment.id,
+            kind,
+            name: attachment.name,
+            detail: attachmentSizeFormat(attachment.size),
+            ...(attachment.previewUrl ? { url: attachment.previewUrl } : {}),
+        };
+    });
 }
 
 function attachmentSizeFormat(bytes: number): string {
@@ -128,8 +138,8 @@ export function ConversationDock(props: ConversationDockProps) {
                 {props.composerAboveControl}
                 <Composer
                     attachmentMultiple
+                    attachmentPreviews={attachmentPreviewsOf(composer)}
                     commands={commandItems}
-                    contextItems={contextItemsOf(composer)}
                     disabled={props.disabled}
                     focusOnType={props.composerFocusOnType}
                     {...(props.composerFocusKey === undefined

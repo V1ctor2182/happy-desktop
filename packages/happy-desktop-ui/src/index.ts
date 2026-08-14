@@ -101,6 +101,12 @@ export {
     type MentionPickerProps,
 } from "./Composer";
 export {
+    type ComposerAttachmentPreview,
+    type ComposerAttachmentPreviewKind,
+    ComposerAttachmentPreviews,
+    type ComposerAttachmentPreviewsProps,
+} from "./ComposerAttachmentPreviews";
+export {
     ComposerModelControl,
     type ComposerModelChoice,
     type ComposerModelControlProps,
