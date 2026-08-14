@@ -24,26 +24,30 @@ import { type RigUserInputAnswerMap } from "../../src/RigUserInputPrompt";
 import { rigComposerModelControlProps } from "../../src/rigComposerModelControl";
 import { ComponentPage } from "../kit";
 import rawRecording from "../recordings/conversations/gold-five-minute-session.v1.json?raw";
+import rawSubagentRecording from "../recordings/conversations/gold-subagent-lifecycle.v1.json?raw";
 import {
     RigConversationReplayDriver,
     rigConversationReplayRecordingParse,
     rigConversationReplayTimeline,
+    type RigConversationReplayRecording,
 } from "../replay/rigConversationReplayDriver";
 
 /** The component plan this page documents. The selector and page header share it. */
 export const componentNumber = "C-256";
 
-const RECORDING = rigConversationReplayRecordingParse(rawRecording);
+const RECORDINGS = [
+    rigConversationReplayRecordingParse(rawSubagentRecording),
+    rigConversationReplayRecordingParse(rawRecording),
+];
 const FRAME_MS = 1_000 / 60;
 
-const COMPOSER: ComposerSnapshot = {
+const COMPOSER: Omit<ComposerSnapshot, "scopeId"> = {
     agentUserIds: [],
     attachments: [],
     capabilities: { commands: [], mentions: false, shellMode: false },
     focused: false,
     mentionCandidates: [],
     revision: 0,
-    scopeId: RECORDING.id,
     submission: { status: "idle" },
     text: "",
 };
@@ -101,12 +105,12 @@ function durationLabel(milliseconds: number): string {
     return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
 }
 
-function frameIndexAt(sourceMs: number): number {
+function frameIndexAt(recording: RigConversationReplayRecording, sourceMs: number): number {
     let low = 0;
-    let high = RECORDING.frames.length;
+    let high = recording.frames.length;
     while (low < high) {
         const middle = Math.floor((low + high) / 2);
-        if (RECORDING.frames[middle]!.atMs <= sourceMs) low = middle + 1;
+        if (recording.frames[middle]!.atMs <= sourceMs) low = middle + 1;
         else high = middle;
     }
     return low - 1;
@@ -127,8 +131,9 @@ const MOTION_GRID: CSSProperties = {
     maxWidth: "1160px",
 };
 
-function ToolMotionReplayLab() {
-    const [driver] = useState(() => new RigConversationReplayDriver(RECORDING));
+function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording }) {
+    const { recording } = props;
+    const [driver] = useState(() => new RigConversationReplayDriver(recording));
     const snapshot = useSyncExternalStore(driver.subscribe, driver.get, driver.get);
     const [activityOpen, setActivityOpen] = useState(false);
     const [requestSelections, setRequestSelections] = useState<
@@ -148,8 +153,12 @@ function ToolMotionReplayLab() {
     // The mapping scans thousands of exact frames, but changes only when the
     // skip toggle changes—not on every animation frame.
     const timeline = useMemo(
-        () => rigConversationReplayTimeline(RECORDING, skipSilence),
-        [skipSilence],
+        () => rigConversationReplayTimeline(recording, skipSilence),
+        [recording, skipSilence],
+    );
+    const composer = useMemo<ComposerSnapshot>(
+        () => ({ ...COMPOSER, scopeId: recording.id }),
+        [recording.id],
     );
     const variant = VARIANTS.find((candidate) => candidate.id === variantId) ?? VARIANTS[0]!;
     const displayMs =
@@ -161,9 +170,9 @@ function ToolMotionReplayLab() {
               );
     const sourceMs = timeline.sourceAt(displayMs);
     const playing = clock.playingSince !== null && displayMs < timeline.displayDurationMs;
-    const sourceEpochNow = RECORDING.startedAt + sourceMs;
-    const currentFrameIndex = frameIndexAt(sourceMs);
-    const currentFrame = RECORDING.frames[currentFrameIndex];
+    const sourceEpochNow = recording.startedAt + sourceMs;
+    const currentFrameIndex = frameIndexAt(recording, sourceMs);
+    const currentFrame = recording.frames[currentFrameIndex];
     const activeSilentWindow = timeline.windows.find(
         (window) => displayMs > window.displayStartMs && displayMs < window.displayEndMs,
     );
@@ -426,7 +435,7 @@ function ToolMotionReplayLab() {
                             onChange={(event) => {
                                 const nextSkip = event.target.checked;
                                 const nextTimeline = rigConversationReplayTimeline(
-                                    RECORDING,
+                                    recording,
                                     nextSkip,
                                 );
                                 setSkipSilence(nextSkip);
@@ -484,7 +493,7 @@ function ToolMotionReplayLab() {
             >
                 <span>
                     frame {Math.max(0, currentFrameIndex + 1).toLocaleString()}/
-                    {RECORDING.frames.length.toLocaleString()}
+                    {recording.frames.length.toLocaleString()}
                 </span>
                 <span>
                     {currentFrame
@@ -527,7 +536,7 @@ function ToolMotionReplayLab() {
                 <ConversationView
                     activityTreatment="focused"
                     agentAuthor={rigAgentAuthor}
-                    composer={COMPOSER}
+                    composer={composer}
                     composerAboveControl={
                         activityOpen ? (
                             <ComposerPanel
@@ -546,13 +555,15 @@ function ToolMotionReplayLab() {
                     composerControls={modelControl}
                     composerFooterControl={footerControl}
                     composerPlaceholder="Message Happy in “less chaotic tool calls”…"
-                    conversationId={RECORDING.id}
+                    conversationId={recording.id}
                     elapsedMs={elapsedMs}
                     entries={snapshot.entries}
                     expandedTurnIds={snapshot.expandedTurnIds}
                     motion={variant.motion}
                     onComposerSend={noop}
                     onComposerValueChange={noop}
+                    now={sourceEpochNow}
+                    onDelegationSelect={noop}
                     onRequestAnswer={(requestId) =>
                         setRequestAnsweredAt((current) => {
                             const next = new Map(current);
@@ -587,14 +598,52 @@ function ToolMotionReplayLab() {
     );
 }
 
+function ToolMotionReplaySwitcher() {
+    const [recordingId, setRecordingId] = useState(RECORDINGS[0]!.id);
+    const recording =
+        RECORDINGS.find((candidate) => candidate.id === recordingId) ?? RECORDINGS[0]!;
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+            <label
+                style={{
+                    alignItems: "center",
+                    display: "flex",
+                    flexDirection: "row",
+                    fontSize: "13px",
+                    gap: "8px",
+                    maxWidth: "1160px",
+                }}
+            >
+                Recording
+                <select
+                    onChange={(event) => setRecordingId(event.target.value)}
+                    value={recording.id}
+                >
+                    {RECORDINGS.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                            {candidate.label}
+                        </option>
+                    ))}
+                </select>
+                <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
+                    {durationLabel(recording.durationMs)} ·{" "}
+                    {recording.frames.length.toLocaleString()} exact frames
+                </span>
+            </label>
+            <ToolMotionReplayLab key={recording.id} recording={recording} />
+        </div>
+    );
+}
+
 export function ToolMotionReplayPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A sanitized five-minute composite of exact Rig arrival deltas replayed through rig-connect, the production chat store, and ConversationView: multiple messages, two steering boundaries, permission reviews, a real Sol subagent lifecycle, a reconstructed Ask User interval, a provider switch, streamed prose, and completed turn rows. Quiet-window skipping compresses time only; it never drops protocol frames."
-            title="ToolMotionReplay · Gold session"
+            summary="Sanitized exact Rig arrival deltas replayed through rig-connect, the production chat store, and ConversationView. Switch between the five-minute composite and a fully real Sol parent run with three concurrent Sol/Terra subagents and a follow-up. Quiet-window skipping compresses time only; it never drops protocol frames."
+            title="ToolMotionReplay · Gold sessions"
         >
-            <ToolMotionReplayLab />
+            <ToolMotionReplaySwitcher />
         </ComponentPage>
     );
 }

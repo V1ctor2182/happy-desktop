@@ -20,7 +20,8 @@ export type RigConversationReplaySource =
     | "provider-switch"
     | "sol-followup"
     | "steering-core"
-    | "subagent-overlay";
+    | "subagent-overlay"
+    | "subagent-lifecycle";
 
 export interface RigConversationReplayFrame {
     readonly atMs: number;
