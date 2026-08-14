@@ -88,7 +88,7 @@ export interface Project {
         | { readonly kind: "git"; readonly url: string };
     readonly requiredSecretKind?: "github";
     readonly avatar?: ProjectAvatar;
-    /** Optimistic-concurrency token the daemon requires to guard a reorder or an archive. */
+    /** Optimistic-concurrency token the daemon requires to guard a reorder, rename, or archive. */
     readonly version: number;
     readonly createdAt: number;
     readonly updatedAt: number;

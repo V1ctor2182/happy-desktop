@@ -405,14 +405,18 @@ export class RigDaemonClient {
         );
     }
 
-    /**
-     * Renames a project. Unlike the worktree rename below, the daemon takes no
-     * version here: a project name is a label with no derived state hanging off
-     * it, so a lost race costs the later of two names rather than corrupting
-     * anything.
-     */
-    renameProject(projectId: string, name: string): Promise<{ readonly project: Project }> {
-        return this.#requestJson("PATCH", `/projects/${encodeURIComponent(projectId)}`, { name });
+    /** Renames a project; guarded by the version it was read at. */
+    renameProject(
+        projectId: string,
+        name: string,
+        expectedVersion: number,
+    ): Promise<{ readonly project: Project }> {
+        return this.#requestJson(
+            "PATCH",
+            `/projects/${encodeURIComponent(projectId)}`,
+            { name },
+            { "if-match": `"${String(expectedVersion)}"` },
+        );
     }
 
     /**

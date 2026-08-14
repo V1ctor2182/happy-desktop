@@ -1207,10 +1207,10 @@ export async function rigProxyHandle(options: RigProxyHandleOptions): Promise<bo
             }
             if (segments[2] === "rename" && segments.length === 3) {
                 const body = await bodyReadJson(request);
-                // A project rename is unguarded because the daemon asks for no
-                // version: the name has nothing derived from it, so the worst a
-                // lost race costs is the later of two names.
-                await client.renameProject(projectId, nameRead(body));
+                const name = nameRead(body);
+                await projectGuarded(client, projectId, (version) =>
+                    client.renameProject(projectId, name, version),
+                );
                 writeJson(response, 200, {});
                 return true;
             }
