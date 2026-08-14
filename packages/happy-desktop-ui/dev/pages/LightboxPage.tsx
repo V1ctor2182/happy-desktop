@@ -1,6 +1,7 @@
 import { Button } from "../../src/Button";
 import { Lightbox } from "../../src/Lightbox";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
+import { videoClipWide } from "./videoClips";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-046";
@@ -37,7 +38,7 @@ export function LightboxPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Full image preview inside a web modal (never a new browser tab). Hosted on ModalOverlay's fill placement it takes the whole app window and paints one flat dark over it, in either appearance, with a chrome-less caption/actions header floating above the shared ImageViewer — so a picture opened from a conversation zooms and pans exactly as one opened from Files."
+            summary="Full image or video preview inside a web modal (never a new browser tab). Hosted on ModalOverlay's fill placement it takes the whole app window and paints one flat dark over it, with a chrome-less caption/actions header above the same ImageViewer and VideoViewer used by Files."
             title="Lightbox"
         >
             <Specimen
@@ -104,6 +105,23 @@ export function LightboxPage() {
                         />
                     </div>
                     <DimensionRule label="28 px step controls · 4 px tool gap · count in tabular mono" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="The shared VideoViewer fills the same immersive room, retaining its transport and keyboard controls"
+                label="Lightbox — video"
+                number="04"
+                stage="surface"
+            >
+                <div style={viewport}>
+                    <Lightbox
+                        alt="Composer walkthrough"
+                        caption="walkthrough.webm"
+                        detail="7.9 MB"
+                        onClose={() => {}}
+                        videoUrl={videoClipWide}
+                    />
                 </div>
             </Specimen>
         </ComponentPage>

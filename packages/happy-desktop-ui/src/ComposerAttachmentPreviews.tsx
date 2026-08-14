@@ -1,4 +1,5 @@
 import { type CSSProperties } from "react";
+import { ComposerAttachmentRemoveButton } from "./ComposerAttachmentRemoveButton";
 import { Icon } from "./Icon";
 
 export type ComposerAttachmentPreviewKind = "file" | "image" | "video";
@@ -15,6 +16,8 @@ export type ComposerAttachmentPreviewsProps = {
     className?: string;
     "data-testid"?: string;
     items: readonly ComposerAttachmentPreview[];
+    /** Opens image or video media in the draft's full-window viewer. */
+    onOpen?: (id: string) => void;
     onRemove?: (id: string) => void;
     readOnly?: boolean;
     style?: CSSProperties;
@@ -79,16 +82,22 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                             <Icon name="play" size={12} />
                         </span>
                     ) : null}
-                    {!props.readOnly && props.onRemove ? (
+                    {(item.kind === "image" || item.kind === "video") &&
+                    item.url &&
+                    props.onOpen ? (
                         <button
-                            aria-label={`Remove ${item.name}`}
-                            className="happy2-composer-attachments__remove"
-                            data-happy-desktop-ui="composer-attachment-remove"
-                            onClick={() => props.onRemove?.(item.id)}
+                            aria-label={`Preview ${item.name}`}
+                            className="happy2-composer-attachments__open"
+                            data-happy-desktop-ui="composer-attachment-open"
+                            onClick={() => props.onOpen?.(item.id)}
                             type="button"
-                        >
-                            <Icon name="close" size={12} />
-                        </button>
+                        />
+                    ) : null}
+                    {!props.readOnly && props.onRemove ? (
+                        <ComposerAttachmentRemoveButton
+                            name={item.name}
+                            onRemove={() => props.onRemove?.(item.id)}
+                        />
                     ) : null}
                 </div>
             ))}

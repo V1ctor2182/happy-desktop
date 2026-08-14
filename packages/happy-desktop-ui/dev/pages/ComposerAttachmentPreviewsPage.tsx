@@ -53,7 +53,7 @@ export function ComposerAttachmentPreviewsPage() {
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <DimensionRule label="56 × 56 px" />
-                    <ComposerAttachmentPreviews items={items} onRemove={noop} />
+                    <ComposerAttachmentPreviews items={items} onOpen={noop} onRemove={noop} />
                 </div>
             </Specimen>
             <Specimen
@@ -64,6 +64,7 @@ export function ComposerAttachmentPreviewsPage() {
             >
                 <ComposerAttachmentPreviews
                     items={denseItems}
+                    onOpen={noop}
                     onRemove={noop}
                     style={{ width: "160px" }}
                 />
@@ -74,7 +75,7 @@ export function ComposerAttachmentPreviewsPage() {
                 number="03"
                 stage="surface"
             >
-                <ComposerAttachmentPreviews items={items} readOnly />
+                <ComposerAttachmentPreviews items={items} onOpen={noop} readOnly />
             </Specimen>
         </ComponentPage>
     );

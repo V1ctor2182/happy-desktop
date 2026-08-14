@@ -1,9 +1,13 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { ComposerSnapshot } from "happy-desktop-state";
 import { Banner } from "./Banner";
+import { Button } from "./Button";
 import { commandPickerItems } from "./CommandPicker";
 import { Composer, type Mentionable } from "./Composer";
 import type { ComposerAttachmentPreview } from "./ComposerAttachmentPreviews";
+import { Lightbox } from "./Lightbox";
+import { ModalOverlay } from "./ModalOverlay";
 
 export type ConversationDockProps = {
     className?: string;
@@ -93,6 +97,7 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
  */
 export function ConversationDock(props: ConversationDockProps) {
     const composer = props.composer;
+    const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
     /*
      * The draft is the query: the store hands over a command query only while the
      * whole draft is one command word that something still matches, so the list
@@ -108,6 +113,75 @@ export function ConversationDock(props: ConversationDockProps) {
                       .startsWith(composer.commandQuery!.toLowerCase()),
               );
     const sendEnabled = composer.text.trim().length > 0 || composer.attachments.length > 0;
+    const attachmentPreviews = attachmentPreviewsOf(composer);
+    const previewMedia = attachmentPreviews.filter(
+        (
+            item,
+        ): item is ComposerAttachmentPreview & {
+            kind: "image" | "video";
+            url: string;
+        } => (item.kind === "image" || item.kind === "video") && item.url !== undefined,
+    );
+    const previewIndex = previewMedia.findIndex((item) => item.id === previewAttachmentId);
+    const previewAttachment = previewIndex >= 0 ? previewMedia[previewIndex] : undefined;
+    const previewStep = (direction: 1 | -1) => {
+        if (previewIndex < 0 || previewMedia.length < 2) return;
+        const index = (previewIndex + direction + previewMedia.length) % previewMedia.length;
+        setPreviewAttachmentId(previewMedia[index]?.id ?? null);
+    };
+    const attachmentRemove = (attachmentId: string) => {
+        if (attachmentId === previewAttachmentId) {
+            const remaining = previewMedia.filter((item) => item.id !== attachmentId);
+            setPreviewAttachmentId(
+                remaining.length > 0
+                    ? (remaining[previewIndex % remaining.length]?.id ?? null)
+                    : null,
+            );
+        }
+        props.onComposerAttachmentRemove?.(attachmentId);
+    };
+    const composerSend = () => {
+        setPreviewAttachmentId(null);
+        props.onComposerSend();
+    };
+    const attachmentRemoveEnabled =
+        !props.disabled && props.onComposerAttachmentRemove !== undefined;
+    const mediaOverlay = previewAttachment ? (
+        <ModalOverlay onDismiss={() => setPreviewAttachmentId(null)} placement="fill">
+            <Lightbox
+                actions={
+                    attachmentRemoveEnabled ? (
+                        <Button
+                            aria-label={`Remove ${previewAttachment.name} from draft`}
+                            icon="trash"
+                            iconOnly
+                            onClick={() => attachmentRemove(previewAttachment.id)}
+                            size="small"
+                            variant="ghost"
+                        />
+                    ) : undefined
+                }
+                alt={previewAttachment.name}
+                caption={previewAttachment.name}
+                detail={previewAttachment.detail}
+                navigationLabel="attachment"
+                onClose={() => setPreviewAttachmentId(null)}
+                {...(previewMedia.length > 1
+                    ? {
+                          onNext: () => previewStep(1),
+                          onPrevious: () => previewStep(-1),
+                          position: {
+                              index: previewIndex,
+                              total: previewMedia.length,
+                          },
+                      }
+                    : {})}
+                {...(previewAttachment.kind === "video"
+                    ? { videoUrl: previewAttachment.url }
+                    : { imageUrl: previewAttachment.url })}
+            />
+        </ModalOverlay>
+    ) : null;
     return (
         <div
             className={["happy2-conversation__dock", props.className].filter(Boolean).join(" ")}
@@ -120,7 +194,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     action={
                         props.disabled || props.submitDisabled
                             ? undefined
-                            : { label: "Retry", onClick: props.onComposerSend }
+                            : { label: "Retry", onClick: composerSend }
                     }
                     data-testid="conversation-submission-error"
                     tone="danger"
@@ -138,7 +212,7 @@ export function ConversationDock(props: ConversationDockProps) {
                 {props.composerAboveControl}
                 <Composer
                     attachmentMultiple
-                    attachmentPreviews={attachmentPreviewsOf(composer)}
+                    attachmentPreviews={attachmentPreviews}
                     commands={commandItems}
                     disabled={props.disabled}
                     focusOnType={props.composerFocusOnType}
@@ -149,11 +223,12 @@ export function ConversationDock(props: ConversationDockProps) {
                     mentions={mentionsOf(composer)}
                     footerControl={props.composerFooterControl}
                     modelControl={props.composerControls}
+                    onAttachmentPreviewOpen={setPreviewAttachmentId}
                     onAttachmentsSelect={props.onComposerAttachmentsSelect}
                     onCommandSelect={(commandId) => props.onCommandInvoke?.(commandId)}
-                    onContextRemove={props.disabled ? undefined : props.onComposerAttachmentRemove}
+                    onContextRemove={attachmentRemoveEnabled ? attachmentRemove : undefined}
                     onFocusChange={props.onComposerFocusChange}
-                    onSend={props.onComposerSend}
+                    onSend={composerSend}
                     onStop={props.onAbort}
                     onValueChange={props.onComposerValueChange}
                     pending={composer.submission.status === "pending"}
@@ -164,6 +239,11 @@ export function ConversationDock(props: ConversationDockProps) {
                     value={composer.text}
                 />
             </div>
+            {mediaOverlay
+                ? typeof document === "undefined"
+                    ? mediaOverlay
+                    : createPortal(mediaOverlay, document.body)
+                : null}
         </div>
     );
 }

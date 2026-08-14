@@ -15,8 +15,8 @@ export type ModalOverlayProps = {
      * `center` (default) hosts dialogs and forms in the standard modal
      * location. `top` anchors transient type-ahead surfaces below the adaptive
      * top gutter; it is not a form placement. `fill` drops the gutter and gives
-     * the whole window to one immersive surface — the image viewer — which then
-     * paints its own dark instead of floating as a card on the dim.
+     * the whole window to one immersive media surface, which then paints its
+     * own dark instead of floating as a card on the dim.
      */
     placement?: "center" | "top" | "fill";
 };

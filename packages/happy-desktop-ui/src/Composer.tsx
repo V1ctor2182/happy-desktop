@@ -311,6 +311,8 @@ export type ComposerProps = {
     onAudienceChange?: (audience: AudienceValue) => void;
     /** Receives files picked, pasted into the draft, or dropped onto the composer. */
     onAttachmentsSelect?: (files: File[]) => void;
+    /** Opens one of the draft's media previews in the full-window viewer. */
+    onAttachmentPreviewOpen?: (id: string) => void;
     onContextRemove?: (id: string) => void;
     /** Called after an emoji is selected. Unicode emoji are also inserted into the draft. */
     onEmojiSelect?: (emoji: EmojiItem) => void;
@@ -1039,6 +1041,7 @@ export function Composer(props: ComposerProps) {
                     >
                         <ComposerAttachmentPreviews
                             items={props.attachmentPreviews ?? []}
+                            onOpen={props.onAttachmentPreviewOpen}
                             onRemove={props.onContextRemove}
                             readOnly={busy || !props.onContextRemove}
                         />

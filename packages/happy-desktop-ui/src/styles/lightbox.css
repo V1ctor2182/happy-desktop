@@ -1,5 +1,5 @@
 /*
- * C-046 Lightbox — full image preview inside a web modal.
+ * C-046 Lightbox — full image or video preview inside a web modal.
  *
  * Not a card: hosted on ModalOverlay's `fill` placement it takes the whole app
  * window and paints one flat dark over it. The root .happy2-lightbox declares
@@ -8,7 +8,8 @@
  * is the inner .happy2-lightbox__dialog: a chrome-less caption/actions header
  * floating on the dark above the shared ImageViewer in its immersive tone. The
  * dark is the theme's own dark surface, pinned in either appearance by the
- * ThemeScope the component wraps itself in.
+ * ThemeScope the component wraps itself in. Its frame hosts the product's
+ * shared ImageViewer or VideoViewer rather than drawing either medium itself.
  */
 
 .happy2-lightbox,

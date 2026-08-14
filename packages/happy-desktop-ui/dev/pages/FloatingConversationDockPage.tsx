@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ComposerSnapshot } from "happy-desktop-state";
 import { AppShell } from "../../src/AppShell";
 import { Box } from "../../src/Box";
@@ -42,6 +43,12 @@ const noop = () => undefined;
 const imagePreview = `data:image/svg+xml,${encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#172554"/><circle cx="116" cy="44" r="24" fill="#fbbf24"/><path d="M0 132 54 70l34 38 22-22 50 50v24H0Z" fill="#22d3ee"/><path d="M0 144 54 82l34 38 22-22 50 50v12H0Z" fill="#f472b6"/></svg>',
 )}`;
+const portraitPreview = `data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="200" viewBox="0 0 120 200"><rect width="120" height="200" fill="#3b0764"/><circle cx="84" cy="48" r="20" fill="#f472b6"/><path d="M0 168 36 102l28 34 18-20 38 52v32H0Z" fill="#c084fc"/></svg>',
+)}`;
+const widePreview = `data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect width="240" height="120" fill="#052e16"/><circle cx="184" cy="32" r="18" fill="#fbbf24"/><path d="M0 104 68 52l48 38 32-30 92 48v12H0Z" fill="#34d399"/></svg>',
+)}`;
 
 function attachmentFixtures(): ComposerSnapshot["attachments"] {
     return [
@@ -62,6 +69,24 @@ function attachmentFixtures(): ComposerSnapshot["attachments"] {
             mediaType: "video/webm",
             file: new File([], "walkthrough.webm", { type: "video/webm" }),
             previewUrl: videoClipWide,
+        },
+        {
+            kind: "workspaceFile",
+            id: "attachment:portrait",
+            name: "portrait-reference.png",
+            size: 593_920,
+            mediaType: "image/png",
+            file: new File([], "portrait-reference.png", { type: "image/png" }),
+            previewUrl: portraitPreview,
+        },
+        {
+            kind: "workspaceFile",
+            id: "attachment:wide",
+            name: "layout-study.gif",
+            size: 4_192_214,
+            mediaType: "image/gif",
+            file: new File([], "layout-study.gif", { type: "image/gif" }),
+            previewUrl: widePreview,
         },
         {
             kind: "workspaceFile",
@@ -87,6 +112,7 @@ function dock(
     value: string,
     unavailable?: string,
     attachments: ComposerSnapshot["attachments"] = [],
+    onAttachmentRemove: (attachmentId: string) => void = noop,
 ) {
     return (
         <ConversationDock
@@ -128,13 +154,20 @@ function dock(
                 />
             }
             composerPlaceholder="Message Happy…"
-            onComposerAttachmentRemove={noop}
+            onComposerAttachmentRemove={onAttachmentRemove}
             onComposerAttachmentsSelect={noop}
             onComposerSend={noop}
             onComposerValueChange={noop}
             submitDisabled={unavailable !== undefined}
             unavailable={unavailable}
         />
+    );
+}
+
+function AttachmentDockSpecimen() {
+    const [attachments, setAttachments] = useState(attachmentFixtures);
+    return dock("Compare these before making the change.", undefined, attachments, (attachmentId) =>
+        setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId)),
     );
 }
 
@@ -293,7 +326,7 @@ export function FloatingConversationDockPage() {
                 </Box>
             </Specimen>
             <Specimen
-                detail="56px image, video, and file previews · removable · above the text"
+                detail="56px image, video, and file previews · media opens in the full-window Lightbox"
                 label="Draft attachments"
                 number="05"
                 stage="surface"
@@ -308,11 +341,7 @@ export function FloatingConversationDockPage() {
                         width: "520px",
                     }}
                 >
-                    {dock(
-                        "Compare these before making the change.",
-                        undefined,
-                        attachmentFixtures(),
-                    )}
+                    <AttachmentDockSpecimen />
                 </Box>
             </Specimen>
         </ComponentPage>

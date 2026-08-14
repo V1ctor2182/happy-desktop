@@ -8,21 +8,22 @@ import {
 import { Button } from "./Button";
 import { ImageViewer } from "./ImageViewer";
 import { ThemeScope } from "./ThemeScope";
+import { VideoViewer } from "./VideoViewer";
 import { Ionicon } from "./vectorIcons/VectorIcon";
-export type LightboxProps = {
+
+type LightboxSharedProps = {
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
-    imageUrl: string;
     alt?: string;
-    /** Primary label above the frame — usually the file name. */
+    /** Primary label above the viewer — usually the file name. */
     caption?: string;
     /** Secondary meta above the frame — usually size / dimensions. */
     detail?: string;
     /** Trailing controls in the header, e.g. a download button. */
     actions?: ReactNode;
     /**
-     * Where this picture sits in the set it was opened from, counted from zero.
+     * Where this media sits in the set it was opened from, counted from zero.
      * Given together with `onPrevious`/`onNext`, it is stated in the header so
      * the reader knows how much of the set is behind and ahead of them.
      */
@@ -30,19 +31,24 @@ export type LightboxProps = {
     /** Wire both to step through a set; the header then carries its controls. */
     onPrevious?: () => void;
     onNext?: () => void;
+    /** Singular noun used by the previous/next controls. Defaults to "image". */
+    navigationLabel?: string;
     onClose?: () => void;
     closeLabel?: string;
 };
+
+export type LightboxProps = LightboxSharedProps &
+    ({ imageUrl: string; videoUrl?: never } | { imageUrl?: never; videoUrl: string });
 /**
- * C-046 Lightbox — full image preview shown inside a web modal (never a new
- * browser tab). It is not a card on a dim: hosted on `ModalOverlay`'s `fill`
- * placement it takes the whole app window and paints one flat dark over it, so
- * looking at a picture is a mode the window enters rather than a panel that
- * floats above a half-legible copy of the app. The root `.happy2-lightbox` still
- * declares no scrim and no fixed position of its own, so it renders as a
- * screenshot-safe specimen in whatever box it is given; the measured surface is
- * the inner `data-happy-desktop-ui="lightbox-dialog"`: an optional caption/detail
- * + actions header above the shared `ImageViewer`.
+ * C-046 Lightbox — full image or video preview shown inside a web modal (never
+ * a new browser tab). It is not a card on a dim: hosted on `ModalOverlay`'s
+ * `fill` placement it takes the whole app window and paints one flat dark over
+ * it, so looking at media is a mode the window enters rather than a panel that
+ * floats above a half-legible copy of the app. The root `.happy2-lightbox`
+ * still declares no scrim and no fixed position of its own, so it renders as a
+ * screenshot-safe specimen in whatever box it is given; the measured surface
+ * is the inner `data-happy-desktop-ui="lightbox-dialog"`: an optional
+ * caption/detail + actions header above the shared viewer.
  *
  * The dark is the picture's own, not the appearance's: the surface is scoped to
  * the dark theme in either appearance, because a photograph is read against
@@ -50,11 +56,9 @@ export type LightboxProps = {
  * pointed at the reader. Everything inside — the caption, the controls, the
  * viewer — takes its colours from that scope rather than from bespoke values.
  *
- * The picture inside is the same viewer the file preview and the separate
- * preview window use, so an image opened from a conversation zooms, pans, and
- * answers the keyboard exactly as one opened from Files does. It is drawn in
- * the viewer's `immersive` tone, which paints no surfaces of its own: the room
- * is already this one, and a second frame inside it would only band the window.
+ * The media inside uses the same image and video viewers as file preview and
+ * the separate preview window. Images keep the `immersive` tone because the
+ * room is already this one; videos keep their own floating transport.
  *
  * A picture opened from a set is one of several: wire `onPrevious`/`onNext` and
  * the header carries controls for the set, its place in it, and the left and
@@ -67,6 +71,7 @@ export function Lightbox(props: LightboxProps) {
         "className",
         "style",
         "imageUrl",
+        "videoUrl",
         "alt",
         "caption",
         "detail",
@@ -74,10 +79,13 @@ export function Lightbox(props: LightboxProps) {
         "position",
         "onPrevious",
         "onNext",
+        "navigationLabel",
         "onClose",
         "closeLabel",
     ]);
     const stepping = Boolean(local.onPrevious && local.onNext);
+    const navigationLabel = local.navigationLabel ?? "image";
+    const mediaName = local.alt ?? local.caption ?? (local.videoUrl ? "Video" : "Image");
     const hasHeader = () =>
         Boolean(local.caption || local.detail || local.actions || local.onClose || stepping);
     /**
@@ -113,7 +121,7 @@ export function Lightbox(props: LightboxProps) {
         >
             <ThemeScope mode="dark">
                 <div
-                    aria-label={local.caption ?? local.alt ?? "Image preview"}
+                    aria-label={local.caption ?? local.alt ?? `${mediaName} preview`}
                     aria-modal="true"
                     className="happy2-lightbox__dialog"
                     data-happy-desktop-ui="lightbox-dialog"
@@ -153,7 +161,7 @@ export function Lightbox(props: LightboxProps) {
                             >
                                 {stepping ? (
                                     <Button
-                                        aria-label="Previous image"
+                                        aria-label={`Previous ${navigationLabel}`}
                                         iconOnly
                                         onClick={() => local.onPrevious?.()}
                                         size="small"
@@ -172,7 +180,7 @@ export function Lightbox(props: LightboxProps) {
                                 ) : null}
                                 {stepping ? (
                                     <Button
-                                        aria-label="Next image"
+                                        aria-label={`Next ${navigationLabel}`}
                                         iconOnly
                                         onClick={() => local.onNext?.()}
                                         size="small"
@@ -196,11 +204,18 @@ export function Lightbox(props: LightboxProps) {
                         </header>
                     ) : null}
                     <div className="happy2-lightbox__frame" data-happy-desktop-ui="lightbox-frame">
-                        <ImageViewer
-                            content={{ type: "url", url: local.imageUrl }}
-                            name={local.alt ?? local.caption ?? "Image"}
-                            tone="immersive"
-                        />
+                        {local.videoUrl ? (
+                            <VideoViewer
+                                content={{ type: "url", url: local.videoUrl }}
+                                name={mediaName}
+                            />
+                        ) : local.imageUrl !== undefined ? (
+                            <ImageViewer
+                                content={{ type: "url", url: local.imageUrl }}
+                                name={mediaName}
+                                tone="immersive"
+                            />
+                        ) : null}
                     </div>
                 </div>
             </ThemeScope>
