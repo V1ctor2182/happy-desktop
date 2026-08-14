@@ -138,18 +138,33 @@
 
 /*
  * The dock is a grounded solid surface whose boundary with the transcript is
- * seamless — no hairline and no gap — with 24px of desktop breathing room
- * below. Its contents center on the entry column's measure, so the input starts
- * flush with the transcript.
+ * seamless — no hairline and no gap. The 16px returned to the input's lower
+ * inset is balanced by 16px less space below the complete stack, preserving
+ * its total height. The painted card ends 40px above the window in both modes,
+ * while the sidebar keeps its own 56px footer bar. Its contents center on the
+ * entry column's measure, so the input starts flush with the transcript.
  */
 .happy2-conversation__dock {
+    --happy2-composer-footer-height: 28px;
+    --happy2-composer-footer-gap: 4px;
+    --happy2-composer-dock-bottom: 8px;
+    --happy2-composer-card-bottom-offset: calc(
+        var(--happy2-composer-dock-bottom) + var(--happy2-composer-footer-height) +
+            var(--happy2-composer-footer-gap)
+    );
     display: flex;
     flex: none;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding-bottom: 24px;
+    padding-bottom: var(--happy2-composer-card-bottom-offset);
     background: var(--surface);
+}
+
+/* The footer row is already part of the 40px card-to-window offset, so only
+ * its terminal 8px remains outside the complete composer stack. */
+.happy2-conversation__dock:has(.happy2-composer__footer) {
+    padding-bottom: var(--happy2-composer-dock-bottom);
 }
 
 .happy2-conversation__dock > * {

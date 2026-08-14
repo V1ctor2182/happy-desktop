@@ -5,8 +5,9 @@
  * border keeps the box model stable while focus/agents paint the frame), 16px
  * radius, 16px visual text inset, auto-growing 16px/22px textarea (1–8 lines).
  * A 32px action lane (32px ghost actions + primary send on an 8px rhythm) sits
- * within a 16px bottom inset. Geometry mirrors the original app's unified input
- * panel (borderless solid fill, 16px corners, 32px controls, roomy text
+ * within a roomier 24px text-to-toolbar inset and a 16px bottom action inset.
+ * Geometry mirrors the original app's unified input panel (borderless solid
+ * fill, 16px corners, 32px controls, roomy text
  * field). ContextChips: 24px inset chips. MentionPicker: a popover flush with
  * the composer's own side edges, with 24px section headings over 32px one-line rows —
  * the command picker's geometry, so both popovers read as one surface.
@@ -130,6 +131,10 @@
     --happy2-composer-fade-bottom: 0px;
     --happy2-composer-input-top: 20px;
     --happy2-composer-input-side: 19px;
+    /*
+     * Keep the roomier draft-to-toolbar inset while the dock gives back the
+     * same 16px below the complete composer stack, preserving its total height.
+     */
     --happy2-composer-input-bottom: 24px;
     position: relative;
     box-sizing: border-box;

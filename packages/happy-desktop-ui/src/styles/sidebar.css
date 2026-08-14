@@ -2,7 +2,7 @@
  * C-009 Sidebar — responsive native navigation column.
  *
  * Contract: 30% of the desktop width, clamped to 250–360px. It fills height
- * on the grouped surface, with a 56px header, 32px rows, and a 56px footer.
+ * on the grouped surface, with a 56px header, 32px rows, and a 40px footer.
  */
 
 .happy2-sidebar,
@@ -11,6 +11,8 @@
 }
 
 .happy2-sidebar {
+    --happy2-surface-header-height: 56px;
+    --happy2-surface-footer-height: 40px;
     display: flex;
     flex: none;
     flex-direction: column;
@@ -37,7 +39,7 @@
     flex: none;
     align-items: center;
     gap: 8px;
-    height: 56px;
+    height: var(--happy2-surface-header-height);
     padding: 0 16px;
 }
 
@@ -1066,7 +1068,11 @@
     display: flex;
     flex: none;
     align-items: center;
-    height: 56px;
+    /*
+     * The footer closes the sidebar on the same 40px lane as the conversation
+     * dock's card edge; its header keeps the taller 56px surface rhythm.
+     */
+    height: var(--happy2-surface-footer-height);
     padding: 0 12px;
     border-top: 1px solid var(--divider);
 }
