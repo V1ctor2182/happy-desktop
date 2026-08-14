@@ -57,7 +57,7 @@
 
 /* Per-size geometry — height, label typography, padding, and inter-slot gap. */
 .happy2-tabs[data-size="small"] .happy2-tabs__tab {
-    height: 32px;
+    height: var(--happy2-subheader-height);
     padding: 0 12px;
     gap: 6px;
     font-size: 12px;
@@ -115,6 +115,14 @@
     align-items: center;
     justify-content: center;
     color: var(--text-link);
+}
+
+.happy2-tabs__tab-dirty {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy2-radius-pill);
+    background: var(--text);
 }
 
 .happy2-tabs__tab-unread {

@@ -771,6 +771,8 @@ const TAB_MENU_CLOSE_OTHERS = "close-others";
 const TAB_MENU_CLOSE_LEFT = "close-left";
 const TAB_MENU_CLOSE_RIGHT = "close-right";
 const TAB_MENU_CLOSE_ALL = "close-all";
+const fileDocumentIdentities = new WeakMap<object, number>();
+let fileDocumentIdentityNext = 0;
 
 /**
  * The context menu one tab offers: the usual sweeps — this tab, the others,
@@ -808,6 +810,36 @@ function tabStripMenu(verb: "Archive" | "Close", left: number, right: number): M
     ];
 }
 
+function fileTabDirty(tab: RigFileTabSnapshot): boolean {
+    if (tab.draft === undefined || tab.document.type !== "ready") return false;
+    const document = tab.document.value;
+    const saved =
+        "newContent" in document
+            ? document.newContent
+            : "content" in document
+              ? document.content
+              : undefined;
+    return saved !== undefined && tab.draft !== saved;
+}
+
+/**
+ * Exact identity of the ready document a file tab is currently drawing.
+ *
+ * A Git revision can advance before its replacement read settles while the old
+ * ready document deliberately stays visible. Keying the editor from the loaded
+ * object keeps that old parsed state attached to the old content until the new
+ * document actually arrives. Weak keys add no lifetime beyond the tab/cache.
+ */
+function fileDocumentKey(tabId: string, document: object): string {
+    let identity = fileDocumentIdentities.get(document);
+    if (identity === undefined) {
+        fileDocumentIdentityNext += 1;
+        identity = fileDocumentIdentityNext;
+        fileDocumentIdentities.set(document, identity);
+    }
+    return `${tabId}\u0000${String(identity)}`;
+}
+
 function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     // A tab of a picture says picture. Wearing the document glyph over every
     // open file made the strip a row of identical marks with only the name to
@@ -816,6 +848,7 @@ function fileTabItem(tab: RigFileTabSnapshot): TabItem {
     return {
         id: tab.id,
         label: tab.path.split("/").at(-1) ?? tab.path,
+        dirty: fileTabDirty(tab),
         icon:
             tab.kind === "document"
                 ? "globe"
@@ -4065,7 +4098,6 @@ function RigFileBody(props: {
                 document={file.document}
                 {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                 key={file.id}
-                loading={file.loading}
                 path={file.path}
             />
         );
@@ -4077,8 +4109,11 @@ function RigFileBody(props: {
         const content = file.document.value.content;
         const dirty = file.draft !== undefined && file.draft !== content;
         const text = file.draft ?? content;
+        const status =
+            props.writeRefusal ?? props.saveRefusal ?? (file.saving ? "Saving…" : undefined);
         return (
             <FileEditor
+                documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
                     ? {
@@ -4139,11 +4174,7 @@ function RigFileBody(props: {
                 readOnly={file.saving || !writable}
                 saveDisabled={saveDisabled}
                 saving={file.saving}
-                status={
-                    props.writeRefusal ??
-                    props.saveRefusal ??
-                    (file.saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved")
-                }
+                {...(status === undefined ? {} : { status })}
                 value={text}
             />
         );
@@ -4160,13 +4191,12 @@ function RigFileBody(props: {
         return (
             <ChangedFileDiff
                 appearance={props.appearance}
-                key={file.id}
+                documentKey={fileDocumentKey(file.id, file.document.value)}
                 loading={file.loading}
                 mode={props.mode}
                 newContent={current}
                 oldContent={change.oldContent}
                 oldPath={change.oldPath}
-                dirty={file.draft !== undefined && file.draft !== change.newContent}
                 {...(writable
                     ? {
                           onContentChange: (content: string) =>
@@ -4294,7 +4324,6 @@ function RigChangedFilePreview(props: {
 function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
-    loading: boolean;
     path: string;
 }) {
     const document = props.document;
@@ -4305,7 +4334,7 @@ function RigFilePreview(props: {
                 path={props.path}
             />
         );
-    if (document.type !== "ready" || props.loading)
+    if (document.type !== "ready")
         return <FilePreview content={{ type: "loading" }} path={props.path} />;
     const value = document.value;
     if (!("contentType" in value))
@@ -5584,6 +5613,10 @@ function RigPanelBody(props: {
     const panelTools = toolTabsPlaced(props.panel, "panel");
     const activeToolTab = panelTools.find((tab) => tab.id === props.panel.activeViewId);
     const panelFile = props.panelFile;
+    const allFilesUnavailable =
+        props.rigAvailability !== undefined && props.workspaceFiles === undefined
+            ? (props.rigAvailabilityReason ?? "Rig must reconnect before loading all files.")
+            : undefined;
     const tabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
         ...(props.panel.fileViewOpen && panelFile
@@ -5754,16 +5787,13 @@ function RigPanelBody(props: {
                                 ? { onOpen: props.onFileOpen }
                                 : {})}
                             onScopeChange={(scope: RigFileScope) => props.onScopeChange(scope)}
-                            {...(props.rigAvailability !== undefined &&
-                            props.workspaceFiles === undefined
-                                ? {
+                            {...(allFilesUnavailable === undefined
+                                ? {}
+                                : {
                                       scopeUnavailable: {
-                                          all:
-                                              props.rigAvailabilityReason ??
-                                              "Rig must reconnect before loading all files.",
+                                          all: allFilesUnavailable,
                                       },
-                                  }
-                                : {})}
+                                  })}
                             {...(props.onRevert ? { onRevert: props.onRevert } : {})}
                             onSelect={(path: string, modifiers: FileTreeSelectModifiers) =>
                                 props.onFileSelect(path, modifiers, fileTreeVisibleFiles(nodes))

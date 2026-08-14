@@ -1,8 +1,8 @@
 /*
  * C-169 FilePreview — one file, shown rather than downloaded.
  *
- * A 56px surface header naming the file, then a body that fills whatever region
- * the preview was given. A picture is handed to the shared ImageViewer, which
+ * A compact diff-style path header, then a body that fills whatever region the
+ * preview was given. A picture is handed to the shared ImageViewer, which
  * brings its own frame and controls; video and audio are centered on the inset
  * stage with the artwork contained rather than cropped, because a preview that
  * crops has answered a different question than the one asked. Source scrolls in a
@@ -36,45 +36,35 @@
     flex: none;
     align-items: center;
     gap: 10px;
-    height: 56px;
-    padding: 0 12px 0 16px;
+    height: var(--happy2-subheader-height);
+    padding: 0 16px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 20px;
 }
 
 .happy2-file-preview__glyph {
-    display: flex;
-    flex: none;
-    align-items: center;
-    color: var(--text-secondary);
+    width: 16px;
+    height: 16px;
 }
 
-.happy2-file-preview__heading {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    justify-content: center;
+.happy2-file-preview__path {
     min-width: 0;
 }
 
-.happy2-file-preview__name {
-    display: block;
-    overflow: hidden;
+/* Pierre paints the diff title as one path in primary ink. Preview uses the
+   same path treatment; only its file-family glyph differs from the change
+   glyph, while diff totals occupy the trailing side in the comparison view. */
+.happy2-file-preview__path .happy2-file-path-label__directory {
     color: var(--text);
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 20px;
-    letter-spacing: -0.01em;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.happy2-file-preview__subtitle {
+.happy2-file-preview__meta {
     display: block;
-    overflow: hidden;
+    flex: none;
     color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-    text-overflow: ellipsis;
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
     white-space: nowrap;
 }
 

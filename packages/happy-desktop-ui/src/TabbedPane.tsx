@@ -80,6 +80,7 @@ export function TabbedPane(props: TabbedPaneProps) {
             {...rest}
             className={["happy2-tabbed-pane", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="tabbed-pane"
+            data-size={local.size ?? "small"}
             style={local.style}
         >
             <div className="happy2-tabbed-pane__bar" data-happy-desktop-ui="tabbed-pane-bar">

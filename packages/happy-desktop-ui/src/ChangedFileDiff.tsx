@@ -1,6 +1,5 @@
 import { MultiFileDiff } from "@pierre/diffs/react";
 import type { CSSProperties, ReactNode } from "react";
-import { Button } from "./Button";
 import { CodeEditor } from "./CodeEditor";
 import { SegmentedControl } from "./SegmentedControl";
 
@@ -39,6 +38,8 @@ export type ChangedFileDiffProps = {
     oldContent: string;
     oldPath?: string;
     path: string;
+    /** Stable loaded-document identity used by the edit mode's bounded state cache. */
+    documentKey?: string;
     style?: CSSProperties;
     /** Which view is showing. Defaults to the unified diff. */
     mode?: ChangedFileDiffMode;
@@ -53,8 +54,6 @@ export type ChangedFileDiffProps = {
     saving?: boolean;
     /** Keeps the edit draft available while disabling persistence. */
     saveDisabled?: boolean;
-    /** True when there are unsaved edits, which is what puts Save on the bar. */
-    dirty?: boolean;
     /** Writes the pending edit back. */
     onSave?: () => void;
     /**
@@ -116,7 +115,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                     aria-label="How this changed file is shown"
                     onChange={(value) => props.onModeChange?.(value as ChangedFileDiffMode)}
                     segments={segments}
-                    size="small"
+                    size="compact"
                     value={mode}
                 />
                 <span className="happy2-changed-file-diff__bar-end">
@@ -128,19 +127,6 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         >
                             {props.saving ? "Saving…" : "Updating…"}
                         </span>
-                    ) : null}
-                    {/* Only offered when there is something to save. An always-on
-                        Save over an unchanged file invites the question of
-                        whether it did anything. */}
-                    {props.dirty && props.onSave ? (
-                        <Button
-                            disabled={props.saving === true || props.saveDisabled === true}
-                            onClick={props.onSave}
-                            size="small"
-                            variant="primary"
-                        >
-                            Save
-                        </Button>
                     ) : null}
                 </span>
             </div>
@@ -154,6 +140,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                 ) : mode === "edit" ? (
                     <CodeEditor
                         className="happy2-changed-file-diff__editor"
+                        documentKey={props.documentKey}
                         name={props.path}
                         // The shortcut every editor has. Without it the only way
                         // to save is to stop typing and reach for a button,

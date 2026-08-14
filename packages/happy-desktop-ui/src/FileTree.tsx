@@ -172,12 +172,17 @@ const FAMILY_GLYPH: Record<Exclude<FileTreeFamily, "directory">, IoniconName> = 
  * are showing, so the row still says which way it is wherever the chevron is
  * out of the reader's eye.
  */
-function FileTreeFamilyIcon(props: { family: FileTreeFamily; expanded?: boolean }) {
+export function FileTreeFamilyIcon(props: {
+    family: FileTreeFamily;
+    expanded?: boolean;
+    size?: 14 | 16;
+}) {
+    const size = props.size ?? 14;
     if (props.family === "directory")
         return (
-            <Ionicon name={props.expanded ? "folder-open-outline" : "folder-outline"} size={14} />
+            <Ionicon name={props.expanded ? "folder-open-outline" : "folder-outline"} size={size} />
         );
-    return <Ionicon name={FAMILY_GLYPH[props.family]} size={14} />;
+    return <Ionicon name={FAMILY_GLYPH[props.family]} size={size} />;
 }
 /**
  * File-type vocabulary, keyed by lowercase extension. This is a visual decision

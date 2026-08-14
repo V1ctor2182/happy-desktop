@@ -7,7 +7,8 @@ import {
 } from "react";
 import { Button } from "./Button";
 import { CodeEditor } from "./CodeEditor";
-import { Icon } from "./Icon";
+import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
+import { FilePathLabel } from "./FilePathLabel";
 import { SegmentedControl } from "./SegmentedControl";
 export type FileEditorProps = {
     className?: string;
@@ -17,11 +18,13 @@ export type FileEditorProps = {
     path: string;
     /** Editor content. */
     value: string;
+    /** Stable loaded-document identity used by the editor's bounded state cache. */
+    documentKey?: string;
     onValueChange?: (value: string) => void;
     onSave?: () => void;
     onRevert?: () => void;
     onClose?: () => void;
-    /** Unsaved local edits exist. Drives the marker, Save, and Revert. */
+    /** Unsaved local edits exist. Drives Command-S and Revert. */
     dirty?: boolean;
     /** A save is in flight. */
     saving?: boolean;
@@ -43,32 +46,20 @@ export type FileEditorProps = {
      * that was opened in order to be written, opens on its source instead.
      */
     initialFace?: "rendered" | "source";
-    /** Right-aligned status-bar text (e.g. "Saved", "1.2 KB"). */
+    /** Compact trailing status, used for saving or an unavailable persistence path. */
     status?: string;
     placeholder?: string;
-    saveLabel?: string;
     revertLabel?: string;
     closeLabel?: string;
 };
-function splitPath(path: string): {
-    name: string;
-    directory: string;
-} {
-    const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
-    const slash = trimmed.lastIndexOf("/");
-    return slash < 0
-        ? { name: trimmed, directory: "" }
-        : { name: trimmed.slice(slash + 1), directory: trimmed.slice(0, slash + 1) };
-}
 /**
  * C-054 FileEditor — a props-only text editor surface for one workspace file.
- * A 56px surface header (name, directory subtitle, unsaved marker, Save /
- * Revert / Close), an optional alert banner for disk-change or conflict, a
- * monospace code body, and a status bar. Cmd/Ctrl+S saves. A file that can also
- * be read rather than edited — Markdown — supplies `rendered` and opens on that
- * face, or on `initialFace`, behind a Rendered / Source control. The app owns the draft, the
- * dirty/saving state, and the conflict-safe write — the editor only renders and
- * reports intent.
+ * A compact diff-style path header, an optional alert banner for disk-change
+ * or conflict, and a monospace code body. Cmd/Ctrl+S is the save affordance;
+ * the owning file tab carries the unsaved dot. A file that can also be read
+ * rather than edited — Markdown — supplies `rendered` and opens on that face,
+ * or on `initialFace`, behind a Rendered / Source control. The app owns the
+ * draft, dirty/saving state, and conflict-safe write.
  */
 export function FileEditor(props: FileEditorProps) {
     const [local] = partitionComponentProps(props, [
@@ -77,6 +68,7 @@ export function FileEditor(props: FileEditorProps) {
         "style",
         "path",
         "value",
+        "documentKey",
         "onValueChange",
         "onSave",
         "onRevert",
@@ -90,7 +82,6 @@ export function FileEditor(props: FileEditorProps) {
         "initialFace",
         "status",
         "placeholder",
-        "saveLabel",
         "revertLabel",
         "closeLabel",
     ]);
@@ -99,7 +90,8 @@ export function FileEditor(props: FileEditorProps) {
     // the file, so it lives here rather than in product state.
     const [face, setFace] = useState<"rendered" | "source">(props.initialFace ?? "rendered");
     const reading = local.rendered !== undefined && face === "rendered";
-    const parts = () => splitPath(local.path);
+    const name = local.path.slice(local.path.lastIndexOf("/") + 1);
+    const family = fileTreeFamily({ kind: "file", name });
     const canSave = () =>
         Boolean(local.dirty) && !local.saving && !local.readOnly && !local.saveDisabled;
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -122,43 +114,25 @@ export function FileEditor(props: FileEditorProps) {
                 data-happy-desktop-ui="file-editor-header"
             >
                 <span
-                    className="happy2-file-editor__glyph"
+                    className="happy2-file-editor__glyph happy2-file-family-glyph"
+                    data-family={family}
                     data-happy-desktop-ui="file-editor-glyph"
                 >
-                    <Icon name="doc" size={16} />
+                    <FileTreeFamilyIcon family={family} size={16} />
                 </span>
-                <span
-                    className="happy2-file-editor__heading"
-                    data-happy-desktop-ui="file-editor-heading"
-                >
-                    <span className="happy2-file-editor__name-row">
-                        <span
-                            className="happy2-file-editor__name"
-                            data-happy-desktop-ui="file-editor-name"
-                        >
-                            {parts().name}
-                        </span>
-                        {local.dirty ? (
-                            <span
-                                aria-label="Unsaved changes"
-                                className="happy2-file-editor__marker"
-                                data-happy-desktop-ui="file-editor-marker"
-                            />
-                        ) : null}
-                    </span>
-                    {parts().directory ? (
-                        <span
-                            className="happy2-file-editor__subtitle"
-                            data-happy-desktop-ui="file-editor-subtitle"
-                        >
-                            {parts().directory}
-                        </span>
-                    ) : null}
-                </span>
+                <FilePathLabel className="happy2-file-editor__heading" path={local.path} />
                 <span
                     className="happy2-file-editor__actions"
                     data-happy-desktop-ui="file-editor-actions"
                 >
+                    {local.status ? (
+                        <span
+                            className="happy2-file-editor__status"
+                            data-happy-desktop-ui="file-editor-status"
+                        >
+                            {local.status}
+                        </span>
+                    ) : null}
                     {local.rendered === undefined ? null : (
                         <SegmentedControl
                             onChange={(value) => setFace(value as "rendered" | "source")}
@@ -166,7 +140,7 @@ export function FileEditor(props: FileEditorProps) {
                                 { value: "rendered", label: "Rendered" },
                                 { value: "source", label: "Source" },
                             ]}
-                            size="small"
+                            size="compact"
                             value={face}
                         />
                     )}
@@ -178,16 +152,6 @@ export function FileEditor(props: FileEditorProps) {
                             variant="ghost"
                         >
                             {local.revertLabel ?? "Revert"}
-                        </Button>
-                    ) : null}
-                    {!local.readOnly ? (
-                        <Button
-                            disabled={!canSave()}
-                            onClick={() => local.onSave?.()}
-                            size="small"
-                            title={local.saveDisabled ? local.status : undefined}
-                        >
-                            {local.saving ? "Saving…" : (local.saveLabel ?? "Save")}
                         </Button>
                     ) : null}
                     {local.onClose ? (
@@ -215,6 +179,7 @@ export function FileEditor(props: FileEditorProps) {
             ) : (
                 <CodeEditor
                     className="happy2-file-editor__area"
+                    documentKey={local.documentKey}
                     name={local.path}
                     onSave={() => {
                         if (canSave()) local.onSave?.();
@@ -225,22 +190,6 @@ export function FileEditor(props: FileEditorProps) {
                     value={local.value}
                 />
             )}
-            <footer
-                className="happy2-file-editor__status"
-                data-happy-desktop-ui="file-editor-status"
-            >
-                <span className="happy2-file-editor__path" data-happy-desktop-ui="file-editor-path">
-                    {local.path}
-                </span>
-                {local.status ? (
-                    <span
-                        className="happy2-file-editor__status-text"
-                        data-happy-desktop-ui="file-editor-status-text"
-                    >
-                        {local.status}
-                    </span>
-                ) : null}
-            </footer>
         </section>
     );
 }

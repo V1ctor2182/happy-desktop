@@ -3,6 +3,7 @@ import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
 import { Banner } from "./Banner";
 import { Icon } from "./Icon";
+import { SegmentedControl } from "./SegmentedControl";
 /** Which files the listing is about: only what changed, or the whole checkout. */
 export type FileBrowserScope = "changed" | "all";
 /** Whether the listing nests into directories or reads as one flat run of files. */
@@ -51,23 +52,22 @@ export type FileBrowserProps = {
     /** Why file rows cannot open or select remote content; directory disclosure stays local. */
     fileActionsUnavailable?: string;
 };
-const SCOPES: { id: FileBrowserScope; label: string }[] = [
-    { id: "changed", label: "Changed" },
-    { id: "all", label: "All files" },
+const SCOPES: { value: FileBrowserScope; label: string }[] = [
+    { value: "changed", label: "Changes" },
+    { value: "all", label: "All Files" },
 ];
 /**
  * C-168 FileBrowser — the file listing of a workspace panel.
  *
- * One 32px control row and a scrolling `FileTree` beneath it, and nothing else.
- * The row carries both of the listing's questions — which files, and whether
- * they nest — plus what the listing currently holds, because a separate 56px
- * header repeating "Changes · 24 files" spent a whole band of a narrow panel
- * restating its own controls.
+ * One 32px control row and a scrolling `FileTree` beneath it. The row carries
+ * the one-layer Changes / All Files choice, diff totals or selection actions,
+ * and the flat List / Tree choice.
  *
- * Every control in the row is flat: text and glyphs that change contrast, with
- * no track, pill, or border, and no rule between the row and the files. A panel
- * this narrow is read as one column, and each hairline drawn across it cuts that
- * column into pieces that have to be reassembled by eye.
+ * Every exclusive control in the row is one layer: no enclosing track, and
+ * only the selected option carries the shared selection fill and outline. No
+ * rule separates the row from the files. A panel this narrow is read as one
+ * column, and each hairline drawn across it cuts that column into pieces that
+ * have to be reassembled by eye.
  *
  * Props only — the caller supplies the nodes and every handler; the browser
  * never fetches.
@@ -105,6 +105,7 @@ export function FileBrowser(props: FileBrowserProps) {
     const picked = local.selectedIds?.size ?? 0;
     return (
         <section
+            aria-label={local.scope === "all" ? "All files" : "Changed files"}
             className={["happy2-file-browser", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="file-browser"
             data-testid={local["data-testid"]}
@@ -114,27 +115,25 @@ export function FileBrowser(props: FileBrowserProps) {
                 className="happy2-file-browser__controls"
                 data-happy-desktop-ui="file-browser-controls"
             >
-                <div className="happy2-file-browser__scopes" role="group">
-                    {SCOPES.map((scope) => (
-                        <button
-                            aria-pressed={local.scope === scope.id}
-                            className="happy2-file-browser__scope"
-                            data-active={local.scope === scope.id ? "" : undefined}
-                            data-happy-desktop-ui="file-browser-scope"
-                            disabled={local.scopeUnavailable?.[scope.id] !== undefined}
-                            key={scope.id}
-                            onClick={() => local.onScopeChange?.(scope.id)}
-                            title={local.scopeUnavailable?.[scope.id]}
-                            type="button"
-                        >
-                            {scope.label}
-                        </button>
-                    ))}
-                </div>
-                {/* What is picked replaces what the listing holds, because the
-                    two answer the same question and only one of them is what
-                    the reader is currently doing. The act on the picked files
-                    sits beside their count rather than in a menu: a selection
+                <SegmentedControl
+                    aria-label="Files shown"
+                    className="happy2-file-browser__scopes"
+                    onChange={(scope) => local.onScopeChange?.(scope as FileBrowserScope)}
+                    segments={SCOPES.map((scope) => ({
+                        ...scope,
+                        ...(local.scopeUnavailable?.[scope.value] === undefined
+                            ? {}
+                            : {
+                                  disabled: true,
+                                  title: local.scopeUnavailable[scope.value],
+                              }),
+                    }))}
+                    size="compact"
+                    value={local.scope}
+                />
+                {/* What is picked replaces the diff totals because it is the
+                    live fact in the row. The act on the picked files sits
+                    beside their count rather than in a menu: a selection
                     exists to be acted on, and it is gone as soon as it is. */}
                 <span
                     className="happy2-file-browser__summary"

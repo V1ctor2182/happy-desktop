@@ -2,7 +2,8 @@ import { partitionComponentProps } from "./componentProps";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { CodeBlock } from "./CodeBlock";
-import { fileTreeFamily } from "./FileTree";
+import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
+import { FilePathLabel } from "./FilePathLabel";
 import { Icon, type IconName } from "./Icon";
 import { ImageViewer } from "./ImageViewer";
 import { MarkdownDocument } from "./MarkdownDocument";
@@ -227,7 +228,7 @@ export function FilePreview(props: FilePreviewProps) {
     const [measured, setMeasured] = useState<{ source: string; dimensions: string }>();
     const kind = local.kind ?? filePreviewKind(local.path);
     const name = local.path.slice(local.path.lastIndexOf("/") + 1);
-    const directory = local.path.slice(0, local.path.lastIndexOf("/") + 1);
+    const family = fileTreeFamily({ kind: "file", name });
     const source = local.content.type === "url" ? local.content.url : local.path;
     const dimensions =
         local.dimensions ?? (measured?.source === source ? measured.dimensions : undefined);
@@ -245,27 +246,21 @@ export function FilePreview(props: FilePreviewProps) {
                 data-happy-desktop-ui="file-preview-header"
             >
                 <span
-                    className="happy2-file-preview__glyph"
+                    className="happy2-file-family-glyph happy2-file-preview__glyph"
+                    data-family={family}
                     data-happy-desktop-ui="file-preview-glyph"
                 >
-                    <Icon name={KIND_ICON[kind]} size={16} />
+                    <FileTreeFamilyIcon family={family} size={16} />
                 </span>
-                <span className="happy2-file-preview__heading">
+                <FilePathLabel className="happy2-file-preview__path" path={local.path} />
+                {meta ? (
                     <span
-                        className="happy2-file-preview__name"
-                        data-happy-desktop-ui="file-preview-name"
+                        className="happy2-file-preview__meta"
+                        data-happy-desktop-ui="file-preview-meta"
                     >
-                        {name}
+                        {meta}
                     </span>
-                    {directory || meta ? (
-                        <span
-                            className="happy2-file-preview__subtitle"
-                            data-happy-desktop-ui="file-preview-subtitle"
-                        >
-                            {[directory, meta].filter(Boolean).join(" · ")}
-                        </span>
-                    ) : null}
-                </span>
+                ) : null}
                 <span className="happy2-file-preview__actions">
                     {(kind === "markdown" || local.rendered !== undefined) &&
                     local.content.type === "text" ? (
@@ -273,7 +268,7 @@ export function FilePreview(props: FilePreviewProps) {
                             data-testid="file-preview-face"
                             onChange={(value) => setFace(value as MarkdownFace)}
                             segments={[...MARKDOWN_FACES]}
-                            size="small"
+                            size="compact"
                             value={face}
                         />
                     ) : null}

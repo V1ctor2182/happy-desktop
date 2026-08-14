@@ -17,14 +17,16 @@
 
 /* The mode switch sits above the code and stays put while it scrolls. */
 .happy2-changed-file-diff__bar {
+    box-sizing: border-box;
     flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--divider);
+    height: var(--happy2-subheader-height);
+    padding: 0 8px;
     background: var(--surface);
+    box-shadow: inset 0 -1px var(--divider);
 }
 
 .happy2-changed-file-diff__bar-end {
@@ -57,9 +59,14 @@
     --diffs-header-font-family: var(--happy2-font-ui);
     --diffs-font-size: 12px;
     --diffs-line-height: 20px;
+    /* Pierre's default header is `1lh + 3 × gap-block`: 20 + 3 × 4 = 32,
+       exactly the same row as the tabs, mode bar, and Preview path. */
+    --diffs-gap-block: var(--happy2-subheader-inset);
     --diffs-gap-inline: 10px;
     --diffs-light-bg: var(--surface);
     --diffs-dark-bg: var(--surface);
+    --diffs-light: var(--text);
+    --diffs-dark: var(--text);
 
     /* Pierre mixes one accent per side into the page background to build every
        addition and deletion surface it draws. Setting those two accents is

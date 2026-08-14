@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { ChangedFileDiff } from "../../src/ChangedFileDiff";
 import { FilePreview } from "../../src/FilePreview";
+import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -57,6 +58,8 @@ function frame(children: ReactNode, height = 420, appearance: "dark" | "light" =
                 background: "var(--surface)",
                 border: "1px solid var(--divider)",
                 borderRadius: "10px",
+                display: "flex",
+                flexDirection: "column",
                 height: `${height}px`,
                 overflow: "hidden",
                 width: "720px",
@@ -64,6 +67,33 @@ function frame(children: ReactNode, height = 420, appearance: "dark" | "light" =
         >
             {children}
         </div>
+    );
+}
+
+/** The real three-layer file surface, used twice so Preview and Pierre can be
+ * compared without either specimen quietly changing the surrounding chrome. */
+function tabbedDiff(mode: "preview" | "unified") {
+    return (
+        <TabbedPane
+            activeId="master-plans/03-file-viewer.md"
+            onSelect={() => undefined}
+            tabs={[
+                {
+                    icon: "doc",
+                    id: "master-plans/03-file-viewer.md",
+                    label: "03-file-viewer.md",
+                },
+            ]}
+        >
+            <ChangedFileDiff
+                appearance="light"
+                mode={mode}
+                newContent={newContent}
+                oldContent={oldContent}
+                path="master-plans/03-file-viewer.md"
+                preview={preview("master-plans/03-file-viewer.md", newContent)}
+            />
+        </TabbedPane>
     );
 }
 
@@ -75,23 +105,15 @@ export function ChangedFileDiffPage() {
             title="ChangedFileDiff"
         >
             <Specimen
-                detail="The working-tree copy in the same preview any file opens into"
-                label="Preview"
+                detail="Preview and Pierre share the same three 32px layers and path origin"
+                label="Chrome and path alignment"
                 number="01"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {frame(
-                        <ChangedFileDiff
-                            appearance="light"
-                            mode="preview"
-                            newContent={newContent}
-                            oldContent={oldContent}
-                            path="master-plans/03-file-viewer.md"
-                            preview={preview("master-plans/03-file-viewer.md", newContent)}
-                        />,
-                    )}
-                    <DimensionRule label="720 × 420 px region · 41 px mode bar · 56 px preview header" />
+                    {frame(tabbedDiff("preview"), 280)}
+                    {frame(tabbedDiff("unified"), 280)}
+                    <DimensionRule label="Preview ↔ Unified · consecutive 32 px bands · 16 px icon at x16 · path at x42 · diff stats right" />
                 </div>
             </Specimen>
 
@@ -148,7 +170,7 @@ export function ChangedFileDiffPage() {
             </Specimen>
 
             <Specimen
-                detail="Offered only with somewhere to hand an edit; Save appears once there is one"
+                detail="Offered only with somewhere to hand an edit; Command-S saves without adding another button to the mode bar"
                 label="Edit"
                 number="05"
                 stage="surface"
@@ -156,7 +178,6 @@ export function ChangedFileDiffPage() {
                 {frame(
                     <ChangedFileDiff
                         appearance="light"
-                        dirty
                         mode="edit"
                         newContent={source}
                         oldContent={sourceBefore}
@@ -288,7 +309,7 @@ export function ChangedFileDiffPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="known Rig offline · the edit draft and diff remain · Save waits for reconnect"
+                detail="known Rig offline · the edit draft and diff remain · Command-S waits for reconnect"
                 label="Rig offline"
                 number="10"
                 stage="surface"
@@ -296,7 +317,6 @@ export function ChangedFileDiffPage() {
                 {frame(
                     <ChangedFileDiff
                         appearance="light"
-                        dirty
                         mode="edit"
                         newContent={source}
                         oldContent={sourceBefore}

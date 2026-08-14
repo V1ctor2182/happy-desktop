@@ -1,11 +1,13 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
-export type SegmentedControlSize = "small" | "medium" | "large";
+export type SegmentedControlSize = "compact" | "small" | "medium" | "large";
 export type SegmentedControlSegment = {
     value: string;
     label: string;
     icon?: IconName;
+    disabled?: boolean;
+    title?: string;
 };
 export type SegmentedControlProps = {
     /** What the segments choose between, for anyone who cannot see the group. */
@@ -21,17 +23,17 @@ export type SegmentedControlProps = {
     disabled?: boolean;
 };
 const iconSizes: Record<SegmentedControlSize, 14 | 16 | 18> = {
+    compact: 14,
     small: 14,
     medium: 16,
     large: 18,
 };
 /**
  * C-022 SegmentedControl — inline exclusive choice group (2–5 segments) with a
- * sliding raised pill under the selected segment. Segments share one equal
- * column width so the control reads as a single well regardless of label
- * length; the pill is absolutely positioned and translated by the selected
- * index so it always covers exactly one segment box. Icons and labels compose
- * the already-tuned Icon primitive.
+ * one-layer radio treatment. Segments share one equal column width regardless
+ * of label length. The group itself is transparent; only the selected segment
+ * is painted, so the choices sit directly on their owning surface instead of
+ * nesting a selected box inside another box.
  */
 export function SegmentedControl(props: SegmentedControlProps) {
     const [local] = partitionComponentProps(props, [
@@ -47,10 +49,6 @@ export function SegmentedControl(props: SegmentedControlProps) {
         "value",
     ]);
     const size = () => local.size ?? "medium";
-    const selectedIndex = () => {
-        const index = local.segments.findIndex((segment) => segment.value === local.value);
-        return index < 0 ? 0 : index;
-    };
     return (
         <div
             aria-label={local["aria-label"]}
@@ -64,17 +62,10 @@ export function SegmentedControl(props: SegmentedControlProps) {
             style={
                 {
                     ...local.style,
-                    "--happy2-segmented-count": String(local.segments.length),
-                    "--happy2-segmented-index": String(selectedIndex()),
                     gridTemplateColumns: `repeat(${local.segments.length}, 1fr)`,
                 } as CSSProperties
             }
         >
-            <span
-                aria-hidden="true"
-                className="happy2-segmented-control__pill"
-                data-happy-desktop-ui="segmented-control-pill"
-            />
             {local.segments.map((segment) => {
                 const active = () => segment.value === local.value;
                 return (
@@ -85,8 +76,9 @@ export function SegmentedControl(props: SegmentedControlProps) {
                         data-active={active() ? "" : undefined}
                         data-happy-desktop-ui="segmented-control-segment"
                         data-value={segment.value}
-                        disabled={local.disabled}
+                        disabled={local.disabled || segment.disabled}
                         onClick={() => local.onChange?.(segment.value)}
+                        title={segment.title}
                         type="button"
                     >
                         {segment.icon

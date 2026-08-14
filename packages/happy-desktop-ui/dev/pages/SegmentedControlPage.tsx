@@ -32,10 +32,21 @@ export function SegmentedControlPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Inline exclusive choice group (2–5 segments) with a sliding raised pill and one equal column width per segment."
+            summary="Inline exclusive choice group (2–5 segments): the group is transparent, inactive choices sit directly on the surface, and only the selected choice uses the shared selection fill."
             title="Segmented control"
         >
             <div className="specimen-grid specimen-grid--sizes">
+                <Specimen
+                    detail="24px high · subheader radio"
+                    label="Compact"
+                    number="SC-00"
+                    stage="app"
+                >
+                    <div style={{ display: "grid", gap: "8px" }}>
+                        <DimensionRule label="height 24" />
+                        <SegmentedControl segments={RANGE} size="compact" value="week" />
+                    </div>
+                </Specimen>
                 <Specimen detail="28px high · 12px label" label="Small" number="SC-01" stage="app">
                     <div style={{ display: "grid", gap: "8px" }}>
                         <DimensionRule label="height 28" />
@@ -103,7 +114,7 @@ export function SegmentedControlPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="selected pill tracks the chosen segment"
+                    detail="only the selected choice carries the shared selection fill"
                     label="Selection sweep"
                     number="SC-06"
                     stage="surface"

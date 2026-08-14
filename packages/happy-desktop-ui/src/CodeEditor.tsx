@@ -1,4 +1,9 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import {
+    defaultKeymap,
+    history as historyExtension,
+    historyKeymap,
+    indentWithTab,
+} from "@codemirror/commands";
 import {
     bracketMatching,
     HighlightStyle,
@@ -7,7 +12,13 @@ import {
     syntaxHighlighting,
 } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { Compartment, EditorState } from "@codemirror/state";
+import {
+    Annotation,
+    Compartment,
+    EditorState,
+    Transaction,
+    type Extension,
+} from "@codemirror/state";
 import {
     drawSelection,
     EditorView,
@@ -94,6 +105,11 @@ export type CodeEditorProps = {
      * Python without the caller naming a grammar.
      */
     name: string;
+    /**
+     * Stable identity of the authoritative document currently being drawn.
+     * Supplying it lets recent CodeMirror states survive switches and unmounts.
+     */
+    documentKey?: string;
     /** The text being edited. */
     value: string;
     onValueChange?: (value: string) => void;
@@ -103,32 +119,293 @@ export type CodeEditorProps = {
     placeholder?: string;
 };
 
-/** Everything the imperative editor keeps for as long as its view is mounted. */
-type EditorHandle = {
-    editable: Compartment;
-    /** The read-only and placeholder configuration currently installed. */
-    editableKey?: string;
-    language: Compartment;
-    /** Which file the loaded grammar belongs to, so a tab switch reloads it. */
-    languageName?: string;
-    view: EditorView;
+type EditorBridge = {
+    /** Conservative upper bound for text retained by this state's undo branch. */
+    historyCharacters: number;
+    onSave?: () => void;
+    onValueChange?: (value: string) => void;
 };
 
-/** Loads the grammar for a file name, or nothing when no language claims it. */
-function languageReconfigure(handle: EditorHandle, name: string) {
-    handle.languageName = name;
-    const view = handle.view;
-    const description = LanguageDescription.matchFilename(languages, name);
-    if (description === null) {
-        view.dispatch({ effects: handle.language.reconfigure([]) });
+/** One parsed document that can move between mounted CodeEditor views. */
+interface EditorDocument {
+    readonly bridge: EditorBridge;
+    /** Duplicate simultaneous consumers stay isolated and never enter the shared LRU. */
+    readonly cacheable: boolean;
+    readonly editable: Compartment;
+    /** The read-only and placeholder configuration currently installed. */
+    editableKey: string;
+    readonly key?: string;
+    readonly language: Compartment;
+    /** Pending lazy language whose single shared request this document follows. */
+    languageDescription?: LanguageDescription;
+    /** A failed lazy load settles to plain text until the file name changes. */
+    languageFailedName?: string;
+    /** Which file the loaded grammar belongs to. */
+    languageName?: string;
+    /** Which file currently has an unresolved grammar request. */
+    languageRequestName?: string;
+    /** Current mounted consumer, if any. Async grammar completion consults this owner. */
+    owner?: EditorHandle;
+    state: EditorState;
+    /** Isolated so an authoritative replacement can discard obsolete undo. */
+    readonly undo: Compartment;
+}
+
+/** Everything the imperative editor keeps for as long as its view is mounted. */
+interface EditorHandle {
+    document: EditorDocument;
+    mounted: boolean;
+    view: EditorView;
+}
+
+/** Controlled document replacements are not typing and must not enter undo. */
+const authoritativeDocumentUpdate = Annotation.define<boolean>();
+
+/** Parsed documents retained across component and tab lifetimes, least recent first. */
+const editorDocumentCache = new Map<string, EditorDocument>();
+const editorDocumentLiveCounts = new Map<string, number>();
+const EDITOR_DOCUMENT_CACHE_LIMIT = 12;
+const EDITOR_DOCUMENT_CACHE_MAX_CHARACTERS = 1_000_000;
+const EDITOR_DOCUMENT_CACHE_MAX_DOCUMENT_CHARACTERS = 250_000;
+let editorDocumentCacheCharacters = 0;
+type EditorLanguageLoad = {
+    readonly documents: Set<EditorDocument>;
+};
+const editorLanguageLoads = new Map<LanguageDescription, EditorLanguageLoad>();
+
+function editorBridgeUpdate(bridge: EditorBridge, props: CodeEditorProps): void {
+    bridge.onSave = props.onSave;
+    bridge.onValueChange = props.onValueChange;
+}
+
+function editorBridgeClear(bridge: EditorBridge): void {
+    bridge.onSave = undefined;
+    bridge.onValueChange = undefined;
+}
+
+function editorEditableKey(props: CodeEditorProps): string {
+    return `${String(props.readOnly === true)}|${props.placeholder ?? ""}`;
+}
+
+function editorEditableExtensions(props: CodeEditorProps): Extension[] {
+    return [
+        EditorView.editable.of(props.readOnly !== true),
+        EditorState.readOnly.of(props.readOnly === true),
+        ...(props.placeholder === undefined ? [] : [placeholderExtension(props.placeholder)]),
+    ];
+}
+
+function editorDocumentCreate(props: CodeEditorProps, cacheable = true): EditorDocument {
+    const bridge: EditorBridge = { historyCharacters: 0 };
+    const editable = new Compartment();
+    const language = new Compartment();
+    const undo = new Compartment();
+    const state = EditorState.create({
+        doc: props.value,
+        extensions: [
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            highlightActiveLine(),
+            highlightSpecialChars(),
+            drawSelection(),
+            undo.of(historyExtension()),
+            bracketMatching(),
+            indentUnit.of("    "),
+            syntaxHighlighting(happyHighlightStyle),
+            language.of([]),
+            editable.of(editorEditableExtensions(props)),
+            keymap.of([
+                {
+                    key: "Mod-s",
+                    preventDefault: true,
+                    run: () => {
+                        bridge.onSave?.();
+                        return true;
+                    },
+                },
+                indentWithTab,
+                ...defaultKeymap,
+                ...historyKeymap,
+            ]),
+            EditorView.updateListener.of((update) => {
+                const authoritative = update.transactions.some(
+                    (transaction) => transaction.annotation(authoritativeDocumentUpdate) === true,
+                );
+                if (update.docChanged && !authoritative) {
+                    let changedCharacters = 0;
+                    update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+                        changedCharacters += toA - fromA + inserted.length;
+                    });
+                    // Once the bound is crossed, its exact overshoot is
+                    // irrelevant: this state will not be admitted to the LRU.
+                    bridge.historyCharacters = Math.min(
+                        EDITOR_DOCUMENT_CACHE_MAX_DOCUMENT_CHARACTERS + 1,
+                        bridge.historyCharacters + changedCharacters,
+                    );
+                    bridge.onValueChange?.(update.state.doc.toString());
+                }
+            }),
+            EditorState.allowMultipleSelections.of(true),
+        ],
+    });
+    return {
+        bridge,
+        cacheable,
+        editable,
+        editableKey: editorEditableKey(props),
+        key: props.documentKey,
+        language,
+        state,
+        undo,
+    };
+}
+
+function editorDocumentWeight(document: EditorDocument): number {
+    return document.state.doc.length + document.bridge.historyCharacters;
+}
+
+function editorLanguageUnsubscribe(document: EditorDocument): void {
+    const description = document.languageDescription;
+    if (description === undefined) return;
+    editorLanguageLoads.get(description)?.documents.delete(document);
+    document.languageDescription = undefined;
+}
+
+function editorDocumentDrop(document: EditorDocument): void {
+    editorBridgeClear(document.bridge);
+    editorLanguageUnsubscribe(document);
+    document.owner = undefined;
+}
+
+function editorDocumentCacheTake(key: string | undefined): EditorDocument | undefined {
+    if (key === undefined) return undefined;
+    const document = editorDocumentCache.get(key);
+    if (document === undefined) return undefined;
+    editorDocumentCache.delete(key);
+    editorDocumentCacheCharacters -= editorDocumentWeight(document);
+    return document;
+}
+
+function editorDocumentCacheRemember(document: EditorDocument): void {
+    const key = document.key;
+    const characters = editorDocumentWeight(document);
+    editorBridgeClear(document.bridge);
+    if (
+        !document.cacheable ||
+        key === undefined ||
+        characters > EDITOR_DOCUMENT_CACHE_MAX_DOCUMENT_CHARACTERS ||
+        characters > EDITOR_DOCUMENT_CACHE_MAX_CHARACTERS
+    ) {
+        editorDocumentDrop(document);
         return;
     }
-    void description.load().then((support) => {
-        // The editor may have been unmounted, or moved to another file, while
-        // the grammar chunk was in flight.
-        if (handle.languageName === name)
-            view.dispatch({ effects: handle.language.reconfigure(support) });
-    });
+    const replaced = editorDocumentCache.get(key);
+    if (replaced !== undefined) {
+        editorDocumentCache.delete(key);
+        editorDocumentCacheCharacters -= editorDocumentWeight(replaced);
+        editorDocumentDrop(replaced);
+    }
+    editorDocumentCache.set(key, document);
+    editorDocumentCacheCharacters += characters;
+    while (
+        editorDocumentCache.size > EDITOR_DOCUMENT_CACHE_LIMIT ||
+        editorDocumentCacheCharacters > EDITOR_DOCUMENT_CACHE_MAX_CHARACTERS
+    ) {
+        const oldestKey = editorDocumentCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        const oldest = editorDocumentCache.get(oldestKey);
+        editorDocumentCache.delete(oldestKey);
+        if (oldest !== undefined) {
+            editorDocumentCacheCharacters -= editorDocumentWeight(oldest);
+            editorDocumentDrop(oldest);
+        }
+    }
+}
+
+function editorDocumentAcquire(props: CodeEditorProps): EditorDocument {
+    const key = props.documentKey;
+    const alreadyLive = key !== undefined && (editorDocumentLiveCounts.get(key) ?? 0) > 0;
+    const document =
+        (!alreadyLive ? editorDocumentCacheTake(key) : undefined) ??
+        editorDocumentCreate(props, !alreadyLive);
+    if (key !== undefined)
+        editorDocumentLiveCounts.set(key, (editorDocumentLiveCounts.get(key) ?? 0) + 1);
+    return document;
+}
+
+function editorDocumentRelease(document: EditorDocument): void {
+    const key = document.key;
+    let remaining = 0;
+    if (key !== undefined) {
+        remaining = Math.max(0, (editorDocumentLiveCounts.get(key) ?? 1) - 1);
+        if (remaining === 0) editorDocumentLiveCounts.delete(key);
+        else editorDocumentLiveCounts.set(key, remaining);
+    }
+    if (remaining === 0) editorDocumentCacheRemember(document);
+    else editorDocumentDrop(document);
+}
+
+/** Loads the grammar for a file name, or nothing when no language claims it. */
+function languageInstall(document: EditorDocument, name: string, extension: Extension): void {
+    if (document.languageRequestName !== name) return;
+    editorLanguageUnsubscribe(document);
+    const effect = document.language.reconfigure(extension);
+    const owner = document.owner;
+    if (owner?.mounted && owner.document === document) {
+        owner.view.dispatch({ effects: effect });
+        document.state = owner.view.state;
+    } else {
+        document.state = document.state.update({ effects: effect }).state;
+    }
+    document.languageFailedName = undefined;
+    document.languageName = name;
+    document.languageRequestName = undefined;
+}
+
+function languageReconfigure(document: EditorDocument, name: string) {
+    editorLanguageUnsubscribe(document);
+    document.languageFailedName = undefined;
+    document.languageName = undefined;
+    document.languageRequestName = name;
+    const description = LanguageDescription.matchFilename(languages, name);
+    if (description === null) {
+        languageInstall(document, name, []);
+        return;
+    }
+    // LanguageDescription keeps its resolved support. Installing that support
+    // synchronously is what prevents an already-known grammar from producing
+    // one plain-text frame every time the reader returns to a file.
+    if (description.support !== undefined) {
+        languageInstall(document, name, description.support);
+        return;
+    }
+    document.languageDescription = description;
+    let loading = editorLanguageLoads.get(description);
+    if (loading === undefined) {
+        loading = { documents: new Set() };
+        editorLanguageLoads.set(description, loading);
+        const request = loading;
+        void description.load().then(
+            (support) => {
+                if (editorLanguageLoads.get(description) !== request) return;
+                editorLanguageLoads.delete(description);
+                for (const waiting of request.documents)
+                    languageInstall(waiting, waiting.languageRequestName ?? "", support);
+            },
+            () => {
+                if (editorLanguageLoads.get(description) !== request) return;
+                editorLanguageLoads.delete(description);
+                for (const waiting of request.documents) {
+                    waiting.languageDescription = undefined;
+                    const failedName = waiting.languageRequestName;
+                    if (failedName === undefined) continue;
+                    waiting.languageFailedName = failedName;
+                    waiting.languageRequestName = undefined;
+                }
+            },
+        );
+    }
+    loading.documents.add(document);
 }
 
 /**
@@ -153,51 +430,32 @@ export function CodeEditor(props: CodeEditorProps) {
     const handle = useRef<EditorHandle | undefined>(undefined);
     const attach = useCallback((host: HTMLDivElement | null) => {
         if (host === null) return;
-        const editable = new Compartment();
-        const language = new Compartment();
+        const current = latest.current;
+        const document = editorDocumentAcquire(current);
+        editorBridgeUpdate(document.bridge, current);
         const view = new EditorView({
             parent: host,
-            state: EditorState.create({
-                doc: latest.current.value,
-                extensions: [
-                    lineNumbers(),
-                    highlightActiveLineGutter(),
-                    highlightActiveLine(),
-                    highlightSpecialChars(),
-                    drawSelection(),
-                    history(),
-                    bracketMatching(),
-                    indentUnit.of("    "),
-                    syntaxHighlighting(happyHighlightStyle),
-                    language.of([]),
-                    editable.of([]),
-                    keymap.of([
-                        {
-                            key: "Mod-s",
-                            preventDefault: true,
-                            run: () => {
-                                latest.current.onSave?.();
-                                return true;
-                            },
-                        },
-                        indentWithTab,
-                        ...defaultKeymap,
-                        ...historyKeymap,
-                    ]),
-                    EditorView.updateListener.of((update) => {
-                        if (update.docChanged)
-                            latest.current.onValueChange?.(update.state.doc.toString());
-                    }),
-                    EditorState.allowMultipleSelections.of(true),
-                ],
-            }),
+            state: document.state,
         });
-        const created: EditorHandle = { editable, language, view };
+        const created: EditorHandle = {
+            document,
+            mounted: true,
+            view,
+        };
+        document.owner = created;
         handle.current = created;
-        languageReconfigure(created, latest.current.name);
+        if (
+            document.languageName !== current.name &&
+            document.languageRequestName !== current.name &&
+            document.languageFailedName !== current.name
+        )
+            languageReconfigure(document, current.name);
         return () => {
-            handle.current = undefined;
-            created.languageName = undefined;
+            if (handle.current === created) handle.current = undefined;
+            created.mounted = false;
+            created.document.state = view.state;
+            if (created.document.owner === created) created.document.owner = undefined;
+            editorDocumentRelease(created.document);
             view.destroy();
         };
     }, []);
@@ -206,26 +464,57 @@ export function CodeEditor(props: CodeEditorProps) {
         latest.current = props;
         const editor = handle.current;
         if (editor === undefined) return;
+        if (props.documentKey !== editor.document.key) {
+            // Take the requested state before remembering the outgoing one, so
+            // an LRU at capacity cannot evict the state we are returning to.
+            const incoming = editorDocumentAcquire(props);
+            editor.document.state = editor.view.state;
+            if (editor.document.owner === editor) editor.document.owner = undefined;
+            editorDocumentRelease(editor.document);
+            editor.document = incoming;
+            incoming.owner = editor;
+            editorBridgeUpdate(incoming.bridge, props);
+            editor.view.setState(incoming.state);
+        }
+        editorBridgeUpdate(editor.document.bridge, props);
         // Typing already produced this text, and replacing a document the
-        // person is inside of would drop their cursor to the top.
-        if (props.value !== editor.view.state.doc.toString())
+        // person is inside of would drop their cursor to the top. A replacement
+        // from props is authoritative synchronization, not another edit: it
+        // neither reports a draft nor becomes an undo step.
+        if (props.value !== editor.view.state.doc.toString()) {
+            // Removing and restoring the history compartment preserves every
+            // other state field — including the parse tree — while making a
+            // revert, save result, or disk reload a true lifetime boundary for
+            // obsolete edits.
+            editor.view.dispatch({
+                effects: editor.document.undo.reconfigure([]),
+            });
             editor.view.dispatch({
                 changes: { from: 0, to: editor.view.state.doc.length, insert: props.value },
+                annotations: [
+                    authoritativeDocumentUpdate.of(true),
+                    Transaction.addToHistory.of(false),
+                ],
             });
-        if (editor.languageName !== props.name) languageReconfigure(editor, props.name);
-        const editableKey = `${String(props.readOnly === true)}|${props.placeholder ?? ""}`;
-        if (editor.editableKey !== editableKey) {
-            editor.editableKey = editableKey;
             editor.view.dispatch({
-                effects: editor.editable.reconfigure([
-                    EditorView.editable.of(props.readOnly !== true),
-                    EditorState.readOnly.of(props.readOnly === true),
-                    ...(props.placeholder === undefined
-                        ? []
-                        : [placeholderExtension(props.placeholder)]),
-                ]),
+                effects: editor.document.undo.reconfigure(historyExtension()),
+            });
+            editor.document.bridge.historyCharacters = 0;
+        }
+        if (
+            editor.document.languageName !== props.name &&
+            editor.document.languageRequestName !== props.name &&
+            editor.document.languageFailedName !== props.name
+        )
+            languageReconfigure(editor.document, props.name);
+        const editableKey = editorEditableKey(props);
+        if (editor.document.editableKey !== editableKey) {
+            editor.document.editableKey = editableKey;
+            editor.view.dispatch({
+                effects: editor.document.editable.reconfigure(editorEditableExtensions(props)),
             });
         }
+        editor.document.state = editor.view.state;
     });
     return (
         <div

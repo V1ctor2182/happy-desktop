@@ -52,6 +52,8 @@ export type TabItem = {
      * outranks it — real work is the thing worth showing.
      */
     waiting?: boolean;
+    /** Unsaved file content. Drawn as the classic dot in the tab's trailing lane. */
+    dirty?: boolean;
     /** Marks the tab as carrying unread activity with a dot on its leading mark. */
     unread?: boolean;
     /**
@@ -132,6 +134,15 @@ function tabActivityMark(tab: TabItem) {
             >
                 <Icon name="clock" size={12} />
             </span>
+        );
+    if (tab.dirty)
+        return (
+            <span
+                aria-label={`${tab.label} has unsaved changes`}
+                className="happy2-tabs__tab-dirty"
+                data-happy-desktop-ui="tab-dirty"
+                role="img"
+            />
         );
     return null;
 }

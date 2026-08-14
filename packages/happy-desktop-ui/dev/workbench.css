@@ -155,9 +155,8 @@
 }
 
 /* Appearance is switched while review captures are being taken, so the control's
-   pill and label transitions must not be able to leave an intermediate frame in
-   a screenshot of the workbench. */
-.workbench-appearance .happy2-segmented-control__pill,
+   selection transition must not leave an intermediate frame in a screenshot of
+   the workbench. */
 .workbench-appearance .happy2-segmented-control__segment {
     transition: none;
 }

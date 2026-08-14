@@ -1,0 +1,99 @@
+/*
+ * Compact path used by file preview and editor headers. The directory gives
+ * way from its middle before the file name does, preserving the useful tail.
+ */
+
+.happy2-file-path-label {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.happy2-file-path-label__directory {
+    display: flex;
+    flex: 0 1000 auto;
+    align-items: baseline;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+}
+
+.happy2-file-path-label__directory-head {
+    display: block;
+    flex: 0 1000 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy2-file-path-label__directory-tail {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy2-file-path-label__name {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+}
+
+/* A file-kind glyph uses the same family palette wherever a compact file path
+   appears. The component supplies the glyph; this class supplies its meaning. */
+.happy2-file-family-glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.happy2-file-family-glyph[data-family="archive"] {
+    color: var(--file-archive);
+}
+
+.happy2-file-family-glyph[data-family="audio"] {
+    color: var(--file-audio);
+}
+
+.happy2-file-family-glyph[data-family="code"] {
+    color: var(--file-code);
+}
+
+.happy2-file-family-glyph[data-family="config"] {
+    color: var(--file-config);
+}
+
+.happy2-file-family-glyph[data-family="data"] {
+    color: var(--file-data);
+}
+
+.happy2-file-family-glyph[data-family="image"] {
+    color: var(--file-image);
+}
+
+.happy2-file-family-glyph[data-family="prose"] {
+    color: var(--file-prose);
+}
+
+.happy2-file-family-glyph[data-family="secret"] {
+    color: var(--file-secret);
+}
+
+.happy2-file-family-glyph[data-family="shell"] {
+    color: var(--file-shell);
+}
+
+.happy2-file-family-glyph[data-family="style"] {
+    color: var(--file-style);
+}
+
+.happy2-file-family-glyph[data-family="video"] {
+    color: var(--file-video);
+}

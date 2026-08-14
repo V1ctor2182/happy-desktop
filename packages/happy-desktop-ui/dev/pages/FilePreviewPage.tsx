@@ -62,11 +62,11 @@ export function FilePreviewPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="One file, shown rather than downloaded: a 56px header naming the file and a body that fills its region. Images and video are contained on the inset stage; Markdown and source scroll in a full-bleed scrollport."
+            summary="One file, shown rather than downloaded: a compact 32px diff-style icon-and-path header and a body that fills its region. Images and video are contained on the inset stage; Markdown and source scroll in a full-bleed scrollport."
             title="FilePreview"
         >
             <Specimen
-                detail="56px header · contained artwork on the inset stage"
+                detail="32px icon-and-path header · contained artwork on the inset stage"
                 label="Image"
                 number="01"
                 stage="surface"
@@ -86,7 +86,7 @@ export function FilePreviewPage() {
                             size="18 KB"
                         />,
                     )}
-                    <DimensionRule label="720 × 420 px region · 56 px header" />
+                    <DimensionRule label="720 × 420 px region · 32 px path header" />
                 </div>
             </Specimen>
 

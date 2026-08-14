@@ -190,11 +190,11 @@ export function FileBrowserPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The file listing of a workspace panel: one 32px flat control row carrying the scope switch, the listing's own totals, and the layout switch, over a virtualized FileTree scrollport with no rule between them."
+            summary="One permanent Files tab contains a one-layer Changes / All Files choice: the group has no track, and only the selected option uses the file-tree selection fill. The same row carries totals and the List / Tree choice over a virtualized FileTree."
             title="FileBrowser"
         >
             <Specimen
-                detail="32px control row · flat controls · per-file diff stat"
+                detail="32px bar · 24px controls · shared 6px selection inset"
                 label="Changed files, flat"
                 number="01"
                 stage="surface"
@@ -211,7 +211,7 @@ export function FileBrowserPage() {
                             selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
                         />,
                     )}
-                    <DimensionRule label="320 px panel · 32 px control row · 28 px row" />
+                    <DimensionRule label="32 px bar · 24 px selector · 28 px row · 6 px shared inset" />
                 </div>
             </Specimen>
 

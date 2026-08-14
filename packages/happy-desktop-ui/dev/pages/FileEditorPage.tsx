@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { Banner } from "../../src/Banner";
+import { EmptyState } from "../../src/EmptyState";
 import { FileEditor } from "../../src/FileEditor";
+import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -16,7 +18,12 @@ export function Counter() {
     );
 }
 `;
-function frame(children: ReactNode, height = 420) {
+function frame(
+    children: ReactNode,
+    height = 420,
+    tab: { path: string; dirty?: boolean } = { path: "src/components/Counter.tsx" },
+) {
+    const name = tab.path.split("/").at(-1) ?? tab.path;
     return (
         <div
             style={{
@@ -28,7 +35,23 @@ function frame(children: ReactNode, height = 420) {
                 width: "640px",
             }}
         >
-            {children}
+            <TabbedPane
+                activeId={tab.path}
+                closeLabel="Close file"
+                onClose={() => undefined}
+                onSelect={() => undefined}
+                tabs={[
+                    {
+                        closable: true,
+                        icon: "doc",
+                        id: tab.path,
+                        label: name,
+                        ...(tab.dirty ? { dirty: true } : {}),
+                    },
+                ]}
+            >
+                {children}
+            </TabbedPane>
         </div>
     );
 }
@@ -36,11 +59,11 @@ export function FileEditorPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A single-file text editor: a 52px header with the file name, directory subtitle, unsaved marker, and Save / Revert / Close; an optional alert banner; a monospace code body; and a status bar. Cmd/Ctrl+S saves."
+            summary="A tab-owned text editor: the tab carries the file name and unsaved dot; a compact 32px diff-style path row sits over the code; there is no Save button or bottom path. Cmd/Ctrl+S saves."
             title="FileEditor"
         >
             <Specimen
-                detail="Clean file — Save disabled, no marker"
+                detail="Clean file — no dot, no Save button, no bottom status/path strip"
                 label="Saved"
                 number="01"
                 stage="surface"
@@ -48,19 +71,18 @@ export function FileEditorPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {frame(
                         <FileEditor
-                            onClose={() => {}}
+                            documentKey="src/components/Counter.tsx@7f3a"
                             onSave={() => {}}
                             path="src/components/Counter.tsx"
-                            status="1.2 KB · UTF-8"
                             value={sample}
                         />,
                     )}
-                    <DimensionRule label="640 px surface · 52 px header · 28 px status bar" />
+                    <DimensionRule label="640 px surface · 32 px tab · 32 px path row" />
                 </div>
             </Specimen>
 
             <Specimen
-                detail="Dirty — unsaved marker, Revert + enabled Save"
+                detail="Dirty — classic tab dot and Revert; Command-S is the only save control"
                 label="Unsaved edits"
                 number="02"
                 stage="surface"
@@ -68,13 +90,14 @@ export function FileEditorPage() {
                 {frame(
                     <FileEditor
                         dirty
-                        onClose={() => {}}
+                        documentKey="src/components/Counter.tsx@7f3a"
                         onRevert={() => {}}
                         onSave={() => {}}
                         path="src/components/Counter.tsx"
-                        status="Modified"
                         value={sample.replace("Count:", "Total:")}
                     />,
+                    420,
+                    { path: "src/components/Counter.tsx", dirty: true },
                 )}
             </Specimen>
 
@@ -92,13 +115,15 @@ export function FileEditorPage() {
                             </Banner>
                         }
                         dirty
-                        onClose={() => {}}
+                        documentKey="README.md@aa31"
                         onRevert={() => {}}
                         onSave={() => {}}
                         path="README.md"
                         status="Conflict"
                         value={"# Project\n\nLocal edits that no longer match the file on disk.\n"}
                     />,
+                    420,
+                    { path: "README.md", dirty: true },
                 )}
             </Specimen>
 
@@ -110,13 +135,14 @@ export function FileEditorPage() {
             >
                 {frame(
                     <FileEditor
-                        onClose={() => {}}
+                        documentKey="dist/bundle.js@19b0"
                         path="dist/bundle.js"
                         readOnly
                         status="Read only"
                         value={"// generated output — do not edit\nconsole.log(0);\n"}
                     />,
                     300,
+                    { path: "dist/bundle.js" },
                 )}
             </Specimen>
             <Specimen
@@ -128,7 +154,7 @@ export function FileEditorPage() {
                 {frame(
                     <FileEditor
                         dirty
-                        onClose={() => {}}
+                        documentKey="src/components/Counter.tsx@7f3a"
                         onRevert={() => {}}
                         onSave={() => {}}
                         onValueChange={() => {}}
@@ -137,7 +163,38 @@ export function FileEditorPage() {
                         status="Rig is offline. Draft preserved locally."
                         value={sample.replace("Count:", "Total:")}
                     />,
+                    420,
+                    { path: "src/components/Counter.tsx", dirty: true },
                 )}
+            </Specimen>
+            <Specimen
+                detail="A cached tab goes straight to highlighted content; only a file with no retained content gets the loading surface"
+                label="Cached vs cold"
+                number="06"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {frame(
+                        <FileEditor
+                            documentKey="src/components/Counter.tsx@7f3a"
+                            onSave={() => {}}
+                            path="src/components/Counter.tsx"
+                            value={sample}
+                        />,
+                        280,
+                    )}
+                    {frame(
+                        <EmptyState
+                            animation="snail"
+                            description="Reading the file from its workspace."
+                            icon="doc"
+                            size="panel"
+                            title="Loading file…"
+                        />,
+                        220,
+                        { path: "src/components/NewFile.tsx" },
+                    )}
+                </div>
             </Specimen>
         </ComponentPage>
     );

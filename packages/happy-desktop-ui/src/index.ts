@@ -124,6 +124,7 @@ export { EventCard, type EventCardProps } from "./EventCard";
 export { Fade, type FadeProps } from "./Fade";
 export {
     FileTree,
+    FileTreeFamilyIcon,
     fileTreeFamily,
     type FileTreeFamily,
     type FileTreeGitStatus,
@@ -138,6 +139,7 @@ export {
     type FileBrowserProps,
     type FileBrowserScope,
 } from "./FileBrowser";
+export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
     FilePreview,
     filePreviewKind,

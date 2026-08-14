@@ -28,6 +28,13 @@
 .happy2-theme-light {
     color-scheme: light;
 
+    /* File tabs, their mode bars, and the path rows below them are one piece
+       of chrome. Keep the containing row and its inset controls on one shared
+       geometry so adjacent layers cannot drift as components evolve. */
+    --happy2-subheader-height: 32px;
+    --happy2-subheader-control-height: 24px;
+    --happy2-subheader-inset: 4px;
+
     --text: #000000;
     --text-destructive: #f44336;
     --text-secondary: #49454f;
