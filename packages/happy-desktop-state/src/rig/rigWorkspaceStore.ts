@@ -35,8 +35,11 @@ import type {
 } from "./rigChatStore.js";
 import {
     rigAttachmentTextAppend,
-    rigComposerAttachmentRead,
+    rigComposerAttachmentCreate,
+    rigComposerAttachmentPreviewRelease,
+    rigComposerAttachmentsValidate,
     rigImageInputsOf,
+    rigWorkspaceAttachmentData,
 } from "./rigComposerAttachment.js";
 import { rigPanelStoreCreate, type RigPanelStore, type RigViewPlacement } from "./rigPanelStore.js";
 import {
@@ -929,10 +932,9 @@ export interface RigWorkspaceStore {
     composerTextSubmit(): void;
     composerCommandInvoke(commandId: string): void;
     /**
-     * Attaches picked or pasted images to the addressed draft. Reading the bytes
-     * is asynchronous, so this returns immediately and each image appears in the
-     * draft as it is read; a file that is not an image is ignored, since a local
-     * turn can only carry images inline.
+     * Attaches picked, pasted, or dropped files to the addressed draft. Small
+     * images are prepared inline; larger media and ordinary files retain their
+     * browser `File` until send so selection itself never serializes a video.
      */
     composerAttachmentsAdd(files: readonly File[]): void;
     /** Removes one attachment from the addressed draft. */
@@ -1173,7 +1175,7 @@ export function rigWorkspaceStoreCreate(
     let chatArrival: Promise<RigChatStore> | undefined;
     let acquisitionGeneration = 0;
     let mentionGeneration = 0;
-    // Names one attached image within its draft; the daemon never sees this id.
+    // Names one attached file within its draft; the daemon never sees this id.
     let attachmentSequence = 0;
 
     let conversation: Loadable<RigConversationSnapshot> = { type: "unloaded" };
@@ -2340,9 +2342,18 @@ export function rigWorkspaceStoreCreate(
         target: ComposerStore | undefined,
         revision: number,
         run: () => Promise<void>,
+        submittedAttachments: readonly ComposerAttachment[] = [],
     ): void => {
         void run().then(
-            () => target?.getState().composerInput({ type: "submissionConfirmed", revision }),
+            () => {
+                target?.getState().composerInput({ type: "submissionConfirmed", revision });
+                const retained = new Set(
+                    target?.getState().attachments.map((attachment) => attachment.id) ?? [],
+                );
+                for (const attachment of submittedAttachments)
+                    if (!retained.has(attachment.id))
+                        rigComposerAttachmentPreviewRelease(attachment);
+            },
             (error: unknown) =>
                 target?.getState().composerInput({
                     type: "submissionFailed",
@@ -2404,6 +2415,7 @@ export function rigWorkspaceStoreCreate(
         text: string,
         attachments: readonly ComposerAttachment[],
     ): Promise<string> => {
+        rigComposerAttachmentsValidate(attachments);
         const paths: string[] = [];
         for (const attachment of attachments) {
             if (attachment.kind !== "workspaceFile") continue;
@@ -2414,7 +2426,8 @@ export function rigWorkspaceStoreCreate(
             // the draft and its attachments for another attempt.
             const refusal = groupWorkRefusalFind(groupId);
             if (refusal) throw new Error(refusal);
-            const written = await client.attachmentWrite(groupId, attachment.name, attachment.data);
+            const data = await rigWorkspaceAttachmentData(attachment);
+            const written = await client.attachmentWrite(groupId, attachment.name, data);
             paths.push(written.path);
         }
         return rigAttachmentTextAppend(text, paths);
@@ -2517,22 +2530,26 @@ export function rigWorkspaceStoreCreate(
                         void withChatStore((store) =>
                             store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
-                        submitting(created, event.revision, async () => {
-                            const group = conversationGroupId(conversationId);
-                            if (!group)
-                                throw new Error("That conversation is no longer in a project.");
-                            const refusal = groupConversationRefusalFind(group);
-                            if (refusal) throw new Error(refusal);
-                            const text = await attachmentsPlace(
-                                group,
-                                event.text,
-                                event.attachments,
-                            );
-                            await withChatStore((store) =>
-                                store.messageSend(text, rigImageInputsOf(event.attachments)),
-                            );
-                            conversationAttachments.delete(conversationId);
-                        });
+                        submitting(
+                            created,
+                            event.revision,
+                            async () => {
+                                const group = conversationGroupId(conversationId);
+                                if (!group)
+                                    throw new Error("That conversation is no longer in a project.");
+                                const refusal = groupConversationRefusalFind(group);
+                                if (refusal) throw new Error(refusal);
+                                const images = await rigImageInputsOf(event.attachments);
+                                const text = await attachmentsPlace(
+                                    group,
+                                    event.text,
+                                    event.attachments,
+                                );
+                                await withChatStore((store) => store.messageSend(text, images));
+                                conversationAttachments.delete(conversationId);
+                            },
+                            event.attachments,
+                        );
                         return;
                     case "shellCommandSubmitted":
                         // A shell command is the most direct write there is: it
@@ -2934,6 +2951,11 @@ export function rigWorkspaceStoreCreate(
     ): Promise<RigSessionLocation> => {
         const refusal = groupConversationRefusalFind(groupId);
         if (refusal) return Promise.reject(new Error(refusal));
+        try {
+            rigComposerAttachmentsValidate(attachments);
+        } catch (error) {
+            return Promise.reject(error);
+        }
         // A file attached to this first message has to land in the checkout, and
         // that is asked for before anything is created rather than after: a
         // refusal discovered once the session exists would leave an empty
@@ -2952,23 +2974,25 @@ export function rigWorkspaceStoreCreate(
         // the reader asked for one new place to work, and a message typed into
         // it while it was being made must not leave a second conversation beside
         // the one the workspace already has.
-        const started =
-            worktreeFirstConversation?.groupId === groupId
-                ? worktreeFirstConversation.started
-                : start.worktreeId
-                  ? list.worktreeSessionStart(start.worktreeId, create)
-                  : list.sessionCreate(create);
-        return started.then(async (location) => {
-            if (!location) throw new Error("The conversation could not be started.");
-            output({ type: "conversationOpenRequested", location });
-            const placed = await attachmentsPlace(location.groupId, text, attachments);
-            const acquired = await client.chat(location.sessionId);
-            try {
-                await acquired.store.messageSend(placed, rigImageInputsOf(attachments));
-            } finally {
-                acquired[Symbol.dispose]();
-            }
-            return location;
+        return rigImageInputsOf(attachments).then((images) => {
+            const started =
+                worktreeFirstConversation?.groupId === groupId
+                    ? worktreeFirstConversation.started
+                    : start.worktreeId
+                      ? list.worktreeSessionStart(start.worktreeId, create)
+                      : list.sessionCreate(create);
+            return started.then(async (location) => {
+                if (!location) throw new Error("The conversation could not be started.");
+                output({ type: "conversationOpenRequested", location });
+                const placed = await attachmentsPlace(location.groupId, text, attachments);
+                const acquired = await client.chat(location.sessionId);
+                try {
+                    await acquired.store.messageSend(placed, images);
+                } finally {
+                    acquired[Symbol.dispose]();
+                }
+                return location;
+            });
         });
     };
 
@@ -3688,20 +3712,25 @@ export function rigWorkspaceStoreCreate(
                             // session has been created: creation navigates,
                             // which releases this group and its draft with it.
                             const selection = groupDraft?.get().selection;
-                            submitting(created, event.revision, async () => {
-                                await groupSubmit(
-                                    groupId,
-                                    event.text,
-                                    event.attachments,
-                                    selection,
-                                );
-                                // Sent, so there is nothing left to come back
-                                // to. Navigation releases this composer before
-                                // it can clear itself, which is why the group's
-                                // own record of the draft is cleared here.
-                                client.memory.groupDraftWrite(groupId, "");
-                                groupAttachments.delete(groupId);
-                            });
+                            submitting(
+                                created,
+                                event.revision,
+                                async () => {
+                                    await groupSubmit(
+                                        groupId,
+                                        event.text,
+                                        event.attachments,
+                                        selection,
+                                    );
+                                    // Sent, so there is nothing left to come back
+                                    // to. Navigation releases this composer before
+                                    // it can clear itself, which is why the group's
+                                    // own record of the draft is cleared here.
+                                    client.memory.groupDraftWrite(groupId, "");
+                                    groupAttachments.delete(groupId);
+                                },
+                                event.attachments,
+                            );
                             return;
                         }
                         default:
@@ -4269,20 +4298,17 @@ export function rigWorkspaceStoreCreate(
             if (!target) return;
             for (const file of files) {
                 const id = `attachment:${++attachmentSequence}`;
-                void rigComposerAttachmentRead(id, file).then(
-                    (attachment) => {
-                        // The draft may have been released (or replaced by
-                        // addressing elsewhere) while the bytes were read; an
-                        // attachment never lands in a composer other than its own.
-                        if ((groupComposer ?? composer) !== target) return;
-                        target.getState().attachmentAdd(attachment);
-                    },
-                    () => undefined,
-                );
+                target.getState().attachmentAdd(rigComposerAttachmentCreate(id, file));
             }
         },
-        composerAttachmentRemove: (attachmentId) =>
-            (groupComposer ?? composer)?.getState().attachmentRemove(attachmentId),
+        composerAttachmentRemove(attachmentId) {
+            const target = groupComposer ?? composer;
+            const attachment = target
+                ?.getState()
+                .attachments.find((candidate) => candidate.id === attachmentId);
+            target?.getState().attachmentRemove(attachmentId);
+            if (attachment) rigComposerAttachmentPreviewRelease(attachment);
+        },
 
         sessionModelUpdate(input) {
             if (groupDraft) groupDraft.modelUpdate(input);
@@ -4717,6 +4743,18 @@ export function rigWorkspaceStoreCreate(
             if (disposed) return;
             disposed = true;
             stop();
+            const released = new Set<string>();
+            for (const attachments of [
+                ...groupAttachments.values(),
+                ...conversationAttachments.values(),
+            ])
+                for (const attachment of attachments) {
+                    if (released.has(attachment.id)) continue;
+                    released.add(attachment.id);
+                    rigComposerAttachmentPreviewRelease(attachment);
+                }
+            groupAttachments.clear();
+            conversationAttachments.clear();
             createRelease();
             // Disposing the panel stops every terminal it opened: this connection is
             // going away, and a shell nobody can reach again is an orphan.

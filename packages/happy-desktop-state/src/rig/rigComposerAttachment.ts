@@ -1,8 +1,11 @@
 import type { ComposerAttachment } from "../modules/composer/composerState.js";
 import type { RigImageInput } from "./rigTypes.js";
 
-/** Bytes per base64 chunk; keeps the argument list of one `fromCharCode` sane. */
-const CHUNK = 0x8000;
+/**
+ * Bytes per base64 chunk. Divisibility by three means each chunk can be encoded
+ * independently without padding in the middle of the joined result.
+ */
+const CHUNK = 0x6000;
 
 /**
  * How large an image may be before it stops travelling inside the turn. Inline
@@ -13,43 +16,96 @@ const CHUNK = 0x8000;
 const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 function base64Encode(bytes: Uint8Array): string {
-    let binary = "";
-    for (let offset = 0; offset < bytes.length; offset += CHUNK)
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
-    return btoa(binary);
+    const encoded: string[] = [];
+    for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+        const binary = String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
+        encoded.push(btoa(binary));
+    }
+    return encoded.join("");
 }
 
 /**
- * Reads one picked, dropped, or pasted file into a draft attachment. A local
- * session has no upload step, so the bytes are carried by the draft itself: an
- * image small enough to inline travels with the turn, and everything else — a
- * PDF, an archive, a screenshot too large to inline — becomes a copy the send
- * writes into the session's working directory and names by path. `id` is minted
- * by the caller so a retry of one attach keeps the identity the chip row already
- * shows.
+ * The shared local/remote attachment ceiling. A Remote Rig carries the daemon's
+ * JSON request through a 40 MiB P2P envelope; 29 MiB of source bytes expands to
+ * about 38.7 MiB in base64, leaving room for JSON keys and the destination path.
  */
-export async function rigComposerAttachmentRead(
-    id: string,
-    file: File,
-): Promise<ComposerAttachment> {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const data = base64Encode(bytes);
-    if (file.type.startsWith("image/") && bytes.byteLength <= INLINE_IMAGE_MAX_BYTES)
+export const RIG_COMPOSER_FILE_MAX_BYTES = 29 * 1024 * 1024;
+
+function mediaPreviewUrl(file: File): string | undefined {
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return undefined;
+    if (typeof URL.createObjectURL !== "function") return undefined;
+    try {
+        return URL.createObjectURL(file);
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Creates one picked, dropped, or pasted draft attachment without reading its
+ * bytes. Selection is synchronous, so an immediate Enter cannot overtake an
+ * attachment that is still being prepared. A small image is marked to travel
+ * inline with the turn; everything else becomes a copy written into the
+ * session's working directory when the draft is submitted.
+ */
+export function rigComposerAttachmentCreate(id: string, file: File): ComposerAttachment {
+    const previewUrl = mediaPreviewUrl(file);
+    if (file.type.startsWith("image/") && file.size <= INLINE_IMAGE_MAX_BYTES) {
         return {
             kind: "inlineImage",
             id,
             name: file.name || "image",
             size: file.size,
             mediaType: file.type,
-            data,
+            file,
+            ...(previewUrl ? { previewUrl } : {}),
         };
+    }
     return {
         kind: "workspaceFile",
         id,
         name: file.name || "attachment",
         size: file.size,
-        data,
+        mediaType: file.type || "application/octet-stream",
+        file,
+        ...(previewUrl ? { previewUrl } : {}),
     };
+}
+
+function attachmentSizeAssert(name: string, size: number): void {
+    if (size > RIG_COMPOSER_FILE_MAX_BYTES)
+        throw new Error(`${name} is too large to attach. Rig currently accepts files up to 29 MB.`);
+}
+
+/** Validates a whole draft before it creates a session or writes its first file. */
+export function rigComposerAttachmentsValidate(attachments: readonly ComposerAttachment[]): void {
+    for (const attachment of attachments)
+        if (attachment.kind === "workspaceFile")
+            attachmentSizeAssert(attachment.name, attachment.size);
+    const inlineBytes = attachments
+        .filter((attachment) => attachment.kind === "inlineImage")
+        .reduce((total, attachment) => total + attachment.size, 0);
+    if (inlineBytes > RIG_COMPOSER_FILE_MAX_BYTES)
+        throw new Error(
+            "These images are too large to attach together. Rig currently accepts up to 29 MB per message.",
+        );
+}
+
+/**
+ * Encodes one non-inline attachment only when a send actually needs it. The
+ * explicit shared ceiling makes local and Remote Rig sends behave alike.
+ */
+export async function rigWorkspaceAttachmentData(
+    attachment: Extract<ComposerAttachment, { kind: "workspaceFile" }>,
+): Promise<string> {
+    attachmentSizeAssert(attachment.name, attachment.size);
+    return base64Encode(new Uint8Array(await attachment.file.arrayBuffer()));
+}
+
+/** Releases the browser resource held by one media preview, when it has one. */
+export function rigComposerAttachmentPreviewRelease(attachment: ComposerAttachment): void {
+    if (attachment.previewUrl && typeof URL.revokeObjectURL === "function")
+        URL.revokeObjectURL(attachment.previewUrl);
 }
 
 /**
@@ -65,11 +121,17 @@ export function rigAttachmentTextAppend(text: string, paths: readonly string[]):
     return text.trim().length === 0 ? `${heading}\n${lines}` : `${text}\n\n${heading}\n${lines}`;
 }
 
-/** The inline images of a draft, in draft order, as the send path carries them. */
-export function rigImageInputsOf(
+/** Encodes the inline images of a draft, in draft order, only during submission. */
+export async function rigImageInputsOf(
     attachments: readonly ComposerAttachment[],
-): readonly RigImageInput[] {
-    return attachments
-        .filter((attachment) => attachment.kind === "inlineImage")
-        .map((attachment) => ({ mediaType: attachment.mediaType, data: attachment.data }));
+): Promise<readonly RigImageInput[]> {
+    rigComposerAttachmentsValidate(attachments);
+    const inline = attachments.filter((attachment) => attachment.kind === "inlineImage");
+    const images: RigImageInput[] = [];
+    for (const attachment of inline)
+        images.push({
+            mediaType: attachment.mediaType,
+            data: base64Encode(new Uint8Array(await attachment.file.arrayBuffer())),
+        });
+    return images;
 }
