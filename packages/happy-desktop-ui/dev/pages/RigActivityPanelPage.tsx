@@ -193,6 +193,44 @@ export function RigActivityPanelPage() {
                     />
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="the full-height, independently scrolling treatment used by the workspace side panel"
+                label="Activity tab"
+                number="05"
+                stage="surface"
+            >
+                <div style={{ display: "flex", height: "360px", width: "360px" }}>
+                    <RigActivityPanel
+                        backgroundProcesses={backgroundProcesses}
+                        goal={goal}
+                        now={NOW}
+                        onBackgroundProcessStop={() => undefined}
+                        placement="panel"
+                        subagents={subagents}
+                        tasks={tasks}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the 250px minimum side-panel width; status moves above content so names and commands keep their readable measure"
+                label="Narrow activity tab"
+                number="06"
+                stage="surface"
+            >
+                <div style={{ display: "flex", height: "360px", width: "250px" }}>
+                    <RigActivityPanel
+                        backgroundProcesses={backgroundProcesses}
+                        goal={goal}
+                        now={NOW}
+                        onBackgroundProcessStop={() => undefined}
+                        placement="panel"
+                        subagents={subagents}
+                        tasks={tasks}
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

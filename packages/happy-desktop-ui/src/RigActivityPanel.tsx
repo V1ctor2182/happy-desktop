@@ -23,6 +23,8 @@ export type RigActivityPanelProps = {
     onBackgroundProcessStop?: (processId: number) => void;
     /** Reference "now" (epoch millis) for computing subagent elapsed time. */
     now: number;
+    /** `panel` fills and scrolls a side-panel tab; the default is inline content. */
+    placement?: "content" | "panel";
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -221,10 +223,11 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
         tasks.length === 0 &&
         subagents.length === 0 &&
         backgroundProcesses.length === 0;
-    return (
+    const content = (
         <section
             className={["happy2-rig-activity", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="rig-activity-panel"
+            data-placement={props.placement === "panel" ? "panel" : undefined}
             data-testid={props["data-testid"]}
             style={props.style}
         >
@@ -303,5 +306,15 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                 </>
             )}
         </section>
+    );
+    return props.placement === "panel" ? (
+        <div
+            className="happy2-rig-activity-panel-scroll"
+            data-happy-desktop-ui="rig-activity-panel-scroll"
+        >
+            <div className="happy2-rig-activity-panel-scroll__content">{content}</div>
+        </div>
+    ) : (
+        content
     );
 }

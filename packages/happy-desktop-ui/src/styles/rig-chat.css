@@ -407,14 +407,15 @@
     display: none;
 }
 
-/* ---- Session activity footer control -------------------------------------
+/* ---- Session activity control --------------------------------------------
  *
  * A session can carry dozens of tasks, agents, and background terminals. The
- * detailed collection belongs in the capped shared activity panel; the footer
- * keeps one compact aggregate control before context usage.
+ * detailed collection belongs in the side panel's Activity tab; the composer
+ * keeps one compact aggregate control directly above the input.
  */
 
 .happy2-rig-activity-control {
+    box-sizing: border-box;
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -435,6 +436,13 @@
     transition:
         color 120ms ease,
         opacity 120ms ease;
+}
+
+.happy2-rig-activity-control[data-placement="above-composer"] {
+    align-self: flex-start;
+    max-width: 136px;
+    padding-right: 16px;
+    padding-left: 16px;
 }
 
 .happy2-rig-activity-control:hover:not(:disabled),

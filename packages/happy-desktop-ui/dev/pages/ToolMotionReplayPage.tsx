@@ -14,11 +14,9 @@ import {
 import { type ActivityMotion } from "../../src/AgentActivityRow";
 import { ComposerFooterBar } from "../../src/ConversationDock";
 import { ComposerModelControl } from "../../src/ComposerModelControl";
-import { ComposerPanel } from "../../src/ComposerPanel";
 import { ContextMeter } from "../../src/ContextMeter";
 import { ConversationView } from "../../src/ConversationView";
 import { RigActivityControl } from "../../src/RigActivityControl";
-import { RigActivityPanel } from "../../src/RigActivityPanel";
 import { RigSessionControls } from "../../src/RigSessionControls";
 import { type RigUserInputAnswerMap } from "../../src/RigUserInputPrompt";
 import { rigComposerModelControlProps } from "../../src/rigComposerModelControl";
@@ -255,14 +253,6 @@ function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording 
                         onPermissionModeChange={noop}
                         onServiceTierChange={noop}
                         variant="ghost"
-                    />
-                    <RigActivityControl
-                        agents={snapshot.subagents.length}
-                        backgroundTerminals={snapshot.backgroundProcesses.length}
-                        hasGoal={snapshot.goal !== undefined}
-                        onClick={() => setActivityOpen((open) => !open)}
-                        open={activityOpen}
-                        tasks={snapshot.tasks.length}
                     />
                 </>
             }
@@ -538,19 +528,15 @@ function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording 
                     agentAuthor={rigAgentAuthor}
                     composer={composer}
                     composerAboveControl={
-                        activityOpen ? (
-                            <ComposerPanel
-                                onClose={() => setActivityOpen(false)}
-                                title="Session activity"
-                            >
-                                <RigActivityPanel
-                                    backgroundProcesses={snapshot.backgroundProcesses}
-                                    now={sourceEpochNow}
-                                    subagents={snapshot.subagents}
-                                    tasks={snapshot.tasks}
-                                />
-                            </ComposerPanel>
-                        ) : undefined
+                        <RigActivityControl
+                            agents={snapshot.subagents.length}
+                            backgroundTerminals={snapshot.backgroundProcesses.length}
+                            hasGoal={snapshot.goal !== undefined}
+                            onClick={() => setActivityOpen((open) => !open)}
+                            open={activityOpen}
+                            placement="above-composer"
+                            tasks={snapshot.tasks.length}
+                        />
                     }
                     composerControls={modelControl}
                     composerFooterControl={footerControl}

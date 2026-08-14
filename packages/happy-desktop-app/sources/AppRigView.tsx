@@ -3307,9 +3307,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const panelComposer =
         panel.open && panel.maximized && conversation.type === "ready" ? (
             <RigPanelComposer
+                activitySelected={panel.activeViewId === "activity"}
                 conversation={conversation.value}
                 groupName={openGroup?.name}
-                now={now}
                 onChatSelect={props.onChatSelect}
                 projects={rows}
                 canAbort={conversationCanAbort}
@@ -3384,6 +3384,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 // own — the reader's choice to have it open is untouched here.
                 panel.open && !openGroupPreparing ? (
                     <RigPanelBody
+                        activity={conversation.type === "ready" ? conversation.value : undefined}
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
                         {...(props.nodeId === undefined ? {} : { nodeId: props.nodeId })}
@@ -3433,6 +3434,17 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                         onLayoutChange={(layout) => {
                             if (openGroup) props.workspace.fileLayoutUpdate(openGroup.id, layout);
                         }}
+                        now={now}
+                        {...(availability.online
+                            ? {
+                                  onActivityProcessStop: (processId: number) => {
+                                      void props.workspace
+                                          .backgroundProcessStop(processId)
+                                          .catch(() => undefined);
+                                  },
+                              }
+                            : {})}
+                        onActivityClose={() => props.workspace.activityPanelClose()}
                         onPanelClose={() => props.workspace.panel.panelToggle()}
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
@@ -3895,6 +3907,9 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     />
                                 ) : (
                                     <RigConversationBody
+                                        activitySelected={
+                                            panel.open && panel.activeViewId === "activity"
+                                        }
                                         conversation={conversation}
                                         focusOnType={composerClaimsTyping}
                                         groupId={openGroup.id}
@@ -4480,41 +4495,9 @@ function RigGroupComposer(props: {
     );
 }
 
-function RigActivityComposerPanel(props: {
-    conversation: RigConversationSnapshot;
-    now: number;
-    rigOnline: () => boolean;
-    unavailable?: string;
-    workspace: RigWorkspaceStore;
-}) {
-    if (!props.conversation.activityPanelOpen) return null;
-    const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
-    return (
-        <ComposerPanel
-            onClose={() => props.workspace.activityPanelClose()}
-            title="Session activity"
-        >
-            <RigActivityPanel
-                backgroundProcesses={props.conversation.backgroundProcesses}
-                goal={props.conversation.goal}
-                now={props.now}
-                {...(props.unavailable === undefined
-                    ? {
-                          onBackgroundProcessStop: (processId: number) => {
-                              if (props.rigOnline())
-                                  swallow(props.workspace.backgroundProcessStop(processId));
-                          },
-                      }
-                    : {})}
-                subagents={props.conversation.subagents}
-                tasks={props.conversation.tasks}
-            />
-        </ComposerPanel>
-    );
-}
-
 /** The open conversation's materialization states, inside the directory's tabs. */
 function RigConversationBody(props: {
+    activitySelected: boolean;
     conversation: RigWorkspaceSnapshot["conversation"];
     focusOnType: boolean;
     groupId: string;
@@ -4558,6 +4541,7 @@ function RigConversationBody(props: {
     if (conversation.type === "ready")
         return (
             <RigConversationSurface
+                activitySelected={props.activitySelected}
                 conversation={conversation.value}
                 focusOnType={props.focusOnType}
                 groupId={props.groupId}
@@ -4647,6 +4631,7 @@ function RigConversationBody(props: {
  * the shared surface hosts in its slots.
  */
 function RigConversationSurface(props: {
+    activitySelected: boolean;
     conversation: RigConversationSnapshot;
     focusOnType: boolean;
     groupId: string;
@@ -4711,12 +4696,9 @@ function RigConversationSurface(props: {
             composer={conversation.composer}
             composerAboveControl={
                 <>
-                    {/* What `/usage` and `/agents` were asked for. They sit here
-                        rather than over the transcript because they are readings
-                        about this session, not places to go: taking the body for
-                        one left the reader on a screen with no way back to the
-                        conversation it was describing. The store keeps at most
-                        one of the two open. */}
+                    {/* Usage is a compact reading carried by the write end. The
+                        unbounded activity reading lives in the side panel; only
+                        its compact trigger stays beside the composer. */}
                     {conversation.usagePanelOpen ? (
                         <ComposerPanel
                             onClose={() => workspace.usagePanelClose()}
@@ -4730,14 +4712,14 @@ function RigConversationSurface(props: {
                             />
                         </ComposerPanel>
                     ) : null}
-                    <RigActivityComposerPanel
-                        conversation={conversation}
-                        now={props.now}
-                        rigOnline={props.rigOnline}
-                        {...(props.unavailable === undefined
-                            ? {}
-                            : { unavailable: props.unavailable })}
-                        workspace={workspace}
+                    <RigActivityControl
+                        agents={conversation.subagents.length}
+                        backgroundTerminals={conversation.backgroundProcesses.length}
+                        hasGoal={conversation.goal !== undefined}
+                        onClick={() => workspace.activityPanelOpen()}
+                        open={props.activitySelected}
+                        placement="above-composer"
+                        tasks={conversation.tasks.length}
                     />
                     <SlotEntries
                         entries={props.slots.aboveComposer}
@@ -4827,14 +4809,6 @@ function RigConversationSurface(props: {
                                 onServiceTierChange={(tier?: RigServiceTier) => {
                                     if (props.rigOnline()) workspace.sessionServiceTierUpdate(tier);
                                 }}
-                            />
-                            <RigActivityControl
-                                agents={conversation.subagents.length}
-                                backgroundTerminals={conversation.backgroundProcesses.length}
-                                hasGoal={conversation.goal !== undefined}
-                                onClick={() => workspace.activityPanelToggle()}
-                                open={conversation.activityPanelOpen}
-                                tasks={conversation.tasks.length}
                             />
                             <SlotEntries
                                 entries={props.slots.statusLine}
@@ -5024,9 +4998,9 @@ function chatTargetLabel(
  * bottom content reachable without an added spacer.
  */
 function RigPanelComposer(props: {
+    activitySelected: boolean;
     conversation: RigConversationSnapshot;
     groupName: string | undefined;
-    now: number;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
     projects: readonly RigProjectGroup[];
     readOnly: boolean;
@@ -5058,14 +5032,14 @@ function RigPanelComposer(props: {
                 composer={conversation.composer}
                 composerAboveControl={
                     <>
-                        <RigActivityComposerPanel
-                            conversation={conversation}
-                            now={props.now}
-                            rigOnline={props.rigOnline}
-                            {...(props.unavailable === undefined
-                                ? {}
-                                : { unavailable: props.unavailable })}
-                            workspace={workspace}
+                        <RigActivityControl
+                            agents={conversation.subagents.length}
+                            backgroundTerminals={conversation.backgroundProcesses.length}
+                            hasGoal={conversation.goal !== undefined}
+                            onClick={() => workspace.activityPanelOpen()}
+                            open={props.activitySelected}
+                            placement="above-composer"
+                            tasks={conversation.tasks.length}
                         />
                         <SlotEntries
                             entries={props.slots.aboveComposer}
@@ -5132,14 +5106,6 @@ function RigPanelComposer(props: {
                                         if (props.rigOnline())
                                             workspace.sessionServiceTierUpdate(tier);
                                     }}
-                                />
-                                <RigActivityControl
-                                    agents={conversation.subagents.length}
-                                    backgroundTerminals={conversation.backgroundProcesses.length}
-                                    hasGoal={conversation.goal !== undefined}
-                                    onClick={() => workspace.activityPanelToggle()}
-                                    open={conversation.activityPanelOpen}
-                                    tasks={conversation.tasks.length}
                                 />
                                 <SlotEntries
                                     entries={props.slots.statusLine}
@@ -5531,6 +5497,7 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 }
 
 function RigPanelBody(props: {
+    activity?: RigConversationSnapshot;
     browserContent?: BrowserContentRenderer;
     /** The machine the open session belongs to, absent on this window's own. */
     nodeId?: string;
@@ -5541,6 +5508,12 @@ function RigPanelBody(props: {
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
     layout: RigFileLayout;
+    /** Reference clock for elapsed subagent activity. */
+    now: number;
+    /** Closes the transient Activity tab. */
+    onActivityClose: () => void;
+    /** Stops one background process from the Activity tab. */
+    onActivityProcessStop?: (processId: number) => void;
     onFileOpen: (path: string) => void;
     onFileSelect: (
         path: string,
@@ -5619,6 +5592,9 @@ function RigPanelBody(props: {
             : undefined;
     const tabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
+        ...(props.panel.activityViewOpen
+            ? [{ closable: true, icon: "agents" as const, id: "activity", label: "Activity" }]
+            : []),
         ...(props.panel.fileViewOpen && panelFile
             ? [
                   {
@@ -5720,12 +5696,14 @@ function RigPanelBody(props: {
                     activeId={props.panel.activeViewId}
                     closeLabel="Close tab"
                     onClose={(tabId) => {
-                        if (tabId === "preview") props.store.previewClose();
+                        if (tabId === "activity") props.onActivityClose();
+                        else if (tabId === "preview") props.store.previewClose();
                         else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.onPanelFileClose();
                         else props.store.tabClose(tabId as RigPanelTabId);
                     }}
                     onSelect={(tabId) => {
                         if (tabId === "files") props.store.filesSelect();
+                        else if (tabId === "activity") props.store.activitySelect();
                         else if (tabId === "preview" && props.panel.previewEntryId)
                             props.store.previewOpen(props.panel.previewEntryId);
                         else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.store.fileViewOpen();
@@ -5736,7 +5714,9 @@ function RigPanelBody(props: {
                     // The listing opens content rather than being content, and a
                     // tool-call preview is bound to an entry of the conversation
                     // the main content is showing; neither has a form over there.
-                    transferable={(tab) => tab.id !== "files" && tab.id !== "preview"}
+                    transferable={(tab) =>
+                        tab.id !== "files" && tab.id !== "activity" && tab.id !== "preview"
+                    }
                     transferTargets={PANEL_TRANSFER_TARGETS}
                 >
                     <RigToolBodies
@@ -5806,6 +5786,25 @@ function RigPanelBody(props: {
                             // act to offer, so it is left as the plain listing.
                             {...(all ? {} : { selectedIds: props.selection })}
                         />
+                    ) : props.panel.activeViewId === "activity" ? (
+                        props.activity ? (
+                            <RigActivityPanel
+                                backgroundProcesses={props.activity.backgroundProcesses}
+                                goal={props.activity.goal}
+                                now={props.now}
+                                onBackgroundProcessStop={props.onActivityProcessStop}
+                                placement="panel"
+                                subagents={props.activity.subagents}
+                                tasks={props.activity.tasks}
+                            />
+                        ) : (
+                            <EmptyState
+                                description="Open a session to see its goal, tasks, subagents, and background terminals."
+                                icon="agents"
+                                size="panel"
+                                title="No session activity"
+                            />
+                        )
                     ) : props.panel.activeViewId === "preview" ? (
                         props.previewTool ? (
                             <ToolCallPreview tool={props.previewTool} />

@@ -1,8 +1,28 @@
 /*
  * Rig session activity monitor (`/goal`, `/tasks`, `/agents`): unframed
- * content inside ComposerPanel's one card. Sections use aligned status lanes
- * on that one surface instead of nesting another set of cards or fills.
+ * content for an inline reading or the side panel's Activity tab. Sections use
+ * aligned status lanes on one surface instead of nesting cards or fills.
  */
+
+.happy2-rig-activity-panel-scroll {
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    overflow: auto;
+}
+
+.happy2-rig-activity-panel-scroll__content {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 100%;
+    padding: 12px 8px;
+    box-sizing: border-box;
+}
 
 .happy2-rig-activity {
     display: flex;
@@ -195,4 +215,83 @@
 
 .happy2-rig-activity__status[data-status="aborted"] {
     color: var(--text-destructive);
+}
+
+/*
+ * At the panel's narrowest desktop width, stack each row's status above its
+ * content so the 76px status lane does not leave names and commands in a
+ * sliver. Wider docked and maximized panels keep the original aligned lanes.
+ */
+@container (max-width: 300px) {
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__empty {
+        padding-right: 8px;
+        padding-left: 8px;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__section {
+        gap: 4px;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__list {
+        gap: 4px;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__row {
+        flex-direction: column;
+        gap: 4px;
+        min-height: 0;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__status {
+        flex: none;
+        height: 16px;
+        font-size: 10px;
+        line-height: 14px;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__objective,
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__task-label,
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__subagent-content {
+        width: 100%;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__subagent-desc {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__subagent-model {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__subagent-latest {
+        -webkit-line-clamp: 1;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__process {
+        flex-flow: row wrap;
+        align-items: center;
+        gap: 4px 8px;
+    }
+
+    .happy2-rig-activity[data-placement="panel"]
+        .happy2-rig-activity__process
+        > .happy2-rig-activity__status {
+        flex: 1 1 auto;
+        order: 1;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__process-command {
+        flex: 0 0 100%;
+        order: 3;
+        width: 100%;
+    }
+
+    .happy2-rig-activity[data-placement="panel"] .happy2-rig-activity__process-stop {
+        order: 2;
+    }
 }

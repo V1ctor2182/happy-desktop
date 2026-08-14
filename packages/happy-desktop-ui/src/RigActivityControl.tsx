@@ -9,6 +9,8 @@ export interface RigActivityControlProps {
     readonly hasGoal?: boolean;
     readonly onClick?: () => void;
     readonly open?: boolean;
+    /** Aligns the label with the composer's 16px inset when rendered above it. */
+    readonly placement?: "inline" | "above-composer";
     readonly style?: CSSProperties;
     readonly tasks?: number;
 }
@@ -22,11 +24,11 @@ function noun(value: number, singular: string): string {
 }
 
 /**
- * One bounded composer-footer affordance for an unbounded session activity list.
+ * One bounded composer-adjacent affordance for an unbounded session activity list.
  *
  * Tasks, delegated agents, and background terminals can each number in the
- * dozens. Their detailed rows live in the capped shared activity panel; this
- * trigger remains one compact control however those collections are composed.
+ * dozens. Their detailed rows live in the shared Activity tab; this trigger
+ * remains one compact control however those collections are composed.
  */
 export function RigActivityControl(props: RigActivityControlProps) {
     const tasks = count(props.tasks);
@@ -50,6 +52,7 @@ export function RigActivityControl(props: RigActivityControlProps) {
             className={["happy2-rig-activity-control", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="rig-activity-control"
             data-open={props.open ? "" : undefined}
+            data-placement={props.placement === "above-composer" ? "above-composer" : undefined}
             data-testid={props["data-testid"]}
             disabled={props.disabled || props.onClick === undefined}
             onClick={props.onClick}

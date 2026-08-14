@@ -978,6 +978,8 @@ export interface RigWorkspaceStore {
     usageGet(): Promise<RigSessionUsage>;
     usagePanelOpen(): void;
     usagePanelClose(): void;
+    /** Opens the right-side Activity tab for the current conversation. */
+    activityPanelOpen(): void;
     activityPanelToggle(): void;
     activityPanelClose(): void;
     reasoningToggle(): void;
@@ -2390,12 +2392,14 @@ export function rigWorkspaceStoreCreate(
                 return;
             case "usage":
                 store.usagePanelOpen();
+                panel.activityClose();
                 return;
             case "tasks":
             case "agents":
             case "goal":
             case "ps":
                 store.activityPanelShow();
+                panel.activitySelect();
                 return;
             case "fork":
                 if (openId && !refused) swallow(list.sessionFork(openId).then(openRequest));
@@ -4361,10 +4365,20 @@ export function rigWorkspaceStoreCreate(
             ),
         historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
-        usagePanelOpen: () => chatStore?.usagePanelOpen(),
+        usagePanelOpen: () => {
+            chatStore?.usagePanelOpen();
+            panel.activityClose();
+        },
         usagePanelClose: () => chatStore?.usagePanelClose(),
+        activityPanelOpen: () => {
+            chatStore?.activityPanelShow();
+            panel.activitySelect();
+        },
         activityPanelToggle: () => chatStore?.activityPanelToggle(),
-        activityPanelClose: () => chatStore?.activityPanelClose(),
+        activityPanelClose: () => {
+            chatStore?.activityPanelClose();
+            panel.activityClose();
+        },
         reasoningToggle: () => chatStore?.reasoningToggle(),
         imageOpen: (messageId, attachmentId) => chatStore?.imageOpen(messageId, attachmentId),
         imageNext: () => chatStore?.imageNext(),
