@@ -11,6 +11,7 @@ import type {
 import { AgentActivityRow, type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
+import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { TurnSummary } from "./TurnSummary";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { DayDivider, Message, SystemNotice, type MessageImage } from "./Message";
@@ -57,6 +58,10 @@ export type ConversationEntryViewProps = {
     onAttachmentOpen?: (attachment: ConversationLinkedAttachment) => void;
     /** Opens this entry's tool call in an owner-provided preview surface. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
+    /** Opens one child session represented by a delegated-agent entry. */
+    onDelegationSelect?: (sessionId: string) => void;
+    /** Reference epoch millis used by live delegated-agent timers. */
+    now?: number;
     /** Opens a workspace file named by a tool call or linked from a message. */
     onFileOpen?: (path: string) => void;
     /** Disables request controls while a prior submission is in flight. */
@@ -137,6 +142,50 @@ function traceControl(
  */
 export function ConversationEntryView(props: ConversationEntryViewProps) {
     const entry = props.entry;
+    if (entry.kind === "delegation") {
+        /* A delegated child opens its turn the same way a tool call does, so it
+           carries the identity header and the trace control when it is the
+           first agent-owned row of the turn. */
+        const traceRow = traceControl(entry.agentTrace, props.traceOpen, props.onTraceToggle);
+        const activity = (
+            <DelegatedAgentActivity
+                child={entry.child}
+                data-testid={props["data-testid"]}
+                now={props.now}
+                onSelect={props.onDelegationSelect}
+            />
+        );
+        return props.activityAuthor ? (
+            <Message
+                agent
+                author={props.activityAuthor.displayName}
+                body=""
+                className={["happy2-message--activity-lead", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
+                initials={initialsOf(props.activityAuthor.displayName)}
+                metaAccessory={traceRow}
+                style={props.style}
+                time={eventTime(entry.child.createdAt)}
+            >
+                {activity}
+            </Message>
+        ) : (
+            <div
+                className={[
+                    "happy2-delegated-agent-entry",
+                    traceRow ? "happy2-delegated-agent-entry--trace" : undefined,
+                    props.className,
+                ]
+                    .filter(Boolean)
+                    .join(" ")}
+                style={props.style}
+            >
+                {activity}
+                {traceRow}
+            </div>
+        );
+    }
     if (entry.kind === "agentActivity") {
         const time = eventTime(entry.occurredAt);
         /* An expanded turn hangs its "Hide traces" control on the row it began

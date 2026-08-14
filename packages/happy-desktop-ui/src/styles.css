@@ -106,6 +106,7 @@
 @import "./styles/rig-pairing.css";
 @import "./styles/rig-peer-status.css";
 @import "./styles/agent-activity-row.css";
+@import "./styles/delegated-agent.css";
 @import "./styles/wait-ring.css";
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";

@@ -9,13 +9,13 @@ import type {
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
-import { rigInboundMessageProject } from "./rigInboundMessageProject.js";
+import { rigDelegatedChildrenByRow, rigDelegationEntryProject } from "./rigDelegationProject.js";
+import { rigInboundMessageOmit } from "./rigInboundMessageProject.js";
 import type {
     RigMessage,
     RigSession,
     RigSessionSummary,
     RigStreamingMessage,
-    RigSubagentSummary,
     RigToolEntry,
     RigToolPresentation,
     RigToolStatus,
@@ -229,32 +229,39 @@ function messageAttachments(message: RigMessage): readonly ConversationAttachmen
 function userEntry(
     sessionId: string,
     message: RigMessage,
-    subagents: readonly RigSubagentSummary[],
     createdAt?: number,
-): ConversationEntry {
+): ConversationEntry | undefined {
     const text = messageText(message);
     const attachments = messageAttachments(message);
     // Older remote Rigs use this durable-message fallback, whose user slot also
-    // carries agent-to-agent and background-work injections. Give those the same
-    // authors the modern transcript projector does instead of claiming they
-    // were written by the owner.
-    const inbound = rigInboundMessageProject({
-        text,
-        subagents,
-        inboundAuthor: rigInboundAuthor,
+    // carries collaboration transport. Apply the same omission policy as the
+    // modern transcript instead of claiming it came from the owner. A durable
+    // message has no `source`, so only the structural shape check applies here.
+    const omit = rigInboundMessageOmit({
+        notification: false,
         opaqueAgent: text.trim().length === 0 && attachments.length === 0,
     });
+    if (omit) return undefined;
     return messageEntry({
         id: message.id,
         sessionId,
-        author: inbound?.author ?? rigOwnerAuthor,
-        text: inbound?.text ?? text,
+        author: rigOwnerAuthor,
+        text,
         createdAt,
         attachments,
     });
 }
 
 type RigToolResultBlock = Extract<RigMessage["blocks"][number], { type: "toolResult" }>;
+interface PairedToolResult {
+    readonly result: RigToolResultBlock;
+    readonly wokeFromInput: boolean;
+}
+interface PendingToolResult {
+    readonly entryId: string;
+    readonly toolName: string;
+    wokeFromInput: boolean;
+}
 
 function toolPresentationMerge(
     call: RigToolPresentation | undefined,
@@ -272,20 +279,34 @@ function toolPresentationMerge(
  * for its id in message order. Matching by id alone would show one late result on
  * every earlier call that happened to share the id.
  */
-function toolResultsPair(messages: readonly RigMessage[]): ReadonlyMap<string, RigToolResultBlock> {
-    const paired = new Map<string, RigToolResultBlock>();
-    const unclaimed = new Map<string, string[]>();
-    for (const message of messages)
+function toolResultsPair(messages: readonly RigMessage[]): ReadonlyMap<string, PairedToolResult> {
+    const paired = new Map<string, PairedToolResult>();
+    const unclaimed = new Map<string, PendingToolResult[]>();
+    for (const message of messages) {
+        if (message.role === "user")
+            for (const queue of unclaimed.values())
+                for (const pending of queue)
+                    if (pending.toolName === "wait_agent") pending.wokeFromInput = true;
         message.blocks.forEach((block, index) => {
             if (block.type === "toolCall") {
                 const queue = unclaimed.get(block.id);
-                if (queue) queue.push(`${message.id}:${index}`);
-                else unclaimed.set(block.id, [`${message.id}:${index}`]);
+                const pending: PendingToolResult = {
+                    entryId: `${message.id}:${index}`,
+                    toolName: block.name,
+                    wokeFromInput: false,
+                };
+                if (queue) queue.push(pending);
+                else unclaimed.set(block.id, [pending]);
             } else if (block.type === "toolResult") {
-                const entryId = unclaimed.get(block.toolCallId)?.shift();
-                if (entryId !== undefined) paired.set(entryId, block);
+                const pending = unclaimed.get(block.toolCallId)?.shift();
+                if (pending !== undefined)
+                    paired.set(pending.entryId, {
+                        result: block,
+                        wokeFromInput: pending.wokeFromInput,
+                    });
             }
         });
+    }
     return paired;
 }
 
@@ -293,7 +314,7 @@ function appendAgentEntries(
     entries: ConversationEntry[],
     sessionId: string,
     message: RigMessage,
-    results: ReadonlyMap<string, RigToolResultBlock>,
+    results: ReadonlyMap<string, PairedToolResult>,
     showReasoning: boolean,
     generationStatus: "streaming" | "complete" | "failed",
     createdAt?: number,
@@ -325,7 +346,12 @@ function appendAgentEntries(
                     sequence: "",
                 });
         } else if (block.type === "toolCall") {
-            const result = results.get(id);
+            const paired = results.get(id);
+            const result = paired?.result;
+            const waitWokeFromInput =
+                block.name === "wait_agent" &&
+                result?.failure?.kind === "interrupted" &&
+                paired?.wokeFromInput === true;
             entries.push({
                 kind: "agentActivity",
                 id,
@@ -337,10 +363,18 @@ function appendAgentEntries(
                         toolCallId: block.id,
                         toolName: block.name,
                         arguments: block.arguments,
-                        status: result ? (result.failed ? "failed" : "success") : "success",
-                        display: result?.display,
-                        failed: result?.failed ?? false,
-                        failure: result?.failure,
+                        status: waitWokeFromInput
+                            ? "success"
+                            : result
+                              ? result.failed
+                                  ? "failed"
+                                  : "success"
+                              : "success",
+                        ...(!waitWokeFromInput && result ? { display: result.display } : {}),
+                        failed: waitWokeFromInput ? false : (result?.failed ?? false),
+                        ...(!waitWokeFromInput && result?.failure
+                            ? { failure: result.failure }
+                            : {}),
                         presentation: toolPresentationMerge(
                             block.presentation,
                             result?.presentation,
@@ -473,14 +507,12 @@ export function rigConversationBuild(
         for (const message of session.messages) {
             if (message.internal) continue;
             if (message.role === "user") {
-                entries.push(
-                    userEntry(
-                        input.sessionId,
-                        message,
-                        session.subagents,
-                        input.messageCreatedAt?.get(message.id),
-                    ),
+                const entry = userEntry(
+                    input.sessionId,
+                    message,
+                    input.messageCreatedAt?.get(message.id),
                 );
+                if (entry) entries.push(entry);
                 continue;
             }
             if (message.role === "system") {
@@ -549,7 +581,22 @@ export function rigConversationBuild(
             },
         });
 
-    return sequenced(explorationEntriesCollapse(entries));
+    const collapsed = explorationEntriesCollapse(entries);
+    const childByRow = rigDelegatedChildrenByRow({
+        parentSessionId: input.sessionId,
+        parentToolCalls: collapsed.flatMap((entry) =>
+            entry.kind === "agentActivity" && entry.activity.kind === "tool"
+                ? [{ rowId: entry.id, toolCallId: entry.activity.tool.toolCallId }]
+                : [],
+        ),
+        subagents: session?.subagents ?? [],
+    });
+    const delegated = collapsed.map((entry): ConversationEntry => {
+        if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return entry;
+        const child = childByRow.get(entry.id);
+        return child ? rigDelegationEntryProject(child, entry) : entry;
+    });
+    return sequenced(delegated);
 }
 
 export type RigConversationSummaryInput = Omit<RigSessionSummary, "projectId" | "worktreeId">;

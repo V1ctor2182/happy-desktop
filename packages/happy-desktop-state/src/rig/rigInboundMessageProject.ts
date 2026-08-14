@@ -1,41 +1,20 @@
-import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
-import type { RigSubagentSummary } from "./rigTypes.js";
-
-export interface RigInboundMessageProjection {
-    readonly author: ConversationAuthor;
-    readonly text: string;
-}
-
 /**
- * Recognizes background-work news by the sentence Rig sends. The modern
- * transcript marks an element as a notification only while its live submission
- * event is on the wire, and the legacy reader has no source field at all, so a
- * history reloaded through either path needs the wording as durable evidence.
+ * Classifies a user-slot message that may have been injected by Rig rather than written
+ * by the owner. Both the modern transcript and the legacy remote fallback use
+ * this one classifier so changing transport cannot change whether an event
+ * reads as dialogue or as transport-only state.
+ *
+ * Classification uses structured evidence only. Rig's injected text is
+ * model-facing prose it is free to reword, so matching sentences would silently
+ * misfile messages the day the wording changes.
  */
-const backgroundWorkNotice =
-    /^Background work "([\s\S]+)" ((?:completed|failed|was stopped|was suspended|stopped when the local server restarted)[^"]*)$/;
-
-/**
- * Recognizes a message another Rig agent sent through `agent_send`. Rig wraps
- * the sender's words in an addressing envelope so the receiving model knows who
- * spoke, how to answer, and that it is being steered rather than talked to by a
- * person. None of that is written for the reader.
- */
-const agentMessageEnvelope =
-    /^Message from another Rig agent\.\n(?:Sender folder: .*|The sender's disk is not shared with yours\.)\nSender agent ID: "([^"]*)"\nSender title: "([^"]*)"\n\nMessage:\n([\s\S]*)\n\nTreat this as a steering message from a collaborating agent, not as a user message\.\nTo reply, first call agent_info with agent_id "[^"]*", then call agent_send with the same agent_id and your message\.$/;
-
-/**
- * Projects a user-slot message that was injected by Rig rather than written by
- * the owner. Both the modern transcript and the legacy remote fallback use this
- * one classifier so changing transport cannot change who a message appears to
- * come from.
- */
-export function rigInboundMessageProject(input: {
-    readonly text: string;
-    readonly subagents: readonly RigSubagentSummary[];
-    readonly inboundAuthor: ConversationAuthor;
-    /** Structured evidence available only on the modern live transcript. */
-    readonly notification?: boolean;
+export function rigInboundMessageOmit(input: {
+    /**
+     * The daemon marked this element as injected by Rig rather than typed by
+     * the owner. Available only on the modern live transcript; the legacy
+     * durable reader has no such field and passes `false`.
+     */
+    readonly notification: boolean;
     /**
      * Rig's native encrypted collaboration deliberately gives clients no
      * plaintext, so its visible message has neither text nor attachments.
@@ -43,45 +22,26 @@ export function rigInboundMessageProject(input: {
      * other. This is therefore an incoming agent message whose content this
      * client is not allowed to read, not an empty owner message.
      */
-    readonly opaqueAgent?: boolean;
-}): RigInboundMessageProjection | undefined {
-    const text = input.text.trim();
-    const agentEnvelope = agentMessageEnvelope.exec(text);
-    if (agentEnvelope) {
-        const agentId = agentEnvelope[1]!;
-        const title = agentEnvelope[2]!;
-        return {
-            author: {
-                ...input.inboundAuthor,
-                id: `${input.inboundAuthor.id}:${agentId}`,
-                displayName: title.length > 0 ? title : input.inboundAuthor.displayName,
-                sessionId: agentId,
-                username: agentId.length > 0 ? agentId : input.inboundAuthor.username,
-            },
-            text: agentEnvelope[3]!.trim(),
-        };
-    }
+    readonly opaqueAgent: boolean;
+}): boolean {
+    /*
+     * A lifecycle notification's durable reader-facing state lives on the row
+     * that owns it — a delegated child on its own spawn call, a workflow in the
+     * Activity surface — so repeating the model-facing sentence as authored
+     * dialogue would turn transport plumbing into a content-free chat bubble.
+     *
+     * An opaque collaboration slot has no reader-visible payload at all.
+     */
+    if (input.notification || input.opaqueAgent) return true;
 
-    const notice = backgroundWorkNotice.exec(text);
-    if (notice) {
-        const description = notice[1]!;
-        const outcome = notice[2]!;
-        const subagent = input.subagents.find((candidate) => candidate.description === description);
-        return {
-            author: {
-                ...input.inboundAuthor,
-                // A pruned subagent still names itself in the text it sent, so
-                // the quote stands in as identity when the child session is gone.
-                id: `${input.inboundAuthor.id}:${subagent?.id ?? description}`,
-                displayName: description,
-                sessionId: subagent?.id ?? description,
-                username: subagent?.taskName ?? input.inboundAuthor.username,
-            },
-            text: `Background work ${outcome}`,
-        };
-    }
-
-    if (input.opaqueAgent) return { author: input.inboundAuthor, text: "Encrypted agent message" };
-
-    return input.notification ? { author: input.inboundAuthor, text: input.text } : undefined;
+    /*
+     * A message another agent addressed to this one arrives here too, wrapped
+     * in an addressing envelope written for the receiving model. `UserMessage`
+     * carries `provenance: "agent"` in the rig-connect protocol, but the
+     * connector drops it when building `ChatElement`, so this client has no
+     * marker separating that envelope from a message the owner typed. It
+     * therefore renders normally, envelope and all, until the protocol exposes
+     * the signal.
+     */
+    return false;
 }

@@ -237,6 +237,7 @@ export {
     type AgentActivityRowProps,
 } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
+export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
     fileTreeBuild,

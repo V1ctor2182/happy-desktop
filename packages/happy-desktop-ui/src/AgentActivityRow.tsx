@@ -145,6 +145,9 @@ function toolVerb(
     // edited something called "Write stdin".
     if (presentation?.type === "backgroundTerminalInteraction" || TERMINAL_INPUT_TOOL.test(lower))
         return active ? "Typing" : "Typed";
+    // Waiting ends when a child sends input. That expected wake-up is projected
+    // as success; the verb describes the wait rather than a generic tool use.
+    if (lower === "wait_agent") return active ? "Waiting" : "Waited";
     if (presentation?.type === "execCommand" || /(bash|exec|shell|command|run)/.test(lower))
         return "Bash";
     if (/(grep|find|glob|^ls$|list|search)/.test(lower)) return active ? "Exploring" : "Explored";
@@ -167,6 +170,9 @@ function toolVerbFocused(verb: string): string {
         case "Editing":
         case "Edited":
             return "Edit";
+        case "Waiting":
+        case "Waited":
+            return "Wait";
         case "Used":
             return "Tool";
         default:
@@ -525,7 +531,10 @@ function AgentToolActivity(props: {
         primaryText = terminalInputSummary(presentation.input) || presentation.command;
     } else {
         verb = toolVerb(tool.toolName, tool.status, presentation);
-        primaryText = humanizeToolName(tool.toolName);
+        primaryText =
+            tool.toolName.toLowerCase() === "wait_agent"
+                ? "for subagents"
+                : humanizeToolName(tool.toolName);
     }
     if (focused && presentation?.type !== "fileDiff") verb = toolVerbFocused(verb);
     const filePath = props.onFileOpen ? toolFilePath(tool) : undefined;

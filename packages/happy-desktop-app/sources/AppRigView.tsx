@@ -69,7 +69,6 @@ import type {
     RigSlotsContext,
     RigSlotsSnapshot,
     RigSlotsStore,
-    RigSubagentSummary,
     RigTerminalStore,
     RigThinkingLevel,
     TitleShimmerStore,
@@ -731,73 +730,6 @@ function previewToolFind(
     return entry?.kind === "agentActivity" && entry.activity.kind === "tool"
         ? entry.activity.tool
         : undefined;
-}
-
-/** Agent tools which address one delegated session rather than only reporting a list. */
-const SUBAGENT_TOOL_NAMES = new Set([
-    "Agent",
-    "TaskOutput",
-    "agent_info",
-    "agent_send",
-    "followup_task",
-    "interrupt_agent",
-    "send_message",
-    "spawn_agent",
-    "spawn_workspace_agent",
-    "wait_agent",
-]);
-
-/** Collects the strings in a closed tool-argument tree for target matching. */
-function toolArgumentStrings(
-    value: ConversationToolCall["arguments"],
-    strings: string[] = [],
-): string[] {
-    if (typeof value === "string") strings.push(value);
-    else if (Array.isArray(value)) for (const item of value) toolArgumentStrings(item, strings);
-    else if (value !== null && typeof value === "object")
-        for (const item of Object.values(value)) toolArgumentStrings(item, strings);
-    return strings;
-}
-
-/**
- * Resolves an agent-oriented tool call against the parent session's authoritative
- * subagent list. Arguments cover spawn/follow-up/send/interrupt calls, while the
- * result text covers a completed wait. An unqualified wait can only name a chat
- * when exactly one child exists; otherwise the ordinary tool preview remains the
- * honest destination.
- */
-function subagentForTool(
-    tool: ConversationToolCall,
-    subagents: readonly RigSubagentSummary[],
-): RigSubagentSummary | undefined {
-    const spawned = subagents.filter((subagent) => subagent.parentToolCallId === tool.toolCallId);
-    if (spawned.length === 1) return spawned[0];
-
-    const toolName = tool.toolName.split(/[.:/]/).at(-1) ?? tool.toolName;
-    if (!SUBAGENT_TOOL_NAMES.has(toolName)) return undefined;
-    const strings = toolArgumentStrings(tool.arguments);
-    if (tool.display) strings.push(tool.display);
-
-    const exact = subagents.filter((subagent) =>
-        strings.some(
-            (value) =>
-                value === subagent.id ||
-                value === subagent.taskName ||
-                value === subagent.description ||
-                (subagent.taskName !== undefined && value.endsWith(`/${subagent.taskName}`)),
-        ),
-    );
-    if (exact.length === 1) return exact[0];
-
-    const mentioned = subagents.filter((subagent) =>
-        strings.some(
-            (value) =>
-                value.includes(subagent.id) ||
-                (subagent.taskName !== undefined && value.includes(subagent.taskName)),
-        ),
-    );
-    if (mentioned.length === 1) return mentioned[0];
-    return toolName === "wait_agent" && subagents.length === 1 ? subagents[0] : undefined;
 }
 
 /** One tab per session in the open group, marked while the agent is working. */
@@ -4957,14 +4889,10 @@ function RigConversationSurface(props: {
                 }
                 if (attachment.openUrl) openExternalLink(attachment.openUrl);
             }}
-            onToolSelect={(entryId, tool) => {
-                const subagent = subagentForTool(tool, conversation.subagents);
-                if (subagent) {
-                    props.onChatSelect(props.groupId, subagent.id);
-                    return;
-                }
-                workspace.panel.previewOpen(entryId);
-            }}
+            onToolSelect={(entryId) => workspace.panel.previewOpen(entryId)}
+            onDelegationSelect={(sessionId) =>
+                props.onChatSelect(props.groupId, sessionId as RigSessionId)
+            }
             {...(props.writeRefusal === undefined && props.unavailable === undefined
                 ? {
                       onRequestAnswer: (requestId: string, answers: RigUserInputAnswerMap) =>
@@ -5005,6 +4933,7 @@ function RigConversationSurface(props: {
             motion="calm-typed"
             running={conversation.running}
             elapsedMs={rigTurnElapsedMs(conversation, props.now)}
+            now={props.now}
             workingPhase={conversation.workingPhase}
             workingLabel={conversation.workingLabel}
             workingWait={rigWaitStatus(conversation, props.now)}

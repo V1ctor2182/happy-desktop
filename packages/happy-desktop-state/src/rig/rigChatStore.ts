@@ -915,8 +915,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 ? ephemeral
                 : transcriptEphemeralProject(transcriptSession, ephemeral)
         ).filter((entry) => entry.kind !== "agentActivity" || entry.activity.kind !== "shell");
-        // Also the transcript's source of sender names: background-work news
-        // quotes the description of the subagent that sent it.
+        // Child summaries place durable delegation rows on their parent spawn calls.
         const subagents =
             transcriptSession === undefined
                 ? (session?.subagents ?? [])

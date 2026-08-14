@@ -154,6 +154,10 @@ export type ConversationViewProps = {
     onAttachmentOpen?: ConversationEntryViewProps["onAttachmentOpen"];
     /** Opens one tool entry in the workspace's replaceable Preview tab. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
+    /** Opens a child session from an inline delegated-agent row. */
+    onDelegationSelect?: ConversationEntryViewProps["onDelegationSelect"];
+    /** Reference epoch millis used by delegated-agent timers. */
+    now?: number;
     /**
      * Opens a workspace file the transcript names — the file a tool call worked
      * on, or one a message links to — in the product's own file viewer. Absent
@@ -189,7 +193,7 @@ function conversationEntryTraceOpen(
     const trace =
         entry.kind === "message"
             ? entry.message.agentTrace
-            : entry.kind === "agentActivity"
+            : entry.kind === "agentActivity" || entry.kind === "delegation"
               ? entry.agentTrace
               : undefined;
     return trace !== undefined && expandedTurnIds?.has(trace.turnId) === true;
@@ -512,6 +516,8 @@ export function ConversationView(props: ConversationViewProps) {
                                         : undefined
                                 }
                                 onToolSelect={props.onToolSelect}
+                                onDelegationSelect={props.onDelegationSelect}
+                                now={props.now}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                 onTraceToggle={props.onTraceToggle}
                                 /* Either kind of row can be the one a turn hung

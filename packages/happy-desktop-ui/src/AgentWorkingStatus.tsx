@@ -1,5 +1,6 @@
 import { type CSSProperties } from "react";
 import { partitionComponentProps } from "./componentProps";
+import { elapsedTimeFormat } from "./elapsedTimeFormat";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import { TypedText } from "./TypedText";
@@ -65,15 +66,6 @@ const PHASE_LABELS: Readonly<Record<AgentWorkingPhase, string>> = {
     callingTools: "Calling tools",
     texting: "Texting",
 };
-
-/** Formats the active turn clock in the smallest useful human-readable units. */
-function elapsedFormat(elapsedMs: number): string {
-    const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1_000));
-    if (totalSeconds < 60) return `${totalSeconds}s`;
-    const totalMinutes = Math.floor(totalSeconds / 60);
-    if (totalMinutes < 60) return `${totalMinutes}m ${totalSeconds % 60}s`;
-    return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
-}
 
 /** The phase word a scheduled wait shows in place of "Thinking". */
 function waitLabel(wait: AgentWaitStatus): string {
@@ -146,7 +138,7 @@ export function AgentWorkingStatus(props: AgentWorkingStatusProps) {
                                     className="happy2-agent-working-status__timer"
                                     data-happy-desktop-ui="agent-working-status-timer"
                                 >
-                                    {elapsedFormat(local.elapsedMs)}
+                                    {elapsedTimeFormat(local.elapsedMs)}
                                 </span>
                                 <span
                                     aria-hidden="true"

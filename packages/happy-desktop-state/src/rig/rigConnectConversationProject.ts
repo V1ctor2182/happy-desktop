@@ -11,9 +11,14 @@ import {
 } from "../conversation/conversationEntry.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import type { AgentTurnTraceSummary } from "../types.js";
-import { rigInboundMessageProject } from "./rigInboundMessageProject.js";
+import { rigInboundMessageOmit } from "./rigInboundMessageProject.js";
+import {
+    rigDelegatedChildrenByRow,
+    rigDelegationEntryProject,
+    type RigPlaceableSubagent,
+} from "./rigDelegationProject.js";
 import type { RigAnsweredUserInput, RigSubagentSummary, RigUserInputRequest } from "./rigTypes.js";
-import { rigAgentAuthor, rigInboundAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
+import { rigAgentAuthor, rigOwnerAuthor } from "./rigConversationProject.js";
 import { rigCompactionSubject } from "./rigTokenFormat.js";
 
 export interface RigConnectConversationInput {
@@ -24,7 +29,7 @@ export interface RigConnectConversationInput {
     readonly pendingUserInputs: readonly RigUserInputRequest[];
     readonly answeredUserInputs: readonly RigAnsweredUserInput[];
     readonly expandedGroupIds: ReadonlySet<string>;
-    /** Named senders for background-work news, matched by the description it quotes. */
+    /** Children delegated from this session, matched to the call that spawned each. */
     readonly subagents: readonly RigSubagentSummary[];
     /**
      * Images this window sent, by message identity. A message is shown from the
@@ -74,6 +79,20 @@ export function rigConnectConversationProject(
     for (const request of input.answeredUserInputs)
         userInputs.set(request.requestId, { state: "answered", request });
     const matchedUserInputIds = new Set<string>();
+    const omittedInboundMessageIds = new Set<string>();
+    for (const element of input.elements) {
+        if (element.kind !== "user_message") continue;
+        if (userMessageOmit(element, input)) omittedInboundMessageIds.add(element.id);
+    }
+    const delegatedChildByRow = rigDelegatedChildrenByRow({
+        parentSessionId: input.sessionId,
+        parentToolCalls: input.elements.flatMap((element) =>
+            element.kind === "tool_call"
+                ? [{ rowId: element.id, toolCallId: element.toolCallId }]
+                : [],
+        ),
+        subagents: input.subagents,
+    });
 
     for (let start = 0; start < input.elements.length; ) {
         const groupId = input.elements[start]!.groupId;
@@ -85,6 +104,13 @@ export function rigConnectConversationProject(
                 input,
                 userInputs,
                 matchedUserInputIds,
+                omittedInboundMessageIds,
+                delegatedChildByRow,
+                groupOpensWithOnlyOmittedUserMessages(
+                    input.elements,
+                    end,
+                    omittedInboundMessageIds,
+                ),
             ),
         );
         start = end;
@@ -138,14 +164,76 @@ function userInputRequestProject(
     };
 }
 
+/** The images one user message shows, from the element or this window's own send. */
+function userMessageAttachments(
+    element: Extract<ChatElement, { kind: "user_message" }>,
+    input: RigConnectConversationInput,
+): readonly { readonly mediaType: string; readonly data: string }[] {
+    return element.attachments ?? input.sentImages?.get(element.messageId) ?? [];
+}
+
+/**
+ * Whether one user-slot element is collaboration transport rather than dialogue.
+ * Both signals are structural: the daemon's own `source` marker, and a shape
+ * Happy's composer cannot submit.
+ */
+function userMessageOmit(
+    element: Extract<ChatElement, { kind: "user_message" }>,
+    input: RigConnectConversationInput,
+): boolean {
+    return rigInboundMessageOmit({
+        notification: element.source === "notification",
+        opaqueAgent:
+            element.text.trim().length === 0 && userMessageAttachments(element, input).length === 0,
+    });
+}
+
+/**
+ * A model-facing collaboration update can end one inference group and open the
+ * next without producing reader-visible dialogue. Its paired "Steered" footer
+ * would otherwise become an orphan above the continuing Happy output.
+ *
+ * The omission set was classified once before grouping, so this lookahead
+ * never reclassifies the following messages merely to decide about a footer.
+ */
+function groupOpensWithOnlyOmittedUserMessages(
+    elements: readonly ChatElement[],
+    start: number,
+    omittedInboundMessageIds: ReadonlySet<string>,
+): boolean {
+    const groupId = elements[start]?.groupId;
+    if (groupId === undefined) return false;
+    let found = false;
+    for (let index = start; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (element.groupId !== groupId || element.kind !== "user_message") break;
+        found = true;
+        if (!omittedInboundMessageIds.has(element.id)) return false;
+    }
+    return found;
+}
+
 function rigConnectGroupProject(
     elements: readonly ChatElement[],
     input: RigConnectConversationInput,
     userInputs: ReadonlyMap<string, ProjectableUserInput>,
     matchedUserInputIds: Set<string>,
+    omittedInboundMessageIds: ReadonlySet<string>,
+    delegatedChildByRow: ReadonlyMap<string, RigPlaceableSubagent>,
+    /** The next group opens with omitted transport, so a "Steered" footer here would orphan. */
+    nextGroupOpensOmitted: boolean,
 ): readonly ConversationEntry[] {
     const entries: ConversationEntry[] = [];
+    /*
+     * Children spawned by a call in this group. Each one is the lasting state of
+     * its own spawn call, so it replaces that call where it happened rather than
+     * collecting under a synthetic container at the end of the run. A child with
+     * no `parentToolCallId` cannot be placed and is left to the Activity surface.
+     */
     let groupEnd: Extract<ChatElement, { kind: "group_end" }> | undefined;
+    const groupSteered = elements.some(
+        (element) => element.kind === "group_end" && element.reason === "steering",
+    );
     const hasTerminalFailure = elements.some(
         (element) => element.kind === "failure" && element.outcome === "failed",
     );
@@ -153,19 +241,10 @@ function rigConnectGroupProject(
         const sequence = sequenceOf(entries.length);
         switch (element.kind) {
             case "user_message": {
-                // Several things reach the user slot without the owner typing
-                // them: subagent and workflow news, and a message another agent
-                // addressed to this one. Each reads as incoming from the sender
-                // that produced it rather than as the reader's own turn.
-                const inbound = rigInboundMessageProject({
-                    text: element.text,
-                    subagents: input.subagents,
-                    inboundAuthor: rigInboundAuthor,
-                    notification: element.source === "notification",
-                    opaqueAgent:
-                        element.text.trim().length === 0 &&
-                        (element.attachments?.length ?? 0) === 0,
-                });
+                // Rig also uses the user slot for collaboration transport:
+                // lifecycle notices and opaque encrypted slots steer the model
+                // but are not dialogue, so they leave no row behind.
+                if (omittedInboundMessageIds.has(element.id)) break;
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -174,20 +253,18 @@ function rigConnectGroupProject(
                         id: element.messageId,
                         sessionId: input.sessionId,
                         sequence,
-                        text: inbound?.text ?? element.text,
+                        text: element.text,
                         createdAt: element.createdAt,
-                        author: inbound?.author ?? profileAuthor(element.profile, element.identity),
-                        attachments: (
-                            element.attachments ??
-                            input.sentImages?.get(element.messageId) ??
-                            []
-                        ).map((attachment, index) => ({
-                            kind: "inlineImage" as const,
-                            id: `${element.id}:image:${String(index)}`,
-                            mediaType: attachment.mediaType,
-                            data: attachment.data,
-                            ...inlineImageSize(attachment.data),
-                        })),
+                        author: profileAuthor(element.profile, element.identity),
+                        attachments: userMessageAttachments(element, input).map(
+                            (attachment, index) => ({
+                                kind: "inlineImage" as const,
+                                id: `${element.id}:image:${String(index)}`,
+                                mediaType: attachment.mediaType,
+                                data: attachment.data,
+                                ...inlineImageSize(attachment.data),
+                            }),
+                        ),
                     }),
                 });
                 break;
@@ -355,16 +432,23 @@ function rigConnectGroupProject(
             case "tool_call":
                 {
                     const userInput = userInputs.get(element.toolCallId);
+                    const child = delegatedChildByRow.get(element.id);
                     if (userInput) {
                         matchedUserInputIds.add(element.toolCallId);
                         entries.push(userInputRequestProject(userInput, sequence));
+                    } else if (child) {
+                        // The child is the lasting state of this call, so it
+                        // takes the call's place in the transcript.
+                        entries.push(
+                            rigDelegationEntryProject(child, { id: element.id, sequence }),
+                        );
                     } else
                         entries.push({
                             kind: "agentActivity",
                             id: element.id,
                             occurredAt: element.createdAt,
                             sequence,
-                            activity: { kind: "tool", tool: toolProject(element) },
+                            activity: { kind: "tool", tool: toolProject(element, groupSteered) },
                         });
                 }
                 break;
@@ -408,7 +492,7 @@ function rigConnectGroupProject(
                     },
                 });
                 break;
-            case "group_end":
+            case "group_end": {
                 groupEnd = element;
                 if (element.errorMessage && !hasTerminalFailure)
                     entries.push({
@@ -420,6 +504,10 @@ function rigConnectGroupProject(
                         text: element.errorMessage,
                         sequence,
                     });
+                /* Steering that produced no visible message has no visible
+                   cause, so its footer would read as the reader interrupting a
+                   turn they never touched. */
+                if (element.reason === "steering" && nextGroupOpensOmitted) break;
                 entries.push({
                     kind: "turnStatus",
                     id: `${element.id}:status`,
@@ -435,6 +523,7 @@ function rigConnectGroupProject(
                     tools: elements.filter((candidate) => candidate.kind === "tool_call").length,
                 });
                 break;
+            }
         }
     }
 
@@ -465,11 +554,32 @@ function rigConnectGroupProject(
      * failure or a retry is why the answer reads the way it does, and burying it
      * behind a control the reader has no reason to open would leave a broken run
      * looking like a clean one. Every non-informational notice therefore stays.
+     *
+     * A delegated child stays for the same reason in a different tense: it is
+     * not a step this turn finished but a run still going somewhere else, and
+     * the row is how the reader reaches it. A tool-only turn with no child keeps
+     * its last real activity row instead of fabricating an empty agent reply.
      */
+    const firstDelegationIndex = entries.findIndex((entry) => entry.kind === "delegation");
+    let lastActivityIndex = -1;
+    if (finalAgentIndex < 0 && firstDelegationIndex < 0)
+        for (let index = entries.length - 1; index >= 0; index -= 1) {
+            if (entries[index]?.kind === "agentActivity") {
+                lastActivityIndex = index;
+                break;
+            }
+        }
+    const actualAnchorIndex =
+        finalAgentIndex >= 0
+            ? finalAgentIndex
+            : firstDelegationIndex >= 0
+              ? firstDelegationIndex
+              : lastActivityIndex;
     const visibleCollapsed = entries.filter(
         (entry, index) =>
             entry.kind === "turnStatus" ||
-            index === finalAgentIndex ||
+            entry.kind === "delegation" ||
+            index === actualAnchorIndex ||
             (entry.kind === "message" && entry.message.sender?.kind !== "agent") ||
             (entry.kind === "notice" && !noticeInformational(entry)),
     );
@@ -488,71 +598,36 @@ function rigConnectGroupProject(
         backgroundTerminals: [],
     };
 
+    /** The same entry carrying this turn's trace, or nothing if it cannot hold one. */
+    const withTrace = (entry: ConversationEntry): ConversationEntry | undefined => {
+        if (entry.kind === "agentActivity") return { ...entry, agentTrace: trace };
+        if (entry.kind === "delegation") return { ...entry, agentTrace: trace };
+        if (entry.kind === "message" && entry.message.sender?.kind === "agent")
+            return { ...entry, message: { ...entry.message, agentTrace: trace } };
+        return undefined;
+    };
+
     /*
      * Expanded, the control folds the turn back up, so it rides the first row of
-     * the turn — usually a tool call, and the only row there is when the turn
-     * ran tools and answered nothing. Collapsed, the one row on screen is the
-     * final answer, and it carries the control that reveals the rest.
+     * the turn — usually a tool call. Collapsed, it rides the final answer, the
+     * first persistent delegation, or the last real activity when there was no
+     * prose.
      */
     if (input.expandedGroupIds.has(groupEnd.groupId)) {
         for (let index = 0; index < entries.length; index += 1) {
-            const entry = entries[index]!;
-            if (entry.kind === "agentActivity") {
-                entries[index] = { ...entry, agentTrace: trace };
-                break;
-            }
-            if (entry.kind === "message" && entry.message.sender?.kind === "agent") {
-                entries[index] = { ...entry, message: { ...entry.message, agentTrace: trace } };
-                break;
-            }
+            const traced = withTrace(entries[index]!);
+            if (!traced) continue;
+            entries[index] = traced;
+            break;
         }
         return entries;
     }
-    /*
-     * A turn that worked without answering still collapses to one row: a faint
-     * empty result standing in for the reply it never wrote. Without it the
-     * turn would have nowhere to keep its control, and folding it up would hide
-     * the fact that it ran at all.
-     *
-     * A turn that did no work has nothing to stand in for. One that only failed
-     * is entirely on screen already — its notices are the turn — so it keeps
-     * them as they are rather than growing an empty answer and a control that
-     * would reveal nothing.
-     */
-    if (!finalAgent || finalAgent.kind !== "message") {
-        if (!entries.some((entry) => entry.kind === "agentActivity")) return entries;
-        const empty: ConversationEntry = {
-            kind: "message",
-            source: "server",
-            delivery: "sent",
-            message: {
-                ...messageProject({
-                    id: `${groupEnd.groupId}:empty-agent-text`,
-                    sessionId: input.sessionId,
-                    sequence: "",
-                    text: "",
-                    createdAt: groupEnd.endedAt,
-                    author: rigAgentAuthor,
-                    generationStatus: "complete",
-                }),
-                agentTrace: trace,
-            },
-        };
-        const statusPosition = visibleCollapsed.findIndex((entry) => entry.kind === "turnStatus");
-        return statusPosition < 0
-            ? [...visibleCollapsed, empty]
-            : [
-                  ...visibleCollapsed.slice(0, statusPosition),
-                  empty,
-                  ...visibleCollapsed.slice(statusPosition),
-              ];
-    }
-    const tracedFinal: ConversationEntry = {
-        ...finalAgent,
-        message: { ...finalAgent.message, agentTrace: trace },
-    };
-    entries[finalAgentIndex] = tracedFinal;
-    return visibleCollapsed.map((entry) => (entry === finalAgent ? tracedFinal : entry));
+    const actualAnchor = entries[actualAnchorIndex];
+    if (!actualAnchor) return visibleCollapsed;
+    const tracedAnchor = withTrace(actualAnchor);
+    if (!tracedAnchor) return visibleCollapsed;
+    entries[actualAnchorIndex] = tracedAnchor;
+    return visibleCollapsed.map((entry) => (entry === actualAnchor ? tracedAnchor : entry));
 }
 
 function messageProject(input: {
@@ -580,20 +655,25 @@ function messageProject(input: {
     };
 }
 
-function toolProject(element: Extract<ChatElement, { kind: "tool_call" }>): ConversationToolCall {
+function toolProject(
+    element: Extract<ChatElement, { kind: "tool_call" }>,
+    groupSteered: boolean,
+): ConversationToolCall {
+    const waitWokeFromInput =
+        groupSteered && element.name === "wait_agent" && element.status === "interrupted";
     return {
         toolCallId: element.toolCallId,
         toolName: element.name,
         arguments: jsonProject(element.arguments),
         status:
-            element.status === "succeeded"
+            waitWokeFromInput || element.status === "succeeded"
                 ? "success"
                 : element.status === "failed"
                   ? "failed"
                   : element.status === "interrupted"
                     ? "stopped"
                     : "running",
-        ...((element.result ?? element.progress)
+        ...(!waitWokeFromInput && (element.result ?? element.progress)
             ? { display: element.result ?? element.progress }
             : {}),
         failed: element.status === "failed",

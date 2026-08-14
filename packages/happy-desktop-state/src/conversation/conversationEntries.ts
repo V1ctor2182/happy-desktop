@@ -6,6 +6,7 @@ import {
     type ConversationActivityPresentation,
     type ConversationActivityReview,
     type ConversationAttachment,
+    type ConversationDelegationChild,
     type ConversationDiffHunk,
     type ConversationEntry,
     type ConversationFileDiff,
@@ -130,6 +131,11 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
         return activityEqual(left.activity, right.activity);
     if (left.kind === "request" && right.kind === "request")
         return requestEqual(left.request, right.request);
+    if (left.kind === "delegation" && right.kind === "delegation")
+        return (
+            delegationEqual(left.child, right.child) &&
+            traceEqual(left.agentTrace, right.agentTrace)
+        );
     if (left.kind === "turnStatus" && right.kind === "turnStatus")
         return (
             left.status === right.status &&
@@ -139,6 +145,29 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             left.tools === right.tools
         );
     return false;
+}
+
+/**
+ * Whether two delegated children render identically. A running child's elapsed
+ * time is derived from `activeSince` at render, so a tick alone must not
+ * replace the row; only the facts the row prints are compared here.
+ */
+function delegationEqual(
+    left: ConversationDelegationChild,
+    right: ConversationDelegationChild,
+): boolean {
+    return (
+        left.sessionId === right.sessionId &&
+        left.parentToolCallId === right.parentToolCallId &&
+        left.description === right.description &&
+        left.taskName === right.taskName &&
+        left.modelId === right.modelId &&
+        left.status === right.status &&
+        left.createdAt === right.createdAt &&
+        left.activeSince === right.activeSince &&
+        left.elapsedMs === right.elapsedMs &&
+        left.totalTokens === right.totalTokens
+    );
 }
 
 /**

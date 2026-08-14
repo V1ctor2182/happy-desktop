@@ -9,9 +9,9 @@ import {
     noticeFailed,
     noticeInformational,
     type ConversationActivityEntry,
+    type ConversationDelegationEntry,
     type ConversationEntry,
     type ConversationMessageEntry,
-    type ConversationNoticeEntry,
 } from "../conversation/conversationEntry.js";
 import { rigAgentAuthor, rigHumanMessageAuthor } from "./rigConversationProject.js";
 
@@ -119,48 +119,6 @@ function lastMessage(body: readonly ConversationEntry[]): ConversationMessageEnt
 }
 
 /**
- * Stable authored result for a turn that performed work without emitting text.
- * It remains empty in product state; Message owns the faint “(no text)”
- * presentation so copying and persistence never fabricate assistant prose.
- */
-function emptyAgentMessage(
-    sectionId: string,
-    anchor: ConversationMessageEntry,
-    body: readonly ConversationEntry[],
-    sequence: string,
-): ConversationMessageEntry {
-    let occurredAt: number | undefined;
-    for (let index = body.length - 1; index >= 0; index -= 1) {
-        const entry = body[index];
-        if (entry?.kind === "agentActivity" && entry.occurredAt !== undefined) {
-            occurredAt = entry.occurredAt;
-            break;
-        }
-    }
-    return {
-        kind: "message",
-        source: "server",
-        delivery: "sent",
-        message: {
-            id: `${sectionId}:empty-agent-text`,
-            chatId: anchor.message.chatId,
-            sessionId: anchor.message.sessionId ?? anchor.message.chatId,
-            sequence,
-            changePts: sequence,
-            sender: rigAgentAuthor,
-            text: "",
-            generationStatus: "complete",
-            attachments: [],
-            reactions: [],
-            createdAt:
-                occurredAt === undefined
-                    ? anchor.message.createdAt
-                    : new Date(occurredAt).toISOString(),
-        },
-    };
-}
-
-/**
  * Attaches the turn summary that turns a row's meta line into "View traces".
  *
  * An agent message and an agent activity row both qualify, because the row the
@@ -170,6 +128,7 @@ function emptyAgentMessage(
  */
 function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary): ConversationEntry {
     if (entry.kind === "agentActivity") return { ...entry, agentTrace: trace };
+    if (entry.kind === "delegation") return { ...entry, agentTrace: trace };
     if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") return entry;
     return { ...entry, message: { ...entry.message, agentTrace: trace } };
 }
@@ -178,8 +137,8 @@ function withAgentTrace(entry: ConversationEntry, trace: AgentTurnTraceSummary):
  * Splits a daemon run into the visual sections introduced by steering messages,
  * summarizes each section, and decides how much of it is visible. A running or
  * expanded section lists its original rows in order. A collapsed section keeps
- * its last text response, or a faint empty result when it performed tools
- * without producing prose.
+ * its last text response, a persistent delegation, or one real activity row
+ * when it performed tools without producing prose.
  *
  * The section identity is the user message that opened it. This deliberately
  * differs from Rig's run-level turn ID: several steering sections may belong to
@@ -208,46 +167,29 @@ function attachSectionTraces(
 ): readonly ConversationEntry[] {
     const result: ConversationEntry[] = [];
     let turnUserId: string | undefined;
-    let turnUserMessage: ConversationMessageEntry | undefined;
     let turnBody: ConversationEntry[] = [];
 
     const flush = (isOpenTurn: boolean, end: "settled" | "steered" = "settled"): void => {
         if (!turnUserId) {
             result.push(...turnBody);
             turnBody = [];
-            turnUserMessage = undefined;
             return;
         }
         const activities = turnBody.filter(
             (entry): entry is ConversationActivityEntry => entry.kind === "agentActivity",
         );
+        const delegations = turnBody.filter(
+            (entry): entry is ConversationDelegationEntry => entry.kind === "delegation",
+        );
         const running = isOpenTurn && input.activeTurnId === turnUserId;
         const expanded = running || input.expandedTurnIds.has(turnUserId);
         const durableFinalMessage = lastMessage(turnBody);
-        const firstErrorIndex = turnBody.findIndex(
-            (entry) => entry.kind === "notice" && noticeFailed(entry),
-        );
-        const summaryAnchor =
-            turnBody[firstErrorIndex > 0 ? firstErrorIndex - 1 : Math.max(0, turnBody.length - 1)];
-        const summarySequence = `${summaryAnchor ? entrySequence(summaryAnchor) : turnUserId}:0-summary`;
-        const collapsedEmptyMessage =
-            !expanded &&
-            durableFinalMessage === undefined &&
-            activities.length > 0 &&
-            turnUserMessage !== undefined
-                ? emptyAgentMessage(turnUserId, turnUserMessage, turnBody, summarySequence)
+        const firstDelegation = delegations[0];
+        const collapsedActivity =
+            !expanded && durableFinalMessage === undefined && firstDelegation === undefined
+                ? activities[activities.length - 1]
                 : undefined;
-        const finalMessage = durableFinalMessage ?? collapsedEmptyMessage;
-        const projectedBody =
-            collapsedEmptyMessage === undefined
-                ? turnBody
-                : firstErrorIndex >= 0
-                  ? [
-                        ...turnBody.slice(0, firstErrorIndex),
-                        collapsedEmptyMessage,
-                        ...turnBody.slice(firstErrorIndex),
-                    ]
-                  : [...turnBody, collapsedEmptyMessage];
+        const collapsedAnchor = durableFinalMessage ?? firstDelegation ?? collapsedActivity;
         const failed =
             durableFinalMessage?.message.generationStatus === "failed" ||
             turnBody.some((entry) => entry.kind === "notice" && noticeFailed(entry));
@@ -259,9 +201,10 @@ function attachSectionTraces(
         // A shell run is a tool the agent used, so it counts as one. The reader
         // is being told how much work the turn took, not which internal shape
         // the daemon happened to deliver each step in.
-        const toolCallCount = activities.filter(
-            (entry) => entry.activity.kind === "tool" || entry.activity.kind === "shell",
-        ).length;
+        const toolCallCount =
+            activities.filter(
+                (entry) => entry.activity.kind === "tool" || entry.activity.kind === "shell",
+            ).length + delegations.length;
         const durationMs = !running ? input.durations?.get(turnUserId) : undefined;
         const trace: AgentTurnTraceSummary = {
             turnId: turnUserId,
@@ -278,36 +221,34 @@ function attachSectionTraces(
         // revealed, so a turn that produced no text still offers the control on
         // the row its work starts on.
         const summarizable = activities.length > 0;
-        const collapsed = summarizable && !expanded ? finalMessage : undefined;
+        const collapsed = summarizable && !expanded;
         // Collapsing hides the turn's work, but not what went wrong doing it: a
         // failure or a retry is the reason the answer looks the way it does, and
         // burying it behind a control the reader has no reason to open would
         // leave a broken run reading as a successful one. Warning and error
         // notices therefore stay on screen in turn order alongside the answer.
-        const persistentNotices = turnBody.filter(
-            (entry): entry is ConversationNoticeEntry =>
-                entry.kind === "notice" && !noticeInformational(entry),
-        );
         const shown = collapsed
-            ? [
-                  ...persistentNotices.filter((entry) => !noticeFailed(entry)),
-                  collapsed,
-                  // The terminal error explains the settled turn, so it stays
-                  // directly above that turn's neutral completion footer.
-                  ...persistentNotices.filter((entry) => noticeFailed(entry)),
-              ]
+            ? turnBody.filter(
+                  (entry) =>
+                      entry.kind === "delegation" ||
+                      entry === collapsedAnchor ||
+                      (entry.kind === "notice" && !noticeInformational(entry)),
+              )
             : expanded
               ? turnBody
-              : projectedBody;
+              : turnBody;
         /*
-         * The control rides the row that opens what is on screen: the single
-         * answer of a collapsed turn, and the first row of an expanded one. Both
-         * fall out of taking the first row of `shown` that can carry it, since a
-         * collapsed turn shows no activity rows at all.
+         * Collapsed, a final answer owns the control just as it does in the
+         * modern projector; a no-answer turn falls back to its first persistent
+         * delegation. Expanded, the first agent-owned row carries it.
          */
         let traced = !summarizable;
         for (const entry of shown) {
             if (traced) {
+                result.push(entry);
+                continue;
+            }
+            if (collapsed && collapsedAnchor !== undefined && entry !== collapsedAnchor) {
                 result.push(entry);
                 continue;
             }
@@ -317,9 +258,12 @@ function attachSectionTraces(
         }
         // A settled section keeps one permanent status row. A tool-only section
         // has no copy payload, but it still completed real work and therefore
-        // keeps the same footer beneath its collapsed empty result. Running
-        // sections use the message-list footer so their clock can tick.
-        if (!running && (durableFinalMessage !== undefined || activities.length > 0)) {
+        // keeps the same footer beneath its retained activity. Running sections
+        // use the message-list footer so their clock can tick.
+        if (
+            !running &&
+            (durableFinalMessage !== undefined || activities.length > 0 || delegations.length > 0)
+        ) {
             // Ordered from the end of the whole turn, not the end of what is
             // currently shown: entries sort by sequence, so anchoring it to a
             // collapsed turn's single message would drop the row in among the
@@ -342,7 +286,6 @@ function attachSectionTraces(
         }
         turnBody = [];
         turnUserId = undefined;
-        turnUserMessage = undefined;
     };
 
     for (let index = 0; index < entries.length; index += 1) {
@@ -350,7 +293,6 @@ function attachSectionTraces(
         if (entry.kind === "message" && rigHumanMessageAuthor(entry.message.sender)) {
             flush(false, input.steeringMessageIds?.has(entry.message.id) ? "steered" : "settled");
             turnUserId = entry.message.id;
-            turnUserMessage = entry;
             result.push(entry);
             continue;
         }

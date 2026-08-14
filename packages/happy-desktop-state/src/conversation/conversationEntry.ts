@@ -407,6 +407,44 @@ export interface ConversationRequestEntry {
     readonly sequence: string;
 }
 
+/** One child session Happy delegated from a concrete parent tool call. */
+export interface ConversationDelegationChild {
+    readonly sessionId: string;
+    /** The spawn call in the parent transcript this child replaces. */
+    readonly parentToolCallId: string;
+    readonly description: string;
+    readonly taskName?: string;
+    readonly modelId: string;
+    readonly status:
+        | "idle"
+        | "queued"
+        | "running"
+        | "completed"
+        | "aborted"
+        | "suspended"
+        | "error"
+        | "archived";
+    readonly createdAt: number;
+    /** When the current run began; a running child clocks its elapsed from here. */
+    readonly activeSince?: number;
+    /** Final recorded duration, used once the child has settled. */
+    readonly elapsedMs?: number;
+    readonly totalTokens?: number;
+}
+
+/**
+ * Persistent in-turn readout for one delegated child. It replaces the concrete
+ * spawn call in place, so every child remains one ordinary agent-owned activity
+ * row instead of being nested under a synthetic aggregate.
+ */
+export interface ConversationDelegationEntry {
+    readonly kind: "delegation";
+    readonly id: string;
+    readonly sequence: string;
+    readonly child: ConversationDelegationChild;
+    readonly agentTrace?: AgentTurnTraceSummary;
+}
+
 /**
  * Permanent readout under a finished turn: how long it took from the request
  * and how many tools it used. Running turns use the message-list footer instead.
@@ -433,6 +471,7 @@ export type ConversationEntry =
     | ConversationActivityEntry
     | ConversationNoticeEntry
     | ConversationRequestEntry
+    | ConversationDelegationEntry
     | ConversationTurnStatusEntry;
 
 /** The stable render identity of an entry; the row key React must keep. */

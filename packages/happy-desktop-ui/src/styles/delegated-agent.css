@@ -1,0 +1,169 @@
+.happy2-delegated-agent,
+.happy2-delegated-agent * {
+    box-sizing: border-box;
+}
+
+.happy2-delegated-agent-entry {
+    width: 100%;
+    min-width: 0;
+}
+
+.happy2-delegated-agent-entry--trace {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding-right: 20px;
+}
+
+.happy2-delegated-agent-entry--trace > .happy2-delegated-agent {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding-right: 0;
+}
+
+.happy2-delegated-agent-entry--trace > .happy2-agent-trace-row {
+    flex: none;
+    margin-top: 2px;
+}
+
+.happy2-delegated-agent {
+    width: 100%;
+    height: 44px;
+    padding: 2px 20px 2px 30px;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
+.happy2-message--activity-lead .happy2-delegated-agent {
+    padding-right: 0;
+    padding-left: 0;
+}
+
+.happy2-delegated-agent__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    height: 40px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.happy2-delegated-agent__row:not(:disabled) {
+    cursor: pointer;
+}
+
+/* A child with no open action is still a readout, not a dimmed dead control. */
+.happy2-delegated-agent__row:disabled {
+    opacity: 1;
+}
+
+.happy2-delegated-agent__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy2-delegated-agent__glyph {
+    display: flex;
+    flex: 0 0 14px;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy2-delegated-agent__content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy2-delegated-agent__primary {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    height: 20px;
+    line-height: 20px;
+}
+
+.happy2-delegated-agent__verb {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+/* Same argument treatment as a focused native tool row. The task and model
+   are both inputs to Agent, not a second title/status hierarchy. */
+.happy2-delegated-agent__arguments {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--warning);
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+.happy2-delegated-agent__task,
+.happy2-delegated-agent__model {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-delegated-agent__task {
+    flex: 0 1 auto;
+}
+
+.happy2-delegated-agent__model {
+    flex: 1 1 auto;
+}
+
+.happy2-delegated-agent__arguments > span[aria-hidden] {
+    flex: none;
+    color: var(--input-placeholder);
+}
+
+.happy2-delegated-agent__meta {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+.happy2-delegated-agent__meta > span:not([aria-hidden]) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy2-delegated-agent__meta > span[aria-hidden] {
+    flex: none;
+    color: var(--input-placeholder);
+}

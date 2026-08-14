@@ -137,6 +137,8 @@ const ATTACHMENT_CARD_GAP = 4;
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40 } as const;
 /** Tool-first Message: 16px top inset + 20px identity row, then no lower chrome. */
 const ACTIVITY_LEAD_CHROME = 36;
+/** One delegated agent row: 20px call + 20px metadata + 4px vertical inset. */
+const DELEGATION_HEIGHT = 44;
 /** `.happy2-day-divider` — 20px padding around a 20px label that never wraps. */
 export const DIVIDER_HEIGHT = 60;
 /** `.happy2-system-notice`: 4px padding at `align="start"`, 16px centered. */
@@ -333,6 +335,16 @@ export function conversationRowHeight(
                 startsGroup ? "leading" : "continuous",
             ].join(":"),
             () => (afterActivity ? 40 : 32) + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
+        );
+    }
+    if (entry.kind === "delegation") {
+        const startsGroup =
+            context.surface === "conversation" && conversationAgentRowStartsGroup(entries, index);
+        return rowHeightCached(
+            cache,
+            entry,
+            `delegation:${startsGroup ? "lead" : "plain"}`,
+            () => DELEGATION_HEIGHT + (startsGroup ? ACTIVITY_LEAD_CHROME : 0),
         );
     }
     if (entry.kind === "notice") {

@@ -48,8 +48,10 @@ export function conversationMessageGrouped(
 ): boolean {
     const entry = entries[index];
     if (entry?.kind !== "message") return false;
-    if (entry.message.sender?.kind === "agent" && entries[index - 1]?.kind === "agentActivity")
-        return true;
+    if (entry.message.sender?.kind === "agent") {
+        const preceding = entries[index - 1];
+        if (preceding?.kind === "agentActivity" || preceding?.kind === "delegation") return true;
+    }
     const previous = previousMessage(entries, index);
     return previous !== undefined && sameSender(entry, previous);
 }
@@ -57,7 +59,9 @@ export function conversationMessageGrouped(
 /** Rows the agent itself produces, and which can therefore open its turn. */
 function agentOwnedRow(entry: ConversationEntry | undefined): boolean {
     return (
-        entry?.kind === "agentActivity" || (entry?.kind === "notice" && entry.variant === "notice")
+        entry?.kind === "agentActivity" ||
+        entry?.kind === "delegation" ||
+        (entry?.kind === "notice" && entry.variant === "notice")
     );
 }
 
@@ -137,7 +141,7 @@ export function conversationTurnStatusAfterActivity(
     if (entries[index]?.kind !== "turnStatus") return false;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const entry = entries[cursor];
-        if (entry?.kind === "agentActivity") return true;
+        if (entry?.kind === "agentActivity" || entry?.kind === "delegation") return true;
         if (entry?.kind === "turnStatus") return false;
         if (entry?.kind === "message" && entry.message.sender?.kind !== "agent") return false;
     }
