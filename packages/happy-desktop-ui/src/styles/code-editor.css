@@ -58,7 +58,10 @@
 
 .happy2-code-editor .cm-gutters {
     border: none;
-    background: transparent;
+    /* CodeMirror keeps the gutter sticky while the content scrolls beneath it.
+       It must therefore paint the exact editor surface: seamless at rest,
+       fully opaque once a long line moves behind the line numbers. */
+    background: var(--surface);
     color: var(--code-gutter);
     font-family: inherit;
     user-select: none;
