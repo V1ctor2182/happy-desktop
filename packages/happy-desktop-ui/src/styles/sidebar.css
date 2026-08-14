@@ -399,6 +399,56 @@
     line-height: 15px;
 }
 
+/*
+ * The tree wrapper owns row spacing while its connector layer leaves the flow.
+ * The layer is an overlay by design: it describes geometry behind the rows and
+ * must not add a box or intercept a pointer intended for a row.
+ */
+.happy2-sidebar__tree {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+}
+
+.happy2-sidebar__tree > .happy2-sidebar__item {
+    position: relative;
+    z-index: 0;
+}
+
+.happy2-sidebar__tree-drag-surface {
+    position: absolute;
+    z-index: 0;
+    right: 0;
+    left: 0;
+    display: block;
+    border-radius: var(--happy2-radius-sm);
+    background: var(--surface-ripple);
+    box-shadow: 0 4px 12px var(--shadow-subtle);
+    pointer-events: none;
+    transition: none;
+}
+
+.happy2-sidebar__tree-connectors {
+    position: absolute;
+    /* Tree ink stays above row fills, including selection and the held row. */
+    z-index: 2;
+    inset: 0;
+    pointer-events: none;
+}
+
+.happy2-sidebar__tree-connector {
+    position: absolute;
+    display: block;
+    width: 1px;
+    background: var(--text-secondary);
+    opacity: 0.28;
+    transition: none;
+    transform-origin: top center;
+}
+
 .happy2-sidebar__empty {
     display: flex;
     align-items: center;
@@ -470,6 +520,17 @@
     transition: none;
 }
 
+/* A tree drag paints one surface around the complete held subtree. Its rows keep
+   this attribute only so every transform tracks the pointer without lag. */
+.happy2-sidebar__tree[data-connector-dragging] > .happy2-sidebar__item[data-dragging] {
+    background: transparent;
+    box-shadow: none;
+}
+
+.happy2-sidebar__tree[data-connector-dragging] > .happy2-sidebar__item[data-dragging][data-active] {
+    background: var(--surface-selected);
+}
+
 /* Said again inside the list being arranged, because that is where it has to
    win: the rule above is one class and one attribute, the reordering rule two
    classes and an attribute, so on its own it loses the transition it is trying
@@ -517,12 +578,7 @@
     color: var(--text);
 }
 
-/*
- * ASCII tree connector for a nested row, drawn as hairlines rather than glyphs so
- * the stem lands exactly on the parent glyph's centre lane. The span is pulled back
- * over the row's own indent to occupy that lane exactly (same 20px box as a leading
- * slot), and stretches the row height so the stem can reach across the 2px row gap.
- */
+/* The horizontal elbow from the parent-owned stem into one nested row. */
 .happy2-sidebar__item-branch {
     position: relative;
     flex: none;
@@ -531,13 +587,6 @@
     margin-left: -16px;
 }
 
-/*
- * The tree is structure, not row state: it holds one tone whatever the row's own
- * colour is (active/unread go to --text), so it never bands from row to row. Each
- * row draws upward into the gap above it only, so neighbouring segments meet
- * without doubling their alpha at the joint.
- */
-.happy2-sidebar__item-branch::before,
 .happy2-sidebar__item-branch::after {
     position: absolute;
     background: var(--text-secondary);
@@ -545,42 +594,15 @@
     opacity: 0.28;
 }
 
-/* Vertical: through the row for a tee, stopping at the elbow for the last child. */
-.happy2-sidebar__item-branch::before {
-    top: -2px;
-    left: calc(50% - 0.5px);
-    width: 1px;
-}
-
-/*
- * The first child rises into the parent row and stops 2px short of the parent
- * glyph's ink, so the tree reads as hanging off that row rather than floating
- * below it. Later siblings stay at -2px, so no two segments ever overlap.
- */
-.happy2-sidebar__item-branch[data-branch-first]::before {
-    top: -8px;
-}
-
-.happy2-sidebar__item-branch[data-branch="tee"]::before {
-    bottom: 0;
-}
-
-/* Anchored to the centre, not sized, so it still meets the elbow when the stem
-   also rises into the parent row as the first child. */
-.happy2-sidebar__item-branch[data-branch="end"]::before {
-    bottom: 50%;
-}
-
-/* Horizontal: from the stem out to the row's label lane. */
 .happy2-sidebar__item-branch::after {
     top: 50%;
-    left: calc(50% - 0.5px);
-    width: 10px;
+    /* Start at the stem's far edge, never on top of its painted pixel. */
+    left: calc(50% + 0.5px);
+    width: 9px;
     height: 1px;
 }
 
-/* Cancel the archived row's 0.55 dimming so the shared line keeps one tone. */
-.happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::before,
+/* Cancel the archived row's 0.55 dimming so the elbow keeps the stem's tone. */
 .happy2-sidebar__item[data-archived] .happy2-sidebar__item-branch::after {
     opacity: 0.509;
 }

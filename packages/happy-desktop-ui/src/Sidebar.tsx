@@ -124,6 +124,16 @@ export type SidebarItem = {
 export const SIDEBAR_ROW_PADDING_X = 10;
 /** Additional left inset applied per nesting level so children sit under their parent. */
 export const SIDEBAR_ROW_INDENT = 16;
+/** The fixed row geometry used by the sidebar's reorder and connector layers. */
+export const SIDEBAR_ROW_HEIGHT = 32;
+export const SIDEBAR_ROW_GAP = 2;
+/** Width of the leading lane whose centre carries a tree stem. */
+export const SIDEBAR_LEADING_SLOT = 20;
+/**
+ * How far below the parent row's centre a stem begins, so it starts 2px under
+ * that row's 16px glyph rather than at the row's midline.
+ */
+export const SIDEBAR_BRANCH_STEM_INSET = 10;
 /** The one control a section heading offers, beside the section's own label. */
 export type SidebarSectionAction = {
     icon: IconName;
@@ -348,21 +358,6 @@ function visibleRows(items: readonly SidebarItem[]): readonly SidebarVisibleRow[
     return rows;
 }
 
-/** `true` when no later sibling sits at this row's depth before the group closes. */
-function isLastAtDepth(items: readonly SidebarItem[], index: number): boolean {
-    const depth = items[index]!.depth ?? 0;
-    for (let next = index + 1; next < items.length; next += 1) {
-        const nextDepth = items[next]!.depth ?? 0;
-        if (nextDepth < depth) return true;
-        if (nextDepth === depth) return false;
-    }
-    return true;
-}
-/** `true` for the first row at its depth, whose stem rises to meet the parent glyph. */
-function isFirstAtDepth(items: readonly SidebarItem[], index: number): boolean {
-    return (items[index - 1]?.depth ?? 0) < (items[index]!.depth ?? 0);
-}
-
 /** Pointer travel, in px, before a press becomes a drag instead of a selection. */
 const DRAG_THRESHOLD = 4;
 
@@ -425,6 +420,9 @@ interface SidebarDrag {
      */
     readonly peers: readonly string[];
     readonly heights: readonly number[];
+    /** Furthest legal visual travel, measured from the peer block boundaries. */
+    readonly minimumDeltaY: number;
+    readonly maximumDeltaY: number;
     /** Set when the drag rearranges one row's children rather than the top level. */
     readonly parentId?: string;
     /** False until the pointer passes the threshold, so a click still selects. */
@@ -526,6 +524,16 @@ function dragTargetIndex(drag: SidebarDrag, deltaY: number): number {
 }
 
 /**
+ * Keeps the held block inside the slots it is allowed to reorder among. The
+ * distances are the measured heights of the peers it can cross, so a leaf stays
+ * inside its parent and a top-level folder (including its subtree) stays inside
+ * its section even when the captured pointer travels far beyond the sidebar.
+ */
+function dragDeltaWithinPeers(drag: SidebarDrag, deltaY: number): number {
+    return Math.max(drag.minimumDeltaY, Math.min(deltaY, drag.maximumDeltaY));
+}
+
+/**
  * How far a block slides while another is dragged across it: every block between
  * the drag's origin and its target steps aside by exactly the dragged block's
  * height, which is what makes the gap follow the pointer.
@@ -536,6 +544,135 @@ function blockShift(drag: SidebarDrag, index: number): number {
     if (drag.from < drag.to && index > drag.from && index <= drag.to) return -height;
     if (drag.to < drag.from && index >= drag.to && index < drag.from) return height;
     return 0;
+}
+
+/** The visual offset shared by rows and the connector layer during a drag. */
+function rowDragShift(drag: SidebarDrag | undefined, index: number): number {
+    if (!drag || !drag.moved) return 0;
+    const unitIndex = drag.units.findIndex((unit) => unit.includes(index));
+    if (unitIndex < 0) return 0;
+    return unitIndex === drag.from ? drag.deltaY : blockShift(drag, unitIndex);
+}
+
+interface SidebarConnectorGroup {
+    readonly parentId: string;
+    readonly parentIndex: number;
+    readonly depth: number;
+    readonly childIndexes: readonly number[];
+}
+
+/**
+ * Finds each row's direct children in one pass over the flattened tree. A
+ * connector belongs to a parent rather than to a child row, so the same stem
+ * owns the complete vertical run at rest and while rows move.
+ */
+function sidebarConnectorGroups(items: readonly SidebarItem[]): readonly SidebarConnectorGroup[] {
+    const groups: SidebarConnectorGroup[] = [];
+    const childIndexesByParent = new Map<number, number[]>();
+    const parentAtDepth: (number | undefined)[] = [];
+    for (const [index, item] of items.entries()) {
+        const depth = Math.max(0, item.depth ?? 0);
+        parentAtDepth.length = depth;
+        const parentIndex = depth > 0 ? parentAtDepth[depth - 1] : undefined;
+        if (parentIndex !== undefined) {
+            let childIndexes = childIndexesByParent.get(parentIndex);
+            if (!childIndexes) {
+                childIndexes = [];
+                childIndexesByParent.set(parentIndex, childIndexes);
+                groups.push({
+                    childIndexes,
+                    depth: Math.max(0, items[parentIndex]!.depth ?? 0),
+                    parentId: items[parentIndex]!.id,
+                    parentIndex,
+                });
+            }
+            childIndexes.push(index);
+        }
+        parentAtDepth[depth] = index;
+    }
+    return groups;
+}
+
+interface SidebarTreeConnectorsProps {
+    readonly items: readonly SidebarItem[];
+    readonly drag?: SidebarDrag;
+    readonly listId: SidebarListId;
+    readonly onElement: (key: string, element: HTMLSpanElement | null) => void;
+}
+
+/**
+ * The tree's one vertical-connector layer. Each parent owns one continuous stem
+ * from beneath its glyph to its lowest direct child. Rows own only their
+ * horizontal elbows, so the joint is never double-painted.
+ */
+function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
+    const groups = sidebarConnectorGroups(props.items);
+    const rowPitch = SIDEBAR_ROW_HEIGHT + SIDEBAR_ROW_GAP;
+    // Connector geometry reads the same current shift as each row. It is not
+    // transitioned, so a held endpoint follows every pointer update immediately.
+    const rowCenter = (index: number): number =>
+        index * rowPitch + SIDEBAR_ROW_HEIGHT / 2 + rowDragShift(props.drag, index);
+    return (
+        <div
+            aria-hidden="true"
+            className="happy2-sidebar__tree-connectors"
+            data-happy-desktop-ui="sidebar-tree-connectors"
+        >
+            {groups.map((group) => {
+                // The stem hangs from just under the parent's glyph, not from its
+                // midline, which is where the resting per-row segment starts too.
+                const stemTop = rowCenter(group.parentIndex) + SIDEBAR_BRANCH_STEM_INSET;
+                // The run ends on whichever child is currently lowest, so carrying
+                // the bottom child upward shortens the line instead of leaving it
+                // sticking out past the last elbow.
+                const lowestChildCenter = Math.max(
+                    ...group.childIndexes.map((index) => rowCenter(index)),
+                );
+                const key = rowKey(props.listId, group.parentId);
+                return (
+                    <span
+                        className="happy2-sidebar__tree-connector"
+                        data-parent-id={group.parentId}
+                        data-happy-desktop-ui="sidebar-tree-connector"
+                        key={group.parentId}
+                        ref={(element) => props.onElement(key, element)}
+                        style={{
+                            // A CSS height ends before its final pixel. Add the
+                            // 1px stroke so the stem reaches the elbow's full depth.
+                            height: `${String(Math.max(0, lowestChildCenter - stemTop + 1))}px`,
+                            left: `${String(
+                                SIDEBAR_ROW_PADDING_X +
+                                    group.depth * SIDEBAR_ROW_INDENT +
+                                    SIDEBAR_LEADING_SLOT / 2 -
+                                    0.5,
+                            )}px`,
+                            top: `${String(stemTop)}px`,
+                        }}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
+/** One carried surface around every row in the held subtree. */
+function SidebarDragSurface(props: { readonly drag: SidebarDrag }) {
+    const held = props.drag.units[props.drag.from];
+    const first = held?.[0];
+    const last = held?.[held.length - 1];
+    if (first === undefined || last === undefined) return null;
+    const rowPitch = SIDEBAR_ROW_HEIGHT + SIDEBAR_ROW_GAP;
+    return (
+        <span
+            aria-hidden="true"
+            className="happy2-sidebar__tree-drag-surface"
+            data-happy-desktop-ui="sidebar-tree-drag-surface"
+            style={{
+                height: `${String((last - first) * rowPitch + SIDEBAR_ROW_HEIGHT)}px`,
+                top: `${String(first * rowPitch + rowDragShift(props.drag, first))}px`,
+            }}
+        />
+    );
 }
 
 function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => void }) {
@@ -576,10 +713,6 @@ function SidebarRow({
     ...props
 }: {
     active: boolean;
-    /** Renders the ASCII tree connector that ties a nested row to its parent. */
-    branch?: "tee" | "end";
-    /** Extends this row's stem up into the parent row, under its glyph. */
-    branchFirst?: boolean;
     className?: string;
     /** Set only while a reorder drag is live, so a static sidebar is untouched. */
     dragging?: boolean;
@@ -779,12 +912,10 @@ function SidebarRow({
             }}
             type="button"
         >
-            {props.branch ? (
+            {depth() > 0 ? (
                 <span
                     aria-hidden="true"
                     className="happy2-sidebar__item-branch"
-                    data-branch={props.branch}
-                    data-branch-first={props.branchFirst ? "" : undefined}
                     data-happy-desktop-ui="sidebar-item-branch"
                 />
             ) : null}
@@ -1083,8 +1214,14 @@ export function Sidebar(props: SidebarProps) {
     // thing another one does, and one list's registration must not delete
     // another's node out from under a drop.
     const [rowNodes] = useState(() => new Map<string, HTMLButtonElement>());
+    // Connector stems have stable parent keys, so the drop can animate their
+    // endpoint separately from the rows that carry the horizontal elbows.
+    const [connectorNodes] = useState(() => new Map<string, HTMLSpanElement>());
     // Row tops captured at the drop, consumed by the layout effect below.
     const flipRef = useRef<Map<string, number> | undefined>(undefined);
+    const connectorFlipRef = useRef<
+        Map<string, { readonly height: number; readonly top: number }> | undefined
+    >(undefined);
     // Lets go of a capture the rearranging render never came for.
     const flipWait = useRef<number | undefined>(undefined);
     const flipWaitClear = (): void => {
@@ -1173,6 +1310,8 @@ export function Sidebar(props: SidebarProps) {
                 deltaY: 0,
                 from: blockIndex,
                 heights,
+                maximumDeltaY: bottom(blocks[blocks.length - 1]!) - bottom(blocks[blockIndex]!),
+                minimumDeltaY: top(0) - top(blockIndex),
                 moved: false,
                 peers: units.map((unit) => items[unit[0]!]!.id),
                 pointerId: event.pointerId,
@@ -1187,8 +1326,9 @@ export function Sidebar(props: SidebarProps) {
     const dragMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
         const current = dragRef.current;
         if (!current || event.pointerId !== current.drag.pointerId) return;
-        const deltaY = event.clientY - current.drag.startY;
-        if (!current.drag.moved && Math.abs(deltaY) < DRAG_THRESHOLD) return;
+        const pointerDeltaY = event.clientY - current.drag.startY;
+        if (!current.drag.moved && Math.abs(pointerDeltaY) < DRAG_THRESHOLD) return;
+        const deltaY = dragDeltaWithinPeers(current.drag, pointerDeltaY);
         const to = dragTargetIndex(current.drag, deltaY);
         // A tick each time the row crosses into a new slot, so the arrangement
         // can be felt without watching it.
@@ -1216,7 +1356,19 @@ export function Sidebar(props: SidebarProps) {
             const node = rowNodes.get(rowKey(listId, item.id));
             if (node) firsts.set(rowKey(listId, item.id), node.getBoundingClientRect().top);
         }
+        const connectorFirsts = new Map<
+            string,
+            { readonly height: number; readonly top: number }
+        >();
+        for (const group of sidebarConnectorGroups(items)) {
+            const key = rowKey(listId, group.parentId);
+            const node = connectorNodes.get(key);
+            if (!node) continue;
+            const bounds = node.getBoundingClientRect();
+            connectorFirsts.set(key, { height: bounds.height, top: bounds.top });
+        }
         flipRef.current = firsts;
+        connectorFlipRef.current = connectorFirsts;
         // Released lit, not resting: the highlight is handed from the drag to
         // the travelling row and only let go once it has arrived.
         setDropped(rowKey(listId, movedId));
@@ -1229,6 +1381,7 @@ export function Sidebar(props: SidebarProps) {
         flipWait.current = window.setTimeout(() => {
             flipWait.current = undefined;
             flipRef.current = undefined;
+            connectorFlipRef.current = undefined;
             setDropped(undefined);
         }, SETTLE_WAIT_MS);
     };
@@ -1363,6 +1516,7 @@ export function Sidebar(props: SidebarProps) {
     useLayoutEffect(() => {
         const firsts = flipRef.current;
         if (!firsts) return;
+        const connectorFirsts = connectorFlipRef.current;
         const played: Animation[] = [];
         for (const [key, first] of firsts) {
             const node = rowNodes.get(key);
@@ -1379,11 +1533,33 @@ export function Sidebar(props: SidebarProps) {
                 ),
             );
         }
+        if (connectorFirsts) {
+            for (const [key, first] of connectorFirsts) {
+                const node = connectorNodes.get(key);
+                if (!node) continue;
+                const bounds = node.getBoundingClientRect();
+                const delta = first.top - bounds.top;
+                const scale = bounds.height > 0 ? first.height / bounds.height : 1;
+                if (Math.abs(delta) < 0.5 && Math.abs(scale - 1) < 0.01) continue;
+                played.push(
+                    node.animate(
+                        [
+                            {
+                                transform: `translateY(${String(delta)}px) scaleY(${String(scale)})`,
+                            },
+                            { transform: "translateY(0) scaleY(1)" },
+                        ],
+                        { duration: SETTLE_MS, easing: SETTLE_EASING },
+                    ),
+                );
+            }
+        }
         // Kept until something actually moved: the reorder may reach the list one
         // render later than the drop, and dropping the capture on the first empty
         // pass would lose the animation entirely.
         if (played.length === 0) return;
         flipRef.current = undefined;
+        connectorFlipRef.current = undefined;
         flipWaitClear();
         // The row stays lit until it stops moving. Rearranging the list moves its
         // node, which drops `:hover` until the pointer moves again — so releasing
@@ -1586,13 +1762,7 @@ export function Sidebar(props: SidebarProps) {
                                             local.onItemSelect(id);
                                         }}
                                         reorderable={local.onActionReorder !== undefined}
-                                        shift={
-                                            dragging
-                                                ? index === drag.from
-                                                    ? drag.deltaY
-                                                    : blockShift(drag, index)
-                                                : undefined
-                                        }
+                                        shift={dragging ? rowDragShift(drag, index) : undefined}
                                     />
                                 );
                             })}
@@ -1614,12 +1784,13 @@ export function Sidebar(props: SidebarProps) {
                         // dragged past nor counted as a neighbour of anything.
                         const shown = visibleRows(section.items);
                         const shownItems = shown.map((row) => row.item);
+                        const sectionDrag = dragOf(section.id);
                         return (
                             <section
                                 className="happy2-sidebar__section"
                                 key={section.id}
                                 data-happy-desktop-ui="sidebar-section"
-                                data-reordering={dragOf(section.id) ? "" : undefined}
+                                data-reordering={sectionDrag ? "" : undefined}
                                 data-section-id={section.id}
                             >
                                 {section.label ? (
@@ -1682,118 +1853,131 @@ export function Sidebar(props: SidebarProps) {
                                 section.nodes.length > 0 ? (
                                     <SidebarNodes label={section.label} nodes={section.nodes} />
                                 ) : null}
-                                {!section.headingOnly
-                                    ? shown.map(({ foldable, item }, index) => {
-                                          const drag = dragOf(section.id);
-                                          const dragging = drag?.moved === true;
-                                          // While a drag is live the row's position
-                                          // is read from that drag's own units, which
-                                          // are the top-level blocks or one row's
-                                          // children depending on where it started.
-                                          const unitIndex = dragging
-                                              ? drag.units.findIndex((unit) => unit.includes(index))
-                                              : -1;
-                                          const held = dragging && unitIndex === drag.from;
-                                          return (
-                                              <SidebarRow
-                                                  active={item.id === local.activeItemId}
-                                                  branch={
-                                                      (item.depth ?? 0) > 0
-                                                          ? isLastAtDepth(shownItems, index)
-                                                              ? "end"
-                                                              : "tee"
-                                                          : undefined
-                                                  }
-                                                  branchFirst={
-                                                      (item.depth ?? 0) > 0 &&
-                                                      isFirstAtDepth(shownItems, index)
-                                                  }
-                                                  dragging={
-                                                      held ||
-                                                      rowKey(section.id, item.id) === dropped
-                                                  }
-                                                  key={item.id}
-                                                  item={item}
-                                                  onContextMenu={openItemMenu}
-                                                  onKeyDown={
-                                                      local.onItemReorder
-                                                          ? (event) =>
-                                                                moveByKey(
-                                                                    event,
-                                                                    section.id,
-                                                                    shownItems,
-                                                                    index,
-                                                                )
-                                                          : undefined
-                                                  }
-                                                  onPointerDown={
-                                                      local.onItemReorder
-                                                          ? (event) =>
-                                                                dragStart(
-                                                                    event,
-                                                                    section.id,
-                                                                    shownItems,
-                                                                    index,
-                                                                )
-                                                          : undefined
-                                                  }
-                                                  onPointerCancel={
-                                                      local.onItemReorder ? dragCancel : undefined
-                                                  }
-                                                  onPointerMove={
-                                                      local.onItemReorder ? dragMove : undefined
-                                                  }
-                                                  onPointerUp={
-                                                      local.onItemReorder
-                                                          ? (event) => dragEnd(event, shownItems)
-                                                          : undefined
-                                                  }
-                                                  reorderable={local.onItemReorder !== undefined}
-                                                  onCollapseToggle={
-                                                      local.onItemCollapseToggle && foldable
-                                                          ? () =>
-                                                                local.onItemCollapseToggle?.(
-                                                                    item.id,
-                                                                )
-                                                          : undefined
-                                                  }
-                                                  onAction={
-                                                      local.onItemAction && item.action
-                                                          ? () => local.onItemAction?.(item.id)
-                                                          : undefined
-                                                  }
-                                                  onSecondaryAction={
-                                                      local.onItemSecondaryAction &&
-                                                      item.secondaryAction
-                                                          ? () =>
-                                                                local.onItemSecondaryAction?.(
-                                                                    item.id,
-                                                                )
-                                                          : undefined
-                                                  }
-                                                  nodeRef={(node) => {
-                                                      const key = rowKey(section.id, item.id);
-                                                      if (node) rowNodes.set(key, node);
-                                                      else rowNodes.delete(key);
-                                                  }}
-                                                  onSelect={(id) => {
-                                                      if (dragClick.current) {
-                                                          dragClick.current = false;
-                                                          return;
-                                                      }
-                                                      local.onItemSelect(id);
-                                                  }}
-                                                  shift={
-                                                      dragging && unitIndex >= 0
-                                                          ? unitIndex === drag.from
-                                                              ? drag.deltaY
-                                                              : blockShift(drag, unitIndex)
-                                                          : undefined
-                                                  }
-                                              />
-                                          );
-                                      })
-                                    : null}
+                                {!section.headingOnly ? (
+                                    <div
+                                        className="happy2-sidebar__tree"
+                                        data-connector-dragging={
+                                            sectionDrag?.moved === true ? "" : undefined
+                                        }
+                                        data-happy-desktop-ui="sidebar-tree"
+                                    >
+                                        {sectionDrag?.moved === true ? (
+                                            <SidebarDragSurface drag={sectionDrag} />
+                                        ) : null}
+                                        <SidebarTreeConnectors
+                                            drag={
+                                                sectionDrag?.moved === true
+                                                    ? sectionDrag
+                                                    : undefined
+                                            }
+                                            items={shownItems}
+                                            listId={section.id}
+                                            onElement={(key, node) => {
+                                                if (node) connectorNodes.set(key, node);
+                                                else connectorNodes.delete(key);
+                                            }}
+                                        />
+                                        {shown.map(({ foldable, item }, index) => {
+                                            const drag = sectionDrag;
+                                            const dragging = drag?.moved === true;
+                                            // While a drag is live the row's position
+                                            // is read from that drag's own units, which
+                                            // are the top-level blocks or one row's
+                                            // children depending on where it started.
+                                            const unitIndex = dragging
+                                                ? drag.units.findIndex((unit) =>
+                                                      unit.includes(index),
+                                                  )
+                                                : -1;
+                                            const held = dragging && unitIndex === drag.from;
+                                            return (
+                                                <SidebarRow
+                                                    active={item.id === local.activeItemId}
+                                                    dragging={
+                                                        held ||
+                                                        rowKey(section.id, item.id) === dropped
+                                                    }
+                                                    key={item.id}
+                                                    item={item}
+                                                    onContextMenu={openItemMenu}
+                                                    onKeyDown={
+                                                        local.onItemReorder
+                                                            ? (event) =>
+                                                                  moveByKey(
+                                                                      event,
+                                                                      section.id,
+                                                                      shownItems,
+                                                                      index,
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onPointerDown={
+                                                        local.onItemReorder
+                                                            ? (event) =>
+                                                                  dragStart(
+                                                                      event,
+                                                                      section.id,
+                                                                      shownItems,
+                                                                      index,
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onPointerCancel={
+                                                        local.onItemReorder ? dragCancel : undefined
+                                                    }
+                                                    onPointerMove={
+                                                        local.onItemReorder ? dragMove : undefined
+                                                    }
+                                                    onPointerUp={
+                                                        local.onItemReorder
+                                                            ? (event) => dragEnd(event, shownItems)
+                                                            : undefined
+                                                    }
+                                                    reorderable={local.onItemReorder !== undefined}
+                                                    onCollapseToggle={
+                                                        local.onItemCollapseToggle && foldable
+                                                            ? () =>
+                                                                  local.onItemCollapseToggle?.(
+                                                                      item.id,
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    onAction={
+                                                        local.onItemAction && item.action
+                                                            ? () => local.onItemAction?.(item.id)
+                                                            : undefined
+                                                    }
+                                                    onSecondaryAction={
+                                                        local.onItemSecondaryAction &&
+                                                        item.secondaryAction
+                                                            ? () =>
+                                                                  local.onItemSecondaryAction?.(
+                                                                      item.id,
+                                                                  )
+                                                            : undefined
+                                                    }
+                                                    nodeRef={(node) => {
+                                                        const key = rowKey(section.id, item.id);
+                                                        if (node) rowNodes.set(key, node);
+                                                        else rowNodes.delete(key);
+                                                    }}
+                                                    onSelect={(id) => {
+                                                        if (dragClick.current) {
+                                                            dragClick.current = false;
+                                                            return;
+                                                        }
+                                                        local.onItemSelect(id);
+                                                    }}
+                                                    shift={
+                                                        dragging && unitIndex >= 0
+                                                            ? rowDragShift(drag, index)
+                                                            : undefined
+                                                    }
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                ) : null}
                                 {!section.headingOnly &&
                                 (section.items.length === 0 ? section.empty : undefined)
                                     ? ((empty) => (
