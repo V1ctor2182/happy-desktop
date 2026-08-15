@@ -510,6 +510,12 @@ export {
     type RigDebugTarget,
 } from "./pages/settings/RigDebugSettings";
 export {
+    RigProfilerSettings,
+    type RigProfilerCapabilities,
+    type RigProfilerSettingsProps,
+    type RigProfilerStatus,
+} from "./pages/settings/RigProfilerSettings";
+export {
     RigInstructionsSettings,
     type RigInstructionDocument,
     type RigInstructionsSettingsProps,

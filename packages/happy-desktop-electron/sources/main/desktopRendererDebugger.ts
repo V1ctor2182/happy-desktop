@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { WebContents } from "electron";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
+import { desktopCdpSharedAcquire } from "./desktopCdpShared";
 
 const LOOPBACK_HOST = "127.0.0.1";
 const MAXIMUM_MESSAGE_BYTES = 4 * 1024 * 1024;
@@ -18,22 +19,13 @@ interface CdpRequest {
     readonly sessionId?: string;
 }
 
-/**
- * Exposes Electron's live in-process CDP client as one loopback WebSocket.
- *
- * Electron deliberately gives the main process an API rather than a public
- * listening address. This relay preserves raw CDP messages in both directions,
- * allowing an external agent to attach without restarting or reloading Happy.
- * One external client owns the debugger at a time because CDP request ids and
- * session events share one underlying Electron debugger connection.
- */
 export async function desktopRendererDebuggerStart(
     webContents: WebContents,
     onDetached: (reason: string) => void,
 ): Promise<DesktopRendererDebugger> {
     if (webContents.isDestroyed()) throw new Error("The Happy renderer is not available.");
 
-    webContents.debugger.attach("1.3");
+    const cdp = await desktopCdpSharedAcquire(webContents, "renderer-debugger");
     const token = randomBytes(24).toString("hex");
     const path = `/cdp/${token}`;
     const server = new WebSocketServer({
@@ -45,23 +37,9 @@ export async function desktopRendererDebuggerStart(
     });
     let client: WebSocket | undefined;
     let closed = false;
-    let intentionalDetach = false;
 
     const send = (socket: WebSocket, message: object): void => {
         if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
-    };
-    const debuggerMessage = (
-        _event: Electron.Event,
-        method: string,
-        params: Record<string, unknown>,
-        sessionId?: string,
-    ): void => {
-        if (!client) return;
-        send(client, {
-            method,
-            params,
-            ...(sessionId === undefined ? {} : { sessionId }),
-        });
     };
     const closeServer = (): Promise<void> =>
         new Promise((resolve) => {
@@ -72,37 +50,45 @@ export async function desktopRendererDebuggerStart(
                 resolve();
             }
         });
+    const removeMessage = cdp.onMessage((method, params, sessionId) => {
+        if (!client) return;
+        send(client, {
+            method,
+            params,
+            ...(sessionId === undefined ? {} : { sessionId }),
+        });
+    });
+    let removeDetached = (): void => undefined;
     const serverFailed = (error: Error): void => {
         if (closed) return;
         closed = true;
         client = undefined;
-        webContents.debugger.removeListener("message", debuggerMessage);
-        webContents.debugger.removeListener("detach", debuggerDetached);
-        if (!webContents.isDestroyed() && webContents.debugger.isAttached()) {
-            intentionalDetach = true;
-            webContents.debugger.detach();
-        }
-        void closeServer().finally(() => onDetached(`relay failed: ${error.message}`));
+        removeMessage();
+        removeDetached();
+        void closeServer()
+            .then(() => cdp.release())
+            .finally(() => onDetached(`relay failed: ${error.message}`));
     };
-    const debuggerDetached = (_event: Electron.Event, reason: string): void => {
-        if (closed || intentionalDetach) return;
+    removeDetached = cdp.onDetached((reason) => {
+        if (closed) return;
         closed = true;
         client = undefined;
-        webContents.debugger.removeListener("message", debuggerMessage);
+        removeMessage();
+        removeDetached();
         void closeServer().finally(() => {
             server.removeListener("error", serverFailed);
             onDetached(reason);
         });
-    };
-    webContents.debugger.on("message", debuggerMessage);
-    webContents.debugger.once("detach", debuggerDetached);
+    });
 
     try {
         await serverListening(server);
     } catch (error) {
-        webContents.debugger.removeListener("message", debuggerMessage);
-        webContents.debugger.removeListener("detach", debuggerDetached);
-        if (webContents.debugger.isAttached()) webContents.debugger.detach();
+        closed = true;
+        removeMessage();
+        removeDetached();
+        await closeServer();
+        await cdp.release();
         throw error;
     }
 
@@ -123,25 +109,27 @@ export async function desktopRendererDebuggerStart(
                 socket.close(1007, "Invalid CDP request");
                 return;
             }
-            void webContents.debugger
-                .sendCommand(request.method, request.params, request.sessionId)
-                .then(
-                    (result) => send(socket, { id: request.id, result }),
-                    (error: unknown) =>
-                        send(socket, {
-                            error: {
-                                code: -32_000,
-                                message:
-                                    error instanceof Error
-                                        ? error.message
-                                        : "The CDP command failed.",
-                            },
-                            id: request.id,
-                        }),
-                );
+            void cdp.sendCommand(request.method, request.params, request.sessionId).then(
+                (result) => send(socket, { id: request.id, result }),
+                (error: unknown) =>
+                    send(socket, {
+                        error: {
+                            code: -32_000,
+                            message:
+                                error instanceof Error ? error.message : "The CDP command failed.",
+                        },
+                        id: request.id,
+                    }),
+            );
         });
         socket.once("close", () => {
-            if (client === socket) client = undefined;
+            if (client === socket) {
+                client = undefined;
+                // A disconnected external client may have started a trace.
+                // End only the trace owned by this shared lease; a live Happy
+                // profiler trace remains untouched and continues to stream.
+                void cdp.endOwnedTracing();
+            }
         });
     });
 
@@ -152,14 +140,11 @@ export async function desktopRendererDebuggerStart(
             if (closed) return;
             closed = true;
             client = undefined;
-            webContents.debugger.removeListener("message", debuggerMessage);
-            webContents.debugger.removeListener("detach", debuggerDetached);
+            removeMessage();
+            removeDetached();
             await closeServer();
             server.removeListener("error", serverFailed);
-            if (!webContents.isDestroyed() && webContents.debugger.isAttached()) {
-                intentionalDetach = true;
-                webContents.debugger.detach();
-            }
+            await cdp.release();
         },
     };
 }

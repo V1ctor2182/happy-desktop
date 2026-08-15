@@ -13,6 +13,9 @@ export {
     type AppRigDebugSnapshot,
     type AppRigDebugStore,
     type AppRigDebugTargetSnapshot,
+    type AppRigProfilerCapabilities,
+    type AppRigProfilerSnapshot,
+    type AppRigProfilerStore,
 } from "./views/AppRigSettingsView";
 export {
     rigMemoryHistoryCreate,

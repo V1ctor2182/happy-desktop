@@ -45,6 +45,13 @@ import {
     type DesktopPreviewNavigationStep,
 } from "../shared/desktopContract";
 import {
+    desktopReactDevtoolsMessageValidate,
+    type DesktopProfilerBuildMode,
+    type DesktopProfilerRequest,
+    type DesktopProfilerSnapshot,
+    type DesktopReactDevtoolsMessage,
+} from "../shared/desktopProfiler";
+import {
     mediaPreviewAddressAllowed,
     mediaPreviewNavigationAllowed,
     mediaPreviewResolve,
@@ -70,6 +77,7 @@ import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserP
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import { DesktopDebugController } from "./desktopDebugController";
 import { desktopMainInspectorStart } from "./desktopInspector";
+import { DesktopProfilerController } from "./desktopProfilerController";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 
@@ -78,6 +86,37 @@ if (process.platform !== "darwin") {
     app.exit(1);
 }
 const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
+const desktopProfilerLaunchMode =
+    process.env.HAPPY2_DESKTOP_PROFILE_MODE === "optimized" ||
+    process.env.HAPPY_DESKTOP_GYM_PROFILE !== undefined
+        ? "optimized"
+        : process.env.HAPPY2_DESKTOP_PROFILE_MODE === "development"
+          ? "development"
+          : undefined;
+const desktopProfilerNamePreserving =
+    desktopProfilerLaunchMode === "optimized" && process.env.HAPPY2_DESKTOP_PROFILE === "1";
+
+function desktopProfilerBuildLabel(): string | undefined {
+    const checkout = buildIdentity?.label;
+    const namePreservingSuffix = desktopProfilerNamePreserving
+        ? " + keepNames requested (profile launch)"
+        : "";
+    if (desktopProfilerLaunchMode === "development") {
+        return checkout
+            ? `development/non-representative${namePreservingSuffix} — ${checkout}`
+            : `development/non-representative${namePreservingSuffix}`;
+    }
+    if (desktopProfilerLaunchMode === "optimized") {
+        return checkout
+            ? `optimized${namePreservingSuffix} — ${checkout}`
+            : `optimized${namePreservingSuffix}`;
+    }
+    return checkout;
+}
+
+function desktopProfilerBuildMode(): DesktopProfilerBuildMode {
+    return desktopProfilerLaunchMode ?? "standard";
+}
 /*
  * A development build says so everywhere the system can name an application. The
  * menu bar and the About item read the application name, which is otherwise
@@ -202,6 +241,7 @@ let runtime: DesktopRuntime;
 let desktopConfigStore: DesktopConfigStore;
 let desktopDebugController: DesktopDebugController | undefined;
 let desktopDebugDaemonAttemptedConnectionId: number | undefined;
+let desktopProfilerController: DesktopProfilerController;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let onboarding: LocalOnboarding;
@@ -295,6 +335,34 @@ function desktopDebugDaemonStartIfReady(snapshot: ReturnType<DesktopRuntime["get
             }
         })
         .catch((error) => desktopDebugError("Rig daemon inspector startup failed", error));
+}
+
+function desktopProfilerPublish(snapshot: DesktopProfilerSnapshot): void {
+    const window = windowLifecycle.get();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.profilerChanged, snapshot);
+}
+
+function desktopProfilerSenderRequire(sender: WebContents): void {
+    const presenting = windowLifecycle.get();
+    if (!presenting || presenting.webContents !== sender)
+        throw new Error("This window cannot control the profiler.");
+}
+
+function desktopProfilerRequestValidate(input: unknown): DesktopProfilerRequest {
+    if (input === undefined) return {};
+    if (!input || typeof input !== "object" || Array.isArray(input))
+        throw new Error("The profiler request is invalid.");
+    const durationMs = (input as { readonly durationMs?: unknown }).durationMs;
+    if (durationMs === undefined) return {};
+    if (
+        typeof durationMs !== "number" ||
+        !Number.isInteger(durationMs) ||
+        durationMs < 1_000 ||
+        durationMs > 10 * 60_000
+    )
+        throw new Error("The profiler duration must be between one second and ten minutes.");
+    return { durationMs };
 }
 
 /** The one native folder chooser, shared by the renderer's request and first-run setup. */
@@ -837,11 +905,14 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     // with the document rather than with the window: work started by the page
     // that was here a moment ago is not owed to the page that replaced it.
     window.webContents.on("did-start-navigation", (details) => {
-        if (details.isMainFrame) presentationAdvance();
+        if (!details.isMainFrame) return;
+        if (!details.isSameDocument) desktopProfilerController?.navigationStarted();
+        presentationAdvance();
     });
     presentationAdvance();
     const cleanup = () => {
         presentationAdvance();
+        desktopProfilerController?.refresh();
         rigInstallManager?.closeOwner(ownerId);
         onboarding?.installAbandoned(ownerId);
         // The mark on the Dock belongs to the window that reported it. This one
@@ -1160,6 +1231,16 @@ void app
                     );
             });
         }
+        desktopProfilerController = new DesktopProfilerController({
+            artifactRoot: desktopRoot,
+            buildMode: desktopProfilerBuildMode(),
+            ...(desktopProfilerBuildLabel() ? { buildLabel: desktopProfilerBuildLabel() } : {}),
+            changed: desktopProfilerPublish,
+            renderer: () => {
+                const window = windowLifecycle.get();
+                return window && !window.isDestroyed() ? window.webContents : undefined;
+            },
+        });
         // Notes live in the user's home rather than in this app's private data
         // directory: the Markdown beside each note is meant to be found by an
         // agent working on this machine, and an application-support path is not
@@ -1218,6 +1299,7 @@ void app
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
             debugController.refresh();
             desktopDebugDaemonStartIfReady(snapshot);
+            desktopProfilerController.refresh();
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
@@ -1259,6 +1341,25 @@ void app
         ipcMain.handle(desktopIpc.debugDaemonInspectorStop, (event) => {
             desktopDebugSenderRequire(event.sender);
             return debugController.stop("daemon");
+        });
+        ipcMain.handle(desktopIpc.profilerGet, (event) => {
+            desktopProfilerSenderRequire(event.sender);
+            return desktopProfilerController.get();
+        });
+        ipcMain.handle(desktopIpc.profilerStart, (event, request: unknown) => {
+            desktopProfilerSenderRequire(event.sender);
+            return desktopProfilerController.start(desktopProfilerRequestValidate(request));
+        });
+        ipcMain.handle(desktopIpc.profilerStop, (event) => {
+            desktopProfilerSenderRequire(event.sender);
+            return desktopProfilerController.stop();
+        });
+        ipcMain.on(desktopIpc.profilerReactMessage, (event, raw: unknown) => {
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender) return;
+            const message: DesktopReactDevtoolsMessage | undefined =
+                desktopReactDevtoolsMessageValidate(raw);
+            if (message) desktopProfilerController.reactMessage(message);
         });
         ipcMain.handle(desktopIpc.browserProxyApply, (_event, target: unknown) =>
             browserProxyApply(desktopBrowserProxyTargetValidate(target)),
@@ -1472,7 +1573,11 @@ app.on("second-instance", () => {
 app.on("before-quit", (event) => {
     if (quitting || !runtime) return;
     event.preventDefault();
-    void Promise.all([runtime.close(), desktopWindowStateStore?.flush()]).finally(() => {
+    void Promise.all([
+        runtime.close(),
+        desktopWindowStateStore?.flush(),
+        desktopProfilerController?.close(),
+    ]).finally(() => {
         browserProxy?.close();
         browserProxy = undefined;
         htmlPreviewProxy?.close();

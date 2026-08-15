@@ -18,6 +18,12 @@ import {
     type LocalOnboardingSnapshot,
     type RigInstallTerminalEvent,
 } from "../shared/desktopContract";
+import type {
+    DesktopProfilerRequest,
+    DesktopProfilerSnapshot,
+    DesktopReactDevtoolsCommand,
+    DesktopReactDevtoolsMessage,
+} from "../shared/desktopProfiler";
 
 /**
  * The development identity main launched this window with. A packaged build
@@ -84,6 +90,25 @@ const bridge: HappyDesktopBridge = {
             listener(snapshot);
         ipcRenderer.on(desktopIpc.debugChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.debugChanged, receive);
+    },
+    profilerGet: () => ipcRenderer.invoke(desktopIpc.profilerGet),
+    profilerStart: (request?: DesktopProfilerRequest) =>
+        ipcRenderer.invoke(desktopIpc.profilerStart, request),
+    profilerStop: () => ipcRenderer.invoke(desktopIpc.profilerStop),
+    profilerSubscribe(listener: (snapshot: DesktopProfilerSnapshot) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, snapshot: DesktopProfilerSnapshot) =>
+            listener(snapshot);
+        ipcRenderer.on(desktopIpc.profilerChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.profilerChanged, receive);
+    },
+    profilerReactMessage(message: DesktopReactDevtoolsMessage) {
+        ipcRenderer.send(desktopIpc.profilerReactMessage, message);
+    },
+    profilerReactSubscribe(listener: (command: DesktopReactDevtoolsCommand) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, command: DesktopReactDevtoolsCommand) =>
+            listener(command);
+        ipcRenderer.on(desktopIpc.profilerReactCommand, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.profilerReactCommand, receive);
     },
     applicationMenuOpen: () => ipcRenderer.invoke(desktopIpc.applicationMenuOpen),
     noteApply: (request: DesktopNoteApplyRequest) =>

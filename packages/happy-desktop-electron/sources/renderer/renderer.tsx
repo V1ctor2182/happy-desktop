@@ -9,6 +9,7 @@ import {
     rigRouterCreate,
     type AppRigUpdate,
     type AppRigDebugStore,
+    type AppRigProfilerStore,
     type RigRouter,
 } from "happy-desktop-app";
 import {
@@ -70,6 +71,7 @@ import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopModelSettingsCreate } from "./desktopModelSettings";
 import { desktopDebugStoreCreate } from "./desktopDebugStore";
+import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
@@ -203,6 +205,7 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
 function RigBoundary(props: {
     appearance: AppearanceStore;
     debug: AppRigDebugStore;
+    profiler: AppRigProfilerStore;
     bridge: HappyDesktopBridge;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
@@ -228,6 +231,7 @@ function RigBoundary(props: {
                 // packaged product supplies nothing and shows nothing.
                 buildIdentity: props.bridge.buildIdentity,
                 debug: props.debug,
+                profiler: props.profiler,
                 htmlPreview: props.htmlPreview,
                 mediaWindow: props.mediaWindow,
                 ...(update
@@ -370,6 +374,7 @@ function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
 interface DesktopRendererProps {
     appearance: AppearanceStore;
     debug: AppRigDebugStore;
+    profiler: AppRigProfilerStore;
     onboarding: LocalOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
@@ -585,6 +590,7 @@ function DesktopRuntimeContent(
             appearance={props.appearance}
             bridge={props.bridge}
             debug={props.debug}
+            profiler={props.profiler}
             browserContent={props.browserContent}
             htmlPreview={props.htmlPreview}
             mediaWindow={props.mediaWindow}
@@ -659,6 +665,7 @@ if (mediaPreviewBridge) {
         desktopAppearanceSynchronize(appearance, desktopBridge);
         const modelSettings = desktopModelSettingsCreate(desktopBridge, config);
         const debug = desktopDebugStoreCreate(desktopBridge);
+        const profiler = desktopProfilerStoreCreate(desktopBridge);
         // Defaults and model picker memory belong to the desktop, not one daemon.
         // The state stores stay synchronous while the bridge persists their typed
         // snapshots through the main process.
@@ -719,6 +726,7 @@ if (mediaPreviewBridge) {
                     <DesktopRenderer
                         appearance={appearance}
                         debug={debug}
+                        profiler={profiler}
                         onboarding={onboardingStore}
                         browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                         htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}

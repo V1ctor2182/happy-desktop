@@ -163,6 +163,23 @@ persistent proxy service. When switching between loopback and `--lan`, stop an
 already-running proxy first; Portless prints the exact `portless proxy stop`
 command when needed.
 
+Start the React profiling development flavor when investigating render and
+memory behavior. It preloads the collector but does not capture until you
+press Start in Settings → Dev Tools; artifacts are labeled
+`development/non-representative`.
+
+```sh
+pnpm dev --profile
+```
+
+For trustworthy gym timing, use the optimized profiling build rather than the
+Vite development server:
+
+```sh
+pnpm --dir packages/happy-desktop-electron build:profile:optimized
+pnpm --dir packages/happy-desktop-gym gym:electron:build-profile
+```
+
 Start the browser development entry:
 
 ```sh
@@ -183,11 +200,11 @@ pnpm check
 
 ## Project components
 
-| Component | Responsibility |
-| --- | --- |
-| State | Framework-independent desktop product state |
-| UI | Reusable desktop components and component blueprint |
-| App | Application composition and workspace routing |
-| Desktop | Native desktop shell and local-machine boundary |
-| Web | Browser development entry |
-| Gym | Rendering and desktop verification utilities |
+| Component | Responsibility                                      |
+| --------- | --------------------------------------------------- |
+| State     | Framework-independent desktop product state         |
+| UI        | Reusable desktop components and component blueprint |
+| App       | Application composition and workspace routing       |
+| Desktop   | Native desktop shell and local-machine boundary     |
+| Web       | Browser development entry                           |
+| Gym       | Rendering and desktop verification utilities        |

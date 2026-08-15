@@ -7,6 +7,7 @@ import {
     RigNodeSettings,
     RigPairing,
     RigProviderSettings,
+    RigProfilerSettings,
     RigSecretsSettings,
     RigSettingsShell,
     RigUsageSettings,
@@ -353,14 +354,14 @@ export function RigSettingsBlueprintPage() {
                 </RigSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Live loopback debugger controls and raw CDP attachment URLs for the three application runtimes"
+                detail="Live debugger controls and a bounded raw renderer profile with React attribution"
                 label="Rig settings — Dev Tools"
                 number="01a"
             >
                 <RigSettingsShell
                     activeCategoryId="debug"
                     categories={categories}
-                    description="Start, stop, and copy live debugger endpoints for Happy and Rig"
+                    description="Inspect live runtimes or capture raw renderer performance evidence"
                     onCategorySelect={noop}
                     onClose={noop}
                     title="Dev Tools"
@@ -387,6 +388,21 @@ export function RigSettingsBlueprintPage() {
                             status: "running",
                             url: "ws://127.0.0.1:62703/cdp/8a84291d",
                         }}
+                        supported
+                    />
+                    <RigProfilerSettings
+                        artifactPath="~/Library/Application Support/Happy/desktop/profiler/session-preview.json"
+                        capabilities={{
+                            liveDebuggerAttach: true,
+                            nativeTrace: true,
+                            processMetrics: true,
+                            reactAttribution: true,
+                            reactDevtoolsProfiling: true,
+                            rendererMetrics: true,
+                        }}
+                        onStart={noop}
+                        onStop={noop}
+                        status="stopped"
                         supported
                     />
                 </RigSettingsShell>

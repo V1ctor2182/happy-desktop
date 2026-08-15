@@ -9,6 +9,12 @@ import type {
     HappyDesktopBridge,
     RigInstallTerminalEvent,
 } from "../shared/desktopContract";
+import type {
+    DesktopProfilerRequest,
+    DesktopProfilerSnapshot,
+    DesktopReactDevtoolsCommand,
+    DesktopReactDevtoolsMessage,
+} from "../shared/desktopProfiler";
 
 const endpoint = "/__happy2_local_rig";
 
@@ -20,8 +26,24 @@ const unsupportedDebugSnapshot: DesktopDebugSnapshot = {
     supported: false,
 };
 
+const unsupportedProfilerSnapshot: DesktopProfilerSnapshot = {
+    capabilities: {
+        liveDebuggerAttach: false,
+        nativeTrace: false,
+        processMetrics: false,
+        reactAttribution: false,
+        reactDevtoolsProfiling: false,
+        rendererMetrics: false,
+    },
+    status: "unavailable",
+};
+
 function nativeDebugUnavailable(): never {
     throw new Error("Debugger attachment is available in the Electron desktop window.");
+}
+
+function nativeProfilerUnavailable(): never {
+    throw new Error("Profiler capture is available in the Electron desktop window.");
 }
 
 interface DevResponse<Value> {
@@ -81,6 +103,13 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         debugDaemonInspectorStart: async () => nativeDebugUnavailable(),
         debugDaemonInspectorStop: async () => nativeDebugUnavailable(),
         debugSubscribe: () => () => undefined,
+        profilerGet: async () => unsupportedProfilerSnapshot,
+        profilerStart: async (_request?: DesktopProfilerRequest) => nativeProfilerUnavailable(),
+        profilerStop: async () => nativeProfilerUnavailable(),
+        profilerSubscribe: () => () => undefined,
+        profilerReactMessage: (_message: DesktopReactDevtoolsMessage) => undefined,
+        profilerReactSubscribe: (_listener: (command: DesktopReactDevtoolsCommand) => void) => () =>
+            undefined,
         applicationMenuOpen: async () => undefined,
         noteApply: (apply: DesktopNoteApplyRequest) =>
             request<DesktopNoteSummary>("noteApply", apply),

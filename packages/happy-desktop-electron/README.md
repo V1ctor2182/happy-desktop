@@ -24,6 +24,34 @@ Use `pnpm dev --debug` to start the development-only main-process, renderer, and
 Rig inspectors. Electron prints each loopback URL; set
 `HAPPY2_DEBUG_RENDERER_PORT` to choose the renderer CDP port explicitly.
 
+Use the profile development flavor from the workspace root:
+
+```sh
+pnpm --dir ../.. dev --profile
+```
+
+It preloads the dormant collector and labels captures
+`development/non-representative`. For optimized profile captures, build once
+and launch the production-shaped profile renderer. The optimized flavor remains
+minified but requests component-name retention. Every artifact records that
+launch request separately from `profileBuildVerified`, which is set only after
+the pre-React bootstrap completes an actual React DevTools v5 profiling
+lifecycle (the attached renderer version is also checked when it is reported):
+
+```sh
+pnpm run build:profile:optimized
+pnpm run start:profile:optimized
+```
+
+Start and stop a capture in Settings → Dev Tools. Happy writes the raw
+Chromium trace, process/heap metrics, and normalized React DevTools 6.1.5
+backend profiling payload beside a smaller ranked report and manifest under
+its desktop profiler data directory. The backend payload is raw evidence for
+Happy's analyzer; it is not the frontend Store export accepted by React
+DevTools' profile importer. The existing renderer debugger can stay attached
+during capture; competing tracing commands and access to the profiler's trace
+stream are rejected.
+
 Use the browser-only environment when needed:
 
 ```sh

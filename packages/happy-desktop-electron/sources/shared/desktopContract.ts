@@ -1,3 +1,10 @@
+import type {
+    DesktopProfilerRequest,
+    DesktopProfilerSnapshot,
+    DesktopReactDevtoolsCommand,
+    DesktopReactDevtoolsMessage,
+} from "./desktopProfiler";
+
 export type DesktopMode = "local";
 
 /** Appearance source the Electron shell applies to every local renderer and guest. */
@@ -161,6 +168,9 @@ export interface DesktopDebugSnapshot {
     readonly renderer: DesktopDebugTargetSnapshot;
     readonly supported: boolean;
 }
+
+/** Native renderer profiling is separate from debugger endpoint lifetimes. */
+export type DesktopProfilerStartRequest = DesktopProfilerRequest;
 
 /**
  * What a development build calls itself. A packaged Happy reports none: only a
@@ -504,6 +514,13 @@ export interface HappyDesktopBridge {
     debugDaemonInspectorStart(): Promise<DesktopDebugSnapshot>;
     debugDaemonInspectorStop(): Promise<DesktopDebugSnapshot>;
     debugSubscribe(listener: (snapshot: DesktopDebugSnapshot) => void): () => void;
+    profilerGet(): Promise<DesktopProfilerSnapshot>;
+    profilerStart(request?: DesktopProfilerStartRequest): Promise<DesktopProfilerSnapshot>;
+    profilerStop(): Promise<DesktopProfilerSnapshot>;
+    profilerSubscribe(listener: (snapshot: DesktopProfilerSnapshot) => void): () => void;
+    /** Private typed Wall transport used by the profile renderer bootstrap. */
+    profilerReactMessage(message: DesktopReactDevtoolsMessage): void;
+    profilerReactSubscribe(listener: (command: DesktopReactDevtoolsCommand) => void): () => void;
     noteApply(request: DesktopNoteApplyRequest): Promise<DesktopNoteSummary>;
     noteCreate(title?: string): Promise<DesktopNoteContent>;
     noteRead(id: string): Promise<DesktopNoteContent>;
@@ -598,6 +615,12 @@ export const desktopIpc = {
     debugMainInspectorStop: "happy2:debug:main-inspector-stop",
     debugRendererInspectorStart: "happy2:debug:renderer-inspector-start",
     debugRendererInspectorStop: "happy2:debug:renderer-inspector-stop",
+    profilerGet: "happy2:profiler:get",
+    profilerStart: "happy2:profiler:start",
+    profilerStop: "happy2:profiler:stop",
+    profilerChanged: "happy2:profiler:changed",
+    profilerReactCommand: "happy2:profiler:react-command",
+    profilerReactMessage: "happy2:profiler:react-message",
     applicationMenuOpen: "happy2:application-menu:open",
     noteApply: "happy2:notes:apply",
     noteCreate: "happy2:notes:create",

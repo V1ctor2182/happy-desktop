@@ -46,6 +46,7 @@ import {
     RigPairing,
     RigContactDialog,
     RigProviderSettings,
+    RigProfilerSettings,
     RigProfilesSettings,
     RigSecretsSettings,
     RigSettingsShell,
@@ -114,8 +115,40 @@ export interface AppRigDebugStore {
     rendererInspectorStop(): void;
 }
 
+export interface AppRigProfilerCapabilities {
+    readonly liveDebuggerAttach: boolean;
+    readonly nativeTrace: boolean;
+    readonly processMetrics: boolean;
+    readonly reactAttribution: boolean;
+    readonly reactDevtoolsProfiling: boolean;
+    readonly rendererMetrics: boolean;
+}
+
+export interface AppRigProfilerSnapshot {
+    readonly artifactPath?: string;
+    readonly capabilities: AppRigProfilerCapabilities;
+    readonly error?: string;
+    readonly partialReason?: string;
+    readonly status:
+        | "stopped"
+        | "starting"
+        | "running"
+        | "stopping"
+        | "partial"
+        | "error"
+        | "unavailable";
+}
+
+/** Framework-neutral adapter for the native renderer profiler capability. */
+export interface AppRigProfilerStore {
+    get(): AppRigProfilerSnapshot;
+    profilerStart(): void;
+    profilerStop(): void;
+    subscribe(listener: () => void): () => void;
+}
+
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
-    debug: "Start, stop, and copy live debugger endpoints for Happy and Rig",
+    debug: "Inspect Happy and Rig with live debugger endpoints and renderer profiles",
     general: "How this window looks and what a new session starts with",
     profiles: "Who this host says is sending work to another Rig",
     murmur: "Trusted contacts and the network used to share folders",
@@ -142,6 +175,7 @@ export interface AppRigSettingsViewProps {
     experiments?: ExperimentsStore;
     /** Every Rig in this window: the Machines category, and whose catalog is read. */
     debug?: AppRigDebugStore;
+    profiler?: AppRigProfilerStore;
     rigs: AppRigDirectoryStore;
     onClose(): void;
     onCategorySelect(id: string): void;
@@ -291,6 +325,13 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
     );
     const debugStore = (props.section === "debug" ? props.debug : undefined) ?? debugStoreNoop;
     const debug = useSyncExternalStore(debugStore.subscribe, debugStore.get, debugStore.get);
+    const profilerStore =
+        (props.section === "debug" ? props.profiler : undefined) ?? profilerStoreNoop;
+    const profiler = useSyncExternalStore(
+        profilerStore.subscribe,
+        profilerStore.get,
+        profilerStore.get,
+    );
     const catalog = models.type === "ready" ? models.catalog : undefined;
     const selection = defaultSelection(catalog, settings);
     const model = catalog?.providers
@@ -318,23 +359,35 @@ export function AppRigSettingsView(props: AppRigSettingsViewProps) {
             windowFullScreen={windowState.fullScreen}
         >
             {props.section === "debug" ? (
-                <RigDebugSettings
-                    daemon={debug.daemon}
-                    daemonConnected={debug.daemonConnected}
-                    error={debug.error}
-                    loading={debug.loading}
-                    main={debug.main}
-                    onAllStart={debugStore.debugAllStart}
-                    onAllStop={debugStore.debugAllStop}
-                    onDaemonStart={debugStore.daemonInspectorStart}
-                    onDaemonStop={debugStore.daemonInspectorStop}
-                    onMainStart={debugStore.mainInspectorStart}
-                    onMainStop={debugStore.mainInspectorStop}
-                    onRendererStart={debugStore.rendererInspectorStart}
-                    onRendererStop={debugStore.rendererInspectorStop}
-                    renderer={debug.renderer}
-                    supported={debug.supported}
-                />
+                <>
+                    <RigDebugSettings
+                        daemon={debug.daemon}
+                        daemonConnected={debug.daemonConnected}
+                        error={debug.error}
+                        loading={debug.loading}
+                        main={debug.main}
+                        onAllStart={debugStore.debugAllStart}
+                        onAllStop={debugStore.debugAllStop}
+                        onDaemonStart={debugStore.daemonInspectorStart}
+                        onDaemonStop={debugStore.daemonInspectorStop}
+                        onMainStart={debugStore.mainInspectorStart}
+                        onMainStop={debugStore.mainInspectorStop}
+                        onRendererStart={debugStore.rendererInspectorStart}
+                        onRendererStop={debugStore.rendererInspectorStop}
+                        renderer={debug.renderer}
+                        supported={debug.supported}
+                    />
+                    <RigProfilerSettings
+                        artifactPath={profiler.artifactPath}
+                        capabilities={profiler.capabilities}
+                        error={profiler.error}
+                        onStart={profilerStore.profilerStart}
+                        onStop={profilerStore.profilerStop}
+                        partialReason={profiler.partialReason}
+                        status={profiler.status}
+                        supported={profiler.status !== "unavailable"}
+                    />
+                </>
             ) : props.section === "profiles" ? (
                 <RigProfilesSettings
                     loading={profiles.loading}
@@ -861,6 +914,23 @@ const debugStoreNoop: AppRigDebugStore = {
     mainInspectorStop: () => undefined,
     rendererInspectorStart: () => undefined,
     rendererInspectorStop: () => undefined,
+};
+const profilerUnavailable: AppRigProfilerSnapshot = {
+    capabilities: {
+        liveDebuggerAttach: false,
+        nativeTrace: false,
+        processMetrics: false,
+        reactAttribution: false,
+        reactDevtoolsProfiling: false,
+        rendererMetrics: false,
+    },
+    status: "unavailable",
+};
+const profilerStoreNoop: AppRigProfilerStore = {
+    get: () => profilerUnavailable,
+    profilerStart: () => undefined,
+    profilerStop: () => undefined,
+    subscribe: noSubscribe,
 };
 
 /**
