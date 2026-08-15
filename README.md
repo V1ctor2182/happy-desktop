@@ -149,6 +149,16 @@ pnpm install
 pnpm dev
 ```
 
+`pnpm dev` uses Portless in loopback-only mode, so it does not depend on Wi-Fi
+and exposes an `https://…localhost` URL. LAN mode is explicit: use
+`pnpm dev --lan` only when testing from another device.
+
+If Portless was previously installed as a startup service, run
+`portless service uninstall` once; Happy's development commands do not install a
+persistent proxy service. When switching between loopback and `--lan`, stop an
+already-running proxy first; Portless prints the exact `portless proxy stop`
+command when needed.
+
 Start the browser development entry:
 
 ```sh

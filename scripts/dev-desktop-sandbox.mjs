@@ -105,9 +105,18 @@ const portlessArguments = ["run", "--name", `happy-desktop-sandbox-${options.nam
 if (process.env.PORT) portlessArguments.push("--app-port", process.env.PORT);
 portlessArguments.push("pnpm", "--filter", "happy-desktop-electron", "dev:electron");
 
+const portlessEnvironment = {
+    ...process.env,
+    HOME: home,
+    TMPDIR: temporary,
+    PORTLESS_LAN: "0",
+    PORTLESS_TLD: "localhost",
+};
+delete portlessEnvironment.PORTLESS_LAN_IP;
+
 const child = spawn(portless, portlessArguments, {
     cwd: workspace,
-    env: { ...process.env, HOME: home, TMPDIR: temporary },
+    env: portlessEnvironment,
     stdio: "inherit",
 });
 

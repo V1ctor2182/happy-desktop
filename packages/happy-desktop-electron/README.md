@@ -17,6 +17,9 @@ Start the complete Electron development environment:
 pnpm dev
 ```
 
+The default is Portless loopback mode (`https://…localhost`); it does not
+require Wi-Fi. Use `pnpm dev --lan` only for deliberate device testing.
+
 Use the browser-only environment when needed:
 
 ```sh
