@@ -5,13 +5,19 @@
     "type": "module",
     "exports": {
         ".": "./sources/index.ts",
-        "./playwright": "./sources/playwright/index.ts"
+        "./playwright": "./sources/playwright/index.ts",
+        "./electron": "./sources/electron/index.ts"
     },
     "scripts": {
         "test": "pnpm test:playwright",
         "test:playwright": "node ../../scripts/run-ui-alignment-tests.mjs --config vitest.playwright.config.ts",
         "test:playwright:artifacts": "VITE_HAPPY_DESKTOP_WRITE_SCREENSHOTS=1 node ../../scripts/run-ui-alignment-tests.mjs --config vitest.playwright.config.ts",
         "test:watch": "vitest --config vitest.playwright.config.ts",
+        "gym:electron": "node --import tsx sources/electron/cli.ts",
+        "gym:electron:build-profile": "pnpm --dir ../happy-desktop-electron build:profile:optimized",
+        "gym:electron:prepare": "node --import tsx sources/electron/cli.ts prepare --profile smoke",
+        "gym:electron:run": "pnpm run gym:electron:build-profile && node --import tsx sources/electron/cli.ts run --profile smoke --workload all",
+        "gym:electron:clean": "node --import tsx sources/electron/cli.ts clean",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",

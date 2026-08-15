@@ -419,12 +419,14 @@ function FileTreeStat(props: { added?: number; deleted?: number }) {
                 <span
                     aria-hidden="true"
                     className="happy2-file-tree__stat-added"
+                    data-happy-desktop-ui="file-tree-insertions"
                 >{`+${compactCount(props.added ?? 0)}`}</span>
             ) : null}
             {deleted ? (
                 <span
                     aria-hidden="true"
                     className="happy2-file-tree__stat-deleted"
+                    data-happy-desktop-ui="file-tree-deletions"
                 >{`−${compactCount(props.deleted ?? 0)}`}</span>
             ) : null}
             {/* Out of flow, so the visible pair keeps the row's own spacing. */}
