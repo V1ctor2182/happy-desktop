@@ -17,6 +17,8 @@ export type MarkdownDocumentProps = {
     style?: CSSProperties;
     /** The document's Markdown source. */
     text: string;
+    /** Stable identity for the saved Markdown bytes, when the caller has one. */
+    cacheKey?: string;
     /**
      * Opens a link that points at another file rather than at the web — a
      * relative path, a `file:` URL, or a bare workspace path. Without it those
@@ -90,6 +92,7 @@ export function markdownDocumentLinkPath(value: unknown): string | undefined {
 }
 
 const FileOpenContext = createContext<((path: string) => void) | undefined>(undefined);
+const MarkdownCacheKeyContext = createContext<string | undefined>(undefined);
 
 /**
  * A link in a document. A web address opens in a fresh browsing context severed
@@ -158,7 +161,9 @@ const DocumentImage = ({ alt, src }: ComponentPropsWithoutRef<"img"> & ExtraProp
  * some other way still has a document to appear in, and falling back to plain
  * text is the honest answer for content whose shape was not what was expected.
  */
-function documentFence(node: ExtraProps["node"]): { lang?: string; text: string } | undefined {
+function documentFence(
+    node: ExtraProps["node"],
+): { lang?: string; text: string; offset?: number } | undefined {
     const code = node?.children.find(
         (child) => child.type === "element" && child.tagName === "code",
     );
@@ -174,7 +179,12 @@ function documentFence(node: ExtraProps["node"]): { lang?: string; text: string 
     const label = (Array.isArray(names) ? names.map(String) : [])
         .find((name) => name.startsWith("language-"))
         ?.slice("language-".length);
-    return { lang: codeBlockLanguage(label), text };
+    const offset = node?.position?.start.offset;
+    return {
+        lang: codeBlockLanguage(label),
+        text,
+        ...(offset === undefined ? {} : { offset }),
+    };
 }
 
 /**
@@ -188,13 +198,22 @@ const DocumentPre = ({
     ...props
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
     const fence = documentFence(node);
+    const documentCacheKey = useContext(MarkdownCacheKeyContext);
+    const cacheKey =
+        fence?.offset === undefined || documentCacheKey === undefined
+            ? undefined
+            : `${documentCacheKey}:f${String(fence.offset)}`;
     return (
         <div
             className="happy2-markdown-document__code"
             data-happy-desktop-ui="markdown-document-code"
         >
             {fence ? (
-                <CodeBlock lang={fence.lang} text={fence.text} />
+                <CodeBlock
+                    {...(cacheKey === undefined ? {} : { cacheKey })}
+                    lang={fence.lang}
+                    text={fence.text}
+                />
             ) : (
                 <pre {...props}>{children}</pre>
             )}
@@ -245,6 +264,7 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
         "data-testid",
         "style",
         "text",
+        "cacheKey",
         "onFileOpen",
     ]);
     return (
@@ -258,11 +278,13 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
                 className="happy2-markdown-document__body"
                 data-happy-desktop-ui="markdown-document-body"
             >
-                <FileOpenContext.Provider value={local.onFileOpen}>
-                    <Markdown components={documentComponents} remarkPlugins={[remarkGfm]}>
-                        {local.text}
-                    </Markdown>
-                </FileOpenContext.Provider>
+                <MarkdownCacheKeyContext.Provider value={local.cacheKey}>
+                    <FileOpenContext.Provider value={local.onFileOpen}>
+                        <Markdown components={documentComponents} remarkPlugins={[remarkGfm]}>
+                            {local.text}
+                        </Markdown>
+                    </FileOpenContext.Provider>
+                </MarkdownCacheKeyContext.Provider>
             </article>
         </div>
     );

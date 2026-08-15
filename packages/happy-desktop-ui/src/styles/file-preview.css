@@ -75,6 +75,16 @@
     gap: 4px;
 }
 
+.happy2-file-preview__updating {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
 /* ---- Body ------------------------------------------------------------- */
 
 .happy2-file-preview__body {

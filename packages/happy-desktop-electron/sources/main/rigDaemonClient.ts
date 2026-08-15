@@ -604,7 +604,11 @@ export class RigDaemonClient {
         path: string,
         revision: string,
         signal?: AbortSignal,
-    ): Promise<{ readonly content: string | null; readonly hash: string | null }> {
+    ): Promise<{
+        readonly content: string | null;
+        /** Hash of the bytes at `revision`, computed by the daemon. */
+        readonly hash: string | null;
+    }> {
         const parameters = new URLSearchParams({ path, revision });
         return this.#requestJson(
             "GET",

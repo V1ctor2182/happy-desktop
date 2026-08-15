@@ -84,6 +84,7 @@ export function FilePreviewPage() {
                             onClose={() => {}}
                             path="packages/happy-desktop-ui/src/assets/backgrounds/relay-field.svg"
                             size="18 KB"
+                            updating
                         />,
                     )}
                     <DimensionRule label="720 × 420 px region · 32 px path header" />

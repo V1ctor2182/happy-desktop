@@ -3,6 +3,9 @@ import { File } from "@pierre/diffs/react";
 import type { CSSProperties } from "react";
 import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
 
+/** Do not retain Pierre ASTs for unusually large documents. */
+export const CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH = 512 * 1024;
+
 /** Every language name Pierre's own extension table can produce. */
 const FENCE_LANGUAGES = new Set<string>(
     Object.values(EXTENSION_TO_FILE_FORMAT).filter((name) => name !== undefined),
@@ -47,6 +50,12 @@ export type CodeBlockProps = {
      * info string goes through `codeBlockLanguage` first.
      */
     lang?: string;
+    /**
+     * Stable content identity for Pierre's worker-pool AST cache. Callers that
+     * can identify authoritative bytes should pass it; transient drafts omit it
+     * so they can never replace a saved file's cached result.
+     */
+    cacheKey?: string;
     /** Numbers the lines. On for a file, off for a snippet inside prose. */
     lineNumbers?: boolean;
 };
@@ -68,6 +77,11 @@ export type CodeBlockProps = {
  * is mounted above, and on the main thread when none is.
  */
 export function CodeBlock(props: CodeBlockProps) {
+    const cacheKey =
+        props.cacheKey !== undefined &&
+        props.text.length <= CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH
+            ? props.cacheKey
+            : undefined;
     return (
         <File
             className={["happy2-code-block", props.className].filter(Boolean).join(" ")}
@@ -78,6 +92,7 @@ export function CodeBlock(props: CodeBlockProps) {
                 // with neither says plain text rather than guessing from the
                 // placeholder name it was handed.
                 lang: props.lang ?? (props.name === undefined ? "text" : undefined),
+                ...(cacheKey === undefined ? {} : { cacheKey }),
             }}
             options={{
                 disableFileHeader: true,

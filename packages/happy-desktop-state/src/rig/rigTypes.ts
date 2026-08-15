@@ -633,6 +633,12 @@ export interface RigChangedFileDocument {
     readonly newContent: string;
     /** Working-tree identity, absent only when the file is deleted. */
     readonly hash?: string;
+    /**
+     * Compact identity of the base content used by the diff. The daemon supplies
+     * this from its authoritative revision read; small legacy/fake documents
+     * may receive a renderer-local fallback.
+     */
+    readonly oldHash?: string;
 }
 
 /** Everything the workspace list needs to group sessions: the projects and their worktrees. */

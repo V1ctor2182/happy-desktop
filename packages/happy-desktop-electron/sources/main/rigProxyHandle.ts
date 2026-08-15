@@ -532,6 +532,8 @@ async function changedFileRead(
     readonly oldContent: string;
     readonly newContent: string;
     readonly hash?: string;
+    /** Hash of the authoritative base bytes returned by readFileAtRevision. */
+    readonly oldHash?: string;
 }> {
     const scope = await fileScopeResolve(client, groupId);
     const git = await groupGitRead(client, groupId);
@@ -547,16 +549,26 @@ async function changedFileRead(
 
     const oldPath = change.previousPath ?? filePath;
     let oldContent = "";
+    let oldHash: string | undefined;
     if (change.status !== "added" && change.status !== "untracked") {
         // The daemon counted this file's lines against its own comparison base,
         // so the diff is read from that same commit. Reading HEAD instead would
         // let a worktree show a row whose stat and whose diff describe two
         // different comparisons.
         const file = await client.readFileAtRevision(scope, oldPath, git?.base ?? "HEAD", signal);
-        oldContent =
-            file.content === null ? "" : changedFileText(Buffer.from(file.content, "base64"));
+        if (file.content !== null) {
+            oldContent = changedFileText(Buffer.from(file.content, "base64"));
+        }
+        if (file.hash !== null) oldHash = file.hash;
     }
-    return { path: filePath, oldPath, oldContent, newContent, ...(hash ? { hash } : {}) };
+    return {
+        path: filePath,
+        oldPath,
+        oldContent,
+        newContent,
+        ...(hash ? { hash } : {}),
+        ...(oldHash === undefined ? {} : { oldHash }),
+    };
 }
 
 /**

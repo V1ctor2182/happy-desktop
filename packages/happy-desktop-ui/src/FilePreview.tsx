@@ -44,8 +44,16 @@ export type FilePreviewProps = {
     /** Overrides the kind derived from the path — use it when the bytes disagree. */
     kind?: FilePreviewKind;
     content: FilePreviewContent;
+    /**
+     * Stable identity for the authoritative text behind this preview. It is
+     * forwarded to every Pierre renderer beneath the preview so remounting a
+     * file can reuse worker-pool highlighting.
+     */
+    cacheKey?: string;
     /** Human-readable size, shown beside the name. */
     size?: string;
+    /** Keeps ready content visible while its authoritative revision revalidates. */
+    updating?: boolean;
     /**
      * Intrinsic pixel size of an image or a recording's frames, shown beside its
      * size. Absent lets the file state its own once it decodes, which is the
@@ -209,7 +217,9 @@ export function FilePreview(props: FilePreviewProps) {
         "path",
         "kind",
         "content",
+        "cacheKey",
         "size",
+        "updating",
         "dimensions",
         "actions",
         "onFileOpen",
@@ -262,6 +272,16 @@ export function FilePreview(props: FilePreviewProps) {
                     </span>
                 ) : null}
                 <span className="happy2-file-preview__actions">
+                    {local.updating ? (
+                        <span
+                            aria-live="polite"
+                            className="happy2-file-preview__updating"
+                            data-happy-desktop-ui="file-preview-updating"
+                        >
+                            <Spinner size={12} tone="muted" />
+                            Updating…
+                        </span>
+                    ) : null}
                     {(kind === "markdown" || local.rendered !== undefined) &&
                     local.content.type === "text" ? (
                         <SegmentedControl
@@ -288,6 +308,7 @@ export function FilePreview(props: FilePreviewProps) {
             <div className="happy2-file-preview__body" data-happy-desktop-ui="file-preview-body">
                 <FilePreviewBody
                     content={local.content}
+                    cacheKey={local.cacheKey}
                     face={face}
                     kind={kind}
                     name={name}
@@ -312,6 +333,7 @@ export function FilePreview(props: FilePreviewProps) {
  */
 function FilePreviewBody(props: {
     content: FilePreviewContent;
+    cacheKey?: string;
     face: MarkdownFace;
     kind: FilePreviewKind;
     name: string;
@@ -427,6 +449,7 @@ function FilePreviewBody(props: {
         return (
             <MarkdownDocument
                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+                {...(props.cacheKey ? { cacheKey: props.cacheKey } : {})}
                 text={props.content.text}
             />
         );
@@ -438,6 +461,7 @@ function FilePreviewBody(props: {
             <div className="happy2-file-preview__source" data-happy-desktop-ui="file-preview-code">
                 <CodeBlock
                     className="happy2-file-preview__source-renderer"
+                    {...(props.cacheKey ? { cacheKey: props.cacheKey } : {})}
                     lineNumbers
                     name={props.name}
                     text={props.content.text}

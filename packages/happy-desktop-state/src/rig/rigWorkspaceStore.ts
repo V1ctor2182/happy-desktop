@@ -1,6 +1,7 @@
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
+import type { UserError } from "../types.js";
 import {
     composerStoreCreate,
     type ComposerAttachment,
@@ -219,7 +220,13 @@ export interface RigFileTabSnapshot {
     readonly document: Loadable<
         RigWorkspaceFileDocument | RigChangedFileDocument | RigWorkspaceFileBytes
     >;
+    /** True only while no ready document is available for this tab. */
     readonly loading: boolean;
+    /**
+     * True while a ready document remains visible and the requested
+     * authoritative revision is being read again.
+     */
+    readonly revalidating: boolean;
     /**
      * Unsaved edit to this file's working-tree text. Present only once it has
      * been typed in, so an untouched tab shows what was read rather than a copy
@@ -240,6 +247,12 @@ export interface RigFileTabSnapshot {
      * rendered face from waiting on an answer that is never coming.
      */
     readonly previewError?: string;
+    /**
+     * A background read failed while this tab still had ready bytes. The bytes
+     * remain usable, but this explains that they may not match the requested
+     * revision.
+     */
+    readonly revalidationError?: UserError;
 }
 
 /**
@@ -262,11 +275,141 @@ export interface RigPanelFileSnapshot {
     readonly path: string;
     readonly kind: RigPanelFileKind;
     readonly document: Loadable<RigWorkspaceFileDocument | RigWorkspaceFileBytes>;
+    /** True only while no ready document is available for this panel file. */
     readonly loading: boolean;
+    /**
+     * True while a ready document remains visible and the requested
+     * authoritative revision is being read again.
+     */
+    readonly revalidating: boolean;
     /** Where a `document` file is served as a page, once the host has said. */
     readonly previewUrl?: string;
     /** Why it has none, when asking the host for one failed. */
     readonly previewError?: string;
+    /**
+     * A background read failed while this viewer still had ready bytes. The
+     * bytes remain visible rather than being replaced by a destructive error
+     * state.
+     */
+    readonly revalidationError?: UserError;
+}
+
+type RigFileDocument = RigWorkspaceFileDocument | RigChangedFileDocument | RigWorkspaceFileBytes;
+
+type RigFileCacheKind = RigFileTabKind | RigPanelFileKind;
+
+type RigDocumentCacheIdentity = {
+    readonly baseKey: string;
+    readonly hash?: string;
+};
+
+type RigReadyDocumentCacheEntry = {
+    readonly addressKey: string;
+    readonly baseKey: string;
+    readonly identity: RigDocumentCacheIdentity;
+    readonly document: RigFileDocument;
+    readonly weight: number;
+};
+
+type RigFileLoadRequest = {
+    readonly controller: AbortController;
+    readonly consumers: Set<string>;
+    readonly promise: Promise<RigFileDocument>;
+};
+
+/** Bounds decoded source text retained between preview/tab lifetimes. */
+const RIG_READY_DOCUMENT_CACHE_MAX_ENTRIES = 48;
+const RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT = 16 * 1024 * 1024;
+const RIG_PANEL_FILE_LOAD_OWNER = "\u0000panel-file";
+/**
+ * The renderer/UI uses the same ceiling when deciding whether to retain a
+ * Pierre AST. A legacy changed document at or above it must already carry the
+ * daemon's authoritative base hash; it is never scanned just to make a cache
+ * key.
+ */
+const RIG_CHANGED_DOCUMENT_HASH_FALLBACK_MAX_TEXT_LENGTH = 512 * 1024;
+
+function rigFileCacheKind(kind: RigFileCacheKind): RigFileTabKind {
+    return kind === "text" ? "file" : kind;
+}
+
+/**
+ * Produces a compact deterministic fallback identity for small legacy/fake
+ * changed documents. Real daemon responses carry `oldHash` and never enter
+ * this function. Two independent 32-bit lanes avoid wide-integer allocations
+ * and keep this compatibility path cheap.
+ */
+function rigCompactContentHash(content: string): string {
+    // Include the UTF-16 length before scanning the small legacy fallback, so
+    // equal prefixes of different lengths cannot share the same hash state
+    // without bringing back the wide-integer work that made large reads costly.
+    let left = Math.imul(0x811c9dc5 ^ content.length, 0x01000193);
+    let right = Math.imul(0x9e3779b9 ^ content.length, 0x85ebca6b);
+    for (let index = 0; index < content.length; index += 1) {
+        const code = content.charCodeAt(index);
+        left = Math.imul(left ^ code, 0x01000193);
+        right = Math.imul(right ^ (code + (index & 0xffff)), 0x85ebca6b);
+    }
+    return `${(left >>> 0).toString(16).padStart(8, "0")}${(right >>> 0)
+        .toString(16)
+        .padStart(8, "0")}`;
+}
+
+function rigChangedDocumentFallbackHashAllowed(document: RigChangedFileDocument): boolean {
+    return (
+        document.oldContent.length < RIG_CHANGED_DOCUMENT_HASH_FALLBACK_MAX_TEXT_LENGTH &&
+        document.newContent.length < RIG_CHANGED_DOCUMENT_HASH_FALLBACK_MAX_TEXT_LENGTH
+    );
+}
+
+function rigFileDocumentCanonical(document: RigFileDocument): RigFileDocument {
+    if (
+        "oldContent" in document &&
+        document.oldHash === undefined &&
+        rigChangedDocumentFallbackHashAllowed(document)
+    )
+        return { ...document, oldHash: rigCompactContentHash(document.oldContent) };
+    return document;
+}
+
+function rigReadyDocumentCacheBaseKey(
+    groupId: RigGroupId,
+    path: string,
+    kind: RigFileCacheKind,
+    revision: string,
+): string {
+    return `${groupId}\u0000${path}\u0000${rigFileCacheKind(kind)}\u0000${revision}`;
+}
+
+function rigReadyDocumentCacheAddressKey(baseKey: string): string {
+    return baseKey.slice(0, baseKey.lastIndexOf("\u0000"));
+}
+
+function rigReadyDocumentCacheKey(
+    baseKey: string,
+    document: RigFileDocument,
+): { readonly key: string; readonly identity: RigDocumentCacheIdentity } {
+    const hash =
+        "oldContent" in document
+            ? `${document.hash ?? ""}:${document.oldHash ?? ""}`
+            : "hash" in document
+              ? document.hash
+              : undefined;
+    const identity = { baseKey, ...(hash ? { hash } : {}) };
+    return { key: `${baseKey}\u0000${hash ?? ""}`, identity };
+}
+
+function rigReadyDocumentWeight(document: RigFileDocument): number {
+    if ("content" in document) return Math.max(1, document.content.length * 2);
+    if ("oldContent" in document)
+        return Math.max(1, (document.oldContent.length + document.newContent.length) * 2);
+    return 1024;
+}
+
+function rigPanelDocumentOf(
+    document: RigFileDocument,
+): document is RigWorkspaceFileDocument | RigWorkspaceFileBytes {
+    return "content" in document || "contentType" in document;
 }
 
 /**
@@ -1361,7 +1504,6 @@ export function rigWorkspaceStoreCreate(
     let tabOrder: readonly string[] = [];
     let panelFile: RigPanelFileSnapshot | undefined;
     let panelFileGeneration = 0;
-    let panelFileController: AbortController | undefined;
     /**
      * The working-tree revision the viewer's file was read at, so an agent
      * editing the file the reader is looking at replaces what is on screen
@@ -1369,7 +1511,126 @@ export function rigWorkspaceStoreCreate(
      */
     let panelFileRevision: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
-    const fileLoadControllers = new Map<string, AbortController>();
+    const readyDocumentCache = new Map<string, RigReadyDocumentCacheEntry>();
+    let readyDocumentCacheWeight = 0;
+    const fileLoadRequests = new Map<string, RigFileLoadRequest>();
+    const fileLoadOwnerKeys = new Map<string, string>();
+    const fileLoadOwnerRequests = new Map<string, RigFileLoadRequest>();
+    const fileTabLoadedIdentities = new Map<string, RigDocumentCacheIdentity>();
+    const fileTabRevalidations = new Map<string, { readonly revision: string }>();
+    let panelFileLoadedIdentity: RigDocumentCacheIdentity | undefined;
+    let panelFileResume:
+        | { readonly file: RigPanelFileSnapshot; readonly revision: string }
+        | undefined;
+
+    const readyDocumentCacheRead = (
+        baseKey: string,
+        allowPreviousRevision = false,
+    ): RigReadyDocumentCacheEntry | undefined => {
+        const addressKey = rigReadyDocumentCacheAddressKey(baseKey);
+        let exact: [string, RigReadyDocumentCacheEntry] | undefined;
+        let previous: [string, RigReadyDocumentCacheEntry] | undefined;
+        for (const [key, entry] of readyDocumentCache) {
+            if (entry.baseKey === baseKey) exact = [key, entry];
+            else if (allowPreviousRevision && entry.addressKey === addressKey)
+                previous = [key, entry];
+        }
+        const found = exact ?? previous;
+        if (found === undefined) return undefined;
+        const [foundKey, entry] = found;
+        readyDocumentCache.delete(foundKey);
+        readyDocumentCache.set(foundKey, entry);
+        return entry;
+    };
+
+    const readyDocumentCacheWrite = (
+        baseKey: string,
+        document: RigFileDocument,
+        expectedHash?: string,
+    ): RigDocumentCacheIdentity | undefined => {
+        const cachedDocument = rigFileDocumentCanonical(document);
+        if ("oldContent" in cachedDocument && cachedDocument.oldHash === undefined)
+            return undefined;
+        const identity = rigReadyDocumentCacheKey(baseKey, cachedDocument);
+        const addressKey = rigReadyDocumentCacheAddressKey(baseKey);
+        if (expectedHash !== undefined && identity.identity.hash !== expectedHash) return undefined;
+        const weight = rigReadyDocumentWeight(cachedDocument);
+        // A single giant document must remain owned by its open surface, never
+        // by this auxiliary cache. The LRU byte budget below bounds aggregate
+        // retained text; this guard also avoids briefly inserting an entry that
+        // can only be evicted immediately.
+        if (weight > RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT) return undefined;
+        for (const [key, entry] of readyDocumentCache) {
+            if (entry.addressKey !== addressKey) continue;
+            readyDocumentCache.delete(key);
+            readyDocumentCacheWeight -= entry.weight;
+        }
+        readyDocumentCache.set(identity.key, {
+            addressKey,
+            baseKey,
+            identity: identity.identity,
+            document: cachedDocument,
+            weight,
+        });
+        readyDocumentCacheWeight += weight;
+        while (
+            readyDocumentCache.size > RIG_READY_DOCUMENT_CACHE_MAX_ENTRIES ||
+            readyDocumentCacheWeight > RIG_READY_DOCUMENT_CACHE_MAX_WEIGHT
+        ) {
+            const oldest = readyDocumentCache.entries().next().value as
+                | [string, RigReadyDocumentCacheEntry]
+                | undefined;
+            if (oldest === undefined) break;
+            readyDocumentCache.delete(oldest[0]);
+            readyDocumentCacheWeight -= oldest[1].weight;
+        }
+        return identity.identity;
+    };
+
+    const fileLoadRequestRelease = (owner: string, expectedRequest?: RigFileLoadRequest): void => {
+        const key = fileLoadOwnerKeys.get(owner);
+        if (key === undefined) return;
+        const request = fileLoadOwnerRequests.get(owner) ?? fileLoadRequests.get(key);
+        if (expectedRequest !== undefined && request !== expectedRequest) return;
+        fileLoadOwnerKeys.delete(owner);
+        fileLoadOwnerRequests.delete(owner);
+        if (request === undefined) return;
+        if (fileLoadRequests.get(key) !== request) return;
+        request.consumers.delete(owner);
+        if (request.consumers.size > 0) return;
+        request.controller.abort();
+        fileLoadRequests.delete(key);
+    };
+
+    const fileLoadRequestOwns = (owner: string, request: RigFileLoadRequest): boolean =>
+        fileLoadOwnerRequests.get(owner) === request;
+
+    const fileLoadRequestAcquire = (
+        owner: string,
+        key: string,
+        read: (signal: AbortSignal) => Promise<RigFileDocument>,
+    ): RigFileLoadRequest => {
+        fileLoadRequestRelease(owner);
+        let request = fileLoadRequests.get(key);
+        if (request === undefined) {
+            const controller = new AbortController();
+            const promise = read(controller.signal);
+            request = {
+                controller,
+                consumers: new Set(),
+                promise,
+            };
+            fileLoadRequests.set(key, request);
+            const settle = (): void => {
+                if (fileLoadRequests.get(key) === request) fileLoadRequests.delete(key);
+            };
+            void promise.then(settle, settle);
+        }
+        request.consumers.add(owner);
+        fileLoadOwnerKeys.set(owner, key);
+        fileLoadOwnerRequests.set(owner, request);
+        return request;
+    };
     /** The group the URL currently names, so tab memory knows what it describes. */
     let addressedGroupId: RigGroupId | undefined;
     /**
@@ -1998,11 +2259,29 @@ export function rigWorkspaceStoreCreate(
         activeMainViewGroupId = undefined;
     };
 
+    const fileTabCacheStore = (tab: RigFileTabSnapshot): void => {
+        if (
+            tab.draft !== undefined ||
+            tab.document.type !== "ready" ||
+            tab.revalidating ||
+            tab.revalidationError !== undefined
+        )
+            return;
+        const identity = fileTabLoadedIdentities.get(tab.id);
+        if (identity === undefined) return;
+        readyDocumentCacheWrite(
+            identity.baseKey,
+            rigFileDocumentCanonical(tab.document.value),
+            identity.hash,
+        );
+    };
+
     /** Stops pending work for a file tab that is being closed or replaced. */
     const fileTabRelease = (tabId: string): void => {
         fileLoadGenerations.delete(tabId);
-        fileLoadControllers.get(tabId)?.abort();
-        fileLoadControllers.delete(tabId);
+        fileTabLoadedIdentities.delete(tabId);
+        fileTabRevalidations.delete(tabId);
+        fileLoadRequestRelease(tabId);
     };
 
     /**
@@ -2045,74 +2324,133 @@ export function rigWorkspaceStoreCreate(
         if (!before) return;
         const generation = (fileLoadGenerations.get(tabId) ?? 0) + 1;
         fileLoadGenerations.set(tabId, generation);
-        fileLoadControllers.get(tabId)?.abort();
-        const controller = new AbortController();
-        fileLoadControllers.set(tabId, controller);
-        fileTabs = fileTabs.map((tab) =>
-            tab.id === tabId
-                ? {
-                      ...tab,
-                      revision,
-                      loading: true,
-                      // A reload keeps showing what is already there only when
-                      // it is the shape this tab reads: a media descriptor names
-                      // where the bytes are, an editable file carries its text,
-                      // and a diff carries both sides of one.
-                      ...(tab.document.type === "ready" &&
-                      (before.kind === "media"
-                          ? "contentType" in tab.document.value
-                          : before.kind === "file" || before.kind === "document"
-                            ? "content" in tab.document.value
-                            : "oldContent" in tab.document.value)
-                          ? {}
-                          : { document: { type: "loading" as const } }),
-                  }
-                : tab,
+        const cacheBaseKey = rigReadyDocumentCacheBaseKey(
+            before.groupId,
+            before.path,
+            before.kind,
+            revision,
         );
-        recompute();
+        const cachedEntry = readyDocumentCacheRead(cacheBaseKey, true);
+        const cached = cachedEntry?.document;
+        if (cachedEntry) {
+            fileTabLoadedIdentities.set(tabId, cachedEntry.identity);
+        } else if (fileTabLoadedIdentities.get(tabId)?.baseKey !== cacheBaseKey) {
+            fileTabLoadedIdentities.delete(tabId);
+        }
+        const existingReady =
+            before.document.type === "ready" &&
+            (before.kind === "media"
+                ? "contentType" in before.document.value
+                : before.kind === "file" || before.kind === "document"
+                  ? "content" in before.document.value
+                  : "oldContent" in before.document.value);
+        const document = cached
+            ? { type: "ready" as const, value: cached }
+            : existingReady
+              ? before.document
+              : { type: "loading" as const };
+        const loading = document.type !== "ready";
+        const revalidating = document.type === "ready";
+        if (revalidating) fileTabRevalidations.set(tabId, { revision });
+        else fileTabRevalidations.delete(tabId);
+        const documentSame =
+            document.type === "ready"
+                ? before.document.type === "ready" && before.document.value === document.value
+                : before.document.type === "loading";
+        if (
+            before.revision !== revision ||
+            before.loading !== loading ||
+            before.revalidating !== revalidating ||
+            before.revalidationError !== undefined ||
+            !documentSame
+        ) {
+            fileTabs = fileTabs.map((tab) =>
+                tab.id === tabId
+                    ? {
+                          ...tab,
+                          revision,
+                          document,
+                          loading,
+                          revalidating,
+                          revalidationError: undefined,
+                      }
+                    : tab,
+            );
+            recompute();
+        }
         const read =
             before.kind === "file" || before.kind === "document"
-                ? client.workspaceFileRead(before.groupId, before.path, controller.signal)
+                ? (signal: AbortSignal) =>
+                      client.workspaceFileRead(before.groupId, before.path, signal)
                 : before.kind === "media"
-                  ? client.workspaceFileBytesRead(before.groupId, before.path, controller.signal)
-                  : client.changedFileRead(before.groupId, before.path, controller.signal);
+                  ? (signal: AbortSignal) =>
+                        client.workspaceFileBytesRead(before.groupId, before.path, signal)
+                  : (signal: AbortSignal) =>
+                        client.changedFileRead(before.groupId, before.path, signal);
+        const request = fileLoadRequestAcquire(tabId, cacheBaseKey, read);
         if (before.kind === "document") filePreviewAddressResolve(tabId, generation, before);
-        void read.then(
+        void request.promise.then(
             (document) => {
-                if (
-                    disposed ||
-                    fileLoadGenerations.get(tabId) !== generation ||
-                    !fileTabs.some((tab) => tab.id === tabId)
-                )
+                const valid =
+                    !disposed &&
+                    fileLoadRequestOwns(tabId, request) &&
+                    fileLoadGenerations.get(tabId) === generation &&
+                    fileTabs.some((tab) => tab.id === tabId);
+                if (!valid) {
+                    fileLoadRequestRelease(tabId, request);
                     return;
-                fileLoadControllers.delete(tabId);
+                }
+                const loaded = rigFileDocumentCanonical(document);
+                const identity = readyDocumentCacheWrite(cacheBaseKey, loaded);
+                if (identity) fileTabLoadedIdentities.set(tabId, identity);
+                else fileTabLoadedIdentities.delete(tabId);
+                fileTabRevalidations.delete(tabId);
+                fileLoadRequestRelease(tabId, request);
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === tabId
                         ? {
                               ...tab,
-                              document: { type: "ready" as const, value: document },
+                              document: { type: "ready" as const, value: loaded },
                               loading: false,
+                              revalidating: false,
+                              revalidationError: undefined,
                           }
                         : tab,
                 );
                 recompute();
             },
             (error: unknown) => {
-                if (
-                    disposed ||
-                    fileLoadGenerations.get(tabId) !== generation ||
-                    !fileTabs.some((tab) => tab.id === tabId)
-                )
+                const valid =
+                    !disposed &&
+                    fileLoadRequestOwns(tabId, request) &&
+                    fileLoadGenerations.get(tabId) === generation &&
+                    fileTabs.some((tab) => tab.id === tabId);
+                if (!valid) {
+                    fileLoadRequestRelease(tabId, request);
                     return;
-                fileLoadControllers.delete(tabId);
+                }
+                const current = fileTabs.find((tab) => tab.id === tabId);
+                const currentReady = current?.document.type === "ready";
+                const failure = rigUserError(error);
+                const identity = fileTabLoadedIdentities.get(tabId);
+                if (identity?.baseKey === cacheBaseKey) fileTabLoadedIdentities.delete(tabId);
+                fileTabRevalidations.delete(tabId);
+                fileLoadRequestRelease(tabId, request);
                 fileTabs = fileTabs.map((tab) =>
                     tab.id === tabId
-                        ? tab.document.type === "ready"
-                            ? { ...tab, loading: false }
+                        ? currentReady
+                            ? {
+                                  ...tab,
+                                  loading: false,
+                                  revalidating: false,
+                                  revalidationError: failure,
+                              }
                             : {
                                   ...tab,
-                                  document: { type: "error" as const, error: rigUserError(error) },
+                                  document: { type: "error" as const, error: failure },
                                   loading: false,
+                                  revalidating: false,
+                                  revalidationError: undefined,
                               }
                         : tab,
                 );
@@ -2123,22 +2461,58 @@ export function rigWorkspaceStoreCreate(
 
     /**
      * Reads the file the panel's viewer is on. One file is being looked at, so
-     * one read is in flight: opening another aborts the previous one and its
-     * answer is discarded by generation, which is what stops a slow first file
-     * from landing on top of the second.
+     * one read is in flight for this owner. Reads shared with a main tab reuse
+     * the same request; opening another panel file releases this owner, and its
+     * answer is discarded by generation, which stops a slow first file from
+     * landing on top of the second.
      */
     const panelFileLoad = (file: RigPanelFileSnapshot): void => {
         const generation = panelFileGeneration + 1;
         panelFileGeneration = generation;
-        panelFileController?.abort();
-        const controller = new AbortController();
-        panelFileController = controller;
-        panelFile = file;
+        const previous = panelFile;
+        const sameAddress =
+            previous !== undefined &&
+            previous.groupId === file.groupId &&
+            previous.path === file.path &&
+            previous.kind === file.kind;
+        fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER);
+        const revision =
+            fileChangeFind(file.groupId, file.path)?.revision ?? panelFileRevision ?? "";
+        const cacheBaseKey = rigReadyDocumentCacheBaseKey(
+            file.groupId,
+            file.path,
+            file.kind,
+            revision,
+        );
+        const cachedEntry = readyDocumentCacheRead(cacheBaseKey, true);
+        const cached = cachedEntry?.document;
+        const cachedPanelDocument =
+            cached !== undefined && rigPanelDocumentOf(cached) ? cached : undefined;
+        const existingReady =
+            sameAddress && file.document.type === "ready" && rigPanelDocumentOf(file.document.value)
+                ? file.document.value
+                : undefined;
+        const visibleDocument = cachedPanelDocument ?? existingReady;
+        if (!sameAddress) panelFileLoadedIdentity = undefined;
+        if (cachedPanelDocument && cachedEntry) panelFileLoadedIdentity = cachedEntry.identity;
+        panelFile = {
+            ...file,
+            ...(cachedPanelDocument
+                ? {
+                      document: { type: "ready" as const, value: cachedPanelDocument },
+                  }
+                : {}),
+            loading: visibleDocument === undefined,
+            revalidating: visibleDocument !== undefined,
+            revalidationError: undefined,
+        };
         recompute();
         const read =
             file.kind === "text" || file.kind === "document"
-                ? client.workspaceFileRead(file.groupId, file.path, controller.signal)
-                : client.workspaceFileBytesRead(file.groupId, file.path, controller.signal);
+                ? (signal: AbortSignal) => client.workspaceFileRead(file.groupId, file.path, signal)
+                : (signal: AbortSignal) =>
+                      client.workspaceFileBytesRead(file.groupId, file.path, signal);
+        const request = fileLoadRequestAcquire(RIG_PANEL_FILE_LOAD_OWNER, cacheBaseKey, read);
         if (file.kind === "document")
             void client.htmlPreviewOpen(file.groupId, file.path).then(
                 (url) => {
@@ -2158,37 +2532,98 @@ export function rigWorkspaceStoreCreate(
                     recompute();
                 },
             );
-        void read.then(
+        void request.promise.then(
             (document) => {
-                if (disposed || panelFileGeneration !== generation || !panelFile) return;
-                panelFileController = undefined;
+                const current = panelFile;
+                const valid =
+                    !disposed &&
+                    fileLoadRequestOwns(RIG_PANEL_FILE_LOAD_OWNER, request) &&
+                    panelFileGeneration === generation &&
+                    current !== undefined;
+                if (!valid) {
+                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
+                    return;
+                }
+                if (!rigPanelDocumentOf(document)) {
+                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
+                    return;
+                }
+                const identity = readyDocumentCacheWrite(cacheBaseKey, document);
+                if (identity) panelFileLoadedIdentity = identity;
+                else panelFileLoadedIdentity = undefined;
+                fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
                 panelFile = {
-                    ...panelFile,
+                    ...current,
                     document: { type: "ready", value: document },
                     loading: false,
+                    revalidating: false,
+                    revalidationError: undefined,
                 };
                 recompute();
             },
             (error: unknown) => {
-                if (disposed || panelFileGeneration !== generation || !panelFile) return;
-                panelFileController = undefined;
+                const current = panelFile;
+                const valid =
+                    !disposed &&
+                    fileLoadRequestOwns(RIG_PANEL_FILE_LOAD_OWNER, request) &&
+                    panelFileGeneration === generation &&
+                    current !== undefined;
+                if (!valid) {
+                    fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
+                    return;
+                }
+                const currentReady = current.document.type === "ready";
+                const failure = rigUserError(error);
+                const identity = panelFileLoadedIdentity;
+                if (identity?.baseKey === cacheBaseKey) panelFileLoadedIdentity = undefined;
+                fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER, request);
                 panelFile = {
-                    ...panelFile,
-                    document: { type: "error", error: rigUserError(error) },
-                    loading: false,
+                    ...current,
+                    ...(currentReady
+                        ? {
+                              loading: false,
+                              revalidating: false,
+                              revalidationError: failure,
+                          }
+                        : {
+                              document: { type: "error" as const, error: failure },
+                              loading: false,
+                              revalidating: false,
+                              revalidationError: undefined,
+                          }),
                 };
                 recompute();
             },
         );
     };
 
-    /** Stops the panel viewer's pending read and forgets the file it was on. */
-    const panelFileRelease = (): void => {
+    /**
+     * Stops the panel viewer's pending read and forgets the file it was on.
+     * During a store stop the private revalidation marker survives so `start`
+     * can resume a cache hit even though the visible document was ready.
+     */
+    const panelFileRelease = (preserveRevalidation = false): void => {
         panelFileGeneration += 1;
-        panelFileController?.abort();
-        panelFileController = undefined;
+        if (panelFile) {
+            if (
+                panelFile.document.type === "ready" &&
+                !panelFile.revalidating &&
+                panelFile.revalidationError === undefined &&
+                panelFileLoadedIdentity !== undefined
+            )
+                readyDocumentCacheWrite(
+                    panelFileLoadedIdentity.baseKey,
+                    panelFile.document.value,
+                    panelFileLoadedIdentity.hash,
+                );
+        }
+        fileLoadRequestRelease(RIG_PANEL_FILE_LOAD_OWNER);
         panelFile = undefined;
         panelFileRevision = undefined;
+        if (!preserveRevalidation) {
+            panelFileLoadedIdentity = undefined;
+            panelFileResume = undefined;
+        }
     };
 
     /**
@@ -2234,6 +2669,8 @@ export function rigWorkspaceStoreCreate(
         }
 
         const revision = fileChangeFind(groupId, path)?.revision ?? "";
+        const cacheBaseKey = rigReadyDocumentCacheBaseKey(groupId, path, kind, revision);
+        const cached = readyDocumentCacheRead(cacheBaseKey, true)?.document;
         const tab: RigFileTabSnapshot = {
             id,
             groupId,
@@ -2242,13 +2679,15 @@ export function rigWorkspaceStoreCreate(
             preview,
             revision,
             saving: false,
-            document: { type: "loading" },
-            loading: true,
+            document: cached ? { type: "ready", value: cached } : { type: "loading" },
+            loading: cached === undefined,
+            revalidating: cached !== undefined,
         };
         const replacedIndex = preview
             ? fileTabs.findIndex((candidate) => candidate.groupId === groupId && candidate.preview)
             : -1;
         if (replacedIndex >= 0) {
+            fileTabCacheStore(fileTabs[replacedIndex]!);
             fileTabRelease(fileTabs[replacedIndex]!.id);
             fileTabs = fileTabs.map((candidate, index) =>
                 index === replacedIndex ? tab : candidate,
@@ -2269,6 +2708,7 @@ export function rigWorkspaceStoreCreate(
     const fileTabClose = (tabId: string): void => {
         const closing = fileTabs.find((tab) => tab.id === tabId);
         if (!closing) return;
+        fileTabCacheStore(closing);
         fileTabRelease(tabId);
         // The neighbours a closed tab can uncover are the ones beside it in its
         // own strip. Indexing the whole list would hand the main content a file
@@ -2296,15 +2736,37 @@ export function rigWorkspaceStoreCreate(
     /** Shows one file in the panel's viewer and starts reading it. */
     const filePanelShow = (groupId: RigGroupId, path: string, kind: RigPanelFileKind): void => {
         if (disposed) return;
-        panelFileRevision = fileChangeFind(groupId, path)?.revision;
-        panel.fileViewOpen();
-        panelFileLoad({
+        panelFileResume = undefined;
+        const requestedRevision = fileChangeFind(groupId, path)?.revision ?? "";
+        const previousRevision = panelFileRevision;
+        panelFileRevision = requestedRevision;
+        const requestedBaseKey = rigReadyDocumentCacheBaseKey(
             groupId,
             path,
             kind,
-            document: { type: "loading" },
-            loading: true,
-        });
+            requestedRevision,
+        );
+        const current =
+            panelFile &&
+            panelFile.groupId === groupId &&
+            panelFile.path === path &&
+            panelFile.kind === kind &&
+            panelFile.document.type === "ready" &&
+            (panelFileLoadedIdentity?.baseKey === requestedBaseKey ||
+                previousRevision === requestedRevision)
+                ? panelFile
+                : undefined;
+        panelFileLoad(
+            current ?? {
+                groupId,
+                path,
+                kind,
+                document: { type: "loading" },
+                loading: true,
+                revalidating: false,
+            },
+        );
+        panel.fileViewOpen();
     };
 
     const fileTabsReconcile = (): void => {
@@ -3409,7 +3871,19 @@ export function rigWorkspaceStoreCreate(
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
         if (openId) acquireConversation(openId);
-        for (const tab of fileTabs) if (tab.loading) fileLoad(tab.id, tab.revision);
+        for (const tab of fileTabs) {
+            const revalidation = fileTabRevalidations.get(tab.id);
+            if (tab.loading || revalidation !== undefined)
+                fileLoad(tab.id, revalidation?.revision ?? tab.revision);
+        }
+        const panelResume = panelFileResume;
+        panelFileResume = undefined;
+        if (panelResume && panel.get().activeViewId === RIG_PANEL_FILE_VIEW_ID) {
+            panelFileRevision = panelResume.revision;
+            panelFileLoad({ ...panelResume.file, loading: true });
+        } else if (panelResume) {
+            panelFileLoadedIdentity = undefined;
+        }
         // Which applications exist is a property of the host, not of anything
         // being opened, so it is read once the workspace is actually on screen
         // rather than when it is constructed.
@@ -3436,11 +3910,28 @@ export function rigWorkspaceStoreCreate(
         restoredGroupRejectionRevisionSeen = folders?.get().restoredGroupRejection?.revision ?? 0;
         authoritativeGroupIds = new Set();
         catalogRevisionSeen = -1;
-        for (const controller of fileLoadControllers.values()) controller.abort();
-        fileLoadControllers.clear();
+        for (const tab of fileTabs) fileTabCacheStore(tab);
+        for (const request of fileLoadRequests.values()) request.controller.abort();
+        fileLoadRequests.clear();
+        fileLoadOwnerKeys.clear();
+        fileLoadOwnerRequests.clear();
         for (const tab of fileTabs)
             fileLoadGenerations.set(tab.id, (fileLoadGenerations.get(tab.id) ?? 0) + 1);
-        panelFileRelease();
+        // A stopped surface has no in-flight authoritative read. Keep ready
+        // bytes visible, but do not expose the old request as revalidating
+        // until start() resumes it.
+        fileTabs = fileTabs.map((tab) =>
+            tab.revalidating ? { ...tab, revalidating: false } : tab,
+        );
+        const panelResume =
+            panelFile === undefined
+                ? undefined
+                : {
+                      file: panelFile,
+                      revision: panelFileRevision ?? "",
+                  };
+        panelFileResume = panelResume;
+        panelFileRelease(true);
         releaseGroup();
         releaseConversation();
         conversation = { type: "unloaded" };

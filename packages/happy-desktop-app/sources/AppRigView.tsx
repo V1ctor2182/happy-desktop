@@ -914,6 +914,23 @@ function fileTabKind(path: string, scope: RigFileScope): RigFileTabKind {
     return scope === "all" ? "file" : "diff";
 }
 
+function fileHighlightLanguageKey(path: string): string {
+    const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+    // Pierre resolves language from the complete basename. Keeping the
+    // complete name avoids treating `component.d.ts` and `component.ts` as
+    // interchangeable cache entries just because their final extension agrees.
+    return name;
+}
+
+/** Compact identity shared by saved source previews with the same bytes/language. */
+function fileHighlightCacheKey(path: string, hash: string): string {
+    return `h:${hash}:${fileHighlightLanguageKey(path)}`;
+}
+
+function markdownHighlightCacheKey(path: string, hash: string): string {
+    return `m:${hash}:${fileHighlightLanguageKey(path)}`;
+}
+
 /** How the panel's viewer should read one file: as characters, or as bytes. */
 function panelFileKind(path: string): RigPanelFileKind {
     const kind = filePreviewKind(path);
@@ -4238,6 +4255,14 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     );
 }
 
+function rigFileRevalidationBanner(error: { readonly message: string } | undefined): ReactNode {
+    return error ? (
+        <Banner tone="warning" title="File may be out of date">
+            Showing the last loaded content. {error.message}
+        </Banner>
+    ) : null;
+}
+
 function RigFileBody(props: {
     appearance: "dark" | "light";
     file: RigFileTabSnapshot;
@@ -4260,12 +4285,16 @@ function RigFileBody(props: {
     const saveDisabled = !writable || props.saveRefusal !== undefined;
     if (file.kind === "media")
         return (
-            <RigFilePreview
-                document={file.document}
-                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
-                key={file.id}
-                path={file.path}
-            />
+            <>
+                {rigFileRevalidationBanner(file.revalidationError)}
+                <RigFilePreview
+                    document={file.document}
+                    {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
+                    key={file.id}
+                    path={file.path}
+                    revalidating={file.revalidating}
+                />
+            </>
         );
     if (
         (file.kind === "file" || file.kind === "document") &&
@@ -4277,8 +4306,13 @@ function RigFileBody(props: {
         const text = file.draft ?? content;
         const status =
             props.writeRefusal ?? props.saveRefusal ?? (file.saving ? "Saving…" : undefined);
+        const markdownCacheKey =
+            file.draft === undefined
+                ? markdownHighlightCacheKey(file.path, file.document.value.hash)
+                : undefined;
         return (
             <FileEditor
+                banner={rigFileRevalidationBanner(file.revalidationError)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -4325,6 +4359,9 @@ function RigFileBody(props: {
                                           fileTabKind(target, "all"),
                                       );
                                   }}
+                                  {...(markdownCacheKey === undefined
+                                      ? {}
+                                      : { cacheKey: markdownCacheKey })}
                                   text={text}
                               />
                           ),
@@ -4354,46 +4391,59 @@ function RigFileBody(props: {
         // An untouched tab shows what was read; once edited it shows what was
         // typed, which is the only copy of it there is.
         const current = file.draft ?? change.newContent;
+        const oldCacheKey =
+            file.draft !== undefined || change.oldHash === undefined
+                ? undefined
+                : `d:old:${file.groupId}:${change.oldHash}:${fileHighlightLanguageKey(change.oldPath)}`;
+        const newCacheKey =
+            file.draft === undefined && change.hash !== undefined
+                ? `d:new:${file.groupId}:${change.hash}:${fileHighlightLanguageKey(file.path)}`
+                : undefined;
         return (
-            <ChangedFileDiff
-                appearance={props.appearance}
-                documentKey={fileDocumentKey(file.id, file.document.value)}
-                loading={file.loading}
-                mode={props.mode}
-                newContent={current}
-                oldContent={change.oldContent}
-                oldPath={change.oldPath}
-                {...(writable
-                    ? {
-                          onContentChange: (content: string) =>
-                              workspace.fileDraftUpdate(file.id, content),
-                          onSave: () => {
-                              if (!saveDisabled && props.rigOnline())
-                                  void workspace.fileDraftSave(file.id).catch(() => undefined);
-                          },
-                      }
-                    : {})}
-                saveDisabled={saveDisabled}
-                onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
-                // A change that deleted the file left no copy to look at, which
-                // the read reports by having no working-tree identity for it.
-                // Preview is then not offered rather than offered over nothing.
-                {...(change.hash === undefined
-                    ? {}
-                    : {
-                          preview: (
-                              <RigChangedFilePreview
-                                  file={file}
-                                  openDisabled={props.saveRefusal !== undefined}
-                                  rigOnline={props.rigOnline}
-                                  text={current}
-                                  workspace={workspace}
-                              />
-                          ),
-                      })}
-                path={file.path}
-                saving={file.saving}
-            />
+            <>
+                {rigFileRevalidationBanner(file.revalidationError)}
+                <ChangedFileDiff
+                    appearance={props.appearance}
+                    documentKey={fileDocumentKey(file.id, file.document.value)}
+                    loading={file.loading}
+                    mode={props.mode}
+                    {...(newCacheKey === undefined ? {} : { newCacheKey })}
+                    newContent={current}
+                    {...(oldCacheKey === undefined ? {} : { oldCacheKey })}
+                    oldContent={change.oldContent}
+                    oldPath={change.oldPath}
+                    {...(writable
+                        ? {
+                              onContentChange: (content: string) =>
+                                  workspace.fileDraftUpdate(file.id, content),
+                              onSave: () => {
+                                  if (!saveDisabled && props.rigOnline())
+                                      void workspace.fileDraftSave(file.id).catch(() => undefined);
+                              },
+                          }
+                        : {})}
+                    saveDisabled={saveDisabled}
+                    onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
+                    // A change that deleted the file left no copy to look at, which
+                    // the read reports by having no working-tree identity for it.
+                    // Preview is then not offered rather than offered over nothing.
+                    {...(change.hash === undefined
+                        ? {}
+                        : {
+                              preview: (
+                                  <RigChangedFilePreview
+                                      file={file}
+                                      openDisabled={props.saveRefusal !== undefined}
+                                      rigOnline={props.rigOnline}
+                                      text={current}
+                                      workspace={workspace}
+                                  />
+                              ),
+                          })}
+                    path={file.path}
+                    saving={file.saving}
+                />
+            </>
         );
     }
     if (file.document.type === "error")
@@ -4464,9 +4514,17 @@ function RigChangedFilePreview(props: {
     // has no preview beats rendering its bytes as characters.
     const kind = filePreviewKind(file.path);
     const readable = kind === "markdown" || kind === "text";
+    const cacheKey =
+        file.draft === undefined &&
+        file.document.type === "ready" &&
+        "hash" in file.document.value &&
+        file.document.value.hash !== undefined
+            ? fileHighlightCacheKey(file.path, file.document.value.hash)
+            : undefined;
     return (
         <FilePreview
             content={readable ? { type: "text", text: props.text } : { type: "unavailable" }}
+            {...(cacheKey === undefined ? {} : { cacheKey })}
             // A document followed out of the changed list lands beside it as the
             // file itself, the same way one followed out of a file tab does.
             onFileOpen={(href) => {
@@ -4491,6 +4549,7 @@ function RigFilePreview(props: {
     document: RigFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
     path: string;
+    revalidating: boolean;
 }) {
     const document = props.document;
     if (document.type === "error")
@@ -4500,6 +4559,9 @@ function RigFilePreview(props: {
                 path={props.path}
             />
         );
+    // A background revalidation must not replace usable media with a loading
+    // face. The request may still fail into the warning banner owned by the
+    // surrounding file surface; only a true first load has no content to show.
     if (document.type !== "ready")
         return <FilePreview content={{ type: "loading" }} path={props.path} />;
     const value = document.value;
@@ -4520,6 +4582,7 @@ function RigFilePreview(props: {
                 : {})}
             path={props.path}
             size={fileSizeFormat(value.size)}
+            updating={props.revalidating}
         />
     );
 }
@@ -6055,51 +6118,63 @@ function RigPanelFileView(props: {
     const content: FilePreviewContent =
         file.document.type === "error"
             ? { type: "error", message: file.document.error.message }
-            : file.document.type !== "ready" || file.loading
+            : file.document.type !== "ready"
               ? { type: "loading" }
               : "content" in file.document.value
                 ? { type: "text", text: file.document.value.content }
                 : file.document.value.contentType === "application/octet-stream"
                   ? { type: "unavailable" }
                   : { type: "url", url: file.document.value.url };
+    const cacheKey =
+        file.document.type === "ready" &&
+        "content" in file.document.value &&
+        file.document.value.hash.length > 0
+            ? fileHighlightCacheKey(file.path, file.document.value.hash)
+            : undefined;
     return (
-        <FilePreview
-            closeLabel="Close file"
-            content={content}
-            {...(file.kind === "document" && props.htmlPreview
-                ? {
-                      rendered: (
-                          <HtmlPreviewFrame
-                              {...(file.previewError
-                                  ? {
-                                        failure: {
-                                            kind: "address-unavailable" as const,
-                                            path: file.path,
-                                            detail: file.previewError,
-                                        },
-                                    }
-                                  : {})}
-                              renderContent={props.htmlPreview}
-                              source={file.previewUrl}
-                          />
-                      ),
-                  }
-                : {})}
-            onClose={props.onClose}
-            // A link inside the document is relative to the document holding it.
-            onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
-            {...(mediaWindow &&
-            content.type === "url" &&
-            mediaWindowShowable(filePreviewKind(file.path))
-                ? {
-                      onMediaWindowOpen: () => mediaWindow({ path: file.path, url: content.url }),
-                  }
-                : {})}
-            path={file.path}
-            {...(file.document.type === "ready" && "size" in file.document.value
-                ? { size: fileSizeFormat(file.document.value.size) }
-                : {})}
-        />
+        <>
+            {rigFileRevalidationBanner(file.revalidationError)}
+            <FilePreview
+                closeLabel="Close file"
+                content={content}
+                {...(cacheKey === undefined ? {} : { cacheKey })}
+                {...(file.kind === "document" && props.htmlPreview
+                    ? {
+                          rendered: (
+                              <HtmlPreviewFrame
+                                  {...(file.previewError
+                                      ? {
+                                            failure: {
+                                                kind: "address-unavailable" as const,
+                                                path: file.path,
+                                                detail: file.previewError,
+                                            },
+                                        }
+                                      : {})}
+                                  renderContent={props.htmlPreview}
+                                  source={file.previewUrl}
+                              />
+                          ),
+                      }
+                    : {})}
+                onClose={props.onClose}
+                // A link inside the document is relative to the document holding it.
+                onFileOpen={(href) => props.onFileOpen(documentLinkResolve(file.path, href))}
+                {...(mediaWindow &&
+                content.type === "url" &&
+                mediaWindowShowable(filePreviewKind(file.path))
+                    ? {
+                          onMediaWindowOpen: () =>
+                              mediaWindow({ path: file.path, url: content.url }),
+                      }
+                    : {})}
+                path={file.path}
+                updating={file.revalidating}
+                {...(file.document.type === "ready" && "size" in file.document.value
+                    ? { size: fileSizeFormat(file.document.value.size) }
+                    : {})}
+            />
+        </>
     );
 }
 

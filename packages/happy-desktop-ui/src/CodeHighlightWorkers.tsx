@@ -30,6 +30,10 @@ export function CodeHighlightWorkers(props: { children: ReactNode }) {
             highlighterOptions={{ theme: { dark: "pierre-dark", light: "pierre-light" } }}
             poolOptions={{
                 poolSize: 2,
+                // Pierre keeps separate file and diff AST LRUs at this size;
+                // cap each one explicitly so the worker pool cannot retain
+                // its library default of 100 entries per cache.
+                totalASTLRUCacheSize: 24,
                 workerFactory: () => new PierreHighlightWorker(),
             }}
         >
