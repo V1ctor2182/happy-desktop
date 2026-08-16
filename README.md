@@ -153,6 +153,10 @@ pnpm dev
 and exposes an `https://…localhost` URL. LAN mode is explicit: use
 `pnpm dev --lan` only when testing from another device.
 
+Use `pnpm dev --debug` to start development-only main-process, renderer, and Rig
+inspectors and print their loopback URLs. Set `HAPPY2_DEBUG_RENDERER_PORT` when a
+specific renderer CDP port is required.
+
 If Portless was previously installed as a startup service, run
 `portless service uninstall` once; Happy's development commands do not install a
 persistent proxy service. When switching between loopback and `--lan`, stop an

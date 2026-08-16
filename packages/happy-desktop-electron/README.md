@@ -20,6 +20,10 @@ pnpm dev
 The default is Portless loopback mode (`https://…localhost`); it does not
 require Wi-Fi. Use `pnpm dev --lan` only for deliberate device testing.
 
+Use `pnpm dev --debug` to start the development-only main-process, renderer, and
+Rig inspectors. Electron prints each loopback URL; set
+`HAPPY2_DEBUG_RENDERER_PORT` to choose the renderer CDP port explicitly.
+
 Use the browser-only environment when needed:
 
 ```sh

@@ -232,6 +232,7 @@ export function rigInstallVerifierCreate(
 /** Connects to the normal daemon, starting it through the discovered command if absent. */
 export function localRigConnectorCreate(
     options: {
+        readonly debug?: (message: string) => void;
         readonly host?: RigProcessHost;
         readonly environment?: NodeJS.ProcessEnv;
         readonly configuredShell?: string;
@@ -246,6 +247,7 @@ export function localRigConnectorCreate(
     const wait = options.wait ?? delay;
     const baseEnvironment = options.environment ?? process.env;
     const clientCreate = options.clientCreate ?? ((input) => new RigDaemonClient(input));
+    const debug = options.debug ?? (() => undefined);
     return {
         async connect(): Promise<LocalRigConnection> {
             const login = await rigLoginEnvironmentDiscover(
@@ -253,6 +255,7 @@ export function localRigConnectorCreate(
                 baseEnvironment,
                 options.configuredShell,
             );
+            debug(`Rig executable: ${login.command} (${login.shell})`);
             const paths = rigDaemonPathsResolve(login.environment);
             let connection = await daemonProbe(paths.socketPath, paths.tokenPath, clientCreate);
             if (!connection) {

@@ -4,16 +4,19 @@ import { join, resolve } from "node:path";
 const workspace = resolve(import.meta.dirname, "..");
 const portless = join(workspace, "node_modules", ".bin", "portless");
 const lan = process.argv.includes("--lan");
+const debug = process.argv.includes("--debug") || process.env.HAPPY2_DESKTOP_DEBUG === "1";
 const childEnvironment = {
     ...process.env,
     // Desktop development is loopback-only by default. Portless persists the
     // last proxy's LAN mode and TLDs, so these settings must be explicit.
     PORTLESS_LAN: lan ? "1" : "0",
     PORTLESS_TLD: lan ? "local" : "localhost",
+    ...(debug ? { HAPPY2_DESKTOP_DEBUG: "1" } : {}),
 };
 if (!lan) delete childEnvironment.PORTLESS_LAN_IP;
-console.log("Happy Desktop development: Electron");
+console.log(`Happy Desktop development: Electron${debug ? " (debug)" : ""}`);
 console.log(`  Portless: ${lan ? "LAN (.local)" : "loopback (.localhost)"}`);
+if (debug) console.log("  inspector URLs will be printed by Electron");
 
 const portlessArguments = ["run", "--name", "happy-desktop-electron"];
 if (process.env.PORT) portlessArguments.push("--app-port", process.env.PORT);

@@ -68,6 +68,7 @@ import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPrevi
 import { rigBrowserProxyCreate, type RigBrowserProxyHandle } from "./rigBrowserProxy";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import { DesktopDebugController } from "./desktopDebugController";
+import { desktopMainInspectorStart } from "./desktopInspector";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 
@@ -114,6 +115,49 @@ const windowTitle =
     buildIdentity && buildIdentity.label !== "dev"
         ? `${applicationName} — ${buildIdentity.label}`
         : applicationName;
+const desktopDebugEnabled =
+    !app.isPackaged &&
+    (process.env.HAPPY2_DESKTOP_DEBUG === "1" || process.argv.includes("--debug"));
+
+function desktopDebugRendererDefaultPort(): number {
+    if (!buildIdentity || buildIdentity.label === "dev") return 9222;
+    let hash = 2_166_136_261;
+    for (const character of buildIdentity.path) {
+        hash ^= character.codePointAt(0) ?? 0;
+        hash = Math.imul(hash, 16_777_619);
+    }
+    return 10_000 + ((hash >>> 0) % 20_000);
+}
+
+function desktopDebugRendererPortRead(): number {
+    const fallback = desktopDebugRendererDefaultPort();
+    const raw = process.env.HAPPY2_DEBUG_RENDERER_PORT?.trim();
+    if (raw === undefined || raw.length === 0) return fallback;
+    const port = Number(raw);
+    if (Number.isInteger(port) && port >= 1024 && port <= 65_535) return port;
+    console.warn(`[happy debug] Invalid HAPPY2_DEBUG_RENDERER_PORT=${raw}; using ${fallback}.`);
+    return fallback;
+}
+
+const desktopDebugRendererPort = desktopDebugEnabled
+    ? desktopDebugRendererPortRead()
+    : desktopDebugRendererDefaultPort();
+
+function desktopDebugLog(message: string): void {
+    if (desktopDebugEnabled) console.log(`[happy debug] ${message}`);
+}
+
+function desktopDebugError(message: string, error?: unknown): void {
+    if (!desktopDebugEnabled) return;
+    console.error(
+        `[happy debug] ${message}${error === undefined ? "" : `: ${errorMessage(error)}`}`,
+    );
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? (error.stack ?? error.message) : String(error);
+}
+
 function windowBackgroundColor(): string {
     return nativeTheme.shouldUseDarkColors ? "#1e1e1e" : "#f5f5f5";
 }
@@ -134,10 +178,29 @@ const macosWindowChrome = {
 nativeTheme.themeSource = "system";
 app.commandLine.appendSwitch("disable-quic");
 app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
+if (desktopDebugEnabled) {
+    // This branch is unavailable in packaged builds. Chromium's raw CDP server
+    // has no authentication, so even an explicit flag must remain development
+    // tooling bound to loopback.
+    app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+    app.commandLine.appendSwitch("remote-debugging-port", String(desktopDebugRendererPort));
+    try {
+        const mainInspectorUrl = desktopMainInspectorStart();
+        desktopDebugLog(`main inspector: ${mainInspectorUrl}`);
+    } catch (error) {
+        desktopDebugError("could not start the main-process inspector", error);
+    }
+    desktopDebugLog(`renderer CDP: http://127.0.0.1:${desktopDebugRendererPort}`);
+    desktopDebugLog(`renderer targets: http://127.0.0.1:${desktopDebugRendererPort}/json/list`);
+    desktopDebugLog(
+        `attach with Playwright: connectOverCDP("http://127.0.0.1:${desktopDebugRendererPort}")`,
+    );
+}
 
 let runtime: DesktopRuntime;
 let desktopConfigStore: DesktopConfigStore;
-let desktopDebugController: DesktopDebugController;
+let desktopDebugController: DesktopDebugController | undefined;
+let desktopDebugDaemonAttemptedConnectionId: number | undefined;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let rigInstallManager: RigInstallTerminalManager;
 let onboarding: LocalOnboarding;
@@ -174,6 +237,63 @@ function desktopDebugSenderRequire(sender: WebContents): void {
     const presenting = windowLifecycle.get();
     if (!presenting || presenting.webContents !== sender)
         throw new Error("This window cannot control the debugger.");
+}
+
+function desktopDebugRuntimeLog(snapshot: ReturnType<DesktopRuntime["get"]>): void {
+    if (!desktopDebugEnabled) return;
+    switch (snapshot.phase) {
+        case "choosing":
+            desktopDebugLog("runtime phase=choosing");
+            return;
+        case "starting":
+            desktopDebugLog(`runtime phase=starting: ${snapshot.message}`);
+            return;
+        case "installRequired":
+            desktopDebugLog(`runtime phase=installRequired: ${snapshot.message}`);
+            return;
+        case "error":
+            desktopDebugError(`runtime phase=error: ${snapshot.message}`);
+            return;
+        case "ready":
+            desktopDebugLog(
+                `runtime phase=ready mode=${snapshot.mode} connection=${snapshot.connectionId}`,
+            );
+            return;
+        default: {
+            const exhaustive: never = snapshot;
+            return exhaustive;
+        }
+    }
+}
+
+/** Starts the Rig inspector for each fresh local connection in CLI debug mode. */
+function desktopDebugDaemonStartIfReady(snapshot: ReturnType<DesktopRuntime["get"]>): void {
+    const debugController = desktopDebugController;
+    if (
+        !desktopDebugEnabled ||
+        !debugController ||
+        snapshot.phase !== "ready" ||
+        snapshot.mode !== "local"
+    )
+        return;
+    const connectionId = snapshot.connectionId;
+    if (desktopDebugDaemonAttemptedConnectionId === connectionId) return;
+    desktopDebugDaemonAttemptedConnectionId = connectionId;
+    void debugController
+        .start("daemon")
+        .then((debugSnapshot) => {
+            const target = debugSnapshot.daemon;
+            if (target.status === "running" && target.url) {
+                desktopDebugLog(`Rig daemon inspector: ${target.url}`);
+            } else {
+                desktopDebugError(
+                    `Rig daemon inspector did not start (${target.status})${
+                        target.error ? `: ${target.error}` : ""
+                    }`,
+                );
+            }
+        })
+        .catch((error) => desktopDebugError("Rig daemon inspector startup failed", error));
 }
 
 /** The one native folder chooser, shared by the renderer's request and first-run setup. */
@@ -636,6 +756,40 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             webviewTag: true,
         }),
     });
+    if (desktopDebugEnabled) {
+        desktopDebugLog(`renderer window created; loading ${rendererUrl}`);
+        window.webContents.on("dom-ready", () =>
+            desktopDebugLog(`renderer DOM ready: ${window.webContents.getURL()}`),
+        );
+        window.webContents.on("did-finish-load", () =>
+            desktopDebugLog(`renderer finished loading: ${window.webContents.getURL()}`),
+        );
+        window.webContents.on(
+            "did-fail-load",
+            (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+                if (isMainFrame)
+                    desktopDebugError(
+                        `renderer failed to load ${validatedURL} (${errorCode} ${errorDescription})`,
+                    );
+            },
+        );
+        // Renderer output is intentionally mirrored only in explicit local
+        // debug mode; it may contain URLs or other development-only details.
+        window.webContents.on("console-message", (details) =>
+            desktopDebugLog(
+                `renderer console level=${details.level}: ${details.message} (${details.sourceId}:${details.lineNumber})`,
+            ),
+        );
+        window.webContents.on("render-process-gone", (_event, details) =>
+            desktopDebugError(
+                `renderer process exited (${details.reason}, code ${details.exitCode})`,
+            ),
+        );
+        window.webContents.on("unresponsive", () =>
+            desktopDebugError("renderer became unresponsive"),
+        );
+        window.webContents.on("responsive", () => desktopDebugLog("renderer responsive again"));
+    }
     windowTitleHold(window);
     windowGeometryRemember(window);
     window.webContents.setWindowOpenHandler(({ url }) => {
@@ -689,12 +843,17 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
         if (isMainFrame && !isInPlace) cleanup();
     });
     return {
-        load: () =>
-            hostedUrl
+        load: () => {
+            const load = hostedUrl
                 ? window.loadURL(hostedUrl)
                 : developmentUrl
                   ? window.loadURL(developmentUrl)
-                  : window.loadFile(rendererPath),
+                  : window.loadFile(rendererPath);
+            return load.catch((error) => {
+                desktopDebugError("renderer load promise rejected", error);
+                throw error;
+            });
+        },
         window,
     };
 }
@@ -927,7 +1086,7 @@ void app
             join(desktopRoot, "window-state.json"),
         );
         desktopConfigStore = await DesktopConfigStore.create(desktopConfigPath());
-        const connector = localRigConnectorCreate();
+        const connector = localRigConnectorCreate({ debug: desktopDebugLog });
         const rendererOrigin =
             desktopFlavor.kind === "local-web"
                 ? desktopFlavor.rendererOrigin
@@ -945,7 +1104,7 @@ void app
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
             },
         );
-        desktopDebugController = new DesktopDebugController({
+        const debugController = new DesktopDebugController({
             changed: desktopDebugPublish,
             daemon: () => {
                 const snapshot = runtime.get();
@@ -962,6 +1121,20 @@ void app
                 return window && !window.isDestroyed() ? window.webContents : undefined;
             },
         });
+        desktopDebugController = debugController;
+        if (desktopDebugEnabled) {
+            // The main inspector was opened before app readiness so a failure
+            // during runtime initialization is still attachable. This call
+            // records that existing endpoint in the controller as well.
+            void debugController.start("main").then((debugSnapshot) => {
+                if (debugSnapshot.main.status !== "running")
+                    desktopDebugError(
+                        `main inspector state is ${debugSnapshot.main.status}${
+                            debugSnapshot.main.error ? `: ${debugSnapshot.main.error}` : ""
+                        }`,
+                    );
+            });
+        }
         // Notes live in the user's home rather than in this app's private data
         // directory: the Markdown beside each note is meant to be found by an
         // agent working on this machine, and an application-support path is not
@@ -1000,6 +1173,7 @@ void app
             update: (snapshot) => runtime.updateSet(snapshot),
         });
         runtime.subscribe((snapshot) => {
+            desktopDebugRuntimeLog(snapshot);
             if (
                 browserProxyConnectionId !== undefined &&
                 (snapshot.phase !== "ready" ||
@@ -1017,7 +1191,8 @@ void app
                     desktopWindowTarget(snapshot).kind === "local")
             )
                 window.webContents.send(desktopIpc.runtimeChanged, snapshot);
-            desktopDebugController.refresh();
+            debugController.refresh();
+            desktopDebugDaemonStartIfReady(snapshot);
         });
         ipcMain.handle(desktopIpc.runtimeGet, () => runtime.get());
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
@@ -1026,39 +1201,39 @@ void app
         );
         ipcMain.handle(desktopIpc.debugGet, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.get();
+            return debugController.get();
         });
         ipcMain.handle(desktopIpc.debugAllStart, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.startAll();
+            return debugController.startAll();
         });
         ipcMain.handle(desktopIpc.debugAllStop, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.stopAll();
+            return debugController.stopAll();
         });
         ipcMain.handle(desktopIpc.debugMainInspectorStart, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.start("main");
+            return debugController.start("main");
         });
         ipcMain.handle(desktopIpc.debugMainInspectorStop, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.stop("main");
+            return debugController.stop("main");
         });
         ipcMain.handle(desktopIpc.debugRendererInspectorStart, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.start("renderer");
+            return debugController.start("renderer");
         });
         ipcMain.handle(desktopIpc.debugRendererInspectorStop, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.stop("renderer");
+            return debugController.stop("renderer");
         });
         ipcMain.handle(desktopIpc.debugDaemonInspectorStart, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.start("daemon");
+            return debugController.start("daemon");
         });
         ipcMain.handle(desktopIpc.debugDaemonInspectorStop, (event) => {
             desktopDebugSenderRequire(event.sender);
-            return desktopDebugController.stop("daemon");
+            return debugController.stop("daemon");
         });
         ipcMain.handle(desktopIpc.browserProxyApply, (_event, target: unknown) =>
             browserProxyApply(desktopBrowserProxyTargetValidate(target)),
@@ -1242,6 +1417,8 @@ void app
         }));
         windowSynchronize(runtime.get());
         applicationMenuInstall(runtime.get());
+        desktopDebugRuntimeLog(runtime.get());
+        desktopDebugDaemonStartIfReady(runtime.get());
         const updateCheck = () => void updater.check().catch(() => undefined);
         const updateCheckInterval = setInterval(updateCheck, updateCheckIntervalMs);
         updateCheckInterval.unref();
