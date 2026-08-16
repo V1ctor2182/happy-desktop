@@ -7,6 +7,8 @@ export interface SplashCoverProps {
      * the change to true the mark fades away over what is underneath.
      */
     readonly ready: boolean;
+    /** Optional startup detail shown below the mark while the cover remains. */
+    readonly note?: string;
     readonly children: ReactNode;
 }
 
@@ -48,7 +50,7 @@ export function SplashCover(props: SplashCoverProps) {
                     if (props.ready) setFinished(true);
                 }}
             >
-                <SplashScreen />
+                <SplashScreen note={props.note} />
             </div>
         </div>
     );

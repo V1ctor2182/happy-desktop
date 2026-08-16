@@ -56,9 +56,25 @@ export function SplashCoverPage() {
             </Specimen>
 
             <Specimen
+                detail="Waiting: a concise reason may sit below the mark without moving it"
+                label="Connecting"
+                number="02"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SplashCover note="Connecting to your local Rig daemon…" ready={false}>
+                            <Underneath />
+                        </SplashCover>
+                    </div>
+                    <DimensionRule label="Note gap 16 · mark remains optically centered" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Ready: the veil fades over 260ms and removes itself on animationend"
                 label="Dissolving"
-                number="02"
+                number="03"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>

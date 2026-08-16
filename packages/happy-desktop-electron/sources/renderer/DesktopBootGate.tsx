@@ -56,6 +56,11 @@ function bootReady(
     return rigs.every(rigSettled);
 }
 
+/** Keep the one allowed initial cover honest about what the window is waiting for. */
+function bootNote(runtime: DesktopRuntimeSnapshot | undefined): string | undefined {
+    return runtime?.phase === "starting" ? runtime.message : undefined;
+}
+
 /**
  * Holds the window on the Happy mark for the whole run-up to a mounted
  * workspace, then dissolves the mark off it.
@@ -96,5 +101,9 @@ export function DesktopBootGate(props: {
     if (booted) return <>{props.children}</>;
     const ready = bootReady(runtime, directory.rigs, setup.onboarding !== undefined);
     if (ready) booted = true;
-    return <SplashCover ready={ready}>{props.children}</SplashCover>;
+    return (
+        <SplashCover note={bootNote(runtime)} ready={ready}>
+            {props.children}
+        </SplashCover>
+    );
 }

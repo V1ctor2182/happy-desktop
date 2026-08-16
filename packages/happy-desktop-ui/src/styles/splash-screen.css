@@ -51,7 +51,9 @@
     transform: translateX(-50%);
     width: max-content;
     max-width: 280px;
+    overflow: hidden;
     text-align: center;
+    text-overflow: ellipsis;
     color: var(--text-secondary);
     font-size: 13px;
     white-space: nowrap;
