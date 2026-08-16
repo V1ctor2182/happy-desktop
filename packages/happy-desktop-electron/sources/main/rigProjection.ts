@@ -452,7 +452,11 @@ export function rigSessionEventProject(
                 ...(event.data.effort ? { effort: event.data.effort as RigThinkingLevel } : {}),
             };
         case "service_tier_changed":
-            return { ...base, type: "service_tier_changed", serviceTier: event.data.serviceTier };
+            return {
+                ...base,
+                type: "service_tier_changed",
+                serviceTier: event.data.serviceTier ?? null,
+            };
         case "permission_mode_changed":
             return {
                 ...base,
