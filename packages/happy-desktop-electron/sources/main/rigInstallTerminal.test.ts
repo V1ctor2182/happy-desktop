@@ -16,9 +16,10 @@ describe("confirmed Rig installation terminal", () => {
         const connector: LocalRigConnector = {
             connect: vi.fn(async () => ({
                 client: {} as RigDaemonClient,
-                command: "/usr/local/bin/rig",
-                environment: { PATH: "/usr/local/bin:/usr/bin" },
                 version: "0.0.45",
+                rigInstallationInspect: async () => {
+                    throw new Error("This fixture does not inspect the local Rig installation.");
+                },
                 close: vi.fn(),
             })),
         };
@@ -116,9 +117,10 @@ describe("confirmed Rig installation terminal", () => {
         manager.closeOwner(9);
         connectionResolve({
             client: {} as RigDaemonClient,
-            command: "/usr/local/bin/rig",
-            environment: {},
             version: "0.0.45",
+            rigInstallationInspect: async () => {
+                throw new Error("This fixture does not inspect the local Rig installation.");
+            },
             close: connectionClose,
         });
         await vi.waitFor(() => expect(connectionClose).toHaveBeenCalledOnce());

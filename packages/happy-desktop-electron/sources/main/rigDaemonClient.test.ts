@@ -11,9 +11,21 @@ import {
 
 describe("rigDaemonPathsResolve", () => {
     it("matches Rig's default and environment-overridden daemon paths", () => {
+        const emptyEnvironmentTemporaryDirectory =
+            process.platform === "win32" ? join("C:\\Windows", "temp") : "/tmp";
         expect(rigDaemonPathsResolve({}, 42)).toEqual({
-            socketPath: join(tmpdir(), "rig-42", "server.sock"),
-            tokenPath: join(tmpdir(), "rig-42", "token"),
+            socketPath: join(emptyEnvironmentTemporaryDirectory, "rig-42", "server.sock"),
+            tokenPath: join(emptyEnvironmentTemporaryDirectory, "rig-42", "token"),
+        });
+        const shellTemporaryDirectory =
+            process.platform === "win32" ? "C:\\shell tmp" : "/private/shell tmp";
+        const shellEnvironment =
+            process.platform === "win32"
+                ? { TEMP: `${shellTemporaryDirectory}\\` }
+                : { TMPDIR: `${shellTemporaryDirectory}/` };
+        expect(rigDaemonPathsResolve(shellEnvironment, 42)).toEqual({
+            socketPath: join(shellTemporaryDirectory, "rig-42", "server.sock"),
+            tokenPath: join(shellTemporaryDirectory, "rig-42", "token"),
         });
         expect(
             rigDaemonPathsResolve(

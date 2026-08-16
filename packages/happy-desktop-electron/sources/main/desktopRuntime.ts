@@ -20,7 +20,6 @@ import {
     desktopTopologyTarget,
 } from "./runtimeValidation";
 import {
-    localRigOnboardingInspect,
     localRigConnectorCreate,
     RigCommandMissingError,
     type LocalRigConnection,
@@ -195,7 +194,7 @@ export class DesktopRuntime implements AsyncDisposable {
         const connection = this.localConnectionRequire(expectedConnectionId);
         const state = await resolveRigOnboarding({
             endpoint,
-            inspectLocalRig: (signal) => localRigOnboardingInspect(connection, signal),
+            inspectLocalRig: (signal) => connection.rigInstallationInspect(signal),
             token: "happy2-local-capability",
         });
         if (

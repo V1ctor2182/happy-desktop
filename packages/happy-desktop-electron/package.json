@@ -37,13 +37,13 @@
     },
     "dependencies": {
         "@lydell/node-pty": "1.2.0-beta.12",
+        "@slopus/rig": "0.2.0",
         "electron-updater": "^6.8.9",
         "ws": "^8.21.1",
         "yjs": "^13.6.31"
     },
     "devDependencies": {
         "@slopus/ghostty-web": "0.1.0",
-        "@slopus/rig": "0.2.0",
         "@slopus/rig-connect": "0.1.16",
         "@tailwindcss/vite": "^4.3.2",
         "@tanstack/react-router": "^1.170.18",
@@ -73,14 +73,9 @@
         "appId": "com.slopus.happy",
         "productName": "Happy",
         "asar": true,
+        "npmRebuild": false,
         "asarUnpack": [
-            "node_modules/@libsql/**/*",
-            "node_modules/@img/**/*",
-            "node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**/*",
-            "node_modules/@lydell/node-pty-darwin-*/**/*",
-            "node_modules/@vscode/ripgrep/**/*",
-            "node_modules/sharp/**/*",
-            "node_modules/**/*.node"
+            "node_modules/**/*"
         ],
         "directories": {
             "buildResources": "build",

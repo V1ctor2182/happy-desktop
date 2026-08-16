@@ -58,9 +58,10 @@ function healthReady(version: string) {
 function connectionWith(health: () => Promise<unknown>, close = vi.fn()): LocalRigConnection {
     return {
         client: { health } as unknown as RigDaemonClient,
-        command: "/usr/local/bin/rig",
-        environment: { PATH: "/usr/bin" },
         version: "0.0.55",
+        rigInstallationInspect: async () => {
+            throw new Error("This fixture does not inspect the local Rig installation.");
+        },
         close,
     };
 }

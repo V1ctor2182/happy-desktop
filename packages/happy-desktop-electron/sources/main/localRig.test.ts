@@ -1,13 +1,13 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RigDaemonClient } from "./rigDaemonClient";
 import {
     discoveryOutputParse,
     localRigConnectorCreate,
+    rigExecutableFind,
     rigLoginEnvironmentDiscover,
-    RigCommandMissingError,
     rigVersionParse,
     type RigProcessHost,
 } from "./localRig";
@@ -19,11 +19,142 @@ afterEach(async () => {
     );
 });
 
+async function writeExecutable(executablePath: string): Promise<string> {
+    await mkdir(dirname(executablePath), { recursive: true });
+    await writeFile(executablePath, "#!/bin/sh\n", { mode: 0o755 });
+    return executablePath;
+}
+
+describe("Rig executable selection", () => {
+    it("prefers an executable login-shell global over the bundled dependency", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-rig-selection-"));
+        directories.push(root);
+        const bundledExecutable = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+        const globalExecutable = await writeExecutable(join(root, "global bin", "rig"));
+
+        await expect(
+            rigExecutableFind(
+                globalExecutable,
+                { PATH: `${dirname(globalExecutable)}:${dirname(bundledExecutable)}` },
+                () => bundledExecutable,
+            ),
+        ).resolves.toEqual({
+            executablePath: globalExecutable,
+            source: "global",
+        });
+    });
+
+    it("uses the bundled dependency when the login shell has no global Rig", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-rig-selection-"));
+        directories.push(root);
+        const bundledExecutable = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+        const happyShim = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", ".bin", "rig"),
+        );
+
+        await expect(
+            rigExecutableFind(happyShim, { PATH: dirname(happyShim) }, () => bundledExecutable),
+        ).resolves.toEqual({
+            executablePath: bundledExecutable,
+            source: "bundled",
+        });
+    });
+
+    it("skips a package shim, including a symlinked shim directory, and finds global Rig later", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-rig-selection-"));
+        directories.push(root);
+        const bundledExecutable = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+        const dependencyDirectory = join(root, "Happy Desktop", "node_modules", ".bin");
+        const happyShim = await writeExecutable(join(dependencyDirectory, "rig"));
+        const linkedDependencyDirectory = join(root, "linked package bin");
+        await symlink(dependencyDirectory, linkedDependencyDirectory, "dir");
+        const apparentShim = join(linkedDependencyDirectory, "rig");
+        const globalExecutable = await writeExecutable(join(root, "global bin", "rig"));
+
+        await expect(
+            rigExecutableFind(
+                apparentShim,
+                {
+                    PATH: `${linkedDependencyDirectory}:${dirname(globalExecutable)}`,
+                },
+                () => bundledExecutable,
+            ),
+        ).resolves.toEqual({
+            executablePath: globalExecutable,
+            source: "global",
+        });
+        expect(happyShim).not.toBe(globalExecutable);
+    });
+
+    it("keeps a global symlink when its installation path contains spaces", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-rig-selection-"));
+        directories.push(root);
+        const bundledExecutable = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+        const globalTarget = await writeExecutable(
+            join(
+                root,
+                "global installation",
+                "lib",
+                "node_modules",
+                "@slopus",
+                "rig",
+                "dist",
+                "main.js",
+            ),
+        );
+        const apparentGlobal = join(root, "global bin with spaces", "rig");
+        await mkdir(dirname(apparentGlobal), { recursive: true });
+        await symlink(globalTarget, apparentGlobal);
+
+        await expect(
+            rigExecutableFind(
+                apparentGlobal,
+                { PATH: `${dirname(apparentGlobal)}:${dirname(bundledExecutable)}` },
+                () => bundledExecutable,
+            ),
+        ).resolves.toEqual({
+            executablePath: apparentGlobal,
+            source: "global",
+        });
+    });
+
+    it("accepts a global node_modules/.bin shim outside Happy's dependency tree", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-rig-selection-"));
+        directories.push(root);
+        const bundledExecutable = await writeExecutable(
+            join(root, "Happy Desktop", "node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+        const globalShim = await writeExecutable(
+            join(root, "yarn global", "node_modules", ".bin", "rig"),
+        );
+
+        await expect(
+            rigExecutableFind(globalShim, { PATH: dirname(globalShim) }, () => bundledExecutable),
+        ).resolves.toEqual({
+            executablePath: globalShim,
+            source: "global",
+        });
+    });
+});
+
 describe("normal Rig discovery", () => {
     it("uses the login shell machine record without running the discovered executable", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-local-rig-"));
+        directories.push(root);
+        const executablePath = await writeExecutable(join(root, "Volta installation", "rig"));
         const host: RigProcessHost = {
             execFile: vi.fn().mockResolvedValue({
-                stdout: "shell banner\n__HAPPY2_RIG_PATH__=/opt/volta/bin/rig\0PATH=/opt/volta/bin:/usr/bin\0VOLTA_HOME=/opt/volta\0",
+                stdout: `shell banner\n__HAPPY2_RIG_PATH__=${executablePath}\0PATH=${dirname(
+                    executablePath,
+                )}:/usr/bin\0VOLTA_HOME=/opt/volta\0`,
                 stderr: "",
             }),
         };
@@ -35,9 +166,10 @@ describe("normal Rig discovery", () => {
         );
 
         expect(result).toEqual({
-            command: "/opt/volta/bin/rig",
+            executablePath,
+            executableSource: "global",
             environment: {
-                PATH: "/opt/volta/bin:/usr/bin",
+                PATH: `${dirname(executablePath)}:/usr/bin`,
                 VOLTA_HOME: "/opt/volta",
             },
             shell: "/bin/zsh",
@@ -46,8 +178,8 @@ describe("normal Rig discovery", () => {
         // what the shell resolved. Running the discovered command belongs to the
         // install verifier, which is a separate decision about a separate moment.
         expect(host.execFile).toHaveBeenCalledTimes(1);
-        const [executable, arguments_] = vi.mocked(host.execFile).mock.calls[0]!;
-        expect(executable).toBe("/bin/zsh");
+        const [program, arguments_] = vi.mocked(host.execFile).mock.calls[0]!;
+        expect(program).toBe("/bin/zsh");
         expect(arguments_.slice(0, 3)).toEqual(["-l", "-i", "-c"]);
     });
 
@@ -64,9 +196,61 @@ describe("normal Rig discovery", () => {
                 stderr: "",
             })),
         };
-        await expect(
-            rigLoginEnvironmentDiscover(host, { SHELL: "/bin/zsh" }, "/bin/zsh"),
-        ).rejects.toBeInstanceOf(RigCommandMissingError);
+        const result = await rigLoginEnvironmentDiscover(host, { SHELL: "/bin/zsh" }, "/bin/zsh");
+        expect(result.executableSource).toBe("bundled");
+        expect(result.executablePath).toContain(
+            join("node_modules", "@slopus", "rig", "dist", "main.js"),
+        );
+    });
+
+    it("attaches to a running shared daemon before discovering or starting Rig", async () => {
+        const root = await mkdtemp(join(tmpdir(), "happy2-local-rig-"));
+        directories.push(root);
+        const tokenPath = join(root, "token");
+        const socketPath = join(root, "server.sock");
+        await writeFile(tokenPath, "existing-token\n");
+        const host: RigProcessHost = {
+            execFile: vi.fn(async () => {
+                throw new Error("A running daemon must not trigger command discovery.");
+            }),
+        };
+        const health = vi.fn().mockResolvedValue({
+            status: "ready",
+            healthy: true,
+            ready: true,
+            identity: { version: "0.2.19" },
+            catalog: {
+                defaultModelId: "model",
+                defaultProviderId: "provider",
+                models: [],
+                providers: [],
+            },
+            durableGlobalEventQueue: true,
+        });
+        const clientCreate = vi.fn(() => ({ health }) as unknown as RigDaemonClient);
+        const wait = vi.fn(async () => undefined);
+        const connector = localRigConnectorCreate({
+            host,
+            environment: {
+                RIG_SERVER_SOCKET_PATH: socketPath,
+                RIG_SERVER_TOKEN_PATH: tokenPath,
+                SHELL: "/bin/zsh",
+            },
+            configuredShell: "/bin/zsh",
+            clientCreate,
+            wait,
+        });
+
+        const connection = await connector.connect();
+
+        expect(connection.version).toBe("0.2.19");
+        expect(clientCreate).toHaveBeenCalledWith({
+            socketPath,
+            token: "existing-token",
+        });
+        expect(health).toHaveBeenCalledOnce();
+        expect(host.execFile).not.toHaveBeenCalled();
+        expect(wait).not.toHaveBeenCalled();
     });
 
     it("starts only an absent daemon and reports the running daemon's version", async () => {
@@ -74,19 +258,20 @@ describe("normal Rig discovery", () => {
         directories.push(root);
         const tokenPath = join(root, "token");
         const socketPath = join(root, "server.sock");
+        const executablePath = await writeExecutable(join(root, "global bin", "rig"));
         const environment = {
-            PATH: "/usr/local/bin:/usr/bin",
+            PATH: `${dirname(executablePath)}:/usr/bin`,
             RIG_SERVER_TOKEN_PATH: tokenPath,
             RIG_SERVER_SOCKET_PATH: socketPath,
         };
         const host: RigProcessHost = {
-            execFile: vi.fn(async (executable) => {
-                if (executable === "/bin/zsh")
+            execFile: vi.fn(async (program) => {
+                if (program === "/bin/zsh")
                     return {
-                        stdout: `__HAPPY2_RIG_PATH__=/usr/local/bin/rig\0${Object.entries(
+                        stdout: `__HAPPY2_RIG_PATH__=${executablePath}\0${Object.entries(
                             environment,
                         )
-                            .map(([key, value]) => `${key}=${value}\0`)
+                            .map(([key, environmentValue]) => `${key}=${environmentValue}\0`)
                             .join("")}`,
                         stderr: "",
                     };
@@ -118,7 +303,7 @@ describe("normal Rig discovery", () => {
         const connection = await connector.connect();
         expect(connection.version).toBe("0.0.45");
         connection.close();
-        expect(host.execFile).toHaveBeenCalledWith("/usr/local/bin/rig", ["daemon", "start"], {
+        expect(host.execFile).toHaveBeenCalledWith(executablePath, ["daemon", "start"], {
             env: environment,
         });
 
@@ -140,8 +325,8 @@ describe("normal Rig discovery", () => {
             vi
                 .mocked(host.execFile)
                 .mock.calls.filter(
-                    ([executable, arguments_]) =>
-                        executable === "/usr/local/bin/rig" && arguments_[0] === "daemon",
+                    ([program, arguments_]) =>
+                        program === executablePath && arguments_[0] === "daemon",
                 ),
         ).toHaveLength(2);
 

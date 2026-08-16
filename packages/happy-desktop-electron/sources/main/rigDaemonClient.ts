@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
-import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, parse, resolve } from "node:path";
 import type { Duplex } from "node:stream";
 import { WebSocket, createWebSocketStream } from "ws";
 import type {
@@ -1145,11 +1144,30 @@ export function rigDaemonPathsResolve(
         ? isAbsolute(configuredDirectory)
             ? configuredDirectory
             : resolve(configuredDirectory)
-        : join(tmpdir(), `rig-${uid}`);
+        : join(nodeTemporaryDirectoryResolve(environment), `rig-${uid}`);
     return {
         socketPath: environment.RIG_SERVER_SOCKET_PATH?.trim() || join(directory, "server.sock"),
         tokenPath: environment.RIG_SERVER_TOKEN_PATH?.trim() || join(directory, "token"),
     };
+}
+
+/**
+ * Reproduces `node:os.tmpdir()` for a process launched with this environment.
+ * `os.tmpdir()` itself reads this process's environment, which is wrong while
+ * Happy is predicting where a child started with its login-shell environment
+ * will create the shared daemon.
+ */
+function nodeTemporaryDirectoryResolve(environment: NodeJS.ProcessEnv): string {
+    const configuredDirectory =
+        process.platform === "win32"
+            ? environment.TEMP ||
+              environment.TMP ||
+              join(environment.SystemRoot || environment.windir || "C:\\Windows", "temp")
+            : environment.TMPDIR || environment.TMP || environment.TEMP || "/tmp";
+    return configuredDirectory.length > parse(configuredDirectory).root.length &&
+        /[/\\]$/u.test(configuredDirectory)
+        ? configuredDirectory.slice(0, -1)
+        : configuredDirectory;
 }
 
 export async function rigDaemonTokenRead(tokenPath: string): Promise<string | undefined> {
