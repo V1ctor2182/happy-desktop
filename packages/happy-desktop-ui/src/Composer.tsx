@@ -357,7 +357,6 @@ export type ComposerProps = {
 };
 const LINE_HEIGHT = 22;
 const MIN_LINES = 1;
-const MAX_LINES = 8;
 
 /**
  * How far an edge fade may reach into the draft. It is a ceiling, never a fixed
@@ -572,10 +571,9 @@ export function Composer(props: ComposerProps) {
      * barely cut one is left alone, which is what keeps whole lines, selections,
      * and the caret out of the fades entirely.
      *
-     * The measurement is written straight to the wrapper because it comes from
-     * the committed textarea, like the auto-grown height above: only the browser
-     * knows where the viewport sits, and a scroll gesture must not re-render the
-     * composer on every frame to say so.
+     * The measurement is written straight to the wrapper because only the
+     * committed textarea knows where its own viewport sits, and a scroll gesture
+     * must not re-render the composer on every frame to say so.
      */
     const draftFadeSync = (el: HTMLTextAreaElement) => {
         const wrapper = inputEl.current;
@@ -592,20 +590,6 @@ export function Composer(props: ComposerProps) {
         wrapper.style.setProperty("--happy2-composer-fade-top", `${top}px`);
         wrapper.style.setProperty("--happy2-composer-fade-bottom", `${bottom}px`);
     };
-    /* Start as one line, then grow up to eight lines for longer drafts. */
-    // eslint-disable-next-line happy2-react/no-layout-effect -- textarea auto-growth must read the committed scrollHeight and write its live DOM height before the browser paints the new draft
-    useLayoutEffect(() => {
-        void props.value;
-        const el = textareaEl.current;
-        if (!el) return;
-        const minHeight = LINE_HEIGHT * MIN_LINES;
-        const maxHeight = LINE_HEIGHT * MAX_LINES;
-        el.style.height = `${minHeight}px`;
-        el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
-        // The new height is what decides what the scrollport cuts, so the fades
-        // are settled in the same pass that resized the control.
-        draftFadeSync(el);
-    }, [props.value]);
     const closeMention = () => {
         setMentionStart(null);
         setMentionQuery("");
@@ -1064,27 +1048,29 @@ export function Composer(props: ComposerProps) {
                     data-happy-desktop-ui="composer-input"
                     ref={inputEl}
                 >
-                    <textarea
-                        className="happy2-composer__textarea"
-                        data-happy-desktop-ui="composer-textarea"
-                        disabled={props.disabled}
-                        readOnly={props.pending}
-                        onBlur={() => {
-                            rememberSelection();
-                            props.onFocusChange?.(false);
-                        }}
-                        onClick={rememberSelection}
-                        onFocus={() => props.onFocusChange?.(true)}
-                        onInput={onInput}
-                        onKeyDown={onKeyDown}
-                        onPaste={onPaste}
-                        onScroll={(event) => draftFadeSync(event.currentTarget)}
-                        onSelect={rememberSelection}
-                        placeholder={props.placeholder}
-                        ref={textareaEl}
-                        rows={MIN_LINES}
-                        value={props.value}
-                    />
+                    <div className="happy2-composer__textarea-size" data-value={props.value}>
+                        <textarea
+                            className="happy2-composer__textarea"
+                            data-happy-desktop-ui="composer-textarea"
+                            disabled={props.disabled}
+                            readOnly={props.pending}
+                            onBlur={() => {
+                                rememberSelection();
+                                props.onFocusChange?.(false);
+                            }}
+                            onClick={rememberSelection}
+                            onFocus={() => props.onFocusChange?.(true)}
+                            onInput={onInput}
+                            onKeyDown={onKeyDown}
+                            onPaste={onPaste}
+                            onScroll={(event) => draftFadeSync(event.currentTarget)}
+                            onSelect={rememberSelection}
+                            placeholder={props.placeholder}
+                            ref={textareaEl}
+                            rows={MIN_LINES}
+                            value={props.value}
+                        />
+                    </div>
                     {/* Decorative edge fades: the draft dissolves into the card
                         where it runs past the visible lines, so a clipped line
                         is never cut on a hard edge. */}
