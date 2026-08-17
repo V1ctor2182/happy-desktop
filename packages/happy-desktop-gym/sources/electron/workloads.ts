@@ -189,6 +189,44 @@ interface TranscriptViewportMeasurement {
     readonly virtualized: boolean;
 }
 
+interface ScrollStabilityFrame {
+    readonly anchorOffset?: number;
+    readonly anchorIndex?: number;
+    readonly bottomDistance: number;
+    readonly clientHeight: number;
+    readonly clientWidth: number;
+    readonly elapsedMs: number;
+    readonly firstRowBottom?: number;
+    readonly firstRowTop?: number;
+    readonly panelWidth?: number;
+    readonly rowOverlapCount: number;
+    readonly scrollHeight: number;
+    readonly scrollTop: number;
+}
+
+interface ScrollStabilityPhase {
+    readonly action: "composer-grow" | "composer-shrink" | "panel-resize";
+    readonly anchorIndex?: number;
+    readonly anchorOffset?: number;
+    readonly anchorMode: "following" | "parked";
+    readonly anchorBreakCount: number;
+    readonly frames: readonly ScrollStabilityFrame[];
+    readonly layoutChangeObserved: boolean;
+    readonly maxBottomDistance: number;
+    readonly maxRowOverlapCount: number;
+    readonly nonMonotonicAnchorCorrections: number;
+    readonly stable: boolean;
+}
+
+interface ScrollStabilityMeasurement {
+    readonly composerGrowth: ScrollStabilityPhase;
+    readonly composerParkedGrowth: ScrollStabilityPhase;
+    readonly composerParkedShrink: ScrollStabilityPhase;
+    readonly composerShrink: ScrollStabilityPhase;
+    readonly panelResize: ScrollStabilityPhase;
+    readonly stable: boolean;
+}
+
 export async function electronWorkloadsRun(options: {
     readonly paths: GymRunPaths;
     readonly manifest: GymManifest;
@@ -1906,6 +1944,369 @@ async function transcriptScrollSequence(
     return interactions;
 }
 
+async function scrollListToFraction(page: Page, fraction: number): Promise<void> {
+    await page.evaluate(
+        (requestedFraction) =>
+            new Promise<void>((resolve, reject) => {
+                const started = performance.now();
+                let consecutiveFrames = 0;
+                const browserWindow = window as Window & {
+                    __happyDesktopGymSettleScrollFraction?: () => void;
+                };
+                browserWindow.__happyDesktopGymSettleScrollFraction = () => {
+                    const list = document.querySelector<HTMLElement>(
+                        '[data-happy-desktop-ui="message-list"]',
+                    );
+                    if (!list) {
+                        delete browserWindow.__happyDesktopGymSettleScrollFraction;
+                        reject(new Error("The conversation message list did not mount."));
+                        return;
+                    }
+                    const maxScrollTop = Math.max(0, list.scrollHeight - list.clientHeight);
+                    const target = maxScrollTop * requestedFraction;
+                    if (Math.abs(list.scrollTop - target) <= 8) {
+                        consecutiveFrames += 1;
+                    } else {
+                        /*
+                         * This is precondition setup, not measured compensation:
+                         * reapply only while late virtual measurements settle,
+                         * and stop writing before the interaction begins.
+                         */
+                        list.scrollTop = target;
+                        list.dispatchEvent(new Event("scroll"));
+                        consecutiveFrames = 0;
+                    }
+                    if (consecutiveFrames >= 3) {
+                        delete browserWindow.__happyDesktopGymSettleScrollFraction;
+                        resolve();
+                        return;
+                    }
+                    if (performance.now() - started > 10_000) {
+                        delete browserWindow.__happyDesktopGymSettleScrollFraction;
+                        reject(
+                            new Error(
+                                `The conversation did not settle at scroll fraction ${requestedFraction}.`,
+                            ),
+                        );
+                        return;
+                    }
+                    requestAnimationFrame(browserWindow.__happyDesktopGymSettleScrollFraction!);
+                };
+                browserWindow.__happyDesktopGymSettleScrollFraction();
+            }),
+        fraction,
+    );
+}
+
+async function scrollStabilityCapture(
+    page: Page,
+    action: () => Promise<void>,
+): Promise<readonly ScrollStabilityFrame[]> {
+    const framesPromise = page.evaluate(
+        () =>
+            new Promise<ScrollStabilityFrame[]>((resolve) => {
+                const frames: ScrollStabilityFrame[] = [];
+                const started = performance.now();
+                let frameHandle = 0;
+                let timerHandle = 0;
+                let stopped = false;
+                const browserWindow = window as Window & {
+                    __happyDesktopGymSampleScrollStability?: () => void;
+                    __happyDesktopGymStopScrollStability?: () => void;
+                };
+                browserWindow.__happyDesktopGymSampleScrollStability = () => {
+                    /*
+                     * rAF itself runs before the frame's ResizeObserver delivery.
+                     * Measure from the following task so this records geometry
+                     * the browser was able to paint, not an internal pre-layout
+                     * state that TanStack corrects before presentation.
+                     */
+                    timerHandle = window.setTimeout(() => {
+                        if (stopped) return;
+                        const list = document.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="message-list"]',
+                        );
+                        const virtual = document.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="message-list-virtual"]',
+                        );
+                        const panel = document.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="app-shell-panel"]',
+                        );
+                        if (list) {
+                            const listRect = list.getBoundingClientRect();
+                            const rows = virtual
+                                ? [
+                                      ...virtual.querySelectorAll<HTMLElement>(
+                                          ".happy2-message-list__virtual-row[data-index]",
+                                      ),
+                                  ]
+                                      .map((row) => {
+                                          const rect = row.getBoundingClientRect();
+                                          return {
+                                              bottom: rect.bottom,
+                                              index: Number.parseInt(row.dataset.index ?? "", 10),
+                                              top: rect.top,
+                                          };
+                                      })
+                                      .filter(
+                                          (row) =>
+                                              Number.isFinite(row.index) &&
+                                              row.bottom > listRect.top &&
+                                              row.top < listRect.bottom,
+                                      )
+                                      .sort((left, right) => left.top - right.top)
+                                : [];
+                            let rowOverlapCount = 0;
+                            for (let index = 1; index < rows.length; index += 1) {
+                                if (rows[index - 1]!.bottom > rows[index]!.top + 1)
+                                    rowOverlapCount += 1;
+                            }
+                            const first = rows[0];
+                            frames.push({
+                                anchorIndex: first?.index,
+                                anchorOffset:
+                                    first === undefined ? undefined : first.top - listRect.top,
+                                bottomDistance: Math.max(
+                                    0,
+                                    list.scrollHeight - list.scrollTop - list.clientHeight,
+                                ),
+                                clientHeight: list.clientHeight,
+                                clientWidth: list.clientWidth,
+                                elapsedMs: performance.now() - started,
+                                firstRowBottom: first?.bottom,
+                                firstRowTop: first?.top,
+                                panelWidth: panel?.getBoundingClientRect().width,
+                                rowOverlapCount,
+                                scrollHeight: list.scrollHeight,
+                                scrollTop: list.scrollTop,
+                            });
+                        }
+                        if (!stopped)
+                            frameHandle = requestAnimationFrame(
+                                browserWindow.__happyDesktopGymSampleScrollStability!,
+                            );
+                    }, 0);
+                };
+                browserWindow.__happyDesktopGymStopScrollStability = () => {
+                    if (stopped) return;
+                    stopped = true;
+                    cancelAnimationFrame(frameHandle);
+                    clearTimeout(timerHandle);
+                    delete browserWindow.__happyDesktopGymSampleScrollStability;
+                    delete browserWindow.__happyDesktopGymStopScrollStability;
+                    resolve(frames);
+                };
+                frameHandle = requestAnimationFrame(
+                    browserWindow.__happyDesktopGymSampleScrollStability,
+                );
+            }),
+    );
+    try {
+        await action();
+        await page.waitForTimeout(300);
+    } finally {
+        await page.evaluate(() => {
+            const browserWindow = window as Window & {
+                __happyDesktopGymStopScrollStability?: () => void;
+            };
+            browserWindow.__happyDesktopGymStopScrollStability?.();
+        });
+    }
+    return framesPromise;
+}
+
+function scrollStabilityPhaseBuild(
+    action: ScrollStabilityPhase["action"],
+    anchorMode: ScrollStabilityPhase["anchorMode"],
+    frames: readonly ScrollStabilityFrame[],
+): ScrollStabilityPhase {
+    const first = frames[0];
+    const maxBottomDistance = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.bottomDistance),
+        0,
+    );
+    const maxRowOverlapCount = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.rowOverlapCount),
+        0,
+    );
+    let anchorBreakCount = 0;
+    let nonMonotonicAnchorCorrections = 0;
+    if (anchorMode === "following") {
+        let anchorWasBroken = false;
+        for (const frame of frames) {
+            if (frame.bottomDistance > 8) {
+                anchorBreakCount += 1;
+                anchorWasBroken = true;
+            } else if (anchorWasBroken) {
+                nonMonotonicAnchorCorrections += 1;
+                anchorWasBroken = false;
+            }
+        }
+    }
+    const parkedAnchorStable =
+        anchorMode !== "parked" ||
+        (first?.anchorIndex !== undefined &&
+            frames.every(
+                (frame) =>
+                    frame.anchorIndex === first.anchorIndex &&
+                    frame.anchorOffset !== undefined &&
+                    first.anchorOffset !== undefined &&
+                    Math.abs(frame.anchorOffset - first.anchorOffset) <= 2,
+            ));
+    const listWidths = frames.map((frame) => frame.clientWidth);
+    const panelWidths = frames.flatMap((frame) =>
+        frame.panelWidth === undefined ? [] : [frame.panelWidth],
+    );
+    const layoutChangeObserved =
+        action !== "panel-resize" ||
+        (Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
+            panelWidths.length > 0 &&
+            Math.max(...panelWidths) - Math.min(...panelWidths) >= 24);
+    const stable =
+        frames.length >= 2 &&
+        layoutChangeObserved &&
+        maxRowOverlapCount === 0 &&
+        (anchorMode === "following"
+            ? maxBottomDistance <= 8 && nonMonotonicAnchorCorrections === 0
+            : parkedAnchorStable);
+    return {
+        action,
+        anchorIndex: first?.anchorIndex,
+        anchorMode,
+        anchorOffset: first?.anchorOffset,
+        anchorBreakCount,
+        frames,
+        layoutChangeObserved,
+        maxBottomDistance,
+        maxRowOverlapCount,
+        nonMonotonicAnchorCorrections,
+        stable,
+    };
+}
+
+async function scrollStabilityRun(
+    page: Page,
+    mark: (name: string) => Promise<void>,
+): Promise<ScrollStabilityMeasurement> {
+    await page.waitForSelector('[data-happy-desktop-ui="message-list"]', {
+        state: "visible",
+        timeout: 30_000,
+    });
+    await page.waitForSelector('[data-happy-desktop-ui="message-list-virtual"]', {
+        state: "attached",
+        timeout: 30_000,
+    });
+    const showPanel = page.locator('button[aria-label="Show panel"]').first();
+    if (await showPanel.isVisible().catch(() => false)) await showPanel.click();
+    const handle = page.locator(
+        '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="left"]',
+    );
+    await handle.waitFor({ state: "visible", timeout: 30_000 });
+    await scrollListToFraction(page, 1);
+    // Read the committed splitter box immediately before pointer-down. Showing
+    // the panel and scrolling the transcript can both change its layout.
+    const handleBox = await handle.boundingBox();
+    if (handleBox === null) throw new Error("The panel resize handle has no layout box.");
+    const handleX = handleBox.x + handleBox.width / 2;
+    const handleY = handleBox.y + handleBox.height / 2;
+    const panelResize = scrollStabilityPhaseBuild(
+        "panel-resize",
+        "following",
+        await scrollStabilityCapture(page, async () => {
+            await page.mouse.move(handleX, handleY);
+            await page.mouse.down();
+            try {
+                for (const delta of [24, 48, 72, 96, 120, 144, 120, 96]) {
+                    await page.mouse.move(handleX + delta, handleY);
+                    await page.waitForTimeout(16);
+                }
+            } finally {
+                await page.mouse.up();
+            }
+        }),
+    );
+    await mark("scroll-stability-panel-resize");
+
+    const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
+    await composer.waitFor({ state: "visible", timeout: 30_000 });
+    const originalComposerValue = await composer.inputValue();
+    const multilineComposerValue = [
+        "Gym scroll stability line one",
+        "Gym scroll stability line two",
+        "Gym scroll stability line three",
+        "Gym scroll stability line four",
+    ].join("\n");
+    await scrollListToFraction(page, 1);
+    const composerGrowth = scrollStabilityPhaseBuild(
+        "composer-grow",
+        "following",
+        await scrollStabilityCapture(page, async () => {
+            await composer.fill(multilineComposerValue);
+        }),
+    );
+    await mark("scroll-stability-composer-grow");
+    const composerShrink = scrollStabilityPhaseBuild(
+        "composer-shrink",
+        "following",
+        await scrollStabilityCapture(page, async () => {
+            await composer.fill(originalComposerValue);
+        }),
+    );
+    await mark("scroll-stability-composer-shrink");
+
+    await scrollListToFraction(page, 0.5);
+    const composerParkedGrowth = scrollStabilityPhaseBuild(
+        "composer-grow",
+        "parked",
+        await scrollStabilityCapture(page, async () => {
+            await composer.fill(multilineComposerValue);
+        }),
+    );
+    await mark("scroll-stability-parked-grow");
+    const composerParkedShrink = scrollStabilityPhaseBuild(
+        "composer-shrink",
+        "parked",
+        await scrollStabilityCapture(page, async () => {
+            await composer.fill(originalComposerValue);
+        }),
+    );
+    await mark("scroll-stability-parked-shrink");
+    await scrollListToFraction(page, 1);
+    const phases = [
+        panelResize,
+        composerGrowth,
+        composerShrink,
+        composerParkedGrowth,
+        composerParkedShrink,
+    ];
+    const measurement = {
+        composerGrowth,
+        composerParkedGrowth,
+        composerParkedShrink,
+        composerShrink,
+        panelResize,
+        stable: phases.every((phase) => phase.stable),
+    };
+    if (!measurement.stable) {
+        throw new Error(
+            `Transcript scroll stability failed: ${JSON.stringify(
+                phases.map((phase) => ({
+                    action: phase.action,
+                    anchorMode: phase.anchorMode,
+                    anchorBreakCount: phase.anchorBreakCount,
+                    layoutChangeObserved: phase.layoutChangeObserved,
+                    ...(phase.stable ? {} : { frames: phase.frames }),
+                    maxBottomDistance: phase.maxBottomDistance,
+                    maxRowOverlapCount: phase.maxRowOverlapCount,
+                    nonMonotonicAnchorCorrections: phase.nonMonotonicAnchorCorrections,
+                    stable: phase.stable,
+                })),
+            )}`,
+        );
+    }
+    return measurement;
+}
+
 function goldReplayDetails(material: GymGoldReplayMaterial): Record<string, unknown> {
     return {
         durationMs: material.durationMs,
@@ -2141,6 +2542,7 @@ async function mixedReplayRun(
         readonly historyGrowthObserved: boolean;
         readonly initialTranscriptViewport: TranscriptViewportMeasurement;
         readonly longChatScrollInteractions: readonly ScrollInteractionMeasurement[];
+        readonly scrollStability: ScrollStabilityMeasurement;
         readonly sessionSwitches: readonly Record<string, unknown>[];
         readonly streamUiInteractions: readonly Record<string, unknown>[];
     }> => {
@@ -2174,6 +2576,13 @@ async function mixedReplayRun(
                         (interaction.historyScrollHeightBefore ?? Number.POSITIVE_INFINITY)),
         );
         await mark("long-chat-scroll-complete");
+        const scrollStability = await scrollStabilityRun(page, mark);
+        overlapEvent("scroll-stability-complete", {
+            stable: scrollStability.stable,
+            panelResizeFrames: scrollStability.panelResize.frames.length,
+            composerGrowthFrames: scrollStability.composerGrowth.frames.length,
+            composerShrinkFrames: scrollStability.composerShrink.frames.length,
+        });
 
         // Keep this checkout foregrounded while the isolated tool mutates its
         // deterministic file. The Changed-files projection is the UI/event
@@ -2354,6 +2763,7 @@ async function mixedReplayRun(
             highlightSequence,
             initialTranscriptViewport,
             longChatScrollInteractions,
+            scrollStability,
             sessionSwitches,
             streamUiInteractions,
         };
@@ -2435,6 +2845,7 @@ async function mixedReplayRun(
                 ui.initialTranscriptViewport.scrollHeight >
                     ui.initialTranscriptViewport.clientHeight,
         },
+        scrollStability: ui.scrollStability,
         liveToolMutation: {
             changedLinesBeforeTool: baselineLiveFileLines,
             expectedChangedLines,

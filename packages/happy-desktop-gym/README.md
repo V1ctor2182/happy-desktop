@@ -81,6 +81,15 @@ ID. Every stream,
 session switch, scroll, and file interaction has an ISO timestamp and latency,
 alongside per-interaction buffered `PerformanceObserver` long-task observations,
 before/after performance capture, and cache-oriented cold/warm timing evidence.
+The same UI lane also measures transcript scroll stability directly in the
+renderer: it samples message-list scrollTop, bottom distance, the first visible
+virtual row, row rectangles, and client/scroll heights on every animation frame
+while dragging the real left-edge panel splitter and while growing and shrinking
+the multiline composer. Following readers must stay within 8px of the bottom
+without a temporary break-and-recovery correction or overlapping virtual rows;
+parked readers must retain the same visible row and pixel offset during composer
+resizing. The recorded `scrollStability` phases distinguish natural text
+rewrap during panel width changes from a lost scroll anchor.
 Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The
