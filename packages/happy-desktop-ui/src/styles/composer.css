@@ -235,6 +235,7 @@
 }
 
 .happy2-composer__textarea-size {
+    /* eslint-disable-next-line happy2-layout/use-flex-layout -- one-cell stack: the hidden sizing twin and live textarea must share a grid area so growth never collapses the committed control */
     display: grid;
     min-height: 22px;
     max-height: 176px;
