@@ -266,7 +266,7 @@ it("hides and shows the sidebar while keeping the workspace DOM node mounted", a
         "background-color": "rgba(0, 0, 0, 0)",
         "border-top-width": "0px",
     });
-    expect(collapseIcon.bounds()).toMatchObject({ width: 14, height: 14 });
+    expect(collapseIcon.bounds()).toMatchObject({ width: 16, height: 16 });
 
     (collapse.element as HTMLButtonElement).click();
     await view.ready();
@@ -286,7 +286,7 @@ it("hides and shows the sidebar while keeping the workspace DOM node mounted", a
         "background-color": "rgba(0, 0, 0, 0)",
         "border-top-width": "0px",
     });
-    expect(revealIcon.bounds()).toMatchObject({ width: 14, height: 14 });
+    expect(revealIcon.bounds()).toMatchObject({ width: 16, height: 16 });
     expect(view.$('[data-happy-desktop-ui="app-shell-workspace"]').element).toBe(workspaceBefore);
 
     (reveal.element as HTMLButtonElement).click();

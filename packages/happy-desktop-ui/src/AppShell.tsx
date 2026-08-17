@@ -470,7 +470,11 @@ export function AppShell(props: AppShellProps) {
             onClick={() => setSidebarCollapsed(false)}
             type="button"
         >
-            <Icon name="sidebar-expand" size={14} />
+            {/* 16, not the 14 of a bare affordance: this glyph answers the
+                sidebar's own 16px row icons across the divider, and an outline
+                fills only 14 of its 16 box, so a 14 box would set 12.25px of
+                ink beside 14px of ink. */}
+            <Icon name="sidebar-expand" size={16} />
             {shortcutHintsEnabled ? (
                 <KeyCap
                     className="happy2-shortcut-hint--floating"
@@ -585,7 +589,9 @@ export function AppShell(props: AppShellProps) {
                                         onClick={() => setSidebarCollapsed(true)}
                                         type="button"
                                     >
-                                        <Icon name="sidebar-collapse" size={14} />
+                                        {/* Matches the reveal control above; see
+                                            the note there for why 16. */}
+                                        <Icon name="sidebar-collapse" size={16} />
                                         {shortcutHintsEnabled ? (
                                             <KeyCap
                                                 className="happy2-shortcut-hint--floating"
