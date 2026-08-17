@@ -133,7 +133,6 @@ function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording 
     const { recording } = props;
     const [driver] = useState(() => new RigConversationReplayDriver(recording));
     const snapshot = useSyncExternalStore(driver.subscribe, driver.get, driver.get);
-    const [activityOpen, setActivityOpen] = useState(false);
     const [requestSelections, setRequestSelections] = useState<
         ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>
     >(() => new Map());
@@ -220,6 +219,14 @@ function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording 
         snapshot.runStatus === "running" && snapshot.runStartedAt !== undefined
             ? Math.max(0, sourceEpochNow - snapshot.runStartedAt)
             : snapshot.turnElapsedMs;
+    const activeAgents = snapshot.subagents.filter(
+        (subagent) => subagent.status === "queued" || subagent.status === "running",
+    );
+    const activeActivity = {
+        agents: activeAgents.length,
+        terminals: snapshot.backgroundProcesses.length,
+    };
+    const activityTotal = activeActivity.agents + activeActivity.terminals;
     const modelControl = snapshot.menus ? (
         <ComposerModelControl
             {...rigComposerModelControlProps(snapshot.menus, {
@@ -526,18 +533,16 @@ function ToolMotionReplayLab(props: { recording: RigConversationReplayRecording 
                 <ConversationView
                     activityTreatment="focused"
                     agentAuthor={rigAgentAuthor}
-                    composer={composer}
-                    composerAboveControl={
-                        <RigActivityControl
-                            agents={snapshot.subagents.length}
-                            backgroundTerminals={snapshot.backgroundProcesses.length}
-                            hasGoal={snapshot.goal !== undefined}
-                            onClick={() => setActivityOpen((open) => !open)}
-                            open={activityOpen}
-                            placement="above-composer"
-                            tasks={snapshot.tasks.length}
-                        />
+                    activityControl={
+                        activityTotal > 0 ? (
+                            <RigActivityControl
+                                agents={activeActivity.agents}
+                                backgroundTerminals={activeActivity.terminals}
+                                onClick={noop}
+                            />
+                        ) : undefined
                     }
+                    composer={composer}
                     composerControls={modelControl}
                     composerFooterControl={footerControl}
                     composerPlaceholder="Message Happy in “less chaotic tool calls”…"
@@ -626,7 +631,7 @@ export function ToolMotionReplayPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Sanitized exact Rig arrival deltas replayed through rig-connect, the production chat store, and ConversationView. Switch between the five-minute composite and a fully real Sol parent run with three concurrent Sol/Terra subagents and a follow-up. Quiet-window skipping compresses time only; it never drops protocol frames."
+            summary="Sanitized exact Rig arrival deltas replayed through rig-connect, the production chat store, and ConversationView. Active agent/task/terminal counts appear as transcript rows beneath the latest message, never above the composer. Switch between the five-minute composite and a fully real Sol parent run with three concurrent Sol/Terra subagents and a follow-up."
             title="ToolMotionReplay · Gold sessions"
         >
             <ToolMotionReplaySwitcher />

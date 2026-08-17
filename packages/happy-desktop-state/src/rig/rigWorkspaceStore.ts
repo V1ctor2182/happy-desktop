@@ -158,6 +158,10 @@ export interface RigConversationSnapshot {
     readonly goal?: RigGoal;
     readonly subagents: readonly RigSubagentSummary[];
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
+    /** Running terminal ids classified from the live transcript/process projection. */
+    readonly detachedBackgroundProcessIds: ReadonlySet<number>;
+    /** Whether the conversation has activity the panel can show, including settled history. */
+    readonly activityAvailable: boolean;
     readonly showReasoning: boolean;
     /** Finished turns the reader expanded, so their trace entries stay listed. */
     readonly expandedTurnIds: ReadonlySet<string>;
@@ -1443,6 +1447,11 @@ export function rigWorkspaceStoreCreate(
         draft: ComposerSnapshot,
     ): RigConversationSnapshot => {
         const models = client.models.get();
+        const activityAvailable =
+            chat.goal !== undefined ||
+            chat.tasks.length > 0 ||
+            chat.subagents.length > 0 ||
+            chat.detachedBackgroundProcessIds.size > 0;
         return {
             conversationId: chat.sessionId,
             ready: chat.ready,
@@ -1467,6 +1476,8 @@ export function rigWorkspaceStoreCreate(
             ...(chat.goal ? { goal: chat.goal } : {}),
             subagents: chat.subagents,
             backgroundProcesses: chat.backgroundProcesses,
+            detachedBackgroundProcessIds: chat.detachedBackgroundProcessIds,
+            activityAvailable,
             showReasoning: chat.showReasoning,
             expandedTurnIds: chat.expandedTurnIds,
             usagePanelOpen: chat.usagePanelOpen,
@@ -2392,7 +2403,7 @@ export function rigWorkspaceStoreCreate(
                 return;
             case "usage":
                 store.usagePanelOpen();
-                panel.activityClose();
+                panel.activityHide();
                 return;
             case "tasks":
             case "agents":
@@ -4367,7 +4378,7 @@ export function rigWorkspaceStoreCreate(
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => {
             chatStore?.usagePanelOpen();
-            panel.activityClose();
+            panel.activityHide();
         },
         usagePanelClose: () => chatStore?.usagePanelClose(),
         activityPanelOpen: () => {
@@ -4792,6 +4803,7 @@ const NO_SELECTIONS: RigChatSnapshot["requestSelections"] = new Map();
 const NO_TASKS: readonly RigTask[] = [];
 const NO_SUBAGENTS: readonly RigSubagentSummary[] = [];
 const NO_PROCESSES: readonly RigBackgroundProcess[] = [];
+const NO_PROCESS_IDS: ReadonlySet<number> = new Set();
 const NO_TURNS: ReadonlySet<string> = new Set();
 
 /**
@@ -4825,6 +4837,8 @@ function conversationAcquiring(
         tasks: NO_TASKS,
         subagents: NO_SUBAGENTS,
         backgroundProcesses: NO_PROCESSES,
+        detachedBackgroundProcessIds: NO_PROCESS_IDS,
+        activityAvailable: false,
         showReasoning: false,
         expandedTurnIds: NO_TURNS,
         usagePanelOpen: false,

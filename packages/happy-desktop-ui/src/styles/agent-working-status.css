@@ -40,6 +40,11 @@
     pointer-events: none;
 }
 
+.happy2-agent-working-status:not([data-active]) {
+    height: 0;
+    min-height: 0;
+}
+
 .happy2-agent-working-status[data-active] {
     visibility: visible;
     opacity: 1;
@@ -114,6 +119,11 @@
 .happy2-chat-turn-status.happy2-agent-working-status,
 .happy2-conversation-turn-status.happy2-agent-working-status {
     margin-top: 4px;
+}
+
+.happy2-chat-turn-status.happy2-agent-working-status:not([data-active]),
+.happy2-conversation-turn-status.happy2-agent-working-status:not([data-active]) {
+    margin-top: 0;
 }
 
 /* When the footer itself opens the agent turn, Message already owns the same

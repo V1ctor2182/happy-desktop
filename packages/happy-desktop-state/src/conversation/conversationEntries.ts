@@ -400,12 +400,20 @@ function presentationEqual(
             })
         );
     if (left.type === "execCommand" && right.type === "execCommand")
-        return left.command === right.command && left.output === right.output;
+        return (
+            left.command === right.command &&
+            left.output === right.output &&
+            left.backgroundProcessId === right.backgroundProcessId
+        );
     if (
         left.type === "backgroundTerminalInteraction" &&
         right.type === "backgroundTerminalInteraction"
     )
-        return left.command === right.command && left.input === right.input;
+        return (
+            left.command === right.command &&
+            left.input === right.input &&
+            left.backgroundProcessId === right.backgroundProcessId
+        );
     if (left.type === "fileDiff" && right.type === "fileDiff")
         return (
             left.omittedFiles === right.omittedFiles &&

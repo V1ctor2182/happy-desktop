@@ -68,6 +68,45 @@
     padding-top: 8px;
 }
 
+/* The live turn and its external work are one wrapping line. The status takes
+   whatever room it needs and grows into the rest, which carries the activity
+   summary to the far end; when the two stop fitting, the summary wraps whole
+   onto the next line and starts at the left. Nothing measures text. */
+.happy2-conversation__status-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.happy2-conversation__status-line > .happy2-agent-working-status {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+
+/* A settled turn leaves the whole line to the summary, which then reads as an
+   ordinary transcript row rather than something pushed to the right. */
+.happy2-conversation__status-line > .happy2-agent-working-status:not([data-active]) {
+    flex: 0 0 0;
+    width: 0;
+    padding: 0;
+}
+
+.happy2-conversation__activity-entry {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: 0;
+    /* The status carries the running turn's 4px clearance as a margin, so the
+       summary takes the same one and the two texts share a line box. */
+    margin-top: 4px;
+    /* Alone or wrapped, the summary starts on the status clock's column: the
+       30px row inset, the 3px + 7px + 3px braille loader column, and the 6px
+       the clock already sits past it. */
+    padding-left: 49px;
+}
+
 .happy2-conversation
     .happy2-message[data-agent].happy2-conversation__resumed:not([data-own])
     .happy2-message__gutter {
@@ -134,6 +173,14 @@
 .happy2-conversation__loading {
     align-items: center;
     justify-content: center;
+}
+
+.happy2-conversation__activity-fallback {
+    width: 100%;
+    max-width: var(--happy2-chat-measure);
+    margin-right: auto;
+    margin-left: auto;
+    margin-top: 12px;
 }
 
 /*

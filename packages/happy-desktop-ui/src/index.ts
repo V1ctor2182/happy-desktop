@@ -2,6 +2,7 @@ import "./styles.css";
 
 export { happyLogoUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
+export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
@@ -319,7 +320,11 @@ export {
 } from "./RigCreateSessionDialog";
 export { RigProjectCloneDialog, type RigProjectCloneDialogProps } from "./RigProjectCloneDialog";
 export { RigActivityPanel, type RigActivityPanelProps } from "./RigActivityPanel";
-export { RigActivityControl, type RigActivityControlProps } from "./RigActivityControl";
+export {
+    RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT,
+    RigActivityControl,
+    type RigActivityControlProps,
+} from "./RigActivityControl";
 export {
     SearchField,
     type SearchFieldEditableProps,

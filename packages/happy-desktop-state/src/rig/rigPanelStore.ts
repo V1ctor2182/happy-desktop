@@ -67,8 +67,10 @@ export interface RigPanelSnapshot {
      */
     readonly maximized: boolean;
     readonly tabs: readonly RigPanelTabSnapshot[];
-    /** Whether the transient Activity tab is present in the panel strip. */
+    /** Whether the transient Activity tab is selected/open for this conversation. */
     readonly activityViewOpen: boolean;
+    /** Whether the reader dismissed the Activity tab for this conversation. */
+    readonly activityViewDismissed: boolean;
     /**
      * The permanent files view, the transient tool preview, the transient file
      * viewer, or one live tool tab.
@@ -117,6 +119,8 @@ export interface RigPanelStore {
     filesSelect(): void;
     /** Opens or selects the transient Activity tab for the current conversation. */
     activitySelect(): void;
+    /** Hides Activity while another panel is shown without dismissing its tab. */
+    activityHide(): void;
     /** Closes the transient Activity tab and returns to Files when it was selected. */
     activityClose(): void;
     /** Opens or replaces the transient Preview tab with one conversation tool entry. */
@@ -261,6 +265,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     let maximized = false;
     let activeViewId: RigPanelSnapshot["activeViewId"] = "files";
     let activityViewShown = false;
+    let activityViewDismissed = false;
     let previewEntryId: string | undefined;
     let previewConversationId: RigSessionId | undefined;
     let fileViewShown = false;
@@ -268,6 +273,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
     let disposed = false;
     let snapshot: RigPanelSnapshot = {
         activeViewId: "files",
+        activityViewDismissed: false,
         activityViewOpen: false,
         fileViewOpen: false,
         maximized: false,
@@ -279,6 +285,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         const visible = tabs.filter((tab) => tab.groupId === groupId);
         return {
             activeViewId,
+            activityViewDismissed,
             activityViewOpen: activityViewShown,
             fileViewOpen: fileViewShown,
             maximized,
@@ -311,6 +318,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             next.open === snapshot.open &&
             next.maximized === snapshot.maximized &&
             next.activeViewId === snapshot.activeViewId &&
+            next.activityViewDismissed === snapshot.activityViewDismissed &&
             next.activityViewOpen === snapshot.activityViewOpen &&
             next.previewEntryId === snapshot.previewEntryId &&
             next.fileViewOpen === snapshot.fileViewOpen &&
@@ -323,6 +331,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         // tab that actually changed.
         snapshot = {
             activeViewId: next.activeViewId,
+            activityViewDismissed: next.activityViewDismissed,
             activityViewOpen: next.activityViewOpen,
             fileViewOpen: next.fileViewOpen,
             maximized: next.maximized,
@@ -501,14 +510,25 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
         activitySelect() {
             if (disposed || !conversationId) return;
             activityViewShown = true;
+            activityViewDismissed = false;
             activeViewId = "activity";
             open = true;
             remember();
             recompute();
         },
-        activityClose() {
-            if (disposed || !activityViewShown) return;
+        activityHide() {
+            if (disposed || !conversationId) return;
+            if (!activityViewShown && activeViewId !== "activity") return;
             activityViewShown = false;
+            if (activeViewId === "activity") activeViewId = "files";
+            remember();
+            recompute();
+        },
+        activityClose() {
+            if (disposed || !conversationId || (!activityViewShown && activityViewDismissed))
+                return;
+            activityViewShown = false;
+            activityViewDismissed = true;
             if (activeViewId === "activity") activeViewId = "files";
             remember();
             recompute();
@@ -640,6 +660,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             conversationId = nextConversationId;
             if (conversationChanged) {
                 activityViewShown = false;
+                activityViewDismissed = false;
                 if (activeViewId === "activity") activeViewId = "files";
             }
             if (previewConversationId !== nextConversationId) {
@@ -656,6 +677,7 @@ export function rigPanelStoreCreate(deps: RigPanelDeps): RigPanelStore {
             // something inside that checkout, so it does not travel to the next
             // project.
             activityViewShown = false;
+            activityViewDismissed = false;
             fileViewShown = false;
             if (nextGroupId) groupRestore(nextGroupId);
             const chrome = nextGroupId ? chromeByGroup.get(nextGroupId) : undefined;

@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 
 export interface RigActivityControlProps {
     readonly agents?: number;
@@ -6,14 +6,12 @@ export interface RigActivityControlProps {
     readonly className?: string;
     readonly "data-testid"?: string;
     readonly disabled?: boolean;
-    readonly hasGoal?: boolean;
     readonly onClick?: () => void;
-    readonly open?: boolean;
-    /** Aligns the label with the composer's 16px inset when rendered above it. */
-    readonly placement?: "inline" | "above-composer";
     readonly style?: CSSProperties;
-    readonly tasks?: number;
 }
+
+/** Fixed height of the one-line transcript activity entry, including its row box. */
+export const RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT = 24;
 
 function count(value: number | undefined): number {
     return Math.max(0, Math.floor(value ?? 0));
@@ -24,61 +22,55 @@ function noun(value: number, singular: string): string {
 }
 
 /**
- * One bounded composer-adjacent affordance for an unbounded session activity list.
- *
- * Tasks, delegated agents, and background terminals can each number in the
- * dozens. Their detailed rows live in the shared Activity tab; this trigger
- * remains one compact control however those collections are composed.
+ * One bounded affordance for live delegated agents and background terminals.
+ * The detailed collection lives in the side panel; the transcript keeps only
+ * the current live counts, as quiet trailing text on the working-status line.
+ * The turn's own loader already says work is running, so this summary carries
+ * no second spinner.
  */
 export function RigActivityControl(props: RigActivityControlProps) {
-    const tasks = count(props.tasks);
     const agents = count(props.agents);
     const terminals = count(props.backgroundTerminals);
-<<<<<<< HEAD
-    const goals = props.hasGoal ? 1 : 0;
-    const total = goals + tasks + agents + terminals;
-    if (total === 0 && !props.open) return null;
-    const fullSummary = [
-        goals > 0 ? "1 goal" : undefined,
-        tasks > 0 ? noun(tasks, "task") : undefined,
-        agents > 0 ? noun(agents, "agent") : undefined,
-        terminals > 0 ? noun(terminals, "terminal") : undefined,
-    ]
-        .filter(Boolean)
-        .join(" · ");
-=======
     if (agents + terminals === 0) return null;
     const summaryParts = [
-        ...(agents > 0 ? [{ id: "agents", label: noun(agents, "agent") }] : []),
-        ...(terminals > 0 ? [{ id: "terminals", label: noun(terminals, "terminal") }] : []),
-        ...(terminals > 0 ? [{ id: "background-status", label: "Running in Background" }] : []),
+        ...(terminals > 0 ? [{ id: "terminals", label: noun(terminals, "Terminal") }] : []),
+        ...(agents > 0 ? [{ id: "agents", label: noun(agents, "Agent") }] : []),
     ];
     const fullSummary = summaryParts.map((part) => part.label).join(" · ");
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     return (
-        <button
-            aria-expanded={props.open}
-            aria-label={`Session activity: ${fullSummary || "none"}`}
-            className={["happy2-rig-activity-control", props.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="rig-activity-control"
-            data-open={props.open ? "" : undefined}
-            data-placement={props.placement === "above-composer" ? "above-composer" : undefined}
-            data-testid={props["data-testid"]}
-            disabled={props.disabled || props.onClick === undefined}
-            onClick={props.onClick}
+        <div
+            className="happy2-rig-activity-transcript"
+            data-happy-desktop-ui="rig-activity-entry"
             style={props.style}
-            title={fullSummary || "Session activity"}
-            type="button"
         >
-            <span
-                className="happy2-rig-activity-control__summary"
-                data-happy-desktop-ui="rig-activity-control-summary"
+            <button
+                aria-label={`Open session details: ${fullSummary}`}
+                className={["happy2-rig-activity-transcript__row", props.className]
+                    .filter(Boolean)
+                    .join(" ")}
+                data-happy-desktop-ui="rig-activity-control"
+                data-testid={props["data-testid"]}
+                disabled={props.disabled || props.onClick === undefined}
+                onClick={props.onClick}
+                title={`Open session details: ${fullSummary}`}
+                type="button"
             >
-                Activity
-                <span className="happy2-rig-activity-control__count">
-                    {total > 99 ? "99+" : total}
+                <span className="happy2-rig-activity-transcript__primary">
+                    {summaryParts.map((part, index) => (
+                        <Fragment key={part.id}>
+                            {index > 0 ? (
+                                <span
+                                    aria-hidden="true"
+                                    className="happy2-rig-activity-transcript__separator"
+                                >
+                                    ·
+                                </span>
+                            ) : null}
+                            <span>{part.label}</span>
+                        </Fragment>
+                    ))}
                 </span>
-            </span>
-        </button>
+            </button>
+        </div>
     );
 }

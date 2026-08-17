@@ -138,11 +138,19 @@ export type ConversationActivityPresentation =
           readonly files: readonly ConversationFileDiff[];
           readonly omittedFiles?: number;
       }
-    | { readonly type: "execCommand"; readonly command: string; readonly output: string }
+    | {
+          readonly type: "execCommand";
+          readonly command: string;
+          readonly output: string;
+          /** Present only when the command belongs to a detached terminal. */
+          readonly backgroundProcessId?: number;
+      }
     | {
           readonly type: "backgroundTerminalInteraction";
           readonly command: string;
           readonly input: string;
+          /** Present when the interaction belongs to a detached terminal. */
+          readonly backgroundProcessId?: number;
       };
 
 export interface ConversationActivityFailure {
@@ -407,11 +415,9 @@ export interface ConversationRequestEntry {
     readonly sequence: string;
 }
 
-/** One child session Happy delegated from a concrete parent tool call. */
-export interface ConversationDelegationChild {
+/** The render-ready facts shared by every compact delegated-agent row. */
+export interface DelegatedAgentSummary {
     readonly sessionId: string;
-    /** The spawn call in the parent transcript this child replaces. */
-    readonly parentToolCallId: string;
     readonly description: string;
     readonly taskName?: string;
     readonly modelId: string;
@@ -424,12 +430,18 @@ export interface ConversationDelegationChild {
         | "suspended"
         | "error"
         | "archived";
-    readonly createdAt: number;
     /** When the current run began; a running child clocks its elapsed from here. */
     readonly activeSince?: number;
     /** Final recorded duration, used once the child has settled. */
     readonly elapsedMs?: number;
     readonly totalTokens?: number;
+}
+
+/** One child session Happy delegated from a concrete parent tool call. */
+export interface ConversationDelegationChild extends DelegatedAgentSummary {
+    /** The spawn call in the parent transcript this child replaces. */
+    readonly parentToolCallId: string;
+    readonly createdAt: number;
 }
 
 /**

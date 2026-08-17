@@ -407,104 +407,58 @@
     display: none;
 }
 
-/* ---- Session activity control --------------------------------------------
+/* ---- Live transcript activity --------------------------------------------
  *
- * A session can carry dozens of tasks, agents, and background terminals. The
- * detailed collection belongs in the side panel's Activity tab; the composer
- * keeps one compact aggregate control directly above the input.
+ * The entry is the trailing half of the working-status line: the same 14px
+ * secondary type as the clock and phase beside it, sized to its own text so
+ * the line can put it at the far end or drop it to the next line whole.
  */
-
-<<<<<<< HEAD
-.happy2-rig-activity-control {
+.happy2-rig-activity-transcript {
     box-sizing: border-box;
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-=======
+    height: 24px;
+    min-width: 0;
+    padding: 2px 20px 2px 0;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-ui);
+    font-synthesis: none;
+}
+
 .happy2-rig-activity-transcript__row {
     display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    width: 100%;
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
+    align-items: baseline;
     height: 20px;
-    max-width: 104px;
     min-width: 0;
-<<<<<<< HEAD
-    padding: 0;
-=======
     margin: 0;
-    padding: 0 0 0 3px;
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
+    padding: 0;
     border: 0;
+    border-radius: var(--happy2-radius-sm);
     background: transparent;
-    color: var(--text-secondary);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.happy2-rig-activity-transcript__row:not(:disabled) {
     cursor: pointer;
-    font-family: var(--happy2-font-ui);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-    opacity: 0.5;
-    white-space: nowrap;
-    transition:
-        color 120ms ease,
-        opacity 120ms ease;
 }
 
-.happy2-rig-activity-control[data-placement="above-composer"] {
-    align-self: flex-start;
-    max-width: 136px;
-    padding-right: 16px;
-    padding-left: 16px;
-}
-
-.happy2-rig-activity-control:hover:not(:disabled),
-.happy2-rig-activity-control[data-open] {
-    color: var(--text);
+.happy2-rig-activity-transcript__row:disabled {
     opacity: 1;
 }
 
-.happy2-rig-activity-control:disabled {
-    cursor: default;
-}
-
-<<<<<<< HEAD
-.happy2-rig-activity-control__summary {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-=======
-.happy2-rig-activity-transcript__glyph {
-    display: flex;
-    flex: 0 0 7px;
-    align-items: center;
-    justify-content: center;
-    width: 7px;
-    height: 20px;
-    margin-right: 3px;
-    color: var(--text-secondary);
-}
-
-.happy2-spinner.happy2-rig-activity-transcript__spinner {
-    /* The live row is deliberately calmer than the main turn indicator. */
-    --happy2-spinner-duration: 3200ms;
-}
-
-.happy2-rig-activity-transcript__content {
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
+.happy2-rig-activity-transcript__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
 }
 
 .happy2-rig-activity-transcript__primary {
     display: flex;
     align-items: baseline;
     gap: 6px;
-    width: 100%;
     min-width: 0;
     height: 20px;
     overflow: hidden;
-    color: var(--text-secondary);
+    color: inherit;
     font-size: 14px;
     font-weight: 400;
     line-height: 20px;
@@ -514,14 +468,14 @@
 
 .happy2-rig-activity-transcript__primary > span {
     min-width: 0;
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy2-rig-activity-control__count {
-    font-variant-numeric: tabular-nums;
+.happy2-rig-activity-transcript__separator {
+    flex: none;
+    color: var(--input-placeholder);
 }
 
 /* Full-window transparent dismissal layer beneath the popover; leaves flow. */

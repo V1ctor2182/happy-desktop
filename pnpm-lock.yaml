@@ -4,6 +4,14 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@slopus/rig-connect@0.1.15':
+    hash: 86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275
+    path: patches/@slopus__rig-connect@0.1.15.patch
+  '@slopus/rig-connect@0.1.16':
+    hash: 86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275
+    path: patches/@slopus__rig-connect@0.1.16.patch
+
 importers:
 
   .:
@@ -159,7 +167,7 @@ importers:
         version: 0.1.0
       '@slopus/rig-connect':
         specifier: 0.1.16
-        version: 0.1.16
+        version: 0.1.16(patch_hash=86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275)
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -261,7 +269,7 @@ importers:
     dependencies:
       '@slopus/rig-connect':
         specifier: 0.1.15
-        version: 0.1.15
+        version: 0.1.15(patch_hash=86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275)
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -371,7 +379,7 @@ importers:
         version: 9.39.2
       '@slopus/rig-connect':
         specifier: 0.1.15
-        version: 0.1.15
+        version: 0.1.15(patch_hash=86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275)
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -8457,11 +8465,11 @@ snapshots:
       '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
 
-  '@slopus/rig-connect@0.1.15':
+  '@slopus/rig-connect@0.1.15(patch_hash=86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275)':
     dependencies:
       '@sinclair/typebox': 0.34.52
 
-  '@slopus/rig-connect@0.1.16':
+  '@slopus/rig-connect@0.1.16(patch_hash=86f7f45258711f4968769b8a0befbcc111e2afc0d8a47b5626bc8214e97a6275)':
     dependencies:
       '@sinclair/typebox': 0.34.52
 

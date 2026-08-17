@@ -313,12 +313,57 @@ function transcriptSubagentsProject(session: SessionState): readonly RigSubagent
 function transcriptBackgroundProcessesProject(
     session: SessionState,
 ): readonly RigBackgroundProcess[] {
+    // This collection is authoritative session state. Do not infer its
+    // lifecycle from the bounded transcript: a detached process may have been
+    // started before the currently loaded window.
     return session.backgroundProcesses.map((process) => ({
         id: process.sessionId,
         command: process.command,
         cwd: process.cwd,
         status: process.status,
     }));
+}
+
+function detachedProcessIdsFromElements(elements: readonly ChatElement[]): ReadonlySet<number> {
+    const ids = new Set<number>();
+    for (const element of elements) {
+        if (element.kind !== "tool_call") continue;
+        const presentation = element.presentation;
+        if (presentation?.kind === "command" && presentation.terminalId !== undefined)
+            ids.add(presentation.terminalId);
+        if (presentation?.kind === "terminal_input") ids.add(presentation.terminalId);
+    }
+    return ids;
+}
+
+/** @internal Purely classifies the current process snapshot for activity UI. */
+export function detachedProcessIdsUpdate(
+    previous: ReadonlySet<number>,
+    elements: readonly ChatElement[],
+    processes: readonly SessionState["backgroundProcesses"][number][],
+    shellCommands: readonly SessionState["shellCommands"][number][] = [],
+    activeTurn: SessionState["activeTurn"] = undefined,
+): ReadonlySet<number> {
+    const detachedIds = new Set(detachedProcessIdsFromElements(elements));
+    for (const command of shellCommands) {
+        if (command.sessionId !== undefined) detachedIds.add(command.sessionId);
+    }
+    const activeIds = new Set(processes.map((process) => process.sessionId));
+    const next = new Set<number>();
+    for (const id of previous) {
+        if (activeIds.has(id)) next.add(id);
+    }
+    for (const id of detachedIds) {
+        if (activeIds.has(id)) next.add(id);
+    }
+    // Once the parent turn is settled, a process still present in the
+    // authoritative collection is necessarily detached work. This handles a
+    // long-lived terminal whose launch element is outside the bounded window.
+    if (activeTurn === undefined && processes.length > 0) {
+        for (const id of activeIds) next.add(id);
+    }
+    if (next.size === previous.size && [...next].every((id) => previous.has(id))) return previous;
+    return next;
 }
 
 function transcriptEphemeralProject(
@@ -402,6 +447,8 @@ export interface RigChatSnapshot {
     readonly goal?: RigGoal;
     readonly subagents: readonly RigSubagentSummary[];
     readonly backgroundProcesses: readonly RigBackgroundProcess[];
+    /** Detached terminal ids discovered from tool presentations and still running. */
+    readonly detachedBackgroundProcessIds: ReadonlySet<number>;
     /**
      * True while the daemon will refuse a model change: a run is active or work
      * is queued behind it. Effort, access mode, and tier stay changeable.
@@ -808,6 +855,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
     let ephemeral: ConversationEntry[] = [];
     let transcriptElements: readonly ChatElement[] | undefined;
     let transcriptSession: SessionState | undefined;
+    let detachedBackgroundProcessIds: ReadonlySet<number> = new Set();
     let transcriptAnsweredUserInputs: readonly RigAnsweredUserInput[] = [];
     let transcriptConnection: RigChatTranscriptConnection | undefined;
     let mutationRejection: MutationRejectedDelta | undefined;
@@ -887,6 +935,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         tasks: [],
         subagents: [],
         backgroundProcesses: [],
+        detachedBackgroundProcessIds: new Set<number>(),
         showReasoning: false,
         expandedTurnIds: new Set<string>(),
         usagePanelOpen: false,
@@ -920,6 +969,22 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             transcriptSession === undefined
                 ? (session?.subagents ?? [])
                 : transcriptSubagentsProject(transcriptSession);
+        const tasks =
+            transcriptSession === undefined
+                ? (session?.tasks ?? [])
+                : transcriptTasksProject(transcriptSession);
+        const goal =
+            transcriptSession === undefined
+                ? session?.goal
+                : transcriptGoalProject(transcriptSession);
+        const backgroundProcesses =
+            transcriptSession === undefined
+                ? (session?.backgroundProcesses ?? [])
+                : transcriptBackgroundProcessesProject(transcriptSession);
+        const visibleDetachedBackgroundProcessIds =
+            transcriptSession === undefined
+                ? new Set((session?.backgroundProcesses ?? []).map((process) => process.id))
+                : detachedBackgroundProcessIds;
         const built =
             transcriptElements === undefined
                 ? rigConversationAttachTurnTraces(
@@ -1054,19 +1119,11 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 transcriptSession === undefined
                     ? (session?.queuedMessages ?? [])
                     : transcriptQueuedMessagesProject(transcriptSession),
-            tasks:
-                transcriptSession === undefined
-                    ? (session?.tasks ?? [])
-                    : transcriptTasksProject(transcriptSession),
-            goal:
-                transcriptSession === undefined
-                    ? session?.goal
-                    : transcriptGoalProject(transcriptSession),
+            tasks,
+            ...(goal === undefined ? {} : { goal }),
             subagents,
-            backgroundProcesses:
-                transcriptSession === undefined
-                    ? (session?.backgroundProcesses ?? [])
-                    : transcriptBackgroundProcessesProject(transcriptSession),
+            backgroundProcesses,
+            detachedBackgroundProcessIds: visibleDetachedBackgroundProcessIds,
             showReasoning,
             expandedTurnIds,
             usagePanelOpen,
@@ -1813,6 +1870,13 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
                 unsubscribeSession = undefined;
                 transcriptElements = elements;
                 transcriptSession = connectedSession;
+                detachedBackgroundProcessIds = detachedProcessIdsUpdate(
+                    detachedBackgroundProcessIds,
+                    elements,
+                    connectedSession.backgroundProcesses,
+                    connectedSession.shellCommands,
+                    connectedSession.activeTurn,
+                );
                 transcriptAnsweredUserInputs = answeredUserInputs;
                 runStatus = transcriptSessionBusy(connectedSession) ? "running" : "idle";
                 runStartedAt = connectedSession.activeTurn?.startedAt;
@@ -1831,6 +1895,15 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
             },
             onError: () => {
                 if (!active || disposed) return;
+                // A connector failure must not erase an accepted transcript.
+                // Keep its rows and activity history visible, but mark the
+                // retained session closed so the host does not present stale
+                // live transport as healthy.
+                if (transcriptSession !== undefined) {
+                    transcriptSession = { ...transcriptSession, connection: "closed" };
+                    commit();
+                    return;
+                }
                 transcriptConnection?.close();
                 transcriptConnection = undefined;
                 transcriptElements = undefined;
@@ -1869,6 +1942,7 @@ export function rigChatStoreCreate(sessionId: RigSessionId, deps: RigChatDeps): 
         transcriptConnection = undefined;
         transcriptElements = undefined;
         transcriptSession = undefined;
+        detachedBackgroundProcessIds = new Set();
         transcriptAnsweredUserInputs = [];
         // Suspend polling while nothing observes this store; the open flag persists
         // so a re-subscription resumes it. No background work without subscribers.

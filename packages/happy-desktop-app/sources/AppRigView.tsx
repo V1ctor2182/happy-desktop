@@ -3385,7 +3385,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const panelComposer =
         panel.open && panel.maximized && conversation.type === "ready" ? (
             <RigPanelComposer
-                activitySelected={panel.activeViewId === "activity"}
                 conversation={conversation.value}
                 groupName={openGroup?.name}
                 onChatSelect={props.onChatSelect}
@@ -3523,9 +3522,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                   },
                               }
                             : {})}
-<<<<<<< HEAD
-                        onActivityClose={() => props.workspace.activityPanelClose()}
-=======
                         onActivityOpen={() => props.workspace.activityPanelOpen()}
                         {...(openGroup
                             ? {
@@ -3535,7 +3531,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                   },
                               }
                             : {})}
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
                         onPanelClose={() => props.workspace.panel.panelToggle()}
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
@@ -4739,11 +4734,27 @@ function RigConversationBody(props: {
     );
 }
 
-/**
- * Projects one local conversation into `ConversationView`: the shared entries,
- * composer, and request prompts, plus the local-only header controls and panels
- * the shared surface hosts in its slots.
- */
+/** Counts live agents and terminals for the compact transcript affordance. */
+function rigActiveActivityCounts(
+    conversation: Pick<
+        RigConversationSnapshot,
+        "subagents" | "backgroundProcesses" | "detachedBackgroundProcessIds"
+    >,
+): {
+    readonly agents: number;
+    readonly terminals: number;
+} {
+    const agents = conversation.subagents.filter(
+        (subagent) => subagent.status === "queued" || subagent.status === "running",
+    );
+    return {
+        agents: agents.length,
+        terminals: conversation.backgroundProcesses.filter((process) =>
+            conversation.detachedBackgroundProcessIds.has(process.id),
+        ).length,
+    };
+}
+
 function RigConversationSurface(props: {
     activitySelected: boolean;
     conversation: RigConversationSnapshot;
@@ -4804,15 +4815,27 @@ function RigConversationSurface(props: {
             />
         );
     const swallow = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+    const activeActivity = rigActiveActivityCounts(conversation);
+    const activityTotal = activeActivity.agents + activeActivity.terminals;
     return (
         <ConversationView
             agentAuthor={rigAgentAuthor}
+            activityControl={
+                activityTotal > 0 ? (
+                    <RigActivityControl
+                        agents={activeActivity.agents}
+                        backgroundTerminals={activeActivity.terminals}
+                        onClick={() => workspace.activityPanelOpen()}
+                    />
+                ) : undefined
+            }
             composer={conversation.composer}
             composerAboveControl={
                 <>
                     {/* Usage is a compact reading carried by the write end. The
-                        unbounded activity reading lives in the side panel; only
-                        its compact trigger stays beside the composer. */}
+                        activity summary lives under the latest message in the
+                        transcript, so it does not add another composer-adjacent
+                        row here. */}
                     {conversation.usagePanelOpen ? (
                         <ComposerPanel
                             onClose={() => workspace.usagePanelClose()}
@@ -4826,15 +4849,6 @@ function RigConversationSurface(props: {
                             />
                         </ComposerPanel>
                     ) : null}
-                    <RigActivityControl
-                        agents={conversation.subagents.length}
-                        backgroundTerminals={conversation.backgroundProcesses.length}
-                        hasGoal={conversation.goal !== undefined}
-                        onClick={() => workspace.activityPanelOpen()}
-                        open={props.activitySelected}
-                        placement="above-composer"
-                        tasks={conversation.tasks.length}
-                    />
                     <SlotEntries
                         entries={props.slots.aboveComposer}
                         onAction={props.slotAction}
@@ -5112,7 +5126,6 @@ function chatTargetLabel(
  * bottom content reachable without an added spacer.
  */
 function RigPanelComposer(props: {
-    activitySelected: boolean;
     conversation: RigConversationSnapshot;
     groupName: string | undefined;
     onChatSelect: RigWorkspaceSurfaceProps["onChatSelect"];
@@ -5146,15 +5159,6 @@ function RigPanelComposer(props: {
                 composer={conversation.composer}
                 composerAboveControl={
                     <>
-                        <RigActivityControl
-                            agents={conversation.subagents.length}
-                            backgroundTerminals={conversation.backgroundProcesses.length}
-                            hasGoal={conversation.goal !== undefined}
-                            onClick={() => workspace.activityPanelOpen()}
-                            open={props.activitySelected}
-                            placement="above-composer"
-                            tasks={conversation.tasks.length}
-                        />
                         <SlotEntries
                             entries={props.slots.aboveComposer}
                             onAction={props.slotAction}
@@ -5626,13 +5630,8 @@ function RigPanelBody(props: {
     layout: RigFileLayout;
     /** Reference clock for elapsed subagent activity. */
     now: number;
-<<<<<<< HEAD
-    /** Closes the transient Activity tab. */
-    onActivityClose: () => void;
-=======
     /** Selects Activity through the workspace so Usage closes first. */
     onActivityOpen: () => void;
->>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     /** Stops one background process from the Activity tab. */
     onActivityProcessStop?: (processId: number) => void;
     /** Opens one delegated child session from the Activity tab. */
@@ -5711,13 +5710,21 @@ function RigPanelBody(props: {
     const panelTools = toolTabsPlaced(props.panel, "panel");
     const activeToolTab = panelTools.find((tab) => tab.id === props.panel.activeViewId);
     const panelFile = props.panelFile;
+    const activityTabShown =
+        props.panel.activityViewOpen ||
+        (props.activity?.activityAvailable === true && !props.panel.activityViewDismissed);
+    const activityBackgroundProcesses = props.activity
+        ? props.activity.backgroundProcesses.filter((process) =>
+              props.activity?.detachedBackgroundProcessIds.has(process.id),
+          )
+        : [];
     const allFilesUnavailable =
         props.rigAvailability !== undefined && props.workspaceFiles === undefined
             ? (props.rigAvailabilityReason ?? "Rig must reconnect before loading all files.")
             : undefined;
     const baseTabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
-        ...(props.panel.activityViewOpen
+        ...(activityTabShown
             ? [{ closable: true, icon: "agents" as const, id: "activity", label: "Activity" }]
             : []),
         ...(props.panel.fileViewOpen && panelFile
@@ -5829,7 +5836,7 @@ function RigPanelBody(props: {
                     onClose={props.onViewClose}
                     onSelect={(tabId) => {
                         if (tabId === "files") props.store.filesSelect();
-                        else if (tabId === "activity") props.store.activitySelect();
+                        else if (tabId === "activity") props.onActivityOpen();
                         else if (tabId === "preview" && props.panel.previewEntryId)
                             props.store.previewOpen(props.panel.previewEntryId);
                         else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.store.fileViewOpen();
@@ -5915,7 +5922,7 @@ function RigPanelBody(props: {
                     ) : props.panel.activeViewId === "activity" ? (
                         props.activity ? (
                             <RigActivityPanel
-                                backgroundProcesses={props.activity.backgroundProcesses}
+                                backgroundProcesses={activityBackgroundProcesses}
                                 goal={props.activity.goal}
                                 now={props.now}
                                 onBackgroundProcessStop={props.onActivityProcessStop}

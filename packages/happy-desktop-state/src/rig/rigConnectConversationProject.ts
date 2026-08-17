@@ -719,6 +719,9 @@ function presentationProject(
                 type: "execCommand",
                 command: presentation.command,
                 output: presentation.output ?? "",
+                ...(presentation.terminalId === undefined
+                    ? {}
+                    : { backgroundProcessId: presentation.terminalId }),
             };
         case "exploration":
             return { type: "exploration", operations: presentation.steps };
@@ -735,6 +738,7 @@ function presentationProject(
                 type: "backgroundTerminalInteraction",
                 command: presentation.command,
                 input: presentation.input,
+                backgroundProcessId: presentation.terminalId,
             };
         // A search outside the workspace, which this surface has no row for yet.
         // Its result text is what the reader sees until it does.

@@ -150,7 +150,6 @@ export function DelegatedAgentActivityPage() {
                             child={{
                                 ...runningChild,
                                 sessionId: "child-long",
-                                parentToolCallId: "spawn-long",
                                 taskName:
                                     "investigate_and_reconcile_every_delegated_agent_transcript_projection_edge_case",
                                 modelId:

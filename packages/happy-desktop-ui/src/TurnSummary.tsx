@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { partitionComponentProps } from "./componentProps";
 import { Icon } from "./Icon";
 
@@ -11,6 +11,12 @@ export interface TurnSummaryProps {
     readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
     readonly status: "complete" | "failed" | "steered";
     readonly style?: CSSProperties;
+    /**
+     * Work that outlived this turn, held at the far end of the settled line.
+     * A terminal still running after the agent stopped belongs on the line
+     * that says the agent stopped, not on a row of its own beneath it.
+     */
+    readonly trailing?: ReactNode;
 }
 
 /** Formats a final turn duration without allowing its units to split across lines. */
@@ -32,6 +38,7 @@ export function TurnSummary(props: TurnSummaryProps) {
         "reason",
         "status",
         "style",
+        "trailing",
     ]);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -86,6 +93,14 @@ export function TurnSummary(props: TurnSummaryProps) {
                 >
                     <Icon name={copied ? "check" : "copy"} size={16} />
                 </button>
+            ) : null}
+            {local.trailing ? (
+                <span
+                    className="happy2-turn-summary__trailing"
+                    data-happy-desktop-ui="turn-summary-trailing"
+                >
+                    {local.trailing}
+                </span>
             ) : null}
         </div>
     );

@@ -7,8 +7,10 @@ import type {
 } from "happy-desktop-state";
 import "./theme.css";
 import "./styles/button.css";
+import "./styles/delegated-agent.css";
 import "./styles/icon.css";
 import "./styles/rig-activity.css";
+import "./styles/spinner.css";
 import { RigActivityPanel } from "./RigActivityPanel";
 import { createRenderer } from "./testing";
 
@@ -68,7 +70,7 @@ const backgroundProcesses: readonly RigBackgroundProcess[] = [
     { id: 7, command: "pnpm server dev", cwd: "/repo", status: "running" },
 ];
 
-it("renders a grouped activity reading with one aligned status lane", async () => {
+it("renders a grouped activity reading with the compact transcript row grammar", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -86,10 +88,11 @@ it("renders a grouped activity reading with one aligned status lane", async () =
     );
     await view.ready();
 
-    // Goal objective + status pill.
-    expect(view.$('[data-happy-desktop-ui="rig-activity-goal-status"]').element.textContent).toBe(
-        "Active",
-    );
+    // Goal objective + status fact.
+    expect(
+        view.$('[data-happy-desktop-ui="rig-activity-goal"] .happy2-delegated-agent__meta').element
+            .textContent,
+    ).toContain("Active");
     expect(view.container.textContent).toContain("Ship the usage panel end to end.");
 
     // Three tasks; the in-progress one shows its active form.
@@ -97,14 +100,11 @@ it("renders a grouped activity reading with one aligned status lane", async () =
     expect(taskRows.length).toBe(3);
     expect(view.container.textContent).toContain("Implementing the store");
 
-    // Subagent monitor: humanized status, elapsed (now - activeSince = 60s), tokens.
-    expect(
-        view.$('[data-happy-desktop-ui="rig-activity-subagent-status"]').element.textContent,
-    ).toBe("Running");
+    // Subagent monitor: status, elapsed (now - activeSince = 60s), tokens.
     const monitor = view.$('[data-happy-desktop-ui="rig-activity-subagent"]').element;
-    expect(monitor.textContent).toContain("1:00");
+    expect(monitor.textContent).toContain("running");
+    expect(monitor.textContent).toContain("1m 0s");
     expect(monitor.textContent).toContain("12,500 tokens");
-    expect(monitor.textContent).toContain("Reading the transport module.");
 
     // Background terminals (`/ps`) listed with their command.
     const processRows = view.container.querySelectorAll(
@@ -171,30 +171,22 @@ it("renders a grouped activity reading with one aligned status lane", async () =
         });
     }
 
-    const statuses = Array.from(
-        view.container.querySelectorAll<HTMLElement>(".happy2-rig-activity__status"),
-    );
-    expect(statuses).toHaveLength(6);
-    for (const status of statuses) {
-        expect(status.getBoundingClientRect().width).toBe(76);
-        expect(status.getBoundingClientRect().height).toBe(20);
-        expect(getComputedStyle(status).borderTopWidth).toBe("0px");
-    }
-
-    const dot = view.$('[data-happy-desktop-ui="rig-activity-status-dot"]');
-    expect(dot.bounds()).toMatchObject({ width: 6, height: 6 });
-    expect((await dot.visibleMetrics()).pixelCount).toBeGreaterThan(0);
-
-    // Every row's primary content begins on the same x coordinate after the
-    // fixed 76px status lane and 12px gap.
+    // Every row's primary content shares the transcript's glyph/content inset.
     const contentLefts = [
-        view.$(".happy2-rig-activity__objective").bounds().x,
-        view.$(".happy2-rig-activity__task-label").bounds().x,
-        view.$(".happy2-rig-activity__subagent-content").bounds().x,
-        view.$(".happy2-rig-activity__process-command").bounds().x,
+        view
+            .$('[data-happy-desktop-ui="rig-activity-goal"] .happy2-delegated-agent__content')
+            .bounds().x,
+        view
+            .$('[data-happy-desktop-ui="rig-activity-task"] .happy2-delegated-agent__content')
+            .bounds().x,
+        view
+            .$('[data-happy-desktop-ui="rig-activity-subagent"] .happy2-delegated-agent__content')
+            .bounds().x,
+        view
+            .$('[data-happy-desktop-ui="rig-activity-process"] .happy2-delegated-agent__content')
+            .bounds().x,
     ];
     expect(new Set(contentLefts).size).toBe(1);
-    expect(contentLefts[0]).toBe(108);
 
     await view.screenshot("RigActivityPanel.test");
 }, 120_000);
@@ -288,7 +280,7 @@ it("fits long live activity at the minimum desktop content measure", async () =>
         "activity panel must not overflow horizontally",
     ).toBeLessThanOrEqual((panel.element as HTMLElement).clientWidth);
 
-    for (const row of view.container.querySelectorAll<HTMLElement>(".happy2-rig-activity__row")) {
+    for (const row of view.container.querySelectorAll<HTMLElement>(".happy2-delegated-agent")) {
         const bounds = row.getBoundingClientRect();
         expect(bounds.left).toBeGreaterThanOrEqual(panelRect.left);
         expect(
@@ -298,9 +290,11 @@ it("fits long live activity at the minimum desktop content measure", async () =>
         expect(getComputedStyle(row).borderTopWidth).toBe("0px");
     }
 
-    const processCommand = view.$(".happy2-rig-activity__process-command");
-    expect(processCommand.bounds().height).toBeGreaterThan(18);
-    expect(processCommand.computedStyle("overflow-wrap")).toBe("anywhere");
+    const processCommand = view.$(
+        '[data-happy-desktop-ui="rig-activity-process"] .happy2-delegated-agent__arguments',
+    );
+    expect(processCommand.computedStyle("overflow")).toBe("hidden");
+    expect(processCommand.computedStyle("text-overflow")).toBe("ellipsis");
 
     await view.screenshot("RigActivityPanel.minimum.test");
 }, 120_000);

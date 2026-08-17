@@ -7,6 +7,7 @@ import type {
     ConversationToolCall,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
+import { RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT } from "./RigActivityControl";
 import {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
@@ -68,6 +69,11 @@ export type ConversationViewProps = {
     motion?: ActivityMotion;
     /** Activity-row content/chrome policy, independent of animation. */
     activityTreatment?: ActivityTreatment;
+    /**
+     * A live summary of external work, rendered as the final transcript entry
+     * instead of taking space above the composer.
+     */
+    activityControl?: ReactNode;
     /**
      * The global switch for a caret at the end of a still-streaming reply.
      * Off by default, preserving the historical no-caret text stream.
@@ -265,8 +271,9 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  * `MessageList` of `ConversationEntry` rows; an optional owner panel that takes
  * the body; and the shared `Composer` with its `/` command palette and `@`
  * mention candidates. A running turn keeps one minimal `AgentWorkingStatus` in the
- * message list footer — elapsed clock and current phase — which scrolls with
- * the transcript rather than floating over it.
+ * message list footer — elapsed clock and current phase — alongside any active
+ * external-work summary, all of which scrolls with the transcript rather than
+ * floating over it.
  *
  * Every value comes from props and every draft keystroke goes back out through
  * `onComposerValueChange`, so the composer store — not this component — owns the
@@ -319,6 +326,39 @@ export function ConversationView(props: ConversationViewProps) {
             wait={props.workingWait}
         />
     );
+    /*
+     * External work closes whichever line reports the turn it outlived: the
+     * live status while the agent runs, and the settled "Completed in" row
+     * once it stops. Only a transcript that ends in neither leaves the summary
+     * a row of its own.
+     */
+    const lastEntry = transcript.at(-1);
+    const activityClosesTurnStatus =
+        props.activityControl !== undefined &&
+        props.running !== true &&
+        lastEntry?.kind === "turnStatus";
+    /**
+     * The live turn and its external work share one line: the status keeps the
+     * left, the activity summary sits at the far right, and when the two no
+     * longer fit the summary wraps whole onto the next line. It is a wrapping
+     * flex line, so nothing here measures text.
+     */
+    const workingStatusLine = (
+        <div
+            className="happy2-conversation__status-line"
+            data-happy-desktop-ui="conversation-status-line"
+        >
+            {workingStatus}
+            {props.activityControl && !activityClosesTurnStatus ? (
+                <div
+                    className="happy2-conversation__activity-entry"
+                    data-happy-desktop-ui="conversation-activity-entry"
+                >
+                    {props.activityControl}
+                </div>
+            ) : null}
+        </div>
+    );
     const workingStatusRow =
         workingStatusStartsGroup && props.agentAuthor ? (
             <Message
@@ -328,11 +368,25 @@ export function ConversationView(props: ConversationViewProps) {
                 className="happy2-message--activity-lead happy2-message--working-lead"
                 initials={initialsOf(props.agentAuthor.displayName)}
             >
-                {workingStatus}
+                {workingStatusLine}
             </Message>
         ) : (
-            workingStatus
+            workingStatusLine
         );
+    const activityFallback = props.activityControl ? (
+        <div
+            className="happy2-conversation__activity-fallback"
+            data-happy-desktop-ui="conversation-activity-fallback"
+        >
+            {props.activityControl}
+        </div>
+    ) : null;
+    const workingStatusHeight =
+        props.running === true
+            ? workingStatusStartsGroup
+                ? 68
+                : AGENT_WORKING_STATUS_ROW_HEIGHT
+            : 0;
     return (
         <section
             className={["happy2-conversation", props.className].filter(Boolean).join(" ")}
@@ -379,6 +433,7 @@ export function ConversationView(props: ConversationViewProps) {
                     data-happy-desktop-ui="conversation-loading"
                 >
                     <Spinner label="Loading conversation" size={20} tone="muted" variant="line" />
+                    {activityFallback}
                 </div>
             ) : props.entries.length === 0 ? (
                 <div
@@ -394,6 +449,7 @@ export function ConversationView(props: ConversationViewProps) {
                         size="panel"
                         title="Nothing here yet"
                     />
+                    {activityFallback}
                 </div>
             ) : (
                 <MessageList
@@ -435,7 +491,18 @@ export function ConversationView(props: ConversationViewProps) {
                         </>
                     }
                     footerHeight={
-                        (workingStatusStartsGroup ? 68 : AGENT_WORKING_STATUS_ROW_HEIGHT) +
+                        workingStatusHeight +
+                        // A running turn already owns the line the summary
+                        // shares, so only a settled turn's summary adds a row.
+                        // A pane too narrow to hold both wraps the summary and
+                        // is one row taller than this; the footer mounts at the
+                        // bottom of every conversation and is measured there, so
+                        // that case corrects itself rather than needing a width.
+                        (props.activityControl &&
+                        props.running !== true &&
+                        !activityClosesTurnStatus
+                            ? RIG_ACTIVITY_CONTROL_TRANSCRIPT_HEIGHT
+                            : 0) +
                         queued.reduce(
                             (total, entry, index) =>
                                 total +
@@ -520,6 +587,9 @@ export function ConversationView(props: ConversationViewProps) {
                                 now={props.now}
                                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                 onTraceToggle={props.onTraceToggle}
+                                {...(activityClosesTurnStatus && index === transcript.length - 1
+                                    ? { trailing: props.activityControl }
+                                    : {})}
                                 /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is
                                    folded up, the row its work starts on when it

@@ -1,4 +1,5 @@
 import type {
+    ChatElement,
     InboxItem,
     RigConnection,
     RigInboxSubscriptionOptions,
@@ -96,14 +97,124 @@ it("combines a session transcript with answered inbox items from the same sessio
         },
     ]);
 
-    inboxOptions?.onError?.(new Error("Inbox unavailable"));
-    expect(transcriptError).not.toHaveBeenCalled();
-    sessionOptions?.onError?.(new Error("Transcript unavailable"));
-    expect(transcriptError).toHaveBeenCalledOnce();
-
     connection.loadMore("older");
     expect(loadMore).toHaveBeenCalledWith("older");
+    inboxOptions?.onError?.(new Error("Inbox unavailable"));
+    expect(transcriptError).not.toHaveBeenCalled();
+    sessionOptions?.onError?.({ status: 404 });
+    expect(transcriptError).toHaveBeenCalledOnce();
     connection.close();
     expect(sessionClose).toHaveBeenCalledOnce();
     expect(inboxClose).toHaveBeenCalledOnce();
+});
+
+it("reports a terminal connector refusal before accepting a transcript", () => {
+    let sessionOptions: RigSessionSubscriptionOptions | undefined;
+    const transcriptError = vi.fn();
+    const rig = {
+        connectSession: (options: RigSessionSubscriptionOptions) => {
+            sessionOptions = options;
+            return { close: vi.fn(), loadMore: vi.fn() };
+        },
+        connectInbox: () => ({ close: vi.fn() }),
+    } as unknown as RigConnection;
+
+    const connection = rigConnectTranscriptConnectCreate(
+        rig,
+        "http://rig.test",
+    )({
+        sessionId: "session-1" as RigSessionId,
+        onChange: () => undefined,
+        onError: transcriptError,
+    });
+
+    sessionOptions?.onError?.({ status: 404 });
+    expect(transcriptError).toHaveBeenCalledOnce();
+    connection.close();
+});
+
+it("reconnects a transient session failure without dropping the accepted snapshot", () => {
+    vi.useFakeTimers();
+    try {
+        let sessionOptions: RigSessionSubscriptionOptions | undefined;
+        let inboxOptions: RigInboxSubscriptionOptions | undefined;
+        const transcriptError = vi.fn();
+        const sessionClose = vi.fn();
+        const rig = {
+            connectSession: (options: RigSessionSubscriptionOptions) => {
+                sessionOptions = options;
+                return { close: sessionClose, loadMore: vi.fn() };
+            },
+            connectInbox: (options: RigInboxSubscriptionOptions) => {
+                inboxOptions = options;
+                return { close: vi.fn() };
+            },
+        } as unknown as RigConnection;
+        const changes: ChatElement[][] = [];
+        const connection = rigConnectTranscriptConnectCreate(
+            rig,
+            "http://rig.test",
+        )({
+            sessionId: "session-1" as RigSessionId,
+            onChange: (elements) => changes.push([...elements]),
+            onError: transcriptError,
+        });
+
+        sessionOptions?.onChange([], { connection: "live" } as SessionState);
+        inboxOptions?.onChange([], { connection: "live" } as never);
+        expect(changes).toHaveLength(1);
+
+        sessionOptions?.onChange([], { connection: "reconnecting" } as SessionState);
+        sessionOptions?.onError?.(new Error("network disconnected"));
+        expect(changes).toHaveLength(1);
+        expect(transcriptError).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(249);
+        expect(changes).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        sessionOptions?.onChange([], { connection: "live" } as SessionState);
+        expect(changes).toHaveLength(2);
+        expect(transcriptError).not.toHaveBeenCalled();
+
+        sessionOptions?.onError?.({ status: 404 });
+        expect(transcriptError).toHaveBeenCalledOnce();
+        connection.close();
+        expect(sessionClose).toHaveBeenCalled();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it("queues history loading until a reconnecting session becomes live", () => {
+    let sessionOptions: RigSessionSubscriptionOptions | undefined;
+    let inboxOptions: RigInboxSubscriptionOptions | undefined;
+    const transcriptError = vi.fn();
+    const loadMore = vi.fn();
+    const rig = {
+        connectSession: (options: RigSessionSubscriptionOptions) => {
+            sessionOptions = options;
+            return { close: vi.fn(), loadMore };
+        },
+        connectInbox: (options: RigInboxSubscriptionOptions) => {
+            inboxOptions = options;
+            return { close: vi.fn() };
+        },
+    } as unknown as RigConnection;
+    const changes: ChatElement[][] = [];
+    const connection = rigConnectTranscriptConnectCreate(
+        rig,
+        "http://rig.test",
+    )({
+        sessionId: "session-1" as RigSessionId,
+        onChange: (elements) => changes.push([...elements]),
+        onError: transcriptError,
+    });
+
+    connection.loadMore("older");
+    expect(loadMore).not.toHaveBeenCalled();
+    sessionOptions?.onChange([], { connection: "live" } as SessionState);
+    inboxOptions?.onChange([], { connection: "live" } as never);
+    expect(loadMore).toHaveBeenCalledWith("older");
+    expect(changes).toHaveLength(1);
+    connection.close();
 });
