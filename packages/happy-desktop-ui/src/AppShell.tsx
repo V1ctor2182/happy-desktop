@@ -64,7 +64,7 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Initial panel width (clamped) once `panelResizable` is set; falls back to `panelWidth`. */
     panelDefaultWidth?: number;
     /**
-     * Reports the width the reader has put the panel at, as they put it there.
+     * Reports the settled width after a pointer drag or keyboard resize step.
      *
      * Supplying `panelWidth` alongside `panelResizable` hands the width to the
      * caller the same way `panelMaximized` hands over the maximize state: the
@@ -159,14 +159,26 @@ function ResizeHandle(props: {
     max: number;
     min: number;
     onResize: (next: number) => void;
+    onResizeEnd?: (next: number) => void;
     step?: number;
     value: number;
 }) {
-    const drag = useRef<{ pointerX: number; width: number } | null>(null);
+    const drag = useRef<{ latestWidth: number; pointerX: number; width: number } | null>(null);
     const sign = props.edge === "right" ? 1 : -1;
     const step = props.step ?? 16;
-    function apply(width: number) {
-        props.onResize(clamp(Math.round(width), props.min, props.max));
+    function nextWidth(width: number) {
+        return clamp(Math.round(width), props.min, props.max);
+    }
+    function apply(width: number, settled: boolean) {
+        const next = nextWidth(width);
+        props.onResize(next);
+        if (settled) props.onResizeEnd?.(next);
+    }
+    function finishDrag() {
+        const current = drag.current;
+        if (!current) return;
+        drag.current = null;
+        props.onResizeEnd?.(current.latestWidth);
     }
     return (
         <div
@@ -187,24 +199,28 @@ function ResizeHandle(props: {
                           : undefined;
                 if (keyDelta !== undefined) {
                     event.preventDefault();
-                    apply(props.value + sign * keyDelta);
+                    apply(props.value + sign * keyDelta, true);
                 } else if (event.key === "Home") {
                     event.preventDefault();
-                    apply(props.edge === "right" ? props.min : props.max);
+                    apply(props.edge === "right" ? props.min : props.max, true);
                 } else if (event.key === "End") {
                     event.preventDefault();
-                    apply(props.edge === "right" ? props.max : props.min);
+                    apply(props.edge === "right" ? props.max : props.min, true);
                 }
             }}
             onLostPointerCapture={() => {
-                drag.current = null;
+                finishDrag();
             }}
             onPointerCancel={() => {
-                drag.current = null;
+                finishDrag();
             }}
             onPointerDown={(event) => {
                 event.preventDefault();
-                drag.current = { pointerX: event.clientX, width: props.value };
+                drag.current = {
+                    latestWidth: props.value,
+                    pointerX: event.clientX,
+                    width: props.value,
+                };
                 try {
                     event.currentTarget.setPointerCapture(event.pointerId);
                 } catch {
@@ -215,10 +231,12 @@ function ResizeHandle(props: {
             onPointerMove={(event) => {
                 const start = drag.current;
                 if (!start) return;
-                apply(start.width + sign * (event.clientX - start.pointerX));
+                const next = nextWidth(start.width + sign * (event.clientX - start.pointerX));
+                start.latestWidth = next;
+                props.onResize(next);
             }}
             onPointerUp={(event) => {
-                drag.current = null;
+                finishDrag();
                 try {
                     event.currentTarget.releasePointerCapture(event.pointerId);
                 } catch {
@@ -304,6 +322,7 @@ export function AppShell(props: AppShellProps) {
             panelMax,
         ),
     );
+    const [panelDragWidth, setPanelDragWidth] = useState<number>();
     const [panelMaximizedState, setPanelMaximizedState] = useState(
         local.panelDefaultMaximized ?? false,
     );
@@ -401,12 +420,17 @@ export function AppShell(props: AppShellProps) {
     // Controlled when a resizable panel is given a width; otherwise AppShell owns
     // it, exactly as `panelMaximized` above.
     const panelWidthControlled = panelResizable && local.panelWidth !== undefined;
-    const panelWidth = panelWidthControlled
+    const panelWidthBase = panelWidthControlled
         ? clamp(local.panelWidth!, panelMin, panelMax)
         : panelWidthState;
-    function applyPanelWidth(next: number) {
-        if (!panelWidthControlled) setPanelWidthState(next);
+    const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
+    function previewPanelWidth(next: number) {
+        if (panelWidthControlled) setPanelDragWidth(next);
+        else setPanelWidthState(next);
+    }
+    function settlePanelWidth(next: number) {
         local.onPanelWidthChange?.(next);
+        setPanelDragWidth(undefined);
     }
     const panelMaximizable = local.panelMaximizable === true;
     const showSidebarHandle = sidebarInteractive && !sidebarCollapsed;
@@ -634,7 +658,8 @@ export function AppShell(props: AppShellProps) {
                                     label={local.panelResizeLabel ?? "Resize panel"}
                                     max={panelMax}
                                     min={panelMin}
-                                    onResize={applyPanelWidth}
+                                    onResize={previewPanelWidth}
+                                    onResizeEnd={settlePanelWidth}
                                     value={panelWidth}
                                 />
                             ) : null}
