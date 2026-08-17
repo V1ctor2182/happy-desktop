@@ -177,14 +177,13 @@ const glyphs: Record<IconName, IconGlyph> = {
     sun: { set: "ionicons", name: "sunny-outline" },
     moon: { set: "ionicons", name: "moon-outline" },
     // The panel and its rail, with no arrow in it: the control says what the
-    // window is made of, and the button's label says which way it goes. Ink in
-    // the rail means the column is there now; a bare line means the panel is
-    // whole and the column is gone.
-    "sidebar-collapse": { set: "drawn", name: "panel-rail-filled" },
+    // window is made of, and the button's label says which way it goes. One
+    // shape in both states, so the toggle never changes under the pointer.
+    "sidebar-collapse": { set: "drawn", name: "panel-rail" },
     "sidebar-expand": { set: "drawn", name: "panel-rail" },
     // The rail is drawn on the left, where the sidebar is. The panel names are
     // the same act at the other edge, so they paint the same shape mirrored.
-    "panel-collapse": { set: "drawn", name: "panel-rail-filled", mirrored: true },
+    "panel-collapse": { set: "drawn", name: "panel-rail", mirrored: true },
     "panel-expand": { set: "drawn", name: "panel-rail", mirrored: true },
     // Filling the window and going back to a docked column, as distinct from
     // hiding the panel: the pair above says whether the panel is there at all.

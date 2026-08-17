@@ -24,15 +24,21 @@ import type { ReactNode } from "react";
  * Ionicon or Octicon it maps to. This file exists for one shape the two
  * families do not contain.
  */
-export type DrawnGlyphName = "panel-rail" | "panel-rail-filled";
+export type DrawnGlyphName = "panel-rail";
 
-/** The rail sits at x 5..6 — a compartment just under a third of the panel. */
-const RAIL_CENTRE = 5.5;
+/** The rail's stroke centreline, a compartment just under a third across. */
+const RAIL_X = 5.5;
 
 /**
- * The panel outline: the 14 x 12 rounded box every panel state shares.
- * `strokeWidth` is on the 16 grid, so it scales with the icon like a glyph.
+ * The rail is a short line rather than a full-height divider or a solid
+ * compartment. Both of those were heavier than the outline holding them: a
+ * fill puts more ink in this glyph than any Ionicons outline beside it carries
+ * in total, and a divider that meets the frame reads as a second frame edge.
+ * A line inset 2 from the inner edges says the same thing at the weight of the
+ * rest of the set.
  */
+const RAIL_INSET = 2;
+
 const outline = (
     <rect
         fill="none"
@@ -47,46 +53,29 @@ const outline = (
     />
 );
 
-/**
- * The compartment as solid ink, drawn on outer geometry (x 1..5.5, y 2..14)
- * so its edge meets the outer edge of the outline stroke rather than showing a
- * seam inside it.
- */
-const railFill = (
-    <path
-        d={`M ${RAIL_CENTRE} 2 H 3 A 2 2 0 0 0 1 4 V 12 A 2 2 0 0 0 3 14 H ${RAIL_CENTRE} Z`}
-        fill="currentColor"
-    />
-);
-
-const railLine = (
+const rail = (
     <line
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth={1}
-        x1={RAIL_CENTRE}
-        x2={RAIL_CENTRE}
-        y1={2.5}
-        y2={13.5}
+        x1={RAIL_X}
+        x2={RAIL_X}
+        y1={2.5 + RAIL_INSET}
+        y2={13.5 - RAIL_INSET}
     />
 );
 
 /*
- * The pair reads as one idea in two states: the panel is there and full, or the
- * panel is there and empty. Same silhouette, so a toggle never jumps.
+ * One shape for the affordance, in both of its states. The control is the same
+ * act whichever way the panel currently sits, and its label already says which
+ * way it goes; a glyph that changed under the pointer would be the only thing
+ * in the chrome that does.
  */
 export const drawnGlyphs: Record<DrawnGlyphName, ReactNode> = {
     "panel-rail": (
         <>
             {outline}
-            {railLine}
-        </>
-    ),
-    "panel-rail-filled": (
-        <>
-            {railFill}
-            {outline}
-            {railLine}
+            {rail}
         </>
     ),
 };
