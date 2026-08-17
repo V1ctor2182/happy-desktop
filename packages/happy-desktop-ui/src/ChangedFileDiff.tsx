@@ -1,6 +1,7 @@
 import { MultiFileDiff } from "@pierre/diffs/react";
 import type { CSSProperties, ReactNode } from "react";
 import { CodeEditor } from "./CodeEditor";
+import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
 import { SegmentedControl } from "./SegmentedControl";
 
 /**
@@ -175,6 +176,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                                 light: "pierre-light",
                             },
                             themeType: props.appearance,
+                            unsafeCSS: PIERRE_PANE_CSS,
                         }}
                     />
                 )}

@@ -126,10 +126,17 @@
 }
 
 /* `CodeBlock` carries the type and material; the preview only says that the
-   file fills the pane it was given rather than the height of its own text. */
+   file fills the pane it was given rather than the height of its own text.
+   The first line sits against the header rather than below a band of blank
+   surface: the header already names the file, so a gap above line 1 only reads
+   as the file starting late. The scrollbar is the platform's own overlay and
+   takes no width, so each line still ends with a spacer wide enough for the
+   thumb to be scrolled out from under. */
 .happy2-file-preview__source-renderer {
     flex: 0 0 auto;
     min-height: 100%;
+    --diffs-gap-block: 0px;
+    --happy2-code-scrollbar-width: 12px;
 }
 
 /* ---- Notices ---------------------------------------------------------- */

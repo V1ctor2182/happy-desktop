@@ -1,6 +1,7 @@
 import { EXTENSION_TO_FILE_FORMAT } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
 import type { CSSProperties } from "react";
+import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
 
 /** Every language name Pierre's own extension table can produce. */
 const FENCE_LANGUAGES = new Set<string>(
@@ -83,6 +84,9 @@ export function CodeBlock(props: CodeBlockProps) {
                 disableLineNumbers: props.lineNumbers !== true,
                 overflow: "scroll",
                 theme: { dark: "pierre-dark", light: "pierre-light" },
+                // Whatever scrolls this code is outside the renderer, so its own
+                // reserved gutter would only leave a dead lane beside every line.
+                unsafeCSS: PIERRE_PANE_CSS,
             }}
             style={props.style}
         />

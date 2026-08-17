@@ -42,8 +42,13 @@
     scrollbar-color: var(--divider) transparent;
 }
 
+/* The first line sits against the header above it. The header already names the
+   file, so surface between it and line 1 only reads as the file starting late —
+   and the active line's shading, which runs the full width, has to begin where
+   the file begins. The room at the bottom is scroll-past-end, which is a
+   different thing and stays. */
 .happy2-code-editor .cm-content {
-    padding: 8px 0 32px;
+    padding: 0 0 32px;
 }
 
 .happy2-code-editor .cm-line {

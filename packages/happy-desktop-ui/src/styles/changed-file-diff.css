@@ -36,10 +36,26 @@
 }
 
 .happy2-changed-file-diff__body {
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
-    overflow: auto;
+    /* Preview and Edit hand scrolling to their own inner viewers. */
+    overflow: hidden;
     scrollbar-color: var(--divider) transparent;
+}
+
+.happy2-changed-file-diff[data-mode="unified"] .happy2-changed-file-diff__body,
+.happy2-changed-file-diff[data-mode="split"] .happy2-changed-file-diff__body {
+    /*
+     * The renderer owns both scroll axes: Pierre keeps horizontal scrolling
+     * inside each code column, while the renderer host owns the one vertical
+     * scrollport for the whole file. Keeping the body clipped prevents a
+     * second native scrollbar from reserving a blank lane beside the rows.
+     */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* A preview is a whole viewer that owns its own scrolling — a document with a
@@ -52,9 +68,19 @@
 }
 
 .happy2-changed-file-diff__renderer {
+    flex: 1 1 auto;
     display: block;
+    width: 100%;
     min-width: 0;
-    min-height: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* The platform draws and sizes this scrollbar, exactly as it does for the
+       file viewer's editor: same inset, same colour, same growth under the
+       pointer. Matching it by hand produced a bar that was recognisably not
+       the system's. */
+    scrollbar-color: var(--divider) transparent;
+    --happy2-code-scrollbar-width: 12px;
     --diffs-font-family: var(--happy2-font-mono);
     --diffs-header-font-family: var(--happy2-font-ui);
     --diffs-font-size: 12px;
