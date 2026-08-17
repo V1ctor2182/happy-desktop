@@ -177,8 +177,10 @@ import {
     type MenuItem,
     type FileTreeNode,
     type FileTreeSelectModifiers,
+    type KeyboardShortcut,
     type RigPeerState,
     type SidebarItem,
+    type SidebarNumberShortcutTarget,
     type SidebarReorder,
     type SidebarSection,
     type TabItem,
@@ -1621,6 +1623,44 @@ function rigSections(
 }
 
 /**
+ * Command-number destinations prioritize the project somebody is working in:
+ * its main checkout is always first, followed by its visible workspaces. Any
+ * remaining digits focus other projects in the sidebar's ordinary top-to-bottom
+ * Rig/project order. Sidebar intersects this order with the rows it actually
+ * draws, so a folded workspace consumes no number.
+ */
+function projectShortcutTargets(
+    directory: AppRigDirectorySnapshot,
+    activeRigId: string | undefined,
+    activeProjectId: RigProjectId | undefined,
+): readonly SidebarNumberShortcutTarget[] {
+    const activeRig = directory.rigs.find((rig) => rig.id === activeRigId);
+    const activeProject = activeRig?.projects.find((project) => project.id === activeProjectId);
+    const target = (
+        rig: AppRigEntry,
+        id: RigProjectId | RigWorktreeId,
+    ): SidebarNumberShortcutTarget => ({
+        itemId: rigItemId(rig.id, id),
+        sectionId: `rig:${rig.id}`,
+    });
+    return [
+        ...(activeRig && activeProject
+            ? [
+                  target(activeRig, activeProject.id),
+                  ...activeProject.worktrees.map((worktree) => target(activeRig, worktree.id)),
+              ]
+            : []),
+        ...directory.rigs.flatMap((rig) =>
+            rig.projects.flatMap((project) =>
+                rig.id === activeRig?.id && project.id === activeProject?.id
+                    ? []
+                    : [target(rig, project.id)],
+            ),
+        ),
+    ];
+}
+
+/**
  * The machines this Rig is peered with that the window has no connection to,
  * reported under the projects.
  *
@@ -1960,10 +2000,9 @@ export function AppRigView(props: AppRigViewProps) {
             : (profiles.selectedProfileId ?? rigOwnerAuthor.id);
     const activeAvailability = active ? rigEntryAvailability(active) : undefined;
     const localAvailability = localRig ? rigEntryAvailability(localRig) : undefined;
-    const shortcutProject =
-        active && activeAvailability?.online && props.groupId
-            ? rowOwnerFind(active.projects, props.groupId)?.project
-            : undefined;
+    const addressedProject =
+        active && props.groupId ? rowOwnerFind(active.projects, props.groupId)?.project : undefined;
+    const shortcutProject = activeAvailability?.online ? addressedProject : undefined;
     const workspaceCreateTarget =
         active && shortcutProject?.lifecycle.phase === "ready"
             ? { projectId: shortcutProject.id, rigId: active.id }
@@ -2190,6 +2229,11 @@ export function AppRigView(props: AppRigViewProps) {
         <Sidebar
             actions={pinned}
             numberShortcuts="navigate"
+            numberShortcutTargets={projectShortcutTargets(
+                directory,
+                active?.id,
+                addressedProject?.id,
+            )}
             activeItemId={
                 props.documentId && selectedDocumentItem && localRig
                     ? folderItemRowId(localRig.id, selectedDocumentItem.id)
@@ -3269,7 +3313,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // One strip, holding the group's sessions and its open files together in
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
-    const activeMainTabId = workspace.activeMainViewId ?? props.chatId;
     const groupTabs: TabItem[] = [
         ...tabsOrdered(
             openGroup
@@ -3284,11 +3327,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             workspace.tabOrder,
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
-    ].map((tab) =>
-        !panelCloseTarget && tab.id === activeMainTabId && tab.closable !== false
-            ? { ...tab, shortcut: APP_SHORTCUTS.tabClose }
-            : tab,
-    );
+    ];
     // Closing a tab archives the session behind it, while a file tab simply
     // closes. The close control and every context-menu sweep funnel through
     // this one routine, so a sweep behaves exactly like closing each tab by
@@ -3461,7 +3500,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 // own — the reader's choice to have it open is untouched here.
                 panel.open && !openGroupPreparing ? (
                     <RigPanelBody
-                        activeTabShortcut={panelCloseTarget ? APP_SHORTCUTS.tabClose : undefined}
+                        {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
                         activity={conversation.type === "ready" ? conversation.value : undefined}
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
@@ -3841,6 +3880,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
+                            {...(panelCloseTarget ? {} : { closeShortcut: APP_SHORTCUTS.tabClose })}
                             onClose={groupTabClose}
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
@@ -5615,8 +5655,6 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 }
 
 function RigPanelBody(props: {
-    /** Held-Command hint for the active closable tab, when it is the Cmd-W target. */
-    activeTabShortcut?: TabItem["shortcut"];
     activity?: RigConversationSnapshot;
     browserContent?: BrowserContentRenderer;
     /** The machine the open session belongs to, absent on this window's own. */
@@ -5625,6 +5663,7 @@ function RigPanelBody(props: {
     mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
+    closeShortcut?: KeyboardShortcut;
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
     layout: RigFileLayout;
@@ -5760,11 +5799,7 @@ function RigPanelBody(props: {
             : []),
         ...toolTabItems(panelTools),
     ];
-    const tabs = baseTabs.map((tab) =>
-        props.activeTabShortcut && tab.id === props.panel.activeViewId && tab.closable !== false
-            ? { ...tab, shortcut: props.activeTabShortcut }
-            : tab,
-    );
+    const tabs = baseTabs;
     return (
         <>
             {/* Both of the panel's own chrome controls, together at its leading
@@ -5833,6 +5868,7 @@ function RigPanelBody(props: {
                     }
                     activeId={props.panel.activeViewId}
                     closeLabel="Close tab"
+                    {...(props.closeShortcut ? { closeShortcut: props.closeShortcut } : {})}
                     onClose={props.onViewClose}
                     onSelect={(tabId) => {
                         if (tabId === "files") props.store.filesSelect();

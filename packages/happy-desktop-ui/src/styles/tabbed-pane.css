@@ -42,7 +42,7 @@
 
 .happy2-tabbed-pane__scroller {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -53,8 +53,7 @@
     display: none;
 }
 
-/* Sized by its content, so it is the strip — not the scrollport — that bounds
-   how far the sticky actions can travel. */
+/* Sized by its content so the following action remains beside a short strip. */
 .happy2-tabbed-pane__strip {
     display: flex;
     flex: none;
@@ -84,46 +83,20 @@
 }
 
 /*
- * The actions follow the last tab inside the scrollport, so the "add tab"
- * control reads as the next thing after the tabs. `sticky` is what keeps that
- * from costing reachability: once the strip overflows, the control parks
- * against the trailing edge rather than scrolling out of the surface, and its
- * own background keeps the tabs passing underneath from showing through.
+ * The actions follow the tab scrollport, so the "add tab" control reads as the
+ * next thing after the tabs while remaining visible when the strip overflows.
+ * Keeping it outside the clipping scrollport also lets a shortcut hint float
+ * below the unchanged control instead of widening the bar.
  */
 .happy2-tabbed-pane__actions {
-    position: sticky;
-    right: 0;
     display: flex;
     flex: none;
     align-items: center;
     gap: 4px;
     /* No leading padding: the last tab already ends with its own, and doubling
-       it left the "+" stranded away from the tabs. The trailing padding is the
-       gutter the control keeps once it is stuck against the edge. */
+       it leaves the "+" stranded away from the tabs. The trailing padding is
+       the bar's ordinary outer gutter. */
     padding: 0 8px 0 0;
-    background: var(--surface);
-    box-shadow: inset 0 -1px var(--divider);
-}
-
-/*
- * A shortcut for the strip's own action belongs beside that action. The bar is
- * an overflow clip, so Button's usual cap beneath the control would be cut off;
- * here the held state widens the icon button and brings the cap into its line.
- */
-.happy2-tabbed-pane__actions .happy2-button[data-shortcut-hint] > .happy2-button__shortcut-hint {
-    position: static;
-    transform: none;
-}
-
-[data-shortcut-hints] .happy2-tabbed-pane__actions .happy2-button[data-shortcut-hint] {
-    gap: 4px;
-}
-
-[data-shortcut-hints]
-    .happy2-tabbed-pane__actions
-    .happy2-button[data-shortcut-hint][data-icon-only] {
-    width: auto;
-    padding: 0 4px 0 7px;
 }
 
 .happy2-tabbed-pane__body {

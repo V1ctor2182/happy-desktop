@@ -214,6 +214,13 @@ export type SidebarSection = {
      */
     error?: string;
 };
+
+/** One visible sidebar destination the caller wants Command-numbered. */
+export type SidebarNumberShortcutTarget = {
+    itemId: string;
+    sectionId: string;
+};
+
 /**
  * The one move a reorder drag made: the row that travelled and the row it now
  * follows among the peers it was dragged between, `null` when it landed first.
@@ -299,11 +306,14 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      */
     onSectionAction?: (sectionId: string, source: SidebarSectionActionSource) => void;
     /**
-     * Gives the first nine visible section destinations Command-1…9 caps.
+     * Gives up to nine visible section destinations Command-1…9 caps.
      * `navigate` also binds the chords; `display` is the deterministic fixture
-     * state. Pinned utilities and Compose do not consume destination digits.
+     * state. `numberShortcutTargets` can state their order; otherwise visible
+     * rows are numbered in reading order. Pinned utilities and Compose never
+     * consume destination digits.
      */
     numberShortcuts?: "display" | "navigate";
+    numberShortcutTargets?: readonly SidebarNumberShortcutTarget[];
     sections: SidebarSection[];
     style?: CSSProperties;
     subtitle?: string;
@@ -383,16 +393,28 @@ const NUMBER_SHORTCUTS = Array.from({ length: 9 }, (_, index) =>
     commandShortcut(String(index + 1)),
 );
 
-function shortcutRowsOf(sections: readonly SidebarSection[]): readonly SidebarShortcutRow[] {
-    return sections
-        .flatMap((section) =>
-            section.headingOnly
-                ? []
-                : visibleRows(section.items).map((row) => ({
-                      item: row.item,
-                      sectionId: section.id,
-                  })),
-        )
+function shortcutRowsOf(
+    sections: readonly SidebarSection[],
+    targets?: readonly SidebarNumberShortcutTarget[],
+): readonly SidebarShortcutRow[] {
+    const rows = sections.flatMap((section) =>
+        section.headingOnly
+            ? []
+            : visibleRows(section.items).map((row) => ({
+                  item: row.item,
+                  sectionId: section.id,
+              })),
+    );
+    if (targets === undefined) return rows.slice(0, 9);
+    const rowsByKey = new Map(rows.map((row) => [rowKey(row.sectionId, row.item.id), row]));
+    return targets
+        .flatMap((target) => {
+            const key = rowKey(target.sectionId, target.itemId);
+            const row = rowsByKey.get(key);
+            if (!row) return [];
+            rowsByKey.delete(key);
+            return [row];
+        })
         .slice(0, 9);
 }
 
@@ -748,7 +770,7 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
             </span>
             {props.action.shortcut ? (
                 <KeyCap
-                    className="happy2-sidebar__item-action-shortcut"
+                    className="happy2-sidebar__item-action-shortcut happy2-shortcut-hint--floating"
                     decorative
                     keys={props.action.shortcut.caps}
                 />
@@ -822,8 +844,6 @@ function SidebarRow({
     const swapsTrailing = () =>
         trailingActions().length > 0 &&
         trailingActions().every((control) => control.action.reveal === "hover");
-    const actionShortcut = () =>
-        trailingActions().some((control) => control.action.shortcut !== undefined);
     const trailingLane = () => (
         <span className="happy2-sidebar__item-actions" data-happy-desktop-ui="sidebar-item-actions">
             {trailingActions().map((control) => (
@@ -953,7 +973,6 @@ function SidebarRow({
             data-lifecycle={lifecycle()}
             data-status={item().status}
             data-share={item().share?.status}
-            data-shortcut-action={actionShortcut() ? "" : undefined}
             data-shortcut-row={props.shortcut ? "" : undefined}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
@@ -1238,6 +1257,7 @@ export function Sidebar(props: SidebarProps) {
         "onItemCollapseToggle",
         "onItemReorder",
         "numberShortcuts",
+        "numberShortcutTargets",
         "onSectionAction",
         "sections",
         "style",
@@ -1319,7 +1339,9 @@ export function Sidebar(props: SidebarProps) {
     const numberShortcutNavigation = local.numberShortcuts === "navigate";
     const sections = local.sections;
     const onItemSelect = local.onItemSelect;
-    const shortcutRows = numberShortcuts ? shortcutRowsOf(sections) : [];
+    const shortcutRows = numberShortcuts
+        ? shortcutRowsOf(sections, local.numberShortcutTargets)
+        : [];
     const shortcutNavigate = useEffectEvent((event: KeyboardEvent) => {
         const index = NUMBER_SHORTCUTS.findIndex((shortcut) =>
             commandShortcutMatches(event, shortcut),

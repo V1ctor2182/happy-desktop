@@ -20,8 +20,9 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style">
      */
     loading?: boolean;
     /**
-     * Command-key hint. It is hidden until an ancestor carries
-     * `data-shortcut-hints`, normally after AppShell's deliberate Command hold.
+     * Command-key hint. It floats below the unchanged button after the ordinary
+     * hover delay, or immediately when an ancestor carries
+     * `data-shortcut-hints` after AppShell's deliberate Command hold.
      */
     shortcut?: KeyboardShortcut;
     size?: ButtonSize;

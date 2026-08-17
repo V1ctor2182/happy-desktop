@@ -161,7 +161,7 @@ export function ButtonPage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="held-Command discovery · cap sits 4px beneath the unchanged 28px control"
+                    detail="500ms hover or held-Command discovery · cap sits 4px beneath the unchanged 28px control"
                     label="Shortcut hint"
                     number="B-08"
                     stage="app"

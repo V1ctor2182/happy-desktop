@@ -108,7 +108,7 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="the strip scrolls; actions stay pinned"
+                    detail="the strip scrolls; its action stays visible outside the clip"
                     label="Many long tabs"
                     number="T-03"
                     stage="app"
@@ -141,8 +141,8 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="The add-session action rests as the same square plus button, then widens inside the clipped tab bar to put Cmd-T directly beside its glyph while Command is held."
-                    label="Bar-action shortcut — resting and held"
+                    detail="The add-session action stays the same square plus button at rest, on hover, and while Command is held; its Cmd-T cap floats below without moving the strip."
+                    label="Bar-action shortcut — stable geometry"
                     number="T-06"
                     stage="app"
                 >
@@ -178,7 +178,7 @@ export function TabbedPanePage() {
                                 <Pane active="one" tabs={sessionTabs} withAction withShortcut />
                             </div>
                         ))}
-                        <DimensionRule label="rest: action 28 square · held: + and ⌘T share the bar" />
+                        <DimensionRule label="action 28 square in every state · cap floats below" />
                     </div>
                 </Specimen>
             </div>

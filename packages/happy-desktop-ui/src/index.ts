@@ -200,6 +200,7 @@ export {
     sidebarReorderMove,
     type SidebarItem,
     type SidebarItemAction,
+    type SidebarNumberShortcutTarget,
     type SidebarProps,
     type SidebarReorder,
     type SidebarSection,

@@ -1,12 +1,10 @@
 import { type ReactNode } from "react";
-import { commandShortcut } from "../../src/keyboardShortcut";
 import { type MenuItem } from "../../src/Menu";
 import { type TabItem, Tabs, type TabsSize } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-025";
-const closeShortcut = commandShortcut("w");
 const inboxTabs: TabItem[] = [
     { id: "all", label: "All", icon: "inbox" },
     { id: "unread", label: "Unread", unread: true },
@@ -147,68 +145,6 @@ export function TabsPage() {
                             tabs={inboxTabs}
                         />
                     </Stack>
-                </Specimen>
-            </div>
-
-            <div className="specimen-grid">
-                <Specimen
-                    detail="The active closable tab holds Cmd-W. Its ordinary close lane rests unchanged, then yields to the cap while Command is held; a permanent tab never advertises the shortcut."
-                    label="Active close shortcut — resting and held"
-                    number="T-12"
-                    stage="app"
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "20px",
-                            padding: "24px",
-                        }}
-                    >
-                        {[
-                            { held: false, label: "REST" },
-                            { held: true, label: "COMMAND HELD" },
-                        ].map((state) => (
-                            <div
-                                data-shortcut-hints={state.held ? "" : undefined}
-                                key={state.label}
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "8px",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        color: "var(--text-secondary)",
-                                        font: "var(--font-caption)",
-                                    }}
-                                >
-                                    {state.label}
-                                </span>
-                                <Bar
-                                    active="logs"
-                                    onClose={() => {}}
-                                    tabs={[
-                                        { closable: true, id: "plan", label: "Plan" },
-                                        {
-                                            closable: true,
-                                            id: "logs",
-                                            label: "Build logs",
-                                            shortcut: closeShortcut,
-                                        },
-                                        {
-                                            closable: false,
-                                            icon: "files",
-                                            id: "files",
-                                            label: "Files",
-                                        },
-                                    ]}
-                                />
-                            </div>
-                        ))}
-                        <DimensionRule label="rest: close lane 16 · held: active lane becomes ⌘W · permanent Files unchanged" />
-                    </div>
                 </Specimen>
             </div>
 

@@ -267,7 +267,7 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="deterministic held-Command state: the sidebar toggle and descendant panel control reveal out-of-flow KeyCaps without changing either hit box"
+                detail="deterministic held-Command state after the 500ms discovery delay: the sidebar toggle and descendant panel control reveal out-of-flow KeyCaps without changing either hit box"
                 label="Command shortcuts · held"
                 number="09"
                 stage="chrome"

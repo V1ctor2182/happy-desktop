@@ -226,15 +226,37 @@
 .happy2-shortcut-hint--floating {
     position: absolute;
     z-index: 4;
-    top: calc(100% + 4px);
+    /* Hidden hints stay inside their owner so they add no phantom scroll range. */
+    top: 50%;
     left: 50%;
-    display: none;
-    transform: translateX(-50%);
+    display: inline-flex;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    visibility: hidden;
     pointer-events: none;
+    transition:
+        opacity 80ms ease,
+        visibility 0s linear 80ms,
+        top 0s linear 80ms,
+        transform 0s linear 80ms;
 }
 
-[data-shortcut-hints] .happy2-shortcut-hint--floating {
-    display: inline-flex;
+[data-shortcut-hint]:hover > .happy2-shortcut-hint--floating {
+    top: calc(100% + 4px);
+    opacity: 1;
+    transform: translateX(-50%);
+    visibility: visible;
+    transition-delay: 500ms;
+}
+
+[data-shortcut-hint]:focus-visible > .happy2-shortcut-hint--floating,
+[data-shortcut-hints] .happy2-shortcut-hint--floating,
+[data-shortcut-hints] [data-shortcut-hint]:hover > .happy2-shortcut-hint--floating {
+    top: calc(100% + 4px);
+    opacity: 1;
+    transform: translateX(-50%);
+    visibility: visible;
+    transition-delay: 0ms;
 }
 
 .happy2-key-cap__label {
@@ -279,6 +301,10 @@
     vector-effect: non-scaling-stroke;
 }
 
+.happy2-key-cap__key svg[data-shortcut-symbol="⌘"] {
+    transform: translateY(0.5px);
+}
+
 /*
  * ---- Optical corrections (measured; see Badge.test.tsx) ---------------
  *
@@ -306,8 +332,10 @@
      * KeyCap vertical is calibrated on '0' (bilaterally symmetric figure band)
      * at the integer fixture position used by Badge.test.tsx. The raster snaps
      * the '0' centroid onto the 10px slot center with no text shift; the
-     * modifier symbols rise 0.5px to sit on that same axis. Chromium and Gecko
-     * rasterize this identically, so only WebKit overrides the symbol shift.
+     * modifier symbols rise 0.5px to sit on that same axis. The Command mark
+     * carries its own 0.5px downward correction above: its four rounded lobes
+     * otherwise read visibly high beside a lining digit. Chromium and Gecko
+     * rasterize the shared slot identically, so only WebKit overrides it.
      */
     --happy2-keycap-symbol-y: -0.5px;
     --happy2-keycap-text-y: 0px;

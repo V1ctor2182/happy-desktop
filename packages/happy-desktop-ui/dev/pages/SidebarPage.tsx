@@ -753,13 +753,6 @@ const SHORTCUT_SECTIONS: SidebarSection[] = [
         id: "shortcuts",
         items: [
             {
-                badge: 4,
-                icon: "inbox",
-                id: "inbox",
-                kind: "view",
-                label: "Inbox",
-            },
-            {
                 action: {
                     icon: "plus",
                     label: "New workspace in keyboard-shortcuts",
@@ -771,15 +764,32 @@ const SHORTCUT_SECTIONS: SidebarSection[] = [
                 status: "working",
             },
             {
-                icon: "archive",
-                id: "folder",
-                kind: "folder",
-                label: "Design notes",
+                depth: 1,
+                id: "workspace-hints",
+                kind: "workspace",
+                label: "hover-hints",
+            },
+            {
+                depth: 1,
+                id: "workspace-layout",
+                kind: "workspace",
+                label: "stable-layout",
+            },
+            {
+                id: "other-project",
+                kind: "project",
+                label: "desktop-shell",
             },
         ],
         label: "This Mac",
     },
 ];
+const SHORTCUT_TARGETS = [
+    { itemId: "project", sectionId: "shortcuts" },
+    { itemId: "workspace-hints", sectionId: "shortcuts" },
+    { itemId: "workspace-layout", sectionId: "shortcuts" },
+    { itemId: "other-project", sectionId: "shortcuts" },
+] as const;
 
 export function SidebarPage() {
     return (
@@ -1140,7 +1150,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="rest and held-Command states · destinations get right-aligned number caps; the current project's plus carries Cmd-N; Create and pinned utilities stay unnumbered"
+                detail="rest and held-Command states · the current project's main checkout is Cmd-1, then its workspaces, then other projects; its plus keeps Cmd-N as a delayed floating hover hint"
                 label="Number shortcuts"
                 number="04b"
                 stage="app"
@@ -1171,9 +1181,10 @@ export function SidebarPage() {
                                 <Frame height={320}>
                                     <Sidebar
                                         actions={SHORTCUT_ACTIONS}
-                                        activeItemId="inbox"
+                                        activeItemId="project"
                                         composeLabel="Create"
                                         numberShortcuts="display"
+                                        numberShortcutTargets={SHORTCUT_TARGETS}
                                         onCompose={() => {}}
                                         onItemAction={() => {}}
                                         onItemSelect={() => {}}

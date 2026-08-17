@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type ReactNode } from "react";
+import type { KeyboardShortcut } from "./keyboardShortcut";
 import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
 import type { TabTransferTarget } from "./tabTransfer";
@@ -19,6 +20,8 @@ export type TabbedPaneProps = {
     onClose?: (id: string) => void;
     /** Accessible name of the close control, for example `Close session`. */
     closeLabel?: string;
+    /** Non-visual shortcut announced on the active tab's close control. */
+    closeShortcut?: KeyboardShortcut;
     /** Commits a drag with the tab ids in their new order; supplying it makes tabs draggable. */
     onReorder?: (ids: readonly string[]) => void;
     /** Returns the context-menu actions available for one tab. Empty means no menu. */
@@ -33,9 +36,9 @@ export type TabbedPaneProps = {
     size?: TabsSize;
     /**
      * Controls that ride directly after the last tab, such as an "add tab"
-     * affordance. They sit inside the strip's scrollport so they read as the
-     * next thing after the tabs, and stick to the trailing edge once the strip
-     * overflows, so they stay reachable however many tabs there are.
+     * affordance. They follow the shrinkable tab scrollport so they read as the
+     * next thing after a short strip and stay reachable when a long strip
+     * scrolls. Living outside that clip also lets their overlays float below.
      */
     actions?: ReactNode;
 };
@@ -48,8 +51,8 @@ export type TabbedPaneProps = {
  * grows, so an unbounded number of tabs scrolls horizontally inside it instead
  * of wrapping into a second row that would move the body. Labels truncate at a
  * fixed tab width so the strip stays scannable, and the body owns its own
- * scrollports. The trailing actions scroll with the tabs while they fit and
- * stick to the trailing edge once they do not, so they are never scrolled off.
+ * scrollports. Trailing actions follow the shrinkable tab scrollport, staying
+ * beside short strips and remaining visible while long ones scroll.
  *
  * It renders exactly one body — whatever the owner passes as `children` for the
  * active tab — so switching tabs is the owner's state change, not a hidden
@@ -62,6 +65,7 @@ export function TabbedPane(props: TabbedPaneProps) {
         "children",
         "className",
         "closeLabel",
+        "closeShortcut",
         "onClose",
         "onDoubleClick",
         "onReorder",
@@ -88,10 +92,9 @@ export function TabbedPane(props: TabbedPaneProps) {
                     className="happy2-tabbed-pane__scroller"
                     data-happy-desktop-ui="tabbed-pane-scroller"
                 >
-                    {/* The strip is only as wide as the tabs and their actions,
-                        which is what bounds the sticky actions: with room to
-                        spare they stay beside the last tab instead of drifting
-                        to the far edge of an empty scrollport. */}
+                    {/* The strip is only as wide as the tabs. The action follows
+                        this shrinkable scrollport outside its clip, so it stays
+                        beside short strips and reachable beside long ones. */}
                     <div
                         className="happy2-tabbed-pane__strip"
                         data-happy-desktop-ui="tabbed-pane-strip"
@@ -100,6 +103,7 @@ export function TabbedPane(props: TabbedPaneProps) {
                             activeId={local.activeId}
                             className="happy2-tabbed-pane__tabs"
                             closeLabel={local.closeLabel}
+                            closeShortcut={local.closeShortcut}
                             onClose={local.onClose}
                             onDoubleClick={local.onDoubleClick}
                             onReorder={local.onReorder}
@@ -112,16 +116,16 @@ export function TabbedPane(props: TabbedPaneProps) {
                             transferTargets={local.transferTargets}
                             transferable={local.transferable}
                         />
-                        {local.actions ? (
-                            <div
-                                className="happy2-tabbed-pane__actions"
-                                data-happy-desktop-ui="tabbed-pane-actions"
-                            >
-                                {local.actions}
-                            </div>
-                        ) : null}
                     </div>
                 </div>
+                {local.actions ? (
+                    <div
+                        className="happy2-tabbed-pane__actions"
+                        data-happy-desktop-ui="tabbed-pane-actions"
+                    >
+                        {local.actions}
+                    </div>
+                ) : null}
             </div>
             <div className="happy2-tabbed-pane__body" data-happy-desktop-ui="tabbed-pane-body">
                 {local.children}

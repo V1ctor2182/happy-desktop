@@ -257,48 +257,6 @@
 }
 
 /*
- * Command discovery uses the active close lane instead of adding another box to
- * every tab. At rest the lane keeps its exact 16px contract; while Command is
- * held the KeyCap overlays the close/activity mark. The lane, label, and every
- * following tab retain their exact geometry.
- */
-.happy2-tabs__tab-shortcut {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    display: none;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-}
-
-[data-shortcut-hints]
-    .happy2-tabs__tab-trailing[data-shortcut-hint]
-    > :not(.happy2-tabs__tab-shortcut) {
-    opacity: 0;
-    pointer-events: none;
-}
-
-[data-shortcut-hints] .happy2-tabs__tab-trailing[data-shortcut-hint] > .happy2-tabs__tab-shortcut {
-    display: inline-flex;
-}
-
-/* A keyboard-focused close control never disappears under discovery. Keeping
-   it mounted preserves focus; once focused it retakes the lane and the cap
-   steps aside until focus moves on. */
-[data-shortcut-hints]
-    .happy2-tabs__tab-trailing[data-shortcut-hint]:focus-within
-    > .happy2-tabs__tab-close {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-[data-shortcut-hints]
-    .happy2-tabs__tab-trailing[data-shortcut-hint]:focus-within
-    > .happy2-tabs__tab-shortcut {
-    display: none;
-}
-
-/*
  * Active underline. left/right:0 span the full tab (padding box included);
  * bottom:-1px drops the 2px bar over the container's 1px hairline so the accent
  * replaces the hairline directly beneath the active tab.

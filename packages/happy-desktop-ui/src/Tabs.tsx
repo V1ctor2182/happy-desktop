@@ -9,7 +9,7 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
-import { CountBadge, KeyCap } from "./Badge";
+import { CountBadge } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
 import type { KeyboardShortcut } from "./keyboardShortcut";
@@ -57,11 +57,6 @@ export type TabItem = {
     dirty?: boolean;
     /** Marks the tab as carrying unread activity with a dot on its leading mark. */
     unread?: boolean;
-    /**
-     * Shortcut shown in the trailing lane while an ancestor carries
-     * `data-shortcut-hints`, normally on the one active tab Cmd-W will close.
-     */
-    shortcut?: KeyboardShortcut;
     /**
      * Gives the tab a generated brutalist mark derived from this string, so a
      * tab that has no icon still has a face the reader can aim at. Supply the
@@ -171,6 +166,8 @@ export type TabsProps = {
     onClose?: (id: string) => void;
     /** Accessible name of the close control, for example `Close session`. */
     closeLabel?: string;
+    /** Non-visual shortcut announced on the active tab's close control. */
+    closeShortcut?: KeyboardShortcut;
     /**
      * Commits a drag with the tab ids in their new order. Supplying it makes the
      * tabs draggable; the component only reports the order it was dragged into
@@ -295,6 +292,7 @@ export function Tabs(props: TabsProps) {
     const [local, rest] = partitionComponentProps(props, [
         "className",
         "closeLabel",
+        "closeShortcut",
         "style",
         "activeId",
         "onClose",
@@ -697,7 +695,6 @@ export function Tabs(props: TabsProps) {
                                 <span
                                     className="happy2-tabs__tab-trailing"
                                     data-happy-desktop-ui="tab-trailing"
-                                    data-shortcut-hint={tab.shortcut ? "" : undefined}
                                 >
                                     {activity ? (
                                         <span
@@ -714,7 +711,9 @@ export function Tabs(props: TabsProps) {
                                            must sit inside the tab box so it
                                            tracks its hover. */
                                         <span
-                                            aria-keyshortcuts={tab.shortcut?.aria}
+                                            aria-keyshortcuts={
+                                                active() ? local.closeShortcut?.aria : undefined
+                                            }
                                             aria-label={local.closeLabel ?? "Close tab"}
                                             className="happy2-tabs__tab-close"
                                             data-happy-desktop-ui="tab-close"
@@ -734,13 +733,6 @@ export function Tabs(props: TabsProps) {
                                         >
                                             <Icon name="close" size={12} />
                                         </span>
-                                    ) : null}
-                                    {tab.shortcut ? (
-                                        <KeyCap
-                                            className="happy2-tabs__tab-shortcut"
-                                            decorative
-                                            keys={tab.shortcut.caps}
-                                        />
                                     ) : null}
                                 </span>
                             ) : null)(

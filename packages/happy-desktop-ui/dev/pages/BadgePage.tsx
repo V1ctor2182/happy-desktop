@@ -116,6 +116,7 @@ export function BadgePage() {
             >
                 <div style={row}>
                     <KeyCap keys="⌘K" />
+                    <KeyCap keys="⌘1" />
                     <KeyCap keys="⇧⌘P" />
                     <KeyCap keys="⌥⌘K" />
                     <KeyCap keys="⌃K" />

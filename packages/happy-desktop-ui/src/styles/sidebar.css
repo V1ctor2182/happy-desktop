@@ -793,22 +793,12 @@
 }
 
 [data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-row]:not([data-shortcut-action]):not(
+    .happy2-sidebar__item[data-shortcut-row]:not(
         :has(> .happy2-sidebar__item-trailing:focus-within)
     )
     > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
         .happy2-sidebar__item-label
     ):not(.happy2-sidebar__item-shortcut) {
-    display: none;
-}
-
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-row][data-shortcut-action]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
-        .happy2-sidebar__item-label
-    ):not(.happy2-sidebar__item-shortcut):not(.happy2-sidebar__item-trailing) {
     display: none;
 }
 
@@ -1025,52 +1015,12 @@
     flex: none;
 }
 
+.happy2-sidebar__item-action[data-shortcut-hint] {
+    position: relative;
+}
+
 .happy2-sidebar__item-action-shortcut {
-    display: none;
     flex: none;
-}
-
-/*
- * The current project's plus carries Cmd-N. At rest it remains the exact 18px
- * control every project uses; while Command is held it widens in its existing
- * trailing lane and puts the cap directly beside the plus.
- */
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-action]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    .happy2-sidebar__item-action[data-shortcut-hint] {
-    width: auto;
-    gap: 3px;
-    padding: 0 3px;
-    opacity: 1;
-}
-
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-action]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    .happy2-sidebar__item-action[data-shortcut-hint]
-    > .happy2-sidebar__item-action-shortcut {
-    display: inline-flex;
-}
-
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-action]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    > .happy2-sidebar__item-trailing[data-swaps]
-    .happy2-sidebar__item-actions {
-    position: static;
-}
-
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-action]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    > .happy2-sidebar__item-trailing
-    > :not(.happy2-sidebar__item-actions) {
-    display: none;
 }
 
 .happy2-sidebar__item-action[data-reveal="hover"] {

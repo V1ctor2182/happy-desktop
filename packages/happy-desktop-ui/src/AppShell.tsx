@@ -51,7 +51,7 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     sidebarResizeLabel?: string;
     /**
      * Renders Command-key discovery for this window. `interactive` holds
-     * Command for 1.5s to reveal descendant hints and binds Command-B;
+     * Command for 500ms to reveal descendant hints and binds Command-B;
      * `display` renders the same caps for a deterministic fixture whose
      * ancestor supplies `data-shortcut-hints`.
      */
@@ -140,7 +140,7 @@ function panelMaxWidthOf(): number {
 const FIXED_SIDEBAR_MIN_WIDTH = 250;
 const REVEAL_WIDTH = 48;
 const WORKSPACE_MIN_WIDTH = 140;
-const SHORTCUT_HINT_DELAY_MS = 1_500;
+const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -466,6 +466,7 @@ export function AppShell(props: AppShellProps) {
             className="happy-desktop-app-shell__reveal-button"
             data-floating={revealFloating ? "" : undefined}
             data-happy-desktop-ui="app-shell-reveal-button"
+            data-shortcut-hint={shortcutHintsEnabled ? "" : undefined}
             onClick={() => setSidebarCollapsed(false)}
             type="button"
         >
@@ -580,6 +581,7 @@ export function AppShell(props: AppShellProps) {
                                         }
                                         className="happy-desktop-app-shell__sidebar-collapse"
                                         data-happy-desktop-ui="app-shell-sidebar-collapse"
+                                        data-shortcut-hint={shortcutHintsEnabled ? "" : undefined}
                                         onClick={() => setSidebarCollapsed(true)}
                                         type="button"
                                     >
