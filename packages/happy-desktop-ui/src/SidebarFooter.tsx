@@ -33,6 +33,8 @@ export type SidebarFooterProps = {
     onSettingsOpen?: () => void;
     /** Overrides the settings control's label. */
     settingsLabel?: string;
+    /** Development-only branch and Blueprint control, pinned beside the footer actions. */
+    devMenu?: ReactNode;
     /** The appearance currently rendered; picks the toggle's icon and label. */
     appearance: "dark" | "light";
     onAppearanceToggle: () => void;
@@ -85,28 +87,38 @@ export function SidebarFooter(props: SidebarFooterProps) {
                 ...props.style,
             }}
         >
-            {identity === undefined ? (
+            {identity !== undefined ? (
+                props.onProfileOpen ? (
+                    <button
+                        aria-label="Open profile"
+                        className="happy2-sidebar__profile"
+                        data-happy-desktop-ui="sidebar-profile"
+                        onClick={props.onProfileOpen}
+                        type="button"
+                    >
+                        {identity}
+                    </button>
+                ) : (
+                    <span
+                        className="happy2-sidebar__profile happy2-sidebar__profile--static"
+                        data-happy-desktop-ui="sidebar-profile"
+                    >
+                        {identity}
+                    </span>
+                )
+            ) : props.devMenu === undefined ? (
                 // No identity to show: the controls keep their trailing position
                 // rather than sliding to the left of an empty row.
                 <span style={{ flex: "1 1 auto" }} />
-            ) : props.onProfileOpen ? (
-                <button
-                    aria-label="Open profile"
-                    className="happy2-sidebar__profile"
-                    data-happy-desktop-ui="sidebar-profile"
-                    onClick={props.onProfileOpen}
-                    type="button"
-                >
-                    {identity}
-                </button>
-            ) : (
+            ) : null}
+            {props.devMenu !== undefined ? (
                 <span
-                    className="happy2-sidebar__profile happy2-sidebar__profile--static"
-                    data-happy-desktop-ui="sidebar-profile"
+                    className="happy2-sidebar__dev-build"
+                    data-happy-desktop-ui="sidebar-dev-build"
                 >
-                    {identity}
+                    {props.devMenu}
                 </span>
-            )}
+            ) : null}
             {props.actions}
             {props.onAdminOpen ? (
                 <Button

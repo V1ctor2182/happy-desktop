@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Avatar } from "../../src/Avatar";
 import { Button } from "../../src/Button";
-import { BuildIdentityPill } from "../../src/BuildIdentityPill";
+import { DevBuildMenu } from "../../src/DevBuildMenu";
 import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { SidebarUpdateAction, type SidebarUpdateActionProps } from "../../src/SidebarUpdateAction";
@@ -594,7 +594,22 @@ function PinnedReorderDemo() {
                 <Sidebar
                     actions={rows}
                     activeItemId=""
-                    headerTrailing={<BuildIdentityPill label="workspace-23" />}
+                    footer={
+                        <SidebarFooter
+                            appearance="light"
+                            devMenu={
+                                <DevBuildMenu
+                                    branch="feature/sidebar-reorder"
+                                    label="workspace-23"
+                                    onBlueprintOpen={() => setMove("opened Blueprint")}
+                                    onCopyPath={() => setMove("copied worktree path")}
+                                    path="/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop"
+                                />
+                            }
+                            onAppearanceToggle={() => {}}
+                            onSettingsOpen={() => {}}
+                        />
+                    }
                     onActionReorder={(reorder) => {
                         setMove(`${reorder.id} after ${reorder.afterId ?? "«front»"}`);
                         setRows((current) => [...listMove(current, reorder.id, reorder.afterId)]);

@@ -22,7 +22,9 @@
     color: var(--text);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
-    overflow: hidden;
+    /* The footer's development menu opens above the sidebar and must be able to
+       paint over the workspace; the body below owns its own scroll clipping. */
+    overflow: visible;
     -webkit-user-select: none;
     user-select: none;
 }
@@ -131,10 +133,6 @@
     min-width: 0;
     overflow: hidden;
     transform: translateY(2px);
-}
-
-.happy2-sidebar__header-trailing > .happy2-build-identity-pill {
-    max-width: 100%;
 }
 
 /* ---- Back / drill-down header ----------------------------------------- */
@@ -1075,6 +1073,12 @@
     height: var(--happy2-surface-footer-height);
     padding: 0 12px;
     border-top: 1px solid var(--divider);
+}
+
+.happy2-sidebar__dev-build {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .happy2-sidebar-update-action {

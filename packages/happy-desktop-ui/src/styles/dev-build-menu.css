@@ -1,0 +1,192 @@
+/*
+ * C-177 DevBuildMenu — a quiet branch trigger in the sidebar footer and the
+ * small development popover that opens above it. The trigger has no resting
+ * outline or status dot: the Blueprint glyph and branch name are enough.
+ */
+
+.happy2-dev-build-menu,
+.happy2-dev-build-menu * {
+    box-sizing: border-box;
+}
+
+.happy2-dev-build-menu {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-synthesis: none;
+}
+
+.happy2-dev-build-menu__trigger {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 28px;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy2-dev-build-menu__trigger:hover,
+.happy2-dev-build-menu[data-open] .happy2-dev-build-menu__trigger {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy2-dev-build-menu__trigger:focus-visible,
+.happy2-dev-build-menu__item:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+.happy2-dev-build-menu__trigger > .happy2-icon {
+    flex: none;
+    color: currentColor;
+}
+
+.happy2-dev-build-menu__trigger-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-dev-build-menu__menu {
+    position: absolute;
+    z-index: 30;
+    bottom: calc(100% + 8px);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 264px;
+    max-width: calc(100vw - 24px);
+    padding: 6px;
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy2-radius-md);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    user-select: none;
+}
+
+.happy2-dev-build-menu__eyebrow {
+    display: block;
+    flex: none;
+    height: 24px;
+    padding: 0 10px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.happy2-dev-build-menu__item {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 40px;
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--happy2-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy2-font-ui);
+    font-size: 14px;
+    font-weight: 550;
+    line-height: 18px;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy2-dev-build-menu__item:hover {
+    background: var(--surface-ripple);
+}
+
+.happy2-dev-build-menu__separator {
+    flex: none;
+    height: 1px;
+    margin: 4px 4px;
+    background: var(--divider);
+}
+
+.happy2-dev-build-menu__item-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy2-dev-build-menu__item-copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    gap: 1px;
+}
+
+.happy2-dev-build-menu__item-detail {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-dev-build-menu__branch {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 10px;
+    color: var(--text-secondary);
+    font-family: var(--happy2-font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 14px;
+}
+
+.happy2-dev-build-menu__branch > .happy2-vector-icon {
+    flex: none;
+}
+
+.happy2-dev-build-menu__branch > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

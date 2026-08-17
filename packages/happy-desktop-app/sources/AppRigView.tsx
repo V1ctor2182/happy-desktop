@@ -112,7 +112,7 @@ import {
     APP_SHELL_PANEL_DEFAULT_WIDTH,
     Banner,
     BrowserPanel,
-    BuildIdentityPill,
+    DevBuildMenu,
     type BrowserContentRenderer,
     HtmlPreviewFrame,
     type HtmlPreviewRenderer,
@@ -354,7 +354,7 @@ export interface AppRigViewProps {
     /** The host Rig this window is an interface onto, and what it currently holds. */
     rigs: AppRigDirectoryStore;
     /**
-     * This build's development identity, shown as a pill in the sidebar header.
+     * This build's development identity, shown in the sidebar footer menu.
      * Absent in the packaged product, where there is nothing to tell apart.
      */
     buildIdentity?: AppBuildIdentity;
@@ -1720,13 +1720,6 @@ function rigStatusLabel(rig: AppRigEntry): string {
 const INBOX_ITEM = "inbox";
 
 /**
- * The pinned row that opens the component workbench. It exists only in a
- * development build: it is a tool for the people building this window, not
- * something the reader's own work ever passes through.
- */
-const BLUEPRINT_ITEM = "blueprint";
-
-/**
  * What the window is addressing, read off the route: the open project, the
  * worktree inside it when the route names one, and the open conversation. A
  * worktree carries its project too, so a contribution addressed at a project is
@@ -2146,21 +2139,6 @@ export function AppRigView(props: AppRigViewProps) {
                   },
               ]
             : []),
-        // The component workbench is a development tool. Its row is a
-        // capability the host grants rather than an environment this
-        // component reads for itself: the router registers the workbench
-        // route, and hands down the way to open it, only in a build that
-        // has one. A host that offers no workbench shows no row.
-        ...(props.onBlueprintOpen
-            ? [
-                  {
-                      icon: "braces" as const,
-                      id: BLUEPRINT_ITEM,
-                      kind: "action" as const,
-                      label: "Blueprint",
-                  },
-              ]
-            : []),
     ];
     const pinned = pinnedArrange(pinnedOffered, navigationOrder.order);
     const sidebar = (
@@ -2171,11 +2149,9 @@ export function AppRigView(props: AppRigViewProps) {
                     ? folderItemRowId(localRig.id, selectedDocumentItem.id)
                     : experimental && props.inboxOpen
                       ? INBOX_ITEM
-                      : props.blueprintOpen
-                        ? BLUEPRINT_ITEM
-                        : props.groupId
-                          ? rigItemId(props.rigId, props.groupId)
-                          : ""
+                      : props.groupId
+                        ? rigItemId(props.rigId, props.groupId)
+                        : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -2203,25 +2179,24 @@ export function AppRigView(props: AppRigViewProps) {
                 <SidebarFooter
                     actions={sidebarUpdate}
                     appearance={appearance.appearance}
+                    devMenu={
+                        props.buildIdentity ? (
+                            <DevBuildMenu
+                                branch={props.buildIdentity.branch}
+                                label={props.buildIdentity.label}
+                                onBlueprintOpen={props.onBlueprintOpen}
+                                onCopyPath={() =>
+                                    void navigator.clipboard
+                                        .writeText(props.buildIdentity!.path)
+                                        .catch(() => undefined)
+                                }
+                                path={props.buildIdentity.path}
+                            />
+                        ) : undefined
+                    }
                     onAppearanceToggle={() => props.appearance.appearanceToggle()}
                     onSettingsOpen={props.onSettingsOpen}
                 />
-            }
-            headerTrailing={
-                props.buildIdentity ? (
-                    <BuildIdentityPill
-                        detail={props.buildIdentity.path}
-                        label={props.buildIdentity.label}
-                        // The path is the one thing a reader wants out of this
-                        // pill: it opens a terminal in the checkout this window
-                        // came from.
-                        onSelect={() =>
-                            void navigator.clipboard
-                                .writeText(props.buildIdentity!.path)
-                                .catch(() => undefined)
-                        }
-                    />
-                ) : undefined
             }
             headerAccessory={
                 active && active.status !== "connected" ? (
@@ -2482,10 +2457,6 @@ export function AppRigView(props: AppRigViewProps) {
             onItemSelect={(id) => {
                 if (id === INBOX_ITEM) {
                     props.onInboxOpen?.();
-                    return;
-                }
-                if (id === BLUEPRINT_ITEM) {
-                    props.onBlueprintOpen?.();
                     return;
                 }
                 // A link row opens what it points at, exactly as that thing's
