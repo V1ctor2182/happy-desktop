@@ -4405,6 +4405,7 @@ function RigFileBody(props: {
                 <ChangedFileDiff
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
+                    key={`${file.id}:${file.kind}`}
                     loading={file.loading}
                     mode={props.mode}
                     {...(newCacheKey === undefined ? {} : { newCacheKey })}

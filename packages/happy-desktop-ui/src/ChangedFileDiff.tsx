@@ -6,7 +6,7 @@ import {
     type FileDiffMetadata,
 } from "@pierre/diffs";
 import { FileDiff, useWorkerPool } from "@pierre/diffs/react";
-import { useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { CodeEditor } from "./CodeEditor";
 import { CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH } from "./CodeBlock";
 import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
@@ -215,7 +215,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     // pane cannot draw.
     const requested = props.mode ?? "unified";
     const mode = segments.some((segment) => segment.value === requested) ? requested : "unified";
-    const rendererMounted = useRef(false);
+    const [rendererMounted, setRendererMounted] = useState(false);
     // Parsing the patch is synchronous. Keep its inputs stable across unrelated
     // workspace notifications while this diff remains mounted; switching files
     // remounts it intentionally, and Pierre cache keys cover that lifetime
@@ -260,13 +260,13 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     // so scroll, expanded hunks, and native selection do not reset.
     const diffPostRender = useMemo(
         () => (_node: HTMLElement, _instance: unknown, phase: "mount" | "update" | "unmount") => {
-            rendererMounted.current = phase !== "unmount";
+            setRendererMounted(phase !== "unmount");
         },
         [],
     );
     const highlightGate = useMemo(
-        () => createDiffHighlightGate(pool, diff, rendererMounted.current),
-        [diff, pool],
+        () => createDiffHighlightGate(pool, diff, rendererMounted),
+        [diff, pool, rendererMounted],
     );
     const highlightState = useSyncExternalStore(
         highlightGate.subscribe,
