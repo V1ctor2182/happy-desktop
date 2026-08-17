@@ -779,9 +779,25 @@
     color: var(--text);
 }
 
+/*
+ * The name and the act about the row. The cluster takes the row's leftover
+ * width so badges and the trailing lane stay against the right edge; the label
+ * shrinks to the text and the control sits immediately after it. Extra space
+ * stays empty to the right of the control, which is what "beside the name"
+ * means for a short label and what keeps a long one from shoving the gear
+ * into the delta.
+ */
+.happy2-sidebar__item-name {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    column-gap: 4px;
+}
+
 .happy2-sidebar__item-label {
     display: block;
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     font-size: 13px;
@@ -815,8 +831,17 @@
         :has(> .happy2-sidebar__item-trailing:focus-within)
     )
     > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
-        .happy2-sidebar__item-label
+        .happy2-sidebar__item-name
     ):not(.happy2-sidebar__item-shortcut) {
+    display: none;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-row]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    .happy2-sidebar__item-name
+    > :not(.happy2-sidebar__item-label) {
     display: none;
 }
 

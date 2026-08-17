@@ -301,7 +301,7 @@ const treatmentSections: SidebarSection[] = [
                 id: "kind-project-narrow",
                 initials: "N",
                 kind: "project",
-                label: "Project — narrowest delta under two controls",
+                label: "Project — narrowest delta, settings beside the name",
                 secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
                 tone: "mint",
             },
@@ -310,7 +310,7 @@ const treatmentSections: SidebarSection[] = [
                 id: "kind-project-clean",
                 initials: "H",
                 kind: "project",
-                label: "Project — two trailing controls",
+                label: "Project — settings beside the name",
                 secondaryAction: { icon: "settings", label: "Project settings", reveal: "hover" },
                 tone: "ocean",
             },
@@ -662,9 +662,9 @@ function Frame(props: { children: ReactNode; height: number }) {
  * What they prove is that a workspace row's delta is in the same place whether
  * a session is running in it, whether it is the selected row, and whether the
  * pointer is on it — the same rows stated four ways, their deltas one column
- * down each frame. The project row heading them carries an always-visible + and
- * a hover-only settings control, which is the one trailing arrangement where
- * the slot holds the activity mark and the controls side by side.
+ * down each frame. The project row heading them carries an always-visible + in
+ * the trailing slot and a hover-only settings control immediately after its
+ * name, so the settings gear cannot widen the slot the worktrees share.
  */
 const ALIGNMENT_WORKTREES: readonly {
     readonly added: number;

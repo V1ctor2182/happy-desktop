@@ -30,7 +30,7 @@ import { RigPeerStatus, type RigPeerState } from "./RigPeerStatus";
 import { ShimmerText } from "./ShimmerText";
 import { SidebarNodes, type SidebarNode } from "./SidebarNodes";
 import { Spinner } from "./Spinner";
-/** One control in a row's trailing lane: its glyph, what it does, and when it shows. */
+/** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
     icon: IconName;
     label: string;
@@ -90,11 +90,11 @@ export type SidebarItem = {
      */
     action?: SidebarItemAction;
     /**
-     * A second control in the same trailing lane, immediately left of `action`
-     * and reported through `onItemSecondaryAction`. It is for an act about the
-     * row rather than the one the row is offering — configuring a project
-     * beside starting work in it — and it shares the lane so the row's text
-     * keeps its width whether or not the control is showing.
+     * A control immediately after the row's name, reported through
+     * `onItemSecondaryAction`. It is for an act about the row rather than the
+     * one the row is offering — configuring a project beside starting work in
+     * it — and it sits with the name so the trailing slot stays one cell and
+     * a project's delta lines up with the rows under it.
      */
     secondaryAction?: SidebarItemAction;
     /**
@@ -298,7 +298,7 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemSelect: (id: string) => void;
     /** Invoked when a row's trailing `action` control is used. */
     onItemAction?: (id: string) => void;
-    /** Invoked when a row's trailing `secondaryAction` control is used. */
+    /** Invoked when a row's name-side `secondaryAction` control is used. */
     onItemSecondaryAction?: (id: string) => void;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
@@ -847,25 +847,20 @@ function SidebarRow({
     const mentioned = () => (item().badge ?? 0) > 0;
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
-    // The row's trailing controls in the order they are read, left to right: an
-    // act about the row, then the act the row is offering.
+    // The act the row is offering, in the trailing slot. An act about the row
+    // itself sits after the name instead, so it cannot widen this slot.
     const trailingActions = (): {
         key: string;
         action: SidebarItemAction;
         onAction: () => void;
     }[] =>
-        [
-            item().secondaryAction && props.onSecondaryAction
-                ? {
-                      key: "secondary",
-                      action: item().secondaryAction!,
-                      onAction: props.onSecondaryAction,
-                  }
-                : undefined,
-            item().action && props.onAction
-                ? { key: "primary", action: item().action!, onAction: props.onAction }
-                : undefined,
-        ].filter((control) => control !== undefined);
+        item().action && props.onAction
+            ? [{ key: "primary", action: item().action!, onAction: props.onAction }]
+            : [];
+    const nameAction = () =>
+        item().secondaryAction && props.onSecondaryAction
+            ? { action: item().secondaryAction!, onAction: props.onSecondaryAction }
+            : undefined;
     // Every control is waiting for hover anyway, so what the row reports at rest
     // may occupy the same cell and step aside when they arrive.
     const swapsTrailing = () =>
@@ -1163,20 +1158,31 @@ function SidebarRow({
                     ) : null}
                 </span>
             ) : null}
-            <span className="happy2-sidebar__item-label" data-happy-desktop-ui="sidebar-item-label">
-                {/* The row's own colour, with a near-white band wiping through
-                    it. Busy is a passing state, so it may not restyle the name:
-                    an unread row is already heavier and darker than its
-                    neighbours, and painting the name again here would stack a
-                    second emphasis on top of one the row had already earned.
-                    Only the travelling band is new. */}
-                {shimmerLabel() ? (
-                    <ShimmerText sweep="sheen" tone="inherit">
-                        {item().label}
-                    </ShimmerText>
-                ) : (
-                    item().label
-                )}
+            <span className="happy2-sidebar__item-name" data-happy-desktop-ui="sidebar-item-name">
+                <span
+                    className="happy2-sidebar__item-label"
+                    data-happy-desktop-ui="sidebar-item-label"
+                >
+                    {/* The row's own colour, with a near-white band wiping through
+                        it. Busy is a passing state, so it may not restyle the name:
+                        an unread row is already heavier and darker than its
+                        neighbours, and painting the name again here would stack a
+                        second emphasis on top of one the row had already earned.
+                        Only the travelling band is new. */}
+                    {shimmerLabel() ? (
+                        <ShimmerText sweep="sheen" tone="inherit">
+                            {item().label}
+                        </ShimmerText>
+                    ) : (
+                        item().label
+                    )}
+                </span>
+                {nameAction() ? (
+                    <SidebarRowAction
+                        action={nameAction()!.action}
+                        onAction={nameAction()!.onAction}
+                    />
+                ) : null}
             </span>
             {props.shortcut ? (
                 <KeyCap

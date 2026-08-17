@@ -536,10 +536,12 @@ function sidebarItems(
                 ...(projectReports ? { reveal: "hover" as const } : {}),
             },
             ...sidebarLifecycle(project.lifecycle),
-            // Settings sits left of the plus and waits for hover: it is about
-            // the project, not about the work to start in it. The home project
-            // is left out — its name and its path are the machine's, so there
-            // is nothing there for the reader to set.
+            // Settings sits immediately after the name and waits for hover: it
+            // is about the project, not about the work to start in it, and
+            // keeping it out of the trailing slot is what keeps a project's
+            // delta in the same column as the worktrees under it. The home
+            // project is left out — its name and its path are the machine's,
+            // so there is nothing there for the reader to set.
             ...(project.kind === "home"
                 ? {}
                 : {
