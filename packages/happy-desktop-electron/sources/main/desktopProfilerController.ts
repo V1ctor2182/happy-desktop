@@ -22,9 +22,9 @@ import { desktopProfilerArtifactWrite } from "./desktopProfilerArtifact";
 import { desktopProfilerCdpStart, type DesktopProfilerCdp } from "./desktopProfilerCdp";
 
 // Full Chromium timeline capture is intentionally profile-flavor-only. A
-// realistic concurrent workload can exceed 64 MiB because Chromium retains
-// the V8 GC dependency of devtools.timeline even when it is negatively
-// filtered. Keep the evidence useful while preserving an explicit hard bound.
+// Realistic concurrent workloads can produce large Chromium traces because
+// timeline categories may retain dependent lanes even when negatively filtered.
+// Keep the evidence useful while preserving an explicit hard bound.
 const TRACE_MAX_BYTES = 256 * 1024 * 1024;
 const TRACE_READ_CHUNK_BYTES = 1024 * 1024;
 const TRACE_READ_LIMIT = 4096;
@@ -763,7 +763,7 @@ export class DesktopProfilerController {
         const bytes = Buffer.byteLength(serialized) + separatorBytes;
         if (this.#traceBytes + bytes > TRACE_MAX_BYTES) {
             this.#traceOverflow = true;
-            this.#partialReason ??= "The raw trace exceeded the bounded 64 MiB capture limit.";
+            this.#partialReason ??= `The raw trace exceeded the bounded ${TRACE_MAX_BYTES} byte capture limit.`;
             return;
         }
         this.#traceBytes += bytes;
@@ -849,8 +849,7 @@ export class DesktopProfilerController {
                             bytes += remaining;
                         }
                         overflow = true;
-                        this.#partialReason ??=
-                            "The raw trace exceeded the bounded 64 MiB capture limit.";
+                        this.#partialReason ??= `The raw trace exceeded the bounded ${TRACE_MAX_BYTES} byte capture limit.`;
                     } else {
                         buffers.push(buffer);
                         bytes += buffer.byteLength;
