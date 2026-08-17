@@ -519,13 +519,19 @@ function isCheckoutPackageBinExecutable(pathName: string): boolean {
     const markerIndex = normalize(pathName).indexOf(marker);
     if (markerIndex < 0) return false;
 
+    // A user may keep their home directory itself in Git. That does not turn a
+    // global package installed below it into a checkout dependency, so the
+    // checkout search stops before that ambient repository boundary. A real
+    // project-local shim finds its nearer `.git` first.
+    const homeDirectory = normalize(userInfo().homedir);
     let directory = normalize(pathName).slice(0, markerIndex);
-    for (;;) {
+    while (directory !== homeDirectory) {
         if (existsSync(join(directory, ".git"))) return true;
         const parent = dirname(directory);
         if (parent === directory) return false;
         directory = parent;
     }
+    return false;
 }
 
 function happyPackageDirectoryFind(): string {

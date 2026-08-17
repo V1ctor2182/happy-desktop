@@ -913,14 +913,14 @@ export class LocalOnboarding implements Disposable {
         readonly probed: boolean;
     }): LocalOnboardingSnapshot["stage"] {
         if (!facts.local) return "inactive";
-        if (!facts.probed) return "checking";
-        if (!facts.node) return "nodeMissing";
-        if (!facts.rig) {
-            if (this.install?.running) return "rigInstalling";
-            if (this.install) return "rigInstallFailed";
-            return "rigMissing";
-        }
         if (!facts.ready) {
+            if (!facts.probed) return "checking";
+            if (!facts.node) return "nodeMissing";
+            if (!facts.rig) {
+                if (this.install?.running) return "rigInstalling";
+                if (this.install) return "rigInstallFailed";
+                return "rigMissing";
+            }
             const runtime = this.options.runtime.get();
             if (runtime.phase !== "error") return "connecting";
             // A daemon that refuses only because no coding assistant is signed in
