@@ -982,6 +982,8 @@ export function MessageList(props: MessageListProps) {
             if (following.current) {
                 panelAnchor.current = undefined;
                 instance.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+                const element = list.current;
+                if (element) element.scrollTop = element.scrollHeight - element.clientHeight;
                 return;
             }
             if (panelAnchor.current) panelAnchorRestore();
@@ -1247,19 +1249,8 @@ export function MessageList(props: MessageListProps) {
                       positionReport();
                   });
         viewportObserver?.observe(element);
-        const virtualContent = element.querySelector<HTMLElement>(
-            '[data-happy-desktop-ui="message-list-virtual"]',
-        );
-        let contentObserver: ResizeObserver | undefined;
-        if (virtualized && virtualContent && typeof ResizeObserver !== "undefined") {
-            contentObserver = new ResizeObserver(() => {
-                if (following.current) scrollToBottom();
-            });
-            contentObserver.observe(virtualContent);
-        }
         return () => {
             positionReport(true);
-            contentObserver?.disconnect();
             observer?.disconnect();
             viewportObserver?.disconnect();
             if (resizeEndTimer !== undefined) window.clearTimeout(resizeEndTimer);

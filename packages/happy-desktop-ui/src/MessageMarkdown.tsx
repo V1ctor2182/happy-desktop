@@ -184,6 +184,15 @@ const MarkdownPre = ({ children, ...props }: ComponentPropsWithoutRef<"pre"> & E
         <pre {...props}>{children}</pre>
     </div>
 );
+const MarkdownTable = ({
+    children,
+    node: _node,
+    ...props
+}: ComponentPropsWithoutRef<"table"> & ExtraProps) => (
+    <div className="happy2-message__table-scroll" data-happy-desktop-ui="message-table-scroll">
+        <table {...props}>{children}</table>
+    </div>
+);
 /**
  * Headings render with no generated `id`. Chat bodies are untrusted and appear
  * many-to-a-page, so generated heading anchors would collide across messages.
@@ -203,6 +212,7 @@ const markdownComponents: Components = {
     img: MarkdownImage,
     p: MarkdownParagraph,
     pre: MarkdownPre,
+    table: MarkdownTable,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
     h3: headingOverride("h3"),
