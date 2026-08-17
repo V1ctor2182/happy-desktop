@@ -1,0 +1,80 @@
+/*
+ * The scrollbar a scrolling surface gets unless it asks for another one. A card
+ * with its own hairline vocabulary may restyle its own — the command palette
+ * does — but a panel in the application chrome takes this.
+ *
+ * It belongs to the design system rather than to an application, because it is
+ * the other half of the panel inset contract (see --happy2-panel-inset), and
+ * that contract is about what the eye sees rather than what the box model says.
+ * A scrollport's content box is inset symmetrically, but the bar drawn beside
+ * it pads its own thumb, and that padding lands on the reader's side of the
+ * gap: measured on real pixels, the platform's own thin bar put 3px of nothing
+ * between the content edge and its thumb, so a row sat 6px from the panel's
+ * left edge and 9px from the mark on its right. The geometry below is stated
+ * rather than inherited so the thumb's ink begins exactly at the content edge
+ * and the two gaps are the same 6px.
+ *
+ * Keeping it here also means the Blueprint draws the scrollbar the product
+ * draws, so a panel can be reviewed with and without one instead of only ever
+ * being measured against macOS's invisible overlay bar.
+ *
+ * The engine split is not decoration. Chromium and WebKit draw this bar from
+ * the `::-webkit-scrollbar` pseudo-elements, and both of them ignore those
+ * pseudo-elements entirely for any element that also sets `scrollbar-width` or
+ * `scrollbar-color` — so declaring the standard properties unconditionally, as
+ * this file used to, silently threw the whole custom geometry away and left us
+ * with the platform's bar and its asymmetric padding. The standard properties
+ * are therefore declared only where the pseudo-elements do not exist, which is
+ * Firefox, and there the thumb's inset is the engine's to choose.
+ */
+
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-color: var(--scrollbar-thumb) transparent;
+        scrollbar-width: thin;
+    }
+}
+
+/*
+ * 10px of track: a 6px thumb, and 4px of clear space holding it off the panel's
+ * outer edge. The thumb is a comfortable pointer target well beyond its ink,
+ * because the whole track takes the press.
+ */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/*
+ * The ink is inset from the panel's outer edge and flush against the content,
+ * so the gap a reader sees between the last thing in a row and the bar is the
+ * scrollport's own inset and nothing else. `background-clip: padding-box` is
+ * what makes a transparent border read as that inset.
+ *
+ * The radii are stated per corner, and they are not decorative. A background
+ * clipped to the padding box is rounded by the *inner* radius — the declared
+ * radius less the border on that side — so the 4px border has to be added back
+ * on the side it sits, or the cap is sliced flat. A pill radius cannot do this:
+ * it clamps to half the border box first, leaving 5px, and the inner radius
+ * comes out at 1px on the bordered side. 3px against the content and 3+4=7px
+ * against the outer edge give a 6px bar a whole 3px cap at both ends.
+ */
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:vertical {
+    border-right: 4px solid transparent;
+    border-radius: 3px 7px 7px 3px;
+}
+
+::-webkit-scrollbar-thumb:horizontal {
+    border-bottom: 4px solid transparent;
+    border-radius: 3px 3px 7px 7px;
+}

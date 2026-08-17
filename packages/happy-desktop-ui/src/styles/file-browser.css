@@ -24,13 +24,15 @@
 
 /* ---- Control row ------------------------------------------------------ */
 
+/* The control row is inset like the listing beneath it, so its leading control
+   starts on the same edge the file rows start on. */
 .happy2-file-browser__controls {
     display: flex;
     flex: none;
     align-items: center;
     gap: 8px;
     height: var(--happy2-subheader-height);
-    padding: 0 6px;
+    padding: 0 var(--happy2-panel-inset);
 }
 
 .happy2-file-browser__scopes {

@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import type { ConversationToolCall } from "happy-desktop-state";
 import "./theme.css";
+import "./styles/visually-hidden.css";
 import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/diff-snippet.css";

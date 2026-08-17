@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
+import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
@@ -415,11 +416,21 @@ function FileTreeStat(props: { added?: number; deleted?: number }) {
     return (
         <span className="happy2-file-tree__stat" data-happy-desktop-ui="file-tree-stat">
             {added ? (
-                <span className="happy2-file-tree__stat-added">{`+${String(props.added)}`}</span>
+                <span
+                    aria-hidden="true"
+                    className="happy2-file-tree__stat-added"
+                >{`+${compactCount(props.added ?? 0)}`}</span>
             ) : null}
             {deleted ? (
-                <span className="happy2-file-tree__stat-deleted">{`−${String(props.deleted)}`}</span>
+                <span
+                    aria-hidden="true"
+                    className="happy2-file-tree__stat-deleted"
+                >{`−${compactCount(props.deleted ?? 0)}`}</span>
             ) : null}
+            {/* Out of flow, so the visible pair keeps the row's own spacing. */}
+            <span className="happy2-visually-hidden">
+                {changeCountLabel(props.added ?? 0, props.deleted ?? 0)}
+            </span>
         </span>
     );
 }

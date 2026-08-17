@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
 import { Banner } from "./Banner";
+import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 import { SegmentedControl } from "./SegmentedControl";
 /** Which files the listing is about: only what changed, or the whole checkout. */
@@ -145,17 +146,27 @@ export function FileBrowser(props: FileBrowserProps) {
                         </span>
                     ) : (
                         <span className="happy2-file-browser__count">
-                            {`${String(local.count)} ${local.count === 1 ? "file" : "files"}`}
+                            {`${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
                         </span>
                     )}
                     {picked === 0 && (added || deleted) ? (
                         <span className="happy2-file-browser__lines">
                             {added ? (
-                                <span className="happy2-file-browser__added">{`+${String(local.addedLines)}`}</span>
+                                <span
+                                    aria-hidden="true"
+                                    className="happy2-file-browser__added"
+                                >{`+${compactCount(local.addedLines ?? 0)}`}</span>
                             ) : null}
                             {deleted ? (
-                                <span className="happy2-file-browser__deleted">{`−${String(local.deletedLines)}`}</span>
+                                <span
+                                    aria-hidden="true"
+                                    className="happy2-file-browser__deleted"
+                                >{`−${compactCount(local.deletedLines ?? 0)}`}</span>
                             ) : null}
+                            {/* Out of flow, so the pair keeps the row's spacing. */}
+                            <span className="happy2-visually-hidden">
+                                {changeCountLabel(local.addedLines ?? 0, local.deletedLines ?? 0)}
+                            </span>
                         </span>
                     ) : null}
                 </span>

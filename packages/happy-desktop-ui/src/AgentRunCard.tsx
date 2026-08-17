@@ -3,6 +3,7 @@ import { type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { Badge, type BadgeVariant } from "./Badge";
 import { Button, type ButtonVariant } from "./Button";
+import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
 export type AgentRunStatus = "queued" | "working" | "review" | "complete";
 export type AgentRunStep = {
@@ -74,8 +75,8 @@ export function AgentRunCard(props: AgentRunCardProps) {
         const stats = local.run.stats;
         if (!stats) return "";
         return [
-            stats.files === undefined ? undefined : `${stats.files} files`,
-            stats.steps === undefined ? undefined : `${stats.steps} steps`,
+            stats.files === undefined ? undefined : `${String(stats.files)} files`,
+            stats.steps === undefined ? undefined : `${String(stats.steps)} steps`,
             stats.note,
         ]
             .filter(Boolean)
@@ -176,18 +177,25 @@ export function AgentRunCard(props: AgentRunCardProps) {
                               there was nothing to learn. */}
                           {stats.added ? (
                               <span
+                                  aria-hidden="true"
                                   className="happy2-agent-run-card__added"
                                   data-happy-desktop-ui="agent-run-card-added"
                               >
-                                  +{stats.added}
+                                  +{compactCount(stats.added)}
                               </span>
                           ) : null}
                           {stats.removed ? (
                               <span
+                                  aria-hidden="true"
                                   className="happy2-agent-run-card__removed"
                                   data-happy-desktop-ui="agent-run-card-removed"
                               >
-                                  &minus;{stats.removed}
+                                  &minus;{compactCount(stats.removed)}
+                              </span>
+                          ) : null}
+                          {stats.added || stats.removed ? (
+                              <span className="happy2-visually-hidden">
+                                  {changeCountLabel(stats.added ?? 0, stats.removed ?? 0)}
                               </span>
                           ) : null}
                           {detail() ? (

@@ -1,4 +1,6 @@
 @import "./theme.css";
+@import "./styles/scrollbar.css";
+@import "./styles/visually-hidden.css";
 @import "./styles/icon.css";
 @import "./styles/vector-icon.css";
 @import "./styles/button.css";

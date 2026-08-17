@@ -36,13 +36,15 @@
 
 /* ---- Header ----------------------------------------------------------- */
 
+/* The header stands over the rows it names: its inset is where a row's ink
+   starts, which is the panel inset plus the row's own padding. */
 .happy2-sidebar__header {
     display: flex;
     flex: none;
     align-items: center;
     gap: 8px;
     height: var(--happy2-surface-header-height);
-    padding: 0 16px;
+    padding: 0 calc(var(--happy2-panel-inset) + var(--happy2-panel-row-padding));
 }
 
 .happy2-sidebar__heading {
@@ -235,12 +237,13 @@
     overflow-y: auto;
 }
 
-/* Inner content wrapper carries the 8px inset around the sections. */
+/* Inner content wrapper carries the shared panel inset around the sections —
+   see --happy2-panel-inset for what it promises. */
 .happy2-sidebar__body-content {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
-    padding: 8px;
+    padding: var(--happy2-panel-inset);
 }
 
 /* The pinned rows are their own column so a reorder drag measures them and
@@ -300,7 +303,7 @@
     align-items: center;
     justify-content: space-between;
     height: 24px;
-    padding: 0 10px;
+    padding: 0 var(--happy2-panel-row-padding);
 }
 
 .happy2-sidebar__section-label {
@@ -341,7 +344,10 @@
     -webkit-app-region: no-drag;
     app-region: no-drag;
     margin: 0;
-    margin-right: -3px; /* optical: align the glyph with the row meta lane */
+    /* Optical, for the reason the rows' trailing slot carries the same: the
+       glyph is smaller than its cell, so the cell hangs into the padding to put
+       its ink where a row's trailing marks put theirs. */
+    margin-right: -3px;
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -391,7 +397,7 @@
     display: block;
     flex: none;
     margin: 0;
-    padding: 0 10px 2px;
+    padding: 0 var(--happy2-panel-row-padding) 2px;
     color: var(--text-destructive);
     font-family: var(--happy2-font-ui);
     font-size: 11px;
@@ -454,7 +460,12 @@
     align-items: center;
     gap: 4px;
     min-height: 28px;
-    padding: 0 6px 0 10px;
+    /* Not the row padding on the trailing side: what sits there is a small
+       Button, which already holds its label 11px inside its own box. Padding it
+       like a row of marks would set that label a control's inset further in
+       again; 6px lets the button's box overhang the row's trailing edge
+       slightly, which is where a control's fill belongs against text. */
+    padding: 0 6px 0 var(--happy2-panel-row-padding);
 }
 
 .happy2-sidebar__empty-description {
@@ -481,7 +492,7 @@
     width: 100%;
     height: 32px;
     margin: 0;
-    padding: 0 10px;
+    padding: 0 var(--happy2-panel-row-padding);
     border: none;
     border-radius: var(--happy2-radius-sm);
     background: transparent;
@@ -622,20 +633,22 @@
 }
 
 /*
- * What the row is doing, as one mark inside the trailing lane.
+ * What the row is doing, as one mark inside the trailing slot.
  *
  * A fixed square rather than shrink-to-fit, so that starting or finishing work
  * never resizes it: a spinner and a clock are different widths, and a mark that
  * took each one's own width would nudge the lane around it as rows became busy.
- * It reports only — the control stacked over it is the thing that can be used.
+ * It is the same square as a control, so the two centre on one column when they
+ * exchange places. It reports only — the control stacked over it is the thing
+ * that can be used.
  */
 .happy2-sidebar__item-activity {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     pointer-events: none;
 }
 
@@ -863,7 +876,6 @@
     font-weight: 500;
     line-height: 16px;
     color: var(--text-secondary);
-    transition: opacity 120ms ease;
 }
 
 .happy2-sidebar__item[data-active] .happy2-sidebar__item-change-stats [data-tone="added"],
@@ -877,73 +889,79 @@
 }
 
 /*
- * The trailing lane: what the row is doing, and the controls that act on it.
- * They occupy the same place rather than sitting side by side, so the controls
- * are always the rightmost thing in the row and arriving at a busy row swaps the
- * spinner for them in place — no reflow, and nothing to chase sideways.
+ * The trailing lane: the Git delta the row reports, then one slot holding
+ * everything about the row that changes.
  *
- * The controls are overlaid, so they contribute no width of their own; the lane
- * reserves it here instead. Without that a lane sized to the 16px activity mark
- * would let a pair of controls reach back out over the name. One control is 18px
- * and each further one adds its own 18 plus the 4px gap; the 3px overhang comes
- * back off the end.
+ * The delta is the fixed part. A row's line count is the same fact whether or
+ * not work is running inside it and whether or not the pointer is on it, so it
+ * neither fades nor moves — a number that slides sideways the moment a session
+ * starts is a number nobody can read down a column. Everything that comes and
+ * goes happens in the slot to its right, and that slot's width is decided by
+ * what the row can ever show rather than by what it is showing now.
+ *
+ * The gap between the two is applied inline from SIDEBAR_TRAILING_GAP, with
+ * every other gap in this lane, because they are all terms in the slot width
+ * computed there.
  */
 .happy2-sidebar__item-trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-end;
+    height: 18px;
+}
+
+/*
+ * The one place in the row that changes: the mark for what the row is doing,
+ * and the controls that act on it. It stays put through hover, focus, and work
+ * starting or stopping.
+ *
+ * Its width and its inner gap are both set inline by `trailingSlotWidth` rather
+ * than stated here. The width is a sum of the cell size, the control gap, and
+ * that inner gap, so a copy of any of those three in this file would be a
+ * second source of truth for the same geometry — and the day the two disagreed
+ * the slot would be the wrong size and the delta beside it would move, which is
+ * the one thing this lane exists to prevent.
+ */
+.happy2-sidebar__item-slot {
     display: flex;
     position: relative;
     flex: none;
     align-items: center;
     justify-content: flex-end;
-    gap: 6px;
-    min-width: 16px;
     height: 18px;
-}
-
-/* The reserved width only has to cover controls that are going to overlay; ones
-   that keep their place in the line bring their own. */
-.happy2-sidebar__item-trailing[data-swaps][data-controls="1"] {
-    min-width: 18px;
-}
-
-.happy2-sidebar__item-trailing[data-swaps][data-controls="2"] {
-    min-width: 37px;
+    /* Optical: a glyph is smaller than the cell it is centred in, so a cell that
+       stopped at the row's padding would put its ink further from the panel edge
+       than the text, badges and status dots that end other rows. The lane hangs
+       into the padding by the cell's own slack, which lines those marks up as
+       ink. Not spacing between siblings — the gaps beside it own that. */
+    margin-right: -3px;
 }
 
 /*
- * The controls hang off the lane's right edge — but only when every one of them
- * is waiting for hover. Nothing is showing there at rest in that case, so the
- * delta and the spinner may have the space until the pointer arrives, and all
- * three end at the same x. A permanently visible control keeps its own place in
- * the line instead: overlaying that one would print it straight on top of the
- * delta it is meant to stand beside.
+ * Controls that are only there on hover share the activity mark's cell: nothing
+ * of theirs is showing at rest, so the archive control can land exactly where
+ * the spinner was. That is the whole point — the reader reaches for a control
+ * without the row's delta being taken away from them to make room for it.
+ *
+ * A control that is always showing cannot overlay the mark it stands beside, so
+ * it keeps its own place in the line and the slot reserves both.
  */
-.happy2-sidebar__item-trailing[data-swaps] .happy2-sidebar__item-actions {
+.happy2-sidebar__item-slot[data-swaps] .happy2-sidebar__item-actions {
     position: absolute;
     right: 0;
 }
 
-/*
- * Everything the row reports at rest steps aside for the controls, and comes
- * back when they go. The fade is carried on the marks rather than on the lane so
- * the lane keeps its width throughout — this is a crossfade in one place, not a
- * layout change.
- */
-.happy2-sidebar__item-activity,
-.happy2-sidebar__item-trailing[data-swaps] .happy2-sidebar__item-change-stats {
+/* The crossfade, carried on the mark alone. The slot keeps its width and the
+   delta keeps its place; this is one thing being exchanged for another in a
+   fixed box, not a layout change. */
+.happy2-sidebar__item-activity {
     transition: opacity 120ms ease;
 }
 
-.happy2-sidebar__item:hover .happy2-sidebar__item-trailing[data-swaps] > *,
-.happy2-sidebar__item-trailing[data-swaps]:focus-within > * {
+.happy2-sidebar__item:hover .happy2-sidebar__item-slot[data-swaps] .happy2-sidebar__item-activity,
+.happy2-sidebar__item-slot[data-swaps]:focus-within .happy2-sidebar__item-activity {
     opacity: 0;
-}
-
-/* …except the controls themselves, which are what the row is making room for. */
-.happy2-sidebar__item:hover
-    .happy2-sidebar__item-trailing[data-swaps]
-    .happy2-sidebar__item-actions,
-.happy2-sidebar__item-trailing[data-swaps]:focus-within .happy2-sidebar__item-actions {
-    opacity: 1;
 }
 
 .happy2-sidebar__item-unread {
@@ -976,18 +994,17 @@
     transform: translateY(var(--happy2-sidebar-meta-optical-y, 0px));
 }
 
-/* The row's controls, in one lane at its trailing edge. The lane reserves its
-   width whether or not the controls are showing, so a row that reveals one on
-   hover does not push its own name aside to do it. The negative right margin is
-   the lane's optical overhang into the row's padding — not spacing between
-   siblings, which the flex gap owns — so the outermost glyph lines up with the
-   rows above and below it. */
+/* The row's controls, in one lane inside the trailing slot. The slot reserves the
+   lane's width whether or not the controls are showing, so revealing one on
+   hover moves nothing. The controls end flush with the slot, which ends at the
+   panel inset like every other mark in the row.
+
+   The gap between two controls is applied inline from SIDEBAR_CONTROL_GAP,
+   because it is a term in the slot width computed there. */
 .happy2-sidebar__item-actions {
     display: flex;
     flex: none;
     align-items: center;
-    gap: 4px;
-    margin-right: -3px;
 }
 
 /* One control. It sits inside the row button so it tracks the row's hover, and

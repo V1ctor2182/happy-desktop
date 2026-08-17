@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
+import "./styles/visually-hidden.css";
 import "./styles/icon.css";
 import "./styles/button.css";
 import "./styles/avatar.css";
@@ -487,7 +488,9 @@ it("holds the expanded complete card at 440: steps, children slot, and max-width
     );
     expect(toggleIcon.computedStyle("transform")).toBe("matrix(-1, 0, 0, -1, 0, 0)");
 
-    /* — 4-digit / 1-digit diffstat variant — */
+    /* — 4-digit / 1-digit diffstat variant. Four digits are abbreviated to a
+       magnitude and a tenth, the way every line count in the application is;
+       the file count beside them is small enough to be stated outright. — */
     const added = view.$(
         '[data-testid="run-complete"] [data-happy-desktop-ui="agent-run-card-added"]',
     );
@@ -497,7 +500,7 @@ it("holds the expanded complete card at 440: steps, children slot, and max-width
     const detail = view.$(
         '[data-testid="run-complete"] [data-happy-desktop-ui="agent-run-card-detail"]',
     );
-    expect(added.element.textContent).toBe("+2521");
+    expect(added.element.textContent).toBe("+2.5k");
     expect(removed.element.textContent).toBe("−4");
     expect(detail.element.textContent).toBe("12 files");
     const meta = view.$(

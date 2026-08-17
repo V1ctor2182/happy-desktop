@@ -508,9 +508,8 @@ function sidebarItems(
     newWorkspaceShortcut: boolean,
 ): SidebarItem[] {
     const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
-    // Anything the row reports about itself — its delta, or the spinner and
-    // clock it wears while work runs in it — lives in the trailing lane, in the
-    // same column the + would otherwise occupy.
+    // Whether the row has anything of its own at its trailing edge: a delta, or
+    // the spinner and clock it wears while work runs in it.
     const projectReports =
         projectHasLineChanges ||
         project.activity === "running" ||
@@ -525,9 +524,10 @@ function sidebarItems(
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-            // While the row has something of its own to report, that report
-            // keeps the lane and hover reveals the add-workspace control in its
-            // place. A quiet project offers + directly.
+            // While the row has something of its own to report, the + waits for
+            // hover and lands in the activity mark's cell when it arrives — the
+            // row's delta stays where it is throughout. A quiet project offers +
+            // directly.
             action: {
                 disabled: project.lifecycle.phase !== "ready",
                 icon: "plus" as const,

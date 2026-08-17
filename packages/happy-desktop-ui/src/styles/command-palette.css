@@ -136,7 +136,12 @@
     background: transparent;
 }
 
-/* Inner content wrapper carries the 8px inset around the command groups. */
+/* Inner content wrapper carries the 8px inset around the command groups. It is
+   a card's own inset, not the panel one: --happy2-search-results-last-radius
+   above is derived from it (14px shell − 1px border − 8px inset = 5px), so
+   retuning it — or pointing it at --happy2-panel-inset because the numbers look
+   alike — bends that inner corner out of parallel with the card's. See
+   DESIGN.md, "Nested rounded corners". */
 .happy2-command-palette__body-content {
     display: flex;
     flex: 1 0 auto;

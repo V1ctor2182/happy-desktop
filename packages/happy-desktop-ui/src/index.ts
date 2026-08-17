@@ -3,6 +3,7 @@ import "./styles.css";
 export { happyLogoUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
+export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";

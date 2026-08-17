@@ -12,6 +12,7 @@ import {
     type ReactNode,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
+import { compactCount, changeCountLabel } from "./countText";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
@@ -130,7 +131,11 @@ export type SidebarItem = {
     tone?: ToneName;
     unread?: boolean;
 };
-/** Left inset of the row content at depth 0 (matches the CSS `padding-left`). */
+/**
+ * Left inset of the row content at depth 0. It is the shared row padding —
+ * `--happy2-panel-row-padding`, which is what the CSS states — restated here
+ * because an indented row and a tree stem are positioned from script.
+ */
 export const SIDEBAR_ROW_PADDING_X = 10;
 /** Additional left inset applied per nesting level so children sit under their parent. */
 export const SIDEBAR_ROW_INDENT = 16;
@@ -144,6 +149,28 @@ export const SIDEBAR_LEADING_SLOT = 20;
  * that row's 16px glyph rather than at the row's midline.
  */
 export const SIDEBAR_BRANCH_STEM_INSET = 10;
+/**
+ * The square a row's trailing marks occupy: the activity spinner and each
+ * control are the same box, so one can take the other's place without moving.
+ */
+export const SIDEBAR_SLOT_CELL = 18;
+/** Distance between two controls queued in the same lane. */
+export const SIDEBAR_CONTROL_GAP = 4;
+/**
+ * The gap between the marks at the row's trailing edge: between the delta and
+ * the slot, and between the activity mark and a control standing beside it
+ * inside the slot. It is the panel inset — the distance between a row's last
+ * marks is the distance the row keeps from the panel edge — which is why it is
+ * 6 rather than a step off the 4px grid: 4 crowds the delta against the
+ * spinner, and 8 pushes them apart into two separate things.
+ *
+ * Every gap in the lane is applied inline from here, including the ones CSS
+ * could state itself, because the slot's width is a sum of this and the two
+ * constants above. A second copy in the stylesheet could drift out of agreement
+ * with that width, and the delta would move — the one thing this lane exists to
+ * prevent.
+ */
+export const SIDEBAR_TRAILING_GAP = 6;
 /** The one control a section heading offers, beside the section's own label. */
 export type SidebarSectionAction = {
     icon: IconName;
@@ -840,12 +867,18 @@ function SidebarRow({
                 : undefined,
         ].filter((control) => control !== undefined);
     // Every control is waiting for hover anyway, so what the row reports at rest
-    // may occupy the same lane and step aside when they arrive.
+    // may occupy the same cell and step aside when they arrive.
     const swapsTrailing = () =>
         trailingActions().length > 0 &&
         trailingActions().every((control) => control.action.reveal === "hover");
     const trailingLane = () => (
-        <span className="happy2-sidebar__item-actions" data-happy-desktop-ui="sidebar-item-actions">
+        <span
+            className="happy2-sidebar__item-actions"
+            data-happy-desktop-ui="sidebar-item-actions"
+            /* Stated here for the same reason the slot's own gap is: it is a
+               term in the slot width computed beside it. */
+            style={{ columnGap: SIDEBAR_CONTROL_GAP }}
+        >
             {trailingActions().map((control) => (
                 <SidebarRowAction
                     action={control.action}
@@ -884,10 +917,9 @@ function SidebarRow({
         (item().kind === "project" || item().kind === "workspace") &&
         (lifecycle() === "creating" || (lifecycle() === undefined && item().status === "working"));
     /*
-     * What the row is doing, as one glyph at the trailing edge. It is the last
-     * thing in the row so it lands in a column of its own down the right side,
-     * where a spinner can start and stop without any of the row's own contents
-     * moving.
+     * What the row is doing, as one glyph in the trailing slot — a fixed cell at
+     * the row's right edge, so a spinner can start and stop without any of the
+     * row's own contents moving.
      *
      * The row's own news comes before what is happening inside it: a place still
      * being made, or already gone, reports that rather than reporting that
@@ -950,6 +982,43 @@ function SidebarRow({
             props.shortcutActive ? props.shortcut?.aria : undefined,
             props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined,
         ].filter((shortcut) => shortcut !== undefined);
+    /*
+     * Whether the row keeps a cell for its activity mark even while it has
+     * nothing to report there.
+     *
+     * A place can start working at any moment, and its delta may not jump
+     * sideways when it does. So the cell is reserved by what the row is — a
+     * project or a workspace, or anything already crossing Murmur or still
+     * being made — rather than by what it happens to be doing this second. A
+     * channel or a person never spins, and reserving a lane for a mark they
+     * cannot show would only pull their names in from the edge.
+     */
+    const reservesActivity = () =>
+        item().kind === "project" ||
+        item().kind === "workspace" ||
+        item().share !== undefined ||
+        lifecycle() !== undefined;
+    /*
+     * How wide the trailing slot is. Every term comes from the row's own
+     * description, never from hover or from the current activity, which is what
+     * makes the delta beside it immovable.
+     *
+     * Controls that all wait for hover share the mark's cell, so the slot is
+     * the wider of the two. One that is always showing stands beside the mark
+     * instead and the slot carries both — including a sibling still waiting for
+     * hover, which would otherwise widen the slot the moment the pointer
+     * arrived and shove the delta along with it.
+     */
+    const trailingSlotWidth = (): number => {
+        const controls = trailingActions().length;
+        const controlsWidth =
+            controls === 0
+                ? 0
+                : controls * SIDEBAR_SLOT_CELL + (controls - 1) * SIDEBAR_CONTROL_GAP;
+        if (!reservesActivity()) return controlsWidth;
+        if (controls === 0 || swapsTrailing()) return Math.max(SIDEBAR_SLOT_CELL, controlsWidth);
+        return SIDEBAR_SLOT_CELL + SIDEBAR_TRAILING_GAP + controlsWidth;
+    };
     return (
         <button
             aria-current={props.active ? "page" : undefined}
@@ -1162,70 +1231,81 @@ function SidebarRow({
                     {item().meta}
                 </span>
             ) : null}
-            {((state, controls, stats) =>
-                /* One lane at the trailing edge, holding everything the row says
-                   about itself on the right: the Git delta it reports at rest,
-                   what it is doing, and the controls that act on it. They all
-                   share one right-aligned column rather than queueing up beside
-                   each other, so every row's delta ends at the same x whether or
-                   not it also has controls, and hovering a row swaps the delta
-                   and the spinner for the controls in place. */
+            {((state, controls, stats, slot) =>
+                /* One lane at the trailing edge, in two parts. The Git delta is
+                   the fixed one: it is stated in the same place whether or not
+                   work is running inside the row and whether or not the pointer
+                   is on it. Everything that comes and goes — the spinner, the
+                   lifecycle glyph, the controls — happens in the slot to its
+                   right, which is sized from the row's own description so that
+                   none of it can move the delta. */
                 state || controls || stats ? (
                     <span
                         className="happy2-sidebar__item-trailing"
-                        data-controls={controls ? String(trailingActions().length) : undefined}
                         data-happy-desktop-ui="sidebar-item-trailing"
-                        data-swaps={controls && swapsTrailing() ? "" : undefined}
+                        style={{ columnGap: SIDEBAR_TRAILING_GAP }}
                     >
-                        {/* The one child left in flow, so the lane is as wide as
-                            the delta it has to show; everything else overlays
-                            it. */}
                         {stats ? (
+                            /* Abbreviated for the column, exact for the reader
+                               who is listening rather than looking. */
                             <span
-                                aria-label={[
-                                    stats.added > 0
-                                        ? `${String(stats.added)} lines added`
-                                        : undefined,
-                                    stats.deleted > 0
-                                        ? `${String(stats.deleted)} lines deleted`
-                                        : undefined,
-                                ]
-                                    .filter(Boolean)
-                                    .join(", ")}
                                 className="happy2-sidebar__item-change-stats"
                                 data-happy-desktop-ui="sidebar-item-change-stats"
                             >
                                 {stats.added > 0 ? (
-                                    <span data-tone="added">+{stats.added}</span>
+                                    <span aria-hidden="true" data-tone="added">
+                                        +{compactCount(stats.added)}
+                                    </span>
                                 ) : null}
                                 {stats.deleted > 0 ? (
-                                    <span data-tone="deleted">−{stats.deleted}</span>
-                                ) : null}
-                            </span>
-                        ) : null}
-                        {state ? (
-                            <span
-                                className="happy2-sidebar__item-activity"
-                                data-activity={
-                                    state.kind === "spinner" ? "spinner" : state.lifecycle
-                                }
-                                data-happy-desktop-ui="sidebar-item-activity"
-                            >
-                                {state.kind === "spinner" ? (
-                                    <Spinner label={state.label} size={14} tone={state.tone} />
-                                ) : (
-                                    <span aria-label={state.label} role="img">
-                                        <Icon name={state.icon} size={14} />
+                                    <span aria-hidden="true" data-tone="deleted">
+                                        −{compactCount(stats.deleted)}
                                     </span>
-                                )}
+                                ) : null}
+                                {/* Out of flow, so the row's flex gap still
+                                    falls between the two visible marks alone. */}
+                                <span className="happy2-visually-hidden">
+                                    {changeCountLabel(stats.added, stats.deleted)}
+                                </span>
                             </span>
                         ) : null}
-                        {controls ? trailingLane() : null}
+                        {slot > 0 ? (
+                            <span
+                                className="happy2-sidebar__item-slot"
+                                data-happy-desktop-ui="sidebar-item-slot"
+                                data-swaps={controls && swapsTrailing() ? "" : undefined}
+                                style={{ columnGap: SIDEBAR_TRAILING_GAP, width: slot }}
+                            >
+                                {state ? (
+                                    <span
+                                        className="happy2-sidebar__item-activity"
+                                        data-activity={
+                                            state.kind === "spinner" ? "spinner" : state.lifecycle
+                                        }
+                                        data-happy-desktop-ui="sidebar-item-activity"
+                                    >
+                                        {state.kind === "spinner" ? (
+                                            <Spinner
+                                                label={state.label}
+                                                size={14}
+                                                tone={state.tone}
+                                            />
+                                        ) : (
+                                            <span aria-label={state.label} role="img">
+                                                <Icon name={state.icon} size={14} />
+                                            </span>
+                                        )}
+                                    </span>
+                                ) : null}
+                                {controls ? trailingLane() : null}
+                            </span>
+                        ) : null}
                     </span>
                 ) : null)(
                 activity(),
                 trailingActions().length > 0,
                 hasChangeStats() ? item().changeStats! : undefined,
+                trailingSlotWidth(),
             )}
         </button>
     );

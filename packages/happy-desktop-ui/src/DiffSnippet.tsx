@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type HTMLAttributes } from "react";
+import { compactCount, changeCountLabel } from "./countText";
 export type DiffLineKind = "add" | "del" | "context" | "meta";
 export type DiffLine = {
     kind: DiffLineKind;
@@ -72,20 +73,25 @@ export function DiffSnippet(props: DiffSnippetProps) {
                               >
                                   {stats.added ? (
                                       <span
+                                          aria-hidden="true"
                                           className="happy2-diff-snippet__added"
                                           data-happy-desktop-ui="diff-snippet-added"
                                       >
-                                          +{stats.added}
+                                          +{compactCount(stats.added)}
                                       </span>
                                   ) : null}
                                   {stats.removed ? (
                                       <span
+                                          aria-hidden="true"
                                           className="happy2-diff-snippet__removed"
                                           data-happy-desktop-ui="diff-snippet-removed"
                                       >
-                                          &minus;{stats.removed}
+                                          &minus;{compactCount(stats.removed)}
                                       </span>
                                   ) : null}
+                                  <span className="happy2-visually-hidden">
+                                      {changeCountLabel(stats.added ?? 0, stats.removed ?? 0)}
+                                  </span>
                               </span>
                           ))(local.stats)
                         : null}

@@ -8,6 +8,7 @@ import type {
     ConversationJson,
     ConversationToolCall,
 } from "happy-desktop-state";
+import { compactCount, changeCountLabel } from "./countText";
 import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
@@ -656,13 +657,18 @@ function AgentToolActivity(props: {
                             data-happy-desktop-ui="agent-activity-stats"
                         >
                             {stats.added ? (
-                                <span className="happy2-agent-activity__added">+{stats.added}</span>
-                            ) : null}
-                            {stats.deleted ? (
-                                <span className="happy2-agent-activity__deleted">
-                                    &minus;{stats.deleted}
+                                <span aria-hidden="true" className="happy2-agent-activity__added">
+                                    +{compactCount(stats.added)}
                                 </span>
                             ) : null}
+                            {stats.deleted ? (
+                                <span aria-hidden="true" className="happy2-agent-activity__deleted">
+                                    &minus;{compactCount(stats.deleted)}
+                                </span>
+                            ) : null}
+                            <span className="happy2-visually-hidden">
+                                {changeCountLabel(stats.added ?? 0, stats.deleted ?? 0)}
+                            </span>
                         </span>
                     ) : null}
                 </span>

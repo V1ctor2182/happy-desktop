@@ -654,6 +654,130 @@ function Frame(props: { children: ReactNode; height: number }) {
     );
 }
 
+/*
+ * The trailing-lane alignment cases: real workspace names and real deltas, in a
+ * run of rows long enough that the scrollbar arrives on its own rather than
+ * being simulated.
+ *
+ * What they prove is that a workspace row's delta is in the same place whether
+ * a session is running in it, whether it is the selected row, and whether the
+ * pointer is on it — the same rows stated four ways, their deltas one column
+ * down each frame. The project row heading them carries an always-visible + and
+ * a hover-only settings control, which is the one trailing arrangement where
+ * the slot holds the activity mark and the controls side by side.
+ */
+const ALIGNMENT_WORKTREES: readonly {
+    readonly added: number;
+    readonly deleted: number;
+    readonly id: string;
+    readonly label: string;
+    readonly working: boolean;
+}[] = [
+    {
+        added: 4124,
+        deleted: 1431,
+        id: "move-activity",
+        label: "Move Activity into Files",
+        working: true,
+    },
+    {
+        added: 4038,
+        deleted: 1453,
+        id: "react-electron-plugin",
+        label: "React Electron Plugin Host",
+        working: true,
+    },
+    {
+        added: 8463,
+        deleted: 23,
+        id: "telegram-emoji",
+        label: "Telegram Custom Emoji",
+        working: false,
+    },
+    { added: 3504, deleted: 907, id: "file-viewer", label: "File viewer polish", working: true },
+    { added: 245, deleted: 82, id: "rig-documents", label: "Rig documents", working: false },
+    { added: 1200, deleted: 34, id: "slots", label: "Contribution slots", working: false },
+    { added: 96, deleted: 0, id: "multirigs", label: "Multirigs", working: false },
+    { added: 12800, deleted: 4310, id: "portless", label: "Portless loopback", working: false },
+];
+
+function alignmentSections(props: {
+    readonly rows: number;
+    readonly working: boolean;
+}): SidebarSection[] {
+    return [
+        {
+            action: { icon: "plus", label: "New workspace in happy-desktop" },
+            id: "happy-desktop",
+            items: [
+                {
+                    action: { icon: "plus", label: "New workspace in happy-desktop" },
+                    id: "happy-desktop-project",
+                    initials: "H",
+                    kind: "project",
+                    label: "happy-desktop",
+                    secondaryAction: {
+                        icon: "settings",
+                        label: "Settings for happy-desktop",
+                        reveal: "hover",
+                    },
+                    tone: "ember",
+                },
+                ...ALIGNMENT_WORKTREES.slice(0, props.rows).map(
+                    (worktree): SidebarItem => ({
+                        action: {
+                            icon: "archive",
+                            label: `Archive ${worktree.label}`,
+                            reveal: "hover",
+                        },
+                        changeStats: { added: worktree.added, deleted: worktree.deleted },
+                        depth: 1,
+                        id: worktree.id,
+                        kind: "workspace",
+                        label: worktree.label,
+                        ...(props.working && worktree.working
+                            ? { status: "working" as const }
+                            : {}),
+                    }),
+                ),
+            ],
+            label: "happy-desktop",
+        },
+    ];
+}
+
+const ALIGNMENT_CASES: readonly {
+    readonly height: number;
+    readonly label: string;
+    readonly sections: SidebarSection[];
+    readonly testId: string;
+}[] = [
+    {
+        height: 300,
+        label: "No scrollbar · sessions running · 6 px both edges",
+        sections: alignmentSections({ rows: 4, working: true }),
+        testId: "alignment-short-working",
+    },
+    {
+        height: 300,
+        label: "Scrollbar present · sessions running · still 6 px, now to the bar",
+        sections: alignmentSections({ rows: 8, working: true }),
+        testId: "alignment-scrolling-working",
+    },
+    {
+        height: 300,
+        label: "No scrollbar · nothing running · deltas unmoved",
+        sections: alignmentSections({ rows: 4, working: false }),
+        testId: "alignment-short-quiet",
+    },
+    {
+        height: 300,
+        label: "Scrollbar present · nothing running · deltas unmoved",
+        sections: alignmentSections({ rows: 8, working: false }),
+        testId: "alignment-scrolling-quiet",
+    },
+];
+
 /** The rows a machine's section holds, reused by each heading-action state. */
 const HEADING_ACTION_ITEMS: SidebarItem[] = [
     { id: "happy2", initials: "H", kind: "project", label: "happy2" },
@@ -1242,6 +1366,36 @@ export function SidebarPage() {
                         />
                     </Frame>
                     <DimensionRule label="error line 11/15 destructive · empty copy 11/15 · no action" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Within a column the delta holds one x: running or quiet, selected or not, hovered or not. Hover any row — the archive control takes the spinner's cell, and the delta neither moves nor fades. The scrolling frames show the other half of it: the list is inset by 6px on both sides and the bar's ink begins at the scrollport's edge, so a row keeps the same 6px from the panel edge and from the bar; the column narrows by the bar's width when it arrives."
+                label="Trailing lane alignment · real workspaces"
+                number="06"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {ALIGNMENT_CASES.map((alignmentCase) => (
+                        <div
+                            key={alignmentCase.testId}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={alignmentCase.height}>
+                                <Sidebar
+                                    activeItemId="react-electron-plugin"
+                                    data-testid={alignmentCase.testId}
+                                    onItemAction={() => {}}
+                                    onItemSecondaryAction={() => {}}
+                                    onItemSelect={() => {}}
+                                    onSectionAction={() => {}}
+                                    sections={alignmentCase.sections}
+                                    title="happy-desktop"
+                                />
+                            </Frame>
+                            <DimensionRule label={alignmentCase.label} />
+                        </div>
+                    ))}
                 </div>
             </Specimen>
         </ComponentPage>

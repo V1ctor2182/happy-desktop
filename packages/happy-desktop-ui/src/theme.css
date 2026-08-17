@@ -35,6 +35,38 @@
     --happy2-subheader-control-height: 24px;
     --happy2-subheader-inset: 4px;
 
+    /* Every scrolling list panel — the sidebar, the file listings, any column
+       of rows — is inset from both of its edges by the same number, so the gap
+       from the panel's left edge to a row equals the gap from a row to the
+       scrollbar. The scrollbar sits outside the scrollport's content box, so
+       the promise holds at whatever width the platform draws it, and whether
+       or not it is there at all.
+
+       A row's own horizontal padding is stated here too, because the two
+       together are what a reader sees on the trailing side: a row's last mark
+       lands `calc(var(--happy2-panel-inset) + var(--happy2-panel-row-padding))`
+       from the scrollbar, and a panel header padded by that same sum stands
+       over the rows it names. The leading side reads that way only in a flat
+       list — a tree puts its disclosure slot and its depth on top of the inset,
+       which is the indent doing its job.
+
+       A sidebar row spaces the marks at its trailing edge by this number too,
+       so the distance between a row's last marks is the distance the row keeps
+       from the panel edge. It states that gap in script rather than reading the
+       token, because the width it reserves there is a sum the script computes
+       (see SIDEBAR_TRAILING_GAP) — so changing this number is a decision to
+       make there as well as here.
+
+       This governs panels, not cards. A rounded modal — the command palette,
+       the command picker — sets its own inset and derives an inner corner from
+       it, because a nested curve is only parallel when the radius drops by the
+       inset it sits inside (see DESIGN.md, "Nested rounded corners"). Those
+       insets happen to be near this one; they are not this one, and pointing
+       them at this token would silently bend the corners derived from them the
+       day it changes. */
+    --happy2-panel-inset: 6px;
+    --happy2-panel-row-padding: 10px;
+
     --text: #000000;
     --text-destructive: #f44336;
     --text-secondary: #49454f;

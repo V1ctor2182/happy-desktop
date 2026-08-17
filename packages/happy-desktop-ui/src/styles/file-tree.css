@@ -43,13 +43,14 @@
 }
 
 /* The inner wrapper carries the listing's inset, so the scrollport above it
-   stays flush with the panel and its scrollbar runs the full height. */
+   stays flush with the panel and its scrollbar runs the full height. It is the
+   shared panel inset — see --happy2-panel-inset. */
 .happy2-file-tree__virtual {
     display: flex;
     flex: none;
     flex-direction: column;
     width: 100%;
-    padding: 0 6px 6px;
+    padding: 0 var(--happy2-panel-inset) var(--happy2-panel-inset);
 }
 
 .happy2-file-tree__virtual-sizer {
@@ -138,6 +139,9 @@
 
 /* ---- Entry ------------------------------------------------------------ */
 
+/* The trailing padding is the shared row padding, so a row's last mark lands
+   where a sidebar row's does. The leading side is 2px because the fixed
+   disclosure slot ahead of it already carries the row's left inset. */
 .happy2-file-tree__entry {
     display: flex;
     flex: 1;
@@ -145,7 +149,7 @@
     gap: 6px;
     min-width: 0;
     height: 28px;
-    padding: 0 10px 0 2px;
+    padding: 0 var(--happy2-panel-row-padding) 0 2px;
     color: inherit;
     font: inherit;
     text-align: left;

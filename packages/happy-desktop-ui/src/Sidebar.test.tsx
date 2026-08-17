@@ -17,7 +17,7 @@ const OPTICAL = 0.75;
  * direct sections covering every row kind in resting and unread states, short
  * and long labels, 1- and 2-char initials, 1/2/3-digit badge counts, both
  * agent statuses, meta trailing text, and presence. Geometry is hand-computed:
- * header 56, body pad 8, rows 32 with 2px gaps, 12px between sections, 24px
+ * header 56, body pad 6, rows 32 with 2px gaps, 12px between sections, 24px
  * section heads, footer 56.
  */
 const sections: SidebarSection[] = [
@@ -370,10 +370,10 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
             .$('[data-testid="full"] .happy2-sidebar__compose .happy2-sidebar__item-label')
             .textMetrics().text,
     ).toContain("Create");
-    expect(compose.bounds().width).toBe(344);
+    expect(compose.bounds().width).toBe(348);
     expect(compose.bounds().height).toBe(32);
-    expect(compose.bounds().x).toBe(8);
-    expect(compose.bounds().y).toBe(64);
+    expect(compose.bounds().x).toBe(6);
+    expect(compose.bounds().y).toBe(62);
     expect(
         compose.computedStyles(["background-color", "border-top-width", "border-radius"]),
     ).toEqual({
@@ -396,7 +396,8 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
 
     const body = view.$('[data-testid="full"] [data-happy-desktop-ui="sidebar-body"]');
     expect(body.bounds().y).toBe(56);
-    /* Scrollport edge-to-edge; the inner content wrapper owns the 8px inset. */
+    /* Scrollport edge-to-edge; the inner content wrapper owns the shared 6px
+       panel inset (see --happy2-panel-inset). */
     expect(
         body.computedStyles(["overflow-y", "padding-left", "padding-right", "padding-top"]),
     ).toEqual({
@@ -410,32 +411,32 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
             .$('[data-testid="full"] [data-happy-desktop-ui="sidebar-body-content"]')
             .computedStyles(["padding-left", "padding-right", "padding-top"]),
     ).toEqual({
-        "padding-left": "8px",
-        "padding-right": "8px",
-        "padding-top": "8px",
+        "padding-left": "6px",
+        "padding-right": "6px",
+        "padding-top": "6px",
     });
 
     const row = (id: string) => view.$(`[data-testid="full"] [data-item-id="${id}"]`);
     /* 32px rows on the grid: gaps 2, sections 12 apart, heads 24. */
-    expect(row("inbox").bounds()).toEqual({ x: 8, y: 98, width: 344, height: 32 });
-    expect(row("my-issues").bounds().y).toBe(132);
-    expect(row("agent-runs").bounds().y).toBe(166);
-    expect(row("launch-week").bounds().y).toBe(236);
-    expect(row("eng-core").bounds().y).toBe(270);
-    expect(row("design-crit").bounds().y).toBe(304);
-    expect(row("claude").bounds().y).toBe(374);
-    expect(row("codex").bounds().y).toBe(408);
-    expect(row("scout").bounds().y).toBe(442);
-    expect(row("maya").bounds().y).toBe(512);
-    expect(row("jun").bounds().y).toBe(546);
-    expect(row("invite").bounds().y).toBe(580);
-    expect(row("requests").bounds().y).toBe(614);
+    expect(row("inbox").bounds()).toEqual({ x: 6, y: 96, width: 348, height: 32 });
+    expect(row("my-issues").bounds().y).toBe(130);
+    expect(row("agent-runs").bounds().y).toBe(164);
+    expect(row("launch-week").bounds().y).toBe(234);
+    expect(row("eng-core").bounds().y).toBe(268);
+    expect(row("design-crit").bounds().y).toBe(302);
+    expect(row("claude").bounds().y).toBe(372);
+    expect(row("codex").bounds().y).toBe(406);
+    expect(row("scout").bounds().y).toBe(440);
+    expect(row("maya").bounds().y).toBe(510);
+    expect(row("jun").bounds().y).toBe(544);
+    expect(row("invite").bounds().y).toBe(578);
+    expect(row("requests").bounds().y).toBe(612);
 
     const head = view.$(
         '[data-testid="full"] [data-section-id="channels"] [data-happy-desktop-ui="sidebar-section-head"]',
     );
     expect(head.bounds().height).toBe(24);
-    expect(head.bounds().y).toBe(210);
+    expect(head.bounds().y).toBe(208);
     const headLabel = view.$(
         '[data-testid="full"] [data-section-id="channels"] [data-happy-desktop-ui="sidebar-section-label"]',
     );

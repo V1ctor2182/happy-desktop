@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import "./theme.css";
+import "./styles/visually-hidden.css";
 import "./styles/diff-snippet.css";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { createRenderer, type RenderedElement } from "./testing";

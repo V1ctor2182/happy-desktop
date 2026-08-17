@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
+import "./styles/visually-hidden.css";
 import "./styles/icon.css";
 import "./styles/file-tree.css";
 import { FileTree, type FileTreeNode } from "./FileTree";
