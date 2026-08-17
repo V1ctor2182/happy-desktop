@@ -2,6 +2,7 @@ import {
     Children,
     createContext,
     createElement,
+    memo,
     useContext,
     type ComponentPropsWithoutRef,
     type ReactNode,
@@ -10,6 +11,14 @@ import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { filePreviewKind } from "./FilePreview";
 import { markdownDocumentLinkPath } from "./MarkdownDocument";
+
+// This list is part of the renderer configuration, not message state. A fresh
+// array here makes react-markdown reparse unchanged streamed messages on every
+// parent notification.
+const MESSAGE_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
+// Keep unchanged streamed message bodies from re-running react-markdown's
+// parser when an unrelated conversation notification reaches the parent.
+const MemoMarkdown = memo(Markdown);
 /**
  * Agent generation lifecycle for a streamed reply. This is deliberately kept
  * separate from `MessageDeliveryState`: delivery describes an *outgoing* message
@@ -222,9 +231,12 @@ export function renderMessageMarkdown(
             }
         >
             <MarkdownFileOpenContext.Provider value={onFileOpen}>
-                <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                <MemoMarkdown
+                    components={markdownComponents}
+                    remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
+                >
                     {text}
-                </Markdown>
+                </MemoMarkdown>
             </MarkdownFileOpenContext.Provider>
         </MarkdownTrailingContext.Provider>
     );

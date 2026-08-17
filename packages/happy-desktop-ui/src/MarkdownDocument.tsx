@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import {
     createContext,
     createElement,
+    memo,
     useContext,
     type ComponentPropsWithoutRef,
     type CSSProperties,
@@ -10,6 +11,15 @@ import {
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock, codeBlockLanguage } from "./CodeBlock";
+
+// react-markdown reparses the document when this plugin list changes identity.
+// Keep the product's fixed GFM configuration stable across streaming/store
+// notifications so unchanged Markdown does not pay a second parse.
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
+// react-markdown is an unmemoized third-party function. Its fixed renderer
+// configuration is safe to memoize here, so parent/store notifications with
+// unchanged text do not parse and run the Markdown tree again.
+const MemoMarkdown = memo(Markdown);
 
 export type MarkdownDocumentProps = {
     className?: string;
@@ -280,9 +290,12 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
             >
                 <MarkdownCacheKeyContext.Provider value={local.cacheKey}>
                     <FileOpenContext.Provider value={local.onFileOpen}>
-                        <Markdown components={documentComponents} remarkPlugins={[remarkGfm]}>
+                        <MemoMarkdown
+                            components={documentComponents}
+                            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+                        >
                             {local.text}
-                        </Markdown>
+                        </MemoMarkdown>
                     </FileOpenContext.Provider>
                 </MarkdownCacheKeyContext.Provider>
             </article>
