@@ -223,6 +223,7 @@ interface ScrollStabilityMeasurement {
     readonly composerParkedGrowth: ScrollStabilityPhase;
     readonly composerParkedShrink: ScrollStabilityPhase;
     readonly composerShrink: ScrollStabilityPhase;
+    readonly panelParkedResize: ScrollStabilityPhase;
     readonly panelResize: ScrollStabilityPhase;
     readonly stable: boolean;
 }
@@ -2062,10 +2063,11 @@ async function scrollStabilityCapture(
                                     rowOverlapCount += 1;
                             }
                             const first = rows[0];
+                            const edge = rows.at(-1);
                             frames.push({
-                                anchorIndex: first?.index,
+                                anchorIndex: edge?.index,
                                 anchorOffset:
-                                    first === undefined ? undefined : first.top - listRect.top,
+                                    edge === undefined ? undefined : listRect.bottom - edge.bottom,
                                 bottomDistance: Math.max(
                                     0,
                                     list.scrollHeight - list.scrollTop - list.clientHeight,
@@ -2202,28 +2204,29 @@ async function scrollStabilityRun(
         '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="left"]',
     );
     await handle.waitFor({ state: "visible", timeout: 30_000 });
-    await scrollListToFraction(page, 1);
-    // Read the committed splitter box immediately before pointer-down. Showing
-    // the panel and scrolling the transcript can both change its layout.
-    const handleBox = await handle.boundingBox();
-    if (handleBox === null) throw new Error("The panel resize handle has no layout box.");
-    const handleX = handleBox.x + handleBox.width / 2;
-    const handleY = handleBox.y + handleBox.height / 2;
-    const panelResize = scrollStabilityPhaseBuild(
-        "panel-resize",
-        "following",
-        await scrollStabilityCapture(page, async () => {
+    const panelDragCapture = async (deltas: readonly number[]) => {
+        const handleBox = await handle.boundingBox();
+        if (handleBox === null) throw new Error("The panel resize handle has no layout box.");
+        const handleX = handleBox.x + handleBox.width / 2;
+        const handleY = handleBox.y + handleBox.height / 2;
+        return scrollStabilityCapture(page, async () => {
             await page.mouse.move(handleX, handleY);
             await page.mouse.down();
             try {
-                for (const delta of [24, 48, 72, 96, 120, 144, 120, 96]) {
+                for (const delta of deltas) {
                     await page.mouse.move(handleX + delta, handleY);
                     await page.waitForTimeout(16);
                 }
             } finally {
                 await page.mouse.up();
             }
-        }),
+        });
+    };
+    await scrollListToFraction(page, 1);
+    const panelResize = scrollStabilityPhaseBuild(
+        "panel-resize",
+        "following",
+        await panelDragCapture([24, 48, 72, 96, 120, 144, 120, 96]),
     );
     await mark("scroll-stability-panel-resize");
 
@@ -2255,6 +2258,12 @@ async function scrollStabilityRun(
     await mark("scroll-stability-composer-shrink");
 
     await scrollListToFraction(page, 0.5);
+    const panelParkedResize = scrollStabilityPhaseBuild(
+        "panel-resize",
+        "parked",
+        await panelDragCapture([-24, -48, -72, -96, -120, -96, -48, 0]),
+    );
+    await mark("scroll-stability-parked-panel-resize");
     const composerParkedGrowth = scrollStabilityPhaseBuild(
         "composer-grow",
         "parked",
@@ -2274,6 +2283,7 @@ async function scrollStabilityRun(
     await scrollListToFraction(page, 1);
     const phases = [
         panelResize,
+        panelParkedResize,
         composerGrowth,
         composerShrink,
         composerParkedGrowth,
@@ -2284,6 +2294,7 @@ async function scrollStabilityRun(
         composerParkedGrowth,
         composerParkedShrink,
         composerShrink,
+        panelParkedResize,
         panelResize,
         stable: phases.every((phase) => phase.stable),
     };
@@ -2580,6 +2591,7 @@ async function mixedReplayRun(
         overlapEvent("scroll-stability-complete", {
             stable: scrollStability.stable,
             panelResizeFrames: scrollStability.panelResize.frames.length,
+            panelParkedResizeFrames: scrollStability.panelParkedResize.frames.length,
             composerGrowthFrames: scrollStability.composerGrowth.frames.length,
             composerShrinkFrames: scrollStability.composerShrink.frames.length,
         });
