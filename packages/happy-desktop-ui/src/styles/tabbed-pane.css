@@ -102,6 +102,7 @@
        gutter the control keeps once it is stuck against the edge. */
     padding: 0 8px 0 0;
     background: var(--surface);
+    box-shadow: inset 0 -1px var(--divider);
 }
 
 .happy2-tabbed-pane__body {
