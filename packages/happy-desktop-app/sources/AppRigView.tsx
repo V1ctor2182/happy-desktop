@@ -127,7 +127,6 @@ import {
     ConversationDock,
     ConversationView,
     DeferredPane,
-    DeferredPaneReady,
     DocumentSurface,
     EmptyState,
     FileBrowser,
@@ -3283,6 +3282,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             : {
                   ...displayedFileTab,
                   kind: displayedFileTab.displayedKind ?? displayedFileTab.kind,
+                  path: displayedFileTab.displayedPath ?? displayedFileTab.path,
                   document: {
                       type: "ready" as const,
                       value: displayedFileTab.displayedDocument,
@@ -3292,7 +3292,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         activeFile &&
         (workspace.displayedMainViewId !== activeFile.id ||
             (activeFile.displayedPresentationId !== activeFile.presentationId &&
-                !activeFile.revalidating &&
                 (activeFile.document.type !== "ready" ||
                     activeFile.document.value !== activeFile.displayedDocument)))
             ? activeFile
@@ -4118,34 +4117,28 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                     onReveal={props.workspace.mainViewDisplay}
                                     pending={
                                         pendingFile
-                                            ? {
-                                                  id: pendingFile.presentationId,
-                                                  render: (ready) => {
-                                                      const waitsForDiff =
-                                                          pendingFile.kind === "diff" &&
-                                                          pendingFile.document.type === "ready" &&
-                                                          "oldContent" in
-                                                              pendingFile.document.value &&
-                                                          (workspace.fileViewMode === "unified" ||
-                                                              workspace.fileViewMode === "split");
-                                                      const readyOnCommit =
-                                                          connectionRefusal !== undefined ||
-                                                          (pendingFile.document.type !==
-                                                              "loading" &&
-                                                              !waitsForDiff);
-                                                      return (
-                                                          <DeferredPaneReady
-                                                              onReady={ready}
-                                                              ready={readyOnCommit}
-                                                          >
-                                                              {mainFileBody(
-                                                                  pendingFile,
-                                                                  waitsForDiff ? ready : undefined,
-                                                              )}
-                                                          </DeferredPaneReady>
-                                                      );
-                                                  },
-                                              }
+                                            ? (() => {
+                                                  const waitsForDiff =
+                                                      pendingFile.kind === "diff" &&
+                                                      pendingFile.document.type === "ready" &&
+                                                      "oldContent" in pendingFile.document.value &&
+                                                      (workspace.fileViewMode === "unified" ||
+                                                          workspace.fileViewMode === "split");
+                                                  const readyOnCommit =
+                                                      connectionRefusal !== undefined ||
+                                                      (pendingFile.document.type !== "loading" &&
+                                                          !waitsForDiff);
+                                                  return {
+                                                      id: pendingFile.presentationId,
+                                                      ready: readyOnCommit,
+                                                      render: (ready: () => void) =>
+                                                          mainFileBody(
+                                                              pendingFile,
+                                                              waitsForDiff ? ready : undefined,
+                                                          ),
+                                                      waitForReady: waitsForDiff,
+                                                  };
+                                              })()
                                             : undefined
                                     }
                                     // Every page moved to this side stays

@@ -13,12 +13,16 @@ export type DeferredPaneCurrent = {
 
 export type DeferredPanePending = {
     readonly id: string;
+    /** Ordinary React content may reveal after it commits. Defaults to true. */
+    readonly ready?: boolean;
     /**
      * Draws the pending body at its real size. The body calls `ready` only once
      * its final pixels exist — after syntax highlighting, not merely after its
      * bytes arrived.
      */
     readonly render: (ready: () => void) => ReactNode;
+    /** A worker-backed body calls `ready` itself instead of revealing on commit. */
+    readonly waitForReady?: boolean;
 };
 
 export type DeferredPaneProps = {
@@ -41,34 +45,8 @@ export type DeferredPaneProps = {
     minimumSlowMs?: number;
 };
 
-export type DeferredPaneReadyProps = {
-    children: ReactNode;
-    onReady: () => void;
-    ready: boolean;
-};
-
 const DEFAULT_SLOW_DELAY_MS = 800;
 const DEFAULT_MINIMUM_SLOW_MS = 500;
-
-/**
- * Reports that ordinary React content has committed. Renderers with a later
- * completion boundary, such as Pierre's worker-backed diff, call the pending
- * layer's callback themselves instead.
- */
-export function DeferredPaneReady(props: DeferredPaneReadyProps) {
-    const { onReady, ready } = props;
-    const readyRef = useCallback(
-        (node: HTMLDivElement | null) => {
-            if (node && ready) onReady();
-        },
-        [onReady, ready],
-    );
-    return (
-        <div className="happy2-deferred-pane__ready" ref={readyRef}>
-            {props.children}
-        </div>
-    );
-}
 
 type DeferredPaneLayerProps = {
     content?: ReactNode;
@@ -165,6 +143,13 @@ function DeferredPaneLayer(props: DeferredPaneLayerProps) {
     );
     const snapshot = useSyncExternalStore(gate.subscribe, gate.getSnapshot, gate.getServerSnapshot);
     const slow = isPending && snapshot === "slow";
+    const revealOnCommit = pending?.ready !== false && pending?.waitForReady !== true;
+    const contentRef = useCallback(
+        (node: HTMLDivElement | null) => {
+            if (node && isPending && revealOnCommit) gate.ready();
+        },
+        [gate, isPending, revealOnCommit],
+    );
     return (
         <div
             className="happy2-deferred-pane__layer"
@@ -173,6 +158,7 @@ function DeferredPaneLayer(props: DeferredPaneLayerProps) {
             <div
                 aria-hidden={isPending ? "true" : undefined}
                 className="happy2-deferred-pane__content"
+                ref={contentRef}
             >
                 {pending ? pending.render(gate.ready) : props.content}
             </div>

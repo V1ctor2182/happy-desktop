@@ -41,10 +41,6 @@
     min-height: 0;
 }
 
-.happy2-deferred-pane__ready {
-    display: contents;
-}
-
 .happy2-deferred-pane__layer[data-state="pending"] .happy2-deferred-pane__content,
 .happy2-deferred-pane__layer[data-state="slow"] .happy2-deferred-pane__content {
     visibility: hidden;

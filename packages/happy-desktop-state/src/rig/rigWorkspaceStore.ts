@@ -230,6 +230,8 @@ export interface RigFileTabSnapshot {
     readonly displayedPresentationId?: string;
     /** The viewer kind that committed `displayedDocument`. */
     readonly displayedKind?: RigFileTabKind;
+    /** The path whose pixels are retained in `displayedDocument`. */
+    readonly displayedPath?: string;
     /** The exact ready document behind `displayedPresentationId`. */
     readonly displayedDocument?: RigFileDocument;
     /** True only while no ready document is available for this tab. */
@@ -2718,7 +2720,7 @@ export function rigWorkspaceStoreCreate(
         const presentationId = filePresentationIdNext();
         const cacheBaseKey = rigReadyDocumentCacheBaseKey(groupId, path, kind, revision);
         const cached = readyDocumentCacheRead(cacheBaseKey, true)?.document;
-        const tab: RigFileTabSnapshot = {
+        let tab: RigFileTabSnapshot = {
             id,
             groupId,
             path,
@@ -2738,7 +2740,25 @@ export function rigWorkspaceStoreCreate(
             const replaced = fileTabs[replacedIndex]!;
             fileTabCacheStore(replaced);
             fileTabRelease(replaced.id);
-            if (displayedMainViewId === replaced.id) displayedMainViewId = undefined;
+            if (displayedMainViewId === replaced.id) {
+                if (
+                    replaced.displayedPresentationId !== undefined &&
+                    replaced.displayedDocument !== undefined
+                ) {
+                    tab = {
+                        ...tab,
+                        displayedDocument: replaced.displayedDocument,
+                        ...(replaced.displayedKind === undefined
+                            ? {}
+                            : { displayedKind: replaced.displayedKind }),
+                        displayedPath: replaced.displayedPath ?? replaced.path,
+                        displayedPresentationId: replaced.displayedPresentationId,
+                    };
+                    displayedMainViewId = tab.id;
+                } else {
+                    displayedMainViewId = undefined;
+                }
+            }
             fileTabs = fileTabs.map((candidate, index) =>
                 index === replacedIndex ? tab : candidate,
             );
@@ -2769,10 +2789,31 @@ export function rigWorkspaceStoreCreate(
         const among = fileTabs
             .filter((tab) => tab.groupId === closing.groupId)
             .findIndex((tab) => tab.id === tabId);
+        const next = siblings[Math.min(among, siblings.length - 1)];
         fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
-        if (activeMainViewId === tabId)
-            activeMainViewId = siblings[Math.min(among, siblings.length - 1)]?.id;
-        if (displayedMainViewId === tabId) displayedMainViewId = undefined;
+        if (activeMainViewId === tabId) activeMainViewId = next?.id;
+        if (displayedMainViewId === tabId) {
+            displayedMainViewId = next?.id;
+            if (
+                next !== undefined &&
+                next.displayedDocument === undefined &&
+                closing.displayedPresentationId !== undefined &&
+                closing.displayedDocument !== undefined
+            )
+                fileTabs = fileTabs.map((tab) =>
+                    tab.id === next.id
+                        ? {
+                              ...tab,
+                              displayedDocument: closing.displayedDocument,
+                              ...(closing.displayedKind === undefined
+                                  ? {}
+                                  : { displayedKind: closing.displayedKind }),
+                              displayedPath: closing.displayedPath ?? closing.path,
+                              displayedPresentationId: closing.displayedPresentationId,
+                          }
+                        : tab,
+                );
+        }
         activeMainViewGroupId = undefined;
         groupTabForget(closing.groupId, tabId);
         // What the closed tab uncovered in its own group: the next file
@@ -4683,6 +4724,7 @@ export function rigWorkspaceStoreCreate(
                     ? {
                           ...tab,
                           displayedKind: file.kind,
+                          displayedPath: file.path,
                           displayedPresentationId: presentationId,
                           displayedDocument:
                               file.document.type === "ready" ? file.document.value : undefined,

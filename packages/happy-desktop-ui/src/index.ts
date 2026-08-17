@@ -398,8 +398,6 @@ export {
     type DeferredPaneCurrent,
     type DeferredPanePending,
     type DeferredPaneProps,
-    DeferredPaneReady,
-    type DeferredPaneReadyProps,
 } from "./DeferredPane";
 export { TransferZone, type TransferZoneProps } from "./TransferZone";
 export {
