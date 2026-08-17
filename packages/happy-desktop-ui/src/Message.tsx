@@ -15,6 +15,7 @@ import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Icon, type IconName } from "./Icon";
+import { APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT } from "./AppShell";
 import { messageMediaSingleBox } from "./conversationRowHeight";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 export type MessageSegment =
@@ -724,6 +725,12 @@ function averageMeasuredSize(measurements: readonly VirtualItem[] | undefined) {
     for (const item of measurements) total += item.size;
     return total / measurements.length;
 }
+function messageListRowWidth(
+    scrollportWidth: number,
+    estimate: MessageListProps["estimateRowWidth"],
+): number {
+    return estimate?.(scrollportWidth) ?? scrollportWidth;
+}
 /**
  * Scrolling message column. A `margin-top: auto` spacer bottom-anchors sparse
  * histories while long histories scroll chronologically from the top.
@@ -736,6 +743,7 @@ function averageMeasuredSize(measurements: readonly VirtualItem[] | undefined) {
  */
 export function MessageList(props: MessageListProps) {
     const list = useRef<HTMLDivElement>(null);
+    const estimateRowWidth = props.estimateRowWidth;
     /* The restore payload is read once, at mount. This list reports its own
        position back out, and an owner that stores it where a later render can
        read it would otherwise feed it back in mid-session — re-anchoring a list
@@ -748,6 +756,17 @@ export function MessageList(props: MessageListProps) {
     positionChange.current = props.onScrollPositionChange;
     const estimateVersion = useRef(props.estimateVersion);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
+    const rowWidthModel = useRef(restore.current?.rowWidth ?? 0);
+    const panelResizing = useRef(false);
+    const panelAnchor = useRef<
+        | {
+              readonly node: Node;
+              readonly offset: number;
+              readonly viewportOffset: number;
+          }
+        | undefined
+    >(undefined);
+    const panelAnchorRestoring = useRef(false);
     const entryItems = Children.toArray(props.children);
     const footerIndex = props.footer === undefined ? undefined : entryItems.length;
     const items =
@@ -766,8 +785,47 @@ export function MessageList(props: MessageListProps) {
               ];
     const virtualized = props.virtualize === true;
     const paddingEnd = props.paddingEnd ?? MESSAGE_LIST_PADDING_END_DEFAULT;
-    const rowWidthOf = (scrollportWidth: number) =>
-        props.estimateRowWidth?.(scrollportWidth) ?? scrollportWidth;
+    const panelAnchorCapture = () => {
+        const element = list.current;
+        if (!element || following.current) return;
+        const listRect = element.getBoundingClientRect();
+        const x = listRect.left + listRect.width / 2;
+        for (const inset of [8, 20, 32, 48, 72, 104]) {
+            const position = document.caretPositionFromPoint?.(x, listRect.bottom - inset);
+            if (!position || !element.contains(position.offsetNode)) continue;
+            const range = document.createRange();
+            range.setStart(position.offsetNode, position.offset);
+            range.collapse(true);
+            const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+            if (!(rect.height > 0 || rect.width > 0)) continue;
+            panelAnchor.current = {
+                node: position.offsetNode,
+                offset: position.offset,
+                viewportOffset: listRect.bottom - rect.top,
+            };
+            return;
+        }
+    };
+    const panelAnchorRestore = () => {
+        const element = list.current;
+        const anchor = panelAnchor.current;
+        if (!element || !anchor?.node.isConnected || panelAnchorRestoring.current) return;
+        const maximumOffset =
+            anchor.node.nodeType === Node.TEXT_NODE
+                ? (anchor.node.textContent?.length ?? 0)
+                : anchor.node.childNodes.length;
+        const range = document.createRange();
+        range.setStart(anchor.node, Math.min(anchor.offset, maximumOffset));
+        range.collapse(true);
+        const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+        if (!(rect.height > 0 || rect.width > 0)) return;
+        const target = element.getBoundingClientRect().bottom - anchor.viewportOffset;
+        const delta = rect.top - target;
+        if (Math.abs(delta) < 0.5) return;
+        panelAnchorRestoring.current = true;
+        element.scrollTop += delta;
+        panelAnchorRestoring.current = false;
+    };
     const estimateItemSize = (index: number, rowWidth: number) =>
         index === footerIndex
             ? (props.footerHeight ?? estimatedSize.current)
@@ -781,7 +839,7 @@ export function MessageList(props: MessageListProps) {
         const rowWidth =
             list.current === null
                 ? (restore.current?.rowWidth ?? 0)
-                : rowWidthOf(list.current.clientWidth);
+                : messageListRowWidth(list.current.clientWidth, estimateRowWidth);
         let total = MESSAGE_LIST_PADDING_START + paddingEnd;
         for (let index = 0; index < items.length; index += 1)
             total += estimateItemSize(index, rowWidth);
@@ -802,18 +860,17 @@ export function MessageList(props: MessageListProps) {
         count: virtualized ? items.length : 0,
         /*
          * A measured row can change height without rendering MessageList.
-         * Let the adapter publish the new container height and row transforms
-         * synchronously from ResizeObserver, before the browser paints.
+         * Publish the new container height and row transforms synchronously
+         * from TanStack's ResizeObserver, before the browser paints.
          */
         directDomUpdates: true,
         directDomUpdatesMode: "transform",
-        estimateSize: (index) =>
-            estimateItemSize(
-                index,
-                list.current === null
-                    ? (restore.current?.rowWidth ?? 0)
-                    : rowWidthOf(list.current.clientWidth),
-            ),
+        /*
+         * Offscreen estimates belong to one committed width generation. Reading
+         * live clientWidth here would re-estimate every uncached row at every
+         * pointer step when any mounted row reports its new height.
+         */
+        estimateSize: (index) => estimateItemSize(index, rowWidthModel.current),
         followOnAppend: true,
         getItemKey: itemKeyAt,
         getScrollElement: () => list.current,
@@ -837,47 +894,68 @@ export function MessageList(props: MessageListProps) {
          */
         paddingEnd,
         paddingStart: MESSAGE_LIST_PADDING_START,
+        onChange: panelAnchorRestore,
         /* Same "still following" tolerance the scroll listener applies, so a
            reader parked one subpixel off the bottom is treated identically by
            the virtualizer's append-follow and by this component's reporting. */
         scrollEndThreshold: FOLLOW_BOTTOM_THRESHOLD,
         useFlushSync: false,
     });
-    const scrollToBottom = () => {
-        if (virtualized) {
-            virtualizer.scrollToEnd();
-            return;
-        }
-        const element = list.current;
-        if (element) element.scrollTop = element.scrollHeight - element.clientHeight;
-    };
     // eslint-disable-next-line happy2-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
-        const bottomEdgeAnchorCapture = () => {
-            const viewportStart = element.scrollTop;
-            const viewportEnd = viewportStart + element.clientHeight;
-            const visible = virtualizer
-                .getVirtualItems()
-                .filter((item) => item.start < viewportEnd && item.end > viewportStart);
-            const item = visible.at(-1);
-            return item ? { key: item.key, gap: viewportEnd - item.end } : undefined;
+        const scrollToBottom = () => {
+            element.scrollTop = element.scrollHeight - element.clientHeight;
         };
-        const bottomEdgeAnchorRestore = (anchor: ReturnType<typeof bottomEdgeAnchorCapture>) => {
-            if (!anchor) return;
-            const row = virtualizer.elementsCache.get(anchor.key);
-            if (!row?.isConnected) return;
-            const index = virtualizer.indexFromElement(row);
-            const endAligned = virtualizer.getOffsetForIndex(index, "end")?.[0];
-            if (endAligned === undefined) return;
-            virtualizer.scrollToOffset(endAligned + anchor.gap, { align: "start" });
+        const shell = element.closest<HTMLElement>('[data-happy-desktop-ui="app-shell"]');
+        const rowWidthCommit = (nextRowWidth: number) => {
+            if (nextRowWidth === rowWidthModel.current) return;
+            const mountedRows = [...virtualizer.elementsCache.values()].filter(
+                (row) => row.isConnected,
+            );
+            rowWidthModel.current = nextRowWidth;
+            virtualizer.measure();
+            for (const row of mountedRows) {
+                const index = virtualizer.indexFromElement(row);
+                virtualizer.resizeItem(
+                    index,
+                    virtualizer.options.measureElement(row, undefined, virtualizer),
+                );
+            }
+            panelAnchorRestore();
         };
-        let rowWidth = props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
+        const onPanelResizeStart = (event: PointerEvent) => {
+            const target = event.target instanceof Element ? event.target : undefined;
+            if (
+                !target?.closest(
+                    '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="left"]',
+                )
+            )
+                return;
+            panelResizing.current = true;
+            panelAnchorCapture();
+            if (panelAnchor.current)
+                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+        };
+        const onPanelResizeEnd = () => {
+            if (!panelResizing.current) return;
+            rowWidthCommit(messageListRowWidth(element.clientWidth, estimateRowWidth));
+            panelAnchorRestore();
+            panelAnchor.current = undefined;
+            panelResizing.current = false;
+            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+        };
+        shell?.addEventListener("lostpointercapture", onPanelResizeEnd);
+        shell?.addEventListener("pointercancel", onPanelResizeEnd);
+        shell?.addEventListener("pointerdown", onPanelResizeStart);
+        shell?.addEventListener("pointerup", onPanelResizeEnd);
+        shell?.addEventListener(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
+        let rowWidth = estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
         /* A first lifetime has no mounted ref or restored measure, so its virtual
            estimates begin at width zero. Rebuild them once at the committed
            width; later width changes take the same path through the observer. */
-        if (virtualized && rowWidth !== (restore.current?.rowWidth ?? 0)) virtualizer.measure();
+        if (virtualized && rowWidth !== rowWidthModel.current) rowWidthCommit(rowWidth);
         const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else element.scrollTop = savedScrollTop ?? 0;
@@ -892,7 +970,6 @@ export function MessageList(props: MessageListProps) {
             });
         };
         let viewportHeight = element.clientHeight;
-        let bottomEdgeAnchor = bottomEdgeAnchorCapture();
         const onScroll = () => {
             /*
              * A growing viewport can clamp scrollTop before ResizeObserver runs.
@@ -905,7 +982,6 @@ export function MessageList(props: MessageListProps) {
                 element.scrollHeight - element.scrollTop - viewportHeight,
             );
             following.current = bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
-            bottomEdgeAnchor = bottomEdgeAnchorCapture();
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
@@ -934,46 +1010,28 @@ export function MessageList(props: MessageListProps) {
                 ? undefined
                 : new ResizeObserver(() => {
                       const nextRowWidth =
-                          props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
+                          estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
                       const nextHeight = element.clientHeight;
                       if (nextRowWidth === rowWidth && nextHeight === viewportHeight) return;
-                      const anchor = bottomEdgeAnchor;
                       const wasFollowing = following.current;
-                      if (nextRowWidth !== rowWidth) {
+                      const previousHeight = viewportHeight;
+                      const widthChanged = nextRowWidth !== rowWidth;
+                      if (widthChanged) {
                           /*
-                           * Offscreen row sizes belong to the width where they
-                           * were measured, so reset them to the caller's model.
-                           * Mounted rows have already reflowed at this point:
-                           * retain those DOM nodes across the reset and feed
-                           * their actual boxes straight back through TanStack's
-                           * own measurement path in the same ResizeObserver
-                           * delivery. No estimated mounted geometry is exposed
-                           * to paint, and TanStack remains the sole scroll
-                           * compensation authority.
+                           * Mounted rows remeasure through TanStack's own
+                           * ResizeObserver. Keep the measured offscreen rows
+                           * intact until they enter the viewport: globally
+                           * clearing that cache on every pointer step makes the
+                           * whole transcript jump between estimates even though
+                           * none of those rows is visible.
                            */
-                          const mountedRows = [...virtualizer.elementsCache.values()].filter(
-                              (row) => row.isConnected,
-                          );
                           rowWidth = nextRowWidth;
-                          if (virtualized) {
-                              virtualizer.measure();
-                              for (const row of mountedRows) {
-                                  const index = virtualizer.indexFromElement(row);
-                                  virtualizer.resizeItem(
-                                      index,
-                                      virtualizer.options.measureElement(
-                                          row,
-                                          undefined,
-                                          virtualizer,
-                                      ),
-                                  );
-                              }
-                          }
+                          if (!panelResizing.current) rowWidthCommit(nextRowWidth);
                       }
                       viewportHeight = nextHeight;
                       if (wasFollowing) scrollToBottom();
-                      else bottomEdgeAnchorRestore(anchor);
-                      bottomEdgeAnchor = bottomEdgeAnchorCapture();
+                      else if (nextHeight !== previousHeight)
+                          element.scrollTop += previousHeight - nextHeight;
                       positionReport();
                   });
         viewportObserver?.observe(element);
@@ -981,9 +1039,15 @@ export function MessageList(props: MessageListProps) {
             positionReport(true);
             observer?.disconnect();
             viewportObserver?.disconnect();
+            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
+            shell?.removeEventListener("lostpointercapture", onPanelResizeEnd);
+            shell?.removeEventListener("pointercancel", onPanelResizeEnd);
+            shell?.removeEventListener("pointerdown", onPanelResizeStart);
+            shell?.removeEventListener("pointerup", onPanelResizeEnd);
+            shell?.removeEventListener(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
             element.removeEventListener("scroll", onScroll);
         };
-    }, [props.estimateRowWidth, virtualized, virtualizer]);
+    }, [estimateRowWidth, virtualized, virtualizer]);
     // eslint-disable-next-line happy2-react/no-layout-effect -- a new font generation changes offscreen row estimates without changing DOM geometry, so the virtualizer must discard its size cache after that generation commits
     useLayoutEffect(() => {
         if (estimateVersion.current === props.estimateVersion) return;

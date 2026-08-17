@@ -142,6 +142,7 @@ const REVEAL_WIDTH = 48;
 const WORKSPACE_MIN_WIDTH = 140;
 const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
+export const APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT = "happy2-app-shell-panel-resize-layout";
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
@@ -269,6 +270,7 @@ function ResizeHandle(props: {
  * and any in-flight content survive the transition.
  */
 export function AppShell(props: AppShellProps) {
+    const shell = useRef<HTMLDivElement>(null);
     const [local, rest] = partitionComponentProps(props, [
         "children",
         "className",
@@ -424,6 +426,10 @@ export function AppShell(props: AppShellProps) {
         ? clamp(local.panelWidth!, panelMin, panelMax)
         : panelWidthState;
     const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
+    // eslint-disable-next-line happy2-react/no-layout-effect -- live panel geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
+    useLayoutEffect(() => {
+        shell.current?.dispatchEvent(new Event(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT));
+    }, [panelWidth]);
     function previewPanelWidth(next: number) {
         if (panelWidthControlled) setPanelDragWidth(next);
         else setPanelWidthState(next);
@@ -539,6 +545,7 @@ export function AppShell(props: AppShellProps) {
             data-sidebar-collapsed={sidebarHidden ? "" : undefined}
             data-window-controls={local.windowControls ? "" : undefined}
             data-window-full-screen={local.windowFullScreen ? "" : undefined}
+            ref={shell}
             style={local.style}
         >
             {local.windowControls ? (

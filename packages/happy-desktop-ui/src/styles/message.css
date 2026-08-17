@@ -942,7 +942,7 @@
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    /* The virtualizer is the one scroll-anchor authority. */
+    /* TanStack and the semantic drag anchor are the scroll authorities. */
     overflow-anchor: none;
     /* Keep every message's available measure constant when the history crosses
        the overflow threshold and native scrollbar space becomes occupied. */
