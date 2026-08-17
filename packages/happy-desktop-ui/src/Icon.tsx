@@ -201,10 +201,15 @@ const glyphs: Record<IconName, IconGlyph> = {
     dot: { set: "ionicons", name: "ellipse" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];
-function glyphContent(glyph: IconGlyph, size: number) {
+function glyphContent(glyph: IconGlyph) {
     if (glyph.set === "drawn") {
+        /*
+         * The drawing fills the icon box rather than taking `size` directly, so
+         * a drawn glyph answers a surface's box override exactly as a font
+         * glyph answers an overridden font-size.
+         */
         return (
-            <svg fill="none" focusable="false" height={size} viewBox="0 0 16 16" width={size}>
+            <svg fill="none" focusable="false" height="100%" viewBox="0 0 16 16" width="100%">
                 {drawnGlyphs[glyph.name]}
             </svg>
         );
@@ -246,7 +251,7 @@ export function Icon(props: IconProps) {
                 ...(local.color === undefined ? null : { color: local.color }),
             }}
         >
-            {glyphContent(glyph, size)}
+            {glyphContent(glyph)}
         </span>
     );
 }
