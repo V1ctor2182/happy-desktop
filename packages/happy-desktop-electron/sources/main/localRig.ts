@@ -157,8 +157,9 @@ const defaultProcessHost: RigProcessHost = {
  * Finds the command that should own the local daemon.
  *
  * The login shell's reported command and every command reconstructed from its
- * PATH are considered in order. A command inside Happy's own dependency tree is
- * skipped so that the package-owned fallback cannot masquerade as a global Rig.
+ * PATH are considered in order. Package-local commands and commands inside
+ * Happy's own dependency tree are skipped so a dependency from this or another
+ * checkout cannot masquerade as the user's global Rig.
  */
 export async function rigExecutableFind(
     loginShellCommand: string | undefined,
@@ -179,6 +180,8 @@ export async function rigExecutableFind(
         const canonicalPath = await executableCanonicalPath(candidatePath);
         if (
             !canonicalPath ||
+            isCheckoutPackageBinExecutable(candidatePath) ||
+            isCheckoutPackageBinExecutable(canonicalPath) ||
             isHappyOwnedExecutable(
                 candidatePath,
                 canonicalPath,
@@ -509,6 +512,20 @@ function isHappyOwnedExecutable(
     return happyDependencyRoots.some(
         (root) => pathIsWithin(apparentPath, root) || pathIsWithin(canonicalPath, root),
     );
+}
+
+function isCheckoutPackageBinExecutable(pathName: string): boolean {
+    const marker = `${sep}node_modules${sep}.bin${sep}`;
+    const markerIndex = normalize(pathName).indexOf(marker);
+    if (markerIndex < 0) return false;
+
+    let directory = normalize(pathName).slice(0, markerIndex);
+    for (;;) {
+        if (existsSync(join(directory, ".git"))) return true;
+        const parent = dirname(directory);
+        if (parent === directory) return false;
+        directory = parent;
+    }
 }
 
 function happyPackageDirectoryFind(): string {
