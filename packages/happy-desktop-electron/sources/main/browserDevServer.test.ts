@@ -58,6 +58,7 @@ function healthReady(version: string) {
 function connectionWith(health: () => Promise<unknown>, close = vi.fn()): LocalRigConnection {
     return {
         client: { health } as unknown as RigDaemonClient,
+        protocolVersion: 17,
         version: "0.0.55",
         rigInstallationInspect: async () => {
             throw new Error("This fixture does not inspect the local Rig installation.");

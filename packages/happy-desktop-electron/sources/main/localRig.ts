@@ -63,6 +63,8 @@ export interface RigLaunchContext {
 
 export interface LocalRigConnection {
     readonly client: RigDaemonClient;
+    /** Protocol reported by the connected daemon's ready health response. */
+    readonly protocolVersion: number;
     readonly version: string;
     rigInstallationInspect(signal: AbortSignal): Promise<LocalRigOnboardingInspection>;
     close(): void;
@@ -647,6 +649,7 @@ async function localRigConnectionCreate(
     const health = await readyHealthWait(daemon.client, daemon.health, wait);
     return {
         client: daemon.client,
+        protocolVersion: health.protocolVersion,
         version: health.identity.version,
         rigInstallationInspect: async (signal) =>
             rigInstallationInspect(await launchContextGet(), signal),

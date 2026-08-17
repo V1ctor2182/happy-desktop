@@ -16,6 +16,7 @@ describe("confirmed Rig installation terminal", () => {
         const connector: LocalRigConnector = {
             connect: vi.fn(async () => ({
                 client: {} as RigDaemonClient,
+                protocolVersion: 17,
                 version: "0.0.45",
                 rigInstallationInspect: async () => {
                     throw new Error("This fixture does not inspect the local Rig installation.");
@@ -117,6 +118,7 @@ describe("confirmed Rig installation terminal", () => {
         manager.closeOwner(9);
         connectionResolve({
             client: {} as RigDaemonClient,
+            protocolVersion: 17,
             version: "0.0.45",
             rigInstallationInspect: async () => {
                 throw new Error("This fixture does not inspect the local Rig installation.");

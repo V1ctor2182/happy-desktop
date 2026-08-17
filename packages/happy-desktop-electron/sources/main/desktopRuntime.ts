@@ -28,9 +28,11 @@ import {
 import {
     connectRig,
     DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS,
+    serverCompatibility,
     type RigConnection,
     type RigOnboardingState,
     type RigProfile,
+    type ServerCompatibility,
 } from "@slopus/rig-connect";
 import {
     rigDaemonConnectionUnavailable,
@@ -192,7 +194,11 @@ export class DesktopRuntime implements AsyncDisposable {
         const connection = this.localConnectionRequire(expectedConnectionId);
         const rig = this.localRigConnect();
         if (!rig) throw new Error("The local Rig daemon is unavailable.");
-        const state = await connectedRigOnboardingResolve(rig);
+        const state = await connectedRigOnboardingResolve(
+            connection.protocolVersion,
+            connection.version,
+            rig,
+        );
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.connectionId !== expectedConnectionId ||
@@ -620,11 +626,18 @@ function displayError(error: unknown): string {
  * Offline `rig inspect` is for installation and repair while no daemon can
  * answer. Once a daemon is serving the shared endpoint, a separately resolved
  * CLI may be older, newer, or belong to another checkout; it must not veto that
- * live connection. `connectRig` has already completed the authenticated
- * protocol handshake, so onboarding asks that connection directly rather than
- * introducing a second installation-schema decoder with a different answer.
+ * live connection. The daemon's ready health response already carries the
+ * protocol version, so that connected fact gates onboarding without another
+ * executable lookup or installation-schema request.
  */
-async function connectedRigOnboardingResolve(rig: RigConnection): Promise<RigOnboardingState> {
+async function connectedRigOnboardingResolve(
+    protocolVersion: number,
+    installedVersion: string,
+    rig: RigConnection,
+): Promise<RigOnboardingState> {
+    const compatibility = serverCompatibility(protocolVersion);
+    if (compatibility.status !== "compatible")
+        return daemonProtocolMismatchState(compatibility, installedVersion);
     try {
         return await rig.getOnboardingStatus({
             signal: AbortSignal.timeout(DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS),
@@ -632,6 +645,22 @@ async function connectedRigOnboardingResolve(rig: RigConnection): Promise<RigOnb
     } catch (error) {
         return rigUnreachableState(error);
     }
+}
+
+function daemonProtocolMismatchState(
+    compatibility: Exclude<ServerCompatibility, { status: "checking" } | { status: "compatible" }>,
+    installedVersion: string,
+): RigOnboardingState {
+    return {
+        installedVersion: installedVersion.slice(0, 256),
+        maximumSupportedProtocolVersion: compatibility.maximumSupportedProtocolVersion,
+        minimumSupportedProtocolVersion: compatibility.minimumSupportedProtocolVersion,
+        protocolVersion: compatibility.serverProtocolVersion,
+        reason: "protocol",
+        source: "daemon",
+        state: "version_mismatch",
+        upgrade: compatibility.status === "client_outdated" ? "happy" : "rig",
+    };
 }
 
 function rigUnreachableState(error: unknown): RigOnboardingState {
