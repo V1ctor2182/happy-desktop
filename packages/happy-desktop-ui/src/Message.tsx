@@ -746,8 +746,6 @@ export function MessageList(props: MessageListProps) {
     const measurements = useRef(restore.current?.measurements);
     const positionChange = useRef(props.onScrollPositionChange);
     positionChange.current = props.onScrollPositionChange;
-    const interactiveResize = useRef(false);
-    const interactiveResizeIndex = useRef<number | undefined>(undefined);
     const estimateVersion = useRef(props.estimateVersion);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const entryItems = Children.toArray(props.children);
@@ -789,14 +787,18 @@ export function MessageList(props: MessageListProps) {
             total += estimateItemSize(index, rowWidth);
         return total;
     };
+    const itemKeyAt = (index: number) => {
+        const item = items[index];
+        return isValidElement(item) && item.key !== null ? item.key : index;
+    };
     // TanStack Virtual deliberately owns mutable measurement functions; this leaf
     // remains outside compiler memoization while every rendered row stays eligible.
     // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
         /* Automatic growth uses the end anchor so a following reader stays at
-           the newest content. An explicitly toggled row temporarily uses its
-           start edge instead: its header stays put and its body opens downward. */
-        anchorTo: interactiveResize.current ? "start" : "end",
+           the newest content. Parked readers use TanStack's item-size
+           compensation and the semantic bottom-edge anchor below. */
+        anchorTo: "end",
         count: virtualized ? items.length : 0,
         /*
          * A measured row can change height without rendering MessageList.
@@ -813,10 +815,7 @@ export function MessageList(props: MessageListProps) {
                     : rowWidthOf(list.current.clientWidth),
             ),
         followOnAppend: true,
-        getItemKey: (index) => {
-            const item = items[index];
-            return isValidElement(item) && item.key !== null ? item.key : index;
-        },
+        getItemKey: itemKeyAt,
         getScrollElement: () => list.current,
         /* Opening a conversation lands on its newest content, which means the
            first offset has to be the height of everything above it. Counting
@@ -844,34 +843,6 @@ export function MessageList(props: MessageListProps) {
         scrollEndThreshold: FOLLOW_BOTTOM_THRESHOLD,
         useFlushSync: false,
     });
-    const beginInteractiveResize: HTMLAttributes<HTMLDivElement>["onClickCapture"] = (event) => {
-        const target = event.target instanceof Element ? event.target : undefined;
-        const toggle = target?.closest<HTMLElement>("button[aria-expanded]");
-        const row = toggle?.closest<HTMLElement>(".happy2-message-list__virtual-row");
-        const index = Number(row?.dataset.index);
-        if (!toggle || !row || !list.current?.contains(toggle) || !Number.isInteger(index)) return;
-
-        interactiveResize.current = true;
-        interactiveResizeIndex.current = index;
-        /*
-         * A child-owned expansion can commit without re-rendering MessageList
-         * first. Change the live instance synchronously in capture phase so its
-         * ResizeObserver sees the interaction anchor, then restore the normal
-         * automatic-growth policy after layout has settled.
-         */
-        virtualizer.options.anchorTo = "start";
-        virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-            item.index !== interactiveResizeIndex.current &&
-            item.start < (list.current?.scrollTop ?? 0);
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                interactiveResize.current = false;
-                interactiveResizeIndex.current = undefined;
-                virtualizer.options.anchorTo = "end";
-                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
-            });
-        });
-    };
     const scrollToBottom = () => {
         if (virtualized) {
             virtualizer.scrollToEnd();
@@ -884,6 +855,24 @@ export function MessageList(props: MessageListProps) {
     useLayoutEffect(() => {
         const element = list.current;
         if (!element) return;
+        const bottomEdgeAnchorCapture = () => {
+            const viewportStart = element.scrollTop;
+            const viewportEnd = viewportStart + element.clientHeight;
+            const visible = virtualizer
+                .getVirtualItems()
+                .filter((item) => item.start < viewportEnd && item.end > viewportStart);
+            const item = visible.at(-1);
+            return item ? { key: item.key, gap: viewportEnd - item.end } : undefined;
+        };
+        const bottomEdgeAnchorRestore = (anchor: ReturnType<typeof bottomEdgeAnchorCapture>) => {
+            if (!anchor) return;
+            const row = virtualizer.elementsCache.get(anchor.key);
+            if (!row?.isConnected) return;
+            const index = virtualizer.indexFromElement(row);
+            const endAligned = virtualizer.getOffsetForIndex(index, "end")?.[0];
+            if (endAligned === undefined) return;
+            virtualizer.scrollToOffset(endAligned + anchor.gap, { align: "start" });
+        };
         let rowWidth = props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
         /* A first lifetime has no mounted ref or restored measure, so its virtual
            estimates begin at width zero. Rebuild them once at the committed
@@ -892,15 +881,6 @@ export function MessageList(props: MessageListProps) {
         const savedScrollTop = restore.current?.scrollTop;
         if (following.current) scrollToBottom();
         else element.scrollTop = savedScrollTop ?? 0;
-        // Virtual-row measurement can compensate the scroll offset after this
-        // layout effect. Reapply a parked reader's exact pixel offset once those
-        // initial measurements have landed.
-        const restoreFrame =
-            !following.current && savedScrollTop !== undefined
-                ? requestAnimationFrame(() => {
-                      element.scrollTop = savedScrollTop;
-                  })
-                : undefined;
         const positionReport = (captureMeasurements = false) => {
             if (captureMeasurements && virtualized)
                 measurements.current = virtualizer.takeSnapshot();
@@ -912,6 +892,7 @@ export function MessageList(props: MessageListProps) {
             });
         };
         let viewportHeight = element.clientHeight;
+        let bottomEdgeAnchor = bottomEdgeAnchorCapture();
         const onScroll = () => {
             /*
              * A growing viewport can clamp scrollTop before ResizeObserver runs.
@@ -924,6 +905,7 @@ export function MessageList(props: MessageListProps) {
                 element.scrollHeight - element.scrollTop - viewportHeight,
             );
             following.current = bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
+            bottomEdgeAnchor = bottomEdgeAnchorCapture();
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
@@ -953,6 +935,10 @@ export function MessageList(props: MessageListProps) {
                 : new ResizeObserver(() => {
                       const nextRowWidth =
                           props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
+                      const nextHeight = element.clientHeight;
+                      if (nextRowWidth === rowWidth && nextHeight === viewportHeight) return;
+                      const anchor = bottomEdgeAnchor;
+                      const wasFollowing = following.current;
                       if (nextRowWidth !== rowWidth) {
                           /*
                            * Offscreen row sizes belong to the width where they
@@ -984,16 +970,14 @@ export function MessageList(props: MessageListProps) {
                               }
                           }
                       }
-                      const nextHeight = element.clientHeight;
-                      if (nextHeight === viewportHeight) return;
-                      const wasFollowing = following.current;
                       viewportHeight = nextHeight;
                       if (wasFollowing) scrollToBottom();
+                      else bottomEdgeAnchorRestore(anchor);
+                      bottomEdgeAnchor = bottomEdgeAnchorCapture();
                       positionReport();
                   });
         viewportObserver?.observe(element);
         return () => {
-            if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
             observer?.disconnect();
             viewportObserver?.disconnect();
@@ -1010,7 +994,6 @@ export function MessageList(props: MessageListProps) {
         <div
             className={["happy2-message-list", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="message-list"
-            onClickCapture={beginInteractiveResize}
             ref={list}
             style={props.style}
         >
