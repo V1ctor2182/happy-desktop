@@ -126,9 +126,9 @@
     margin-top: 0;
 }
 
-/* When the footer itself opens the agent turn, Message already owns the same
+/* When the status itself opens the agent turn, Message already owns the same
    content inset and author clearance as a tool-first row. */
-.happy2-message--working-lead .happy2-conversation-turn-status {
+.happy2-message--activity-lead .happy2-conversation-turn-status {
     margin-top: 0;
     padding: 0;
 }
