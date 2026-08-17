@@ -274,19 +274,31 @@ class DeterministicInferenceServer implements GymInferenceServer {
                 },
             });
         }
+        const streamingPaint = scriptKey.includes("gym-streaming-paint");
+        const streamingUnstick = scriptKey.includes("gym-mixed-replay-stream-unstick");
         return {
             content,
-            ...(replay
+            ...(streamingPaint
                 ? {
-                      thinkingDeltaChunkSize: 96,
-                      thinkingDeltaDelayMs: 4,
-                      textDeltaChunkSize: 256,
-                      textDeltaDelayMs: 4,
+                      textDeltaChunkSize: 8,
+                      textDeltaDelayMs: 48,
                   }
-                : {
-                      textDeltaChunkSize: longChat ? 16_384 : 96,
-                      textDeltaDelayMs: this.#manifest.profile === "smoke" ? 0 : 1,
-                  }),
+                : streamingUnstick
+                  ? {
+                        textDeltaChunkSize: 64,
+                        textDeltaDelayMs: 12,
+                    }
+                  : replay
+                    ? {
+                          thinkingDeltaChunkSize: 96,
+                          thinkingDeltaDelayMs: 4,
+                          textDeltaChunkSize: 256,
+                          textDeltaDelayMs: 4,
+                      }
+                    : {
+                          textDeltaChunkSize: longChat ? 16_384 : 96,
+                          textDeltaDelayMs: this.#manifest.profile === "smoke" ? 0 : 1,
+                      }),
             completionDelayMs: replay ? 20 : this.#manifest.profile === "smoke" ? 0 : 2,
         };
     }
@@ -328,6 +340,20 @@ function deterministicText(
     longChat: boolean,
     replay: boolean,
 ): string {
+    if (scriptKey.includes("gym-streaming-paint"))
+        return [
+            `script=${scriptKey}`,
+            "",
+            "Streaming fixture anchor. This completed paragraph must keep one stable DOM and layout identity while later blocks arrive.",
+            "",
+            "| Surface | Short value | Detail |",
+            "| --- | --- | --- |",
+            "| Alpha | One | Compact content. |",
+            "| Beta | Two | A deliberately much longer cell arrives later and must not resize columns already shown above. |",
+            "| Gamma | Three | Final table row. |",
+            "",
+            "The trailing paragraph arrives after the complete table.",
+        ].join("\n");
     const lineCount = longChat
         ? manifest.seed.longChatResponseLines
         : toolHeavy

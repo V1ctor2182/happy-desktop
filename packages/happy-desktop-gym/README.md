@@ -93,12 +93,17 @@ retain the same lowest visible text glyph and bottom-edge offset through splitte
 drags in both directions, panel/sidebar toggles, window resizing, and composer
 resizing. The recorded `scrollStability` phases distinguish natural text rewrap
 during width changes from a lost scroll anchor.
-The standalone `streaming` workload submits through the real composer three times. A
+The standalone `streaming` workload submits through the real composer four times. A
 following send must remain exactly pinned while the working status and response
 stream grow, including a stable status-to-composer gap; a parked send must retain
-the same glyph and scrollTop while the same durable SSE path appends below it. A
+the same glyph while the same durable SSE path appends below it, including when
+the cleared composer changes the viewport's raw scrollTop. A
 third send wheels away from the tail while SSE is active and requires the reader's
-new glyph to remain fixed for the rest of the stream.
+new glyph to remain fixed for the rest of the stream. A fourth slow-chunk response
+forms a real GFM table over SSE. The prospective header must remain progressively
+visible as text before it becomes a table; its own columns may reflow as rows arrive.
+Every painted frame must nevertheless keep the completed prefix node, the transcript
+at the bottom, and the status-to-composer gap stable.
 Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The

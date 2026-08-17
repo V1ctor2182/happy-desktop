@@ -201,6 +201,14 @@ interface ScrollStabilityFrame {
     readonly scrollTop: number;
     readonly sidebarWidth?: number;
     readonly statusGap?: number;
+    readonly trackedBodyHeight?: number;
+    readonly trackedProgressiveTableParagraph?: boolean;
+    readonly trackedPrefixPreserved?: boolean;
+    readonly trackedRowHeight?: number;
+    readonly trackedTableColumns?: readonly number[];
+    readonly trackedTableRows?: number;
+    readonly trackedTextLength?: number;
+    readonly trackedVirtualHeight?: number;
     readonly windowWidth: number;
 }
 
@@ -253,9 +261,27 @@ interface StreamingScrollPhase extends ScrollStabilityPhase {
 
 interface StreamingScrollMeasurement {
     readonly following: StreamingScrollPhase;
+    readonly paint: StreamingPaintMeasurement;
     readonly parked: StreamingScrollPhase;
     readonly stable: boolean;
     readonly unstick: StreamingScrollPhase;
+}
+
+interface StreamingPaintMeasurement {
+    readonly delayedRowGeometryCorrections: number;
+    readonly frameCount: number;
+    readonly frames: readonly ScrollStabilityFrame[];
+    readonly maxBottomDistance: number;
+    readonly progressiveTableParagraphObserved: boolean;
+    readonly prefixCaptureFrameCount: number;
+    readonly prefixNodePreserved: boolean;
+    readonly stable: boolean;
+    readonly statusGapMax?: number;
+    readonly statusGapMin?: number;
+    readonly statusGapSpread?: number;
+    readonly tableColumnReflows: number;
+    readonly tableObserved: boolean;
+    readonly tableStructureTransitions: number;
 }
 
 export async function electronWorkloadsRun(options: {
@@ -1974,12 +2000,14 @@ async function scrollListToFraction(page: Page, fraction: number): Promise<void>
 async function scrollStabilityCapture(
     page: Page,
     action: () => Promise<void>,
+    trackedText?: string,
 ): Promise<readonly ScrollStabilityFrame[]> {
     const framesPromise = page.evaluate(
-        () =>
+        (tracked) =>
             new Promise<ScrollStabilityFrame[]>((resolve) => {
                 const frames: ScrollStabilityFrame[] = [];
                 const started = performance.now();
+                let trackedPrefixNode: Node | undefined;
                 let frameHandle = 0;
                 let timerHandle = 0;
                 let stopped = false;
@@ -2057,6 +2085,39 @@ async function scrollStabilityCapture(
                         const statusLine = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="conversation-status-line"]',
                         );
+                        const trackedMessage =
+                            tracked === undefined
+                                ? undefined
+                                : [
+                                      ...document.querySelectorAll<HTMLElement>(
+                                          '[data-happy-desktop-ui="message"]',
+                                      ),
+                                  ]
+                                      .filter((message) => message.textContent?.includes(tracked))
+                                      .at(-1);
+                        const trackedBody = trackedMessage?.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="message-body"]',
+                        );
+                        const trackedRow = trackedMessage?.closest<HTMLElement>(
+                            ".happy2-message-list__virtual-row[data-index]",
+                        );
+                        const trackedTable = trackedBody?.querySelector("table");
+                        if (trackedBody && trackedPrefixNode === undefined) {
+                            const walker = document.createTreeWalker(
+                                trackedBody,
+                                NodeFilter.SHOW_TEXT,
+                            );
+                            for (
+                                let node = walker.nextNode();
+                                node !== null;
+                                node = walker.nextNode()
+                            ) {
+                                if (!node.textContent?.includes("Streaming fixture anchor"))
+                                    continue;
+                                trackedPrefixNode = node;
+                                break;
+                            }
+                        }
                         if (list) {
                             const listRect = list.getBoundingClientRect();
                             const statusRect = statusLine?.getBoundingClientRect();
@@ -2137,6 +2198,29 @@ async function scrollStabilityCapture(
                                     statusRect && statusRect.height > 0
                                         ? listRect.bottom - statusRect.bottom
                                         : undefined,
+                                trackedBodyHeight: trackedBody?.getBoundingClientRect().height,
+                                trackedProgressiveTableParagraph: trackedBody
+                                    ? [...trackedBody.querySelectorAll("p")].some((paragraph) =>
+                                          paragraph.textContent?.includes("| Surface |"),
+                                      )
+                                    : undefined,
+                                trackedPrefixPreserved:
+                                    trackedPrefixNode === undefined
+                                        ? undefined
+                                        : trackedPrefixNode.isConnected &&
+                                          trackedBody?.contains(trackedPrefixNode) === true,
+                                trackedRowHeight: trackedRow?.getBoundingClientRect().height,
+                                trackedTableColumns:
+                                    trackedTable === null || trackedTable === undefined
+                                        ? undefined
+                                        : [
+                                              ...trackedTable.querySelectorAll<HTMLElement>(
+                                                  "thead th",
+                                              ),
+                                          ].map((cell) => cell.getBoundingClientRect().width),
+                                trackedTableRows: trackedTable?.querySelectorAll("tbody tr").length,
+                                trackedTextLength: trackedBody?.textContent?.length,
+                                trackedVirtualHeight: virtual?.getBoundingClientRect().height,
                                 windowWidth: window.innerWidth,
                             });
                         }
@@ -2160,6 +2244,7 @@ async function scrollStabilityCapture(
                     browserWindow.__happyDesktopGymSampleScrollStability,
                 );
             }),
+        trackedText,
     );
     try {
         await page.waitForFunction(
@@ -2505,7 +2590,6 @@ function streamingScrollPhaseBuild(
         ...base,
         stable:
             base.stable &&
-            (anchorMode !== "parked" || scrollTopSpread <= 2) &&
             statusObserved &&
             (anchorMode === "parked" ||
                 (statusGapMin !== undefined &&
@@ -2519,6 +2603,86 @@ function streamingScrollPhaseBuild(
         statusGapMin,
         statusGapSpread,
         statusObserved,
+    };
+}
+
+function streamingPaintMeasurementBuild(
+    frames: readonly ScrollStabilityFrame[],
+): StreamingPaintMeasurement {
+    let delayedRowGeometryCorrections = 0;
+    let tableColumnReflows = 0;
+    let tableStructureTransitions = 0;
+    let previous: ScrollStabilityFrame | undefined;
+    for (const frame of frames) {
+        if (
+            previous?.trackedTextLength !== undefined &&
+            frame.trackedTextLength === previous.trackedTextLength &&
+            (Math.abs((frame.trackedBodyHeight ?? 0) - (previous.trackedBodyHeight ?? 0)) > 1 ||
+                Math.abs((frame.trackedRowHeight ?? 0) - (previous.trackedRowHeight ?? 0)) > 1)
+        )
+            delayedRowGeometryCorrections += 1;
+        const columns = frame.trackedTableColumns;
+        const previousColumns = previous?.trackedTableColumns;
+        if (
+            columns &&
+            previousColumns &&
+            (columns.length !== previousColumns.length ||
+                columns.some((width, index) => Math.abs(width - previousColumns[index]!) > 1))
+        )
+            tableColumnReflows += 1;
+        if ((previous?.trackedTableRows ?? 0) === 0 && (frame.trackedTableRows ?? 0) > 0)
+            tableStructureTransitions += 1;
+        previous = frame;
+    }
+    const maxBottomDistance = frames.reduce(
+        (maximum, frame) => Math.max(maximum, frame.bottomDistance),
+        0,
+    );
+    const tableObserved = frames.some((frame) => (frame.trackedTableRows ?? 0) >= 3);
+    const progressiveTableParagraphObserved = frames.some(
+        (frame) => frame.trackedProgressiveTableParagraph === true,
+    );
+    const prefixFrames = frames.filter((frame) => frame.trackedPrefixPreserved !== undefined);
+    const prefixCaptureFrameCount = prefixFrames.length;
+    const prefixNodePreserved = prefixFrames.every(
+        (frame) => frame.trackedPrefixPreserved === true,
+    );
+    const statusGaps = frames.flatMap((frame) =>
+        frame.statusGap === undefined ? [] : [frame.statusGap],
+    );
+    const statusGapMin = statusGaps.length > 0 ? Math.min(...statusGaps) : undefined;
+    const statusGapMax = statusGaps.length > 0 ? Math.max(...statusGaps) : undefined;
+    const statusGapSpread =
+        statusGapMin === undefined || statusGapMax === undefined
+            ? undefined
+            : statusGapMax - statusGapMin;
+    return {
+        delayedRowGeometryCorrections,
+        frameCount: frames.length,
+        frames,
+        maxBottomDistance,
+        progressiveTableParagraphObserved,
+        prefixCaptureFrameCount,
+        prefixNodePreserved,
+        stable:
+            frames.length > 2 &&
+            delayedRowGeometryCorrections === 0 &&
+            maxBottomDistance <= 1 &&
+            progressiveTableParagraphObserved &&
+            prefixCaptureFrameCount >= 2 &&
+            prefixNodePreserved &&
+            statusGapMin !== undefined &&
+            Math.abs(statusGapMin - 24) <= 1 &&
+            statusGapSpread !== undefined &&
+            statusGapSpread <= 1 &&
+            tableObserved &&
+            tableStructureTransitions === 1,
+        statusGapMax,
+        statusGapMin,
+        statusGapSpread,
+        tableColumnReflows,
+        tableObserved,
+        tableStructureTransitions,
     };
 }
 
@@ -2540,7 +2704,11 @@ async function streamingScrollRun(
          */
         await page.waitForTimeout(200);
         const marker = `gym-mixed-replay-stream-${anchorMode}-${String(ordinal)}-${Date.now().toString(36)}`;
-        await composer.fill(`Exercise real ${anchorMode} streaming. [${marker}]`);
+        const prompt =
+            anchorMode === "parked"
+                ? `Exercise real ${anchorMode} streaming.\nKeep the parked glyph fixed when this multiline composer clears.\n[${marker}]`
+                : `Exercise real ${anchorMode} streaming. [${marker}]`;
+        await composer.fill(prompt);
         const runningStatus = page.locator(
             '[data-happy-desktop-ui="sidebar-item"][data-active][data-status="working"]',
         );
@@ -2592,16 +2760,33 @@ async function streamingScrollRun(
         undefined,
         { timeout: 5_000 },
     );
-    await page.waitForTimeout(100);
     const unstickFrames = await scrollStabilityCapture(page, async () => {
         await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
     });
     const unstick = streamingScrollPhaseBuild("parked", unstickFrames);
     await mark("streaming-scroll-unstick");
+    await scrollListToFraction(page, 1);
+    await page.waitForTimeout(200);
+    const paintMarker = `gym-streaming-paint-${Date.now().toString(36)}`;
+    await composer.fill(`Exercise real streaming paint stability. [${paintMarker}]`);
+    const paintFrames = await scrollStabilityCapture(
+        page,
+        async () => {
+            await composer.press("Enter");
+            await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
+            await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+        },
+        paintMarker,
+    );
+    const paint = streamingPaintMeasurementBuild(paintFrames);
+    if (!paint.stable)
+        throw new Error(`Streaming paint stability failed: ${JSON.stringify(paint)}`);
+    await mark("streaming-paint");
     return {
         following,
+        paint,
         parked,
-        stable: following.stable && parked.stable && unstick.stable,
+        stable: following.stable && paint.stable && parked.stable && unstick.stable,
         unstick,
     };
 }
