@@ -20,7 +20,7 @@
  * turn's live status line lives in the message list footer after that last
  * message and scrolls with the transcript, aligned with the step rows above it.
  */
-.happy2-chat-conversation .happy2-message-list__content {
+.happy2-chat-conversation .happy2-message-list__content:not([data-virtualized]) {
     padding-bottom: 24px;
 }
 

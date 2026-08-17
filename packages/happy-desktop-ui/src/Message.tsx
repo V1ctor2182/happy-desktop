@@ -1,5 +1,4 @@
 import { partitionComponentProps } from "./componentProps";
-import { flushSync } from "react-dom";
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import {
     Children,
@@ -663,6 +662,8 @@ export type MessageListProps = {
     footer?: ReactNode;
     /** Fixed height supplied to the virtualizer for the stable footer row. */
     footerHeight?: number;
+    /** Bottom clearance represented inside the virtualizer's coordinate space. */
+    paddingEnd?: number;
     /**
      * Height of row `index` at the list's current content width, computed from
      * the caller's own data rather than from the DOM. Every row is still
@@ -704,7 +705,7 @@ export interface MessageListScrollPosition {
 const FOLLOW_BOTTOM_THRESHOLD = 8;
 /** Transcript clearances represented inside the virtualizer's coordinate space. */
 const MESSAGE_LIST_PADDING_START = 12;
-const MESSAGE_LIST_PADDING_END = 8;
+const MESSAGE_LIST_PADDING_END_DEFAULT = 8;
 /** Row height assumed before anything has ever been measured. */
 const ROW_SIZE_FALLBACK = 72;
 /** Reserved stable entity key for the optional final footer row. */
@@ -748,7 +749,6 @@ export function MessageList(props: MessageListProps) {
     const interactiveResize = useRef(false);
     const interactiveResizeIndex = useRef<number | undefined>(undefined);
     const estimateVersion = useRef(props.estimateVersion);
-    const scrollPositionSync = useRef<() => void>(() => undefined);
     const estimatedSize = useRef(averageMeasuredSize(restore.current?.measurements));
     const entryItems = Children.toArray(props.children);
     const footerIndex = props.footer === undefined ? undefined : entryItems.length;
@@ -767,6 +767,7 @@ export function MessageList(props: MessageListProps) {
                   </div>,
               ];
     const virtualized = props.virtualize === true;
+    const paddingEnd = props.paddingEnd ?? MESSAGE_LIST_PADDING_END_DEFAULT;
     const rowWidthOf = (scrollportWidth: number) =>
         props.estimateRowWidth?.(scrollportWidth) ?? scrollportWidth;
     const estimateItemSize = (index: number, rowWidth: number) =>
@@ -783,7 +784,7 @@ export function MessageList(props: MessageListProps) {
             list.current === null
                 ? (restore.current?.rowWidth ?? 0)
                 : rowWidthOf(list.current.clientWidth);
-        let total = MESSAGE_LIST_PADDING_START + MESSAGE_LIST_PADDING_END;
+        let total = MESSAGE_LIST_PADDING_START + paddingEnd;
         for (let index = 0; index < items.length; index += 1)
             total += estimateItemSize(index, rowWidth);
         return total;
@@ -797,6 +798,13 @@ export function MessageList(props: MessageListProps) {
            start edge instead: its header stays put and its body opens downward. */
         anchorTo: interactiveResize.current ? "start" : "end",
         count: virtualized ? items.length : 0,
+        /*
+         * A measured row can change height without rendering MessageList.
+         * Let the adapter publish the new container height and row transforms
+         * synchronously from ResizeObserver, before the browser paints.
+         */
+        directDomUpdates: true,
+        directDomUpdatesMode: "transform",
         estimateSize: (index) =>
             estimateItemSize(
                 index,
@@ -828,7 +836,7 @@ export function MessageList(props: MessageListProps) {
          * Keeping them here makes row starts, total size, scrollTop, anchoring,
          * and restored measurements use one coordinate system.
          */
-        paddingEnd: MESSAGE_LIST_PADDING_END,
+        paddingEnd,
         paddingStart: MESSAGE_LIST_PADDING_START,
         /* Same "still following" tolerance the scroll listener applies, so a
            reader parked one subpixel off the bottom is treated identically by
@@ -864,8 +872,11 @@ export function MessageList(props: MessageListProps) {
             });
         });
     };
-    const virtualContentSize = virtualized ? virtualizer.getTotalSize() : 0;
     const scrollToBottom = () => {
+        if (virtualized) {
+            virtualizer.scrollToEnd();
+            return;
+        }
         const element = list.current;
         if (element) element.scrollTop = element.scrollHeight - element.clientHeight;
     };
@@ -901,7 +912,6 @@ export function MessageList(props: MessageListProps) {
             });
         };
         let viewportHeight = element.clientHeight;
-        let bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - viewportHeight);
         const onScroll = () => {
             /*
              * A growing viewport can clamp scrollTop before ResizeObserver runs.
@@ -909,66 +919,33 @@ export function MessageList(props: MessageListProps) {
              * offset captured against the previous viewport height.
              */
             if (element.clientHeight !== viewportHeight) return;
-            bottomOffset = Math.max(0, element.scrollHeight - element.scrollTop - viewportHeight);
+            const bottomOffset = Math.max(
+                0,
+                element.scrollHeight - element.scrollTop - viewportHeight,
+            );
             following.current = bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
             positionReport();
         };
         element.addEventListener("scroll", onScroll, { passive: true });
-        scrollPositionSync.current = onScroll;
         /*
-         * Both paths react to DOM growth through this watcher, whose microtask
-         * runs after the growing commit but before the browser paints. The
-         * unmeasured path just re-pins the bottom. The virtualized path has a
-         * harder problem: a streamed reply grows its row in a commit that may
-         * not render MessageList at all, and the virtualizer's own
-         * ResizeObserver reports the new height through the async scheduler —
-         * often after paint, leaving one visible frame where the rows below
-         * (and the footer status) sit at stale offsets underneath the new
-         * text. Re-measuring here inside `flushSync` commits the corrected
-         * offsets in the same frame as the growth, so text never paints twice
-         * in two places. `resizeItem` is used directly because
-         * `measureElement` declines to measure while the list scrolls — and a
-         * followed stream keeps the list permanently scrolling. Style-only
-         * mutations are not observed, so the corrective render cannot retrigger
-         * this observer.
+         * TanStack Virtual measures mounted rows through its own ResizeObserver
+         * and owns their scroll compensation. A second mutation-driven measure
+         * would create another geometry authority and visibly fight that
+         * compensation while text streams. The unmeasured list alone needs a
+         * DOM-growth watcher to remain pinned.
          */
-        const measureRows = (rows: ReadonlySet<HTMLElement>) => {
-            for (const row of rows) {
-                const index = Number(row.dataset.index);
-                if (!Number.isInteger(index)) continue;
-                /* A real DOM read, deliberately: the entry-less form of
-                   `options.measureElement` answers from the size cache to
-                   avoid forced reflow, which here would just re-read the
-                   stale height this callback exists to correct. Rounding
-                   matches the ResizeObserver path so the two never disagree
-                   over the same row. */
-                virtualizer.resizeItem(index, Math.round(row.getBoundingClientRect().height));
-            }
-        };
-        const observer = new MutationObserver((records) => {
-            if (virtualized) {
-                const rows = new Set<HTMLElement>();
-                for (const record of records) {
-                    const target =
-                        record.target instanceof Element
-                            ? record.target
-                            : record.target.parentElement;
-                    const row = target?.closest<HTMLElement>(".happy2-message-list__virtual-row");
-                    if (row && element.contains(row)) rows.add(row);
-                }
-                if (rows.size > 0) flushSync(() => measureRows(rows));
-            }
-            if (following.current) scrollToBottom();
-        });
-        observer.observe(element, { characterData: true, childList: true, subtree: true });
+        const observer = virtualized
+            ? undefined
+            : new MutationObserver(() => {
+                  if (following.current) scrollToBottom();
+              });
+        observer?.observe(element, { characterData: true, childList: true, subtree: true });
         /*
-         * The composer is a flex sibling of this scrollport. As its textarea
-         * grows or shrinks, preserve the reader's exact distance from the
-         * transcript bottom by restoring the offset captured before the resize.
-         * Computing the final target avoids double-adjusting when the browser
-         * has already clamped scrollTop as a growing viewport collapses the
-         * composer. This applies equally to a following reader and someone
-         * parked higher in history.
+         * The composer is a flex sibling of this scrollport. Once its committed
+         * height changes, a reader who was following stays at the transcript
+         * end; a reader parked in history keeps the same scroll offset. The old
+         * path restored a hand-maintained bottom distance for both cases, which
+         * competed with the virtualizer and caused a delayed correction.
          */
         const viewportObserver =
             typeof ResizeObserver === "undefined"
@@ -977,29 +954,49 @@ export function MessageList(props: MessageListProps) {
                       const nextRowWidth =
                           props.estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
                       if (nextRowWidth !== rowWidth) {
+                          /*
+                           * Offscreen row sizes belong to the width where they
+                           * were measured, so reset them to the caller's model.
+                           * Mounted rows have already reflowed at this point:
+                           * retain those DOM nodes across the reset and feed
+                           * their actual boxes straight back through TanStack's
+                           * own measurement path in the same ResizeObserver
+                           * delivery. No estimated mounted geometry is exposed
+                           * to paint, and TanStack remains the sole scroll
+                           * compensation authority.
+                           */
+                          const mountedRows = [...virtualizer.elementsCache.values()].filter(
+                              (row) => row.isConnected,
+                          );
                           rowWidth = nextRowWidth;
-                          if (virtualized) virtualizer.measure();
+                          if (virtualized) {
+                              virtualizer.measure();
+                              for (const row of mountedRows) {
+                                  const index = virtualizer.indexFromElement(row);
+                                  virtualizer.resizeItem(
+                                      index,
+                                      virtualizer.options.measureElement(
+                                          row,
+                                          undefined,
+                                          virtualizer,
+                                      ),
+                                  );
+                              }
+                          }
                       }
                       const nextHeight = element.clientHeight;
                       if (nextHeight === viewportHeight) return;
+                      const wasFollowing = following.current;
                       viewportHeight = nextHeight;
-                      element.scrollTop = Math.max(
-                          0,
-                          element.scrollHeight - nextHeight - bottomOffset,
-                      );
-                      bottomOffset = Math.max(
-                          0,
-                          element.scrollHeight - element.scrollTop - nextHeight,
-                      );
+                      if (wasFollowing) scrollToBottom();
                       positionReport();
                   });
         viewportObserver?.observe(element);
         return () => {
             if (restoreFrame !== undefined) cancelAnimationFrame(restoreFrame);
             positionReport(true);
-            observer.disconnect();
+            observer?.disconnect();
             viewportObserver?.disconnect();
-            scrollPositionSync.current = () => undefined;
             element.removeEventListener("scroll", onScroll);
         };
     }, [props.estimateRowWidth, virtualized, virtualizer]);
@@ -1009,23 +1006,6 @@ export function MessageList(props: MessageListProps) {
         estimateVersion.current = props.estimateVersion;
         if (virtualized) virtualizer.measure();
     }, [props.estimateVersion, virtualized, virtualizer]);
-    // eslint-disable-next-line happy2-react/no-layout-effect -- a resized virtual row can change scrollHeight only after commit, so a following reader must be re-pinned from the live list geometry before paint
-    useLayoutEffect(() => {
-        /*
-         * A resized virtual row updates the virtualizer before React commits the
-         * sizer's new height. Re-pin a following reader after that commit, when
-         * the browser can accept the final scroll offset without clamping it to
-         * the old maximum. Parked readers stay under the virtualizer's own
-         * item-size compensation and are never moved here.
-         */
-        void virtualContentSize;
-        if (interactiveResize.current) {
-            scrollPositionSync.current();
-            return;
-        }
-        if (!following.current) return;
-        scrollToBottom();
-    }, [items.length, virtualContentSize]);
     return (
         <div
             className={["happy2-message-list", props.className].filter(Boolean).join(" ")}
@@ -1048,7 +1028,7 @@ export function MessageList(props: MessageListProps) {
                     <div
                         className="happy2-message-list__virtual"
                         data-happy-desktop-ui="message-list-virtual"
-                        style={{ height: `${virtualizer.getTotalSize()}px` }}
+                        ref={virtualizer.containerRef}
                     >
                         {virtualizer.getVirtualItems().map((virtualItem) => (
                             <div
@@ -1059,7 +1039,6 @@ export function MessageList(props: MessageListProps) {
                                 }
                                 key={virtualItem.key}
                                 ref={virtualizer.measureElement}
-                                style={{ transform: `translateY(${virtualItem.start}px)` }}
                             >
                                 {items[virtualItem.index]}
                             </div>

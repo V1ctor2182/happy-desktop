@@ -525,6 +525,7 @@ export function ConversationView(props: ConversationViewProps) {
                     // restore its own position instead of inheriting one.
                     key={props.conversationId}
                     onScrollPositionChange={props.onScrollPositionChange}
+                    paddingEnd={24}
                     virtualize
                 >
                     {transcript.map((entry, index) => {

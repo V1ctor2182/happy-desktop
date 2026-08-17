@@ -51,6 +51,9 @@
     width: 100%;
     max-width: var(--happy2-chat-measure);
     margin-inline: auto;
+}
+
+.happy2-conversation .happy2-message-list__content:not([data-virtualized]) {
     /* The dock is seamless with the transcript, so the clearance beneath the
        newest message is what keeps it from reading as part of the composer. */
     padding-bottom: 24px;
