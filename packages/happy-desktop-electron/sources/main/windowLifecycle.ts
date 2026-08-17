@@ -27,6 +27,8 @@ export class DesktopWindowLifecycle<Window extends DesktopManagedWindow> {
     private active?: { key: string; window: Window };
     private presented?: Window;
 
+    constructor(private readonly present: (window: Window) => void = (window) => window.show()) {}
+
     get(): Window | undefined {
         return live(this.active?.window);
     }
@@ -49,7 +51,7 @@ export class DesktopWindowLifecycle<Window extends DesktopManagedWindow> {
         const reveal = () => {
             if (revealed || window.isDestroyed() || this.active?.window !== window) return;
             revealed = true;
-            window.show();
+            this.present(window);
             const previous = live(this.presented);
             this.presented = window;
             if (previous && previous !== window) previous.destroy();

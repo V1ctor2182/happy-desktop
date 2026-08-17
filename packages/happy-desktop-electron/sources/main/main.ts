@@ -86,9 +86,9 @@ if (process.platform !== "darwin") {
     app.exit(1);
 }
 const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
+const desktopGymActive = process.env.HAPPY_DESKTOP_GYM_PROFILE !== undefined;
 const desktopProfilerLaunchMode =
-    process.env.HAPPY2_DESKTOP_PROFILE_MODE === "optimized" ||
-    process.env.HAPPY_DESKTOP_GYM_PROFILE !== undefined
+    process.env.HAPPY2_DESKTOP_PROFILE_MODE === "optimized" || desktopGymActive
         ? "optimized"
         : process.env.HAPPY2_DESKTOP_PROFILE_MODE === "development"
           ? "development"
@@ -258,7 +258,12 @@ let browserProxyConnectionId: number | undefined;
  */
 let browserProxyTarget: DesktopBrowserProxyTarget | undefined;
 let browserProxyOperation = Promise.resolve();
-const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>();
+// Automation needs a real laid-out window without taking focus from the work
+// happening beside it.
+const windowLifecycle = new DesktopWindowLifecycle<BrowserWindow>((window) => {
+    if (desktopGymActive) window.showInactive();
+    else window.show();
+});
 const unavailableBrowserProxy = "http://127.0.0.1:9";
 /*
  * The one window a file is shown in outside the application. There is exactly
@@ -1173,7 +1178,8 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
 void app
     .whenReady()
     .then(async () => {
-        if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
+        if (desktopGymActive) app.dock?.hide();
+        else if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
         await browserSessionConfigure();
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
