@@ -176,15 +176,17 @@ const glyphs: Record<IconName, IconGlyph> = {
     edit: { set: "ionicons", name: "create-outline" },
     sun: { set: "ionicons", name: "sunny-outline" },
     moon: { set: "ionicons", name: "moon-outline" },
-    // The panel and its rail, with no arrow in it: the control says what the
-    // window is made of, and the button's label says which way it goes. One
-    // shape in both states, so the toggle never changes under the pointer.
+    // The panel and its column, with no arrow in it: the control says what the
+    // window is made of, and the button's label says which way it goes. The
+    // collapse name shows the column open, because that is the state you are in
+    // when the control offers to close it; the expand name shows it put away
+    // against the edge it hides at.
     "sidebar-collapse": { set: "drawn", name: "panel-rail" },
-    "sidebar-expand": { set: "drawn", name: "panel-rail" },
-    // The rail is drawn on the left, where the sidebar is. The panel names are
-    // the same act at the other edge, so they paint the same shape mirrored.
+    "sidebar-expand": { set: "drawn", name: "panel-rail-collapsed" },
+    // The column is drawn on the left, where the sidebar is. The panel names are
+    // the same act at the other edge, so they paint the same shapes mirrored.
     "panel-collapse": { set: "drawn", name: "panel-rail", mirrored: true },
-    "panel-expand": { set: "drawn", name: "panel-rail", mirrored: true },
+    "panel-expand": { set: "drawn", name: "panel-rail-collapsed", mirrored: true },
     // Filling the window and going back to a docked column, as distinct from
     // hiding the panel: the pair above says whether the panel is there at all.
     "panel-maximize": { set: "octicons", name: "screen-full" },

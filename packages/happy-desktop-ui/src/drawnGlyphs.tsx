@@ -24,21 +24,40 @@ import type { ReactNode } from "react";
  * Ionicon or Octicon it maps to. This file exists for one shape the two
  * families do not contain.
  */
-export type DrawnGlyphName = "panel-rail";
+export type DrawnGlyphName = "panel-rail" | "panel-rail-collapsed" | "panel-rail-filled";
 
-/** The rail's stroke centreline, a compartment just under a third across. */
-const RAIL_X = 5.5;
+/** The divider's centreline: a column just under a third of the panel across. */
+const DIVIDER_X = 5.5;
 
 /**
- * The rail is a short line rather than a full-height divider or a solid
- * compartment. Both of those were heavier than the outline holding them: a
- * fill puts more ink in this glyph than any Ionicons outline beside it carries
- * in total, and a divider that meets the frame reads as a second frame edge.
- * A line inset 2 from the inner edges says the same thing at the weight of the
- * rest of the set.
+ * The collapsed rail's gap — the same distance from the frame's inner left, top
+ * and bottom edges, so the line sits square in its corner and mirrors exactly
+ * for the panel at the other edge.
+ *
+ * 1, not a half step: a 1px stroke is only crisp on a half-pixel centreline, so
+ * an even gap here (0.5, 1.5) would smear the line across two pixel columns at
+ * a 16px box and read fatter than the frame around it.
  */
-const RAIL_INSET = 2;
+const COLLAPSED_GAP = 1;
 
+/** The frame's inner ink edges, which the collapsed rail measures its gap from. */
+const INNER_LEFT = 2;
+const INNER_TOP = 3;
+const INNER_BOTTOM = 13;
+
+/*
+ * Stroke centrelines from those inner edges. A 1px stroke puts ink half a unit
+ * either side of its centreline, and a round cap adds the same half unit past
+ * each end, so both axes take the same half-unit correction.
+ */
+const COLLAPSED_X = INNER_LEFT + COLLAPSED_GAP + 0.5;
+const COLLAPSED_Y1 = INNER_TOP + COLLAPSED_GAP + 0.5;
+const COLLAPSED_Y2 = INNER_BOTTOM - COLLAPSED_GAP - 0.5;
+
+/**
+ * The panel outline: the 14 x 12 rounded box every panel state shares.
+ * `strokeWidth` is on the 16 grid, so it scales with the icon like a glyph.
+ */
 const outline = (
     <rect
         fill="none"
@@ -53,29 +72,69 @@ const outline = (
     />
 );
 
-const rail = (
+/** The open panel: a divider meeting the frame, so the column reads as a room. */
+const divider = (
     <line
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth={1}
-        x1={RAIL_X}
-        x2={RAIL_X}
-        y1={2.5 + RAIL_INSET}
-        y2={13.5 - RAIL_INSET}
+        x1={DIVIDER_X}
+        x2={DIVIDER_X}
+        y1={2.5}
+        y2={13.5}
+    />
+);
+
+/** The closed panel: the column shrunk to a mark against the edge it hides at. */
+const collapsedRail = (
+    <line
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth={1}
+        x1={COLLAPSED_X}
+        x2={COLLAPSED_X}
+        y1={COLLAPSED_Y1}
+        y2={COLLAPSED_Y2}
+    />
+);
+
+/**
+ * The column as solid ink, drawn on outer geometry (x 1..5.5, y 2..14) so its
+ * edge meets the outer edge of the outline stroke rather than showing a seam
+ * inside it. Heavier than anything else in the set — kept because it is a good
+ * shape for a surface that wants the panel state stated loudly, not because
+ * the window chrome uses it.
+ */
+const columnFill = (
+    <path
+        d={`M ${DIVIDER_X} 2 H 3 A 2 2 0 0 0 1 4 V 12 A 2 2 0 0 0 3 14 H ${DIVIDER_X} Z`}
+        fill="currentColor"
     />
 );
 
 /*
- * One shape for the affordance, in both of its states. The control is the same
- * act whichever way the panel currently sits, and its label already says which
- * way it goes; a glyph that changed under the pointer would be the only thing
- * in the chrome that does.
+ * One silhouette, three readings of what is inside it: the column is open, the
+ * column is put away, or the column is full. The frame never moves between
+ * them, so a toggle changes what it is saying without jumping.
  */
 export const drawnGlyphs: Record<DrawnGlyphName, ReactNode> = {
     "panel-rail": (
         <>
             {outline}
-            {rail}
+            {divider}
+        </>
+    ),
+    "panel-rail-collapsed": (
+        <>
+            {outline}
+            {collapsedRail}
+        </>
+    ),
+    "panel-rail-filled": (
+        <>
+            {columnFill}
+            {outline}
+            {divider}
         </>
     ),
 };
