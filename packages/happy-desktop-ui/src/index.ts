@@ -146,6 +146,14 @@ export {
 export { ImageViewer, type ImageViewerContent, type ImageViewerProps } from "./ImageViewer";
 export { VideoViewer, type VideoViewerContent, type VideoViewerProps } from "./VideoViewer";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
+export {
+    commandShortcut,
+    commandShortcutMatches,
+    windowShortcutBlocked,
+    type CommandShortcut,
+    type KeyboardShortcut,
+} from "./keyboardShortcut";
+export { WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
 export type { HtmlPreviewFailure, HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
 export type { MediaWindowOpener, MediaWindowRequest } from "./mediaWindow";
 export { HtmlPreviewFrame, type HtmlPreviewFrameProps } from "./HtmlPreviewFrame";

@@ -414,15 +414,28 @@
  * keeps one compact aggregate control directly above the input.
  */
 
+<<<<<<< HEAD
 .happy2-rig-activity-control {
     box-sizing: border-box;
     display: inline-flex;
     flex: none;
     align-items: center;
+=======
+.happy2-rig-activity-transcript__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    width: 100%;
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     height: 20px;
     max-width: 104px;
     min-width: 0;
+<<<<<<< HEAD
     padding: 0;
+=======
+    margin: 0;
+    padding: 0 0 0 3px;
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     border: 0;
     background: transparent;
     color: var(--text-secondary);
@@ -455,10 +468,53 @@
     cursor: default;
 }
 
+<<<<<<< HEAD
 .happy2-rig-activity-control__summary {
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
+=======
+.happy2-rig-activity-transcript__glyph {
+    display: flex;
+    flex: 0 0 7px;
+    align-items: center;
+    justify-content: center;
+    width: 7px;
+    height: 20px;
+    margin-right: 3px;
+    color: var(--text-secondary);
+}
+
+.happy2-spinner.happy2-rig-activity-transcript__spinner {
+    /* The live row is deliberately calmer than the main turn indicator. */
+    --happy2-spinner-duration: 3200ms;
+}
+
+.happy2-rig-activity-transcript__content {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy2-rig-activity-transcript__primary {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    height: 20px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy2-rig-activity-transcript__primary > span {
+    min-width: 0;
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

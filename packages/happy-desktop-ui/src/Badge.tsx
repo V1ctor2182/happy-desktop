@@ -100,6 +100,8 @@ export function ReactionChip(props: ReactionChipProps) {
 }
 export type KeyCapProps = {
     className?: string;
+    /** Removes the cap from the accessibility tree when its owner announces the shortcut. */
+    decorative?: boolean;
     keys: string;
 };
 const shortcutSymbols = new Set(["⌘", "⇧", "⌥", "⌃"]);
@@ -119,7 +121,8 @@ function ShortcutSymbol(props: { symbol: string }) {
 export function KeyCap(props: KeyCapProps) {
     return (
         <kbd
-            aria-label={props.keys}
+            aria-hidden={props.decorative ? "true" : undefined}
+            aria-label={props.decorative ? undefined : props.keys}
             className={["happy2-key-cap", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="key-cap"
         >

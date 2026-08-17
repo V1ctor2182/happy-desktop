@@ -105,6 +105,27 @@
     box-shadow: inset 0 -1px var(--divider);
 }
 
+/*
+ * A shortcut for the strip's own action belongs beside that action. The bar is
+ * an overflow clip, so Button's usual cap beneath the control would be cut off;
+ * here the held state widens the icon button and brings the cap into its line.
+ */
+.happy2-tabbed-pane__actions .happy2-button[data-shortcut-hint] > .happy2-button__shortcut-hint {
+    position: static;
+    transform: none;
+}
+
+[data-shortcut-hints] .happy2-tabbed-pane__actions .happy2-button[data-shortcut-hint] {
+    gap: 4px;
+}
+
+[data-shortcut-hints]
+    .happy2-tabbed-pane__actions
+    .happy2-button[data-shortcut-hint][data-icon-only] {
+    width: auto;
+    padding: 0 4px 0 7px;
+}
+
 .happy2-tabbed-pane__body {
     display: flex;
     flex: 1;

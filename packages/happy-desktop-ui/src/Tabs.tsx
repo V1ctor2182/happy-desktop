@@ -9,9 +9,10 @@ import {
     type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
-import { CountBadge } from "./Badge";
+import { CountBadge, KeyCap } from "./Badge";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
+import type { KeyboardShortcut } from "./keyboardShortcut";
 import { Menu, type MenuItem } from "./Menu";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
@@ -56,6 +57,11 @@ export type TabItem = {
     dirty?: boolean;
     /** Marks the tab as carrying unread activity with a dot on its leading mark. */
     unread?: boolean;
+    /**
+     * Shortcut shown in the trailing lane while an ancestor carries
+     * `data-shortcut-hints`, normally on the one active tab Cmd-W will close.
+     */
+    shortcut?: KeyboardShortcut;
     /**
      * Gives the tab a generated brutalist mark derived from this string, so a
      * tab that has no icon still has a face the reader can aim at. Supply the
@@ -691,6 +697,7 @@ export function Tabs(props: TabsProps) {
                                 <span
                                     className="happy2-tabs__tab-trailing"
                                     data-happy-desktop-ui="tab-trailing"
+                                    data-shortcut-hint={tab.shortcut ? "" : undefined}
                                 >
                                     {activity ? (
                                         <span
@@ -707,6 +714,7 @@ export function Tabs(props: TabsProps) {
                                            must sit inside the tab box so it
                                            tracks its hover. */
                                         <span
+                                            aria-keyshortcuts={tab.shortcut?.aria}
                                             aria-label={local.closeLabel ?? "Close tab"}
                                             className="happy2-tabs__tab-close"
                                             data-happy-desktop-ui="tab-close"
@@ -726,6 +734,13 @@ export function Tabs(props: TabsProps) {
                                         >
                                             <Icon name="close" size={12} />
                                         </span>
+                                    ) : null}
+                                    {tab.shortcut ? (
+                                        <KeyCap
+                                            className="happy2-tabs__tab-shortcut"
+                                            decorative
+                                            keys={tab.shortcut.caps}
+                                        />
                                     ) : null}
                                 </span>
                             ) : null)(

@@ -43,6 +43,7 @@ import {
 import {
     mediaPreviewView,
     type DesktopConfig,
+    type DesktopGuestKeyEvent,
     type DesktopRuntimeSnapshot,
     type DesktopUpdateSnapshot,
     type HappyDesktopBridge,
@@ -625,6 +626,24 @@ if (mediaPreviewBridge) {
     );
 } else if (bridge) {
     const desktopBridge = bridge;
+    const guestKeyUnsubscribe = desktopBridge.guestKeySubscribe((input: DesktopGuestKeyEvent) => {
+        window.dispatchEvent(
+            new KeyboardEvent(input.type, {
+                altKey: input.altKey,
+                bubbles: true,
+                cancelable: true,
+                code: input.code,
+                ctrlKey: input.ctrlKey,
+                isComposing: input.isComposing,
+                key: input.key,
+                location: input.location,
+                metaKey: input.metaKey,
+                repeat: input.repeat,
+                shiftKey: input.shiftKey,
+            }),
+        );
+    });
+    window.addEventListener("unload", guestKeyUnsubscribe, { once: true });
     const start = (config: DesktopConfig): void => {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
         // First-run setup outlives every daemon connection this window makes, so

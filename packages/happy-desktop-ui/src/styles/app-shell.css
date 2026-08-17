@@ -383,6 +383,10 @@
     cursor: pointer;
 }
 
+.happy-desktop-app-shell__reveal-button:not([data-floating]) {
+    position: relative;
+}
+
 .happy-desktop-app-shell__reveal-button:hover {
     background: var(--surface-pressed);
     color: var(--text);

@@ -122,6 +122,7 @@ function DynamicActivityPanelFixture() {
                 onBackgroundProcessStop={() => undefined}
                 goal={goal}
                 now={NOW}
+                onSubagentSelect={() => undefined}
                 subagents={currentSubagents}
                 tasks={tasks}
             />
@@ -133,7 +134,7 @@ export function RigActivityPanelPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Rig session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): one flat reading for the goal, tasks, delegated subagents, and running terminals, separated by spacing instead of nested cards. Read-only; SSE-reactive."
+            summary="Rig session activity monitor (`/goal`, `/tasks`, `/agents`, `/ps`): live agents and terminals lead, settled agents stay in a collapsed disclosure, and agent rows can open their session. SSE-reactive."
             title="RigActivityPanel"
         >
             <Specimen
@@ -143,6 +144,24 @@ export function RigActivityPanelPage() {
                 stage="surface"
             >
                 <DynamicActivityPanelFixture />
+            </Specimen>
+
+            <Specimen
+                detail="the Completed disclosure directly rendered open, with its delegated-session navigation affordance"
+                label="Completed expanded"
+                number="01b"
+                stage="surface"
+            >
+                <div style={{ width: "560px" }}>
+                    <RigActivityPanel
+                        backgroundProcesses={[]}
+                        completedInitiallyOpen
+                        now={NOW}
+                        onSubagentSelect={() => undefined}
+                        subagents={subagents.slice(1)}
+                        tasks={[]}
+                    />
+                </div>
             </Specimen>
 
             <Specimen
@@ -188,6 +207,7 @@ export function RigActivityPanelPage() {
                         backgroundProcesses={backgroundProcesses.slice(0, 1)}
                         now={NOW}
                         onBackgroundProcessStop={() => undefined}
+                        onSubagentSelect={() => undefined}
                         subagents={subagents.slice(0, 1)}
                         tasks={tasks.slice(0, 2)}
                     />
@@ -206,6 +226,7 @@ export function RigActivityPanelPage() {
                         goal={goal}
                         now={NOW}
                         onBackgroundProcessStop={() => undefined}
+                        onSubagentSelect={() => undefined}
                         placement="panel"
                         subagents={subagents}
                         tasks={tasks}
@@ -225,6 +246,7 @@ export function RigActivityPanelPage() {
                         goal={goal}
                         now={NOW}
                         onBackgroundProcessStop={() => undefined}
+                        onSubagentSelect={() => undefined}
                         placement="panel"
                         subagents={subagents}
                         tasks={tasks}

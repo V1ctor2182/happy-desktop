@@ -9,8 +9,16 @@ import type {
     RigTaskStatus,
 } from "happy-desktop-state";
 import { Button } from "./Button";
+<<<<<<< HEAD
+=======
+import { CompactActivityRow } from "./CompactActivityRow";
+import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
+import { Icon } from "./Icon";
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
 
 export type RigActivityPanelProps = {
+    /** Opens the native Completed disclosure on its first render; omitted is closed. */
+    completedInitiallyOpen?: boolean;
     /** The session's persistent goal, when one is set (`/goal`). */
     goal?: RigGoal;
     /** The session task list in display order (`/tasks`). */
@@ -21,6 +29,8 @@ export type RigActivityPanelProps = {
     backgroundProcesses: readonly RigBackgroundProcess[];
     /** Requests termination of one background terminal (`/stop`); omit to hide the control. */
     onBackgroundProcessStop?: (processId: number) => void;
+    /** Opens one delegated child session through the owning workspace. */
+    onSubagentSelect?: (sessionId: string) => void;
     /** Reference "now" (epoch millis) for computing subagent elapsed time. */
     now: number;
     /** `panel` fills and scrolls a side-panel tab; the default is inline content. */
@@ -57,6 +67,7 @@ const SUBAGENT_STATUS_LABELS: Record<RigSessionStatus, string> = {
 
 const TOKENS = new Intl.NumberFormat("en-US");
 
+<<<<<<< HEAD
 /** Formats a running subagent's elapsed span as a compact `m:ss`/`h:mm:ss`. */
 function formatElapsed(ms: number): string {
     const total = Math.max(0, Math.floor(ms / 1000));
@@ -88,6 +99,8 @@ function ActivityStatus(props: {
     );
 }
 
+=======
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
 function SectionHeading(props: { count?: number; label: string }) {
     return (
         <h3 className="happy2-rig-activity__heading">
@@ -141,12 +154,17 @@ function TaskRow(props: { task: RigTask }) {
     );
 }
 
-function SubagentRow(props: { subagent: RigSubagentSummary; now: number }) {
+function SubagentRow(props: {
+    subagent: RigSubagentSummary;
+    now: number;
+    onSelect?: (sessionId: string) => void;
+}) {
     const { subagent, now } = props;
     const elapsed =
         subagent.elapsedMs ??
         (subagent.activeSince !== undefined ? now - subagent.activeSince : undefined);
     return (
+<<<<<<< HEAD
         <li
             className="happy2-rig-activity__row happy2-rig-activity__subagent"
             data-happy-desktop-ui="rig-activity-subagent"
@@ -155,6 +173,28 @@ function SubagentRow(props: { subagent: RigSubagentSummary; now: number }) {
                 label={SUBAGENT_STATUS_LABELS[subagent.status]}
                 part="rig-activity-subagent-status"
                 status={subagent.status}
+=======
+        <li className="happy2-rig-activity__subagent" data-happy-desktop-ui="rig-activity-subagent">
+            <DelegatedAgentActivity
+                child={{
+                    sessionId: subagent.id,
+                    description: subagent.description,
+                    ...(subagent.taskName === undefined ? {} : { taskName: subagent.taskName }),
+                    modelId: subagent.modelId,
+                    status: subagent.status,
+                    ...(subagent.activeSince === undefined
+                        ? {}
+                        : { activeSince: subagent.activeSince }),
+                    ...(subagent.elapsedMs === undefined ? {} : { elapsedMs: subagent.elapsedMs }),
+                    ...(subagent.totalTokens === undefined
+                        ? {}
+                        : { totalTokens: subagent.totalTokens }),
+                }}
+                completedLabel="Done"
+                now={now}
+                onSelect={props.onSelect}
+                placement="panel"
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
             />
             <div className="happy2-rig-activity__subagent-content">
                 <span className="happy2-rig-activity__subagent-desc">
@@ -207,17 +247,87 @@ function BackgroundProcessRow(props: {
     );
 }
 
+function AgentSection(props: {
+    agents: readonly RigSubagentSummary[];
+    now: number;
+    onSelect?: (sessionId: string) => void;
+}) {
+    if (props.agents.length === 0) return null;
+    return (
+        <section
+            className="happy2-rig-activity__section"
+            data-happy-desktop-ui="rig-activity-subagents"
+        >
+            <SectionHeading count={props.agents.length} label="Agents" />
+            <ul className="happy2-rig-activity__list" data-happy-desktop-ui="rig-activity-list">
+                {props.agents.map((subagent) => (
+                    <SubagentRow
+                        key={subagent.id}
+                        now={props.now}
+                        onSelect={props.onSelect}
+                        subagent={subagent}
+                    />
+                ))}
+            </ul>
+        </section>
+    );
+}
+
+function TerminalSection(props: {
+    processes: readonly RigBackgroundProcess[];
+    onStop?: (processId: number) => void;
+}) {
+    if (props.processes.length === 0) return null;
+    return (
+        <section
+            className="happy2-rig-activity__section"
+            data-happy-desktop-ui="rig-activity-processes"
+        >
+            <SectionHeading count={props.processes.length} label="Terminals" />
+            <ul className="happy2-rig-activity__list" data-happy-desktop-ui="rig-activity-list">
+                {props.processes.map((process) => (
+                    <BackgroundProcessRow
+                        key={process.id}
+                        process={process}
+                        onStop={props.onStop}
+                    />
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 /**
  * RigActivityPanel — the read-only session activity monitor combining the TUI's
- * `/goal`, `/tasks`, `/agents`, and `/ps` views: the persistent goal with its
- * status, the task list, the delegated-subagent monitor with status/elapsed/tokens/
- * latest text, and running background terminals. Every value flows from the reactive
- * session snapshot (reconciled from `tasks_changed`/`goal_changed`/`subagent_changed`/
- * `background_processes_changed` SSE events), so this component holds no state and
- * starts no work — it only projects the props it is given.
+ * `/goal`, `/tasks`, `/agents`, and `/ps` views. Live agents and terminals lead;
+ * settled agents remain mounted inside a collapsed disclosure. An optional
+ * selection callback turns agent readouts into session-navigation buttons. Every
+ * value flows from the reactive session snapshot (reconciled from
+ * `tasks_changed`/`goal_changed`/`subagent_changed`/`background_processes_changed`
+ * SSE events), so this component holds no product state and starts no work.
  */
 export function RigActivityPanel(props: RigActivityPanelProps) {
     const { goal, tasks, subagents, backgroundProcesses } = props;
+<<<<<<< HEAD
+=======
+    const orderedTasks = priorityOrdered(tasks, taskPriority);
+    const orderedSubagents = priorityOrdered(subagents, subagentPriority);
+    const runningSubagents = orderedSubagents.filter(
+        (subagent) =>
+            subagent.status === "idle" ||
+            subagent.status === "queued" ||
+            subagent.status === "running" ||
+            subagent.status === "suspended",
+    );
+    const completedSubagents = orderedSubagents.filter(
+        (subagent) =>
+            subagent.status === "completed" ||
+            subagent.status === "aborted" ||
+            subagent.status === "error" ||
+            subagent.status === "archived",
+    );
+    const hasRunning = runningSubagents.length > 0 || backgroundProcesses.length > 0;
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     const empty =
         goal === undefined &&
         tasks.length === 0 &&
@@ -240,6 +350,26 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                 </p>
             ) : (
                 <>
+                    {hasRunning ? (
+                        <section
+                            className="happy2-rig-activity__group"
+                            data-happy-desktop-ui="rig-activity-running"
+                        >
+                            <h2 className="happy2-rig-activity__group-heading">Running</h2>
+                            <div className="happy2-rig-activity__group-content">
+                                <AgentSection
+                                    agents={runningSubagents}
+                                    now={props.now}
+                                    onSelect={props.onSubagentSelect}
+                                />
+                                <TerminalSection
+                                    processes={backgroundProcesses}
+                                    onStop={props.onBackgroundProcessStop}
+                                />
+                            </div>
+                        </section>
+                    ) : null}
+
                     {goal ? <GoalSection goal={goal} /> : null}
 
                     {tasks.length > 0 ? (
@@ -259,11 +389,13 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                         </section>
                     ) : null}
 
-                    {subagents.length > 0 ? (
-                        <section
-                            className="happy2-rig-activity__section"
-                            data-happy-desktop-ui="rig-activity-subagents"
+                    {completedSubagents.length > 0 ? (
+                        <details
+                            className="happy2-rig-activity__completed"
+                            data-happy-desktop-ui="rig-activity-completed"
+                            open={props.completedInitiallyOpen || undefined}
                         >
+<<<<<<< HEAD
                             <SectionHeading count={subagents.length} label="Subagents" />
                             <ul
                                 className="happy2-rig-activity__list"
@@ -302,6 +434,29 @@ export function RigActivityPanel(props: RigActivityPanelProps) {
                                 ))}
                             </ul>
                         </section>
+=======
+                            <summary className="happy2-rig-activity__completed-summary">
+                                <Icon
+                                    className="happy2-rig-activity__completed-chevron"
+                                    name="chevron-right"
+                                    size={12}
+                                />
+                                <h2 className="happy2-rig-activity__completed-heading">
+                                    Completed
+                                </h2>
+                                <span className="happy2-rig-activity__count">
+                                    {completedSubagents.length}
+                                </span>
+                            </summary>
+                            <div className="happy2-rig-activity__completed-content">
+                                <AgentSection
+                                    agents={completedSubagents}
+                                    now={props.now}
+                                    onSelect={props.onSubagentSelect}
+                                />
+                            </div>
+                        </details>
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
                     ) : null}
                 </>
             )}

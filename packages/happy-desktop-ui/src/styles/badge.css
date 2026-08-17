@@ -223,6 +223,20 @@
     white-space: nowrap;
 }
 
+.happy2-shortcut-hint--floating {
+    position: absolute;
+    z-index: 4;
+    top: calc(100% + 4px);
+    left: 50%;
+    display: none;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+[data-shortcut-hints] .happy2-shortcut-hint--floating {
+    display: inline-flex;
+}
+
 .happy2-key-cap__label {
     display: flex;
     align-items: center;

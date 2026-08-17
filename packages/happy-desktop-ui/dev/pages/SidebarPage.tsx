@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Avatar } from "../../src/Avatar";
 import { Button } from "../../src/Button";
 import { DevBuildMenu } from "../../src/DevBuildMenu";
+import { commandShortcut } from "../../src/keyboardShortcut";
 import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
 import { SidebarFooter } from "../../src/SidebarFooter";
 import { SidebarUpdateAction, type SidebarUpdateActionProps } from "../../src/SidebarUpdateAction";
@@ -9,6 +10,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-009";
+const workspaceShortcut = commandShortcut("n");
 const workspaceSections: SidebarSection[] = [
     {
         id: "views",
@@ -529,7 +531,7 @@ function ReorderDemo() {
                     {move}
                 </span>
             </div>
-            <DimensionRule label="drag a row · nested rows reorder inside their parent" />
+            <DimensionRule label="cursor pointer → grabbing · nested rows reorder inside their parent" />
         </div>
     );
 }
@@ -631,7 +633,7 @@ function PinnedReorderDemo() {
             >
                 {move}
             </span>
-            <DimensionRule label="pinned rows arrange above the projects · ⌥↑ / ⌥↓ moves the focused row" />
+            <DimensionRule label="cursor pointer → grabbing · pinned rows arrange above the projects · ⌥↑ / ⌥↓ moves the focused row" />
         </div>
     );
 }
@@ -740,6 +742,42 @@ const UPDATE_STATES: readonly {
             status: "downloaded",
             version: "build 8250610",
         },
+    },
+];
+
+const SHORTCUT_ACTIONS: SidebarItem[] = [
+    { icon: "braces", id: "blueprint", kind: "action", label: "Blueprint" },
+];
+const SHORTCUT_SECTIONS: SidebarSection[] = [
+    {
+        id: "shortcuts",
+        items: [
+            {
+                badge: 4,
+                icon: "inbox",
+                id: "inbox",
+                kind: "view",
+                label: "Inbox",
+            },
+            {
+                action: {
+                    icon: "plus",
+                    label: "New workspace in keyboard-shortcuts",
+                    shortcut: workspaceShortcut,
+                },
+                id: "project",
+                kind: "project",
+                label: "keyboard-shortcuts",
+                status: "working",
+            },
+            {
+                icon: "archive",
+                id: "folder",
+                kind: "folder",
+                label: "Design notes",
+            },
+        ],
+        label: "This Mac",
     },
 ];
 
@@ -943,7 +981,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="A top-level row carries its nested rows; a nested row reorders among its siblings and cannot leave its parent. The drop reports one move — the row and the row it now follows — so a list that changes mid-drag cannot lose it."
+                detail="A top-level row carries its nested rows; a nested row reorders among its siblings and cannot leave its parent. Rows keep their ordinary pointer until one is actually carried, then use the grabbing hand. The drop reports one move — the row and the row it now follows — so a list that changes mid-drag cannot lose it."
                 label="Reorder by dragging"
                 number="02b"
                 stage="app"
@@ -961,7 +999,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="The pinned rows above the projects arrange the same way, by drag or by ⌥↑ / ⌥↓ on the focused row. A move is announced to a screen reader, the badge and the row's identity travel with it, and the click the browser fires on release does not open what was dragged."
+                detail="The pinned rows above the projects arrange the same way, by drag or by ⌥↑ / ⌥↓ on the focused row. Their pointer becomes a grabbing hand only after a drag begins. A move is announced to a screen reader, the badge and the row's identity travel with it, and the click the browser fires on release does not open what was dragged."
                 label="Arrange the pinned rows"
                 number="02d"
                 stage="app"
@@ -1098,6 +1136,55 @@ export function SidebarPage() {
                         />
                     </Frame>
                     <DimensionRule label="empty row 28 px · copy 11/15 · ghost action" />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="rest and held-Command states · destinations get right-aligned number caps; the current project's plus carries Cmd-N; Create and pinned utilities stay unnumbered"
+                label="Number shortcuts"
+                number="04b"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", gap: "20px" }}>
+                        {[
+                            { label: "REST", revealed: false },
+                            { label: "HELD", revealed: true },
+                        ].map((state) => (
+                            <div
+                                data-shortcut-hints={state.revealed ? "" : undefined}
+                                key={state.label}
+                                style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        color: "var(--text-secondary)",
+                                        font: "600 10px var(--happy2-font-mono)",
+                                    }}
+                                >
+                                    {state.label}
+                                </span>
+                                <Frame height={320}>
+                                    <Sidebar
+                                        actions={SHORTCUT_ACTIONS}
+                                        activeItemId="inbox"
+                                        composeLabel="Create"
+                                        numberShortcuts="display"
+                                        onCompose={() => {}}
+                                        onItemAction={() => {}}
+                                        onItemSelect={() => {}}
+                                        sections={SHORTCUT_SECTIONS}
+                                        title="Happy"
+                                    />
+                                </Frame>
+                            </div>
+                        ))}
+                    </div>
+                    <DimensionRule label="row 32 px · labels yield width to held-Command caps" />
                 </div>
             </Specimen>
 

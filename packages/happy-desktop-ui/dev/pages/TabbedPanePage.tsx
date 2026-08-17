@@ -1,11 +1,13 @@
 import { Button } from "../../src/Button";
 import { EmptyState } from "../../src/EmptyState";
+import { commandShortcut } from "../../src/keyboardShortcut";
 import { TabbedPane } from "../../src/TabbedPane";
 import { type TabItem } from "../../src/Tabs";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-160";
+const sessionShortcut = commandShortcut("t");
 
 const sessionTabs: TabItem[] = [
     { id: "one", label: "Refactor the router" },
@@ -33,6 +35,7 @@ function Body(props: { title: string }) {
 
 function Pane(props: {
     active: string;
+    withShortcut?: boolean;
     tabs: TabItem[];
     withAction?: boolean;
     withClose?: boolean;
@@ -55,6 +58,7 @@ function Pane(props: {
                             icon="plus"
                             iconOnly
                             onClick={() => {}}
+                            shortcut={props.withShortcut ? sessionShortcut : undefined}
                             size="small"
                             variant="ghost"
                         />
@@ -126,14 +130,55 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="drag a tab to rearrange; neighbours slide, the drag reports once"
+                    detail="drag a tab to rearrange; the cursor stays a pointer until the tab is actually carried, neighbours slide, and the drag reports once"
                     label="Draggable tabs"
                     number="T-05"
                     stage="app"
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="one" tabs={sessionTabs} withAction withClose withReorder />
-                        <DimensionRule label="threshold 4 · shift = dragged width · ease 140ms" />
+                        <DimensionRule label="cursor pointer → grabbing · threshold 4 · shift = dragged width · ease 140ms" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="The add-session action rests as the same square plus button, then widens inside the clipped tab bar to put Cmd-T directly beside its glyph while Command is held."
+                    label="Bar-action shortcut — resting and held"
+                    number="T-06"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "16px",
+                            padding: "24px",
+                        }}
+                    >
+                        {[
+                            { held: false, label: "REST" },
+                            { held: true, label: "COMMAND HELD" },
+                        ].map((state) => (
+                            <div
+                                data-shortcut-hints={state.held ? "" : undefined}
+                                key={state.label}
+                                style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        color: "var(--text-secondary)",
+                                        font: "var(--font-caption)",
+                                    }}
+                                >
+                                    {state.label}
+                                </span>
+                                <Pane active="one" tabs={sessionTabs} withAction withShortcut />
+                            </div>
+                        ))}
+                        <DimensionRule label="rest: action 28 square · held: + and ⌘T share the bar" />
                     </div>
                 </Specimen>
             </div>

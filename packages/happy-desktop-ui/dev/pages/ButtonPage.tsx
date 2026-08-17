@@ -1,8 +1,10 @@
 import { Button } from "../../src/Button";
+import { commandShortcut } from "../../src/keyboardShortcut";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-003";
+const panelShortcut = commandShortcut("b", { alt: true });
 
 export function ButtonPage() {
     return (
@@ -156,6 +158,55 @@ export function ButtonPage() {
                                 Disabled
                             </Button>
                         </div>
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="held-Command discovery · cap sits 4px beneath the unchanged 28px control"
+                    label="Shortcut hint"
+                    number="B-08"
+                    stage="app"
+                >
+                    <div
+                        style={{
+                            alignItems: "flex-start",
+                            display: "flex",
+                            gap: "36px",
+                            minHeight: "64px",
+                            padding: "20px",
+                        }}
+                    >
+                        {[
+                            { label: "REST", revealed: false },
+                            { label: "HELD", revealed: true },
+                        ].map((state) => (
+                            <div
+                                data-shortcut-hints={state.revealed ? "" : undefined}
+                                key={state.label}
+                                style={{
+                                    alignItems: "center",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        color: "var(--text-secondary)",
+                                        font: "600 10px var(--happy2-font-mono)",
+                                    }}
+                                >
+                                    {state.label}
+                                </span>
+                                <Button
+                                    aria-label="Show panel"
+                                    icon="panel-expand"
+                                    iconOnly
+                                    shortcut={panelShortcut}
+                                    size="small"
+                                    variant="ghost"
+                                />
+                            </div>
+                        ))}
                     </div>
                 </Specimen>
             </div>

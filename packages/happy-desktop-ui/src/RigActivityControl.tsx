@@ -34,6 +34,7 @@ export function RigActivityControl(props: RigActivityControlProps) {
     const tasks = count(props.tasks);
     const agents = count(props.agents);
     const terminals = count(props.backgroundTerminals);
+<<<<<<< HEAD
     const goals = props.hasGoal ? 1 : 0;
     const total = goals + tasks + agents + terminals;
     if (total === 0 && !props.open) return null;
@@ -45,6 +46,15 @@ export function RigActivityControl(props: RigActivityControlProps) {
     ]
         .filter(Boolean)
         .join(" · ");
+=======
+    if (agents + terminals === 0) return null;
+    const summaryParts = [
+        ...(agents > 0 ? [{ id: "agents", label: noun(agents, "agent") }] : []),
+        ...(terminals > 0 ? [{ id: "terminals", label: noun(terminals, "terminal") }] : []),
+        ...(terminals > 0 ? [{ id: "background-status", label: "Running in Background" }] : []),
+    ];
+    const fullSummary = summaryParts.map((part) => part.label).join(" · ");
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     return (
         <button
             aria-expanded={props.open}

@@ -520,6 +520,10 @@
     transition: none;
 }
 
+.happy2-sidebar__item[data-grabbed] {
+    cursor: grabbing;
+}
+
 /* A tree drag paints one surface around the complete held subtree. Its rows keep
    this attribute only so every transform tracks the pointer without lag. */
 .happy2-sidebar__tree[data-connector-dragging] > .happy2-sidebar__item[data-dragging] {
@@ -771,6 +775,44 @@
 }
 
 /*
+ * Command discovery borrows the row's existing trailing lane. Ordinary reports
+ * temporarily step aside; without one, the label yields enough width for the
+ * right-aligned key cap.
+ */
+.happy2-sidebar__item-shortcut {
+    display: none;
+    flex: none;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-row]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    > .happy2-sidebar__item-shortcut {
+    display: inline-flex;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-row]:not([data-shortcut-action]):not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
+        .happy2-sidebar__item-label
+    ):not(.happy2-sidebar__item-shortcut) {
+    display: none;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-row][data-shortcut-action]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
+        .happy2-sidebar__item-label
+    ):not(.happy2-sidebar__item-shortcut):not(.happy2-sidebar__item-trailing) {
+    display: none;
+}
+
+/*
  * A busy place shimmers its own name, and the shimmer is an inline-block — an
  * atomic box the label's `text-overflow` cannot reach into, so a long name would
  * be cut off mid-letter instead of ellipsised. The truncation therefore moves
@@ -976,6 +1018,59 @@
         background-color 120ms ease,
         color 120ms ease,
         opacity 120ms ease;
+}
+
+.happy2-sidebar__item-action-icon {
+    display: flex;
+    flex: none;
+}
+
+.happy2-sidebar__item-action-shortcut {
+    display: none;
+    flex: none;
+}
+
+/*
+ * The current project's plus carries Cmd-N. At rest it remains the exact 18px
+ * control every project uses; while Command is held it widens in its existing
+ * trailing lane and puts the cap directly beside the plus.
+ */
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-action]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    .happy2-sidebar__item-action[data-shortcut-hint] {
+    width: auto;
+    gap: 3px;
+    padding: 0 3px;
+    opacity: 1;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-action]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    .happy2-sidebar__item-action[data-shortcut-hint]
+    > .happy2-sidebar__item-action-shortcut {
+    display: inline-flex;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-action]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    > .happy2-sidebar__item-trailing[data-swaps]
+    .happy2-sidebar__item-actions {
+    position: static;
+}
+
+[data-shortcut-hints]
+    .happy2-sidebar__item[data-shortcut-action]:not(
+        :has(> .happy2-sidebar__item-trailing:focus-within)
+    )
+    > .happy2-sidebar__item-trailing
+    > :not(.happy2-sidebar__item-actions) {
+    display: none;
 }
 
 .happy2-sidebar__item-action[data-reveal="hover"] {

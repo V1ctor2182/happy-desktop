@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import {
+    useEffectEvent,
     useLayoutEffect,
     useRef,
     useState,
@@ -12,10 +13,17 @@ import {
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { haptic } from "./haptics";
-import { CountBadge } from "./Badge";
+import { CountBadge, KeyCap } from "./Badge";
 import { Button } from "./Button";
 import { happyLogoUrl } from "./assets";
 import { Icon, type IconName } from "./Icon";
+import {
+    commandShortcut,
+    commandShortcutMatches,
+    windowShortcutBlocked,
+    type CommandShortcut,
+    type KeyboardShortcut,
+} from "./keyboardShortcut";
 import { Menu, type MenuItem } from "./Menu";
 import { RigPeerStatus, type RigPeerState } from "./RigPeerStatus";
 import { ShimmerText } from "./ShimmerText";
@@ -28,6 +36,8 @@ export type SidebarItemAction = {
     /** Keeps the control visible in its lane while refusing an unavailable action. */
     disabled?: boolean;
     reveal?: "hover";
+    /** Command-N discovery for the current project's new-workspace control. */
+    shortcut?: KeyboardShortcut;
 };
 export type SidebarItem = {
     /** Marks a row as archived; the row keeps its position but paints muted. */
@@ -288,6 +298,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * offers instead — and a caller that conflated them would run the wrong one.
      */
     onSectionAction?: (sectionId: string, source: SidebarSectionActionSource) => void;
+    /**
+     * Gives the first nine visible section destinations Command-1…9 caps.
+     * `navigate` also binds the chords; `display` is the deterministic fixture
+     * state. Pinned utilities and Compose do not consume destination digits.
+     */
+    numberShortcuts?: "display" | "navigate";
     sections: SidebarSection[];
     style?: CSSProperties;
     subtitle?: string;
@@ -356,6 +372,28 @@ function visibleRows(items: readonly SidebarItem[]): readonly SidebarVisibleRow[
         if (item.collapsed === true) hiddenBelow = depth + 1;
     }
     return rows;
+}
+
+interface SidebarShortcutRow {
+    readonly item: SidebarItem;
+    readonly sectionId: string;
+}
+
+const NUMBER_SHORTCUTS = Array.from({ length: 9 }, (_, index) =>
+    commandShortcut(String(index + 1)),
+);
+
+function shortcutRowsOf(sections: readonly SidebarSection[]): readonly SidebarShortcutRow[] {
+    return sections
+        .flatMap((section) =>
+            section.headingOnly
+                ? []
+                : visibleRows(section.items).map((row) => ({
+                      item: row.item,
+                      sectionId: section.id,
+                  })),
+        )
+        .slice(0, 9);
 }
 
 /** Pointer travel, in px, before a press becomes a drag instead of a selection. */
@@ -682,11 +720,13 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
            so it tracks the row's hover. */
         <span
             aria-disabled={props.action.disabled ? "true" : undefined}
+            aria-keyshortcuts={props.action.shortcut?.aria}
             aria-label={props.action.label}
             className="happy2-sidebar__item-action"
             data-happy-desktop-ui="sidebar-item-action"
             data-reveal={props.action.reveal}
             data-disabled={props.action.disabled ? "" : undefined}
+            data-shortcut-hint={props.action.shortcut ? "" : undefined}
             onClick={(event) => {
                 event.stopPropagation();
                 if (props.action.disabled) return;
@@ -703,7 +743,16 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
             role="button"
             tabIndex={props.action.disabled ? -1 : 0}
         >
-            <Icon name={props.action.icon} size={12} />
+            <span className="happy2-sidebar__item-action-icon">
+                <Icon name={props.action.icon} size={12} />
+            </span>
+            {props.action.shortcut ? (
+                <KeyCap
+                    className="happy2-sidebar__item-action-shortcut"
+                    decorative
+                    keys={props.action.shortcut.caps}
+                />
+            ) : null}
         </span>
     );
 }
@@ -716,6 +765,8 @@ function SidebarRow({
     className?: string;
     /** Set only while a reorder drag is live, so a static sidebar is untouched. */
     dragging?: boolean;
+    /** The pointer has crossed the drag threshold and is still holding this row. */
+    grabbed?: boolean;
     item: SidebarItem;
     onContextMenu?: (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => void;
     onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
@@ -735,6 +786,9 @@ function SidebarRow({
     onSelect: (id: string) => void;
     /** The row can be arranged, which is what the keyboard shortcut is offered for. */
     reorderable?: boolean;
+    /** The rendered number cap is backed by live Command-number navigation. */
+    shortcutActive?: boolean;
+    shortcut?: KeyboardShortcut;
     shift?: number;
 }) {
     const item = () => props.item;
@@ -768,6 +822,8 @@ function SidebarRow({
     const swapsTrailing = () =>
         trailingActions().length > 0 &&
         trailingActions().every((control) => control.action.reveal === "hover");
+    const actionShortcut = () =>
+        trailingActions().some((control) => control.action.shortcut !== undefined);
     const trailingLane = () => (
         <span className="happy2-sidebar__item-actions" data-happy-desktop-ui="sidebar-item-actions">
             {trailingActions().map((control) => (
@@ -869,11 +925,18 @@ function SidebarRow({
             };
         return undefined;
     };
+    const ariaKeyShortcuts = () =>
+        [
+            props.shortcutActive ? props.shortcut?.aria : undefined,
+            props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined,
+        ].filter((shortcut) => shortcut !== undefined);
     return (
         <button
             aria-current={props.active ? "page" : undefined}
             aria-expanded={props.onCollapseToggle ? item().collapsed !== true : undefined}
-            aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
+            aria-keyshortcuts={
+                ariaKeyShortcuts().length > 0 ? ariaKeyShortcuts().join(" ") : undefined
+            }
             className={["happy2-sidebar__item", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-archived={item().archived ? "" : undefined}
@@ -890,8 +953,11 @@ function SidebarRow({
             data-lifecycle={lifecycle()}
             data-status={item().status}
             data-share={item().share?.status}
+            data-shortcut-action={actionShortcut() ? "" : undefined}
+            data-shortcut-row={props.shortcut ? "" : undefined}
             data-unread={unread() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
+            data-grabbed={props.grabbed ? "" : undefined}
             onClick={() => props.onSelect(item().id)}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
             onKeyDown={props.onKeyDown}
@@ -1024,6 +1090,13 @@ function SidebarRow({
                     item().label
                 )}
             </span>
+            {props.shortcut ? (
+                <KeyCap
+                    className="happy2-sidebar__item-shortcut"
+                    decorative
+                    keys={props.shortcut.caps}
+                />
+            ) : null}
             {unread() && !unreadOnLeading() && !mentioned() ? (
                 <span
                     aria-label="Unread"
@@ -1164,6 +1237,7 @@ export function Sidebar(props: SidebarProps) {
         "onItemMenuSelect",
         "onItemCollapseToggle",
         "onItemReorder",
+        "numberShortcuts",
         "onSectionAction",
         "sections",
         "style",
@@ -1241,6 +1315,33 @@ export function Sidebar(props: SidebarProps) {
     const dragOf = (listId: SidebarListId): SidebarDrag | undefined =>
         dragPaint?.listId === listId ? dragPaint.drag : undefined;
     const actions = local.actions ?? [];
+    const numberShortcuts = local.numberShortcuts !== undefined;
+    const numberShortcutNavigation = local.numberShortcuts === "navigate";
+    const sections = local.sections;
+    const onItemSelect = local.onItemSelect;
+    const shortcutRows = numberShortcuts ? shortcutRowsOf(sections) : [];
+    const shortcutNavigate = useEffectEvent((event: KeyboardEvent) => {
+        const index = NUMBER_SHORTCUTS.findIndex((shortcut) =>
+            commandShortcutMatches(event, shortcut),
+        );
+        const row = index >= 0 ? shortcutRows[index] : undefined;
+        if (!row || windowShortcutBlocked()) return;
+        event.preventDefault();
+        onItemSelect(row.item.id);
+    });
+    // eslint-disable-next-line happy2-react/no-layout-effect -- Command-number navigation must reach the sidebar no matter which window control currently owns focus
+    useLayoutEffect(() => {
+        if (!numberShortcutNavigation) return;
+        const onKeyDown = (event: KeyboardEvent) => shortcutNavigate(event);
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [numberShortcutNavigation]);
+    const shortcutByRow = new Map<string, CommandShortcut>(
+        shortcutRows.map((row, index) => [
+            rowKey(row.sectionId, row.item.id),
+            NUMBER_SHORTCUTS[index]!,
+        ]),
+    );
     /**
      * Where one list's moves are reported, and whether it can be arranged at all.
      * The pinned actions and a section are told apart here and nowhere else, so
@@ -1726,6 +1827,7 @@ export function Sidebar(props: SidebarProps) {
                                             (dragging && drag.from === index) ||
                                             rowKey(ACTIONS_LIST, action.id) === dropped
                                         }
+                                        grabbed={dragging && drag.from === index}
                                         item={action}
                                         key={action.id}
                                         nodeRef={(node) => {
@@ -1880,6 +1982,9 @@ export function Sidebar(props: SidebarProps) {
                                         {shown.map(({ foldable, item }, index) => {
                                             const drag = sectionDrag;
                                             const dragging = drag?.moved === true;
+                                            const shortcut = shortcutByRow.get(
+                                                rowKey(section.id, item.id),
+                                            );
                                             // While a drag is live the row's position
                                             // is read from that drag's own units, which
                                             // are the top-level blocks or one row's
@@ -1897,6 +2002,7 @@ export function Sidebar(props: SidebarProps) {
                                                         held ||
                                                         rowKey(section.id, item.id) === dropped
                                                     }
+                                                    grabbed={held}
                                                     key={item.id}
                                                     item={item}
                                                     onContextMenu={openItemMenu}
@@ -1934,6 +2040,8 @@ export function Sidebar(props: SidebarProps) {
                                                             : undefined
                                                     }
                                                     reorderable={local.onItemReorder !== undefined}
+                                                    shortcutActive={numberShortcutNavigation}
+                                                    shortcut={shortcut}
                                                     onCollapseToggle={
                                                         local.onItemCollapseToggle && foldable
                                                             ? () =>

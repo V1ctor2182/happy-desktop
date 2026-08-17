@@ -1,9 +1,12 @@
 import { type ReactNode } from "react";
 import { AppShell } from "../../src/AppShell";
+import { Button } from "../../src/Button";
+import { commandShortcut } from "../../src/keyboardShortcut";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-010";
+const panelShortcut = commandShortcut("b", { alt: true });
 /*
  * Slot placeholders: the shell composes TitleBar, Rail, Sidebar, and content
  * built elsewhere, so the blueprint marks each region with a dashed slot and
@@ -61,6 +64,42 @@ function window1024(children: ReactNode) {
         </div>
     );
 }
+
+function shortcutShell(revealed: boolean) {
+    return window1024(
+        <div
+            data-shortcut-hints={revealed ? "" : undefined}
+            style={{ display: "flex", height: "100%", width: "100%" }}
+        >
+            <AppShell
+                shortcutHints="display"
+                sidebar={<Slot label="sidebar" note="resizable · 288px" />}
+                sidebarCollapsible
+                titleBar={titleBarSlot()}
+            >
+                <div
+                    style={{
+                        alignItems: "flex-start",
+                        display: "flex",
+                        height: "100%",
+                        justifyContent: "flex-end",
+                        padding: "14px 20px",
+                    }}
+                >
+                    <Button
+                        aria-label="Show panel"
+                        icon="panel-expand"
+                        iconOnly
+                        shortcut={panelShortcut}
+                        size="small"
+                        variant="ghost"
+                    />
+                </div>
+            </AppShell>
+        </div>,
+    );
+}
+
 export function AppShellPage() {
     return (
         <ComponentPage
@@ -216,6 +255,24 @@ export function AppShellPage() {
                         <Slot label="children" note="mounted, overlaid" />
                     </AppShell>,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="default state: shortcut KeyCaps stay in the DOM but paint nothing and leave both 28px controls unchanged"
+                label="Command shortcuts · rest"
+                number="08"
+                stage="chrome"
+            >
+                {shortcutShell(false)}
+            </Specimen>
+
+            <Specimen
+                detail="deterministic held-Command state: the sidebar toggle and descendant panel control reveal out-of-flow KeyCaps without changing either hit box"
+                label="Command shortcuts · held"
+                number="09"
+                stage="chrome"
+            >
+                {shortcutShell(true)}
             </Specimen>
         </ComponentPage>
     );

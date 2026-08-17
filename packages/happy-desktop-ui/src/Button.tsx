@@ -1,8 +1,10 @@
 import { partitionComponentProps } from "./componentProps";
 import { type ButtonHTMLAttributes, type CSSProperties } from "react";
+import { KeyCap } from "./Badge";
 import type { Dimension } from "./dimensions";
 import { toCssDimension } from "./dimensions";
 import { Icon, type IconName } from "./Icon";
+import type { KeyboardShortcut } from "./keyboardShortcut";
 import { Spinner } from "./Spinner";
 export type ButtonSize = "small" | "medium" | "large";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
@@ -17,6 +19,11 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style">
      * would throw away whatever the person was reading when they pressed it.
      */
     loading?: boolean;
+    /**
+     * Command-key hint. It is hidden until an ancestor carries
+     * `data-shortcut-hints`, normally after AppShell's deliberate Command hold.
+     */
+    shortcut?: KeyboardShortcut;
     size?: ButtonSize;
     style?: CSSProperties;
     variant?: ButtonVariant;
@@ -35,6 +42,7 @@ export function Button(props: ButtonProps) {
         "icon",
         "iconOnly",
         "loading",
+        "shortcut",
         "size",
         "style",
         "type",
@@ -46,10 +54,12 @@ export function Button(props: ButtonProps) {
     return (
         <button
             {...rest}
+            aria-keyshortcuts={local.shortcut?.aria ?? rest["aria-keyshortcuts"]}
             className={["happy2-button", local.className].filter(Boolean).join(" ")}
             data-icon-only={local.iconOnly ? "" : undefined}
             data-happy-desktop-ui="button"
             data-loading={local.loading ? "" : undefined}
+            data-shortcut-hint={local.shortcut ? "" : undefined}
             disabled={rest.disabled === true || local.loading === true}
             data-size={size()}
             data-variant={variant()}
@@ -92,6 +102,13 @@ export function Button(props: ButtonProps) {
                     </span>
                 ) : null}
             </span>
+            {local.shortcut ? (
+                <KeyCap
+                    className="happy2-button__shortcut-hint happy2-shortcut-hint--floating"
+                    decorative
+                    keys={local.shortcut.caps}
+                />
+            ) : null}
         </button>
     );
 }

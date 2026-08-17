@@ -23,6 +23,10 @@
         color 120ms ease;
 }
 
+.happy2-button[data-shortcut-hint] {
+    position: relative;
+}
+
 /*
  * Line boxes are taller than the font size (≥1.2em) so every ascender and
  * descender paints inside the label's own box: element captures clip to the

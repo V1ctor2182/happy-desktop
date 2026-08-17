@@ -7,6 +7,7 @@ import {
     type DesktopPreviewNavigation,
     type DesktopBuildIdentity,
     type DesktopDebugSnapshot,
+    type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
     type DesktopNoteApplyRequest,
     type DesktopRuntimeSnapshot,
@@ -49,6 +50,12 @@ const bridge: HappyDesktopBridge = {
             listener(status);
         ipcRenderer.on(desktopIpc.browserStatusChanged, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserStatusChanged, receive);
+    },
+    guestKeySubscribe(listener: (event: DesktopGuestKeyEvent) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, input: DesktopGuestKeyEvent) =>
+            listener(input);
+        ipcRenderer.on(desktopIpc.guestKey, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.guestKey, receive);
     },
     previewNavigationSubscribe(listener: (step: DesktopPreviewNavigation) => void) {
         const receive = (_event: Electron.IpcRendererEvent, step: DesktopPreviewNavigation) =>

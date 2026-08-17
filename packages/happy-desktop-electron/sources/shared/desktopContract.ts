@@ -124,6 +124,20 @@ export interface DesktopWindowState {
     readonly fullScreen: boolean;
 }
 
+/** One native keyboard event relayed from an embedded browser/preview guest. */
+export interface DesktopGuestKeyEvent {
+    readonly altKey: boolean;
+    readonly code: string;
+    readonly ctrlKey: boolean;
+    readonly isComposing: boolean;
+    readonly key: string;
+    readonly location: number;
+    readonly metaKey: boolean;
+    readonly repeat: boolean;
+    readonly shiftKey: boolean;
+    readonly type: "keydown" | "keyup";
+}
+
 export type DesktopDebugTargetStatus =
     | "stopped"
     | "starting"
@@ -454,6 +468,12 @@ export interface HappyDesktopBridge {
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     /**
+     * Relays Command keyboard input while an isolated browser or HTML preview
+     * guest owns focus. The renderer dispatches it through the same window
+     * shortcut path as native host input.
+     */
+    guestKeySubscribe(listener: (event: DesktopGuestKeyEvent) => void): () => void;
+    /**
      * The ordered life of every HTML preview guest in this window. A view claims
      * the steps carrying its own guest id and follows one navigation at a time.
      */
@@ -557,6 +577,7 @@ export const desktopIpc = {
     browserProxyApply: "happy2:browser:proxy-apply",
     browserOpenRequested: "happy2:browser:open-requested",
     browserStatusChanged: "happy2:browser:status-changed",
+    guestKey: "happy2:guest:key",
     previewNavigationChanged: "happy2:html-preview:navigation-changed",
     directoryPick: "happy2:directory:pick",
     mediaPreviewChanged: "happy2:media-preview:changed",

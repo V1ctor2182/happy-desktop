@@ -182,12 +182,13 @@ import {
     type SidebarReorder,
     type SidebarSection,
     type TabItem,
+    WindowShortcuts,
     WorkspaceLifecycleLane,
     WorkspaceLifecycleNotice,
     type WorkspaceLifecyclePhase,
+    commandShortcut,
 } from "happy-desktop-ui";
 import { openExternalLink } from "./externalLink";
-import { NewSessionShortcut } from "./components/NewSessionShortcut";
 import { BlueprintView } from "./views/BlueprintView";
 
 export interface AppRigUpdate {
@@ -477,6 +478,18 @@ interface OpenGroup {
     readonly path: string;
 }
 
+const APP_SHORTCUTS = {
+    panelToggle: commandShortcut("j"),
+    panelToggleAlternate: commandShortcut("b", { alt: true }),
+    sessionCreate: commandShortcut("t"),
+    tabClose: commandShortcut("w"),
+    workspaceCreate: commandShortcut("n"),
+} as const;
+const PANEL_TOGGLE_HINT = {
+    aria: `${APP_SHORTCUTS.panelToggle.aria} ${APP_SHORTCUTS.panelToggleAlternate.aria}`,
+    caps: APP_SHORTCUTS.panelToggle.caps,
+} as const;
+
 /**
  * The rows one project contributes: the project itself, then a nested row per
  * worktree that has work in it. A row is the project's name and its picture,
@@ -487,7 +500,11 @@ interface OpenGroup {
  * it has no remote to derive a picture from, and an "H" plaque would read as one
  * more repository, so it wears a house instead.
  */
-function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): SidebarItem[] {
+function sidebarItems(
+    project: RigProjectGroup,
+    titleShimmerEnabled: boolean,
+    newWorkspaceShortcut: boolean,
+): SidebarItem[] {
     const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
     // Anything the row reports about itself — its delta, or the spinner and
     // clock it wears while work runs in it — lives in the trailing lane, in the
@@ -513,6 +530,7 @@ function sidebarItems(project: RigProjectGroup, titleShimmerEnabled: boolean): S
                 disabled: project.lifecycle.phase !== "ready",
                 icon: "plus" as const,
                 label: `New workspace in ${project.name}`,
+                ...(newWorkspaceShortcut ? { shortcut: APP_SHORTCUTS.workspaceCreate } : {}),
                 ...(projectReports ? { reveal: "hover" as const } : {}),
             },
             ...sidebarLifecycle(project.lifecycle),
@@ -690,6 +708,17 @@ function toolTabsPlaced(
     placement: "panel" | "main",
 ): readonly RigPanelTabSnapshot[] {
     return panel.tabs.filter((tab) => tab.placement === placement);
+}
+
+function panelCloseTargetFind(panel: RigPanelSnapshot): string | undefined {
+    if (!panel.open || panel.activeViewId === "files") return undefined;
+    if (panel.activeViewId === "activity") return "activity";
+    if (panel.activeViewId === "preview") return panel.previewEntryId ? "preview" : undefined;
+    if (panel.activeViewId === "file") return panel.fileViewOpen ? "file" : undefined;
+    const tab = panel.tabs.find(
+        (entry) => entry.id === panel.activeViewId && entry.placement === "panel",
+    );
+    return tab?.id;
 }
 
 /** One tab per tool, iconed by what it holds. */
@@ -1499,6 +1528,7 @@ function rigSections(
     titleShimmerEnabled: boolean,
     selectedPeerProfileId: string | undefined,
     peerProfilesLoading: boolean,
+    shortcutProject?: { readonly projectId: RigProjectId; readonly rigId: string },
 ): SidebarSection[] {
     return [
         ...directory.rigs.map((rig) => ({
@@ -1506,7 +1536,14 @@ function rigSections(
             label: rig.label,
             status: rigPeerState(rig),
             items: rig.projects
-                .flatMap((project) => sidebarItems(project, titleShimmerEnabled))
+                .flatMap((project) =>
+                    sidebarItems(
+                        project,
+                        titleShimmerEnabled,
+                        shortcutProject?.rigId === rig.id &&
+                            shortcutProject.projectId === project.id,
+                    ),
+                )
                 .map((item) => ({
                     ...item,
                     id: rigItemId(rig.id, item.id),
@@ -1923,6 +1960,14 @@ export function AppRigView(props: AppRigViewProps) {
             : (profiles.selectedProfileId ?? rigOwnerAuthor.id);
     const activeAvailability = active ? rigEntryAvailability(active) : undefined;
     const localAvailability = localRig ? rigEntryAvailability(localRig) : undefined;
+    const shortcutProject =
+        active && activeAvailability?.online && props.groupId
+            ? rowOwnerFind(active.projects, props.groupId)?.project
+            : undefined;
+    const workspaceCreateTarget =
+        active && shortcutProject?.lifecycle.phase === "ready"
+            ? { projectId: shortcutProject.id, rigId: active.id }
+            : undefined;
     const activeRigOnline = (): boolean => {
         const current = props.rigs.get();
         const rig =
@@ -2144,6 +2189,7 @@ export function AppRigView(props: AppRigViewProps) {
     const sidebar = (
         <Sidebar
             actions={pinned}
+            numberShortcuts="navigate"
             activeItemId={
                 props.documentId && selectedDocumentItem && localRig
                     ? folderItemRowId(localRig.id, selectedDocumentItem.id)
@@ -2655,6 +2701,7 @@ export function AppRigView(props: AppRigViewProps) {
                         titleShimmerEnabled,
                         profiles.selectedProfileId,
                         profiles.loading,
+                        workspaceCreateTarget,
                     ),
                 ],
                 sidebarCollapse.collapsed,
@@ -2750,6 +2797,9 @@ export function AppRigView(props: AppRigViewProps) {
                     titleShimmerEnabled={titleShimmerEnabled}
                     viewerId={viewerId}
                     workspace={active.session.workspace}
+                    {...(workspaceCreateTarget
+                        ? { workspaceCreateProjectId: workspaceCreateTarget.projectId }
+                        : {})}
                 />
             );
         // The host Rig has no live stores yet — it is still connecting, or it could
@@ -2789,6 +2839,7 @@ export function AppRigView(props: AppRigViewProps) {
                 focus, width, collapsed state, or scroll position. */}
             <AppShell
                 sidebarCollapsible
+                shortcutHints="interactive"
                 windowControls={desktop}
                 windowFullScreen={windowState.fullScreen}
                 sidebar={sidebar}
@@ -3027,6 +3078,8 @@ interface RigWorkspaceSurfaceProps {
     viewerId: string;
     groupId?: string;
     chatId?: string;
+    /** Ready online project that Cmd-N and its sidebar cap both address. */
+    workspaceCreateProjectId?: RigProjectId;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
 }
 
@@ -3073,7 +3126,6 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         props.appearance.get,
         props.appearance.get,
     );
-
     // A materialized workspace is a Rig lifetime, not a connection lifetime.
     // Health only changes what this mounted surface may do and what it says
     // about the state already on screen.
@@ -3096,12 +3148,10 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     const projects = workspace.list.projects;
     const rows = projects.type === "ready" ? projects.value : [];
     const applets = new Set(props.slots.applets.map((applet) => applet.name));
-    // What may be done in the addressed checkout, as the state decided it. Every
-    // control below that has a side effect there reads this one value, so a
-    // control that is not offered and an action that is refused always give the
-    // same reason.
+    // What may be done in the addressed checkout, as the state decided it.
+    // Connection health stays separate: each control combines the relevant
+    // durable refusal with connection state at the boundary where it acts.
     const access = workspace.groupAccess;
-    const openGroupWorkRefusal = connectionRefusal ?? access.writeRefusal;
     // Why a chat cannot be started here or sent to. A workspace whose checkout
     // Rig is still preparing refuses the second and not the first, so the two
     // reasons are kept apart all the way down to the controls: a composer reads
@@ -3121,6 +3171,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         title: slotPlacement("title"),
     };
     const openGroup = openGroupFind(rows, props.groupId, props.folders);
+    const sessionCreateAvailable =
+        openGroup?.create !== undefined &&
+        connectionRefusal === undefined &&
+        openGroupChatRefusal === undefined;
+    const workspaceCreateProjectId = props.workspaceCreateProjectId;
     // The worktree phase this screen has to say something about. `ready` and a
     // project both leave it absent: there is nothing to interrupt the reader
     // with when the place they are looking at is simply there.
@@ -3143,6 +3198,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // on a directory that is not there yet is withheld for the same reason —
     // there is nothing behind them to act on until the checkout arrives.
     const openGroupPreparing = openGroupPhase === "creating";
+    const panelCloseTarget = openGroupPreparing ? undefined : panelCloseTargetFind(panel);
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — rig-connect withdrew
     // the one it had predicted — so the address answers for itself here rather
@@ -3213,6 +3269,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // One strip, holding the group's sessions and its open files together in
     // the single order the reader arranged. A detached subagent is addressed by
     // id rather than listed, so it is not part of that order and follows it.
+    const activeMainTabId = workspace.activeMainViewId ?? props.chatId;
     const groupTabs: TabItem[] = [
         ...tabsOrdered(
             openGroup
@@ -3227,7 +3284,11 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
             workspace.tabOrder,
         ),
         ...(detachedConversationTab ? [detachedConversationTab] : []),
-    ];
+    ].map((tab) =>
+        !panelCloseTarget && tab.id === activeMainTabId && tab.closable !== false
+            ? { ...tab, shortcut: APP_SHORTCUTS.tabClose }
+            : tab,
+    );
     // Closing a tab archives the session behind it, while a file tab simply
     // closes. The close control and every context-menu sweep funnel through
     // this one routine, so a sweep behaves exactly like closing each tab by
@@ -3236,33 +3297,79 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
     // the tab the sweep was asked to keep — before anything leaves the list,
     // so it never sits on a session that has just gone.
     const groupTabsClose = (tabIds: readonly string[], keepId?: string) => {
-        if (!openGroup) return;
+        const current = props.workspace.get();
+        const currentRows =
+            current.list.projects.type === "ready" ? current.list.projects.value : [];
+        const currentGroup = openGroupFind(currentRows, current.address.groupId, props.folders);
+        if (!currentGroup) return;
+        const panelNow = props.workspace.panel.get();
         const online = rigOnline();
-        const sessionIds = new Set(openGroup.conversations.map((summary) => summary.id));
-        const closeableIds = tabIds.filter((tabId) => online || !sessionIds.has(tabId));
+        const sessionIds = new Set(currentGroup.conversations.map((summary) => summary.id));
+        const fileIds = new Set(
+            current.fileTabs.filter((tab) => tab.groupId === currentGroup.id).map((tab) => tab.id),
+        );
+        const toolIds = new Set<string>(
+            panelNow.tabs.filter((tab) => tab.placement === "main").map((tab) => tab.id),
+        );
+        const closeableIds = tabIds.filter(
+            (tabId) =>
+                fileIds.has(tabId) ||
+                toolIds.has(tabId) ||
+                (online && sessionIds.has(tabId as RigSessionId)),
+        );
         const targets = new Set(closeableIds);
-        const rest = openGroup.conversations.filter((summary) => !targets.has(summary.id));
-        if (props.chatId && targets.has(props.chatId)) {
+        const rest = currentGroup.conversations.filter((summary) => !targets.has(summary.id));
+        if (current.address.conversationId && targets.has(current.address.conversationId)) {
             const next =
                 keepId !== undefined && rest.some((summary) => summary.id === keepId)
                     ? keepId
                     : rest[0]?.id;
-            props.onChatSelect(rest.length > 0 ? openGroup.id : undefined, next, true);
+            props.onChatSelect(rest.length > 0 ? currentGroup.id : undefined, next, true);
         }
         for (const tabId of closeableIds) {
-            if (groupFileTabs.some((tab) => tab.id === tabId)) {
+            if (fileIds.has(tabId)) {
                 props.workspace.fileClose(tabId);
                 continue;
             }
             // A terminal or a page closes where it is drawn: it was moved here,
             // not copied, so this is the only tab it has and closing it ends
             // the shell or the page rather than sending it back.
-            if (mainTools.some((tab) => tab.id === tabId)) {
+            if (toolIds.has(tabId)) {
                 props.workspace.panel.tabClose(tabId as RigPanelTabId);
                 continue;
             }
             void props.workspace.conversationArchive(tabId as RigSessionId).catch(() => undefined);
         }
+    };
+    const groupTabClose = (tabId: string) => {
+        // A detached subagent's tab is an address, not a member of the list:
+        // closing it only steps back to the sessions that are listed.
+        if (tabId === detachedConversationId) {
+            props.onChatSelect(
+                openGroup && openGroup.conversations.length > 0 ? openGroup.id : undefined,
+                openGroup?.conversations[0]?.id,
+                true,
+            );
+            return;
+        }
+        groupTabsClose([tabId]);
+    };
+    const panelViewClose = (viewId: string) => {
+        if (viewId === "activity") props.workspace.activityPanelClose();
+        else if (viewId === "preview") props.workspace.panel.previewClose();
+        else if (viewId === "file") props.workspace.filePanelClose();
+        else props.workspace.panel.tabClose(viewId as RigPanelTabId);
+    };
+    const activeTabClose = () => {
+        const panelNow = props.workspace.panel.get();
+        const panelTarget = openGroupPreparing ? undefined : panelCloseTargetFind(panelNow);
+        if (panelTarget) {
+            panelViewClose(panelTarget);
+            return;
+        }
+        const current = props.workspace.get();
+        const tabId = current.activeMainViewId ?? current.address.conversationId;
+        if (tabId) groupTabClose(tabId);
     };
     // The strip in the order it is drawn, without the detached subagent: it is
     // addressed rather than listed, so a sweep over "the tabs beside this one"
@@ -3355,6 +3462,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 // own — the reader's choice to have it open is untouched here.
                 panel.open && !openGroupPreparing ? (
                     <RigPanelBody
+                        activeTabShortcut={panelCloseTarget ? APP_SHORTCUTS.tabClose : undefined}
                         activity={conversation.type === "ready" ? conversation.value : undefined}
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
@@ -3415,7 +3523,19 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                   },
                               }
                             : {})}
+<<<<<<< HEAD
                         onActivityClose={() => props.workspace.activityPanelClose()}
+=======
+                        onActivityOpen={() => props.workspace.activityPanelOpen()}
+                        {...(openGroup
+                            ? {
+                                  onSubagentSelect: (sessionId: string) => {
+                                      props.workspace.activityPanelClose();
+                                      props.onChatSelect(openGroup.id, sessionId as RigSessionId);
+                                  },
+                              }
+                            : {})}
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
                         onPanelClose={() => props.workspace.panel.panelToggle()}
                         {...(workspace.panelFile ? { panelFile: workspace.panelFile } : {})}
                         onPanelFileClose={() => props.workspace.filePanelClose()}
@@ -3423,6 +3543,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             if (!openGroup || !rigOnline()) return;
                             props.workspace.filePanelOpen(openGroup.id, path, panelFileKind(path));
                         }}
+                        onViewClose={panelViewClose}
                         onScopeChange={(scope) => {
                             if (
                                 openGroup &&
@@ -3552,6 +3673,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                             icon="panel-expand"
                                             iconOnly
                                             onClick={() => props.workspace.panel.panelToggle()}
+                                            shortcut={PANEL_TOGGLE_HINT}
                                             size="small"
                                             variant="ghost"
                                         />
@@ -3586,13 +3708,48 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             {availability.message}
                         </Banner>
                     )}
-                    {/* Cmd+T opens a tab, and here a tab is a session in the
-                        project that is already open — so a workspace that cannot
-                        host a session does not answer the shortcut at all,
-                        rather than answering it with a failure. */}
-                    {connectionRefusal === undefined && openGroupChatRefusal === undefined ? (
-                        <NewSessionShortcut onCreate={() => groupConversationCreate(openGroup)} />
-                    ) : null}
+                    <WindowShortcuts
+                        actions={[
+                            // Cmd-W is consistently the workspace's close
+                            // command. The live handler simply has nothing to
+                            // do when Files or an offline session is the only
+                            // current target.
+                            { run: activeTabClose, shortcut: APP_SHORTCUTS.tabClose },
+                            ...(openGroupPreparing
+                                ? []
+                                : [
+                                      {
+                                          run: () => props.workspace.panel.panelToggle(),
+                                          shortcut: APP_SHORTCUTS.panelToggle,
+                                      },
+                                      {
+                                          run: () => props.workspace.panel.panelToggle(),
+                                          shortcut: APP_SHORTCUTS.panelToggleAlternate,
+                                      },
+                                  ]),
+                            ...(sessionCreateAvailable
+                                ? [
+                                      {
+                                          run: () => groupConversationCreate(openGroup),
+                                          shortcut: APP_SHORTCUTS.sessionCreate,
+                                      },
+                                  ]
+                                : []),
+                            ...(workspaceCreateProjectId
+                                ? [
+                                      {
+                                          run: () => {
+                                              if (rigOnline())
+                                                  void props.workspace
+                                                      .worktreeCreate(workspaceCreateProjectId)
+                                                      .catch(() => undefined);
+                                          },
+                                          shortcut: APP_SHORTCUTS.workspaceCreate,
+                                      },
+                                  ]
+                                : []),
+                        ]}
+                    />
                     {/* A worktree with work already in it keeps its tab strip and
                         its transcripts, so its phase is stated in the lane above
                         them rather than in place of them: the reader can still
@@ -3675,12 +3832,13 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 // workspace that cannot host a session offers no
                                 // button, because the only thing it could do is
                                 // fail.
-                                openGroupWorkRefusal === undefined ? (
+                                sessionCreateAvailable ? (
                                     <Button
                                         aria-label="Create a session in this project"
                                         icon="plus"
                                         iconOnly
                                         onClick={() => groupConversationCreate(openGroup)}
+                                        shortcut={APP_SHORTCUTS.sessionCreate}
                                         size="small"
                                         variant="ghost"
                                     />
@@ -3688,22 +3846,7 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                             }
                             activeId={workspace.activeMainViewId ?? props.chatId ?? ""}
                             closeLabel="Close tab"
-                            onClose={(tabId) => {
-                                // A detached subagent's tab is an address, not a
-                                // member of the list: closing it only steps back to
-                                // the sessions that are listed.
-                                if (tabId === detachedConversationId) {
-                                    props.onChatSelect(
-                                        openGroup.conversations.length > 0
-                                            ? openGroup.id
-                                            : undefined,
-                                        openGroup.conversations[0]?.id,
-                                        true,
-                                    );
-                                    return;
-                                }
-                                groupTabsClose([tabId]);
-                            }}
+                            onClose={groupTabClose}
                             onDoubleClick={(tabId) => {
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
                                 if (file)
@@ -5468,6 +5611,8 @@ function changeEntry(change: OpenGroup["changes"][number]): FileTreeBuildEntry {
 }
 
 function RigPanelBody(props: {
+    /** Held-Command hint for the active closable tab, when it is the Cmd-W target. */
+    activeTabShortcut?: TabItem["shortcut"];
     activity?: RigConversationSnapshot;
     browserContent?: BrowserContentRenderer;
     /** The machine the open session belongs to, absent on this window's own. */
@@ -5481,10 +5626,17 @@ function RigPanelBody(props: {
     layout: RigFileLayout;
     /** Reference clock for elapsed subagent activity. */
     now: number;
+<<<<<<< HEAD
     /** Closes the transient Activity tab. */
     onActivityClose: () => void;
+=======
+    /** Selects Activity through the workspace so Usage closes first. */
+    onActivityOpen: () => void;
+>>>>>>> 777abca6 (Add workspace shortcuts and organize activity)
     /** Stops one background process from the Activity tab. */
     onActivityProcessStop?: (processId: number) => void;
+    /** Opens one delegated child session from the Activity tab. */
+    onSubagentSelect?: (sessionId: string) => void;
     onFileOpen: (path: string) => void;
     onFileSelect: (
         path: string,
@@ -5503,6 +5655,8 @@ function RigPanelBody(props: {
     onToggle: (path: string, expanded: boolean) => void;
     /** Moves one view out of this panel and into the main content. */
     onViewTransfer: (viewId: string) => void;
+    /** Closes one panel view through the same route used by Cmd-W. */
+    onViewClose: (viewId: string) => void;
     panel: RigPanelSnapshot;
     previewTool?: ConversationToolCall;
     /** Owning Rig availability applied to every retained terminal tab. */
@@ -5561,7 +5715,7 @@ function RigPanelBody(props: {
         props.rigAvailability !== undefined && props.workspaceFiles === undefined
             ? (props.rigAvailabilityReason ?? "Rig must reconnect before loading all files.")
             : undefined;
-    const tabs: TabItem[] = [
+    const baseTabs: TabItem[] = [
         { closable: false, icon: "files", id: "files", label: "Files" },
         ...(props.panel.activityViewOpen
             ? [{ closable: true, icon: "agents" as const, id: "activity", label: "Activity" }]
@@ -5599,6 +5753,11 @@ function RigPanelBody(props: {
             : []),
         ...toolTabItems(panelTools),
     ];
+    const tabs = baseTabs.map((tab) =>
+        props.activeTabShortcut && tab.id === props.panel.activeViewId && tab.closable !== false
+            ? { ...tab, shortcut: props.activeTabShortcut }
+            : tab,
+    );
     return (
         <>
             {/* Both of the panel's own chrome controls, together at its leading
@@ -5613,6 +5772,7 @@ function RigPanelBody(props: {
                     icon="panel-collapse"
                     iconOnly
                     onClick={props.onPanelClose}
+                    shortcut={PANEL_TOGGLE_HINT}
                     size="small"
                     variant="ghost"
                 />
@@ -5666,12 +5826,7 @@ function RigPanelBody(props: {
                     }
                     activeId={props.panel.activeViewId}
                     closeLabel="Close tab"
-                    onClose={(tabId) => {
-                        if (tabId === "activity") props.onActivityClose();
-                        else if (tabId === "preview") props.store.previewClose();
-                        else if (tabId === RIG_PANEL_FILE_VIEW_ID) props.onPanelFileClose();
-                        else props.store.tabClose(tabId as RigPanelTabId);
-                    }}
+                    onClose={props.onViewClose}
                     onSelect={(tabId) => {
                         if (tabId === "files") props.store.filesSelect();
                         else if (tabId === "activity") props.store.activitySelect();
@@ -5764,6 +5919,7 @@ function RigPanelBody(props: {
                                 goal={props.activity.goal}
                                 now={props.now}
                                 onBackgroundProcessStop={props.onActivityProcessStop}
+                                onSubagentSelect={props.onSubagentSelect}
                                 placement="panel"
                                 subagents={props.activity.subagents}
                                 tasks={props.activity.tasks}

@@ -39,6 +39,7 @@ import {
     type DesktopBrowserProxyTarget,
     type DesktopBrowserStatus,
     type DesktopDebugSnapshot,
+    type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
     type DesktopPreviewNavigation,
     type DesktopPreviewNavigationStep,
@@ -587,6 +588,30 @@ function browserGuestAttach(window: BrowserWindow): void {
         webPreferences.allowRunningInsecureContent = false;
     });
     window.webContents.on("did-attach-webview", (_event, guest) => {
+        guest.on("before-input-event", (_inputEvent, input) => {
+            const type =
+                input.type === "keyDown"
+                    ? ("keydown" as const)
+                    : input.type === "keyUp"
+                      ? ("keyup" as const)
+                      : undefined;
+            // Ordinary guest typing stays wholly inside the guest. Command
+            // input also reaches the host so window shortcuts and held-Command
+            // discovery keep working after the page itself takes focus.
+            if (!type || (!input.meta && input.key !== "Meta") || window.isDestroyed()) return;
+            window.webContents.send(desktopIpc.guestKey, {
+                altKey: input.alt,
+                code: input.code,
+                ctrlKey: input.control,
+                isComposing: input.isComposing,
+                key: input.key,
+                location: input.location,
+                metaKey: input.meta,
+                repeat: input.isAutoRepeat,
+                shiftKey: input.shift,
+                type,
+            } satisfies DesktopGuestKeyEvent);
+        });
         if (guest.session === htmlPreviewSessionGet()) {
             // A preview is one page of one file. Following a link out of it, or
             // opening a window from it, is browsing, and browsing is the browser

@@ -55,6 +55,8 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         browserProxyApply: async () => undefined,
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
+        // Browser-local mode has no isolated Electron guest to relay from.
+        guestKeySubscribe: () => () => undefined,
         // A browser tab hosts no preview guest, so no navigation is ever
         // reported and the subscription is a well-behaved no-op.
         previewNavigationSubscribe: () => () => undefined,
