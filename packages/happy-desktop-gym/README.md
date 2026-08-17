@@ -85,7 +85,7 @@ The same UI lane also measures transcript scroll stability directly in the
 renderer: it samples message-list scrollTop, bottom distance, the first visible
 virtual row, the lowest visible row's bottom-edge offset, row rectangles, and
 client/scroll heights on every animation frame while dragging the real left-edge
-panel splitter and while growing and shrinking the multiline composer.
+panel and sidebar splitters and while growing and shrinking the multiline composer.
 Following readers must stay within 8px of the bottom without a temporary
 break-and-recovery correction or overlapping virtual rows; parked readers must
 retain the same lowest visible row and bottom-edge offset through splitter drags

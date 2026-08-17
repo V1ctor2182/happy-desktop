@@ -188,6 +188,7 @@ interface TranscriptViewportMeasurement {
 interface ScrollStabilityFrame {
     readonly anchorOffset?: number;
     readonly anchorIndex?: number;
+    readonly anchorSource: "row" | "text";
     readonly bottomDistance: number;
     readonly clientHeight: number;
     readonly clientWidth: number;
@@ -198,10 +199,11 @@ interface ScrollStabilityFrame {
     readonly rowOverlapCount: number;
     readonly scrollHeight: number;
     readonly scrollTop: number;
+    readonly sidebarWidth?: number;
 }
 
 interface ScrollStabilityPhase {
-    readonly action: "composer-grow" | "composer-shrink" | "panel-resize";
+    readonly action: "composer-grow" | "composer-shrink" | "panel-resize" | "sidebar-resize";
     readonly anchorIndex?: number;
     readonly anchorOffset?: number;
     readonly anchorMode: "following" | "parked";
@@ -212,6 +214,7 @@ interface ScrollStabilityPhase {
     readonly maxRowOverlapCount: number;
     readonly nonMonotonicAnchorCorrections: number;
     readonly stable: boolean;
+    readonly textAnchorObserved: boolean;
 }
 
 interface ScrollStabilityMeasurement {
@@ -221,6 +224,7 @@ interface ScrollStabilityMeasurement {
     readonly composerShrink: ScrollStabilityPhase;
     readonly panelParkedResize: ScrollStabilityPhase;
     readonly panelResize: ScrollStabilityPhase;
+    readonly sidebarParkedResize: ScrollStabilityPhase;
     readonly stable: boolean;
 }
 
@@ -2012,6 +2016,9 @@ async function scrollStabilityCapture(
                         const panel = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="app-shell-panel"]',
                         );
+                        const sidebar = document.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="app-shell-sidebar"]',
+                        );
                         if (list) {
                             const listRect = list.getBoundingClientRect();
                             const rows = virtual
@@ -2046,6 +2053,7 @@ async function scrollStabilityCapture(
                             let anchorIndex = edge?.index;
                             let anchorOffset =
                                 edge === undefined ? undefined : listRect.bottom - edge.bottom;
+                            let anchorSource: ScrollStabilityFrame["anchorSource"] = "row";
                             if (textAnchor?.node.isConnected) {
                                 const maximumOffset =
                                     textAnchor.node.nodeType === Node.TEXT_NODE
@@ -2062,11 +2070,13 @@ async function scrollStabilityCapture(
                                 if (rect.height > 0 || rect.width > 0) {
                                     anchorIndex = textAnchor.index;
                                     anchorOffset = listRect.bottom - rect.top;
+                                    anchorSource = "text";
                                 }
                             }
                             frames.push({
                                 anchorIndex,
                                 anchorOffset,
+                                anchorSource,
                                 bottomDistance: Math.max(
                                     0,
                                     list.scrollHeight - list.scrollTop - list.clientHeight,
@@ -2080,6 +2090,7 @@ async function scrollStabilityCapture(
                                 rowOverlapCount,
                                 scrollHeight: list.scrollHeight,
                                 scrollTop: list.scrollTop,
+                                sidebarWidth: sidebar?.getBoundingClientRect().width,
                             });
                         }
                         if (!stopped)
@@ -2170,17 +2181,27 @@ function scrollStabilityPhaseBuild(
     const panelWidths = frames.flatMap((frame) =>
         frame.panelWidth === undefined ? [] : [frame.panelWidth],
     );
+    const sidebarWidths = frames.flatMap((frame) =>
+        frame.sidebarWidth === undefined ? [] : [frame.sidebarWidth],
+    );
     const layoutChangeObserved =
         action === "panel-resize"
             ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
               panelWidths.length > 0 &&
               Math.max(...panelWidths) - Math.min(...panelWidths) >= 24
-            : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
+            : action === "sidebar-resize"
+              ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
+                sidebarWidths.length > 0 &&
+                Math.max(...sidebarWidths) - Math.min(...sidebarWidths) >= 24
+              : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
     const parkedReaderObserved = anchorMode !== "parked" || (first?.bottomDistance ?? 0) > 8;
+    const textAnchorObserved =
+        anchorMode !== "parked" || frames.every((frame) => frame.anchorSource === "text");
     const stable =
         frames.length >= 2 &&
         layoutChangeObserved &&
         parkedReaderObserved &&
+        textAnchorObserved &&
         maxRowOverlapCount === 0 &&
         (anchorMode === "following"
             ? maxBottomDistance <= 8 && nonMonotonicAnchorCorrections === 0
@@ -2197,6 +2218,7 @@ function scrollStabilityPhaseBuild(
         maxRowOverlapCount,
         nonMonotonicAnchorCorrections,
         stable,
+        textAnchorObserved,
     };
 }
 
@@ -2218,9 +2240,12 @@ async function scrollStabilityRun(
         '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="left"]',
     );
     await handle.waitFor({ state: "visible", timeout: 30_000 });
-    const panelDragCapture = async (deltas: readonly number[]) => {
-        const handleBox = await handle.boundingBox();
-        if (handleBox === null) throw new Error("The panel resize handle has no layout box.");
+    const splitterDragCapture = async (
+        splitter: Locator,
+        deltas: readonly number[],
+    ): Promise<readonly ScrollStabilityFrame[]> => {
+        const handleBox = await splitter.boundingBox();
+        if (handleBox === null) throw new Error("The splitter resize handle has no layout box.");
         const handleX = handleBox.x + handleBox.width / 2;
         const handleY = handleBox.y + handleBox.height / 2;
         return scrollStabilityCapture(page, async () => {
@@ -2240,7 +2265,7 @@ async function scrollStabilityRun(
     const panelResize = scrollStabilityPhaseBuild(
         "panel-resize",
         "following",
-        await panelDragCapture([24, 48, 72, 96, 120, 144, 120, 96]),
+        await splitterDragCapture(handle, [24, 48, 72, 96, 120, 144, 120, 96]),
     );
     await mark("scroll-stability-panel-resize");
 
@@ -2275,9 +2300,19 @@ async function scrollStabilityRun(
     const panelParkedResize = scrollStabilityPhaseBuild(
         "panel-resize",
         "parked",
-        await panelDragCapture([-24, -48, -72, -96, -120, -96, -48, 0]),
+        await splitterDragCapture(handle, [-24, -48, -72, -96, -120, -96, -48, 0]),
     );
     await mark("scroll-stability-parked-panel-resize");
+    const sidebarHandle = page
+        .locator('[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="right"]')
+        .first();
+    await sidebarHandle.waitFor({ state: "visible", timeout: 30_000 });
+    const sidebarParkedResize = scrollStabilityPhaseBuild(
+        "sidebar-resize",
+        "parked",
+        await splitterDragCapture(sidebarHandle, [24, 48, 72, 96, 72, 48, 24, 0]),
+    );
+    await mark("scroll-stability-parked-sidebar-resize");
     const composerParkedGrowth = scrollStabilityPhaseBuild(
         "composer-grow",
         "parked",
@@ -2298,6 +2333,7 @@ async function scrollStabilityRun(
     const phases = [
         panelResize,
         panelParkedResize,
+        sidebarParkedResize,
         composerGrowth,
         composerShrink,
         composerParkedGrowth,
@@ -2310,6 +2346,7 @@ async function scrollStabilityRun(
         composerShrink,
         panelParkedResize,
         panelResize,
+        sidebarParkedResize,
         stable: phases.every((phase) => phase.stable),
     };
     if (!measurement.stable) {
