@@ -95,10 +95,10 @@ anchor.
 Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The
-changed-file lane also establishes a native browser text range inside a diff
-row only after its cold worker-backed highlight has replaced the initial plain
-DOM. `changedFileSelection` then records the exact native selection at 0, 100,
-500, 1,000, and 2,000 milliseconds while the concurrent streams continue.
+changed-file lane establishes a native browser text range only after the
+highlight-first viewer reveals its final diff DOM. `changedFileSelection` then
+records the exact native selection at 0, 100, 500, 1,000, and 2,000 milliseconds
+while the concurrent streams continue.
 Every sample must retain the same text, length, connected endpoints, and diff
 mode, and Pierre's settled shadow DOM must not mutate at all. This proves stable
 file/options identity prevents unrelated store notifications from rebuilding

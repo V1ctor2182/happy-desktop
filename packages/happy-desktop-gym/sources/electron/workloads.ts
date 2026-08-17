@@ -145,8 +145,6 @@ interface DiffSelectionStabilityObservation {
     readonly selectionSamples: readonly DiffSelectionSample[];
     readonly selectionTimeline: readonly DiffSelectionTimelineEvent[];
     readonly stableViewMutated: boolean;
-    readonly workerReplacementObserved: boolean;
-    readonly workerSettledAtMs?: number;
 }
 
 interface DiffSelectionMeasurement {
@@ -160,8 +158,6 @@ interface DiffSelectionMeasurement {
     readonly stableViewMutationObserved: boolean;
     readonly stableViewNodesPreserved: boolean;
     readonly stable: boolean;
-    readonly workerReplacementObserved: boolean;
-    readonly workerSettledAtMs: number;
 }
 
 interface ScrollInteractionMeasurement {
@@ -1039,12 +1035,7 @@ async function changedFileSelectionBarrier(
     const observation = await diffSelectionStabilityObserve(page, path);
     const before = observation.selectionSamples[0];
     const after = observation.selectionSamples.at(-1);
-    if (
-        before === undefined ||
-        after === undefined ||
-        before.length < 2 ||
-        observation.workerSettledAtMs === undefined
-    )
+    if (before === undefined || after === undefined || before.length < 2)
         throw new Error(`Changed-file diff selection did not start for ${path}.`);
     const stableViewNodesPreserved =
         observation.selectionSamples.length === 5 &&
@@ -1058,14 +1049,12 @@ async function changedFileSelectionBarrier(
         );
     if (
         observation.initialMode !== observation.finalMode ||
-        !observation.workerReplacementObserved ||
         observation.stableViewMutated ||
         !stableViewNodesPreserved
     ) {
         throw new Error(
             `Settled changed-file diff identity was unstable for ${path}: ` +
                 `mode=${String(observation.finalMode)} expectedMode=${observation.initialMode} ` +
-                `workerReplacement=${String(observation.workerReplacementObserved)} ` +
                 `stableViewMutation=${String(observation.stableViewMutated)} ` +
                 `nodesPreserved=${String(stableViewNodesPreserved)} ` +
                 `before=${String(before.length)} after=${String(after.length)}.`,
@@ -1082,8 +1071,6 @@ async function changedFileSelectionBarrier(
         stable: stableViewNodesPreserved,
         stableViewMutationObserved: observation.stableViewMutated,
         stableViewNodesPreserved,
-        workerReplacementObserved: observation.workerReplacementObserved,
-        workerSettledAtMs: observation.workerSettledAtMs,
     };
 }
 
@@ -1102,13 +1089,9 @@ async function diffSelectionStabilityObserve(
                 let diff: HTMLElement | undefined;
                 let documentObserver: MutationObserver | undefined;
                 let stableObserver: MutationObserver | undefined;
-                let workerObserver: MutationObserver | undefined;
                 let selectedAt = 0;
                 let initialMode: string | undefined;
                 let stableViewMutated = false;
-                let workerReplacementObserved = false;
-                let workerSettledAtMs: number | undefined;
-                let workerWaitStarted = 0;
                 let selectionStarted = false;
                 let staged = false;
                 const selectionAbort = new AbortController();
@@ -1165,38 +1148,10 @@ async function diffSelectionStabilityObserve(
                     diff = candidateDiff;
                     initialMode = candidateDiff.dataset.mode;
                     documentObserver?.disconnect();
-                    workerWaitStarted = performance.now();
-                    workerObserver = new MutationObserver(() => {
-                        if (target.text.isConnected && candidateRoot.contains(target.text)) return;
-                        workerReplacementObserved = true;
-                        workerSettledAtMs = Math.max(0, performance.now() - workerWaitStarted);
-                        workerObserver?.disconnect();
-                        let settledTarget:
-                            | {
-                                  readonly end: number;
-                                  readonly start: number;
-                                  readonly text: Text;
-                              }
-                            | undefined;
-                        for (const line of candidateRoot.querySelectorAll<HTMLElement>(
-                            "[data-code] [data-line][data-line-index]",
-                        )) {
-                            const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-                            while (walker.nextNode()) {
-                                const text = walker.currentNode as Text;
-                                const start = text.data.search(/\S/u);
-                                if (start < 0 || text.data.length - start < 2) continue;
-                                settledTarget = {
-                                    end: Math.min(text.data.length, start + 16),
-                                    start,
-                                    text,
-                                };
-                                break;
-                            }
-                            if (settledTarget !== undefined) break;
-                        }
+                    {
+                        const settledTarget = target;
                         const selection = window.getSelection();
-                        if (settledTarget === undefined || selection === null) return;
+                        if (selection === null) return;
                         selectionStarted = true;
                         selectedAt = performance.now();
                         document.addEventListener(
@@ -1331,7 +1286,6 @@ async function diffSelectionStabilityObserve(
                                 completed = true;
                                 documentObserver?.disconnect();
                                 stableObserver?.disconnect();
-                                workerObserver?.disconnect();
                                 selectionAbort.abort();
                                 window.clearTimeout(stageTimeout);
                                 resolve({
@@ -1340,17 +1294,10 @@ async function diffSelectionStabilityObserve(
                                     selectionSamples: samples,
                                     selectionTimeline: timeline,
                                     stableViewMutated,
-                                    workerReplacementObserved,
-                                    workerSettledAtMs,
                                 });
                             }, atMs);
                         }
-                    });
-                    workerObserver.observe(candidateRoot, {
-                        characterData: true,
-                        childList: true,
-                        subtree: true,
-                    });
+                    }
                 });
                 documentObserver.observe(document.documentElement ?? document, {
                     attributes: true,
@@ -1367,14 +1314,9 @@ async function diffSelectionStabilityObserve(
                     completed = true;
                     documentObserver?.disconnect();
                     stableObserver?.disconnect();
-                    workerObserver?.disconnect();
                     selectionAbort.abort();
                     reject(
-                        new Error(
-                            staged
-                                ? `Cold Pierre worker replacement did not arrive for ${expected}.`
-                                : `Selectable cold diff text did not appear for ${expected}.`,
-                        ),
+                        new Error(`Selectable settled diff text did not appear for ${expected}.`),
                     );
                 }, 30_000);
                 document.documentElement?.toggleAttribute("data-happy-desktop-gym-selection-arm");
@@ -2011,10 +1953,47 @@ async function scrollStabilityCapture(
                 let frameHandle = 0;
                 let timerHandle = 0;
                 let stopped = false;
+                const listAtStart = document.querySelector<HTMLElement>(
+                    '[data-happy-desktop-ui="message-list"]',
+                );
+                const listRectAtStart = listAtStart?.getBoundingClientRect();
+                let textAnchor:
+                    | {
+                          readonly index: number | undefined;
+                          readonly node: Node;
+                          readonly offset: number;
+                      }
+                    | undefined;
+                if (listAtStart && listRectAtStart) {
+                    const x = listRectAtStart.left + listRectAtStart.width / 2;
+                    for (const inset of [8, 20, 32, 48, 72, 104]) {
+                        const position = document.caretPositionFromPoint?.(
+                            x,
+                            listRectAtStart.bottom - inset,
+                        );
+                        if (!position || !listAtStart.contains(position.offsetNode)) continue;
+                        const parent =
+                            position.offsetNode instanceof Element
+                                ? position.offsetNode
+                                : position.offsetNode.parentElement;
+                        const row = parent?.closest<HTMLElement>(
+                            ".happy2-message-list__virtual-row[data-index]",
+                        );
+                        const index = Number.parseInt(row?.dataset.index ?? "", 10);
+                        textAnchor = {
+                            index: Number.isFinite(index) ? index : undefined,
+                            node: position.offsetNode,
+                            offset: position.offset,
+                        };
+                        break;
+                    }
+                }
                 const browserWindow = window as Window & {
+                    __happyDesktopGymScrollStabilityFrameCount?: () => number;
                     __happyDesktopGymSampleScrollStability?: () => void;
                     __happyDesktopGymStopScrollStability?: () => void;
                 };
+                browserWindow.__happyDesktopGymScrollStabilityFrameCount = () => frames.length;
                 browserWindow.__happyDesktopGymSampleScrollStability = () => {
                     /*
                      * rAF itself runs before the frame's ResizeObserver delivery.
@@ -2064,10 +2043,30 @@ async function scrollStabilityCapture(
                             }
                             const first = rows[0];
                             const edge = rows.at(-1);
+                            let anchorIndex = edge?.index;
+                            let anchorOffset =
+                                edge === undefined ? undefined : listRect.bottom - edge.bottom;
+                            if (textAnchor?.node.isConnected) {
+                                const maximumOffset =
+                                    textAnchor.node.nodeType === Node.TEXT_NODE
+                                        ? (textAnchor.node.textContent?.length ?? 0)
+                                        : textAnchor.node.childNodes.length;
+                                const range = document.createRange();
+                                range.setStart(
+                                    textAnchor.node,
+                                    Math.min(textAnchor.offset, maximumOffset),
+                                );
+                                range.collapse(true);
+                                const rect =
+                                    range.getClientRects()[0] ?? range.getBoundingClientRect();
+                                if (rect.height > 0 || rect.width > 0) {
+                                    anchorIndex = textAnchor.index;
+                                    anchorOffset = listRect.bottom - rect.top;
+                                }
+                            }
                             frames.push({
-                                anchorIndex: edge?.index,
-                                anchorOffset:
-                                    edge === undefined ? undefined : listRect.bottom - edge.bottom,
+                                anchorIndex,
+                                anchorOffset,
                                 bottomDistance: Math.max(
                                     0,
                                     list.scrollHeight - list.scrollTop - list.clientHeight,
@@ -2094,6 +2093,7 @@ async function scrollStabilityCapture(
                     stopped = true;
                     cancelAnimationFrame(frameHandle);
                     clearTimeout(timerHandle);
+                    delete browserWindow.__happyDesktopGymScrollStabilityFrameCount;
                     delete browserWindow.__happyDesktopGymSampleScrollStability;
                     delete browserWindow.__happyDesktopGymStopScrollStability;
                     resolve(frames);
@@ -2104,6 +2104,16 @@ async function scrollStabilityCapture(
             }),
     );
     try {
+        await page.waitForFunction(
+            () => {
+                const browserWindow = window as Window & {
+                    __happyDesktopGymScrollStabilityFrameCount?: () => number;
+                };
+                return (browserWindow.__happyDesktopGymScrollStabilityFrameCount?.() ?? 0) > 0;
+            },
+            undefined,
+            { timeout: 5_000 },
+        );
         await action();
         await page.waitForTimeout(300);
     } finally {
