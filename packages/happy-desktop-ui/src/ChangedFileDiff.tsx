@@ -6,7 +6,7 @@ import {
     type FileDiffMetadata,
 } from "@pierre/diffs";
 import { FileDiff, useWorkerPool } from "@pierre/diffs/react";
-import { useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { CodeEditor } from "./CodeEditor";
 import { CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH } from "./CodeBlock";
 import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
@@ -73,7 +73,7 @@ function diffIsMassive(diff: FileDiffMetadata): boolean {
 function createDiffHighlightGate(
     pool: ReturnType<typeof useWorkerPool>,
     diff: FileDiffMetadata | undefined,
-    rendererMounted: boolean,
+    enabled: boolean,
 ): DiffHighlightGate {
     const cacheReady = (): boolean =>
         pool !== undefined &&
@@ -89,12 +89,12 @@ function createDiffHighlightGate(
         })();
     let snapshot: DiffHighlightGateSnapshot = "ready";
     if (
+        enabled &&
         pool !== undefined &&
         diff !== undefined &&
         diff.cacheKey !== undefined &&
         !diffIsPlainText(diff) &&
         !diffIsMassive(diff) &&
-        !rendererMounted &&
         pool.getStats().workersFailed === false &&
         !cacheReady()
     )
@@ -173,6 +173,8 @@ export type ChangedFileDiffProps = {
     saveDisabled?: boolean;
     /** Writes the pending edit back. */
     onSave?: () => void;
+    /** Reports that the final diff DOM has rendered after any cold highlighting wait. */
+    onReady?: () => void;
     /**
      * The file as it now stands, drawn by whatever the product opens a file
      * into. It is the caller's because a preview is a whole viewer — a rendered
@@ -203,6 +205,7 @@ export type ChangedFileDiffProps = {
  * full-file view carrying a second palette that merely resembles the first.
  */
 export function ChangedFileDiff(props: ChangedFileDiffProps) {
+    const onReady = props.onReady;
     const editable = props.onContentChange !== undefined;
     const previewable = props.preview !== undefined;
     const segments = CHANGED_FILE_DIFF_MODES.filter((candidate) =>
@@ -215,7 +218,6 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     // pane cannot draw.
     const requested = props.mode ?? "unified";
     const mode = segments.some((segment) => segment.value === requested) ? requested : "unified";
-    const [rendererMounted, setRendererMounted] = useState(false);
     // Parsing the patch is synchronous. Keep its inputs stable across unrelated
     // workspace notifications while this diff remains mounted; switching files
     // remounts it intentionally, and Pierre cache keys cover that lifetime
@@ -255,18 +257,15 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
         return value;
     }, [mode, newCacheKey, newFile, oldCacheKey, oldFile]);
     const pool = useWorkerPool();
-    // The first mount may wait for a keyed highlighted result. Once Pierre owns
-    // the DOM, later content/theme/mode updates must stay in that same instance
-    // so scroll, expanded hunks, and native selection do not reset.
     const diffPostRender = useMemo(
         () => (_node: HTMLElement, _instance: unknown, phase: "mount" | "update" | "unmount") => {
-            setRendererMounted(phase !== "unmount");
+            if (phase !== "unmount") onReady?.();
         },
-        [],
+        [onReady],
     );
     const highlightGate = useMemo(
-        () => createDiffHighlightGate(pool, diff, rendererMounted),
-        [diff, pool, rendererMounted],
+        () => createDiffHighlightGate(pool, diff, onReady !== undefined),
+        [diff, onReady, pool],
     );
     const highlightState = useSyncExternalStore(
         highlightGate.subscribe,
@@ -345,24 +344,12 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         readOnly={props.saving === true}
                         value={props.newContent}
                     />
-                ) : (
-                    <>
-                        {highlightState === "waiting" ? (
-                            <div
-                                aria-live="polite"
-                                className="happy2-changed-file-diff__highlighting"
-                                data-happy-desktop-ui="changed-file-diff-highlighting"
-                            >
-                                Highlighting…
-                            </div>
-                        ) : diff === undefined ? null : (
-                            <FileDiff
-                                className="happy2-changed-file-diff__renderer"
-                                fileDiff={diff}
-                                options={diffOptions}
-                            />
-                        )}
-                    </>
+                ) : highlightState === "waiting" || diff === undefined ? null : (
+                    <FileDiff
+                        className="happy2-changed-file-diff__renderer"
+                        fileDiff={diff}
+                        options={diffOptions}
+                    />
                 )}
             </div>
         </section>

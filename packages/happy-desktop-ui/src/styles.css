@@ -53,6 +53,7 @@
 @import "./styles/fade.css";
 @import "./styles/tabs.css";
 @import "./styles/tabbed-pane.css";
+@import "./styles/deferred-pane.css";
 @import "./styles/transfer-zone.css";
 @import "./styles/toolbar.css";
 @import "./styles/terminal-panel.css";

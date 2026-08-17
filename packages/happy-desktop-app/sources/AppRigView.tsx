@@ -126,6 +126,8 @@ import {
     ComposerPanel,
     ConversationDock,
     ConversationView,
+    DeferredPane,
+    DeferredPaneReady,
     DocumentSurface,
     EmptyState,
     FileBrowser,
@@ -3274,11 +3276,33 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
         ? workspace.fileTabs.filter((tab) => tab.groupId === openGroup.id)
         : [];
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeMainViewId);
+    const displayedFileTab = groupFileTabs.find((tab) => tab.id === workspace.displayedMainViewId);
+    const displayedFile =
+        displayedFileTab?.displayedDocument === undefined
+            ? displayedFileTab
+            : {
+                  ...displayedFileTab,
+                  kind: displayedFileTab.displayedKind ?? displayedFileTab.kind,
+                  document: {
+                      type: "ready" as const,
+                      value: displayedFileTab.displayedDocument,
+                  },
+              };
+    const pendingFile =
+        activeFile &&
+        (workspace.displayedMainViewId !== activeFile.id ||
+            (activeFile.displayedPresentationId !== activeFile.presentationId &&
+                !activeFile.revalidating &&
+                (activeFile.document.type !== "ready" ||
+                    activeFile.document.value !== activeFile.displayedDocument)))
+            ? activeFile
+            : undefined;
     // Terminals and pages the reader moved out of the panel. They belong to the
     // addressed group the way the panel does, so they are listed and drawn here
     // only while that group is the one open.
     const mainTools = openGroup ? toolTabsPlaced(panel, "main") : [];
     const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
+    const displayedMainTool = mainTools.find((tab) => tab.id === workspace.displayedMainViewId);
     const openInRecent = workspace.openInTargets.find(
         (target) => target.id === workspace.openInRecentId,
     );
@@ -3493,6 +3517,76 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                 size="compact"
             />
         ) : undefined;
+    const mainFileBody = (file: RigFileTabSnapshot, onReady?: () => void): ReactNode => (
+        <RigFileBody
+            appearance={appearance.appearance}
+            file={file}
+            {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+            key={`${file.id}:${file.kind}`}
+            {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
+            mode={workspace.fileViewMode}
+            {...(onReady === undefined ? {} : { onReady })}
+            rigOnline={rigOnline}
+            {...(access.writeRefusal === undefined ? {} : { writeRefusal: access.writeRefusal })}
+            {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
+            workspace={props.workspace}
+        />
+    );
+    const mainConversationBody =
+        openGroup === undefined ? undefined : openGroup.conversations.length === 0 &&
+          workspace.groupComposer ? (
+            // Files or tools are open here, but no session exists yet. The body
+            // under the strip is the same composer that starts the first one.
+            <RigGroupComposer
+                composer={workspace.groupComposer}
+                {...(workspace.groupSessionDraft
+                    ? { draftMenus: workspace.groupSessionDraft.menus }
+                    : {})}
+                focusOnType={composerClaimsTyping}
+                groupId={openGroup.id}
+                groupName={openGroup.name}
+                rigOnline={rigOnline}
+                slotAction={props.slotAction}
+                slots={slotViews}
+                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
+                workspace={props.workspace}
+            />
+        ) : (
+            <RigConversationBody
+                activitySelected={panel.open && panel.activeViewId === "activity"}
+                conversation={conversation}
+                focusOnType={composerClaimsTyping}
+                groupId={openGroup.id}
+                groupName={openGroup.name}
+                {...(preparingNotice ? { notice: preparingNotice } : {})}
+                now={now}
+                {...(connectionRefusal === undefined &&
+                openGroupChatRefusal === undefined &&
+                openGroup.create !== undefined
+                    ? { onCreate: () => groupConversationCreate(openGroup) }
+                    : {})}
+                onChatSelect={props.onChatSelect}
+                onFileOpen={(path) => {
+                    if (!rigOnline() || !openGroup.create) return;
+                    const target = workspacePathRelative(path, openGroup.create.cwd);
+                    props.workspace.filePanelOpen(openGroup.id, target, panelFileKind(target));
+                }}
+                canAbort={conversationCanAbort}
+                readOnly={conversationReadOnly}
+                rigOnline={rigOnline}
+                {...(connectionRefusal === undefined ? {} : { unavailable: connectionRefusal })}
+                {...(conversationReadOnlyReason === undefined
+                    ? {}
+                    : { readOnlyReason: conversationReadOnlyReason })}
+                {...(connectionRefusal === undefined && openGroupChatRefusal === undefined
+                    ? {}
+                    : { writeRefusal: connectionRefusal ?? openGroupChatRefusal })}
+                slotAction={props.slotAction}
+                slots={slotViews}
+                viewerId={props.viewerId}
+                workspace={props.workspace}
+            />
+        );
 
     return (
         <AppShell
@@ -3996,137 +4090,98 @@ function RigWorkspaceSurface(props: RigWorkspaceSurfaceProps) {
                                 id={TRANSFER_ZONE_MAIN}
                                 label="Open in the main content"
                             >
-                                {/* Every page moved to this side stays mounted
-                                whichever tab is on screen, exactly as it does
-                                in the panel: a page is only loaded once. */}
-                                <RigToolBodies
-                                    activeId={workspace.activeMainViewId}
-                                    {...(props.browserContent
-                                        ? { browserContent: props.browserContent }
-                                        : {})}
-                                    {...(props.nodeId === undefined
-                                        ? {}
-                                        : { nodeId: props.nodeId })}
-                                    {...(props.htmlPreview
-                                        ? { htmlPreview: props.htmlPreview }
-                                        : {})}
-                                    {...(props.chatId ? { sessionId: props.chatId } : {})}
-                                    store={props.workspace.panel}
-                                    tabs={mainTools}
-                                    {...(terminalRigAvailability === undefined
-                                        ? {}
-                                        : {
-                                              rigAvailability: terminalRigAvailability,
-                                              rigAvailabilityReason: availability.message,
-                                          })}
-                                    appletRevisions={
-                                        new Map(
-                                            props.slots.applets.map((applet) => [
-                                                applet.name,
-                                                applet.currentVersion,
-                                            ]),
-                                        )
+                                <DeferredPane
+                                    current={
+                                        displayedMainTool
+                                            ? undefined
+                                            : displayedFile
+                                              ? {
+                                                    id:
+                                                        displayedFile.displayedPresentationId ??
+                                                        displayedFile.presentationId,
+                                                    content: mainFileBody(displayedFile),
+                                                }
+                                              : {
+                                                    id: `conversation:${openGroup.id}:${props.chatId ?? "empty"}`,
+                                                    content: mainConversationBody,
+                                                }
+                                    }
+                                    fallback={
+                                        <EmptyState
+                                            animation="snail"
+                                            description="The selected file is taking a moment."
+                                            icon="doc"
+                                            size="panel"
+                                            title="Opening file…"
+                                        />
+                                    }
+                                    onReveal={props.workspace.mainViewDisplay}
+                                    pending={
+                                        pendingFile
+                                            ? {
+                                                  id: pendingFile.presentationId,
+                                                  render: (ready) => {
+                                                      const waitsForDiff =
+                                                          pendingFile.kind === "diff" &&
+                                                          pendingFile.document.type === "ready" &&
+                                                          "oldContent" in
+                                                              pendingFile.document.value &&
+                                                          (workspace.fileViewMode === "unified" ||
+                                                              workspace.fileViewMode === "split");
+                                                      const readyOnCommit =
+                                                          connectionRefusal !== undefined ||
+                                                          (pendingFile.document.type !==
+                                                              "loading" &&
+                                                              !waitsForDiff);
+                                                      return (
+                                                          <DeferredPaneReady
+                                                              onReady={ready}
+                                                              ready={readyOnCommit}
+                                                          >
+                                                              {mainFileBody(
+                                                                  pendingFile,
+                                                                  waitsForDiff ? ready : undefined,
+                                                              )}
+                                                          </DeferredPaneReady>
+                                                      );
+                                                  },
+                                              }
+                                            : undefined
+                                    }
+                                    // Every page moved to this side stays
+                                    // mounted whichever tab is on screen.
+                                    persistent={
+                                        <RigToolBodies
+                                            activeId={workspace.displayedMainViewId}
+                                            {...(props.browserContent
+                                                ? { browserContent: props.browserContent }
+                                                : {})}
+                                            {...(props.nodeId === undefined
+                                                ? {}
+                                                : { nodeId: props.nodeId })}
+                                            {...(props.htmlPreview
+                                                ? { htmlPreview: props.htmlPreview }
+                                                : {})}
+                                            {...(props.chatId ? { sessionId: props.chatId } : {})}
+                                            store={props.workspace.panel}
+                                            tabs={mainTools}
+                                            {...(terminalRigAvailability === undefined
+                                                ? {}
+                                                : {
+                                                      rigAvailability: terminalRigAvailability,
+                                                      rigAvailabilityReason: availability.message,
+                                                  })}
+                                            appletRevisions={
+                                                new Map(
+                                                    props.slots.applets.map((applet) => [
+                                                        applet.name,
+                                                        applet.currentVersion,
+                                                    ]),
+                                                )
+                                            }
+                                        />
                                     }
                                 />
-                                {activeMainTool ? null : activeFile ? (
-                                    <RigFileBody
-                                        appearance={appearance.appearance}
-                                        file={activeFile}
-                                        rigOnline={rigOnline}
-                                        {...(props.htmlPreview
-                                            ? { htmlPreview: props.htmlPreview }
-                                            : {})}
-                                        {...(props.mediaWindow
-                                            ? { mediaWindow: props.mediaWindow }
-                                            : {})}
-                                        mode={workspace.fileViewMode}
-                                        {...(access.writeRefusal === undefined
-                                            ? {}
-                                            : { writeRefusal: access.writeRefusal })}
-                                        {...(connectionRefusal === undefined
-                                            ? {}
-                                            : { saveRefusal: connectionRefusal })}
-                                        workspace={props.workspace}
-                                    />
-                                ) : openGroup.conversations.length === 0 &&
-                                  workspace.groupComposer ? (
-                                    // Files or tools are open here, but no
-                                    // session exists yet. The body under the
-                                    // strip is the same composer that starts the
-                                    // first one — telling the reader that no
-                                    // session is selected when there is none to
-                                    // select would only take away the place to
-                                    // begin.
-                                    <RigGroupComposer
-                                        composer={workspace.groupComposer}
-                                        {...(workspace.groupSessionDraft
-                                            ? { draftMenus: workspace.groupSessionDraft.menus }
-                                            : {})}
-                                        focusOnType={composerClaimsTyping}
-                                        groupId={openGroup.id}
-                                        groupName={openGroup.name}
-                                        rigOnline={rigOnline}
-                                        slotAction={props.slotAction}
-                                        slots={slotViews}
-                                        {...(connectionRefusal === undefined
-                                            ? {}
-                                            : { unavailable: connectionRefusal })}
-                                        workspace={props.workspace}
-                                    />
-                                ) : (
-                                    <RigConversationBody
-                                        activitySelected={
-                                            panel.open && panel.activeViewId === "activity"
-                                        }
-                                        conversation={conversation}
-                                        focusOnType={composerClaimsTyping}
-                                        groupId={openGroup.id}
-                                        groupName={openGroup.name}
-                                        {...(preparingNotice ? { notice: preparingNotice } : {})}
-                                        now={now}
-                                        {...(connectionRefusal === undefined &&
-                                        openGroupChatRefusal === undefined &&
-                                        openGroup.create !== undefined
-                                            ? {
-                                                  onCreate: () =>
-                                                      groupConversationCreate(openGroup),
-                                              }
-                                            : {})}
-                                        onChatSelect={props.onChatSelect}
-                                        onFileOpen={(path) => {
-                                            if (!rigOnline() || !openGroup.create) return;
-                                            const target = workspacePathRelative(
-                                                path,
-                                                openGroup.create.cwd,
-                                            );
-                                            props.workspace.filePanelOpen(
-                                                openGroup.id,
-                                                target,
-                                                panelFileKind(target),
-                                            );
-                                        }}
-                                        canAbort={conversationCanAbort}
-                                        readOnly={conversationReadOnly}
-                                        rigOnline={rigOnline}
-                                        {...(connectionRefusal === undefined
-                                            ? {}
-                                            : { unavailable: connectionRefusal })}
-                                        {...(conversationReadOnlyReason === undefined
-                                            ? {}
-                                            : { readOnlyReason: conversationReadOnlyReason })}
-                                        {...(connectionRefusal === undefined &&
-                                        openGroupChatRefusal === undefined
-                                            ? {}
-                                            : {
-                                                  writeRefusal:
-                                                      connectionRefusal ?? openGroupChatRefusal,
-                                              })}
-                                        slotAction={props.slotAction}
-                                        slots={slotViews}
-                                        viewerId={props.viewerId}
-                                        workspace={props.workspace}
-                                    />
-                                )}
                             </TransferZone>
                         </TabbedPane>
                     ) : null}
@@ -4269,6 +4324,8 @@ function RigFileBody(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: RigFileViewMode;
+    /** Reports that a pending worker-backed diff has committed its final DOM. */
+    onReady?: () => void;
     /** Re-reads Rig availability when a retained file handler fires. */
     rigOnline: () => boolean;
     /** Why this file cannot be edited or saved, or absent when it can. */
@@ -4406,7 +4463,7 @@ function RigFileBody(props: {
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
                     key={`${file.id}:${file.kind}`}
-                    loading={file.loading}
+                    loading={file.revalidating}
                     mode={props.mode}
                     {...(newCacheKey === undefined ? {} : { newCacheKey })}
                     newContent={current}
@@ -4425,6 +4482,7 @@ function RigFileBody(props: {
                         : {})}
                     saveDisabled={saveDisabled}
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
+                    {...(props.onReady === undefined ? {} : { onReady: props.onReady })}
                     // A change that deleted the file left no copy to look at, which
                     // the read reports by having no working-tree identity for it.
                     // Preview is then not offered rather than offered over nothing.

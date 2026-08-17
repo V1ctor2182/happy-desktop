@@ -393,6 +393,14 @@ export {
 } from "./LottieScene";
 export { type TabItem, Tabs, type TabsProps, type TabsSize } from "./Tabs";
 export { TabbedPane, type TabbedPaneProps } from "./TabbedPane";
+export {
+    DeferredPane,
+    type DeferredPaneCurrent,
+    type DeferredPanePending,
+    type DeferredPaneProps,
+    DeferredPaneReady,
+    type DeferredPaneReadyProps,
+} from "./DeferredPane";
 export { TransferZone, type TransferZoneProps } from "./TransferZone";
 export {
     TRANSFER_ZONE_ATTRIBUTE,

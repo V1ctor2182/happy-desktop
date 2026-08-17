@@ -220,6 +220,18 @@ export interface RigFileTabSnapshot {
     readonly document: Loadable<
         RigWorkspaceFileDocument | RigChangedFileDocument | RigWorkspaceFileBytes
     >;
+    /**
+     * Identity of this authoritative read/render attempt. It changes before
+     * every read and is committed only after the corresponding body is ready,
+     * so late renderer completions cannot reveal newer or older bytes.
+     */
+    readonly presentationId: string;
+    /** The last presentation this tab committed to the main-content body. */
+    readonly displayedPresentationId?: string;
+    /** The viewer kind that committed `displayedDocument`. */
+    readonly displayedKind?: RigFileTabKind;
+    /** The exact ready document behind `displayedPresentationId`. */
+    readonly displayedDocument?: RigFileDocument;
     /** True only while no ready document is available for this tab. */
     readonly loading: boolean;
     /**
@@ -474,6 +486,13 @@ export interface RigWorkspaceSnapshot {
      * exactly one thing at a time and two fields could disagree about which.
      */
     readonly activeMainViewId?: string;
+    /**
+     * What the main-content body has actually committed to showing. It normally
+     * matches `activeMainViewId`; while a newly selected file is still being
+     * read or highlighted it deliberately names the previous body instead.
+     * Absent means the addressed conversation is still visible.
+     */
+    readonly displayedMainViewId?: string;
     /**
      * The file the panel's viewer is on, if any. It is separate from `fileTabs`
      * because it is a glance out of the transcript with the panel's lifetime,
@@ -1017,6 +1036,12 @@ export interface RigWorkspaceStore {
      * is what the main content shows.
      */
     mainViewSelect(viewId: string | undefined): void;
+    /**
+     * Commits the selected main-content view after its renderer says it is
+     * complete. A stale completion is ignored when another tab was selected in
+     * the meantime.
+     */
+    mainViewDisplay(presentationId: string): void;
     fileClose(tabId: string): void;
     fileRetry(tabId: string): void;
     /** Chooses how changed files are displayed, for every tab. */
@@ -1492,6 +1517,8 @@ export function rigWorkspaceStoreCreate(
     let scrollPositions: ReadonlyMap<RigSessionId, RigScrollPosition> = new Map();
     let fileTabs: readonly RigFileTabSnapshot[] = [];
     let activeMainViewId: string | undefined;
+    /** The selected view whose complete pixels are currently on screen. */
+    let displayedMainViewId: string | undefined;
     /**
      * The group the main content's tool view belongs to, when it is one. A tool
      * tab is the panel's, and the panel shows one group at a time, so knowing
@@ -1511,6 +1538,9 @@ export function rigWorkspaceStoreCreate(
      */
     let panelFileRevision: string | undefined;
     const fileLoadGenerations = new Map<string, number>();
+    let filePresentationId = 0;
+    const filePresentationIdNext = (): string =>
+        `file-presentation:${String((filePresentationId += 1))}`;
     const readyDocumentCache = new Map<string, RigReadyDocumentCacheEntry>();
     let readyDocumentCacheWeight = 0;
     const fileLoadRequests = new Map<string, RigFileLoadRequest>();
@@ -2046,6 +2076,7 @@ export function rigWorkspaceStoreCreate(
             snapshot.fileTabs === fileTabs &&
             snapshot.tabOrder === tabOrder &&
             snapshot.activeMainViewId === activeMainViewId &&
+            snapshot.displayedMainViewId === displayedMainViewId &&
             snapshot.panelFile === panelFile &&
             snapshot.groupResume === groupResume &&
             snapshot.openInTargets === openInTargets &&
@@ -2092,6 +2123,7 @@ export function rigWorkspaceStoreCreate(
             ...(projectClone ? { projectClone } : {}),
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
+            ...(displayedMainViewId ? { displayedMainViewId } : {}),
             ...(panelFile ? { panelFile } : {}),
             ...(groupComposerDraft ? { groupComposer: groupComposerDraft } : {}),
             ...(groupSessionDraft ? { groupSessionDraft } : {}),
@@ -2127,6 +2159,7 @@ export function rigWorkspaceStoreCreate(
             !fileTabs.some((tab) => tab.id === activeMainViewId) &&
             !panel.get().tabs.some((tab) => tab.id === activeMainViewId && tab.placement === "main")
         ) {
+            if (displayedMainViewId === activeMainViewId) displayedMainViewId = undefined;
             activeMainViewId = undefined;
             activeMainViewGroupId = undefined;
             groupTabRemember(addressedGroupId, openId);
@@ -2319,7 +2352,11 @@ export function rigWorkspaceStoreCreate(
         );
     };
 
-    const fileLoad = (tabId: string, revision: string): void => {
+    const fileLoad = (
+        tabId: string,
+        revision: string,
+        presentationId = filePresentationIdNext(),
+    ): void => {
         const before = fileTabs.find((tab) => tab.id === tabId);
         if (!before) return;
         const generation = (fileLoadGenerations.get(tabId) ?? 0) + 1;
@@ -2370,6 +2407,7 @@ export function rigWorkspaceStoreCreate(
                           ...tab,
                           revision,
                           document,
+                          presentationId,
                           loading,
                           revalidating,
                           revalidationError: undefined,
@@ -2401,6 +2439,13 @@ export function rigWorkspaceStoreCreate(
                     return;
                 }
                 const loaded = rigFileDocumentCanonical(document);
+                const current = fileTabs.find((tab) => tab.id === tabId);
+                const settledPresentationId =
+                    current?.document.type === "ready" &&
+                    rigReadyDocumentCacheKey(cacheBaseKey, current.document.value).key !==
+                        rigReadyDocumentCacheKey(cacheBaseKey, loaded).key
+                        ? filePresentationIdNext()
+                        : (current?.presentationId ?? presentationId);
                 const identity = readyDocumentCacheWrite(cacheBaseKey, loaded);
                 if (identity) fileTabLoadedIdentities.set(tabId, identity);
                 else fileTabLoadedIdentities.delete(tabId);
@@ -2411,6 +2456,7 @@ export function rigWorkspaceStoreCreate(
                         ? {
                               ...tab,
                               document: { type: "ready" as const, value: loaded },
+                              presentationId: settledPresentationId,
                               loading: false,
                               revalidating: false,
                               revalidationError: undefined,
@@ -2669,6 +2715,7 @@ export function rigWorkspaceStoreCreate(
         }
 
         const revision = fileChangeFind(groupId, path)?.revision ?? "";
+        const presentationId = filePresentationIdNext();
         const cacheBaseKey = rigReadyDocumentCacheBaseKey(groupId, path, kind, revision);
         const cached = readyDocumentCacheRead(cacheBaseKey, true)?.document;
         const tab: RigFileTabSnapshot = {
@@ -2678,6 +2725,7 @@ export function rigWorkspaceStoreCreate(
             kind,
             preview,
             revision,
+            presentationId,
             saving: false,
             document: cached ? { type: "ready", value: cached } : { type: "loading" },
             loading: cached === undefined,
@@ -2687,8 +2735,10 @@ export function rigWorkspaceStoreCreate(
             ? fileTabs.findIndex((candidate) => candidate.groupId === groupId && candidate.preview)
             : -1;
         if (replacedIndex >= 0) {
-            fileTabCacheStore(fileTabs[replacedIndex]!);
-            fileTabRelease(fileTabs[replacedIndex]!.id);
+            const replaced = fileTabs[replacedIndex]!;
+            fileTabCacheStore(replaced);
+            fileTabRelease(replaced.id);
+            if (displayedMainViewId === replaced.id) displayedMainViewId = undefined;
             fileTabs = fileTabs.map((candidate, index) =>
                 index === replacedIndex ? tab : candidate,
             );
@@ -2697,7 +2747,7 @@ export function rigWorkspaceStoreCreate(
         }
         groupTabRemember(groupId, id);
         recompute();
-        fileLoad(id, revision);
+        fileLoad(id, revision, presentationId);
     };
 
     /**
@@ -2722,6 +2772,7 @@ export function rigWorkspaceStoreCreate(
         fileTabs = fileTabs.filter((tab) => tab.id !== tabId);
         if (activeMainViewId === tabId)
             activeMainViewId = siblings[Math.min(among, siblings.length - 1)]?.id;
+        if (displayedMainViewId === tabId) displayedMainViewId = undefined;
         activeMainViewGroupId = undefined;
         groupTabForget(closing.groupId, tabId);
         // What the closed tab uncovered in its own group: the next file
@@ -3963,6 +4014,7 @@ export function rigWorkspaceStoreCreate(
             ...(projectClone ? { projectClone } : {}),
             ...(create ? { create } : {}),
             ...(activeMainViewId ? { activeMainViewId } : {}),
+            ...(displayedMainViewId ? { displayedMainViewId } : {}),
         };
     };
 
@@ -4160,6 +4212,7 @@ export function rigWorkspaceStoreCreate(
             });
             addressApply(groupId, conversationId);
             if (groupId !== addressedGroupId) {
+                displayedMainViewId = undefined;
                 fileSelectionReset();
                 fileTreeExpansionReset();
             }
@@ -4184,6 +4237,7 @@ export function rigWorkspaceStoreCreate(
             pendingFolderRemovalAddressApply({ groupId });
             addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
+                displayedMainViewId = undefined;
                 fileSelectionReset();
                 fileTreeExpansionReset();
             }
@@ -4260,6 +4314,7 @@ export function rigWorkspaceStoreCreate(
             // ask the owner to navigate away from a list it is already on.
             addressedGroupId = undefined;
             addressedGroupSeen = undefined;
+            displayedMainViewId = undefined;
             openConversation(undefined);
         },
         conversationListRetry: () => {
@@ -4334,6 +4389,7 @@ export function rigWorkspaceStoreCreate(
                 );
             if (opened) {
                 activeMainViewId = opened.id;
+                displayedMainViewId = opened.id;
                 activeMainViewGroupId = addressedGroupId;
                 if (addressedGroupId !== undefined) groupTabRemember(addressedGroupId, opened.id);
                 recompute();
@@ -4541,12 +4597,14 @@ export function rigWorkspaceStoreCreate(
                 panel.tabPlacementUpdate(tool.id, placement);
                 if (placement === "main") {
                     activeMainViewId = tool.id;
+                    displayedMainViewId = tool.id;
                     activeMainViewGroupId = addressedGroupId;
                     if (addressedGroupId !== undefined) groupTabRemember(addressedGroupId, tool.id);
                 } else if (activeMainViewId === tool.id) {
                     // The main content uncovers whatever it was showing before
                     // this tab arrived: the conversation the address names.
                     activeMainViewId = undefined;
+                    displayedMainViewId = undefined;
                     activeMainViewGroupId = undefined;
                     if (addressedGroupId !== undefined && openId !== undefined)
                         groupTabRemember(addressedGroupId, openId);
@@ -4598,6 +4656,9 @@ export function rigWorkspaceStoreCreate(
                     ? undefined
                     : panel.get().tabs.find((tab) => tab.id === viewId && tab.placement === "main");
             activeMainViewId = file?.id ?? tool?.id;
+            // Files finish their read/highlight off screen and explicitly
+            // commit below. Conversations and live tools are already complete.
+            if (!file) displayedMainViewId = tool?.id;
             activeMainViewGroupId = tool ? addressedGroupId : undefined;
             if (file) groupTabRemember(file.groupId, file.id);
             else if (addressedGroupId !== undefined) {
@@ -4606,6 +4667,28 @@ export function rigWorkspaceStoreCreate(
                 const remembered = tool?.id ?? openId;
                 if (remembered !== undefined) groupTabRemember(addressedGroupId, remembered);
             }
+            recompute();
+        },
+        mainViewDisplay(presentationId) {
+            if (disposed) return;
+            const file = fileTabs.find(
+                (tab) => tab.id === activeMainViewId && tab.presentationId === presentationId,
+            );
+            if (!file) return;
+            if (displayedMainViewId === file.id && file.displayedPresentationId === presentationId)
+                return;
+            displayedMainViewId = file.id;
+            fileTabs = fileTabs.map((tab) =>
+                tab.id === file.id
+                    ? {
+                          ...tab,
+                          displayedKind: file.kind,
+                          displayedPresentationId: presentationId,
+                          displayedDocument:
+                              file.document.type === "ready" ? file.document.value : undefined,
+                      }
+                    : tab,
+            );
             recompute();
         },
         fileClose: (tabId) => fileTabClose(tabId),
