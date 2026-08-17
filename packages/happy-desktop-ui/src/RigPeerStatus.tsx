@@ -42,10 +42,11 @@ export interface RigPeerStatusProps {
 }
 
 /**
- * One Rig's connection, as the same small marker everywhere it is shown. It says
- * nothing about what is on the other end: this window's own host Rig and each
- * node that Rig is peered with report where their link stands in the same terms,
- * so the reader compares them by eye.
+ * One Rig's connection, as the same small marker everywhere it is shown. A
+ * healthy connection is deliberately quiet; the marker only appears when the
+ * connection needs attention. It says nothing about what is on the other end:
+ * this window's own host Rig and each node that Rig is peered with report where
+ * their link stands in the same terms, so the reader compares them by eye.
  *
  * The marker is static in every state. A connection that is still being made is a
  * colour rather than a motion, so a window with several machines in it does not
@@ -55,6 +56,8 @@ export function RigPeerStatus(props: RigPeerStatusProps) {
     const label = rigPeerStatusLabel(props.state);
     const described = props.name ? `${props.name}: ${label}` : label;
     const variant = props.variant ?? "dot";
+    if (variant === "dot" && props.state === "connected") return null;
+    const showDot = props.state !== "connected";
     return (
         <span
             className={["happy2-rig-peer-status", props.className].filter(Boolean).join(" ")}
@@ -63,13 +66,15 @@ export function RigPeerStatus(props: RigPeerStatusProps) {
             data-variant={variant}
             title={described}
         >
-            <span
-                aria-label={variant === "dot" ? described : undefined}
-                aria-hidden={variant === "dot" ? undefined : true}
-                className="happy2-rig-peer-status__dot"
-                data-happy-desktop-ui="rig-peer-status-dot"
-                role={variant === "dot" ? "img" : undefined}
-            />
+            {showDot ? (
+                <span
+                    aria-label={variant === "dot" ? described : undefined}
+                    aria-hidden={variant === "dot" ? undefined : true}
+                    className="happy2-rig-peer-status__dot"
+                    data-happy-desktop-ui="rig-peer-status-dot"
+                    role={variant === "dot" ? "img" : undefined}
+                />
+            ) : null}
             {variant === "inline" ? (
                 <span
                     className="happy2-rig-peer-status__label"

@@ -40,11 +40,11 @@ export function RigPeerStatusPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="One Rig's connection as the same marker everywhere it is shown: an 8px dot in the shared status colours, with the state's word beside it when the surface is about the connection itself. Static in every state, so a window holding several machines is still while they are being reached."
+            summary="One Rig's connection as the same marker everywhere it is shown: a subdued 8px warning dot whenever attention is needed, with the state's word beside it when the surface is about the connection itself. Healthy connections are silent, and the marker never animates."
             title="Rig peer status"
         >
             <Specimen
-                detail="dot 8px · connected fills green, connecting fills blue, restricted keeps the connected fill inside a ring because the link is genuinely up, disconnected is a hollow ring, error fills red"
+                detail="dot 8px · connected is silent · every non-connected state uses a subdued warning marker"
                 label="Marker — every state"
                 number="01"
                 stage="surface"
