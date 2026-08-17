@@ -20,6 +20,7 @@
  */
 export const PIERRE_PANE_CSS = `
     [data-code] {
+        padding-bottom: var(--diffs-gap-block, var(--diffs-gap-fallback));
         scrollbar-gutter: auto;
     }
     [data-line]::after {
