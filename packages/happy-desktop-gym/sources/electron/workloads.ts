@@ -2156,17 +2156,21 @@ function scrollStabilityPhaseBuild(
                     Math.abs(frame.anchorOffset - first.anchorOffset) <= 2,
             ));
     const listWidths = frames.map((frame) => frame.clientWidth);
+    const listHeights = frames.map((frame) => frame.clientHeight);
     const panelWidths = frames.flatMap((frame) =>
         frame.panelWidth === undefined ? [] : [frame.panelWidth],
     );
     const layoutChangeObserved =
-        action !== "panel-resize" ||
-        (Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
-            panelWidths.length > 0 &&
-            Math.max(...panelWidths) - Math.min(...panelWidths) >= 24);
+        action === "panel-resize"
+            ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
+              panelWidths.length > 0 &&
+              Math.max(...panelWidths) - Math.min(...panelWidths) >= 24
+            : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
+    const parkedReaderObserved = anchorMode !== "parked" || (first?.bottomDistance ?? 0) > 8;
     const stable =
         frames.length >= 2 &&
         layoutChangeObserved &&
+        parkedReaderObserved &&
         maxRowOverlapCount === 0 &&
         (anchorMode === "following"
             ? maxBottomDistance <= 8 && nonMonotonicAnchorCorrections === 0
