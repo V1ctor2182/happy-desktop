@@ -200,10 +200,20 @@ interface ScrollStabilityFrame {
     readonly scrollHeight: number;
     readonly scrollTop: number;
     readonly sidebarWidth?: number;
+    readonly statusGap?: number;
+    readonly windowWidth: number;
 }
 
 interface ScrollStabilityPhase {
-    readonly action: "composer-grow" | "composer-shrink" | "panel-resize" | "sidebar-resize";
+    readonly action:
+        | "composer-grow"
+        | "composer-shrink"
+        | "panel-resize"
+        | "panel-toggle"
+        | "sidebar-resize"
+        | "sidebar-toggle"
+        | "stream-send"
+        | "window-resize";
     readonly anchorIndex?: number;
     readonly anchorOffset?: number;
     readonly anchorMode: "following" | "parked";
@@ -223,9 +233,29 @@ interface ScrollStabilityMeasurement {
     readonly composerParkedShrink: ScrollStabilityPhase;
     readonly composerShrink: ScrollStabilityPhase;
     readonly panelParkedResize: ScrollStabilityPhase;
+    readonly panelParkedToggle: ScrollStabilityPhase;
     readonly panelResize: ScrollStabilityPhase;
     readonly sidebarParkedResize: ScrollStabilityPhase;
+    readonly sidebarParkedToggle: ScrollStabilityPhase;
     readonly stable: boolean;
+    readonly windowParkedResize: ScrollStabilityPhase;
+}
+
+interface StreamingScrollPhase extends ScrollStabilityPhase {
+    readonly scrollTopMax?: number;
+    readonly scrollTopMin?: number;
+    readonly scrollTopSpread?: number;
+    readonly statusGapMax?: number;
+    readonly statusGapMin?: number;
+    readonly statusGapSpread?: number;
+    readonly statusObserved: boolean;
+}
+
+interface StreamingScrollMeasurement {
+    readonly following: StreamingScrollPhase;
+    readonly parked: StreamingScrollPhase;
+    readonly stable: boolean;
+    readonly unstick: StreamingScrollPhase;
 }
 
 export async function electronWorkloadsRun(options: {
@@ -623,21 +653,17 @@ async function workloadRun(
         if ((await composer.count()) === 0 || !(await composer.isVisible().catch(() => false))) {
             return finish({ reason: "The composer is not mounted.", status: "skipped" });
         }
-        await composer.fill("Gym streaming workload");
-        await composer.press("Enter");
-        await page.waitForFunction(
-            () =>
-                document
-                    .querySelector('[data-happy-desktop-ui="conversation-view"]')
-                    ?.textContent?.includes("Gym transcript") === true ||
-                document
-                    .querySelector('[data-happy-desktop-ui="conversation-view"]')
-                    ?.textContent?.includes("Gym deterministic tool output") === true,
-            undefined,
-            { timeout: 90_000 },
-        );
+        const streamingScroll = await streamingScrollRun(page, composer, mark);
+        if (!streamingScroll.stable) {
+            throw new Error(
+                `Real streaming scroll stability failed: ${JSON.stringify(streamingScroll)}`,
+            );
+        }
         await mark("stream-complete");
-        return finish(await performanceCapture(page, app, options.profilerActive()));
+        return finish({
+            streamingScroll,
+            ...(await performanceCapture(page, app, options.profilerActive())),
+        });
     }
     if (workload === "memory-idle") {
         const before = await performanceCapture(page, app, options.profilerActive());
@@ -1963,6 +1989,7 @@ async function scrollStabilityCapture(
                 const listRectAtStart = listAtStart?.getBoundingClientRect();
                 let textAnchor:
                     | {
+                          readonly extent: number;
                           readonly index: number | undefined;
                           readonly node: Node;
                           readonly offset: number;
@@ -1984,10 +2011,18 @@ async function scrollStabilityCapture(
                             ".happy2-message-list__virtual-row[data-index]",
                         );
                         const index = Number.parseInt(row?.dataset.index ?? "", 10);
+                        const textLength =
+                            position.offsetNode.nodeType === Node.TEXT_NODE
+                                ? (position.offsetNode.textContent?.length ?? 0)
+                                : 0;
                         textAnchor = {
+                            extent: textLength > 0 ? 1 : 0,
                             index: Number.isFinite(index) ? index : undefined,
                             node: position.offsetNode,
-                            offset: position.offset,
+                            offset:
+                                textLength > 0
+                                    ? Math.min(position.offset, textLength - 1)
+                                    : position.offset,
                         };
                         break;
                     }
@@ -2019,8 +2054,12 @@ async function scrollStabilityCapture(
                         const sidebar = document.querySelector<HTMLElement>(
                             '[data-happy-desktop-ui="app-shell-sidebar"]',
                         );
+                        const statusLine = document.querySelector<HTMLElement>(
+                            '[data-happy-desktop-ui="conversation-status-line"]',
+                        );
                         if (list) {
                             const listRect = list.getBoundingClientRect();
+                            const statusRect = statusLine?.getBoundingClientRect();
                             const rows = virtual
                                 ? [
                                       ...virtual.querySelectorAll<HTMLElement>(
@@ -2060,11 +2099,14 @@ async function scrollStabilityCapture(
                                         ? (textAnchor.node.textContent?.length ?? 0)
                                         : textAnchor.node.childNodes.length;
                                 const range = document.createRange();
-                                range.setStart(
-                                    textAnchor.node,
-                                    Math.min(textAnchor.offset, maximumOffset),
+                                const offset = Math.min(
+                                    textAnchor.offset,
+                                    Math.max(0, maximumOffset - textAnchor.extent),
                                 );
-                                range.collapse(true);
+                                range.setStart(textAnchor.node, offset);
+                                if (textAnchor.extent > 0)
+                                    range.setEnd(textAnchor.node, offset + textAnchor.extent);
+                                else range.collapse(true);
                                 const rect =
                                     range.getClientRects()[0] ?? range.getBoundingClientRect();
                                 if (rect.height > 0 || rect.width > 0) {
@@ -2086,11 +2128,16 @@ async function scrollStabilityCapture(
                                 elapsedMs: performance.now() - started,
                                 firstRowBottom: first?.bottom,
                                 firstRowTop: first?.top,
-                                panelWidth: panel?.getBoundingClientRect().width,
+                                panelWidth: panel?.getBoundingClientRect().width ?? 0,
                                 rowOverlapCount,
                                 scrollHeight: list.scrollHeight,
                                 scrollTop: list.scrollTop,
-                                sidebarWidth: sidebar?.getBoundingClientRect().width,
+                                sidebarWidth: sidebar?.getBoundingClientRect().width ?? 0,
+                                statusGap:
+                                    statusRect && statusRect.height > 0
+                                        ? listRect.bottom - statusRect.bottom
+                                        : undefined,
+                                windowWidth: window.innerWidth,
                             });
                         }
                         if (!stopped)
@@ -2184,16 +2231,23 @@ function scrollStabilityPhaseBuild(
     const sidebarWidths = frames.flatMap((frame) =>
         frame.sidebarWidth === undefined ? [] : [frame.sidebarWidth],
     );
+    const windowWidths = frames.map((frame) => frame.windowWidth);
+    const scrollHeights = frames.map((frame) => frame.scrollHeight);
     const layoutChangeObserved =
-        action === "panel-resize"
+        action === "panel-resize" || action === "panel-toggle"
             ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
               panelWidths.length > 0 &&
               Math.max(...panelWidths) - Math.min(...panelWidths) >= 24
-            : action === "sidebar-resize"
+            : action === "sidebar-resize" || action === "sidebar-toggle"
               ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
                 sidebarWidths.length > 0 &&
                 Math.max(...sidebarWidths) - Math.min(...sidebarWidths) >= 24
-              : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
+              : action === "window-resize"
+                ? Math.max(...listWidths) - Math.min(...listWidths) >= 24 &&
+                  Math.max(...windowWidths) - Math.min(...windowWidths) >= 24
+                : action === "stream-send"
+                  ? Math.max(...scrollHeights) - Math.min(...scrollHeights) >= 24
+                  : Math.max(...listHeights) - Math.min(...listHeights) >= 16;
     const parkedReaderObserved = anchorMode !== "parked" || (first?.bottomDistance ?? 0) > 8;
     const textAnchorObserved =
         anchorMode !== "parked" || frames.every((frame) => frame.anchorSource === "text");
@@ -2313,6 +2367,59 @@ async function scrollStabilityRun(
         await splitterDragCapture(sidebarHandle, [24, 48, 72, 96, 72, 48, 24, 0]),
     );
     await mark("scroll-stability-parked-sidebar-resize");
+    const sidebarCollapse = page
+        .locator('[data-happy-desktop-ui="app-shell-sidebar-collapse"]')
+        .first();
+    await sidebarCollapse.waitFor({ state: "visible", timeout: 30_000 });
+    const sidebarParkedToggle = scrollStabilityPhaseBuild(
+        "sidebar-toggle",
+        "parked",
+        await scrollStabilityCapture(page, async () => {
+            await sidebarCollapse.click();
+            const sidebarReveal = page
+                .locator('[data-happy-desktop-ui="app-shell-reveal-button"]')
+                .first();
+            await sidebarReveal.waitFor({ state: "visible", timeout: 5_000 });
+            await page.waitForTimeout(80);
+            await sidebarReveal.click();
+            await sidebarCollapse.waitFor({ state: "visible", timeout: 5_000 });
+        }),
+    );
+    await mark("scroll-stability-parked-sidebar-toggle");
+    const hidePanel = page.locator('button[aria-label="Hide panel"]').first();
+    await hidePanel.waitFor({ state: "visible", timeout: 30_000 });
+    const panelParkedToggle = scrollStabilityPhaseBuild(
+        "panel-toggle",
+        "parked",
+        await scrollStabilityCapture(page, async () => {
+            await hidePanel.click();
+            const panelReveal = page.locator('button[aria-label="Show panel"]').first();
+            await panelReveal.waitFor({ state: "visible", timeout: 5_000 });
+            await page.waitForTimeout(80);
+            await panelReveal.click();
+            await hidePanel.waitFor({ state: "visible", timeout: 5_000 });
+        }),
+    );
+    await mark("scroll-stability-parked-panel-toggle");
+    const originalWindowSize = await page.evaluate(() => ({
+        height: window.outerHeight,
+        width: window.outerWidth,
+    }));
+    const windowParkedResize = scrollStabilityPhaseBuild(
+        "window-resize",
+        "parked",
+        await scrollStabilityCapture(page, async () => {
+            for (const delta of [20, 40, 60, 80, 100, 120, 100, 80, 60, 40, 20, 0]) {
+                await page.evaluate(
+                    ({ delta, height, width }) => window.resizeTo(width - delta, height),
+                    { ...originalWindowSize, delta },
+                );
+                await page.waitForTimeout(16);
+            }
+            await page.waitForTimeout(550);
+        }),
+    );
+    await mark("scroll-stability-parked-window-resize");
     const composerParkedGrowth = scrollStabilityPhaseBuild(
         "composer-grow",
         "parked",
@@ -2333,7 +2440,10 @@ async function scrollStabilityRun(
     const phases = [
         panelResize,
         panelParkedResize,
+        panelParkedToggle,
         sidebarParkedResize,
+        sidebarParkedToggle,
+        windowParkedResize,
         composerGrowth,
         composerShrink,
         composerParkedGrowth,
@@ -2345,9 +2455,12 @@ async function scrollStabilityRun(
         composerParkedShrink,
         composerShrink,
         panelParkedResize,
+        panelParkedToggle,
         panelResize,
         sidebarParkedResize,
+        sidebarParkedToggle,
         stable: phases.every((phase) => phase.stable),
+        windowParkedResize,
     };
     if (!measurement.stable) {
         throw new Error(
@@ -2367,6 +2480,130 @@ async function scrollStabilityRun(
         );
     }
     return measurement;
+}
+
+function streamingScrollPhaseBuild(
+    anchorMode: ScrollStabilityPhase["anchorMode"],
+    frames: readonly ScrollStabilityFrame[],
+): StreamingScrollPhase {
+    const base = scrollStabilityPhaseBuild("stream-send", anchorMode, frames);
+    const statusGaps = frames.flatMap((frame) =>
+        frame.statusGap === undefined ? [] : [frame.statusGap],
+    );
+    const statusGapMin = statusGaps.length > 0 ? Math.min(...statusGaps) : undefined;
+    const statusGapMax = statusGaps.length > 0 ? Math.max(...statusGaps) : undefined;
+    const statusGapSpread =
+        statusGapMin === undefined || statusGapMax === undefined
+            ? undefined
+            : statusGapMax - statusGapMin;
+    const scrollTops = frames.map((frame) => frame.scrollTop);
+    const scrollTopMin = Math.min(...scrollTops);
+    const scrollTopMax = Math.max(...scrollTops);
+    const scrollTopSpread = scrollTopMax - scrollTopMin;
+    const statusObserved = anchorMode === "parked" || statusGaps.length >= 2;
+    return {
+        ...base,
+        stable:
+            base.stable &&
+            (anchorMode !== "parked" || scrollTopSpread <= 2) &&
+            statusObserved &&
+            (anchorMode === "parked" ||
+                (statusGapMin !== undefined &&
+                    statusGapMin >= 8 &&
+                    statusGapSpread !== undefined &&
+                    statusGapSpread <= 8)),
+        scrollTopMax,
+        scrollTopMin,
+        scrollTopSpread,
+        statusGapMax,
+        statusGapMin,
+        statusGapSpread,
+        statusObserved,
+    };
+}
+
+async function streamingScrollRun(
+    page: Page,
+    composer: Locator,
+    mark: (name: string) => Promise<void>,
+): Promise<StreamingScrollMeasurement> {
+    const run = async (
+        anchorMode: ScrollStabilityPhase["anchorMode"],
+        ordinal: number,
+    ): Promise<StreamingScrollPhase> => {
+        await scrollListToFraction(page, anchorMode === "following" ? 1 : 0.5);
+        /*
+         * The helper writes scrollTop in page context. Let the browser deliver
+         * that real scroll and TanStack's scroll-end notification before a
+         * later keyboard action; a human cannot wheel and press Enter in the
+         * same JavaScript task either.
+         */
+        await page.waitForTimeout(200);
+        const marker = `gym-mixed-replay-stream-${anchorMode}-${String(ordinal)}-${Date.now().toString(36)}`;
+        await composer.fill(`Exercise real ${anchorMode} streaming. [${marker}]`);
+        const runningStatus = page.locator(
+            '[data-happy-desktop-ui="sidebar-item"][data-active][data-status="working"]',
+        );
+        const frames = await scrollStabilityCapture(page, async () => {
+            await composer.press("Enter");
+            await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
+            if (anchorMode === "following") {
+                await page.waitForFunction(
+                    (scriptMarker) =>
+                        document
+                            .querySelector('[data-happy-desktop-ui="conversation-view"]')
+                            ?.textContent?.includes(`script=${String(scriptMarker)}`) === true,
+                    marker,
+                    { timeout: 90_000 },
+                );
+            }
+            await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+        });
+        const phase = streamingScrollPhaseBuild(anchorMode, frames);
+        await mark(`streaming-scroll-${anchorMode}`);
+        return phase;
+    };
+    const following = await run("following", 1);
+    const parked = await run("parked", 2);
+    await scrollListToFraction(page, 1);
+    await page.waitForTimeout(200);
+    const unstickMarker = `gym-mixed-replay-stream-unstick-3-${Date.now().toString(36)}`;
+    await composer.fill(`Exercise real mid-stream unstick. [${unstickMarker}]`);
+    const runningStatus = page.locator(
+        '[data-happy-desktop-ui="sidebar-item"][data-active][data-status="working"]',
+    );
+    await composer.press("Enter");
+    await runningStatus.waitFor({ state: "visible", timeout: 30_000 });
+    const list = page.locator('[data-happy-desktop-ui="message-list"]').first();
+    const listBox = await list.boundingBox();
+    if (!listBox) throw new Error("The streaming transcript has no wheel target.");
+    await page.mouse.move(listBox.x + listBox.width / 2, listBox.y + listBox.height / 2);
+    await page.mouse.wheel(0, -Math.max(800, listBox.height * 2));
+    await page.waitForFunction(
+        () => {
+            const element = document.querySelector<HTMLElement>(
+                '[data-happy-desktop-ui="message-list"]',
+            );
+            return (
+                element !== null &&
+                element.scrollHeight - element.scrollTop - element.clientHeight > 100
+            );
+        },
+        undefined,
+        { timeout: 5_000 },
+    );
+    await page.waitForTimeout(100);
+    const unstickFrames = await scrollStabilityCapture(page, async () => {
+        await runningStatus.waitFor({ state: "hidden", timeout: 90_000 });
+    });
+    const unstick = streamingScrollPhaseBuild("parked", unstickFrames);
+    await mark("streaming-scroll-unstick");
+    return {
+        following,
+        parked,
+        stable: following.stable && parked.stable && unstick.stable,
+        unstick,
+    };
 }
 
 function goldReplayDetails(material: GymGoldReplayMaterial): Record<string, unknown> {

@@ -85,13 +85,20 @@ The same UI lane also measures transcript scroll stability directly in the
 renderer: it samples message-list scrollTop, bottom distance, the first visible
 virtual row, the lowest visible row's bottom-edge offset, row rectangles, and
 client/scroll heights on every animation frame while dragging the real left-edge
-panel and sidebar splitters and while growing and shrinking the multiline composer.
+panel and sidebar splitters, folding each panel away and restoring it, resizing the
+native window, and growing and shrinking the multiline composer.
 Following readers must stay within 8px of the bottom without a temporary
 break-and-recovery correction or overlapping virtual rows; parked readers must
-retain the same lowest visible row and bottom-edge offset through splitter drags
-in both directions and composer resizing. The recorded `scrollStability` phases
-distinguish natural text rewrap during panel width changes from a lost scroll
-anchor.
+retain the same lowest visible text glyph and bottom-edge offset through splitter
+drags in both directions, panel/sidebar toggles, window resizing, and composer
+resizing. The recorded `scrollStability` phases distinguish natural text rewrap
+during width changes from a lost scroll anchor.
+The standalone `streaming` workload submits through the real composer three times. A
+following send must remain exactly pinned while the working status and response
+stream grow, including a stable status-to-composer gap; a parked send must retain
+the same glyph and scrollTop while the same durable SSE path appends below it. A
+third send wheels away from the tail while SSE is active and requires the reader's
+new glyph to remain fixed for the rest of the stream.
 Rig 0.2.0's JustBash gym mount is the
 actual ready managed worktree at `/workspace`; the live tool mutates that same
 worktree while clustered sessions stream and switch in the same run. The
