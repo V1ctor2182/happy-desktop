@@ -397,12 +397,6 @@
     outline-offset: 1px;
 }
 
-/* Octicons draw the sidebar rail on the opposite side from this left dock. */
-.happy-desktop-app-shell__sidebar-collapse .happy2-icon,
-.happy-desktop-app-shell__reveal-button .happy2-icon {
-    transform: scaleX(-1);
-}
-
 /* Vertical drag divider: its 8px hit lane overlays the owning surface edge so
    structural hairlines meet continuously instead of leaving an 8px gutter. */
 .happy-desktop-app-shell__resize-handle {

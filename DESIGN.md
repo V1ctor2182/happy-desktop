@@ -505,6 +505,18 @@ Do not hand-draw an icon, do not add an inline-SVG icon component, and do not
 re-back `Icon` with path data. Adding a name to `IconName` means picking the
 upstream glyph it maps to. How the families are built:
 
+**The one exception** is `src/drawnGlyphs.tsx`, the panel affordance behind
+`sidebar-collapse`, `sidebar-expand`, `panel-collapse`, and `panel-expand`.
+Neither family ships an arrow-free panel, and Octicons' `sidebar-collapse` is
+drawn on the full 16 box with a 1.5px stroke where an Ionicons outline uses 1px
+in a 14 × 12 ink box, so it sat visibly heavier and larger than the glyphs
+beside it. Those four names paint shapes drawn to Ionicons' own measured
+metrics instead: a 1px stroke with round joins, a 14 × 12 ink box (outer edges
+at x 1–15, y 2–14), and a 2px outer corner radius, on stroke centrelines that
+land on whole pixels at a 16px box. This file is closed: a missing curated name
+is still answered by picking an upstream glyph, never by drawing another shape
+here.
+
 - The upstream TrueType fonts are vendored under
   `packages/happy-desktop-ui/src/assets/fonts/` (`Ionicons.ttf`, `Octicons.ttf`).
   `@expo/vector-icons` ships no woff2, so the TTFs are used as-is through

@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
+import { drawnGlyphs, type DrawnGlyphName } from "./drawnGlyphs";
 import { ioniconsGlyphs, type IoniconName } from "./vectorIcons/ioniconsGlyphs";
 import { octiconsGlyphs, type OcticonName } from "./vectorIcons/octiconsGlyphs";
 export type IconName =
@@ -95,14 +96,19 @@ export type IconProps = {
  * box-centered glyph. Regenerate the glyphmaps from upstream rather than editing
  * a codepoint here.
  *
- * A `mirrored` name renders an upstream glyph flipped across its vertical axis.
- * It exists for a pair of affordances that are the same act at opposite edges of
- * the window — collapsing the left sidebar and collapsing the right panel — where
- * upstream ships only the left-handed glyph. The flip is presentation, not a new
- * glyph: the same codepoint in the same family is painted, so the two edges read
- * as one idea instead of borrowing an unrelated symbol for one of them.
+ * A `mirrored` name renders its glyph flipped across the vertical axis. It exists
+ * for a pair of affordances that are the same act at opposite edges of the window
+ * — collapsing the left sidebar and collapsing the right panel — where only one
+ * handedness is drawn. The flip is presentation, not a new glyph: the same shape
+ * is painted, so the two edges read as one idea instead of borrowing an unrelated
+ * symbol for one of them.
+ *
+ * The `drawn` set is the single hand-drawn family, kept to Ionicons' own stroke
+ * and box metrics; see `drawnGlyphs.tsx` for why it exists and why nothing else
+ * belongs in it.
  */
 type IconGlyph = (
+    | { set: "drawn"; name: DrawnGlyphName }
     | { set: "ionicons"; name: IoniconName }
     | { set: "octicons"; name: OcticonName }
 ) & { mirrored?: true };
@@ -170,13 +176,16 @@ const glyphs: Record<IconName, IconGlyph> = {
     edit: { set: "ionicons", name: "create-outline" },
     sun: { set: "ionicons", name: "sunny-outline" },
     moon: { set: "ionicons", name: "moon-outline" },
-    "sidebar-collapse": { set: "octicons", name: "sidebar-collapse" },
-    "sidebar-expand": { set: "octicons", name: "sidebar-expand" },
-    // Octicons draw these with the rail on the right. AppShell mirrors the same
-    // upstream glyphs for its left sidebar; the panel names stay unmirrored so
-    // the two window edges point in opposite directions.
-    "panel-collapse": { set: "octicons", name: "sidebar-collapse" },
-    "panel-expand": { set: "octicons", name: "sidebar-expand" },
+    // The panel and its rail, with no arrow in it: the control says what the
+    // window is made of, and the button's label says which way it goes. Ink in
+    // the rail means the column is there now; a bare line means the panel is
+    // whole and the column is gone.
+    "sidebar-collapse": { set: "drawn", name: "panel-rail-filled" },
+    "sidebar-expand": { set: "drawn", name: "panel-rail" },
+    // The rail is drawn on the left, where the sidebar is. The panel names are
+    // the same act at the other edge, so they paint the same shape mirrored.
+    "panel-collapse": { set: "drawn", name: "panel-rail-filled", mirrored: true },
+    "panel-expand": { set: "drawn", name: "panel-rail", mirrored: true },
     // Filling the window and going back to a docked column, as distinct from
     // hiding the panel: the pair above says whether the panel is there at all.
     "panel-maximize": { set: "octicons", name: "screen-full" },
@@ -192,7 +201,14 @@ const glyphs: Record<IconName, IconGlyph> = {
     dot: { set: "ionicons", name: "ellipse" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];
-function glyphChar(glyph: IconGlyph) {
+function glyphContent(glyph: IconGlyph, size: number) {
+    if (glyph.set === "drawn") {
+        return (
+            <svg fill="none" focusable="false" height={size} viewBox="0 0 16 16" width={size}>
+                {drawnGlyphs[glyph.name]}
+            </svg>
+        );
+    }
     const codepoint =
         glyph.set === "ionicons" ? ioniconsGlyphs[glyph.name] : octiconsGlyphs[glyph.name];
     return String.fromCodePoint(codepoint);
@@ -230,7 +246,7 @@ export function Icon(props: IconProps) {
                 ...(local.color === undefined ? null : { color: local.color }),
             }}
         >
-            {glyphChar(glyph)}
+            {glyphContent(glyph, size)}
         </span>
     );
 }

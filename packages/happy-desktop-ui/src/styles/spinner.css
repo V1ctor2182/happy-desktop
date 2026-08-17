@@ -187,10 +187,18 @@
 
 /* ---- circle — ◐◓◑◒ ---------------------------------------------------- */
 
+/*
+ * This is the one spinner that stands in an icon's place — an activity row
+ * swaps it for the tool's glyph the moment the tool starts — so it is drawn to
+ * Ionicons' metrics rather than to the spinner box. An Ionicons outline is a
+ * 1px stroke inside a 13 x 13 ink box at a 16px box; a full-box disc with a
+ * fixed 1px border read a third heavier and a notch larger than the glyph it
+ * replaces, which is what made a run look louder than the work around it.
+ */
 .happy2-spinner[data-variant="circle"] .happy2-spinner__glyph {
-    width: 100%;
-    height: 100%;
-    border: 1px solid currentcolor;
+    width: 81.25%;
+    height: 81.25%;
+    border: calc(var(--happy2-spinner-size) / 16) solid currentcolor;
     border-radius: var(--happy2-radius-pill);
     background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
     animation-name: happy2-spinner-turn;
