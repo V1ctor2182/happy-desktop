@@ -15,7 +15,7 @@ import { happyLogoUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Icon, type IconName } from "./Icon";
-import { APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT } from "./AppShell";
+import { APP_SHELL_RESIZE_LAYOUT_EVENT } from "./AppShell";
 import { messageMediaSingleBox } from "./conversationRowHeight";
 import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
 export type MessageSegment =
@@ -809,7 +809,11 @@ export function MessageList(props: MessageListProps) {
     const panelAnchorRestore = () => {
         const element = list.current;
         const anchor = panelAnchor.current;
-        if (!element || !anchor?.node.isConnected || panelAnchorRestoring.current) return;
+        if (!element || !anchor || panelAnchorRestoring.current) return;
+        if (!anchor.node.isConnected) {
+            panelAnchor.current = undefined;
+            return;
+        }
         const maximumOffset =
             anchor.node.nodeType === Node.TEXT_NODE
                 ? (anchor.node.textContent?.length ?? 0)
@@ -908,13 +912,13 @@ export function MessageList(props: MessageListProps) {
         const scrollToBottom = () => {
             element.scrollTop = element.scrollHeight - element.clientHeight;
         };
-        const shell = element.closest<HTMLElement>('[data-happy-desktop-ui="app-shell"]');
         const rowWidthCommit = (nextRowWidth: number) => {
             if (nextRowWidth === rowWidthModel.current) return;
+            rowWidthModel.current = nextRowWidth;
+            if (!virtualized) return;
             const mountedRows = [...virtualizer.elementsCache.values()].filter(
                 (row) => row.isConnected,
             );
-            rowWidthModel.current = nextRowWidth;
             virtualizer.measure();
             for (const row of mountedRows) {
                 const index = virtualizer.indexFromElement(row);
@@ -925,20 +929,15 @@ export function MessageList(props: MessageListProps) {
             }
             panelAnchorRestore();
         };
-        const onPanelResizeStart = (event: PointerEvent) => {
+        const onShellResizeStart = (event: PointerEvent) => {
             const target = event.target instanceof Element ? event.target : undefined;
-            if (
-                !target?.closest(
-                    '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="left"]',
-                )
-            )
-                return;
+            if (!target?.closest('[data-happy-desktop-ui="app-shell-resize-handle"]')) return;
             panelResizing.current = true;
             panelAnchorCapture();
-            if (panelAnchor.current)
-                virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+            virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+                panelAnchor.current === undefined && item.end <= element.scrollTop;
         };
-        const onPanelResizeEnd = () => {
+        const onShellResizeEnd = () => {
             if (!panelResizing.current) return;
             rowWidthCommit(messageListRowWidth(element.clientWidth, estimateRowWidth));
             panelAnchorRestore();
@@ -946,11 +945,11 @@ export function MessageList(props: MessageListProps) {
             panelResizing.current = false;
             virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
         };
-        shell?.addEventListener("lostpointercapture", onPanelResizeEnd);
-        shell?.addEventListener("pointercancel", onPanelResizeEnd);
-        shell?.addEventListener("pointerdown", onPanelResizeStart);
-        shell?.addEventListener("pointerup", onPanelResizeEnd);
-        shell?.addEventListener(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
+        window.addEventListener("lostpointercapture", onShellResizeEnd);
+        window.addEventListener("pointercancel", onShellResizeEnd);
+        window.addEventListener("pointerdown", onShellResizeStart);
+        window.addEventListener("pointerup", onShellResizeEnd);
+        window.addEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
         let rowWidth = estimateRowWidth?.(element.clientWidth) ?? element.clientWidth;
         /* A first lifetime has no mounted ref or restored measure, so its virtual
            estimates begin at width zero. Rebuild them once at the committed
@@ -965,7 +964,7 @@ export function MessageList(props: MessageListProps) {
             positionChange.current?.({
                 scrollTop: element.scrollTop,
                 following: following.current,
-                rowWidth,
+                rowWidth: rowWidthModel.current,
                 measurements: measurements.current,
             });
         };
@@ -1039,12 +1038,14 @@ export function MessageList(props: MessageListProps) {
             positionReport(true);
             observer?.disconnect();
             viewportObserver?.disconnect();
+            panelAnchor.current = undefined;
+            panelResizing.current = false;
             virtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined;
-            shell?.removeEventListener("lostpointercapture", onPanelResizeEnd);
-            shell?.removeEventListener("pointercancel", onPanelResizeEnd);
-            shell?.removeEventListener("pointerdown", onPanelResizeStart);
-            shell?.removeEventListener("pointerup", onPanelResizeEnd);
-            shell?.removeEventListener(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
+            window.removeEventListener("lostpointercapture", onShellResizeEnd);
+            window.removeEventListener("pointercancel", onShellResizeEnd);
+            window.removeEventListener("pointerdown", onShellResizeStart);
+            window.removeEventListener("pointerup", onShellResizeEnd);
+            window.removeEventListener(APP_SHELL_RESIZE_LAYOUT_EVENT, panelAnchorRestore);
             element.removeEventListener("scroll", onScroll);
         };
     }, [estimateRowWidth, virtualized, virtualizer]);

@@ -142,7 +142,7 @@ const REVEAL_WIDTH = 48;
 const WORKSPACE_MIN_WIDTH = 140;
 const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
-export const APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT = "happy2-app-shell-panel-resize-layout";
+export const APP_SHELL_RESIZE_LAYOUT_EVENT = "happy2-app-shell-resize-layout";
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
@@ -426,10 +426,10 @@ export function AppShell(props: AppShellProps) {
         ? clamp(local.panelWidth!, panelMin, panelMax)
         : panelWidthState;
     const panelWidth = panelWidthControlled ? (panelDragWidth ?? panelWidthBase) : panelWidthState;
-    // eslint-disable-next-line happy2-react/no-layout-effect -- live panel geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
+    // eslint-disable-next-line happy2-react/no-layout-effect -- live splitter geometry commits before paint; descendants use this scoped event to keep their own visual anchors in the same frame
     useLayoutEffect(() => {
-        shell.current?.dispatchEvent(new Event(APP_SHELL_PANEL_RESIZE_LAYOUT_EVENT));
-    }, [panelWidth]);
+        shell.current?.dispatchEvent(new Event(APP_SHELL_RESIZE_LAYOUT_EVENT, { bubbles: true }));
+    }, [panelWidth, sidebarWidth]);
     function previewPanelWidth(next: number) {
         if (panelWidthControlled) setPanelDragWidth(next);
         else setPanelWidthState(next);
