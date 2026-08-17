@@ -27,10 +27,14 @@ import {
 } from "./localRig";
 import {
     connectRig,
-    resolveRigOnboarding,
+    DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS,
+    discoverRigInstallation,
+    RigInstallationDiscoveryUnsupportedError,
+    rigInstallationCompatibility,
     type RigConnection,
     type RigOnboardingState,
     type RigProfile,
+    type ServerCompatibility,
 } from "@slopus/rig-connect";
 import {
     rigDaemonConnectionUnavailable,
@@ -192,11 +196,9 @@ export class DesktopRuntime implements AsyncDisposable {
         const endpoint = this.localRigEndpoint();
         if (!endpoint) throw new Error("The local Rig daemon is unavailable.");
         const connection = this.localConnectionRequire(expectedConnectionId);
-        const state = await resolveRigOnboarding({
-            endpoint,
-            inspectLocalRig: (signal) => connection.rigInstallationInspect(signal),
-            token: "happy2-local-capability",
-        });
+        const rig = this.localRigConnect();
+        if (!rig) throw new Error("The local Rig daemon is unavailable.");
+        const state = await connectedRigOnboardingResolve(endpoint, rig);
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.connectionId !== expectedConnectionId ||
@@ -616,6 +618,65 @@ function connectAttemptRetryable(error: unknown): boolean {
 
 function displayError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Resolves onboarding from the daemon Happy has already authenticated.
+ *
+ * Offline `rig inspect` is for installation and repair while no daemon can
+ * answer. Once a daemon is serving the shared endpoint, a separately resolved
+ * CLI may be older, newer, or belong to another checkout; it must not veto that
+ * live connection. Authenticated installation discovery retains the protocol
+ * gate and validates the daemon's current initialized-data contract before its
+ * onboarding status is accepted.
+ */
+async function connectedRigOnboardingResolve(
+    endpoint: string,
+    rig: RigConnection,
+): Promise<RigOnboardingState> {
+    try {
+        const discovery = await discoverRigInstallation({
+            endpoint,
+            token: "happy2-local-capability",
+        });
+        const compatibility = rigInstallationCompatibility(discovery);
+        if (compatibility.status === "checking")
+            throw new Error("Rig daemon compatibility could not be determined.");
+        if (compatibility.status !== "compatible")
+            return daemonProtocolMismatchState(compatibility, discovery.daemonVersion);
+        return await rig.getOnboardingStatus({
+            signal: AbortSignal.timeout(DEFAULT_INSTALLATION_DISCOVERY_TIMEOUT_MS),
+        });
+    } catch (error) {
+        if (error instanceof RigInstallationDiscoveryUnsupportedError)
+            return daemonProtocolMismatchState(error.compatibility);
+        return rigUnreachableState(error);
+    }
+}
+
+function daemonProtocolMismatchState(
+    compatibility: Exclude<ServerCompatibility, { status: "checking" } | { status: "compatible" }>,
+    installedVersion?: string,
+): RigOnboardingState {
+    return {
+        ...(installedVersion === undefined
+            ? {}
+            : { installedVersion: installedVersion.slice(0, 256) }),
+        maximumSupportedProtocolVersion: compatibility.maximumSupportedProtocolVersion,
+        minimumSupportedProtocolVersion: compatibility.minimumSupportedProtocolVersion,
+        protocolVersion: compatibility.serverProtocolVersion,
+        reason: "protocol",
+        source: "daemon",
+        state: "version_mismatch",
+        upgrade: compatibility.status === "client_outdated" ? "happy" : "rig",
+    };
+}
+
+function rigUnreachableState(error: unknown): RigOnboardingState {
+    return {
+        message: displayError(error).slice(0, 2_048) || "Rig could not be reached.",
+        state: "rig_unreachable",
+    };
 }
 
 export { rigDaemonConnectionUnavailable };
