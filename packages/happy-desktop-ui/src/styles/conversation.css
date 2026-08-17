@@ -94,6 +94,13 @@
     padding: 0;
 }
 
+/* When the live status opens the agent turn, Message supplies identity rather
+   than prose. Drop its prose-only right reserve so the trailing activity keeps
+   the same 20px gutter it owns on every other live status line. */
+.happy2-message[data-agent].happy2-message--working-lead {
+    padding-right: 0;
+}
+
 .happy2-conversation__activity-entry {
     display: flex;
     flex: 0 0 auto;
