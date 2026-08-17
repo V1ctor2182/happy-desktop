@@ -168,7 +168,7 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     const icon = part("s-full", "icon");
     expect(icon.bounds().width).toBe(16);
     expect(icon.bounds().height).toBe(16);
-    expect(icon.computedStyle("color")).toBe("rgb(73, 69, 79)");
+    expect(icon.computedStyle("color")).toBe("rgb(102, 102, 102)");
     expect((await icon.visibleMetrics()).pixelCount, "hash glyph paints").toBeGreaterThan(0);
     const title = part("s-full", "title");
     expect(title.element.textContent).toBe("launch-week");
@@ -178,7 +178,7 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     expect(titleMetrics.font.size).toBe(15);
     expect(titleMetrics.font.weight).toBe("700");
     expect(titleMetrics.font.lineHeight).toBe(20);
-    expect(title.computedStyle("color")).toBe("rgb(0, 0, 0)");
+    expect(title.computedStyle("color")).toBe("rgb(102, 102, 102)");
     /* Word labels have asymmetric ink along x, so only the vertical centroid
        is asserted. */
     const titleInk = await inkCenter("title launch-week", title, hFull);
@@ -188,13 +188,13 @@ it("holds ChannelHeader geometry, colors, and optical alignment", { timeout: 900
     expect(dot.bounds().height).toBe(3);
     expect(dot.bounds().y - hFull.bounds().y + 1.5).toBe(LANE_CENTER);
     expect(dot.computedStyles(["background-color", "border-radius"])).toEqual({
-        "background-color": "rgb(73, 69, 79)",
+        "background-color": "rgb(102, 102, 102)",
         "border-radius": "999px",
     });
     const topic = part("s-full", "topic");
     expect(topic.element.textContent).toBe("Ship mobile v2 by Fri");
     expect(topic.computedStyles(["color", "font-size", "font-weight", "line-height"])).toEqual({
-        color: "rgb(73, 69, 79)",
+        color: "rgb(102, 102, 102)",
         "font-size": "12px",
         "font-weight": "400",
         "line-height": "16px",

@@ -103,6 +103,7 @@
     --groupped-section-title: #49454f;
     --header-background: #ffffff;
     --header-tint: #18171c;
+    --header-tint-secondary: #666666;
     --switch-track-active: #1976d2;
     --switch-track-inactive: #dddddd;
     --switch-thumb-active: #ffffff;
@@ -296,6 +297,7 @@
         --groupped-section-title: #cac4d0;
         --header-background: #212121;
         --header-tint: #ffffff;
+        --header-tint-secondary: #8e8e93;
         --switch-track-active: #1976d2;
         --switch-track-inactive: #3a393f;
         --switch-thumb-active: #ffffff;
@@ -461,6 +463,7 @@
     --groupped-section-title: #cac4d0;
     --header-background: #212121;
     --header-tint: #ffffff;
+    --header-tint-secondary: #8e8e93;
     --switch-track-active: #1976d2;
     --switch-track-inactive: #3a393f;
     --switch-thumb-active: #ffffff;

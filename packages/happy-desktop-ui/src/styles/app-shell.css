@@ -313,7 +313,9 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: var(--text-secondary);
+    /* The band's own tone, shared with its heading and with the panel's edge
+       controls across the window. */
+    color: var(--header-tint-secondary);
     cursor: pointer;
 }
 
@@ -379,7 +381,7 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     cursor: pointer;
 }
 

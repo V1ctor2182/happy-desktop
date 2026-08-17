@@ -330,7 +330,7 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect(titleMetrics.font.weight).toBe("800");
     expect(titleMetrics.font.lineHeight).toBe(20);
     expect(titleMetrics.font.letterSpacing).toBeCloseTo(-0.15, 3);
-    expect(title.computedStyle("color")).toBe("rgb(0, 0, 0)");
+    expect(title.computedStyle("color")).toBe("rgb(102, 102, 102)");
 
     /*
      * Heading block (title + subtitle ink together) is optically centered in
@@ -353,13 +353,13 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
     expect((await title.visibleMetrics()).pixelCount).toBeGreaterThan(0);
     const chevron = view.$('[data-testid="full"] .happy2-sidebar__title-chevron');
     expect(chevron.bounds().width).toBe(14);
-    expect(chevron.computedStyle("color")).toBe("rgb(73, 69, 79)");
+    expect(chevron.computedStyle("color")).toBe("rgb(102, 102, 102)");
     expect((await chevron.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const subtitle = view.$('[data-testid="full"] [data-happy-desktop-ui="sidebar-subtitle"]');
     expect(subtitle.textMetrics().font.size).toBe(11);
     expect(subtitle.textMetrics().font.lineHeight).toBe(14);
-    expect(subtitle.computedStyle("color")).toBe("rgb(73, 69, 79)");
+    expect(subtitle.computedStyle("color")).toBe("rgb(102, 102, 102)");
     expect((await subtitle.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const compose = view.$('[data-testid="full"] .happy2-sidebar__compose');

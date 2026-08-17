@@ -72,10 +72,15 @@
     user-select: none;
 }
 
+/*
+ * The sidebar's own header band, in the same quiet tone as the header across
+ * the divider from it (see channel-header.css): the two bands are one line
+ * across the window and must not disagree about how loud a heading is.
+ */
 .happy2-sidebar__title {
     display: block;
     overflow: hidden;
-    color: var(--text);
+    color: var(--header-tint-secondary);
     font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.01em;
@@ -99,20 +104,20 @@
 }
 
 .happy2-sidebar__title--brand {
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
 }
 
 .happy2-sidebar__title-chevron {
     display: flex;
     flex: none;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     transform: translateY(var(--happy2-sidebar-chevron-optical-y, 0px));
 }
 
 .happy2-sidebar__subtitle {
     display: block;
     overflow: hidden;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     font-size: 11px;
     font-weight: 500;
     line-height: 14px;

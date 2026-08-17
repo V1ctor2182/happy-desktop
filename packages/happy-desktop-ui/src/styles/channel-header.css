@@ -80,7 +80,7 @@
     background: transparent;
     border: 0;
     border-radius: var(--happy2-radius-sm);
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     appearance: none;
     cursor: pointer;
     transition:
@@ -140,16 +140,22 @@
 .happy2-channel-header__icon {
     display: flex;
     flex: none;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
 }
 
+/*
+ * A header band names the surface under it; it is not that surface's loudest
+ * thing. Its glyph, its name, and the chrome control at its far edge speak in
+ * one quiet tone, so the band reads as a label instead of competing with the
+ * content it heads. Weight, not colour, is what makes the name a heading.
+ */
 .happy2-channel-header__title {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
     margin: 0;
     overflow: hidden;
-    color: var(--text);
+    color: var(--header-tint-secondary);
     font-size: 15px;
     font-weight: 700;
     line-height: 20px;
@@ -189,13 +195,13 @@
     width: 3px;
     height: 3px;
     border-radius: var(--happy2-radius-pill);
-    background: var(--text-secondary);
+    background: var(--header-tint-secondary);
 }
 
 .happy2-channel-header__topic {
     flex: 0 1 auto;
     min-width: 0;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     font-size: 12px;
     font-weight: 400;
     line-height: 16px;
@@ -228,7 +234,7 @@
     height: 28px;
     margin: 0;
     padding: 0 8px;
-    color: var(--text-secondary);
+    color: var(--header-tint-secondary);
     font-family: var(--happy2-font-ui);
     font-synthesis: none;
 }
@@ -248,7 +254,7 @@
 .happy2-channel-header__members--button:hover {
     background: var(--surface-ripple);
     border-color: var(--divider);
-    color: var(--text-secondary);
+    color: var(--text);
 }
 
 .happy2-channel-header__members--button:focus-visible {
