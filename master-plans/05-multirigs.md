@@ -24,6 +24,11 @@ When connectivity returns, Happy reconciles the Rig in place and resumes live
 work. Navigation, focus, selection, scroll position, open panels, drafts, and
 other UI identity survive the outage and reconnect.
 
+That stability is a general UI invariant, not only a reconnect guarantee.
+Streaming updates, composer growth, and resizing surrounding chrome reconcile
+without a delayed visual correction: a chat following its newest content stays
+pinned there, while a reader parked in history keeps the same visual anchor.
+
 ## How we get there
 
 First, make every known Rig a stable app lifetime independent of its connection
@@ -52,6 +57,8 @@ behavior without rebuilding the surrounding app.
   all offline-capable navigation, reading, and editing remain usable.
 - Reconnecting reconciles fresh Rig state in place without losing navigation,
   focus, selection, scroll position, open panels, or drafts.
+- Streaming, composer editing, and surrounding-panel resize preserve the
+  transcript's active scroll anchor without a visible correction frame.
 - Remote work still uses the host-published routes, ordinary Rig connections,
   and stable per-Rig namespaces defined by the Remote Rig plan; no second
   remote-sync model is introduced.
