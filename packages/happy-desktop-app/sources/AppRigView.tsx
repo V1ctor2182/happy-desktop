@@ -387,13 +387,6 @@ function sidebarItems(
     newWorkspaceShortcut: boolean,
 ): SidebarItem[] {
     const projectHasLineChanges = (project.addedLines ?? 0) > 0 || (project.deletedLines ?? 0) > 0;
-    // Whether the row has anything of its own at its trailing edge: a delta, or
-    // the spinner and clock it wears while work runs in it.
-    const projectReports =
-        projectHasLineChanges ||
-        project.activity === "running" ||
-        project.activity === "waiting" ||
-        project.lifecycle.phase !== "ready";
     return [
         {
             id: project.id,
@@ -403,24 +396,21 @@ function sidebarItems(
             initials: project.name.slice(0, 1).toUpperCase(),
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-            // While the row has something of its own to report, the + waits for
-            // hover and lands in the activity mark's cell when it arrives — the
-            // row's delta stays where it is throughout. A quiet project offers +
-            // directly.
+            // The + always waits for hover, so a project at rest ends with its
+            // delta on the same column as every other row and nothing is
+            // holding a place open for a control the reader is not reaching for.
             action: {
                 disabled: project.lifecycle.phase !== "ready",
                 icon: "plus" as const,
                 label: `New workspace in ${project.name}`,
                 ...(newWorkspaceShortcut ? { shortcut: APP_SHORTCUTS.workspaceCreate } : {}),
-                ...(projectReports ? { reveal: "hover" as const } : {}),
+                reveal: "hover" as const,
             },
             ...sidebarLifecycle(project.lifecycle),
-            // Settings sits immediately after the name and waits for hover: it
-            // is about the project, not about the work to start in it, and
-            // keeping it out of the trailing slot is what keeps a project's
-            // delta in the same column as the worktrees under it. The home
-            // project is left out — its name and its path are the machine's,
-            // so there is nothing there for the reader to set.
+            // Settings waits for hover beside the +, both laid over the lane
+            // rather than placed in it. The home project is left out — its name
+            // and its path are the machine's, so there is nothing there for the
+            // reader to set.
             ...(project.kind === "home"
                 ? {}
                 : {

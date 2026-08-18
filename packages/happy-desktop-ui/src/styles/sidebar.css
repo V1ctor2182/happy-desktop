@@ -816,25 +816,9 @@
     color: var(--text);
 }
 
-/*
- * The name and the act about the row. The cluster takes the row's leftover
- * width so badges and the trailing lane stay against the right edge; the label
- * shrinks to the text and the control sits immediately after it. Extra space
- * stays empty to the right of the control, which is what "beside the name"
- * means for a short label and what keeps a long one from shoving the gear
- * into the delta.
- */
-.happy2-sidebar__item-name {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    align-items: center;
-    column-gap: 4px;
-}
-
 .happy2-sidebar__item-label {
     display: block;
-    flex: 0 1 auto;
+    flex: 1;
     min-width: 0;
     overflow: hidden;
     font-size: 13px;
@@ -868,17 +852,8 @@
         :has(> .happy2-sidebar__item-trailing:focus-within)
     )
     > :not(.happy2-sidebar__item-branch):not(.happy2-sidebar__item-leading):not(
-        .happy2-sidebar__item-name
+        .happy2-sidebar__item-label
     ):not(.happy2-sidebar__item-shortcut) {
-    display: none;
-}
-
-[data-shortcut-hints]
-    .happy2-sidebar__item[data-shortcut-row]:not(
-        :has(> .happy2-sidebar__item-trailing:focus-within)
-    )
-    .happy2-sidebar__item-name
-    > :not(.happy2-sidebar__item-label) {
     display: none;
 }
 
@@ -956,79 +931,68 @@
 }
 
 /*
- * The trailing lane: the Git delta the row reports, then one slot holding
- * everything about the row that changes.
+ * The trailing lane: the Git delta the row reports, then the mark for what the
+ * row is doing, with the controls laid over both.
  *
- * The delta is the fixed part. A row's line count is the same fact whether or
- * not work is running inside it and whether or not the pointer is on it, so it
- * neither fades nor moves — a number that slides sideways the moment a session
- * starts is a number nobody can read down a column. Everything that comes and
- * goes happens in the slot to its right, and that slot's width is decided by
- * what the row can ever show rather than by what it is showing now.
+ * The delta is last in flow, so at rest it ends the row on the same column as
+ * the badges and metadata that end the rows around it. Work adds the activity
+ * cell after it and pushes it left by exactly that cell — a running row is the
+ * one row that reads differently, and it should.
  *
- * The gap between the two is applied inline from SIDEBAR_TRAILING_GAP, with
- * every other gap in this lane, because they are all terms in the slot width
- * computed there.
+ * The lane's gap and its resting width are applied inline from
+ * SIDEBAR_TRAILING_GAP and `trailingLaneMinWidth`, because both are terms in
+ * the overlay geometry computed there; a copy here would be a second source of
+ * truth for the same numbers.
  */
 .happy2-sidebar__item-trailing {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: flex-end;
-    height: 18px;
-}
-
-/*
- * The one place in the row that changes: the mark for what the row is doing,
- * and the controls that act on it. It stays put through hover, focus, and work
- * starting or stopping.
- *
- * Its width and its inner gap are both set inline by `trailingSlotWidth` rather
- * than stated here. The width is a sum of the cell size, the control gap, and
- * that inner gap, so a copy of any of those three in this file would be a
- * second source of truth for the same geometry — and the day the two disagreed
- * the slot would be the wrong size and the delta beside it would move, which is
- * the one thing this lane exists to prevent.
- */
-.happy2-sidebar__item-slot {
     display: flex;
     position: relative;
     flex: none;
     align-items: center;
     justify-content: flex-end;
     height: 18px;
-    /* Optical: a glyph is smaller than the cell it is centred in, so a cell that
-       stopped at the row's padding would put its ink further from the panel edge
-       than the text, badges and status dots that end other rows. The lane hangs
-       into the padding by the cell's own slack, which lines those marks up as
-       ink. Not spacing between siblings — the gaps beside it own that. */
+}
+
+/*
+ * The marks that come and go hang into the row's trailing padding by their own
+ * slack: a glyph is smaller than the cell it is centred in, so a cell stopping
+ * at the padding would put its ink further from the panel edge than the text
+ * and badges that end other rows. Not spacing between siblings — the lane's
+ * gap owns that.
+ */
+.happy2-sidebar__item-activity {
     margin-right: -3px;
 }
 
 /*
- * Controls that are only there on hover share the activity mark's cell: nothing
- * of theirs is showing at rest, so the archive control can land exactly where
- * the spinner was. That is the whole point — the reader reaches for a control
- * without the row's delta being taken away from them to make room for it.
- *
- * A control that is always showing cannot overlay the mark it stands beside, so
- * it keeps its own place in the line and the slot reserves both.
+ * Controls are laid over the lane instead of taking a place in it, so a row
+ * costs the same width whether or not the pointer is on it. They sit against
+ * the same optical edge the activity mark uses.
  */
-.happy2-sidebar__item-slot[data-swaps] .happy2-sidebar__item-actions {
+.happy2-sidebar__item-trailing[data-swaps] .happy2-sidebar__item-actions {
     position: absolute;
-    right: 0;
+    right: -3px;
 }
 
-/* The crossfade, carried on the mark alone. The slot keeps its width and the
-   delta keeps its place; this is one thing being exchanged for another in a
-   fixed box, not a layout change. */
-.happy2-sidebar__item-activity {
-    transition: opacity 120ms ease;
-}
-
-.happy2-sidebar__item:hover .happy2-sidebar__item-slot[data-swaps] .happy2-sidebar__item-activity,
-.happy2-sidebar__item-slot[data-swaps]:focus-within .happy2-sidebar__item-activity {
-    opacity: 0;
+/*
+ * What the controls cover is hidden where it stands. `visibility` keeps the
+ * delta's exact box and the lane's gaps, so the row does not re-lay-out under
+ * the pointer; `display: none` would collapse it and `opacity` would leave it
+ * catching clicks. The exact count stays in the accessibility tree either way,
+ * because it is a separate visually-hidden child rather than these marks.
+ */
+.happy2-sidebar__item:hover
+    .happy2-sidebar__item-trailing[data-swaps]
+    .happy2-sidebar__item-change-stats
+    > [data-tone],
+.happy2-sidebar__item-trailing[data-swaps]:focus-within
+    .happy2-sidebar__item-change-stats
+    > [data-tone],
+.happy2-sidebar__item:hover
+    .happy2-sidebar__item-trailing[data-swaps]
+    .happy2-sidebar__item-activity,
+.happy2-sidebar__item-trailing[data-swaps]:focus-within .happy2-sidebar__item-activity {
+    visibility: hidden;
 }
 
 .happy2-sidebar__item-unread {
