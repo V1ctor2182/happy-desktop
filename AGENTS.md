@@ -60,6 +60,10 @@ runs it, so never run the package suite separately alongside one of those. When
 you only need to inspect one failure, run that single test file instead of the
 whole package.
 
+On macOS, request reviewed full-access execution before running any real-browser
+Playwright suite; otherwise the inherited sandbox crashes the browsers and
+triggers native crash dialogs.
+
 ## Review
 
 Review is optional for every edit and never gates pushing or merging. An

@@ -12,7 +12,7 @@
         "test": "pnpm test:playwright",
         "test:playwright": "node ../../scripts/run-ui-alignment-tests.mjs --config vitest.playwright.config.ts",
         "test:playwright:artifacts": "VITE_HAPPY_DESKTOP_WRITE_SCREENSHOTS=1 node ../../scripts/run-ui-alignment-tests.mjs --config vitest.playwright.config.ts",
-        "test:watch": "vitest --config vitest.playwright.config.ts",
+        "test:watch": "node ../../scripts/run-ui-alignment-tests.mjs --watch --config vitest.playwright.config.ts",
         "gym:electron": "node --import tsx sources/electron/cli.ts",
         "gym:electron:build-profile": "pnpm --dir ../happy-desktop-electron build:profile:optimized",
         "gym:electron:prepare": "node --import tsx sources/electron/cli.ts prepare --profile smoke",
