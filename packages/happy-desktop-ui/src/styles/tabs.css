@@ -180,6 +180,25 @@
 }
 
 /*
+ * A tab that ends in the lane keeps less padding behind it than one that ends
+ * in its label, because the lane brings its own air: a fixed 16px box centring
+ * a small mark already holds most of an inset, and a tab's full padding after
+ * it showed that air twice over. Measured in Chromium, the busy spinner's ink —
+ * a braille cell, two columns of dots at half the width of its own box, so
+ * 4.5px inside the 16px lane — sat 17.75px from the tab's trailing edge while
+ * the leading icon sat 12px from the other one.
+ *
+ * Four is what is left of each size's padding once the lane's own slack is
+ * counted, and it is the same four at every size because the padding and the
+ * slack grow together. The parent states it: the lane is a child, and a child
+ * that pulled its own parent's padding off with a negative margin would be
+ * spacing itself against a box it does not own.
+ */
+.happy2-tabs__tab:has(.happy2-tabs__tab-trailing) {
+    padding-right: 4px;
+}
+
+/*
  * Not interactive and not reachable by tab: it reports, and the control stacked
  * over it is the thing that can be used. It is out of flow so that a tab which
  * is both busy and closable keeps one 16px lane rather than two.
