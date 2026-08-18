@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useMemo, useSyncExternalStore } from "react";
+import { type CSSProperties, type ReactNode, useState, useSyncExternalStore } from "react";
 import type {
     ComposerSnapshot,
     ConversationAuthor,
@@ -30,6 +30,7 @@ import {
     contentWidth,
     conversationRowHeight,
     conversationRowHeightCacheCreate,
+    type ConversationRowHeightCache,
 } from "./conversationRowHeight";
 import { EmptyState } from "./EmptyState";
 import { Message, MessageList, type MessageListScrollPosition } from "./Message";
@@ -286,20 +287,22 @@ export function ConversationView(props: ConversationViewProps) {
         messageTextLayoutFontGenerationGet,
         messageTextLayoutFontGenerationGet,
     );
+    /*
+     * One measurement cache per conversation, kept for as long as this view is
+     * mounted: leaving a conversation and coming back must find that same cache
+     * with the measurements it already has, rather than re-measuring a transcript
+     * it just left. This Map and its values are component-lifetime memo caches,
+     * not product state: retaining a calculation never drives another render.
+     * The row estimator needs the active cache while rendering, so lazy state
+     * initialization gives the registry one stable owner without reading or
+     * writing a ref during render.
+     */
+    const [rowHeightCaches] = useState(() => new Map<string, ConversationRowHeightCache>());
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
-    /*
-     * MessageList's estimator mutates this measurement cache, so its identity
-     * must survive ordinary transcript renders and change only at the
-     * conversation lifetime boundary that also remounts the list below.
-     */
-    const rowHeightCache = useMemo(
-        () => ({
-            conversationCacheKey,
-            value: conversationRowHeightCacheCreate(),
-        }),
-        [conversationCacheKey],
-    ).value;
+    const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
+    const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
+    if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
     const { transcript, queued } = conversationPendingSteering(props.entries);
     const awaitingInput = transcript.some(
         (entry) =>
