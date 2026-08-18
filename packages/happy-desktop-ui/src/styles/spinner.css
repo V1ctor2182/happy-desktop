@@ -194,17 +194,61 @@
  * 1px stroke inside a 13 x 13 ink box at a 16px box; a full-box disc with a
  * fixed 1px border read a third heavier and a notch larger than the glyph it
  * replaces, which is what made a run look louder than the work around it.
+ *
+ * The disc does not rotate, and that is what keeps it still. Rotating a
+ * half-filled disc through four right angles draws exactly the same four
+ * phases as filling the left, top, right, and bottom half in turn — but a
+ * transform resamples the whole shape, so the ring's antialiasing has to be
+ * recomputed against the device grid on every frame. Whenever the glyph's
+ * edges do not land on that grid, each frame rounds differently and the disc's
+ * own outline shifts by a device pixel: the reader sees an icon sliding side
+ * to side rather than one turning in place. Animating the fill instead leaves
+ * the bordered box untouched, so the outline rasterises once and only the
+ * boundary across it moves.
+ *
+ * This matters because the window zooms. Cmd +/- multiplies the device ratio,
+ * so a 2x display runs at 1.34, 2.2, 2.5, 3.5 and so on, and no amount of
+ * pixel snapping in CSS can anticipate those — `round()` works in CSS pixels,
+ * which zoom scales along with everything else. Measured over the four frames
+ * at every Chromium zoom step: rotated, the outline moves a device pixel at
+ * five of them (67%, 75%, 110%, 125%, 175% at the 16px size); with the fill
+ * animated instead it does not move at any of them, at any size.
+ *
+ * The dimensions are still snapped so the glyph is crisp at the common
+ * ratios, which is a separate concern from whether it holds still.
  */
 .happy2-spinner[data-variant="circle"] .happy2-spinner__glyph {
-    width: 81.25%;
-    height: 81.25%;
-    border-width: calc(var(--happy2-spinner-size) / 16);
+    width: round(calc(var(--happy2-spinner-size) * 0.8125), 1px);
+    height: round(calc(var(--happy2-spinner-size) * 0.8125), 1px);
+    /* Longhands: the shorthand puts a non-theme var inside a colour-bearing
+     * declaration, which the theme rule forbids. */
+    border-width: round(calc(var(--happy2-spinner-size) / 16), 1px);
     border-style: solid;
     border-color: currentcolor;
     border-radius: var(--happy2-radius-pill);
+    /* Frame 0, so a glyph with no running animation still reads as the moon. */
     background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
-    animation-name: happy2-spinner-turn;
-    animation-timing-function: steps(4);
+    animation-name: happy2-spinner-phase;
+}
+
+/* Left, top, right, bottom — the same cycle a 90deg step rotation produced.
+   The shared `steps(1, end)` holds each phase for its whole frame. */
+@keyframes happy2-spinner-phase {
+    0% {
+        background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
+    }
+
+    25% {
+        background-image: linear-gradient(180deg, currentcolor 50%, transparent 50%);
+    }
+
+    50% {
+        background-image: linear-gradient(270deg, currentcolor 50%, transparent 50%);
+    }
+
+    75% {
+        background-image: linear-gradient(0deg, currentcolor 50%, transparent 50%);
+    }
 }
 
 @keyframes happy2-spinner-turn {
