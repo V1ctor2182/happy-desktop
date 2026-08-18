@@ -241,8 +241,22 @@ export interface SidebarReorder {
     /** Set when the drag rearranged one row's children rather than the top level. */
     readonly parentId?: string;
 }
+/**
+ * Which end of a row says that work is running in it.
+ *
+ * `trailing` is the product's own answer and the default: the leading lane is
+ * identity, so a busy row still shows the face or glyph the reader picks it out
+ * by, and a column of spinners where the avatars were is a column with nothing
+ * left to aim at. `leading` puts the mark before the name instead, which reads
+ * as a list of what is happening rather than a list of what exists — a
+ * different thing to want, and worth being able to want.
+ */
+export type SidebarActivityPlacement = "leading" | "trailing";
+
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     activeItemId: string;
+    /** Which end of a row reports work. Defaults to `trailing`. */
+    activityPlacement?: SidebarActivityPlacement;
     /**
      * Pinned rows beneath the compose row, for the few acts that belong to the
      * window rather than to any one row in the list. They are reported through
@@ -854,6 +868,8 @@ function SidebarRow({
     /** The pointer has crossed the drag threshold and is still holding this row. */
     grabbed?: boolean;
     item: SidebarItem;
+    /** Which end of the row reports work. See `SidebarProps.activityPlacement`. */
+    activityPlacement?: SidebarActivityPlacement;
     onContextMenu?: (item: SidebarItem, event: MouseEvent<HTMLButtonElement>) => void;
     onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
     /** The gesture was taken away rather than finished; nothing is reported. */
@@ -995,6 +1011,38 @@ function SidebarRow({
             };
         return undefined;
     };
+    /*
+     * Where this row's activity mark is actually drawn.
+     *
+     * Asked once, and both lanes read the same answer, so the mark is never in
+     * two places and never in neither. A row with nothing to report is trailing
+     * whatever the window asked for: an empty leading lane opened for a mark
+     * that is not there would indent the name of every quiet row.
+     */
+    const activityLeading = () => props.activityPlacement === "leading" && activity() !== undefined;
+    /* One mark, drawn the same in whichever lane it lands in: the cell is the
+       square a control occupies, so the two centre on one column when they
+       exchange places at the trailing edge, and it is the square a glyph
+       occupies at the leading one. */
+    const activityMark = () => {
+        const state = activity();
+        if (!state) return undefined;
+        return (
+            <span
+                className="happy2-sidebar__item-activity"
+                data-activity={state.kind === "spinner" ? "spinner" : state.lifecycle}
+                data-happy-desktop-ui="sidebar-item-activity"
+            >
+                {state.kind === "spinner" ? (
+                    <Spinner label={state.label} size={14} tone={state.tone} />
+                ) : (
+                    <span aria-label={state.label} role="img">
+                        <Icon name={state.icon} size={14} />
+                    </span>
+                )}
+            </span>
+        );
+    };
     const ariaKeyShortcuts = () =>
         [
             props.shortcutActive ? props.shortcut?.aria : undefined,
@@ -1065,22 +1113,27 @@ function SidebarRow({
                     data-happy-desktop-ui="sidebar-item-branch"
                 />
             ) : null}
-            {showsLeadingSlot(item()) || props.onCollapseToggle ? (
+            {showsLeadingSlot(item()) || activityLeading() || props.onCollapseToggle ? (
                 <span
                     className="happy2-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
                 >
-                    {/* Identity only. What the row is doing is reported at the
-                        trailing edge instead, so a busy row still shows the face
-                        or glyph the reader picks it out by — a column of
-                        spinners where the avatars were is a column with nothing
-                        left to aim at.
+                    {/* Identity, unless the window asked for work to be reported
+                        here. By default it is not: what the row is doing is
+                        reported at the trailing edge, so a busy row still shows
+                        the face or glyph the reader picks it out by — a column
+                        of spinners where the avatars were is a column with
+                        nothing left to aim at. A reader who would rather read
+                        the column as what is happening says so, and then the
+                        mark stands in the lane for as long as the work runs.
 
                         A nested row that shows no mark of its own keeps showing
                         none when it folds: the branch line beside it already says
                         what it is, and opening the lane for the chevron must not
                         put back the glyph that line replaced. */}
-                    {!showsLeadingSlot(item()) ? null : item().kind === "person" ||
+                    {activityLeading() ? (
+                        activityMark()
+                    ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
                       item().kind === "agent" ||
                       item().kind === "project" ? (
                         <Avatar
@@ -1228,9 +1281,11 @@ function SidebarRow({
                    right. The Git delta is the last thing in flow, so at rest it
                    ends the row on the same column as the marks above and below
                    it. Work adds the activity cell after the delta and moves it
-                   left by exactly that cell. The controls are laid over the
-                   lane rather than placed in it, so arriving and leaving costs
-                   no reflow: what they cover is hidden where it stands. */
+                   left by exactly that cell — unless the window put activity in
+                   the leading lane, in which case nothing here moves at all. The
+                   controls are laid over the lane rather than placed in it, so
+                   arriving and leaving costs no reflow: what they cover is
+                   hidden where it stands. */
                 state || controls || stats ? (
                     <span
                         className="happy2-sidebar__item-trailing"
@@ -1267,27 +1322,11 @@ function SidebarRow({
                                 </span>
                             </span>
                         ) : null}
-                        {state ? (
-                            <span
-                                className="happy2-sidebar__item-activity"
-                                data-activity={
-                                    state.kind === "spinner" ? "spinner" : state.lifecycle
-                                }
-                                data-happy-desktop-ui="sidebar-item-activity"
-                            >
-                                {state.kind === "spinner" ? (
-                                    <Spinner label={state.label} size={14} tone={state.tone} />
-                                ) : (
-                                    <span aria-label={state.label} role="img">
-                                        <Icon name={state.icon} size={14} />
-                                    </span>
-                                )}
-                            </span>
-                        ) : null}
+                        {state ? activityMark() : null}
                         {controls ? trailingLane() : null}
                     </span>
                 ) : null)(
-                activity(),
+                activityLeading() ? undefined : activity(),
                 trailingActions().length > 0,
                 hasChangeStats() ? item().changeStats! : undefined,
                 swapsTrailing(),
@@ -1304,6 +1343,7 @@ export function Sidebar(props: SidebarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "actions",
         "activeItemId",
+        "activityPlacement",
         "brand",
         "bodyAccessory",
         "className",
@@ -2170,6 +2210,7 @@ export function Sidebar(props: SidebarProps) {
                                             return (
                                                 <SidebarRow
                                                     active={item.id === local.activeItemId}
+                                                    activityPlacement={local.activityPlacement}
                                                     dragging={
                                                         held ||
                                                         rowKey(section.id, item.id) === dropped?.key

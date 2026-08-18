@@ -800,7 +800,9 @@ function BranchListSketch(props: { working: boolean }) {
                                     style={{ columnGap: SIDEBAR_TRAILING_GAP }}
                                 >
                                     <span className="happy2-sidebar__item-change-stats">
-                                        <span data-tone="added">+{sketchCount(worktree.added)}</span>
+                                        <span data-tone="added">
+                                            +{sketchCount(worktree.added)}
+                                        </span>
                                         <span data-tone="deleted">
                                             −{sketchCount(worktree.deleted)}
                                         </span>
@@ -1377,6 +1379,43 @@ export function SidebarPage() {
                         </Frame>
                         <DimensionRule label="Nothing running · every row a branch" />
                     </div>
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Which end of a row says that work is running in it. Trailing is the default and the product's own answer: the leading lane is identity, so a busy row still shows the avatar or glyph the reader picks it out by, and the delta beside it steps left by exactly the activity cell. Leading reads the column as what is happening rather than as what exists — the mark stands where the identity was, for as long as the work runs, and the trailing lane never moves. Only a row with something to report differs; a quiet row is identical in both frames, because a lane opened for an absent mark would indent every name in the column."
+                label="Where a row reports its work"
+                number="08"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {(["trailing", "leading"] as const).map((placement) => (
+                        <div
+                            key={placement}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={220}>
+                                <Sidebar
+                                    activeItemId="react-electron-plugin"
+                                    activityPlacement={placement}
+                                    data-testid={`activity-${placement}`}
+                                    onItemAction={() => {}}
+                                    onItemSecondaryAction={() => {}}
+                                    onItemSelect={() => {}}
+                                    onSectionAction={() => {}}
+                                    sections={alignmentSections({ rows: 4, working: true })}
+                                    title="happy-desktop"
+                                />
+                            </Frame>
+                            <DimensionRule
+                                label={
+                                    placement === "trailing"
+                                        ? "trailing · default · the delta steps left by one cell"
+                                        : "leading · the mark takes the identity lane"
+                                }
+                            />
+                        </div>
+                    ))}
                 </div>
             </Specimen>
         </ComponentPage>
